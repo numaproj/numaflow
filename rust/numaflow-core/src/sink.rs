@@ -116,6 +116,7 @@ pub(super) struct SinkWriter {
     sink_handle: mpsc::Sender<ActorMessage>,
     fb_sink_handle: Option<mpsc::Sender<ActorMessage>>,
     tracker_handle: TrackerHandle,
+    cln_token: CancellationToken,
 }
 
 /// SinkWriterBuilder is a builder to build a SinkWriter.
@@ -126,6 +127,7 @@ pub struct SinkWriterBuilder {
     sink_client: SinkClientType,
     fb_sink_client: Option<SinkClientType>,
     tracker_handle: TrackerHandle,
+    cln_token: CancellationToken,
 }
 
 impl SinkWriterBuilder {
@@ -134,6 +136,7 @@ impl SinkWriterBuilder {
         chunk_timeout: Duration,
         sink_type: SinkClientType,
         tracker_handle: TrackerHandle,
+        cln_token: CancellationToken,
     ) -> Self {
         Self {
             batch_size,
@@ -142,6 +145,7 @@ impl SinkWriterBuilder {
             sink_client: sink_type,
             fb_sink_client: None,
             tracker_handle,
+            cln_token,
         }
     }
 
@@ -220,6 +224,7 @@ impl SinkWriterBuilder {
             sink_handle: sender,
             fb_sink_handle,
             tracker_handle: self.tracker_handle,
+            cln_token: self.cln_token,
         })
     }
 }
@@ -257,15 +262,13 @@ impl SinkWriter {
     /// Streaming write the messages to the Sink, it will keep writing messages until the stream is
     /// closed or the cancellation token is triggered.
     pub(super) async fn streaming_write(
-        &self,
+        mut self,
         messages_stream: ReceiverStream<Message>,
-        cancellation_token: CancellationToken,
     ) -> Result<JoinHandle<Result<()>>> {
         let handle: JoinHandle<Result<()>> = tokio::spawn({
-            let mut this = self.clone();
             async move {
                 let chunk_stream =
-                    messages_stream.chunks_timeout(this.batch_size, this.chunk_timeout);
+                    messages_stream.chunks_timeout(self.batch_size, self.chunk_timeout);
 
                 pin!(chunk_stream);
 
@@ -298,18 +301,18 @@ impl SinkWriter {
 
                     let sink_start = time::Instant::now();
                     let total_valid_msgs = batch.len();
-                    match this.write(batch.clone(), cancellation_token.clone()).await {
+                    match self.write(batch.clone()).await {
                         Ok(_) => {
                             for offset in offsets {
                                 // Delete the message from the tracker
-                                this.tracker_handle.delete(offset).await?;
+                                self.tracker_handle.delete(offset).await?;
                             }
                         }
                         Err(e) => {
                             error!(?e, "Error writing to sink");
                             for offset in offsets {
                                 // Discard the message from the tracker
-                                this.tracker_handle.discard(offset).await?;
+                                self.tracker_handle.discard(offset).await?;
                             }
                             return Err(e);
                         }
@@ -358,11 +361,7 @@ impl SinkWriter {
     }
 
     /// Write the messages to the Sink.
-    pub(crate) async fn write(
-        &mut self,
-        messages: Vec<Message>,
-        cln_token: CancellationToken,
-    ) -> Result<()> {
+    pub(crate) async fn write(&mut self, messages: Vec<Message>) -> Result<()> {
         if messages.is_empty() {
             return Ok(());
         }
@@ -402,7 +401,7 @@ impl SinkWriter {
                 }
 
                 // if we are shutting down, stop the retry
-                if cln_token.is_cancelled() {
+                if self.cln_token.is_cancelled() {
                     return Err(Error::Sink(
                         "Cancellation token triggered during retry".to_string(),
                     ));
@@ -758,6 +757,7 @@ mod tests {
             Duration::from_secs(1),
             SinkClientType::Log,
             TrackerHandle::new(None, None),
+            CancellationToken::new(),
         )
         .build()
         .await
@@ -782,9 +782,7 @@ mod tests {
             })
             .collect();
 
-        let result = sink_writer
-            .write(messages.clone(), CancellationToken::new())
-            .await;
+        let result = sink_writer.write(messages.clone()).await;
         assert!(result.is_ok());
     }
 
@@ -796,6 +794,7 @@ mod tests {
             Duration::from_millis(100),
             SinkClientType::Log,
             tracker_handle.clone(),
+            CancellationToken::new(),
         )
         .build()
         .await
@@ -831,7 +830,7 @@ mod tests {
         drop(tx);
 
         let handle = sink_writer
-            .streaming_write(ReceiverStream::new(rx), CancellationToken::new())
+            .streaming_write(ReceiverStream::new(rx))
             .await
             .unwrap();
 
@@ -874,6 +873,7 @@ mod tests {
                 create_rpc_channel(sock_file).await.unwrap(),
             )),
             tracker_handle.clone(),
+            CancellationToken::new(),
         )
         .build()
         .await
@@ -909,7 +909,7 @@ mod tests {
         drop(tx);
         let cln_token = CancellationToken::new();
         let handle = sink_writer
-            .streaming_write(ReceiverStream::new(rx), cln_token.clone())
+            .streaming_write(ReceiverStream::new(rx))
             .await
             .unwrap();
 
@@ -960,6 +960,7 @@ mod tests {
                 create_rpc_channel(sock_file).await.unwrap(),
             )),
             tracker_handle.clone(),
+            CancellationToken::new(),
         )
         .fb_sink_client(SinkClientType::Log)
         .build()
@@ -994,9 +995,8 @@ mod tests {
             let _ = tx.send(msg).await;
         }
         drop(tx);
-        let cln_token = CancellationToken::new();
         let handle = sink_writer
-            .streaming_write(ReceiverStream::new(rx), cln_token.clone())
+            .streaming_write(ReceiverStream::new(rx))
             .await
             .unwrap();
 

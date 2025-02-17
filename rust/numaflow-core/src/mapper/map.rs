@@ -1,13 +1,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use numaflow_pb::clients::map::map_client::MapClient;
-use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
-use tokio::task::JoinHandle;
-use tokio_stream::wrappers::ReceiverStream;
-use tokio_stream::StreamExt;
-use tonic::transport::Channel;
-
 use crate::config::pipeline::map::MapMode;
 use crate::error;
 use crate::error::Error;
@@ -16,6 +9,13 @@ use crate::mapper::map::user_defined::{
 };
 use crate::message::{Message, Offset};
 use crate::tracker::TrackerHandle;
+use numaflow_pb::clients::map::map_client::MapClient;
+use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
+use tokio::task::JoinHandle;
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::StreamExt;
+use tonic::transport::Channel;
+use tracing::info;
 pub(super) mod user_defined;
 
 /// UnaryActorMessage is a message that is sent to the UnaryMapperActor.
@@ -202,55 +202,52 @@ impl MapHandle {
     /// background task. In case of critical errors it stops reading from the input stream and
     /// returns the error using the join handle.
     pub(crate) async fn streaming_map(
-        &self,
+        self,
         input_stream: ReceiverStream<Message>,
     ) -> error::Result<(ReceiverStream<Message>, JoinHandle<error::Result<()>>)> {
         let (output_tx, output_rx) = mpsc::channel(self.batch_size);
-        let (error_tx, mut error_rx) = mpsc::channel(1);
-
-        let actor_handle = self.actor_sender.clone();
-        let tracker = self.tracker.clone();
+        let (error_tx, mut error_rx) = mpsc::channel(self.batch_size);
         let semaphore = Arc::new(Semaphore::new(self.concurrency));
-        let batch_size = self.batch_size;
-        let read_timeout = self.read_timeout;
 
         let handle = tokio::spawn(async move {
             let mut input_stream = input_stream;
 
             // based on the map mode, send the message to the appropriate actor handle.
-            match actor_handle {
+            match &self.actor_sender {
                 ActorSender::Unary(map_handle) => loop {
                     // we need tokio select here because we have to listen to both the input stream
                     // and the error channel. If there is an error, we need to discard all the messages
                     // in the tracker and stop processing the input stream.
                     tokio::select! {
+                        Some(error) = error_rx.recv() => {
+                            error!(?error, "error received while performing unary map operation, discarding all messages in the tracker");
+                            // if there is an error, discard all the messages in the tracker and return the error.
+                            self.tracker.discard_all().await?;
+                            return Err(error);
+                        },
                         read_msg = input_stream.next() => {
                             if let Some(read_msg) = read_msg {
-                                let permit = Arc::clone(&semaphore).acquire_owned().await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {}", e)))?;
-                                let error_tx = error_tx.clone();
+                                let permit = Arc::clone(&semaphore).acquire_owned()
+                                        .await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {}", e)))?;
                                 Self::unary(
                                     map_handle.clone(),
                                     permit,
                                     read_msg,
                                     output_tx.clone(),
-                                    tracker.clone(),
-                                    error_tx,
+                                    self.tracker.clone(),
+                                    error_tx.clone(),
                                 ).await;
                             } else {
                                 break;
                             }
                         },
-                        Some(error) = error_rx.recv() => {
-                            // if there is an error, discard all the messages in the tracker and return the error.
-                            tracker.discard_all().await?;
-                            return Err(error);
-                        },
                     }
                 },
 
                 ActorSender::Batch(map_handle) => {
-                    let timeout_duration = read_timeout;
-                    let chunked_stream = input_stream.chunks_timeout(batch_size, timeout_duration);
+                    let timeout_duration = self.read_timeout;
+                    let chunked_stream =
+                        input_stream.chunks_timeout(self.batch_size, timeout_duration);
                     tokio::pin!(chunked_stream);
                     // we don't need to tokio spawn here because, unlike unary and stream, batch is a blocking operation,
                     // and we process one batch at a time.
@@ -260,12 +257,13 @@ impl MapHandle {
                                 map_handle.clone(),
                                 batch,
                                 output_tx.clone(),
-                                tracker.clone(),
+                                self.tracker.clone(),
                             )
                             .await
                             {
+                                error!(?e, "error received while performing batch map operation, discarding all messages in the tracker");
                                 // if there is an error, discard all the messages in the tracker and return the error.
-                                tracker.discard_all().await?;
+                                self.tracker.discard_all().await?;
                                 return Err(e);
                             }
                         }
@@ -277,6 +275,12 @@ impl MapHandle {
                     // and the error channel. If there is an error, we need to discard all the messages
                     // in the tracker and stop processing the input stream.
                     tokio::select! {
+                       Some(error) = error_rx.recv() => {
+                            error!(?error, "error received while performing stream map operation, discarding all messages in the tracker");
+                            // if there is an error, discard all the messages in the tracker and return the error.
+                            self.tracker.discard_all().await?;
+                            return Err(error);
+                        },
                         read_msg = input_stream.next() => {
                             if let Some(read_msg) = read_msg {
                                 let permit = Arc::clone(&semaphore).acquire_owned().await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {}", e)))?;
@@ -286,21 +290,17 @@ impl MapHandle {
                                     permit,
                                     read_msg,
                                     output_tx.clone(),
-                                    tracker.clone(),
+                                    self.tracker.clone(),
                                     error_tx,
                                 ).await;
                             } else {
                                 break;
                             }
                         },
-                        Some(error) = error_rx.recv() => {
-                            // if there is an error, discard all the messages in the tracker and return the error.
-                            tracker.discard_all().await?;
-                            return Err(error);
-                        },
                     }
                 },
             }
+            info!("Map input stream ended");
             Ok(())
         });
 
@@ -335,6 +335,7 @@ impl MapHandle {
             };
 
             if let Err(e) = map_handle.send(msg).await {
+                error!(?e, "failed to send message to map actor");
                 let _ = error_tx
                     .send(Error::Mapper(format!("failed to send message: {}", e)))
                     .await;
@@ -349,13 +350,13 @@ impl MapHandle {
                             .update(offset.clone(), message.tags.clone())
                             .await
                         {
-                            error_tx.send(e).await.expect("failed to send error");
+                            let _ = error_tx.send(e).await;
                             return;
                         }
                     }
                     // done with the batch
                     if let Err(e) = tracker_handle.update_eof(offset).await {
-                        error_tx.send(e).await.expect("failed to send error");
+                        let _ = error_tx.send(e).await;
                         return;
                     }
                     // send messages downstream
@@ -367,13 +368,14 @@ impl MapHandle {
                     }
                 }
                 Ok(Err(_map_err)) => {
-                    error_tx.send(_map_err).await.expect("failed to send error");
+                    error!(err=?_map_err, "failed to map message");
+                    let _ = error_tx.send(_map_err).await;
                 }
-                Err(e) => {
-                    error_tx
-                        .send(Error::Mapper(format!("failed to receive message: {}", e)))
-                        .await
-                        .expect("failed to send error");
+                Err(err) => {
+                    error!(?err, "failed to receive message");
+                    let _ = error_tx
+                        .send(Error::Mapper(format!("failed to receive message: {}", err)))
+                        .await;
                 }
             }
         });
@@ -422,6 +424,7 @@ impl MapHandle {
                     }
                 }
                 Ok(Err(_map_err)) => {
+                    error!(err=?_map_err, "failed to map message");
                     return Err(_map_err);
                 }
                 Err(e) => {
@@ -473,26 +476,25 @@ impl MapHandle {
                             .update(mapped_message.offset.clone(), mapped_message.tags.clone())
                             .await
                         {
-                            error_tx.send(e).await.expect("failed to send error");
+                            let _ = error_tx.send(e).await;
                             return;
                         }
                         if let Err(e) = output_tx.send(mapped_message).await {
-                            error_tx
+                            let _ = error_tx
                                 .send(Error::Mapper(format!("failed to send message: {}", e)))
-                                .await
-                                .expect("failed to send error");
+                                .await;
                             return;
                         }
                     }
                     Err(e) => {
-                        error_tx.send(e).await.expect("failed to send error");
+                        let _ = error_tx.send(e).await;
                         return;
                     }
                 }
             }
 
             if let Err(e) = tracker_handle.update_eof(read_msg.offset).await {
-                error_tx.send(e).await.expect("failed to send error");
+                let _ = error_tx.send(e).await;
             }
         });
     }
@@ -683,10 +685,6 @@ mod tests {
             assert_eq!(mapped_message.value, format!("value_{}", i));
         }
 
-        // we need to drop the mapper, because if there are any in-flight requests
-        // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
-        drop(mapper);
-
         shutdown_tx
             .send(())
             .expect("failed to send shutdown signal");
@@ -774,10 +772,6 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("PanicCat panicked!"));
-
-        // we need to drop the mapper, because if there are any in-flight requests
-        // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
-        drop(mapper);
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(
@@ -894,10 +888,6 @@ mod tests {
         let mapped_message2 = output_rx.recv().await.unwrap();
         assert_eq!(mapped_message2.value, "world");
 
-        // we need to drop the mapper, because if there are any in-flight requests
-        // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
-        drop(mapper);
-
         shutdown_tx
             .send(())
             .expect("failed to send shutdown signal");
@@ -1007,10 +997,6 @@ mod tests {
         let result = map_handle.await.unwrap();
         assert!(result.is_err(), "Expected an error due to panic");
 
-        // we need to drop the mapper, because if there are any in-flight requests
-        // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
-        drop(mapper);
-
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(
             handle.is_finished(),
@@ -1113,10 +1099,6 @@ mod tests {
             .collect();
         assert_eq!(values, vec!["test", "map", "stream"]);
 
-        // we need to drop the client, because if there are any in-flight requests
-        // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
-        drop(mapper);
-
         shutdown_tx
             .send(())
             .expect("failed to send shutdown signal");
@@ -1205,10 +1187,6 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("PanicFlatmapStream panicked!"));
-
-        // we need to drop the client, because if there are any in-flight requests
-        // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
-        drop(mapper);
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(

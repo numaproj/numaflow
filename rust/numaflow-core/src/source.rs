@@ -298,16 +298,10 @@ impl Source {
     /// Starts streaming messages from the source. It returns a stream of messages and
     /// a handle to the spawned task.
     pub(crate) fn streaming_read(
-        &self,
+        mut self,
         cln_token: CancellationToken,
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
-        let batch_size = self.read_batch_size;
-        let (messages_tx, messages_rx) = mpsc::channel(2 * batch_size);
-        let source_handle = self.sender.clone();
-        let tracker_handle = self.tracker_handle.clone();
-        let read_ahead_enabled = self.read_ahead;
-        let mut transformer = self.transformer.clone();
-        let mut watermark_handle = self.watermark_handle.clone();
+        let (messages_tx, messages_rx) = mpsc::channel(2 * self.read_batch_size);
 
         let mut pipeline_labels = pipeline_forward_metric_labels("Source").clone();
         pipeline_labels.push((
@@ -317,7 +311,7 @@ impl Source {
 
         let mvtx_labels = mvtx_forward_metric_labels();
 
-        info!(?batch_size, "Started streaming source with batch size");
+        info!(?self.read_batch_size, "Started streaming source with batch size");
         let handle = tokio::spawn(async move {
             // this semaphore is used only if read-ahead is disabled. we hold this semaphore to
             // make sure we can read only if the current inflight ones are ack'ed.
@@ -329,7 +323,7 @@ impl Source {
                     return Ok(());
                 }
 
-                if !read_ahead_enabled {
+                if !self.read_ahead {
                     // Acquire the semaphore permit before reading the next batch to make
                     // sure we are not reading ahead and all the inflight messages are acked.
                     let _permit = Arc::clone(&semaphore)
@@ -339,7 +333,7 @@ impl Source {
                 }
 
                 let read_start_time = Instant::now();
-                let messages = match Self::read(source_handle.clone()).await {
+                let messages = match Self::read(self.sender.clone()).await {
                     Ok(messages) => messages,
                     Err(e) => {
                         error!("Error while reading messages: {:?}", e);
@@ -353,10 +347,10 @@ impl Source {
                 // attempt to publish idle watermark since we are not able to read any message from
                 // the source.
                 if msgs_len == 0 {
-                    if let Some(watermark_handle) = watermark_handle.as_mut() {
+                    if let Some(watermark_handle) = self.watermark_handle.as_mut() {
                         watermark_handle
                             .publish_source_idle_watermark(
-                                Self::partitions(source_handle.clone()).await?,
+                                Self::partitions(self.sender.clone()).await?,
                             )
                             .await;
                     }
@@ -368,7 +362,7 @@ impl Source {
                     let offset = message.offset.clone();
 
                     // insert the offset and the ack one shot in the tracker.
-                    tracker_handle.insert(message, resp_ack_tx).await?;
+                    self.tracker_handle.insert(message, resp_ack_tx).await?;
 
                     // store the ack one shot in the batch to invoke ack later.
                     ack_batch.push((offset, resp_ack_rx));
@@ -379,9 +373,9 @@ impl Source {
                 // we wait for all the inflight messages to be acked before reading the next batch.
                 tokio::spawn(Self::invoke_ack(
                     read_start_time,
-                    source_handle.clone(),
+                    self.sender.clone(),
                     ack_batch,
-                    if !read_ahead_enabled {
+                    if !self.read_ahead {
                         Some(Arc::clone(&semaphore).acquire_owned().await.unwrap())
                     } else {
                         None
@@ -390,12 +384,12 @@ impl Source {
 
                 // transform the batch if the transformer is present, this need not
                 // be streaming because transformation should be fast operation.
-                let messages = match transformer.as_mut() {
+                let messages = match self.transformer.as_mut() {
                     None => messages,
                     Some(transformer) => transformer.transform_batch(messages).await?,
                 };
 
-                if let Some(watermark_handle) = watermark_handle.as_mut() {
+                if let Some(watermark_handle) = self.watermark_handle.as_mut() {
                     watermark_handle
                         .generate_and_publish_source_watermark(&messages)
                         .await;
@@ -636,9 +630,11 @@ mod tests {
             None,
         );
 
+        let sender = source.sender.clone();
+
         let cln_token = CancellationToken::new();
 
-        let (mut stream, handle) = source.streaming_read(cln_token.clone()).unwrap();
+        let (mut stream, handle) = source.clone().streaming_read(cln_token.clone()).unwrap();
         let mut offsets = vec![];
         // we should read all the 100 messages
         for _ in 0..100 {
@@ -648,18 +644,17 @@ mod tests {
         }
 
         // ack all the messages
-        Source::ack(source.sender.clone(), offsets).await.unwrap();
+        Source::ack(sender.clone(), offsets).await.unwrap();
 
         // since we acked all the messages, pending should be 0
         let pending = source.pending().await.unwrap();
         assert_eq!(pending, Some(0));
 
-        let partitions = Source::partitions(source.sender.clone()).await.unwrap();
+        let partitions = Source::partitions(sender.clone()).await.unwrap();
         assert_eq!(partitions, vec![1, 2]);
 
         cln_token.cancel();
         let _ = handle.await.unwrap();
-        drop(source);
         let _ = shutdown_tx.send(());
         server_handle.await.unwrap();
     }

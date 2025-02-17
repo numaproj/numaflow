@@ -60,16 +60,13 @@ impl Forwarder {
             cln_token,
         }
     }
-    pub(crate) async fn start(&self) -> error::Result<()> {
+    pub(crate) async fn start(self) -> error::Result<()> {
         let (messages_stream, reader_handle) =
             self.source.streaming_read(self.cln_token.clone())?;
 
-        let sink_writer_handle = self
-            .sink_writer
-            .streaming_write(messages_stream, self.cln_token.clone())
-            .await?;
+        let sink_writer_handle = self.sink_writer.streaming_write(messages_stream).await?;
 
-        match tokio::try_join!(reader_handle, sink_writer_handle,) {
+        match tokio::try_join!(reader_handle, sink_writer_handle) {
             Ok((reader_result, sink_writer_result)) => {
                 sink_writer_result?;
                 reader_result?;
@@ -264,6 +261,7 @@ mod tests {
             Duration::from_millis(100),
             SinkClientType::Log,
             tracker_handle.clone(),
+            cln_token.clone(),
         )
         .build()
         .await
@@ -394,6 +392,7 @@ mod tests {
             Duration::from_millis(100),
             SinkClientType::Log,
             tracker_handle.clone(),
+            cln_token.clone(),
         )
         .build()
         .await

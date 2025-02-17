@@ -232,10 +232,19 @@ async fn start_map_forwarder(
         CallbackHandler::new(config.vertex_name.to_string(), cb_cfg.callback_concurrency)
     });
 
-    for stream in reader_config.streams.clone() {
-        let tracker_handle =
-            TrackerHandle::new(watermark_handle.clone(), serving_callback_handler.clone());
+    // create tracker and buffer writer, they can be shared across all forwarders
+    let tracker_handle =
+        TrackerHandle::new(watermark_handle.clone(), serving_callback_handler.clone());
+    let buffer_writer = create_buffer_writer(
+        &config,
+        js_context.clone(),
+        tracker_handle.clone(),
+        cln_token.clone(),
+        watermark_handle.clone().map(WatermarkHandle::ISB),
+    )
+    .await;
 
+    for stream in reader_config.streams.clone() {
         info!("Creating buffer reader for stream {:?}", stream);
         let buffer_reader = create_buffer_reader(
             config.vertex_type_config.to_string(),
@@ -249,7 +258,6 @@ async fn start_map_forwarder(
         .await?;
 
         isb_lag_readers.push(buffer_reader.clone());
-
         let (mapper, mapper_rpc_client) = create_components::create_mapper(
             config.batch_size,
             config.read_timeout,
@@ -262,16 +270,7 @@ async fn start_map_forwarder(
         if let Some(mapper_rpc_client) = mapper_rpc_client {
             mapper_grpc_client = Some(mapper_rpc_client);
         }
-
-        let buffer_writer = create_buffer_writer(
-            &config,
-            js_context.clone(),
-            tracker_handle.clone(),
-            cln_token.clone(),
-            watermark_handle.clone().map(WatermarkHandle::ISB),
-        )
-        .await;
-        forwarder_components.push((buffer_reader, buffer_writer, mapper));
+        forwarder_components.push((buffer_reader, buffer_writer.clone(), mapper));
     }
 
     let pending_reader = shared::metrics::create_pending_reader(
@@ -297,7 +296,15 @@ async fn start_map_forwarder(
             cln_token.clone(),
         )
         .await;
-        let task = tokio::spawn(async move { forwarder.start().await });
+        let task = tokio::spawn({
+            let cln_token = cln_token.clone();
+            async move {
+                forwarder.start().await.inspect_err(|_| {
+                    // cancel the token so that other forwarders can gracefully stop
+                    cln_token.cancel();
+                })
+            }
+        });
         forwarder_tasks.push(task);
     }
 

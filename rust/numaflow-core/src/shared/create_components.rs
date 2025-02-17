@@ -49,6 +49,7 @@ pub(crate) async fn create_sink_writer(
                 read_timeout,
                 SinkClientType::Log,
                 tracker_handle,
+                cln_token.clone(),
             ),
             None,
         ),
@@ -58,6 +59,7 @@ pub(crate) async fn create_sink_writer(
                 read_timeout,
                 SinkClientType::Blackhole,
                 tracker_handle,
+                cln_token.clone(),
             ),
             None,
         ),
@@ -91,6 +93,7 @@ pub(crate) async fn create_sink_writer(
                     read_timeout,
                     SinkClientType::UserDefined(sink_grpc_client.clone()),
                     tracker_handle,
+                    cln_token.clone(),
                 )
                 .retry_config(primary_sink.retry_config.unwrap_or_default()),
                 Some(sink_grpc_client),

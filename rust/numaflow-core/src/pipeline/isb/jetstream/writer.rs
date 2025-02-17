@@ -180,11 +180,9 @@ impl JetstreamWriter {
 
     /// Starts reading messages from the stream and writes them to Jetstream ISB.
     pub(crate) async fn streaming_write(
-        &self,
+        self,
         messages_stream: ReceiverStream<Message>,
     ) -> Result<JoinHandle<Result<()>>> {
-        let this = self.clone();
-
         let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
             info!("Starting streaming Jetstream writer");
             let mut messages_stream = messages_stream;
@@ -198,13 +196,13 @@ impl JetstreamWriter {
                 // TODO: add metric for dropped count
                 if message.dropped() {
                     // delete the entry from tracker
-                    this.tracker_handle.delete(message.offset).await?;
+                    self.tracker_handle.delete(message.offset).await?;
                     continue;
                 }
 
                 // List of PAFs(one message can be written to multiple streams)
                 let mut pafs = vec![];
-                for vertex in &*this.config {
+                for vertex in &*self.config {
                     // check whether we need to write to this downstream vertex
                     if !forward::should_forward(message.tags.clone(), vertex.conditions.clone()) {
                         continue;
@@ -225,7 +223,7 @@ impl JetstreamWriter {
                         .expect("stream should be present")
                         .clone();
 
-                    if let Some(paf) = this
+                    if let Some(paf) = self
                         .write(
                             stream.clone(),
                             message.clone(),
@@ -247,7 +245,7 @@ impl JetstreamWriter {
                     continue;
                 }
 
-                this.resolve_pafs(pafs, message).await?;
+                self.resolve_pafs(pafs, message).await?;
 
                 processed_msgs_count += 1;
                 if last_logged_at.elapsed().as_secs() >= 1 {

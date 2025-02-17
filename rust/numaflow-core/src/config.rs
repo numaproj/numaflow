@@ -237,7 +237,7 @@ mod tests {
             let settings = Settings::load().unwrap();
             let mvtx_cfg = match settings.custom_resource_type {
                 CustomResourceType::MonoVertex(cfg) => cfg,
-                _ => panic!("Invalid configuration type"),
+                CustomResourceType::Pipeline(_) => panic!("Invalid configuration type"),
             };
 
             assert_eq!(
@@ -307,7 +307,7 @@ mod tests {
             let settings = Settings::load().unwrap();
             let mvtx_cfg = match settings.custom_resource_type {
                 CustomResourceType::MonoVertex(cfg) => cfg,
-                _ => panic!("Invalid configuration type"),
+                CustomResourceType::Pipeline(_) => panic!("Invalid configuration type"),
             };
 
             assert_eq!(
@@ -386,7 +386,7 @@ mod tests {
             let settings = Settings::load().unwrap();
             let mvtx_config = match settings.custom_resource_type {
                 CustomResourceType::MonoVertex(cfg) => cfg,
-                _ => panic!("Invalid configuration type"),
+                CustomResourceType::Pipeline(_) => panic!("Invalid configuration type"),
             };
 
             assert_eq!(

@@ -151,28 +151,20 @@ impl JetStreamReader {
     /// cancellationToken cancellation during the permit reservation and fetching messages,
     /// since rest of the operations should finish immediately.
     pub(crate) async fn streaming_read(
-        &self,
+        self,
         cancel_token: CancellationToken,
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let (messages_tx, messages_rx) = mpsc::channel(2 * self.batch_size);
 
         let handle: JoinHandle<Result<()>> = tokio::spawn({
-            let consumer = self.consumer.clone();
-            let stream = self.stream.clone();
-            let config = self.config.clone();
-            let tracker_handle = self.tracker_handle.clone();
-            let cancel_token = cancel_token.clone();
-            let watermark_handle = self.watermark_handle.clone();
-            let vertex_type = self.vertex_type.clone();
-
             async move {
-                let mut labels = pipeline_forward_metric_labels(&vertex_type).clone();
+                let mut labels = pipeline_forward_metric_labels(&self.vertex_type).clone();
                 labels.push((
                     metrics::PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                    stream.name.to_string(),
+                    self.stream.name.to_string(),
                 ));
 
-                let mut message_stream = consumer.messages().await.map_err(|e| {
+                let mut message_stream = self.consumer.messages().await.map_err(|e| {
                     Error::ISB(format!(
                         "Failed to get message stream from Jetstream: {:?}",
                         e
@@ -182,26 +174,26 @@ impl JetStreamReader {
                 loop {
                     tokio::select! {
                         _ = cancel_token.cancelled() => { // should we drain from the stream when token is cancelled?
-                            info!(?stream, "Cancellation token received, stopping the reader.");
+                            info!(stream=?self.stream, "Cancellation token received, stopping the reader.");
                             break;
                         }
                         message = message_stream.next() => {
                             let Some(message) = message else {
                                 // stream has been closed because we got none
-                                info!(?stream, "Stream has been closed");
+                                info!(stream=?self.stream, "Stream has been closed");
                                 break;
                             };
 
                             let jetstream_message = match message {
                                 Ok(message) => message,
                                 Err(e) => {
-                                    error!(?e, ?stream, "Failed to fetch messages from the Jetstream");
+                                    error!(?e, stream=?self.stream, "Failed to fetch messages from the Jetstream");
                                     continue;
                                 }
                             };
 
                             let js_message = JSWrappedMessage {
-                                partition_idx: stream.partition,
+                                partition_idx: self.stream.partition,
                                 message: jetstream_message.clone(),
                                 vertex_name: get_vertex_name().to_string(),
                             };
@@ -219,25 +211,26 @@ impl JetStreamReader {
                                 continue;
                             }
 
-                            if let Some(watermark_handle) = watermark_handle.as_ref() {
+                            if let Some(watermark_handle) = self.watermark_handle.as_ref() {
                                 let watermark = watermark_handle.fetch_watermark(message.offset.clone()).await;
                                 message.watermark = Some(watermark);
                             }
 
                             // Insert the message into the tracker and wait for the ack to be sent back.
                             let (ack_tx, ack_rx) = oneshot::channel();
-                            tracker_handle.insert(&message, ack_tx).await?;
+                            self.tracker_handle.insert(&message, ack_tx).await?;
 
                             tokio::spawn(Self::start_work_in_progress(
                                 jetstream_message,
                                 ack_rx,
-                                config.wip_ack_interval,
+                                self.config.wip_ack_interval,
                             ));
 
                             let offset = message.offset.clone();
                             if let Err(e) = messages_tx.send(message).await {
                                 // nak the read message and return
-                                tracker_handle.discard(offset).await?;
+                                self.tracker_handle.discard(offset).await?;
+                                error!(?e, "Failed to send message to receiver");
                                 return Err(Error::ISB(format!(
                                     "Failed to send message to receiver: {:?}",
                                     e
