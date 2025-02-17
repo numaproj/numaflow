@@ -45,9 +45,11 @@ where
     /// The oneshot receiver will be notified when all callbacks for this connection is received from the numaflow pipeline
     pub(crate) async fn register(
         &mut self,
-        id: String,
-    ) -> oneshot::Receiver<Result<String, Error>> {
+        id: Option<String>,
+    ) -> crate::Result<(String, oneshot::Receiver<Result<String, Error>>)> {
         // TODO: add an entry in Redis to note that the entry has been registered
+
+        let id = self.store.register(id).await?; // FIXME:
 
         let (tx, rx) = oneshot::channel();
         {
@@ -60,8 +62,7 @@ where
                 },
             );
         }
-        self.store.register(id).await.unwrap(); // FIXME:
-        rx
+        Ok((id, rx))
     }
 
     /// Retrieves the output of the numaflow pipeline
@@ -251,7 +252,7 @@ mod tests {
 
         // Test register
         let id = "test_id".to_string();
-        let rx = state.register(id.clone()).await;
+        let (id, rx) = state.register(Some(id.clone())).await.unwrap();
 
         let xid = id.clone();
 

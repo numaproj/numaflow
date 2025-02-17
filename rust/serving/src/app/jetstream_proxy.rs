@@ -1,16 +1,16 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use axum::{
     body::Bytes,
-    extract::State,
-    http::{HeaderMap, HeaderValue, StatusCode},
+    extract::{Query, State},
+    http::{HeaderMap, HeaderName, HeaderValue, StatusCode},
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
+use serde::Deserialize;
 use tokio::sync::{mpsc, oneshot};
 use tracing::error;
-use uuid::Uuid;
 
 use super::{
     callback::store::{PipelineResult, Store},
@@ -63,12 +63,15 @@ pub(crate) async fn serving_public_routes<T: Clone + Send + Sync + Store + 'stat
     Ok(router)
 }
 
+#[derive(Deserialize)]
+struct ServeQueryParams {
+    id: String,
+}
+
 async fn serve<T: Send + Sync + Clone + Store>(
     State(proxy_state): State<Arc<ProxyState<T>>>,
-    headers: HeaderMap,
+    Query(ServeQueryParams { id }): Query<ServeQueryParams>,
 ) -> impl IntoResponse {
-    let id = extract_id_from_headers(&proxy_state.tid_header, &headers);
-
     let pipeline_result = match proxy_state.callback.clone().retrieve_saved(&id).await {
         Ok(result) => result,
         Err(e) => {
@@ -112,7 +115,9 @@ async fn sync_publish<T: Send + Sync + Clone + Store>(
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
-    let id = extract_id_from_headers(&proxy_state.tid_header, &headers);
+    let id = headers
+        .get(&proxy_state.tid_header)
+        .map(|v| String::from_utf8_lossy(v.as_bytes()).to_string());
 
     let mut msg_headers: HashMap<String, String> = HashMap::new();
     for (key, value) in headers.iter() {
@@ -121,6 +126,17 @@ async fn sync_publish<T: Send + Sync + Clone + Store>(
             String::from_utf8_lossy(value.as_bytes()).to_string(),
         );
     }
+
+    // Register the ID in the callback proxy state
+    let (id, notify) = match proxy_state.callback.clone().register(id).await {
+        Ok(result) => result,
+        Err(e) => {
+            error!(error = ?e, "Registering request in data store");
+            return Err(ApiError::InternalServerError(
+                "Failed to register message".to_string(),
+            ));
+        }
+    };
 
     let (confirm_save_tx, confirm_save_rx) = oneshot::channel();
     let message = MessageWrapper {
@@ -131,9 +147,6 @@ async fn sync_publish<T: Send + Sync + Clone + Store>(
             headers: msg_headers,
         },
     };
-
-    // Register the ID in the callback proxy state
-    let notify = proxy_state.callback.clone().register(id.clone()).await;
     proxy_state.message.send(message).await.unwrap(); // FIXME:
 
     if let Err(e) = confirm_save_rx.await {
@@ -163,15 +176,23 @@ async fn sync_publish<T: Send + Sync + Clone + Store>(
         }
     };
 
+    let mut header_map = HeaderMap::new();
+    header_map.insert(
+        HeaderName::from_str(&proxy_state.tid_header).unwrap(),
+        HeaderValue::from_str(&id).unwrap(),
+    );
     let PipelineResult::Completed(result) = result else {
+        header_map.insert(
+            http::header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
         let body = r#"{'status': 'processing'}"#.as_bytes().to_vec();
-        return Ok((HeaderMap::new(), body));
+        return Ok((header_map, body));
     };
 
     // The response can be a binary array of elements as single chunk. For the user to process the blob, we return the array len and
     // length of each element in the array. This will help the user to decompose the binary response chunk into individual
     // elements.
-    let mut header_map = HeaderMap::new();
     let response_arr_len: String = result
         .iter()
         .map(|x| x.len().to_string())
@@ -196,7 +217,9 @@ async fn async_publish<T: Send + Sync + Clone + Store>(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Json<ServeResponse>, ApiError> {
-    let id = extract_id_from_headers(&proxy_state.tid_header, &headers);
+    let id = headers
+        .get(&proxy_state.tid_header)
+        .map(|v| String::from_utf8_lossy(v.as_bytes()).to_string());
     let mut msg_headers: HashMap<String, String> = HashMap::new();
     for (key, value) in headers.iter() {
         // Exclude request ID
@@ -209,6 +232,18 @@ async fn async_publish<T: Send + Sync + Clone + Store>(
         );
     }
 
+    // Register request in Redis
+    let (id, notify) = match proxy_state.callback.clone().register(id).await {
+        Ok(result) => result,
+        Err(e) => {
+            error!(error = ?e, "Registering request in data store");
+            return Err(ApiError::InternalServerError(
+                "Failed to register message".to_string(),
+            ));
+        }
+    };
+    tokio::spawn(notify);
+
     let (confirm_save_tx, confirm_save_rx) = oneshot::channel();
     let message = MessageWrapper {
         confirm_save: confirm_save_tx,
@@ -218,10 +253,6 @@ async fn async_publish<T: Send + Sync + Clone + Store>(
             headers: msg_headers,
         },
     };
-
-    // Register request in Redis
-    let notify = proxy_state.callback.clone().register(id.clone()).await;
-    tokio::spawn(notify);
 
     proxy_state.message.send(message).await.unwrap(); // FIXME:
     if proxy_state.monovertex {
@@ -246,14 +277,6 @@ async fn async_publish<T: Send + Sync + Clone + Store>(
             ))
         }
     }
-}
-
-// extracts the ID from the headers, if not found, generates a new UUID
-fn extract_id_from_headers(tid_header: &str, headers: &HeaderMap) -> String {
-    headers.get(tid_header).map_or_else(
-        || Uuid::new_v4().to_string(),
-        |v| String::from_utf8_lossy(v.as_bytes()).to_string(),
-    )
 }
 
 #[cfg(test)]
@@ -282,8 +305,8 @@ mod tests {
     struct MockStore;
 
     impl Store for MockStore {
-        async fn register(&mut self, _id: String) -> crate::Result<()> {
-            Ok(())
+        async fn register(&mut self, _id: Option<String>) -> crate::Result<String> {
+            Ok("".into())
         }
         async fn deregister(&mut self, _id: String) -> crate::Result<()> {
             Ok(())

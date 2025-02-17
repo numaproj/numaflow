@@ -5,6 +5,7 @@ use backoff::strategy::fixed;
 use redis::aio::ConnectionManager;
 use redis::{AsyncCommands, RedisError};
 use tokio::sync::Semaphore;
+use uuid::Uuid;
 
 use super::{PayloadToSave, PipelineResult};
 use crate::app::callback::Callback;
@@ -109,11 +110,46 @@ async fn handle_write_requests(
 // It is possible to move the methods defined here to be methods on the Redis actor and communicate through channels.
 // With that, all public APIs defined on RedisConnection can be on &self (immutable).
 impl super::Store for RedisConnection {
-    async fn register(&mut self, id: String) -> crate::Result<()> {
-        self.conn_manager
-            .set_nx(format!("request:{id}:status"), "processing")
-            .await
-            .map_err(|e| Error::StoreWrite(format!("Registering request_id={id} in Redis: {e:?}")))
+    async fn register(&mut self, id: Option<String>) -> crate::Result<String> {
+        match id {
+            Some(id) => {
+                let status: bool = self
+                    .conn_manager
+                    .set_nx(format!("request:{id}:status"), "processing")
+                    .await
+                    .map_err(|e| {
+                        Error::StoreWrite(format!("Registering request_id={id} in Redis: {e:?}"))
+                    })?;
+                if !status {
+                    // The user specified request id already exists
+                    return Err(Error::StoreWrite(format!(
+                        "request_id {id} already exists in the store",
+                    )));
+                }
+                Ok(id)
+            }
+            None => {
+                for _ in 0..5 {
+                    let id = Uuid::new_v4().to_string();
+                    let status: bool = self
+                        .conn_manager
+                        .set_nx(format!("request:{id}:status"), "processing")
+                        .await
+                        .map_err(|e| {
+                            Error::StoreWrite(format!(
+                                "Registering request_id={id} in Redis: {e:?}"
+                            ))
+                        })?;
+                    if !status {
+                        continue;
+                    }
+                    return Ok(id);
+                }
+                Err(Error::StoreWrite(format!(
+                    "Could not generate a unique request id"
+                )))
+            }
+        }
     }
     async fn deregister(&mut self, id: String) -> crate::Result<()> {
         self.conn_manager

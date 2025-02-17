@@ -25,8 +25,8 @@ impl InMemoryStore {
 }
 
 impl super::Store for InMemoryStore {
-    async fn register(&mut self, _id: String) -> crate::Result<()> {
-        Ok(())
+    async fn register(&mut self, _id: Option<String>) -> crate::Result<String> {
+        Ok("".into())
     }
     async fn deregister(&mut self, _id: String) -> crate::Result<()> {
         Ok(())

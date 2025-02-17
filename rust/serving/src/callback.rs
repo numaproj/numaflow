@@ -219,7 +219,10 @@ mod tests {
 
         // Register the request id in the store. This normally happens when the Serving source
         // receives a request from the client. The callbacks for this request must only happen after this.
-        let _callback_notify_rx = app_state.callback_state.register(ID_VALUE.into()).await;
+        let _callback_notify_rx = app_state
+            .callback_state
+            .register(Some(ID_VALUE.into()))
+            .await;
 
         let server_handle = tokio::spawn(start_main_server(app_state, tls_config));
 

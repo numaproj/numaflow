@@ -76,7 +76,6 @@ pub(crate) async fn router_with_auth<T>(app: AppState<T>) -> crate::Result<Route
 where
     T: Clone + Send + Sync + Store + 'static,
 {
-    let tid_header = app.settings.tid_header.clone();
     let layers = ServiceBuilder::new()
         // Add tracing to all requests
         .layer(
@@ -87,12 +86,8 @@ where
                         // We don't need request ID for these endpoints
                         return info_span!("request", method=?req.method(), path=req_path);
                     }
-                    let tid = req
-                        .headers()
-                        .get(&tid_header)
-                        .and_then(|v| v.to_str().ok())
-                        .map(|v| v.to_string())
-                        .unwrap_or_else(|| Uuid::new_v4().to_string());
+                    let uuid = Uuid::now_v7().to_string();
+                    let tid = format!("{}{}{}", &uuid[..8], &uuid[10..13], &uuid[uuid.len() - 5..]);
 
                     let matched_path = req
                         .extensions()

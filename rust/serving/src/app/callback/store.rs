@@ -27,7 +27,10 @@ pub(crate) enum PipelineResult {
 #[trait_variant::make(Store: Send)]
 #[allow(dead_code)]
 pub(crate) trait LocalStore {
-    async fn register(&mut self, id: String) -> crate::Result<()>;
+    /// Register a request id in the store. If user provides a request id, the same will be returned
+    /// if the same doesn't already exist in the store. An error is returned if the user-specified request id
+    /// already exists in the store. If the `id` is `None`, the store will generate a new unique request id.
+    async fn register(&mut self, id: Option<String>) -> crate::Result<String>;
     async fn deregister(&mut self, id: String) -> crate::Result<()>;
     async fn save(&mut self, messages: Vec<PayloadToSave>) -> crate::Result<()>;
     /// retrieve the callback payloads
