@@ -8,6 +8,7 @@ import {
   VertexDetailsContext,
   VertexDetailsContextProps,
 } from "../../../SlidingSidebar/partials/VertexDetails";
+import { Pod } from "../../../../../types/declarations/pods";
 
 const modalStyle = {
   position: "absolute",
@@ -31,6 +32,7 @@ interface MetricsModalProps {
   vertexId: string;
   type: string;
   presets?: any;
+  pod?: Pod;
 }
 
 export function MetricsModal({
@@ -43,6 +45,7 @@ export function MetricsModal({
   vertexId,
   type,
   presets,
+  pod,
 }: MetricsModalProps) {
   const { setVertexTab, setPodsViewTab, setExpanded, setPresets } =
     useContext<VertexDetailsContextProps>(VertexDetailsContext);
@@ -102,6 +105,7 @@ export function MetricsModal({
             metricDisplayName={metricDisplayName}
             setMetricsFound={setMetricsFound}
             presets={presets}
+            pod={pod}
           />
         </Box>
         {metricsFound && (
