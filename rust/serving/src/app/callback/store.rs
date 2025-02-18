@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use thiserror::Error;
+
 use crate::app::callback::Callback;
 
 // in-memory store
@@ -23,6 +25,29 @@ pub(crate) enum PipelineResult {
     Completed(Vec<Vec<u8>>),
 }
 
+#[derive(Error, Debug, Clone)]
+pub(crate) enum Error {
+    #[error("Connecting to store: {0}")]
+    Connection(String),
+
+    #[error("Request id {0} already exists in the store")]
+    DuplicateRequest(String),
+
+    #[error("Reading from store: {0}")]
+    StoreRead(String),
+
+    #[error("Writing payload to store: {0}")]
+    StoreWrite(String),
+}
+
+impl From<Error> for crate::Error {
+    fn from(value: Error) -> Self {
+        crate::Error::Store(value.to_string())
+    }
+}
+
+pub(crate) type Result<T> = std::result::Result<T, Error>;
+
 /// Store trait to store the callback information.
 #[trait_variant::make(Store: Send)]
 #[allow(dead_code)]
@@ -30,11 +55,11 @@ pub(crate) trait LocalStore {
     /// Register a request id in the store. If user provides a request id, the same will be returned
     /// if the same doesn't already exist in the store. An error is returned if the user-specified request id
     /// already exists in the store. If the `id` is `None`, the store will generate a new unique request id.
-    async fn register(&mut self, id: Option<String>) -> crate::Result<String>;
-    async fn deregister(&mut self, id: String) -> crate::Result<()>;
-    async fn save(&mut self, messages: Vec<PayloadToSave>) -> crate::Result<()>;
+    async fn register(&mut self, id: Option<String>) -> Result<String>;
+    async fn deregister(&mut self, id: String) -> Result<()>;
+    async fn save(&mut self, messages: Vec<PayloadToSave>) -> Result<()>;
     /// retrieve the callback payloads
-    async fn retrieve_callbacks(&mut self, id: &str) -> Result<Vec<Arc<Callback>>, crate::Error>;
-    async fn retrieve_datum(&mut self, id: &str) -> Result<PipelineResult, crate::Error>;
+    async fn retrieve_callbacks(&mut self, id: &str) -> Result<Vec<Arc<Callback>>>;
+    async fn retrieve_datum(&mut self, id: &str) -> Result<PipelineResult>;
     async fn ready(&mut self) -> bool;
 }

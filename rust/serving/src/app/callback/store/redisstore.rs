@@ -7,11 +7,10 @@ use redis::{AsyncCommands, RedisError};
 use tokio::sync::Semaphore;
 use uuid::Uuid;
 
+use super::{Error as StoreError, Result as StoreResult};
 use super::{PayloadToSave, PipelineResult};
 use crate::app::callback::Callback;
 use crate::config::RedisConfig;
-use crate::Error;
-use crate::Error::Connection;
 
 const LPUSH: &str = "LPUSH";
 const LRANGE: &str = "LRANGE";
@@ -28,11 +27,11 @@ impl RedisConnection {
     /// Creates a new RedisConnection with concurrent operations on Redis set by max_tasks.
     pub(crate) async fn new(config: RedisConfig) -> crate::Result<Self> {
         let client = redis::Client::open(config.addr.as_str())
-            .map_err(|e| Connection(format!("Creating Redis client: {e:?}")))?;
+            .map_err(|e| StoreError::Connection(format!("Creating Redis client: {e:?}")))?;
         let conn = client
             .get_connection_manager()
             .await
-            .map_err(|e| Connection(format!("Connecting to Redis server: {e:?}")))?;
+            .map_err(|e| StoreError::Connection(format!("Connecting to Redis server: {e:?}")))?;
         Ok(Self {
             conn_manager: conn,
             config,
@@ -58,7 +57,7 @@ impl RedisConnection {
     }
 
     // write to Redis with retries
-    async fn write_to_redis(&self, key: &str, value: &Vec<u8>) -> crate::Result<()> {
+    async fn write_to_redis(&self, key: &str, value: &Vec<u8>) -> StoreResult<()> {
         let interval = fixed::Interval::from_millis(self.config.retries_duration_millis.into())
             .take(self.config.retries);
 
@@ -77,19 +76,16 @@ impl RedisConnection {
             |e: &RedisError| !e.is_unrecoverable_error(),
         )
         .await
-        .map_err(|err| Error::StoreWrite(format!("Saving to redis: {}", err).to_string()))
+        .map_err(|err| StoreError::StoreWrite(format!("Saving to redis: {}", err).to_string()))
     }
 }
 
-async fn handle_write_requests(
-    redis_conn: RedisConnection,
-    msg: PayloadToSave,
-) -> crate::Result<()> {
+async fn handle_write_requests(redis_conn: RedisConnection, msg: PayloadToSave) -> StoreResult<()> {
     match msg {
         PayloadToSave::Callback { key, value } => {
             // Convert the CallbackRequest to a byte array
             let value = serde_json::to_vec(&*value)
-                .map_err(|e| Error::StoreWrite(format!("Serializing payload - {}", e)))?;
+                .map_err(|e| StoreError::StoreWrite(format!("Serializing payload - {}", e)))?;
 
             let key = format!("request:{key}:callbacks");
             redis_conn.write_to_redis(&key, &value).await
@@ -110,7 +106,7 @@ async fn handle_write_requests(
 // It is possible to move the methods defined here to be methods on the Redis actor and communicate through channels.
 // With that, all public APIs defined on RedisConnection can be on &self (immutable).
 impl super::Store for RedisConnection {
-    async fn register(&mut self, id: Option<String>) -> crate::Result<String> {
+    async fn register(&mut self, id: Option<String>) -> StoreResult<String> {
         match id {
             Some(id) => {
                 let mut pipe = redis::pipe();
@@ -125,16 +121,14 @@ impl super::Store for RedisConnection {
                     pipe.query_async(&mut self.conn_manager)
                         .await
                         .map_err(|e| {
-                            Error::StoreWrite(format!(
+                            StoreError::StoreWrite(format!(
                                 "Registering request_id={id} in Redis: {e:?}"
                             ))
                         })?;
 
                 if !status {
                     // The user specified request id already exists
-                    return Err(Error::StoreWrite(format!(
-                        "request_id {id} already exists in the store",
-                    )));
+                    return Err(StoreError::DuplicateRequest(id));
                 }
                 Ok(id)
             }
@@ -154,7 +148,7 @@ impl super::Store for RedisConnection {
                         .query_async(&mut self.conn_manager)
                         .await
                         .map_err(|e| {
-                            Error::StoreWrite(format!(
+                            StoreError::StoreWrite(format!(
                                 "Registering request_id={id} in Redis: {e:?}"
                             ))
                         })?;
@@ -164,13 +158,13 @@ impl super::Store for RedisConnection {
                     }
                     return Ok(id);
                 }
-                Err(Error::StoreWrite(format!(
+                Err(StoreError::StoreWrite(format!(
                     "Could not generate a unique request id"
                 )))
             }
         }
     }
-    async fn deregister(&mut self, id: String) -> crate::Result<()> {
+    async fn deregister(&mut self, id: String) -> StoreResult<()> {
         let key = format!("request:{id}:status");
         let status: bool = redis::cmd("SET")
             .arg(&key)
@@ -180,19 +174,19 @@ impl super::Store for RedisConnection {
             .query_async(&mut self.conn_manager)
             .await
             .map_err(|e| {
-                Error::StoreWrite(format!(
+                StoreError::StoreWrite(format!(
                     "Setting processing status as completed in Redis for request_id={id}: {e:?}"
                 ))
             })?;
         if !status {
-            return Err(Error::StoreWrite(format!(
+            return Err(StoreError::StoreWrite(format!(
                 "Key {key} is not present in Redis for updating processing status as completed"
             )));
         }
         Ok(())
     }
     // Attempt to save all payloads. Returns error if we fail to save at least one message.
-    async fn save(&mut self, messages: Vec<PayloadToSave>) -> crate::Result<()> {
+    async fn save(&mut self, messages: Vec<PayloadToSave>) -> StoreResult<()> {
         let mut tasks = vec![];
         // This is put in place not to overload Redis and also way some kind of
         // flow control.
@@ -212,7 +206,7 @@ impl super::Store for RedisConnection {
         Ok(())
     }
 
-    async fn retrieve_callbacks(&mut self, id: &str) -> Result<Vec<Arc<Callback>>, Error> {
+    async fn retrieve_callbacks(&mut self, id: &str) -> StoreResult<Vec<Arc<Callback>>> {
         let redis_key = format!("request:{id}:callbacks");
         let result: Result<Vec<Vec<u8>>, RedisError> = redis::cmd(LRANGE)
             .arg(redis_key)
@@ -224,14 +218,17 @@ impl super::Store for RedisConnection {
         match result {
             Ok(result) => {
                 if result.is_empty() {
-                    return Err(Error::StoreRead(format!("No entry found for id: {}", id)));
+                    return Err(StoreError::StoreRead(format!(
+                        "No entry found for id: {}",
+                        id
+                    )));
                 }
 
                 let messages: Result<Vec<_>, _> = result
                     .into_iter()
                     .map(|msg| {
                         let cbr: Callback = serde_json::from_slice(&msg).map_err(|e| {
-                            Error::StoreRead(format!("Parsing payload from bytes - {}", e))
+                            StoreError::StoreRead(format!("Parsing payload from bytes - {}", e))
                         })?;
                         Ok(Arc::new(cbr))
                     })
@@ -239,20 +236,20 @@ impl super::Store for RedisConnection {
 
                 messages
             }
-            Err(e) => Err(Error::StoreRead(format!(
+            Err(e) => Err(StoreError::StoreRead(format!(
                 "Failed to read from redis: {:?}",
                 e
             ))),
         }
     }
 
-    async fn retrieve_datum(&mut self, id: &str) -> Result<PipelineResult, Error> {
+    async fn retrieve_datum(&mut self, id: &str) -> StoreResult<PipelineResult> {
         let redis_status_key = format!("request:{id}:status");
         let status: String = self
             .conn_manager
             .get(redis_status_key)
             .await
-            .map_err(|e| Error::StoreRead(format!("Reading request status: {e:?}")))?;
+            .map_err(|e| StoreError::StoreRead(format!("Reading request status: {e:?}")))?;
 
         if status == "processing" {
             return Ok(PipelineResult::Processing);
@@ -269,12 +266,15 @@ impl super::Store for RedisConnection {
         match result {
             Ok(result) => {
                 if result.is_empty() {
-                    return Err(Error::StoreRead(format!("No entry found for id: {}", id)));
+                    return Err(StoreError::StoreRead(format!(
+                        "No entry found for id: {}",
+                        id
+                    )));
                 }
 
                 Ok(PipelineResult::Completed(result))
             }
-            Err(e) => Err(Error::StoreRead(format!(
+            Err(e) => Err(StoreError::StoreRead(format!(
                 "Failed to read from redis: {:?}",
                 e
             ))),
@@ -369,11 +369,11 @@ mod tests {
 
         // Test Redis retrieve callbacks error
         let result = redis_conn.retrieve_callbacks("non_existent_key").await;
-        assert!(matches!(result, Err(Error::StoreRead(_))));
+        assert!(matches!(result, Err(StoreError::StoreRead(_))));
 
         // Test Redis retrieve datum error
         let result = redis_conn.retrieve_datum("non_existent_key").await;
-        assert!(matches!(result, Err(Error::StoreRead(_))));
+        assert!(matches!(result, Err(StoreError::StoreRead(_))));
     }
 
     #[tokio::test]

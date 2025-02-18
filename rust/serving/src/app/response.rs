@@ -30,6 +30,7 @@ pub enum ApiError {
     BadRequest(String),
     InternalServerError(String),
     BadGateway(String),
+    Conflict(String),
 }
 
 impl IntoResponse for ApiError {
@@ -45,6 +46,7 @@ impl IntoResponse for ApiError {
             ApiError::BadRequest(message) => (StatusCode::BAD_REQUEST, message),
             ApiError::InternalServerError(message) => (StatusCode::INTERNAL_SERVER_ERROR, message),
             ApiError::BadGateway(message) => (StatusCode::BAD_GATEWAY, message),
+            ApiError::Conflict(message) => (StatusCode::CONFLICT, message),
         };
 
         (

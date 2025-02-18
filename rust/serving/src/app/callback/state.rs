@@ -6,6 +6,7 @@ use std::{
 use tokio::sync::oneshot;
 
 use super::store::{PipelineResult, Store};
+use crate::app::callback::store::Result as StoreResult;
 use crate::app::callback::{store::PayloadToSave, Callback};
 use crate::app::tracker::MessageGraph;
 use crate::Error;
@@ -46,7 +47,7 @@ where
     pub(crate) async fn register(
         &mut self,
         id: Option<String>,
-    ) -> crate::Result<(String, oneshot::Receiver<Result<String, Error>>)> {
+    ) -> StoreResult<(String, oneshot::Receiver<Result<String, Error>>)> {
         // TODO: add an entry in Redis to note that the entry has been registered
 
         let id = self.store.register(id).await?; // FIXME:
@@ -67,7 +68,7 @@ where
 
     /// Retrieves the output of the numaflow pipeline
     pub(crate) async fn retrieve_saved(&mut self, id: &str) -> Result<PipelineResult, Error> {
-        self.store.retrieve_datum(id).await
+        self.store.retrieve_datum(id).await.map_err(Into::into)
     }
 
     pub(crate) async fn save_response(
@@ -83,6 +84,7 @@ where
                 value: body,
             }])
             .await
+            .map_err(Into::into)
     }
 
     /// insert_callback_requests is used to insert the callback requests.
@@ -217,13 +219,12 @@ where
         id: &str,
     ) -> Result<Vec<Arc<Callback>>, Error> {
         // If the id is not found in the in-memory store, fetch from Redis
-        let callbacks: Vec<Arc<Callback>> = match self.store.retrieve_callbacks(id).await {
-            Ok(response) => response.into_iter().collect(),
-            Err(e) => {
-                return Err(e);
-            }
-        };
-        Ok(callbacks)
+        Ok(self
+            .store
+            .retrieve_callbacks(id)
+            .await?
+            .into_iter()
+            .collect())
     }
 
     // Check if the store is ready

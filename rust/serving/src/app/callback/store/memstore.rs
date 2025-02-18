@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use super::{Error as StoreError, Result as StoreResult};
 use super::{PayloadToSave, PipelineResult};
 use crate::app::callback::Callback;
-use crate::Error;
 
 /// `InMemoryStore` is an in-memory implementation of the `Store` trait.
 /// It uses a `HashMap` to store data in memory.
@@ -25,29 +25,30 @@ impl InMemoryStore {
 }
 
 impl super::Store for InMemoryStore {
-    async fn register(&mut self, _id: Option<String>) -> crate::Result<String> {
+    async fn register(&mut self, _id: Option<String>) -> StoreResult<String> {
         Ok("".into())
     }
-    async fn deregister(&mut self, _id: String) -> crate::Result<()> {
+    async fn deregister(&mut self, _id: String) -> StoreResult<()> {
         Ok(())
     }
     /// Saves a vector of `PayloadToSave` into the `HashMap`.
     /// Each `PayloadToSave` is serialized into bytes and stored in the `HashMap` under its key.
-    async fn save(&mut self, messages: Vec<PayloadToSave>) -> crate::Result<()> {
+    async fn save(&mut self, messages: Vec<PayloadToSave>) -> StoreResult<()> {
         let mut data = self.data.lock().unwrap();
         for msg in messages {
             match msg {
                 PayloadToSave::Callback { key, value } => {
                     if key.is_empty() {
-                        return Err(Error::StoreWrite("Key cannot be empty".to_string()));
+                        return Err(StoreError::StoreWrite("Key cannot be empty".to_string()));
                     }
-                    let bytes = serde_json::to_vec(&*value)
-                        .map_err(|e| Error::StoreWrite(format!("Serializing to bytes - {}", e)))?;
+                    let bytes = serde_json::to_vec(&*value).map_err(|e| {
+                        StoreError::StoreWrite(format!("Serializing to bytes - {}", e))
+                    })?;
                     data.entry(key).or_default().push(bytes);
                 }
                 PayloadToSave::DatumFromPipeline { key, value } => {
                     if key.is_empty() {
-                        return Err(Error::StoreWrite("Key cannot be empty".to_string()));
+                        return Err(StoreError::StoreWrite("Key cannot be empty".to_string()));
                     }
                     data.entry(format!("{}_{}", key, "saved"))
                         .or_default()
@@ -60,7 +61,7 @@ impl super::Store for InMemoryStore {
 
     /// Retrieves callbacks for a given id from the `HashMap`.
     /// Each callback is deserialized from bytes into a `CallbackRequest`.
-    async fn retrieve_callbacks(&mut self, id: &str) -> Result<Vec<Arc<Callback>>, Error> {
+    async fn retrieve_callbacks(&mut self, id: &str) -> StoreResult<Vec<Arc<Callback>>> {
         let data = self.data.lock().unwrap();
         match data.get(id) {
             Some(result) => {
@@ -68,7 +69,7 @@ impl super::Store for InMemoryStore {
                     .iter()
                     .map(|msg| {
                         let cbr: Callback = serde_json::from_slice(msg).map_err(|_| {
-                            Error::StoreRead(
+                            StoreError::StoreRead(
                                 "Failed to parse CallbackRequest from bytes".to_string(),
                             )
                         })?;
@@ -77,18 +78,24 @@ impl super::Store for InMemoryStore {
                     .collect();
                 messages
             }
-            None => Err(Error::StoreRead(format!("No entry found for id: {}", id))),
+            None => Err(StoreError::StoreRead(format!(
+                "No entry found for id: {}",
+                id
+            ))),
         }
     }
 
     /// Retrieves data for a given id from the `HashMap`.
     /// Each piece of data is deserialized from bytes into a `String`.
-    async fn retrieve_datum(&mut self, id: &str) -> Result<PipelineResult, Error> {
+    async fn retrieve_datum(&mut self, id: &str) -> StoreResult<PipelineResult> {
         let id = format!("{}_{}", id, "saved");
         let data = self.data.lock().unwrap();
         match data.get(&id) {
             Some(result) => Ok(PipelineResult::Completed(result.to_vec())),
-            None => Err(Error::StoreRead(format!("No entry found for id: {}", id))),
+            None => Err(StoreError::StoreRead(format!(
+                "No entry found for id: {}",
+                id
+            ))),
         }
     }
 
