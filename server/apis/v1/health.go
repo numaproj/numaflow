@@ -169,10 +169,10 @@ func isVertexHealthy(h *handler, ns string, pipeline string, vertex *dfv1.Vertex
 	if vertex.Status.Phase != dfv1.VertexPhaseRunning {
 		// check if the number of replicas running in the vertex
 		// are equal to the number of desired replicas
-		if int(vertex.Status.Replicas) != vertex.GetReplicas() {
+		if int(vertex.Status.Replicas) != int(vertex.Status.DesiredReplicas) {
 			return false, &resourceHealthResponse{
 				Message: fmt.Sprintf("Vertex %q has %d replicas running, "+
-					"expected %d", vertex.Name, vertex.Status.Replicas, vertex.GetReplicas()),
+					"expected %d", vertex.Name, vertex.Status.Replicas, vertex.Status.DesiredReplicas),
 				Code: "V9",
 			}, nil
 		}
