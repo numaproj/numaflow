@@ -29,6 +29,7 @@ import {
 } from "../../utils/constants";
 import { AppContext } from "../../../../../../../../../../../../../../../App";
 import { AppContextProps } from "../../../../../../../../../../../../../../../types/declarations/app";
+import { Pod } from "../../../../../../../../../../../../../../../types/declarations/pods";
 
 interface TooltipProps {
   payload?: any[];
@@ -193,9 +194,9 @@ interface LineChartComponentProps {
   type: string;
   metric: any;
   vertexId?: string;
-  selectedPodName?: string;
   presets?: any;
   fromModal?: boolean;
+  pod?: Pod;
 }
 
 // TODO have a check for metricReq against metric object to ensure required fields are passed
@@ -205,9 +206,9 @@ const LineChartComponent = ({
   type,
   metric,
   vertexId,
-  selectedPodName,
   presets,
   fromModal,
+  pod,
 }: LineChartComponentProps) => {
   const { addError } = useContext<AppContextProps>(AppContext);
   const [transformedData, setTransformedData] = useState<any[]>([]);
@@ -254,13 +255,13 @@ const LineChartComponent = ({
                 return `${pipelineId}-${vertexId}-.*`;
             }
           } else {
-            return selectedPodName;
+            return pod?.name;
           }
         default:
           return "";
       }
     },
-    [namespaceId, pipelineId]
+    [namespaceId, pipelineId, pod]
   );
 
   const updateFilterList = useCallback(
@@ -396,6 +397,18 @@ const LineChartComponent = ({
           return (periodOrder[period1] || 0) - (periodOrder[period2] || 0);
         });
 
+    if (Array.isArray(label) && label.length === 1 && label[0] === "container"){
+      filteredChartData = filteredChartData?.filter((item) => {
+        return pod?.containers?.includes(item?.metric?.["container"])
+      })
+    }
+    
+    if (Array.isArray(label) && label.length === 1 && label[0] === "pod"){
+      filteredChartData = filteredChartData?.filter((item) => {
+        return !item?.metric?.["pod"]?.includes("daemon")
+      })
+    }
+    
     filteredChartData?.forEach((item) => {
       let labelVal = "";
       label?.forEach((eachLabel: string) => {
@@ -431,7 +444,7 @@ const LineChartComponent = ({
     });
     setChartLabels(labels);
     setTransformedData(transformedData);
-  }, [chartData, metricsReq, groupByLabel]);
+  }, [chartData, metricsReq, groupByLabel, pod]);
 
   useEffect(() => {
     if (chartData) updateChartData();
@@ -494,31 +507,31 @@ const LineChartComponent = ({
 
       {filtersList?.filter((filterEle: any) => !filterEle?.required)?.length >
         0 && (
-        <Box
-          sx={{
-            display: fromModal ? "none" : "flex",
-            alignItems: "center",
-            justifyContent: "space-around",
-            mt: "1rem",
-            mb: "2rem",
-            px: "6rem",
-          }}
-        >
-          <Box sx={{ mr: "1rem" }}>Filters</Box>
-          <FiltersDropdown
-            items={filtersList?.filter(
-              (filterEle: any) => !filterEle?.required
-            )}
-            namespaceId={namespaceId}
-            pipelineId={pipelineId}
-            type={type}
-            vertexId={vertexId}
-            setFilters={setFilters}
-            selectedPodName={selectedPodName}
-            metric={metric}
-          />
-        </Box>
-      )}
+          <Box
+            sx={{
+              display: fromModal ? "none" : "flex",
+              alignItems: "center",
+              justifyContent: "space-around",
+              mt: "1rem",
+              mb: "2rem",
+              px: "6rem",
+            }}
+          >
+            <Box sx={{ mr: "1rem" }}>Filters</Box>
+            <FiltersDropdown
+              items={filtersList?.filter(
+                (filterEle: any) => !filterEle?.required
+              )}
+              namespaceId={namespaceId}
+              pipelineId={pipelineId}
+              type={type}
+              vertexId={vertexId}
+              setFilters={setFilters}
+              selectedPodName={pod?.name}
+              metric={metric}
+            />
+          </Box>
+        )}
 
       {isLoading && (
         <Box
