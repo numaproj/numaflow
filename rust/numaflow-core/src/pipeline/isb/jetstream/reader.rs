@@ -6,7 +6,7 @@ use async_nats::jetstream::{
     consumer::PullConsumer, AckKind, Context, Message as JetstreamMessage,
 };
 use prost::Message as ProtoMessage;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinHandle;
 use tokio::time::{self, Instant};
 use tokio_stream::wrappers::ReceiverStream;
@@ -25,6 +25,8 @@ use crate::shared::grpc::utc_from_timestamp;
 use crate::tracker::TrackerHandle;
 use crate::watermark::isb::ISBWatermarkHandle;
 use crate::{metrics, Result};
+
+const MAX_ACK_PENDING: usize = 25000;
 
 /// The JetStreamReader is a handle to the background actor that continuously fetches messages from JetStream.
 /// It can be used to cancel the background task and stop reading from JetStream.
@@ -159,6 +161,7 @@ impl JetStreamReader {
         let handle: JoinHandle<Result<()>> = tokio::spawn({
             async move {
                 let mut labels = pipeline_forward_metric_labels(&self.vertex_type).clone();
+                let semaphore = Arc::new(Semaphore::new(MAX_ACK_PENDING));
                 labels.push((
                     metrics::PIPELINE_PARTITION_NAME_LABEL.to_string(),
                     self.stream.name.to_string(),
@@ -204,12 +207,15 @@ impl JetStreamReader {
 
                             // we can ignore the wmb messages
                             if let MessageType::WMB = message.typ {
+                                info!(?message, "Received WMB message");
                                 // ack the message and continue
                                 jetstream_message.ack().await.map_err(|e| {
                                     Error::ISB(format!("Failed to ack the wmb message: {:?}", e))
                                 })?;
                                 continue;
                             }
+
+                            info!(offset=?message.offset, "Read message from Jetstream");
 
                             if let Some(watermark_handle) = self.watermark_handle.as_ref() {
                                 let watermark = watermark_handle.fetch_watermark(message.offset.clone()).await;
@@ -220,23 +226,17 @@ impl JetStreamReader {
                             let (ack_tx, ack_rx) = oneshot::channel();
                             self.tracker_handle.insert(&message, ack_tx).await?;
 
+                            // Reserve a permit before sending the message to the channel.
+                            let permit = Arc::clone(&semaphore).acquire_owned().await.expect("Failed to acquire semaphore permit");
                             tokio::spawn(Self::start_work_in_progress(
+                                message.offset.clone(),
                                 jetstream_message,
                                 ack_rx,
                                 self.config.wip_ack_interval,
+                                permit,
                             ));
 
-                            let offset = message.offset.clone();
-                            if let Err(e) = messages_tx.send(message).await {
-                                // nak the read message and return
-                                self.tracker_handle.discard(offset).await?;
-                                error!(?e, "Failed to send message to receiver");
-                                return Err(Error::ISB(format!(
-                                    "Failed to send message to receiver: {:?}",
-                                    e
-                                )));
-                            }
-
+                            messages_tx.send(message).await.expect("Failed to send message to channel");
                             pipeline_metrics()
                                 .forwarder
                                 .read_total
@@ -245,6 +245,13 @@ impl JetStreamReader {
                         }
                     }
                 }
+                info!(stream=?self.stream, "Jetstream reader stopped, waiting for ack tasks to complete");
+                // wait for all the permits to be released before returning
+                let _permit = Arc::clone(&semaphore)
+                    .acquire_many_owned(MAX_ACK_PENDING as u32)
+                    .await
+                    .expect("Failed to acquire semaphore permit");
+                info!(stream=?self.stream, "All permits released, returning from Jetstream reader");
                 Ok(())
             }
         });
@@ -255,13 +262,16 @@ impl JetStreamReader {
     // We will continuously retry if there is an error in acknowledging the message as work-in-progress.
     // If the sender end of the ack_rx channel was dropped before sending a final Ack or Nak (due to some unhandled/unknown failure), we will send a Nak to Jetstream.
     async fn start_work_in_progress(
+        offset: Offset,
         msg: JetstreamMessage,
         mut ack_rx: oneshot::Receiver<ReadAck>,
         tick: Duration,
+        _permit: OwnedSemaphorePermit, // permit to release after acking the offsets.
     ) {
-        let mut interval = time::interval_at(Instant::now() + tick, tick);
         let start = Instant::now();
+        let mut interval = time::interval_at(start + tick, tick);
 
+        info!(offset=?offset, "Starting work in progress for message");
         loop {
             let wip = async {
                 interval.tick().await;
@@ -269,7 +279,11 @@ impl JetStreamReader {
                 if let Err(e) = ack_result {
                     // We expect that the ack in the next iteration will be successful.
                     // If its some unrecoverable Jetstream error, the fetching messages in the JetstreamReader implementation should also fail and cause the system to shut down.
-                    error!(?e, "Failed to send InProgress Ack to Jetstream for message");
+                    error!(
+                        ?e,
+                        ?offset,
+                        "Failed to send InProgress Ack to Jetstream for message"
+                    );
                 }
             };
 
@@ -279,7 +293,11 @@ impl JetStreamReader {
             };
 
             let ack = ack.unwrap_or_else(|e| {
-                error!(?e, "Received error while waiting for Ack oneshot channel");
+                error!(
+                    ?e,
+                    ?offset,
+                    "Received error while waiting for Ack oneshot channel"
+                );
                 ReadAck::Nak
             });
 
@@ -287,7 +305,7 @@ impl JetStreamReader {
                 ReadAck::Ack => {
                     let ack_result = msg.ack().await;
                     if let Err(e) = ack_result {
-                        error!(?e, "Failed to send Ack to Jetstream for message");
+                        error!(?e, ?offset, "Failed to send Ack to Jetstream for message");
                     }
                     pipeline_metrics()
                         .forwarder
@@ -300,13 +318,15 @@ impl JetStreamReader {
                         .ack_total
                         .get_or_create(pipeline_isb_metric_labels())
                         .inc();
+                    info!(?offset, "Sent Ack to Jetstream for message");
                     return;
                 }
                 ReadAck::Nak => {
                     let ack_result = msg.ack_with(AckKind::Nak(None)).await;
                     if let Err(e) = ack_result {
-                        error!(?e, "Failed to send Nak to Jetstream for message");
+                        error!(?e, ?offset, "Failed to send Nak to Jetstream for message");
                     }
+                    info!(?offset, "Sent Nak to Jetstream for message");
                     return;
                 }
             }
@@ -568,5 +588,34 @@ mod tests {
         js_reader_task.await.unwrap().unwrap();
 
         context.delete_stream(js_stream.name).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_child_tasks_not_aborted() {
+        use tokio::task;
+        use tokio::time::{sleep, Duration};
+
+        // Parent task
+        let parent_task = task::spawn(async {
+            // Spawn a child task
+            task::spawn(async {
+                for i in 1..=5 {
+                    println!("Child task running: {}", i);
+                    sleep(Duration::from_secs(1)).await;
+                }
+            });
+
+            // Parent task logic
+            println!("Parent task running");
+            sleep(Duration::from_secs(2)).await;
+
+            // Parent task returns early
+            println!("Parent task returning early");
+        });
+
+        drop(parent_task);
+
+        // Give some time to observe the child task behavior
+        sleep(Duration::from_secs(8)).await;
     }
 }

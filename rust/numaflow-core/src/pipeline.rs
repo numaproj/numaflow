@@ -201,10 +201,9 @@ async fn start_source_forwarder(
     )
     .await;
 
-    let forwarder =
-        source_forwarder::SourceForwarder::new(source, buffer_writer, cln_token.clone());
+    let forwarder = source_forwarder::SourceForwarder::new(source, buffer_writer);
 
-    forwarder.start().await?;
+    forwarder.start(cln_token).await?;
     Ok(())
 }
 
@@ -235,6 +234,7 @@ async fn start_map_forwarder(
     // create tracker and buffer writer, they can be shared across all forwarders
     let tracker_handle =
         TrackerHandle::new(watermark_handle.clone(), serving_callback_handler.clone());
+
     let buffer_writer = create_buffer_writer(
         &config,
         js_context.clone(),
@@ -289,21 +289,11 @@ async fn start_map_forwarder(
     let mut forwarder_tasks = vec![];
     for (buffer_reader, buffer_writer, mapper) in forwarder_components {
         info!(%buffer_reader, "Starting forwarder for buffer reader");
-        let forwarder = forwarder::map_forwarder::MapForwarder::new(
-            buffer_reader,
-            mapper,
-            buffer_writer,
-            cln_token.clone(),
-        )
-        .await;
+        let forwarder =
+            forwarder::map_forwarder::MapForwarder::new(buffer_reader, mapper, buffer_writer).await;
         let task = tokio::spawn({
             let cln_token = cln_token.clone();
-            async move {
-                forwarder.start().await.inspect_err(|_| {
-                    // cancel the token so that other forwarders can gracefully stop
-                    cln_token.cancel();
-                })
-            }
+            async move { forwarder.start(cln_token.clone()).await }
         });
         forwarder_tasks.push(task);
     }
@@ -394,14 +384,13 @@ async fn start_sink_forwarder(
     let mut forwarder_tasks = Vec::new();
     for (buffer_reader, (sink_writer, _, _)) in buffer_readers.into_iter().zip(sink_writers) {
         info!(%buffer_reader, "Starting forwarder for buffer reader");
-        let forwarder = forwarder::sink_forwarder::SinkForwarder::new(
-            buffer_reader,
-            sink_writer,
-            cln_token.clone(),
-        )
-        .await;
+        let forwarder =
+            forwarder::sink_forwarder::SinkForwarder::new(buffer_reader, sink_writer).await;
 
-        let task = tokio::spawn(async move { forwarder.start().await });
+        let task = tokio::spawn({
+            let cln_token = cln_token.clone();
+            async move { forwarder.start(cln_token.clone()).await }
+        });
         forwarder_tasks.push(task);
     }
 

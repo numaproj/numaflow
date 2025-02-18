@@ -240,6 +240,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) error {
 	var readOffsets = make([]isb.Offset, len(readMessages))
 	for idx, m := range readMessages {
 		readOffsets[idx] = m.ReadOffset
+		isdf.opts.logger.Infow("Read message with offset", zap.String("offset", m.ReadOffset.String()))
 		totalBytes += len(m.Payload)
 		if m.Kind == isb.Data {
 			dataMessages = append(dataMessages, m)

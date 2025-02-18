@@ -189,6 +189,7 @@ func (jr *jetStreamReader) NoAck(ctx context.Context, offsets []isb.Offset) {
 			if err := o.NoAck(); err != nil {
 				jr.log.Errorw("Failed to nak JetStream msg", zap.Error(err))
 			}
+			jr.log.Infow("nack message with offset", zap.String("offset", o.String()))
 		}(o)
 	}
 	wg.Wait()

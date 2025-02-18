@@ -14,19 +14,20 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use chrono::{DateTime, Utc};
-use serving::callback::CallbackHandler;
-use serving::{DEFAULT_CALLBACK_URL_HEADER_KEY, DEFAULT_ID_HEADER};
-use tokio::sync::{mpsc, oneshot};
-
 use crate::error::Error;
 use crate::message::{Message, Offset, ReadAck};
 use crate::watermark::isb::ISBWatermarkHandle;
 use crate::Result;
+use chrono::{DateTime, Utc};
+use serving::callback::CallbackHandler;
+use serving::{DEFAULT_CALLBACK_URL_HEADER_KEY, DEFAULT_ID_HEADER};
+use tokio::sync::{mpsc, oneshot};
+use tracing::{error, info};
 
 /// TrackerEntry represents the state of a tracked message.
 #[derive(Debug)]
 struct TrackerEntry {
+    offset: Offset,
     /// one shot to send the ack back
     ack_send: oneshot::Sender<ReadAck>,
     /// number of messages in flight. the count to reach 0 for the ack to happen.
@@ -38,6 +39,7 @@ struct TrackerEntry {
 }
 
 /// ActorMessage represents the messages that can be sent to the Tracker actor.
+#[derive(Debug)]
 enum ActorMessage {
     Insert {
         offset: Offset,
@@ -58,7 +60,6 @@ enum ActorMessage {
     UpdateEOF {
         offset: Offset,
     },
-    DiscardAll, // New variant for discarding all messages
     #[cfg(test)]
     IsEmpty {
         respond_to: oneshot::Sender<bool>,
@@ -131,12 +132,15 @@ impl TryFrom<&Message> for ServingCallbackInfo {
 
 impl Drop for Tracker {
     fn drop(&mut self) {
-        // clear the entries from the map and send nak
-        for (_, entry) in self.entries.drain() {
-            entry
-                .ack_send
-                .send(ReadAck::Nak)
-                .expect("Failed to send nak");
+        let keys: Vec<_> = self.entries.keys().cloned().collect();
+        info!("Dropping tracker with entries: {:?}", keys);
+        for offset in keys {
+            if let Some(entry) = self.entries.remove(&offset) {
+                info!(?offset, ?entry, "Dropping tracker entry");
+                if let Err(e) = entry.ack_send.send(ReadAck::Nak) {
+                    error!(?e, ?offset, "Failed to send nak");
+                }
+            }
         }
     }
 }
@@ -159,8 +163,10 @@ impl Tracker {
     /// Runs the Tracker, processing incoming actor messages to update the state.
     async fn run(mut self) {
         while let Some(message) = self.receiver.recv().await {
+            info!(?message, "Received tracker actor message");
             self.handle_message(message).await;
         }
+        info!("Tracker actor stopped");
     }
 
     /// Handles incoming actor messages to update the state of tracked messages.
@@ -187,9 +193,6 @@ impl Tracker {
             ActorMessage::Discard { offset } => {
                 self.handle_discard(offset).await;
             }
-            ActorMessage::DiscardAll => {
-                self.handle_discard_all().await;
-            }
             #[cfg(test)]
             ActorMessage::IsEmpty { respond_to } => {
                 let is_empty = self.entries.is_empty();
@@ -206,9 +209,11 @@ impl Tracker {
         watermark: Option<DateTime<Utc>>,
         respond_to: oneshot::Sender<ReadAck>,
     ) {
+        info!("Inserting offset into tracker: {:?}", offset);
         self.entries.insert(
             offset.clone(),
             TrackerEntry {
+                offset: offset.clone(),
                 ack_send: respond_to,
                 count: 0,
                 eof: true,
@@ -274,22 +279,15 @@ impl Tracker {
         let Some(entry) = self.entries.remove(&offset) else {
             return;
         };
-        entry
-            .ack_send
-            .send(ReadAck::Nak)
-            .expect("Failed to send nak");
+        info!(
+            "Discarding offset from tracker: {:?} and entry: {:?}",
+            offset, entry
+        );
+        if let Err(e) = entry.ack_send.send(ReadAck::Nak) {
+            error!(?e, ?offset, "***Failed to send nak***");
+        }
         if let Some(watermark_handle) = &self.watermark_handle {
             watermark_handle.remove_offset(offset).await;
-        }
-    }
-
-    /// Discards all entries from the tracker and sends a nak for each.
-    async fn handle_discard_all(&mut self) {
-        for (_, entry) in self.entries.drain() {
-            entry
-                .ack_send
-                .send(ReadAck::Nak)
-                .expect("Failed to send nak");
         }
     }
 
@@ -305,6 +303,7 @@ impl Tracker {
             ..
         } = entry;
 
+        info!("Deleting offset from the tracker: {:?}", offset);
         ack_send.send(ReadAck::Ack).expect("Failed to send ack");
 
         if let Some(watermark_handle) = &self.watermark_handle {
@@ -315,7 +314,7 @@ impl Tracker {
             return;
         };
         let Some(callback_info) = callback_info else {
-            tracing::error!("Callback is enabled, but Tracker doesn't contain callback info");
+            error!("Callback is enabled, but Tracker doesn't contain callback info");
             return;
         };
 
@@ -329,7 +328,7 @@ impl Tracker {
             )
             .await;
         if let Err(e) = result {
-            tracing::error!(?e, id, "Failed to send callback");
+            error!(?e, id, "Failed to send callback");
         }
     }
 }
@@ -430,16 +429,6 @@ impl TrackerHandle {
     /// Discards a message from the Tracker with the given offset.
     pub(crate) async fn discard(&self, offset: Offset) -> Result<()> {
         let message = ActorMessage::Discard { offset };
-        self.sender
-            .send(message)
-            .await
-            .map_err(|e| Error::Tracker(format!("{:?}", e)))?;
-        Ok(())
-    }
-
-    /// Discards all messages from the Tracker and sends a nak for each.
-    pub(crate) async fn discard_all(&self) -> Result<()> {
-        let message = ActorMessage::DiscardAll;
         self.sender
             .send(message)
             .await

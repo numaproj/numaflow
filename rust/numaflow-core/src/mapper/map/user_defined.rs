@@ -125,14 +125,7 @@ impl UserDefinedUnaryMap {
             .await
             .insert(key.clone(), (msg_info, respond_to));
 
-        // if sending the message to rpc server fails, remove the entry from the map and return error
-        if let Err(e) = self.read_tx.send(message.into()).await {
-            error!(?e, "failed to send message to grpc server");
-            let val = self.senders.lock().await.remove(&key);
-            if let Some((_, sender)) = val {
-                let _ = sender.send(Err(Error::Mapper("failed to send message".to_string())));
-            }
-        }
+        let _ = self.read_tx.send(message.into()).await;
     }
 }
 

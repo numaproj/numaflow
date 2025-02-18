@@ -3,21 +3,27 @@ kind: Pipeline
 metadata:
   name: simple-pipeline
 spec:
+  watermark:
+    disabled: true
   vertices:
     - name: in
       scale:
         min: 1
       # A self data generating source
       source:
-        generator:
-          rpu: 5
-          duration: 1s
+        udsource:
+          container:
+            image: quay.io/numaio/numaflow-go/source-simple-source:stable
+            imagePullPolicy: Never
     - name: cat
+      partitions: 2
       scale:
         min: 1
+        max: 1
       udf:
-        builtin:
-          name: cat # A built-in UDF which simply cats the message
+        container:
+          image: quay.io/numaio/numaflow-go/map-forward-message:stable
+          imagePullPolicy: Never
     - name: out
       scale:
         min: 1

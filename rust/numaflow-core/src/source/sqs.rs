@@ -195,21 +195,17 @@ pub mod tests {
             Duration::from_millis(100),
             SinkClientType::Log,
             tracker_handle.clone(),
-            cln_token.clone(),
         )
         .build()
         .await
         .unwrap();
 
         // create the forwarder with the source and sink writer
-        let forwarder = crate::monovertex::forwarder::Forwarder::new(
-            source.clone(),
-            sink_writer,
-            cln_token.clone(),
-        );
+        let forwarder = crate::monovertex::forwarder::Forwarder::new(source.clone(), sink_writer);
 
+        let cancel_token = cln_token.clone();
         let _forwarder_handle: JoinHandle<crate::error::Result<()>> = tokio::spawn(async move {
-            forwarder.start().await?;
+            forwarder.start(cancel_token).await?;
             Ok(())
         });
 

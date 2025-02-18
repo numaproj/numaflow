@@ -42,7 +42,6 @@ pub(crate) struct JetstreamWriter {
     /// HashMap of streams (a vertex can write to any immediate downstream) and a bool to represent
     /// whether the corresponding stream is full.
     is_full: HashMap<&'static str, Arc<AtomicBool>>,
-    cancel_token: CancellationToken,
     tracker_handle: TrackerHandle,
     sem: Arc<Semaphore>,
     watermark_handle: Option<WatermarkHandle>,
@@ -73,7 +72,6 @@ impl JetstreamWriter {
             config: Arc::new(config),
             js_ctx,
             is_full,
-            cancel_token,
             tracker_handle,
             sem: Arc::new(Semaphore::new(paf_concurrency)),
             watermark_handle,
@@ -83,7 +81,7 @@ impl JetstreamWriter {
         tokio::task::spawn({
             let mut this = this.clone();
             async move {
-                this.check_stream_status().await;
+                this.check_stream_status(cancel_token).await;
             }
         });
 
@@ -92,7 +90,7 @@ impl JetstreamWriter {
 
     /// Checks the buffer usage metrics (soft and solid usage) for each stream in the streams vector.
     /// If the usage is greater than the bufferUsageLimit, it sets the is_full flag to true.
-    async fn check_stream_status(&mut self) {
+    async fn check_stream_status(&mut self, cln_token: CancellationToken) {
         let mut interval =
             tokio::time::interval(Duration::from_secs(DEFAULT_REFRESH_INTERVAL_SECS));
         loop {
@@ -121,7 +119,7 @@ impl JetstreamWriter {
                         }
                     }
                 }
-                _ = self.cancel_token.cancelled() => {
+                _ = cln_token.cancelled() => {
                     return;
                 }
             }
@@ -182,6 +180,7 @@ impl JetstreamWriter {
     pub(crate) async fn streaming_write(
         self,
         messages_stream: ReceiverStream<Message>,
+        cln_token: CancellationToken,
     ) -> Result<JoinHandle<Result<()>>> {
         let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
             info!("Starting streaming Jetstream writer");
@@ -196,7 +195,10 @@ impl JetstreamWriter {
                 // TODO: add metric for dropped count
                 if message.dropped() {
                     // delete the entry from tracker
-                    self.tracker_handle.delete(message.offset).await?;
+                    self.tracker_handle
+                        .delete(message.offset)
+                        .await
+                        .expect("Failed to delete offset from tracker");
                     continue;
                 }
 
@@ -228,6 +230,7 @@ impl JetstreamWriter {
                             stream.clone(),
                             message.clone(),
                             vertex.writer_config.buffer_full_strategy.clone(),
+                            cln_token.clone(),
                         )
                         .await
                     {
@@ -245,7 +248,12 @@ impl JetstreamWriter {
                     continue;
                 }
 
-                self.resolve_pafs(pafs, message).await?;
+                self.resolve_pafs(pafs, message, cln_token.clone())
+                    .await
+                    .inspect_err(|e| {
+                        error!(?e, "Failed to resolve PAFs");
+                        cln_token.cancel();
+                    })?;
 
                 processed_msgs_count += 1;
                 if last_logged_at.elapsed().as_secs() >= 1 {
@@ -272,6 +280,7 @@ impl JetstreamWriter {
         stream: Stream,
         message: Message,
         on_full: BufferFullStrategy,
+        cln_token: CancellationToken,
     ) -> Option<PublishAckFuture> {
         let mut log_counter = 500u16;
         let offset = message.offset.clone();
@@ -318,7 +327,7 @@ impl JetstreamWriter {
             }
 
             // short-circuit out in failure mode if shutdown has been initiated
-            if self.cancel_token.is_cancelled() {
+            if cln_token.is_cancelled() {
                 error!("Shutdown signal received, exiting write loop");
                 return None;
             }
@@ -337,6 +346,7 @@ impl JetstreamWriter {
         &self,
         pafs: Vec<(Stream, PublishAckFuture)>,
         message: Message,
+        cln_token: CancellationToken,
     ) -> Result<()> {
         let start_time = Instant::now();
         let permit = Arc::clone(&self.sem)
@@ -359,7 +369,8 @@ impl JetstreamWriter {
                             ?e, stream = ?stream,
                             "Failed to resolve the future trying blocking write",
                         );
-                        this.blocking_write(stream.clone(), message.clone()).await
+                        this.blocking_write(stream.clone(), message.clone(), cln_token.clone())
+                            .await
                     }
                 };
 
@@ -418,6 +429,7 @@ impl JetstreamWriter {
         &self,
         stream: Stream,
         message: Message,
+        cln_token: CancellationToken,
     ) -> Result<PublishAck> {
         let start_time = Instant::now();
         let payload: BytesMut = message
@@ -452,7 +464,7 @@ impl JetstreamWriter {
                 }
             }
 
-            if self.cancel_token.is_cancelled() {
+            if cln_token.is_cancelled() {
                 return Err(Error::ISB("Shutdown signal received".to_string()));
             }
         }
@@ -572,6 +584,7 @@ mod tests {
                 stream.clone(),
                 message,
                 BufferFullStrategy::RetryUntilSuccess,
+                cln_token.clone(),
             )
             .await;
         assert!(paf.unwrap().await.is_ok());
@@ -646,7 +659,9 @@ mod tests {
             None,
         );
 
-        let result = writer.blocking_write(stream.clone(), message).await;
+        let result = writer
+            .blocking_write(stream.clone(), message, cln_token.clone())
+            .await;
         assert!(result.is_ok());
 
         let publish_ack = result.unwrap();
@@ -732,6 +747,7 @@ mod tests {
                     stream.clone(),
                     message,
                     BufferFullStrategy::RetryUntilSuccess,
+                    cancel_token.clone(),
                 )
                 .await;
             result_receivers.push(paf);
@@ -760,6 +776,7 @@ mod tests {
                 stream.clone(),
                 message,
                 BufferFullStrategy::RetryUntilSuccess,
+                cancel_token.clone(),
             )
             .await;
         result_receivers.push(paf);
@@ -920,7 +937,7 @@ mod tests {
         let mut js_writer = writer.clone();
         // Simulate the stream status check
         tokio::spawn(async move {
-            js_writer.check_stream_status().await;
+            js_writer.check_stream_status(cancel_token.clone()).await;
         });
 
         // Publish messages to fill the buffer, since max_length is 100, we need to publish 80 messages
@@ -1037,7 +1054,10 @@ mod tests {
         drop(messages_tx);
 
         let receiver_stream = ReceiverStream::new(messages_rx);
-        let _handle = writer.streaming_write(receiver_stream).await.unwrap();
+        let _handle = writer
+            .streaming_write(receiver_stream, cln_token.clone())
+            .await
+            .unwrap();
 
         for ack_rx in ack_rxs {
             assert_eq!(ack_rx.await.unwrap(), ReadAck::Ack);
@@ -1126,7 +1146,10 @@ mod tests {
         }
 
         let receiver_stream = ReceiverStream::new(rx);
-        let _handle = writer.streaming_write(receiver_stream).await.unwrap();
+        let _handle = writer
+            .streaming_write(receiver_stream, cancel_token.clone())
+            .await
+            .unwrap();
 
         // Attempt to publish the 101st message, which should get stuck in the retry loop
         // because the max message size is set to 1024
@@ -1268,7 +1291,10 @@ mod tests {
         drop(messages_tx);
 
         let receiver_stream = ReceiverStream::new(messages_rx);
-        let _handle = writer.streaming_write(receiver_stream).await.unwrap();
+        let _handle = writer
+            .streaming_write(receiver_stream, cln_token.clone())
+            .await
+            .unwrap();
 
         for ack_rx in ack_rxs {
             assert_eq!(ack_rx.await.unwrap(), ReadAck::Ack);

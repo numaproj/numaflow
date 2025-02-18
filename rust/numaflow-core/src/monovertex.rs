@@ -94,11 +94,11 @@ async fn start(
     .await;
     let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
-    let forwarder = forwarder::Forwarder::new(source, sink, cln_token);
+    let forwarder = forwarder::Forwarder::new(source, sink);
 
     info!("Forwarder is starting...");
     // start the forwarder, it will return only on Signal
-    forwarder.start().await?;
+    forwarder.start(cln_token).await?;
 
     info!("Forwarder stopped gracefully.");
     Ok(())
