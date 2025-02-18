@@ -368,6 +368,12 @@ const LineChartComponent = ({
     [labelVal]: parseFloat(value),
   });
 
+  const periodOrder = {
+    "1m": 1,
+    "5m": 2,
+    "15m": 3,
+  };
+
   const updateChartData = useCallback(() => {
     if (!chartData) return;
 
@@ -381,9 +387,15 @@ const LineChartComponent = ({
         metricsReq?.display_name
       )
     )
-      filteredChartData = filteredChartData?.filter((item) => {
-        return item?.metric?.["period"] !== "default";
-      });
+      filteredChartData = filteredChartData
+        // Filter out default period for pending messages
+        ?.filter((item) => item?.metric?.["period"] !== "default")
+        // Sort data based on period for pending messages
+        ?.sort((a, b) => {
+          const period1: "1m" | "5m" | "15m" = a?.metric?.["period"];
+          const period2: "1m" | "5m" | "15m" = b?.metric?.["period"];
+          return (periodOrder[period1] || 0) - (periodOrder[period2] || 0);
+        });
 
     filteredChartData?.forEach((item) => {
       let labelVal = "";
