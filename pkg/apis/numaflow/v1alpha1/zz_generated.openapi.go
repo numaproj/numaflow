@@ -28,6 +28,7 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AWSCredentials":                   schema_pkg_apis_numaflow_v1alpha1_AWSCredentials(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractPodTemplate":              schema_pkg_apis_numaflow_v1alpha1_AbstractPodTemplate(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractSink":                     schema_pkg_apis_numaflow_v1alpha1_AbstractSink(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractVertex":                   schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref),
@@ -99,6 +100,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASL":                             schema_pkg_apis_numaflow_v1alpha1_SASL(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLOAuth":                        schema_pkg_apis_numaflow_v1alpha1_SASLOAuth(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain":                        schema_pkg_apis_numaflow_v1alpha1_SASLPlain(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SQSAuth":                          schema_pkg_apis_numaflow_v1alpha1_SQSAuth(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale":                            schema_pkg_apis_numaflow_v1alpha1_Scale(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingSource":                    schema_pkg_apis_numaflow_v1alpha1_ServingSource(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingStore":                     schema_pkg_apis_numaflow_v1alpha1_ServingStore(ref),
@@ -109,6 +111,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink":                             schema_pkg_apis_numaflow_v1alpha1_Sink(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SlidingWindow":                    schema_pkg_apis_numaflow_v1alpha1_SlidingWindow(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source":                           schema_pkg_apis_numaflow_v1alpha1_Source(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SqsSource":                        schema_pkg_apis_numaflow_v1alpha1_SqsSource(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Status":                           schema_pkg_apis_numaflow_v1alpha1_Status(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS":                              schema_pkg_apis_numaflow_v1alpha1_TLS(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TagConditions":                    schema_pkg_apis_numaflow_v1alpha1_TagConditions(ref),
@@ -130,6 +133,34 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Window":                           schema_pkg_apis_numaflow_v1alpha1_Window(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.containerBuilder":                 schema_pkg_apis_numaflow_v1alpha1_containerBuilder(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.getContainerReq":                  schema_pkg_apis_numaflow_v1alpha1_getContainerReq(ref),
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_AWSCredentials(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AWSCredentials contains AWS credentials information",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"accessKeyId": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AccessKeyID is the AWS access key ID",
+							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
+						},
+					},
+					"secretAccessKey": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SecretAccessKey is the AWS secret access key",
+							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
+						},
+					},
+				},
+				Required: []string{"accessKeyId", "secretAccessKey"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/api/core/v1.SecretKeySelector"},
 	}
 }
 
@@ -4680,6 +4711,34 @@ func schema_pkg_apis_numaflow_v1alpha1_SASLPlain(ref common.ReferenceCallback) c
 	}
 }
 
+func schema_pkg_apis_numaflow_v1alpha1_SQSAuth(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "SQSAuth defines how to authenticate with AWS SQS",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"credentials": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AWS Credentials",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AWSCredentials"),
+						},
+					},
+					"roleARN": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Role ARN to assume",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AWSCredentials"},
+	}
+}
+
 func schema_pkg_apis_numaflow_v1alpha1_Scale(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -5251,6 +5310,102 @@ func schema_pkg_apis_numaflow_v1alpha1_Source(ref common.ReferenceCallback) comm
 		},
 		Dependencies: []string{
 			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GeneratorSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.HTTPSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDTransformer"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_SqsSource(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "SqsSource represents the configuration of an AWS SQS source",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"awsRegion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AWS Region where the SQS queue is located",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"queueName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name of the SQS queue",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"auth": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Authentication configuration for AWS SQS Either credentials or role ARN must be provided",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SQSAuth"),
+						},
+					},
+					"visibilityTimeout": {
+						SchemaProps: spec.SchemaProps{
+							Description: "VisibilityTimeout is the duration (in seconds) that the received messages are hidden from subsequent retrieve requests after being retrieved by a ReceiveMessage request. Valid values: 0-43200 (12 hours)",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"maxNumberOfMessages": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MaxNumberOfMessages is the maximum number of messages to return in a single poll. Valid values: 1-10 Defaults to 1",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"waitTimeSeconds": {
+						SchemaProps: spec.SchemaProps{
+							Description: "WaitTimeSeconds is the duration (in seconds) for which the call waits for a message to arrive in the queue before returning. If a message is available, the call returns sooner than WaitTimeSeconds. Valid values: 0-20 Defaults to 0 (short polling)",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"endpointUrl": {
+						SchemaProps: spec.SchemaProps{
+							Description: "EndpointURL is the custom endpoint URL for the AWS SQS API. This is useful for testing with localstack or when using VPC endpoints.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"attributeNames": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AttributeNames is a list of attributes that need to be returned along with each message. Valid values: All | Policy | VisibilityTimeout | MaximumMessageSize | MessageRetentionPeriod | ApproximateNumberOfMessages | ApproximateNumberOfMessagesNotVisible | CreatedTimestamp | LastModifiedTimestamp | QueueArn | ApproximateNumberOfMessagesDelayed | DelaySeconds | ReceiveMessageWaitTimeSeconds | RedrivePolicy | FifoQueue | ContentBasedDeduplication | KmsMasterKeyId | KmsDataKeyReusePeriodSeconds | DeduplicationScope | FifoThroughputLimit | RedriveAllowPolicy | SqsManagedSseEnabled",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+					"messageAttributeNames": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MessageAttributeNames is a list of message attributes that need to be returned along with each message.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"awsRegion", "queueName", "auth"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SQSAuth"},
 	}
 }
 

@@ -26,6 +26,92 @@ Resource Types:
 
 </ul>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.AWSCredentials">
+
+AWSCredentials
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.SQSAuth">SQSAuth</a>)
+</p>
+
+<p>
+
+<p>
+
+AWSCredentials contains AWS credentials information
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>accessKeyId</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
+</td>
+
+<td>
+
+<p>
+
+AccessKeyID is the AWS access key ID
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>secretAccessKey</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
+</td>
+
+<td>
+
+<p>
+
+SecretAccessKey is the AWS secret access key
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
 
 AbstractPodTemplate
@@ -9544,6 +9630,92 @@ SASLType describes the SASL type
 
 </p>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.SQSAuth">
+
+SQSAuth
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.SqsSource">SqsSource</a>)
+</p>
+
+<p>
+
+<p>
+
+SQSAuth defines how to authenticate with AWS SQS
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>credentials</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.AWSCredentials"> AWSCredentials
+</a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+AWS Credentials
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>roleARN</code></br> <em> string </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Role ARN to assume
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.Scale">
 
 Scale
@@ -10787,6 +10959,233 @@ JetStreamSource </a> </em>
 <td>
 
 <em>(Optional)</em>
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.SqsSource">
+
+SqsSource
+</h3>
+
+<p>
+
+<p>
+
+SqsSource represents the configuration of an AWS SQS source
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>awsRegion</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+AWS Region where the SQS queue is located
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>queueName</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+Name of the SQS queue
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>auth</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SQSAuth"> SQSAuth </a> </em>
+</td>
+
+<td>
+
+<p>
+
+Authentication configuration for AWS SQS Either credentials or role ARN
+must be provided
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>visibilityTimeout</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+VisibilityTimeout is the duration (in seconds) that the received
+messages are hidden from subsequent retrieve requests after being
+retrieved by a ReceiveMessage request. Valid values: 0-43200 (12 hours)
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>maxNumberOfMessages</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+MaxNumberOfMessages is the maximum number of messages to return in a
+single poll. Valid values: 1-10 Defaults to 1
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>waitTimeSeconds</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+WaitTimeSeconds is the duration (in seconds) for which the call waits
+for a message to arrive in the queue before returning. If a message is
+available, the call returns sooner than WaitTimeSeconds. Valid values:
+0-20 Defaults to 0 (short polling)
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>endpointUrl</code></br> <em> string </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+EndpointURL is the custom endpoint URL for the AWS SQS API. This is
+useful for testing with localstack or when using VPC endpoints.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>attributeNames</code></br> <em> \[\]string </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+AttributeNames is a list of attributes that need to be returned along
+with each message. Valid values: All \| Policy \| VisibilityTimeout \|
+MaximumMessageSize \| MessageRetentionPeriod \|
+ApproximateNumberOfMessages \| ApproximateNumberOfMessagesNotVisible \|
+CreatedTimestamp \| LastModifiedTimestamp \| QueueArn \|
+ApproximateNumberOfMessagesDelayed \| DelaySeconds \|
+ReceiveMessageWaitTimeSeconds \| RedrivePolicy \| FifoQueue \|
+ContentBasedDeduplication \| KmsMasterKeyId \|
+KmsDataKeyReusePeriodSeconds \| DeduplicationScope \|
+FifoThroughputLimit \| RedriveAllowPolicy \| SqsManagedSseEnabled
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>messageAttributeNames</code></br> <em> \[\]string </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+MessageAttributeNames is a list of message attributes that need to be
+returned along with each message.
+</p>
+
 </td>
 
 </tr>

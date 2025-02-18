@@ -6,6 +6,7 @@
 //! - Actor-based concurrency model for thread safety
 //! - Clean abstraction of SQS operations
 use tokio::sync::oneshot;
+mod client;
 pub mod source;
 
 /// Custom error types for the SQS client library.
@@ -21,6 +22,9 @@ pub enum Error {
 
     #[error("Failed to receive message from channel. Actor task is terminated: {0:?}")]
     ActorTaskTerminated(oneshot::error::RecvError),
+
+    #[error("Invalid configuration: {0}")]
+    InvalidConfig(String),
 
     #[error("{0}")]
     Other(String),

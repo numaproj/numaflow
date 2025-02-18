@@ -40,6 +40,7 @@ impl From<numaflow_sqs::Error> for Error {
             numaflow_sqs::Error::ActorTaskTerminated(_) => {
                 Error::ActorPatternRecv(value.to_string())
             }
+            numaflow_sqs::Error::InvalidConfig(e) => Error::Source(e),
             numaflow_sqs::Error::Other(e) => Error::Source(e),
         }
     }
@@ -109,7 +110,9 @@ pub mod tests {
     use aws_smithy_mocks_experimental::{mock, MockResponseInterceptor, Rule, RuleMode};
     use bytes::Bytes;
     use chrono::Utc;
-    use numaflow_sqs::source::{SqsSourceBuilder, SQS_DEFAULT_REGION};
+    use numaflow_sqs::source::{
+        AWSCredentials, SQSAuth, SecretKeySelector, SqsSourceBuilder, SQS_DEFAULT_REGION,
+    };
     use tokio::task::JoinHandle;
     use tokio_util::sync::CancellationToken;
 
@@ -164,9 +167,29 @@ pub mod tests {
         let sqs_client =
             aws_sdk_sqs::Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
 
+        // TODO: use config in sqs actor methods
         let sqs_source = SqsSourceBuilder::new(SQSSourceConfig {
             region: SQS_DEFAULT_REGION.to_string(),
             queue_name: "test-q".to_string(),
+            auth: SQSAuth {
+                credentials: Some(AWSCredentials {
+                    access_key_id: SecretKeySelector {
+                        name: "test-secret".to_string(),
+                        key: "access-key".to_string(),
+                    },
+                    secret_access_key: SecretKeySelector {
+                        name: "test-secret".to_string(),
+                        key: "secret-key".to_string(),
+                    },
+                }),
+                role_arn: None,
+            },
+            visibility_timeout: None,
+            max_number_of_messages: None,
+            wait_time_seconds: None,
+            endpoint_url: None,
+            attribute_names: vec![],
+            message_attribute_names: vec![],
         })
         .batch_size(1)
         .timeout(Duration::from_secs(1))
