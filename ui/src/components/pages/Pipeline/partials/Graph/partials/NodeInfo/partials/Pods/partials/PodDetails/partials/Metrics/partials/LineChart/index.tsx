@@ -81,8 +81,7 @@ const CustomTooltip = ({
 }: TooltipProps & { displayName: string }) => {
   if (!active || !payload || !payload.length) return null;
 
-  const maxWidth =
-    Math.max(...payload.map((entry) => entry?.name?.length)) * 9.5;
+  const maxWidth = Math.max(...payload.map((entry) => entry?.name?.length));
   const timestamp = payload[0]?.payload?.timestamp;
 
   return (
@@ -101,7 +100,7 @@ const CustomTooltip = ({
           <Box key={`item-${index}`} sx={{ display: "flex" }}>
             <Box
               sx={{
-                width: `${maxWidth / 9}rem`,
+                width: `${maxWidth + 1}rem`,
                 display: "inline-block",
                 paddingRight: "1rem",
                 color: entry?.color,
