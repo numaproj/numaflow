@@ -46,12 +46,25 @@ export function MetricsModalWrapper({
   });
 
   const isClickable = useMemo(() => {
-    return (
+    if (
+      discoveredMetrics &&
       !discoveredMetricsError &&
-      !discoveredMetricsLoading &&
-      !disableMetricsCharts
-    );
-  }, [discoveredMetricsError, discoveredMetricsLoading, disableMetricsCharts]);
+      !discoveredMetricsLoading
+    ) {
+      return (
+        !disableMetricsCharts &&
+        discoveredMetrics?.data?.some(
+          (metric: any) => metric?.display_name === metricDisplayName
+        )
+      );
+    }
+    return false;
+  }, [
+    discoveredMetrics,
+    discoveredMetricsError,
+    discoveredMetricsLoading,
+    disableMetricsCharts,
+  ]);
 
   return (
     <Box>
