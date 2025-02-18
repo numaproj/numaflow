@@ -378,12 +378,12 @@ const LineChartComponent = ({
     const label = groupByLabel(metricsReq?.dimension, metricsReq?.display_name);
 
     if (Array.isArray(label) && label.length === 1 && label[0] === "container"){
-      filteredChartData = chartData.filter((item) => {
+      filteredChartData = chartData?.filter((item) => {
         return pod?.containers?.includes(item?.metric?.["container"])
       })
     }
     if (Array.isArray(label) && label.length === 1 && label[0] === "pod"){
-      filteredChartData = chartData.filter((item) => {
+      filteredChartData = chartData?.filter((item) => {
         return !item?.metric?.["pod"]?.includes("daemon")
       })
     }
