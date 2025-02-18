@@ -30,6 +30,9 @@ pub(crate) enum Error {
     #[error("Connecting to the store: {0}")]
     Connection(String),
 
+    #[error("Request id {0} doesn't exist in store")]
+    InvalidRequestId(String),
+
     #[error("Request id {0} already exists in the store")]
     DuplicateRequest(String),
 

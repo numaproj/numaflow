@@ -76,7 +76,7 @@ async fn serve<T: Send + Sync + Clone + Store>(
     let pipeline_result = match proxy_state.callback.clone().retrieve_saved(&id).await {
         Ok(result) => result,
         Err(e) => {
-            error!(error = ?e, "Failed to retrieve from redis");
+            error!(error = ?e, "Failed to retrieve from store");
             return Err(ApiError::InternalServerError(
                 "Failed to retrieve from redis".to_string(),
             ));
@@ -175,7 +175,7 @@ async fn sync_publish<T: Send + Sync + Clone + Store>(
     let result = match proxy_state.callback.clone().retrieve_saved(&id).await {
         Ok(result) => result,
         Err(e) => {
-            error!(error = ?e, "Failed to retrieve from redis");
+            error!(error = ?e, "Failed to retrieve from store");
             return Err(ApiError::InternalServerError(
                 "Failed to retrieve from redis".to_string(),
             ));
@@ -299,6 +299,7 @@ mod tests {
     use axum::http::header::{CONTENT_LENGTH, CONTENT_TYPE};
     use serde_json::{json, Value};
     use tower::ServiceExt;
+    use uuid::Uuid;
 
     use super::*;
     use crate::app::callback::state::State as CallbackState;
@@ -317,8 +318,8 @@ mod tests {
     struct MockStore;
 
     impl Store for MockStore {
-        async fn register(&mut self, _id: Option<String>) -> StoreResult<String> {
-            Ok("".into())
+        async fn register(&mut self, id: Option<String>) -> StoreResult<String> {
+            Ok(id.unwrap_or_else(|| Uuid::now_v7().to_string()))
         }
         async fn deregister(&mut self, _id: String) -> StoreResult<()> {
             Ok(())
@@ -339,7 +340,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_async_publish() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        const ID_HEADER: &str = "X-Numaflow-ID";
+        const ID_HEADER: &str = "X-Numaflow-Id";
         const ID_VALUE: &str = "foobar";
         let settings = Settings {
             tid_header: ID_HEADER.into(),
@@ -408,20 +409,22 @@ mod tests {
                 vertex: "in".to_string(),
                 cb_time: 12345,
                 from_vertex: "in".to_string(),
-                responses: vec![Response { tags: None }],
+                responses: vec![Response {
+                    tags: Some(vec!["asciiart".into()]),
+                }],
             },
             Callback {
                 id: id.to_string(),
-                vertex: "cat".to_string(),
+                vertex: "asciiart".to_string(),
                 cb_time: 12345,
                 from_vertex: "in".to_string(),
                 responses: vec![Response { tags: None }],
             },
             Callback {
                 id: id.to_string(),
-                vertex: "out".to_string(),
+                vertex: "serve-sink".to_string(),
                 cb_time: 12345,
-                from_vertex: "cat".to_string(),
+                from_vertex: "asciiart".to_string(),
                 responses: vec![Response { tags: None }],
             },
         ]
@@ -572,7 +575,7 @@ mod tests {
 
         let res = Request::builder()
             .method("POST")
-            .uri("/sync_serve")
+            .uri("/sync")
             .header("Content-Type", "text/plain")
             .header(DEFAULT_ID_HEADER, ID_VALUE)
             .body(Body::from("Test Message"))

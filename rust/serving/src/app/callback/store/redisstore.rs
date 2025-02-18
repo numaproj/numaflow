@@ -245,11 +245,15 @@ impl super::Store for RedisConnection {
 
     async fn retrieve_datum(&mut self, id: &str) -> StoreResult<PipelineResult> {
         let redis_status_key = format!("request:{id}:status");
-        let status: String = self
+        let status: Option<String> = self
             .conn_manager
             .get(redis_status_key)
             .await
             .map_err(|e| StoreError::StoreRead(format!("Reading request status: {e:?}")))?;
+
+        let Some(status) = status else {
+            return Err(StoreError::InvalidRequestId(id.to_string()));
+        };
 
         if status == "processing" {
             return Ok(PipelineResult::Processing);
@@ -329,6 +333,7 @@ mod tests {
         };
 
         let mut redis_conn = redis_connection.unwrap();
+        redis_conn.register(Some(key.clone())).await.unwrap();
 
         // Test Redis save
         assert!(redis_conn.save(vec![ps_cb]).await.is_ok());
@@ -358,7 +363,10 @@ mod tests {
         let datums = redis_conn.retrieve_datum(&key).await;
         assert!(datums.is_ok());
 
-        let datums = datums.unwrap();
+        assert_eq!(datums.unwrap(), PipelineResult::Processing);
+
+        redis_conn.deregister(key.clone()).await.unwrap();
+        let datums = redis_conn.retrieve_datum(&key).await.unwrap();
         let PipelineResult::Completed(datums) = datums else {
             panic!("Expected completed results");
         };
@@ -373,7 +381,7 @@ mod tests {
 
         // Test Redis retrieve datum error
         let result = redis_conn.retrieve_datum("non_existent_key").await;
-        assert!(matches!(result, Err(StoreError::StoreRead(_))));
+        assert!(matches!(result, Err(StoreError::InvalidRequestId(_))));
     }
 
     #[tokio::test]

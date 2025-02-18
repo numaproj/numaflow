@@ -113,10 +113,9 @@ where
             let id = cbr.id.clone();
             {
                 let mut guard = self.callbacks.lock().expect("Getting lock on State");
-                let Some(req_state) = guard.get_mut(&id) else {
-                    tracing::debug!(id, "Request is not found in in-memory store");
-                    continue;
-                };
+                let req_state = guard.get_mut(&id).ok_or_else(|| {
+                    Error::SubGraphInvalidInput(format!("request id {id} doesn't exist in-memory"))
+                })?;
                 req_state.vtx_visited.push(cbr);
             }
 

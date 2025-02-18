@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use uuid::Uuid;
+
 use super::{Error as StoreError, Result as StoreResult};
 use super::{PayloadToSave, PipelineResult};
 use crate::app::callback::Callback;
@@ -25,8 +27,8 @@ impl InMemoryStore {
 }
 
 impl super::Store for InMemoryStore {
-    async fn register(&mut self, _id: Option<String>) -> StoreResult<String> {
-        Ok("".into())
+    async fn register(&mut self, id: Option<String>) -> StoreResult<String> {
+        Ok(id.unwrap_or_else(|| Uuid::now_v7().to_string()))
     }
     async fn deregister(&mut self, _id: String) -> StoreResult<()> {
         Ok(())
