@@ -373,9 +373,19 @@ const LineChartComponent = ({
 
     const labels: string[] = [];
     const transformedData: Record<string, any>[] = [];
+    let filteredChartData = chartData;
     const label = groupByLabel(metricsReq?.dimension, metricsReq?.display_name);
 
-    chartData?.forEach((item) => {
+    if (
+      [VERTEX_PENDING_MESSAGES, MONO_VERTEX_PENDING_MESSAGES]?.includes(
+        metricsReq?.display_name
+      )
+    )
+      filteredChartData = filteredChartData?.filter((item) => {
+        return item?.metric?.["period"] !== "default";
+      });
+
+    filteredChartData?.forEach((item) => {
       let labelVal = "";
       label?.forEach((eachLabel: string) => {
         if (item?.metric?.[eachLabel] !== undefined) {
