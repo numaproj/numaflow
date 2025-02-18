@@ -54,7 +54,7 @@ impl RedisConnection {
         }
 
         // Execute the pipeline
-        pipe.query_async(conn_manager).await.map(|_: ()| ())
+        pipe.exec_async(conn_manager).await
     }
 
     // write to Redis with retries
@@ -113,13 +113,23 @@ impl super::Store for RedisConnection {
     async fn register(&mut self, id: Option<String>) -> crate::Result<String> {
         match id {
             Some(id) => {
-                let status: bool = self
-                    .conn_manager
-                    .set_nx(format!("request:{id}:status"), "processing")
-                    .await
-                    .map_err(|e| {
-                        Error::StoreWrite(format!("Registering request_id={id} in Redis: {e:?}"))
-                    })?;
+                let mut pipe = redis::pipe();
+                let key = format!("request:{id}:status");
+                pipe.cmd("SET").arg(&key).arg("processing").arg("NX");
+                // if the ttl is configured, add the EXPIRE command to the pipeline
+                if let Some(ttl) = self.config.ttl_secs {
+                    pipe.arg("EX").arg(ttl);
+                }
+
+                let (status,): (bool,) =
+                    pipe.query_async(&mut self.conn_manager)
+                        .await
+                        .map_err(|e| {
+                            Error::StoreWrite(format!(
+                                "Registering request_id={id} in Redis: {e:?}"
+                            ))
+                        })?;
+
                 if !status {
                     // The user specified request id already exists
                     return Err(Error::StoreWrite(format!(
@@ -130,16 +140,25 @@ impl super::Store for RedisConnection {
             }
             None => {
                 for _ in 0..5 {
-                    let id = Uuid::new_v4().to_string();
-                    let status: bool = self
-                        .conn_manager
-                        .set_nx(format!("request:{id}:status"), "processing")
+                    let id = Uuid::now_v7().to_string();
+                    let mut pipe = redis::pipe();
+                    let key = format!("request:{id}:status");
+                    pipe.cmd("SET").arg(&key).arg("processing").arg("NX");
+
+                    // if the ttl is configured, add the EXPIRE command to the pipeline
+                    if let Some(ttl) = self.config.ttl_secs {
+                        pipe.arg("EX").arg(ttl);
+                    }
+
+                    let (status,): (bool,) = pipe
+                        .query_async(&mut self.conn_manager)
                         .await
                         .map_err(|e| {
                             Error::StoreWrite(format!(
                                 "Registering request_id={id} in Redis: {e:?}"
                             ))
                         })?;
+
                     if !status {
                         continue;
                     }
@@ -152,14 +171,25 @@ impl super::Store for RedisConnection {
         }
     }
     async fn deregister(&mut self, id: String) -> crate::Result<()> {
-        self.conn_manager
-            .set(format!("request:{id}:status"), "completed")
+        let key = format!("request:{id}:status");
+        let status: bool = redis::cmd("SET")
+            .arg(&key)
+            .arg("completed")
+            .arg("XX")
+            .arg("KEEPTTL")
+            .query_async(&mut self.conn_manager)
             .await
             .map_err(|e| {
                 Error::StoreWrite(format!(
                     "Setting processing status as completed in Redis for request_id={id}: {e:?}"
                 ))
-            })
+            })?;
+        if !status {
+            return Err(Error::StoreWrite(format!(
+                "Key {key} is not present in Redis for updating processing status as completed"
+            )));
+        }
+        Ok(())
     }
     // Attempt to save all payloads. Returns error if we fail to save at least one message.
     async fn save(&mut self, messages: Vec<PayloadToSave>) -> crate::Result<()> {
