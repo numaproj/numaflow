@@ -103,7 +103,8 @@ impl Forwarder {
                 break;
             }
 
-            processed_msgs_count += self.read_and_process_messages().await?;
+            let msgs_count = self.read_and_process_messages().await?;
+            processed_msgs_count += msgs_count;
 
             // if the last forward was more than 1 second ago, forward a chunk print the number of messages forwarded
             // TODO: add histogram details (p99, etc.)
@@ -115,6 +116,11 @@ impl Forwarder {
                 );
                 processed_msgs_count = 0;
                 last_forwarded_at = std::time::Instant::now();
+            }
+
+            // avoid updating the metrics if no messages were processed
+            if msgs_count == 0 {
+                continue;
             }
 
             forward_mvtx_metrics()
@@ -140,15 +146,15 @@ impl Forwarder {
             start_time.elapsed().as_millis()
         );
 
-        forward_mvtx_metrics()
-            .read_time
-            .get_or_create(&self.common_labels)
-            .observe(start_time.elapsed().as_micros() as f64);
-
         // read returned 0 messages, nothing more to be done.
         if messages.is_empty() {
             return Ok(0);
         }
+
+        forward_mvtx_metrics()
+            .read_time
+            .get_or_create(&self.common_labels)
+            .observe(start_time.elapsed().as_micros() as f64);
 
         let msg_count = messages.len() as u64;
         forward_mvtx_metrics()
