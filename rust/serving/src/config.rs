@@ -173,7 +173,7 @@ impl TryFrom<HashMap<String, String>> for Settings {
             true => {
                 let vertex_obj = serde_json::from_slice::<MonoVertex>(&source_spec_decoded)
                     .map_err(|e| ParseConfig(format!("parsing {ENV_VERTEX_OBJ}: {e:?}")))?;
-                let serving_spec = vertex_obj
+                vertex_obj
                     .spec
                     .source
                     .ok_or_else(|| {
@@ -184,14 +184,13 @@ impl TryFrom<HashMap<String, String>> for Settings {
                         ParseConfig(format!(
                             "parsing {ENV_VERTEX_OBJ}: Serving source spec is not found"
                         ))
-                    })?;
-                serving_spec
+                    })?
             }
             false => {
                 let vertex_obj = serde_json::from_slice::<Vertex>(&source_spec_decoded)
                     .map_err(|e| ParseConfig(format!("parsing {ENV_VERTEX_OBJ}: {e:?}")))?;
 
-                let serving_spec = vertex_obj
+                vertex_obj
                     .spec
                     .source
                     .ok_or_else(|| {
@@ -202,8 +201,7 @@ impl TryFrom<HashMap<String, String>> for Settings {
                         ParseConfig(format!(
                             "parsing {ENV_VERTEX_OBJ}: Serving source spec is not found"
                         ))
-                    })?;
-                serving_spec
+                    })?
             }
         };
         // Update tid_header from source_spec

@@ -27,16 +27,16 @@ pub(crate) enum PipelineResult {
 
 #[derive(Error, Debug, Clone)]
 pub(crate) enum Error {
-    #[error("Connecting to store: {0}")]
+    #[error("Connecting to the store: {0}")]
     Connection(String),
 
     #[error("Request id {0} already exists in the store")]
     DuplicateRequest(String),
 
-    #[error("Reading from store: {0}")]
+    #[error("Reading from the store: {0}")]
     StoreRead(String),
 
-    #[error("Writing payload to store: {0}")]
+    #[error("Writing payload to the store: {0}")]
     StoreWrite(String),
 }
 

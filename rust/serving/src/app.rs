@@ -19,7 +19,7 @@ use tracing::{info, info_span, Span};
 use uuid::Uuid;
 
 use self::{
-    callback::callback_handler, direct_proxy::direct_proxy, jetstream_proxy::serving_public_routes,
+    callback::callback_handler, direct_proxy::direct_proxy, jetstream_proxy::jetstream_proxy,
     message_path::get_message_path,
 };
 use crate::app::callback::store::Store;
@@ -251,7 +251,7 @@ async fn routes<T: Clone + Send + Sync + Store + 'static>(
     app_state: AppState<T>,
 ) -> crate::Result<Router> {
     let state = app_state.callback_state.clone();
-    let jetstream_proxy = serving_public_routes(app_state.clone()).await?;
+    let jetstream_proxy = jetstream_proxy(app_state.clone()).await?;
     let callback_router = callback_handler(
         app_state.settings.tid_header.clone(),
         app_state.callback_state.clone(),

@@ -158,9 +158,9 @@ impl super::Store for RedisConnection {
                     }
                     return Ok(id);
                 }
-                Err(StoreError::StoreWrite(format!(
-                    "Could not generate a unique request id"
-                )))
+                Err(StoreError::StoreWrite(
+                    "Could not generate a unique request id".to_string(),
+                ))
             }
         }
     }
