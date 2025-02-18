@@ -61,7 +61,22 @@ impl MessageGraph {
         callbacks: Vec<Arc<Callback>>,
     ) -> Result<Option<String>, Error> {
         if self.is_monovertex() && callbacks.len() == 1 {
-            return Ok(Some(id));
+            let cb = callbacks.first();
+            let mut subgraph: Subgraph = Subgraph {
+                id,
+                blocks: Vec::new(),
+            };
+            if let Some(cb) = cb {
+                subgraph.blocks.push(Block {
+                    from: cb.from_vertex.clone(),
+                    to: cb.vertex.clone(),
+                    cb_time: cb.cb_time,
+                });
+            }
+            return match serde_json::to_string(&subgraph) {
+                Ok(json) => Ok(Some(json)),
+                Err(e) => Err(Error::SubGraphGenerator(e.to_string())),
+            };
         }
 
         // Create a HashMap to map each vertex to its corresponding callbacks
