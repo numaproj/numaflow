@@ -409,22 +409,29 @@ mod tests {
                 vertex: "in".to_string(),
                 cb_time: 12345,
                 from_vertex: "in".to_string(),
+                responses: vec![Response { tags: None }],
+            },
+            Callback {
+                id: id.to_string(),
+                vertex: "planner".to_string(),
+                cb_time: 12345,
+                from_vertex: "in".to_string(),
                 responses: vec![Response {
-                    tags: Some(vec!["asciiart".into()]),
+                    tags: Some(vec!["tiger".into()]),
                 }],
             },
             Callback {
                 id: id.to_string(),
-                vertex: "asciiart".to_string(),
+                vertex: "tiger".to_string(),
                 cb_time: 12345,
-                from_vertex: "in".to_string(),
+                from_vertex: "planner".to_string(),
                 responses: vec![Response { tags: None }],
             },
             Callback {
                 id: id.to_string(),
                 vertex: "serve-sink".to_string(),
                 cb_time: 12345,
-                from_vertex: "asciiart".to_string(),
+                from_vertex: "tiger".to_string(),
                 responses: vec![Response { tags: None }],
             },
         ]
@@ -467,6 +474,10 @@ mod tests {
 
         tokio::spawn(async move {
             let mut retries = 0;
+            callback_state
+                .save_response(ID_VALUE.into(), Bytes::from_static(b"test-output"))
+                .await
+                .unwrap();
             loop {
                 let cbs = create_default_callbacks(ID_VALUE);
                 match callback_state.insert_callback_requests(cbs).await {
@@ -495,15 +506,8 @@ mod tests {
         assert_eq!(message.id, ID_VALUE);
         assert_eq!(response.status(), StatusCode::OK);
 
-        let result = extract_response_from_body(response.into_body()).await;
-        assert_eq!(
-            result,
-            json!({
-                "message": "Successfully processed the message",
-                "id": ID_VALUE,
-                "code": 200
-            })
-        );
+        let result = to_bytes(response.into_body(), 10 * 1024).await.unwrap();
+        assert_eq!(result, Bytes::from_static(b"test-output"));
     }
 
     #[tokio::test]
