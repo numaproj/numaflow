@@ -43,13 +43,14 @@ const parsePodLogs = (
   value: string,
   enableTimestamp: boolean,
   levelFilter: string,
-  type: string
+  type: string,
+  isErrorMessage: boolean
 ): string[] => {
   const rawLogs = value.split("\n").filter((s) => s.trim().length);
   return rawLogs.map((raw: string) => {
     // 30 characters for RFC 3339 timestamp
-    const timestamp = raw.length >= 31 ? raw.substring(0, 30) : "";
-    const logWithoutTimestamp = raw.length >= 31 ? raw.substring(31) : raw;
+    const timestamp = raw.length >= 31 && !isErrorMessage ? raw.substring(0, 30) : "";
+    const logWithoutTimestamp = raw.length >= 31 && !isErrorMessage ? raw.substring(31) : raw;
 
     let msg = enableTimestamp ? `${timestamp} ` : "";
 
@@ -147,12 +148,25 @@ export function PodLogs({
               return;
             }
             if (value) {
+              // Check if the value is an error response
+              let isErrorMessage = false;
+              try{
+                const jsonResponse = JSON.parse(value);
+                if (jsonResponse?.errMsg) {
+                  // If there's an error message, set value to errMsg
+                  value = jsonResponse.errMsg;
+                  isErrorMessage = true;
+                }
+              } catch {
+                //do nothing
+              }
               setLogs((logs) => {
                 const latestLogs = parsePodLogs(
                   value,
                   enableTimestamp,
                   levelFilter,
-                  type
+                  type,
+                  isErrorMessage
                 )?.filter((logs) => logs !== "");
                 let updated = [...logs, ...latestLogs];
                 if (updated.length > MAX_LOGS) {
@@ -193,12 +207,25 @@ export function PodLogs({
                 return;
               }
               if (value) {
+                // Check if the value is an error response
+                let isErrorMessage = false;
+                try{
+                  const jsonResponse = JSON.parse(value);
+                  if (jsonResponse?.errMsg) {
+                    // If there's an error message, set value to errMsg
+                    value = jsonResponse.errMsg;
+                    isErrorMessage = true;
+                  }
+                } catch {
+                  //do nothing
+                }
                 setPreviousLogs((prevLogs) => {
                   const latestLogs = parsePodLogs(
                     value,
                     enableTimestamp,
                     levelFilter,
-                    type
+                    type,
+                    isErrorMessage
                   )?.filter((logs) => logs !== "");
                   let updated = [...prevLogs, ...latestLogs];
                   if (updated.length > MAX_LOGS) {
@@ -228,20 +255,25 @@ export function PodLogs({
 
   useEffect(() => {
     if (!search) {
-      setFilteredLogs(logs);
+      if(showPreviousLogs){
+        setFilteredLogs(previousLogs);
+      }else{
+        setFilteredLogs(logs);
+      }
       return;
     }
     const searchLowerCase = search.toLowerCase();
-    const filtered = logs.filter((log) =>
+    const filtered = (showPreviousLogs ? previousLogs : logs)?.filter((log) =>
       negateSearch
         ? !log.toLowerCase().includes(searchLowerCase)
-        : log.toLowerCase().includes(searchLowerCase)
-    );
+        : log.toLowerCase().includes(searchLowerCase));
+    
     if (!filtered.length) {
       filtered.push("No logs matching search.");
     }
     setFilteredLogs(filtered);
-  }, [logs, search, negateSearch]);
+    
+  }, [showPreviousLogs, previousLogs, logs, search, negateSearch]);
 
   const handleSearchChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -533,7 +565,7 @@ export function PodLogs({
             }}
           >
             {logsOrder === "asc" &&
-              (showPreviousLogs ? previousLogs : filteredLogs).map(
+               filteredLogs.map(
                 (l: string, idx) => (
                   <Box
                     key={`${idx}-${podName}-logs`}
@@ -570,7 +602,7 @@ export function PodLogs({
                 )
               )}
             {logsOrder === "desc" &&
-              (showPreviousLogs ? previousLogs : filteredLogs)
+              filteredLogs
                 .slice()
                 .reverse()
                 .map((l: string, idx) => (
