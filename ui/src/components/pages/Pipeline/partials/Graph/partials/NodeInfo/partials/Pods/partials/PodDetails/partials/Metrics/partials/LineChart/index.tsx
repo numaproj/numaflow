@@ -82,6 +82,13 @@ const CustomTooltip = ({
 }: TooltipProps & { displayName: string }) => {
   if (!active || !payload || !payload.length) return null;
 
+  // sorting tooltip based on values in descending order
+  payload?.sort((a, b) => {
+    const period1 = a?.value;
+    const period2 = b?.value;
+    return period2 - period1;
+  });
+
   const maxWidth = Math.max(...payload.map((entry) => entry?.name?.length));
   const timestamp = payload[0]?.payload?.timestamp;
 
@@ -368,12 +375,6 @@ const LineChartComponent = ({
     [labelVal]: parseFloat(value),
   });
 
-  const periodOrder = {
-    "1m": 1,
-    "5m": 2,
-    "15m": 3,
-  };
-
   const updateChartData = useCallback(() => {
     if (!chartData) return;
 
@@ -389,26 +390,24 @@ const LineChartComponent = ({
     )
       filteredChartData = filteredChartData
         // Filter out default period for pending messages
-        ?.filter((item) => item?.metric?.["period"] !== "default")
-        // Sort data based on period for pending messages
-        ?.sort((a, b) => {
-          const period1: "1m" | "5m" | "15m" = a?.metric?.["period"];
-          const period2: "1m" | "5m" | "15m" = b?.metric?.["period"];
-          return (periodOrder[period1] || 0) - (periodOrder[period2] || 0);
-        });
+        ?.filter((item) => item?.metric?.["period"] !== "default");
 
-    if (Array.isArray(label) && label.length === 1 && label[0] === "container"){
+    if (
+      Array.isArray(label) &&
+      label.length === 1 &&
+      label[0] === "container"
+    ) {
       filteredChartData = filteredChartData?.filter((item) => {
-        return pod?.containers?.includes(item?.metric?.["container"])
-      })
+        return pod?.containers?.includes(item?.metric?.["container"]);
+      });
     }
-    
-    if (Array.isArray(label) && label.length === 1 && label[0] === "pod"){
+
+    if (Array.isArray(label) && label.length === 1 && label[0] === "pod") {
       filteredChartData = filteredChartData?.filter((item) => {
-        return !item?.metric?.["pod"]?.includes("daemon")
-      })
+        return !item?.metric?.["pod"]?.includes("daemon");
+      });
     }
-    
+
     filteredChartData?.forEach((item) => {
       let labelVal = "";
       label?.forEach((eachLabel: string) => {
@@ -507,31 +506,31 @@ const LineChartComponent = ({
 
       {filtersList?.filter((filterEle: any) => !filterEle?.required)?.length >
         0 && (
-          <Box
-            sx={{
-              display: fromModal ? "none" : "flex",
-              alignItems: "center",
-              justifyContent: "space-around",
-              mt: "1rem",
-              mb: "2rem",
-              px: "6rem",
-            }}
-          >
-            <Box sx={{ mr: "1rem" }}>Filters</Box>
-            <FiltersDropdown
-              items={filtersList?.filter(
-                (filterEle: any) => !filterEle?.required
-              )}
-              namespaceId={namespaceId}
-              pipelineId={pipelineId}
-              type={type}
-              vertexId={vertexId}
-              setFilters={setFilters}
-              selectedPodName={pod?.name}
-              metric={metric}
-            />
-          </Box>
-        )}
+        <Box
+          sx={{
+            display: fromModal ? "none" : "flex",
+            alignItems: "center",
+            justifyContent: "space-around",
+            mt: "1rem",
+            mb: "2rem",
+            px: "6rem",
+          }}
+        >
+          <Box sx={{ mr: "1rem" }}>Filters</Box>
+          <FiltersDropdown
+            items={filtersList?.filter(
+              (filterEle: any) => !filterEle?.required
+            )}
+            namespaceId={namespaceId}
+            pipelineId={pipelineId}
+            type={type}
+            vertexId={vertexId}
+            setFilters={setFilters}
+            selectedPodName={pod?.name}
+            metric={metric}
+          />
+        </Box>
+      )}
 
       {isLoading && (
         <Box
