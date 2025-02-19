@@ -22,7 +22,7 @@ use chrono::{DateTime, Utc};
 use serving::callback::CallbackHandler;
 use serving::{DEFAULT_CALLBACK_URL_HEADER_KEY, DEFAULT_ID_HEADER};
 use tokio::sync::{mpsc, oneshot};
-use tracing::{error, info};
+use tracing::error;
 
 /// TrackerEntry represents the state of a tracked message.
 #[derive(Debug)]

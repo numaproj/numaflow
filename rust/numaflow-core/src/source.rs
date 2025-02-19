@@ -5,6 +5,7 @@
 //! [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 
 use std::sync::Arc;
+use tracing::warn;
 
 use numaflow_pulsar::source::PulsarSource;
 use numaflow_sqs::source::SQSSource;
@@ -322,7 +323,7 @@ impl Source {
             // this semaphore is used only if read-ahead is disabled. we hold this semaphore to
             // make sure we can read only if the current inflight ones are ack'ed.
             let semaphore = Arc::new(Semaphore::new(1));
-
+            let mut result = Ok(());
             loop {
                 if cln_token.is_cancelled() {
                     info!("Cancellation token is cancelled. Stopping the source.");
@@ -343,7 +344,8 @@ impl Source {
                     Ok(messages) => messages,
                     Err(e) => {
                         error!("Error while reading messages: {:?}", e);
-                        return Err(e);
+                        result = Err(e);
+                        break;
                     }
                 };
 
@@ -356,12 +358,15 @@ impl Source {
                     if let Some(watermark_handle) = self.watermark_handle.as_mut() {
                         watermark_handle
                             .publish_source_idle_watermark(
-                                Self::partitions(self.sender.clone()).await?,
+                                Self::partitions(self.sender.clone())
+                                    .await
+                                    .unwrap_or_default(),
                             )
                             .await;
                     }
                 }
 
+                let mut offsets = vec![];
                 let mut ack_batch = Vec::with_capacity(msgs_len);
                 for message in messages.iter() {
                     let (resp_ack_tx, resp_ack_rx) = oneshot::channel();
@@ -371,7 +376,8 @@ impl Source {
                     self.tracker_handle.insert(message, resp_ack_tx).await?;
 
                     // store the ack one shot in the batch to invoke ack later.
-                    ack_batch.push((offset, resp_ack_rx));
+                    ack_batch.push((offset.clone(), resp_ack_rx));
+                    offsets.push(offset);
                 }
 
                 // start a background task to invoke ack on the source for the offsets that are acked.
@@ -392,7 +398,26 @@ impl Source {
                 // be streaming because transformation should be fast operation.
                 let messages = match self.transformer.as_mut() {
                     None => messages,
-                    Some(transformer) => transformer.transform_batch(messages).await?,
+                    Some(transformer) => match transformer
+                        .transform_batch(messages, cln_token.clone())
+                        .await
+                    {
+                        Ok(messages) => messages,
+                        Err(e) => {
+                            error!(
+                                ?e,
+                                "Error while transforming messages, sending nack to the batch"
+                            );
+                            for offset in offsets {
+                                self.tracker_handle
+                                    .discard(offset)
+                                    .await
+                                    .expect("tracker operations should never fail");
+                            }
+                            result = Err(e);
+                            break;
+                        }
+                    },
                 };
 
                 if let Some(watermark_handle) = self.watermark_handle.as_mut() {
@@ -403,12 +428,19 @@ impl Source {
 
                 // write the messages to downstream.
                 for message in messages {
-                    messages_tx.send(message).await.map_err(|e| {
-                        Error::Source(format!("failed to send message to downstream {:?}", e))
-                    })?;
+                    messages_tx
+                        .send(message)
+                        .await
+                        .expect("send should not fail");
                 }
             }
-            Ok(())
+            info!(status=?result, "Source stopped, waiting for inflight messages to be acked");
+            let _permit = Arc::clone(&semaphore)
+                .acquire_owned()
+                .await
+                .expect("acquiring permit should not fail");
+            info!("All inflight messages are acked. Source stopped.");
+            result
         });
         Ok((ReceiverStream::new(messages_rx), handle))
     }
@@ -429,7 +461,7 @@ impl Source {
                     offsets_to_ack.push(offset);
                 }
                 Ok(ReadAck::Nak) => {
-                    error!(?offset, "Nak received for offset");
+                    warn!(?offset, "Nak received for offset");
                 }
                 Err(e) => {
                     error!(?offset, err=?e, "Error receiving ack for offset");
