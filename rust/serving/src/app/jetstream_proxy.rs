@@ -1,14 +1,15 @@
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use axum::{
-    body::Bytes,
+    body::{Body, Bytes},
     extract::{Query, State},
     http::{HeaderMap, HeaderName, HeaderValue, StatusCode},
-    response::IntoResponse,
+    response::{IntoResponse, Response},
     routing::{get, post},
     Json, Router,
 };
 use serde::Deserialize;
+use serde_json::json;
 use tokio::sync::{mpsc, oneshot};
 use tracing::error;
 
@@ -72,20 +73,26 @@ struct ServeQueryParams {
 async fn serve<T: Send + Sync + Clone + Store>(
     State(proxy_state): State<Arc<ProxyState<T>>>,
     Query(ServeQueryParams { id }): Query<ServeQueryParams>,
-) -> impl IntoResponse {
+) -> Response {
     let pipeline_result = match proxy_state.callback.clone().retrieve_saved(&id).await {
         Ok(result) => result,
         Err(e) => {
+            if let StoreError::InvalidRequestId(id) = e {
+                return Response::builder()
+                    .status(StatusCode::NOT_FOUND)
+                    .body(Body::new(format!(
+                        "Specified request id {id} is not found in the store"
+                    )))
+                    .expect("creating response");
+            }
             error!(error = ?e, "Failed to retrieve from store");
-            return Err(ApiError::InternalServerError(
-                "Failed to retrieve from redis".to_string(),
-            ));
+            return ApiError::InternalServerError("Failed to retrieve from redis".to_string())
+                .into_response();
         }
     };
 
     let PipelineResult::Completed(result) = pipeline_result else {
-        let body = r#"{'status': 'processing'}"#.as_bytes().to_vec();
-        return Ok((HeaderMap::new(), body));
+        return Json(json!({"status": "processing"})).into_response();
     };
 
     // The response can be a binary array of elements as single chunk. For the user to process the blob, we return the array len and
@@ -97,18 +104,25 @@ async fn serve<T: Send + Sync + Clone + Store>(
         .map(|x| x.len().to_string())
         .collect::<Vec<_>>()
         .join(",");
+
+    let arr_idx_header_val = match HeaderValue::from_str(response_arr_len.as_str()) {
+        Ok(val) => val,
+        Err(e) => {
+            tracing::error!(?e, "Encoding response array length");
+            return ApiError::InternalServerError(format!(
+                "Encoding response array len failed: {}",
+                e
+            ))
+            .into_response();
+        }
+    };
     header_map.insert(NUMAFLOW_RESP_ARRAY_LEN, result.len().into());
-    header_map.insert(
-        NUMAFLOW_RESP_ARRAY_IDX_LEN,
-        HeaderValue::from_str(response_arr_len.as_str()).map_err(|e| {
-            ApiError::InternalServerError(format!("Encoding response array len failed: {}", e))
-        })?,
-    );
+    header_map.insert(NUMAFLOW_RESP_ARRAY_IDX_LEN, arr_idx_header_val);
 
     // concatenate as single result, should use header values to decompose based on the len
     let body = result.concat();
 
-    Ok((header_map, body))
+    (header_map, body).into_response()
 }
 
 async fn sync_publish<T: Send + Sync + Clone + Store>(
@@ -577,7 +591,7 @@ mod tests {
             }
         });
 
-        let res = Request::builder()
+        let req = Request::builder()
             .method("POST")
             .uri("/sync")
             .header("Content-Type", "text/plain")
@@ -585,7 +599,7 @@ mod tests {
             .body(Body::from("Test Message"))
             .unwrap();
 
-        let response = app.oneshot(res).await.unwrap();
+        let response = app.clone().oneshot(req).await.unwrap();
         let message = response_collector.await.unwrap();
         assert_eq!(message.id, ID_VALUE);
 
@@ -602,5 +616,28 @@ mod tests {
 
         let result = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         assert_eq!(result, "Test Message 1Another Test Message 2".as_bytes());
+
+        // Get result for the request id using /serve endpoint
+        let req = Request::builder()
+            .method("GET")
+            .uri(format!("/serve?id={ID_VALUE}"))
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let serve_resp = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        assert_eq!(
+            serve_resp,
+            Bytes::from_static(b"Test Message 1Another Test Message 2")
+        );
+
+        // Request for an id that doesn't exist in the store
+        let req = Request::builder()
+            .method("GET")
+            .uri("/serve?id=unknown")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let response = app.oneshot(req).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 }

@@ -16,6 +16,9 @@ const LPUSH: &str = "LPUSH";
 const LRANGE: &str = "LRANGE";
 const EXPIRE: &str = "EXPIRE";
 
+const STATUS_PROCESSING: &str = "processing";
+const STATUS_COMPLETED: &str = "completed";
+
 // Handle to the Redis actor.
 #[derive(Clone)]
 pub(crate) struct RedisConnection {
@@ -111,7 +114,7 @@ impl super::Store for RedisConnection {
             Some(id) => {
                 let mut pipe = redis::pipe();
                 let key = format!("request:{id}:status");
-                pipe.cmd("SET").arg(&key).arg("processing").arg("NX");
+                pipe.cmd("SET").arg(&key).arg(STATUS_PROCESSING).arg("NX");
                 // if the ttl is configured, add the EXPIRE command to the pipeline
                 if let Some(ttl) = self.config.ttl_secs {
                     pipe.arg("EX").arg(ttl);
@@ -133,11 +136,12 @@ impl super::Store for RedisConnection {
                 Ok(id)
             }
             None => {
+                // We use UUID v7 as the request id. Attempt for a maxium of 5 times to generate an id that doesn't currently exist in the Store.
                 for _ in 0..5 {
                     let id = Uuid::now_v7().to_string();
                     let mut pipe = redis::pipe();
                     let key = format!("request:{id}:status");
-                    pipe.cmd("SET").arg(&key).arg("processing").arg("NX");
+                    pipe.cmd("SET").arg(&key).arg(STATUS_PROCESSING).arg("NX");
 
                     // if the ttl is configured, add the EXPIRE command to the pipeline
                     if let Some(ttl) = self.config.ttl_secs {
@@ -168,7 +172,7 @@ impl super::Store for RedisConnection {
         let key = format!("request:{id}:status");
         let status: bool = redis::cmd("SET")
             .arg(&key)
-            .arg("completed")
+            .arg(STATUS_COMPLETED)
             .arg("XX")
             .arg("KEEPTTL")
             .query_async(&mut self.conn_manager)
@@ -255,7 +259,7 @@ impl super::Store for RedisConnection {
             return Err(StoreError::InvalidRequestId(id.to_string()));
         };
 
-        if status == "processing" {
+        if status == STATUS_PROCESSING {
             return Ok(PipelineResult::Processing);
         }
 

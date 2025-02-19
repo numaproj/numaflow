@@ -94,7 +94,7 @@ impl super::Store for InMemoryStore {
         let data = self.data.lock().unwrap();
         match data.get(&id) {
             Some(result) => Ok(PipelineResult::Completed(result.to_vec())),
-            None => Err(StoreError::StoreRead(format!(
+            None => Err(StoreError::InvalidRequestId(format!(
                 "No entry found for id: {}",
                 id
             ))),

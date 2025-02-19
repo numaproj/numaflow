@@ -60,7 +60,9 @@ impl MessageGraph {
         id: String,
         callbacks: Vec<Arc<Callback>>,
     ) -> Result<Option<String>, Error> {
+        // For a monovertex, there will only be 1 callback.
         if self.is_monovertex() && callbacks.len() == 1 {
+            // We return a json object similar to that returned by pipeline.
             let cb = callbacks.first();
             let mut subgraph: Subgraph = Subgraph {
                 id,
@@ -265,6 +267,7 @@ impl MessageGraph {
     }
 
     pub(crate) fn is_monovertex(&self) -> bool {
+        // The DAG is created from the edges. For a monovertex, edges will be empty.
         self.dag.is_empty()
     }
 }
