@@ -22202,6 +22202,9 @@
         "serving": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingSource"
         },
+        "sqs": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SqsSource"
+        },
         "transformer": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDTransformer"
         },

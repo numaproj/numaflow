@@ -45,7 +45,7 @@ pub async fn create_sqs_client(config: Option<SQSSourceConfig>) -> Result<Client
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::source::{AWSCredentials, SQSAuth, SecretKeySelector};
+    use crate::source::{AWSCredentials, SQSAuth};
 
     #[tokio::test]
     async fn test_client_creation_with_defaults() {
@@ -54,14 +54,8 @@ mod tests {
             queue_name: "test-queue".to_string(),
             auth: SQSAuth {
                 credentials: Some(AWSCredentials {
-                    access_key_id: SecretKeySelector {
-                        name: "test-secret".to_string(),
-                        key: "access-key".to_string(),
-                    },
-                    secret_access_key: SecretKeySelector {
-                        name: "test-secret".to_string(),
-                        key: "secret-key".to_string(),
-                    },
+                    access_key_id: "test-key".to_string(),
+                    secret_access_key: "test-secret".to_string(),
                 }),
                 role_arn: None,
             },
@@ -84,14 +78,8 @@ mod tests {
             queue_name: "test-queue".to_string(),
             auth: SQSAuth {
                 credentials: Some(AWSCredentials {
-                    access_key_id: SecretKeySelector {
-                        name: "test-secret".to_string(),
-                        key: "access-key".to_string(),
-                    },
-                    secret_access_key: SecretKeySelector {
-                        name: "test-secret".to_string(),
-                        key: "secret-key".to_string(),
-                    },
+                    access_key_id: "test-key".to_string(),
+                    secret_access_key: "test-secret".to_string(),
                 }),
                 role_arn: None,
             },
@@ -124,14 +112,8 @@ mod tests {
             queue_name: "test-queue".to_string(),
             auth: SQSAuth {
                 credentials: Some(AWSCredentials {
-                    access_key_id: SecretKeySelector {
-                        name: "test-secret".to_string(),
-                        key: "access-key".to_string(),
-                    },
-                    secret_access_key: SecretKeySelector {
-                        name: "test-secret".to_string(),
-                        key: "secret-key".to_string(),
-                    },
+                    access_key_id: "test-key".to_string(),
+                    secret_access_key: "test-secret".to_string(),
                 }),
                 role_arn: None,
             },
@@ -153,14 +135,8 @@ mod tests {
             queue_name: "test-queue".to_string(),
             auth: SQSAuth {
                 credentials: Some(AWSCredentials {
-                    access_key_id: SecretKeySelector {
-                        name: "test-secret".to_string(),
-                        key: "access-key".to_string(),
-                    },
-                    secret_access_key: SecretKeySelector {
-                        name: "test-secret".to_string(),
-                        key: "secret-key".to_string(),
-                    },
+                    access_key_id: "test-key".to_string(),
+                    secret_access_key: "test-secret".to_string(),
                 }),
                 role_arn: None,
             },

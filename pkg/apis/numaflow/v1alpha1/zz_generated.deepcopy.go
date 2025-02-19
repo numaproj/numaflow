@@ -2635,6 +2635,11 @@ func (in *Source) DeepCopyInto(out *Source) {
 		*out = new(PulsarSource)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.Sqs != nil {
+		in, out := &in.Sqs, &out.Sqs
+		*out = new(SqsSource)
+		(*in).DeepCopyInto(*out)
+	}
 	return
 }
 

@@ -46,15 +46,16 @@ impl From<numaflow_sqs::Error> for Error {
     }
 }
 
-#[allow(dead_code)] // TODO(SQS): remove it when integrated with controller
 pub(crate) async fn new_sqs_source(
     cfg: SQSSourceConfig,
     batch_size: usize,
     timeout: Duration,
+    vertex_replica: u16,
 ) -> crate::Result<SQSSource> {
     Ok(SqsSourceBuilder::new(cfg)
         .batch_size(batch_size)
         .timeout(timeout)
+        .vertex_replica(vertex_replica)
         .build()
         .await?)
 }
@@ -110,9 +111,7 @@ pub mod tests {
     use aws_smithy_mocks_experimental::{mock, MockResponseInterceptor, Rule, RuleMode};
     use bytes::Bytes;
     use chrono::Utc;
-    use numaflow_sqs::source::{
-        AWSCredentials, SQSAuth, SecretKeySelector, SqsSourceBuilder, SQS_DEFAULT_REGION,
-    };
+    use numaflow_sqs::source::{AWSCredentials, SQSAuth, SqsSourceBuilder, SQS_DEFAULT_REGION};
     use tokio::task::JoinHandle;
     use tokio_util::sync::CancellationToken;
 
@@ -173,14 +172,8 @@ pub mod tests {
             queue_name: "test-q".to_string(),
             auth: SQSAuth {
                 credentials: Some(AWSCredentials {
-                    access_key_id: SecretKeySelector {
-                        name: "test-secret".to_string(),
-                        key: "access-key".to_string(),
-                    },
-                    secret_access_key: SecretKeySelector {
-                        name: "test-secret".to_string(),
-                        key: "secret-key".to_string(),
-                    },
+                    access_key_id: "test-key".to_string(),
+                    secret_access_key: "test-secret".to_string(),
                 }),
                 role_arn: None,
             },

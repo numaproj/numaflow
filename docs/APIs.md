@@ -10963,6 +10963,21 @@ JetStreamSource </a> </em>
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>sqs</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SqsSource"> SqsSource </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -10971,6 +10986,12 @@ JetStreamSource </a> </em>
 
 SqsSource
 </h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Source">Source</a>)
+</p>
 
 <p>
 

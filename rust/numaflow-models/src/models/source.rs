@@ -32,6 +32,8 @@ pub struct Source {
     pub pulsar: Option<Box<crate::models::PulsarSource>>,
     #[serde(rename = "serving", skip_serializing_if = "Option::is_none")]
     pub serving: Option<Box<crate::models::ServingSource>>,
+    #[serde(rename = "sqs", skip_serializing_if = "Option::is_none")]
+    pub sqs: Option<Box<crate::models::SqsSource>>,
     #[serde(rename = "transformer", skip_serializing_if = "Option::is_none")]
     pub transformer: Option<Box<crate::models::UdTransformer>>,
     #[serde(rename = "udsource", skip_serializing_if = "Option::is_none")]
@@ -48,6 +50,7 @@ impl Source {
             nats: None,
             pulsar: None,
             serving: None,
+            sqs: None,
             transformer: None,
             udsource: None,
         }

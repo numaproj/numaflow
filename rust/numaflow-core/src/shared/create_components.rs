@@ -22,6 +22,7 @@ use crate::shared::server_info::{sdk_server_info, ContainerType};
 use crate::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
 use crate::source::generator::new_generator;
 use crate::source::pulsar::new_pulsar_source;
+use crate::source::sqs::new_sqs_source;
 use crate::source::user_defined::new_source;
 use crate::source::Source;
 use crate::tracker::TrackerHandle;
@@ -344,6 +345,26 @@ pub async fn create_source(
                 Source::new(
                     batch_size,
                     source::SourceType::Pulsar(pulsar),
+                    tracker_handle,
+                    source_config.read_ahead,
+                    transformer,
+                    watermark_handle,
+                ),
+                None,
+            ))
+        }
+        SourceType::Sqs(sqs_source_config) => {
+            let sqs = new_sqs_source(
+                sqs_source_config.clone(),
+                batch_size,
+                read_timeout,
+                *get_vertex_replica(),
+            )
+            .await?;
+            Ok((
+                Source::new(
+                    batch_size,
+                    source::SourceType::SQS(sqs),
                     tracker_handle,
                     source_config.read_ahead,
                     transformer,

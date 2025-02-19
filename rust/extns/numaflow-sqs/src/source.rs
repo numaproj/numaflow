@@ -25,9 +25,8 @@ pub const SQS_DEFAULT_REGION: &str = "us-west-2";
 /// Configuration for an SQS message source.
 ///
 /// Used to initialize the SQS client with region and queue settings.
-/// Implements serde::Deserialize to support loading from configuration files.
 /// TODO: use config in sqs actor methods
-#[derive(serde::Deserialize, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SQSSourceConfig {
     // Required fields
     pub region: String,
@@ -35,17 +34,11 @@ pub struct SQSSourceConfig {
     pub auth: SQSAuth,
 
     // Optional fields
-    #[serde(default)]
     pub visibility_timeout: Option<i32>,
-    #[serde(default)]
     pub max_number_of_messages: Option<i32>,
-    #[serde(default)]
     pub wait_time_seconds: Option<i32>,
-    #[serde(default)]
     pub endpoint_url: Option<String>,
-    #[serde(default)]
     pub attribute_names: Vec<String>,
-    #[serde(default)]
     pub message_attribute_names: Vec<String>,
 }
 
@@ -96,11 +89,9 @@ impl SQSSourceConfig {
 }
 
 /// AWS authentication configuration
-#[derive(serde::Deserialize, Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct SQSAuth {
-    #[serde(default)]
     pub credentials: Option<AWSCredentials>,
-    #[serde(default)]
     pub role_arn: Option<String>,
 }
 
@@ -116,13 +107,12 @@ impl SQSAuth {
             )),
             (Some(creds), None) => {
                 // Validate that both access key and secret key are provided
-                if creds.access_key_id.name.is_empty() || creds.access_key_id.key.is_empty() {
+                if creds.access_key_id.is_empty() {
                     return Err(Error::InvalidConfig(
                         "access key ID secret selector is invalid".to_string(),
                     ));
                 }
-                if creds.secret_access_key.name.is_empty() || creds.secret_access_key.key.is_empty()
-                {
+                if creds.secret_access_key.is_empty() {
                     return Err(Error::InvalidConfig(
                         "secret access key secret selector is invalid".to_string(),
                     ));
@@ -140,17 +130,10 @@ impl SQSAuth {
 }
 
 /// AWS credentials information
-#[derive(serde::Deserialize, Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct AWSCredentials {
-    pub access_key_id: SecretKeySelector,
-    pub secret_access_key: SecretKeySelector,
-}
-
-/// Secret key selector
-#[derive(serde::Deserialize, Clone, PartialEq)]
-pub struct SecretKeySelector {
-    pub name: String,
-    pub key: String,
+    pub access_key_id: String,
+    pub secret_access_key: String,
 }
 
 /// Internal message types for the actor implementation.
@@ -473,6 +456,7 @@ pub struct SQSSource {
     /// timeout for each batch read request
     timeout: Duration,
     actor_tx: mpsc::Sender<SQSActorMessage>,
+    vertex_replica: u16,
 }
 
 /// Builder for creating an `SqsSource`.
@@ -485,6 +469,7 @@ pub struct SqsSourceBuilder {
     batch_size: usize,
     timeout: Duration,
     client: Option<Client>,
+    vertex_replica: u16,
 }
 
 impl Default for SqsSourceBuilder {
@@ -513,6 +498,7 @@ impl SqsSourceBuilder {
             batch_size: 1,
             timeout: Duration::from_secs(1),
             client: None,
+            vertex_replica: 0,
         }
     }
     pub fn config(mut self, config: SQSSourceConfig) -> Self {
@@ -532,6 +518,11 @@ impl SqsSourceBuilder {
 
     pub fn client(mut self, client: Client) -> Self {
         self.client = Some(client);
+        self
+    }
+
+    pub fn vertex_replica(mut self, vertex_replica: u16) -> Self {
+        self.vertex_replica = vertex_replica;
         self
     }
 
@@ -578,6 +569,7 @@ impl SqsSourceBuilder {
             batch_size: self.batch_size,
             timeout: self.timeout,
             actor_tx: handler_tx,
+            vertex_replica: self.vertex_replica,
         })
     }
 }
@@ -644,7 +636,7 @@ impl SQSSource {
     /// Note: It is implemented in the core to return the current vertex replica.
     /// See `numaflow-core/src/source/sqs.rs` for the implementation.
     pub fn partitions(&self) -> Vec<u16> {
-        unimplemented!()
+        vec![self.vertex_replica]
     }
 }
 
@@ -676,14 +668,8 @@ mod tests {
             queue_name: "test-q".to_string(),
             auth: SQSAuth {
                 credentials: Some(AWSCredentials {
-                    access_key_id: SecretKeySelector {
-                        key: "secret-key".to_string(),
-                        name: "test-key".to_string(),
-                    },
-                    secret_access_key: SecretKeySelector {
-                        key: "secret-key".to_string(),
-                        name: "test-secret".to_string(),
-                    },
+                    access_key_id: "test-key".to_string(),
+                    secret_access_key: "test-secret".to_string(),
                 }),
                 role_arn: None,
             },
@@ -735,14 +721,8 @@ mod tests {
             queue_name: "test-q".to_string(),
             auth: SQSAuth {
                 credentials: Some(AWSCredentials {
-                    access_key_id: SecretKeySelector {
-                        key: "secret-key".to_string(),
-                        name: "test-key".to_string(),
-                    },
-                    secret_access_key: SecretKeySelector {
-                        key: "secret-key".to_string(),
-                        name: "test-secret".to_string(),
-                    },
+                    access_key_id: "test-key".to_string(),
+                    secret_access_key: "test-secret".to_string(),
                 }),
                 role_arn: None,
             },
@@ -784,14 +764,8 @@ mod tests {
             queue_name: "test-q".to_string(),
             auth: SQSAuth {
                 credentials: Some(AWSCredentials {
-                    access_key_id: SecretKeySelector {
-                        key: "secret-key".to_string(),
-                        name: "test-key".to_string(),
-                    },
-                    secret_access_key: SecretKeySelector {
-                        key: "secret-key".to_string(),
-                        name: "test-secret".to_string(),
-                    },
+                    access_key_id: "test-key".to_string(),
+                    secret_access_key: "test-secret".to_string(),
                 }),
                 role_arn: None,
             },
@@ -828,14 +802,8 @@ mod tests {
             queue_name: "test-q".to_string(),
             auth: SQSAuth {
                 credentials: Some(AWSCredentials {
-                    access_key_id: SecretKeySelector {
-                        key: "secret-key".to_string(),
-                        name: "test-key".to_string(),
-                    },
-                    secret_access_key: SecretKeySelector {
-                        key: "secret-key".to_string(),
-                        name: "test-secret".to_string(),
-                    },
+                    access_key_id: "test-key".to_string(),
+                    secret_access_key: "test-secret".to_string(),
                 }),
                 role_arn: None,
             },
@@ -855,14 +823,14 @@ mod tests {
     }
 
     #[tokio::test]
-    #[should_panic(expected = "not implemented")]
     async fn test_partitions_unimplemented() {
         let source = SQSSource {
             batch_size: 1,
             timeout: Duration::from_secs(0),
             actor_tx: mpsc::channel(1).0,
+            vertex_replica: 1,
         };
-        source.partitions();
+        assert_eq!(source.partitions(), vec![1]);
     }
 
     fn get_queue_attributes_output() -> Rule {

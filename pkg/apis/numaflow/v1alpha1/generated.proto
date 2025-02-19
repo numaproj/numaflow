@@ -1674,6 +1674,9 @@ message Source {
 
   // +optional
   optional PulsarSource pulsar = 9;
+
+  // +optional
+  optional SqsSource sqs = 10;
 }
 
 // SqsSource represents the configuration of an AWS SQS source
