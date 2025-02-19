@@ -14,7 +14,7 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::error;
 
 use super::{
-    callback::store::{PipelineResult, Store},
+    callback::store::{ProcessingStatus, Store},
     AppState,
 };
 use crate::app::callback::store::Error as StoreError;
@@ -92,8 +92,8 @@ async fn fetch<T: Send + Sync + Clone + Store>(
         }
     };
 
-    let PipelineResult::Completed(result) = pipeline_result else {
-        return Json(json!({"status": "processing"})).into_response();
+    let ProcessingStatus::Completed(result) = pipeline_result else {
+        return Json(json!({"status": "in-progress"})).into_response();
     };
 
     // The response can be a binary array of elements as single chunk. For the user to process the blob, we return the array len and
@@ -202,7 +202,7 @@ async fn sync_publish<T: Send + Sync + Clone + Store>(
         HeaderName::from_str(&proxy_state.tid_header).unwrap(),
         HeaderValue::from_str(&id).unwrap(),
     );
-    let PipelineResult::Completed(result) = result else {
+    let ProcessingStatus::Completed(result) = result else {
         return Ok(Json(json!({"status": "processing"})).into_response());
     };
 
@@ -344,8 +344,8 @@ mod tests {
         async fn retrieve_callbacks(&mut self, _id: &str) -> StoreResult<Vec<Arc<Callback>>> {
             Ok(vec![])
         }
-        async fn retrieve_datum(&mut self, _id: &str) -> StoreResult<PipelineResult> {
-            Ok(PipelineResult::Completed(vec![]))
+        async fn retrieve_datum(&mut self, _id: &str) -> StoreResult<ProcessingStatus> {
+            Ok(ProcessingStatus::Completed(vec![]))
         }
         async fn ready(&mut self) -> bool {
             true
@@ -617,7 +617,7 @@ mod tests {
         let result = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         assert_eq!(result, "Test Message 1Another Test Message 2".as_bytes());
 
-        // Get result for the request id using /serve endpoint
+        // Get result for the request id using /fetch endpoint
         let req = Request::builder()
             .method("GET")
             .uri(format!("/fetch?id={ID_VALUE}"))

@@ -4,8 +4,10 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use super::{Error as StoreError, Result as StoreResult};
-use super::{PayloadToSave, PipelineResult};
+use super::{PayloadToSave, ProcessingStatus};
 use crate::app::callback::Callback;
+
+const STORE_KEY_SUFFIX: &str = "saved";
 
 /// `InMemoryStore` is an in-memory implementation of the `Store` trait.
 /// It uses a `HashMap` to store data in memory.
@@ -52,7 +54,7 @@ impl super::Store for InMemoryStore {
                     if key.is_empty() {
                         return Err(StoreError::StoreWrite("Key cannot be empty".to_string()));
                     }
-                    data.entry(format!("{}_{}", key, "saved"))
+                    data.entry(format!("{key}_{STORE_KEY_SUFFIX}"))
                         .or_default()
                         .push(value.into());
                 }
@@ -89,11 +91,11 @@ impl super::Store for InMemoryStore {
 
     /// Retrieves data for a given id from the `HashMap`.
     /// Each piece of data is deserialized from bytes into a `String`.
-    async fn retrieve_datum(&mut self, id: &str) -> StoreResult<PipelineResult> {
-        let id = format!("{}_{}", id, "saved");
+    async fn retrieve_datum(&mut self, id: &str) -> StoreResult<ProcessingStatus> {
+        let id = format!("{id}_{STORE_KEY_SUFFIX}");
         let data = self.data.lock().unwrap();
         match data.get(&id) {
-            Some(result) => Ok(PipelineResult::Completed(result.to_vec())),
+            Some(result) => Ok(ProcessingStatus::Completed(result.to_vec())),
             None => Err(StoreError::InvalidRequestId(format!(
                 "No entry found for id: {}",
                 id
@@ -160,7 +162,7 @@ mod tests {
 
         // Retrieve the datum
         let retrieved = store.retrieve_datum(&key).await.unwrap();
-        let PipelineResult::Completed(retrieved) = retrieved else {
+        let ProcessingStatus::Completed(retrieved) = retrieved else {
             panic!("Expected pipeline processing to be completed");
         };
 

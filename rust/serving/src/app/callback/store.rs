@@ -20,8 +20,9 @@ pub(crate) enum PayloadToSave {
 }
 
 #[derive(Debug, PartialEq)]
-pub(crate) enum PipelineResult {
-    Processing,
+/// Represents the current processing status of a request id in the `Store`.
+pub(crate) enum ProcessingStatus {
+    InProgress,
     Completed(Vec<Vec<u8>>),
 }
 
@@ -64,6 +65,6 @@ pub(crate) trait LocalStore {
     async fn save(&mut self, messages: Vec<PayloadToSave>) -> Result<()>;
     /// retrieve the callback payloads
     async fn retrieve_callbacks(&mut self, id: &str) -> Result<Vec<Arc<Callback>>>;
-    async fn retrieve_datum(&mut self, id: &str) -> Result<PipelineResult>;
+    async fn retrieve_datum(&mut self, id: &str) -> Result<ProcessingStatus>;
     async fn ready(&mut self) -> bool;
 }

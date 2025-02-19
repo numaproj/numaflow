@@ -8,7 +8,7 @@ use tokio::sync::Semaphore;
 use uuid::Uuid;
 
 use super::{Error as StoreError, Result as StoreResult};
-use super::{PayloadToSave, PipelineResult};
+use super::{PayloadToSave, ProcessingStatus};
 use crate::app::callback::Callback;
 use crate::config::RedisConfig;
 
@@ -168,6 +168,8 @@ impl super::Store for RedisConnection {
             }
         }
     }
+
+    // Updates the processing status for the specified request id as completed.
     async fn done(&mut self, id: String) -> StoreResult<()> {
         let key = format!("request:{id}:status");
         let status: bool = redis::cmd("SET")
@@ -247,7 +249,7 @@ impl super::Store for RedisConnection {
         }
     }
 
-    async fn retrieve_datum(&mut self, id: &str) -> StoreResult<PipelineResult> {
+    async fn retrieve_datum(&mut self, id: &str) -> StoreResult<ProcessingStatus> {
         let redis_status_key = format!("request:{id}:status");
         let status: Option<String> = self
             .conn_manager
@@ -260,7 +262,7 @@ impl super::Store for RedisConnection {
         };
 
         if status == STATUS_PROCESSING {
-            return Ok(PipelineResult::Processing);
+            return Ok(ProcessingStatus::InProgress);
         }
 
         let key = format!("request:{id}:results");
@@ -280,7 +282,7 @@ impl super::Store for RedisConnection {
                     )));
                 }
 
-                Ok(PipelineResult::Completed(result))
+                Ok(ProcessingStatus::Completed(result))
             }
             Err(e) => Err(StoreError::StoreRead(format!(
                 "Failed to read from redis: {:?}",
@@ -306,7 +308,7 @@ mod tests {
     use redis::AsyncCommands;
 
     use super::*;
-    use crate::app::callback::store::{LocalStore, PipelineResult};
+    use crate::app::callback::store::{LocalStore, ProcessingStatus};
     use crate::callback::Response;
 
     #[tokio::test]
@@ -367,11 +369,11 @@ mod tests {
         let datums = redis_conn.retrieve_datum(&key).await;
         assert!(datums.is_ok());
 
-        assert_eq!(datums.unwrap(), PipelineResult::Processing);
+        assert_eq!(datums.unwrap(), ProcessingStatus::InProgress);
 
         redis_conn.done(key.clone()).await.unwrap();
         let datums = redis_conn.retrieve_datum(&key).await.unwrap();
-        let PipelineResult::Completed(datums) = datums else {
+        let ProcessingStatus::Completed(datums) = datums else {
             panic!("Expected completed results");
         };
         assert_eq!(datums.len(), 1);
