@@ -1,5 +1,5 @@
+use std::collections::HashMap;
 use std::fmt::Debug;
-use std::{collections::HashMap, env};
 
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
@@ -114,7 +114,7 @@ pub struct CallbackStorageConfig {
 impl TryFrom<HashMap<String, String>> for Settings {
     type Error = Error;
     fn try_from(env_vars: HashMap<String, String>) -> std::result::Result<Self, Self::Error> {
-        let is_monovertex = env::var("NUMAFLOW_MONO_VERTEX_OBJECT").is_ok();
+        let is_monovertex = env_vars.contains_key(ENV_MONOVERTEX_OBJ);
         let mut settings = Settings {
             host_ip: "localhost".to_string(),
             pipeline_spec: PipelineDCG::monovertex(),
@@ -257,7 +257,7 @@ mod tests {
     }
 
     #[test]
-    fn test_config_parse() {
+    fn test_pipeline_config_parse() {
         // Set up the environment variables
         let env_vars = [
             (ENV_NUMAFLOW_SERVING_HOST_IP, "10.2.3.5"),
@@ -303,6 +303,49 @@ mod tests {
                     to: "serve-sink".into(),
                     conditions: None,
                 }],
+            },
+            ..Default::default()
+        };
+        assert_eq!(settings, expected_config);
+    }
+
+    #[test]
+    fn test_monovertex_config_parse() {
+        // Set up the environment variables
+        let env_vars = [
+            (ENV_NUMAFLOW_SERVING_HOST_IP, "10.2.3.5"),
+            (ENV_NUMAFLOW_SERVING_APP_PORT, "8443"),
+            (ENV_MONOVERTEX_OBJ, "eyJtZXRhZGF0YSI6eyJuYW1lIjoidHJhbnNmb3JtZXItbW9uby12ZXJ0ZXgiLCJuYW1lc3BhY2UiOiJkZWZhdWx0IiwiY3JlYXRpb25UaW1lc3RhbXAiOm51bGx9LCJzcGVjIjp7InJlcGxpY2FzIjowLCJzb3VyY2UiOnsic2VydmluZyI6eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQiLCJzdG9yZSI6eyJ1cmwiOiJyZWRpczovL3JlZGlzOjYzNzkifX19LCJzaW5rIjp7InVkc2luayI6eyJjb250YWluZXIiOnsiaW1hZ2UiOiJzZXJ2ZXNpbms6MC4xIiwiZW52IjpbeyJuYW1lIjoiTlVNQUZMT1dfQ0FMTEJBQ0tfVVJMX0tFWSIsInZhbHVlIjoiWC1OdW1hZmxvdy1DYWxsYmFjay1VcmwifSx7Im5hbWUiOiJOVU1BRkxPV19NU0dfSURfSEVBREVSX0tFWSIsInZhbHVlIjoiWC1OdW1hZmxvdy1JZCJ9XSwicmVzb3VyY2VzIjp7fSwiaW1hZ2VQdWxsUG9saWN5IjoiTmV2ZXIifX0sInJldHJ5U3RyYXRlZ3kiOnt9fSwiY29udGFpbmVyVGVtcGxhdGUiOnsicmVzb3VyY2VzIjp7fSwiZW52IjpbeyJuYW1lIjoiTlVNQUZMT1dfQ0FMTEJBQ0tfRU5BQkxFRCIsInZhbHVlIjoidHJ1ZSJ9XX0sImxpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMifSwic2NhbGUiOnt9LCJ1cGRhdGVTdHJhdGVneSI6e30sImxpZmVjeWNsZSI6e319LCJzdGF0dXMiOnsicmVwbGljYXMiOjAsImRlc2lyZWRSZXBsaWNhcyI6MCwibGFzdFVwZGF0ZWQiOm51bGwsImxhc3RTY2FsZWRBdCI6bnVsbH19"),
+        ];
+
+        // Call the config method
+        let settings: Settings = env_vars
+            .into_iter()
+            .map(|(key, val)| (key.to_owned(), val.to_owned()))
+            .collect::<HashMap<String, String>>()
+            .try_into()
+            .unwrap();
+
+        let expected_config = Settings {
+            tid_header: "X-Numaflow-Id".into(),
+            app_listen_port: 8443,
+            metrics_server_listen_port: 3001,
+            upstream_addr: "localhost:8888".into(),
+            drain_timeout_secs: 10,
+            redis: RedisConfig {
+                addr: "redis://redis:6379".into(),
+                max_tasks: 50,
+                retries: 5,
+                retries_duration_millis: 100,
+                ttl_secs: Some(DEFAULT_REDIS_TTL_IN_SECS),
+            },
+            host_ip: "localhost".into(),
+            api_auth_token: None,
+            pipeline_spec: PipelineDCG {
+                vertices: vec![Vertex {
+                    name: "source".into(),
+                }],
+                edges: vec![],
             },
             ..Default::default()
         };

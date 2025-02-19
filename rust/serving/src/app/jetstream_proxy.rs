@@ -43,6 +43,7 @@ const NUMAFLOW_RESP_ARRAY_IDX_LEN: &str = "Numaflow-Array-Index-Len";
 struct ProxyState<T> {
     message: mpsc::Sender<MessageWrapper>,
     tid_header: String,
+    /// Lets the HTTP handlers know whether they are in a Monovertex or a Pipeline
     monovertex: bool,
     callback: state::State<T>,
 }
@@ -53,14 +54,14 @@ pub(crate) async fn jetstream_proxy<T: Clone + Send + Sync + Store + 'static>(
     let proxy_state = Arc::new(ProxyState {
         message: state.message.clone(),
         tid_header: state.settings.tid_header.clone(),
-        monovertex: state.settings.pipeline_spec.edges.is_empty(), // FIXME:
+        monovertex: state.settings.pipeline_spec.edges.is_empty(),
         callback: state.callback_state.clone(),
     });
 
     let router = Router::new()
         .route("/async", post(async_publish))
         .route("/sync", post(sync_publish))
-        .route("/serve", get(serve))
+        .route("/fetch", get(fetch))
         .with_state(proxy_state);
     Ok(router)
 }
@@ -70,7 +71,7 @@ struct ServeQueryParams {
     id: String,
 }
 
-async fn serve<T: Send + Sync + Clone + Store>(
+async fn fetch<T: Send + Sync + Clone + Store>(
     State(proxy_state): State<Arc<ProxyState<T>>>,
     Query(ServeQueryParams { id }): Query<ServeQueryParams>,
 ) -> Response {
@@ -267,6 +268,8 @@ async fn async_publish<T: Send + Sync + Clone + Store>(
             ));
         }
     };
+    // A send operation happens at the sender end of the notify channel when all callbacks are received.
+    // We keep the receiver alive to avoid send failure.
     tokio::spawn(notify);
 
     let (confirm_save_tx, confirm_save_rx) = oneshot::channel();
@@ -281,6 +284,8 @@ async fn async_publish<T: Send + Sync + Clone + Store>(
 
     proxy_state.message.send(message).await.unwrap(); // FIXME:
     if proxy_state.monovertex {
+        // A send operation happens at the sender end of the confirm_save channel when writing to Sink is successful and ACK is received for the message.
+        // We keep the receiver alive to avoid send failure.
         tokio::spawn(confirm_save_rx);
         return Ok(Json(ServeResponse::new(
             "Successfully published message".to_string(),
@@ -620,7 +625,7 @@ mod tests {
         // Get result for the request id using /serve endpoint
         let req = Request::builder()
             .method("GET")
-            .uri(format!("/serve?id={ID_VALUE}"))
+            .uri(format!("/fetch?id={ID_VALUE}"))
             .body(axum::body::Body::empty())
             .unwrap();
         let response = app.clone().oneshot(req).await.unwrap();
@@ -634,7 +639,7 @@ mod tests {
         // Request for an id that doesn't exist in the store
         let req = Request::builder()
             .method("GET")
-            .uri("/serve?id=unknown")
+            .uri("/fetch?id=unknown")
             .body(axum::body::Body::empty())
             .unwrap();
         let response = app.oneshot(req).await.unwrap();
