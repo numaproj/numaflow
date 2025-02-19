@@ -203,12 +203,7 @@ async fn sync_publish<T: Send + Sync + Clone + Store>(
         HeaderValue::from_str(&id).unwrap(),
     );
     let PipelineResult::Completed(result) = result else {
-        header_map.insert(
-            http::header::CONTENT_TYPE,
-            HeaderValue::from_static("application/json"),
-        );
-        let body = r#"{'status': 'processing'}"#.as_bytes().to_vec();
-        return Ok((header_map, body));
+        return Ok(Json(json!({"status": "processing"})).into_response());
     };
 
     // The response can be a binary array of elements as single chunk. For the user to process the blob, we return the array len and
@@ -230,7 +225,7 @@ async fn sync_publish<T: Send + Sync + Clone + Store>(
     // concatenate as single result, should use header values to decompose based on the len
     let body = result.concat();
 
-    Ok((header_map, body))
+    Ok((header_map, body).into_response())
 }
 
 async fn async_publish<T: Send + Sync + Clone + Store>(
