@@ -457,12 +457,13 @@ mod tests {
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
         };
+        let tracker = TrackerHandle::new(None, None);
         let js_reader = JetStreamReader::new(
             "Map".to_string(),
             stream.clone(),
             context.clone(),
             buf_reader_config,
-            TrackerHandle::new(None, None),
+            tracker.clone(),
             500,
             None,
         )
@@ -475,13 +476,16 @@ mod tests {
             .await
             .unwrap();
 
+        let mut offsets = vec![];
         for i in 0..10 {
+            let offset = Offset::Int(IntOffset::new(i + 1, 0));
+            offsets.push(offset.clone());
             let message = Message {
                 typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: Offset::Int(IntOffset::new(i, 0)),
+                offset,
                 event_time: Utc::now(),
                 watermark: None,
                 id: MessageID {
@@ -513,6 +517,9 @@ mod tests {
             "Expected 10 messages from the jetstream reader"
         );
 
+        for offset in offsets {
+            tracker.discard(offset).await.unwrap();
+        }
         reader_cancel_token.cancel();
         js_reader_task.await.unwrap().unwrap();
 

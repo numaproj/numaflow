@@ -247,7 +247,7 @@ impl MapHandle {
                         Some(error) = error_rx.recv() => {
                             // when we get an error we cancel the token to signal the upstream to stop
                             // sending new messages, and we empty the input stream and return the error.
-                            if !self.final_result.is_err() {
+                            if self.final_result.is_ok() {
                                 error!(?error, "error received while performing unary map operation");
                                 cln_token.cancel();
                                 self.final_result = Err(error);
@@ -325,7 +325,7 @@ impl MapHandle {
                        Some(error) = error_rx.recv() => {
                             // when we get an error we cancel the token to signal the upstream to stop
                             // sending new messages, and we empty the input stream and return the error.
-                            if !self.final_result.is_err() {
+                            if self.final_result.is_ok() {
                                 error!(?error, "error received while performing stream map operation");
                                 cln_token.cancel();
                                 self.final_result = Err(error);
@@ -577,7 +577,6 @@ impl MapHandle {
                                 output_tx.send(mapped_message).await.expect("failed to send response");
                             }
                             Some(Err(e)) => {
-                                error!(?e, "failed to map message");
                                 tracker_handle
                                     .discard(read_msg.offset)
                                     .await
@@ -614,17 +613,17 @@ impl MapHandle {
 mod tests {
     use std::time::Duration;
 
-    use numaflow::{batchmap, map, mapstream};
-    use numaflow_pb::clients::map::map_client::MapClient;
-    use tempfile::TempDir;
-    use tokio::sync::{mpsc::Sender, oneshot};
-
     use super::*;
     use crate::{
         message::{MessageID, Offset, StringOffset},
         shared::grpc::create_rpc_channel,
         Result,
     };
+    use numaflow::{batchmap, map, mapstream};
+    use numaflow_pb::clients::map::map_client::MapClient;
+    use tempfile::TempDir;
+    use tokio::sync::{mpsc::Sender, oneshot};
+    use tokio::time::sleep;
 
     struct SimpleMapper;
 
@@ -857,29 +856,33 @@ mod tests {
         let (input_tx, input_rx) = mpsc::channel(10);
         let input_stream = ReceiverStream::new(input_rx);
 
-        let message = Message {
-            typ: Default::default(),
-            keys: Arc::from(vec!["first".into()]),
-            tags: None,
-            value: "hello".into(),
-            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
-            event_time: chrono::Utc::now(),
-            watermark: None,
-            id: MessageID {
-                vertex_name: "vertex_name".to_string().into(),
-                offset: "0".to_string().into(),
-                index: 0,
-            },
-            headers: Default::default(),
-            metadata: None,
-        };
-
-        input_tx.send(message).await.unwrap();
-
         let (_output_stream, map_handle) = mapper
             .streaming_map(input_stream, CancellationToken::new())
             .await?;
 
+        // send 10 requests to the mapper
+        for i in 0..10 {
+            let message = Message {
+                typ: Default::default(),
+                keys: Arc::from(vec![format!("key_{}", i)]),
+                tags: None,
+                value: format!("value_{}", i).into(),
+                offset: Offset::String(StringOffset::new(i.to_string(), 0)),
+                event_time: chrono::Utc::now(),
+                watermark: None,
+                id: MessageID {
+                    vertex_name: "vertex_name".to_string().into(),
+                    offset: i.to_string().into(),
+                    index: i,
+                },
+                headers: Default::default(),
+                metadata: None,
+            };
+            input_tx.send(message).await.unwrap();
+            sleep(Duration::from_millis(10)).await;
+        }
+
+        drop(input_tx);
         // Await the join handle and expect an error due to the panic
         let result = map_handle.await.unwrap();
         assert!(result.is_err(), "Expected an error due to panic");
@@ -1277,32 +1280,36 @@ mod tests {
         )
         .await?;
 
-        let message = Message {
-            typ: Default::default(),
-            keys: Arc::from(vec!["first".into()]),
-            tags: None,
-            value: "panic".into(),
-            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
-            event_time: chrono::Utc::now(),
-            watermark: None,
-            id: MessageID {
-                vertex_name: "vertex_name".to_string().into(),
-                offset: "0".to_string().into(),
-                index: 0,
-            },
-            headers: Default::default(),
-            metadata: None,
-        };
-
         let (input_tx, input_rx) = mpsc::channel(10);
         let input_stream = ReceiverStream::new(input_rx);
-
-        input_tx.send(message).await.unwrap();
 
         let (_output_stream, map_handle) = mapper
             .streaming_map(input_stream, CancellationToken::new())
             .await?;
 
+        // send 10 requests to the mapper
+        for i in 0..10 {
+            let message = Message {
+                typ: Default::default(),
+                keys: Arc::from(vec![format!("key_{}", i)]),
+                tags: None,
+                value: format!("value_{}", i).into(),
+                offset: Offset::String(StringOffset::new(i.to_string(), 0)),
+                event_time: chrono::Utc::now(),
+                watermark: None,
+                id: MessageID {
+                    vertex_name: "vertex_name".to_string().into(),
+                    offset: i.to_string().into(),
+                    index: i,
+                },
+                headers: Default::default(),
+                metadata: None,
+            };
+            input_tx.send(message).await.unwrap();
+            sleep(Duration::from_millis(10)).await;
+        }
+
+        drop(input_tx);
         // Await the join handle and expect an error due to the panic
         let result = map_handle.await.unwrap();
         assert!(result.is_err(), "Expected an error due to panic");

@@ -131,7 +131,7 @@ impl TryFrom<&Message> for ServingCallbackInfo {
 
 impl Drop for Tracker {
     fn drop(&mut self) {
-        if self.entries.len() > 0 {
+        if !self.entries.is_empty() {
             error!("Tracker dropped with non-empty entries: {:?}", self.entries);
         }
     }

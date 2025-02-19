@@ -274,16 +274,17 @@ async fn create_response_stream(
     let mut resp_stream = client
         .map_fn(Request::new(ReceiverStream::new(read_rx)))
         .await
-        .map_err(|e| Error::Grpc(e))?
+        .map_err(Error::Grpc)?
         .into_inner();
 
-    let handshake_response = resp_stream
-        .message()
-        .await
-        .map_err(|e| Error::Grpc(e))?
-        .ok_or(Error::Mapper(
-            "failed to receive handshake response".to_string(),
-        ))?;
+    let handshake_response =
+        resp_stream
+            .message()
+            .await
+            .map_err(Error::Grpc)?
+            .ok_or(Error::Mapper(
+                "failed to receive handshake response".to_string(),
+            ))?;
 
     if handshake_response.handshake.map_or(true, |h| !h.sot) {
         return Err(Error::Mapper("invalid handshake response".to_string()));

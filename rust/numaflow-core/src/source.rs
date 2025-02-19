@@ -371,6 +371,7 @@ impl Source {
                 for message in messages.iter() {
                     let (resp_ack_tx, resp_ack_rx) = oneshot::channel();
                     let offset = message.offset.clone();
+                    println!("offset: {:?}", offset);
 
                     // insert the offset and the ack one shot in the tracker.
                     self.tracker_handle.insert(message, resp_ack_tx).await?;
@@ -660,10 +661,11 @@ mod tests {
             .map_err(|e| panic!("failed to create source reader: {:?}", e))
             .unwrap();
 
+        let tracker = TrackerHandle::new(None, None);
         let source = Source::new(
             5,
             SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
-            TrackerHandle::new(None, None),
+            tracker.clone(),
             true,
             None,
             None,
@@ -683,7 +685,11 @@ mod tests {
         }
 
         // ack all the messages
-        Source::ack(sender.clone(), offsets).await.unwrap();
+        Source::ack(sender.clone(), offsets.clone()).await.unwrap();
+
+        for offset in offsets {
+            tracker.discard(offset).await.unwrap();
+        }
 
         // since we acked all the messages, pending should be 0
         let pending = source.pending().await.unwrap();
@@ -691,6 +697,9 @@ mod tests {
 
         let partitions = Source::partitions(sender.clone()).await.unwrap();
         assert_eq!(partitions, vec![1, 2]);
+
+        drop(source);
+        drop(sender);
 
         cln_token.cancel();
         let _ = handle.await.unwrap();

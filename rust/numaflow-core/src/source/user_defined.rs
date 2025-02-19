@@ -90,18 +90,19 @@ impl UserDefinedSourceRead {
         let mut resp_stream = client
             .read_fn(Request::new(read_stream))
             .await
-            .map_err(|e| Error::Grpc(e))?
+            .map_err(Error::Grpc)?
             .into_inner();
 
         // first response from the server will be the handshake response. We need to check if the
         // server has accepted the handshake.
-        let handshake_response = resp_stream
-            .message()
-            .await
-            .map_err(|e| Error::Grpc(e))?
-            .ok_or(Error::Source(
-                "failed to receive handshake response".to_string(),
-            ))?;
+        let handshake_response =
+            resp_stream
+                .message()
+                .await
+                .map_err(Error::Grpc)?
+                .ok_or(Error::Source(
+                    "failed to receive handshake response".to_string(),
+                ))?;
         // handshake cannot to None during the initial phase, and it has to set `sot` to true.
         if handshake_response.handshake.map_or(true, |h| !h.sot) {
             return Err(Error::Source("invalid handshake response".to_string()));
@@ -183,12 +184,7 @@ impl SourceReader for UserDefinedSourceRead {
 
         let mut messages = Vec::with_capacity(self.num_records);
 
-        while let Some(response) = self
-            .resp_stream
-            .message()
-            .await
-            .map_err(|e| Error::Grpc(e))?
-        {
+        while let Some(response) = self.resp_stream.message().await.map_err(Error::Grpc)? {
             if response.status.is_some_and(|status| status.eot) {
                 break;
             }
@@ -247,7 +243,7 @@ impl UserDefinedSourceAck {
         let mut ack_resp_stream = client
             .ack_fn(Request::new(ack_stream))
             .await
-            .map_err(|e| Error::Grpc(e))?
+            .map_err(Error::Grpc)?
             .into_inner();
 
         // first response from the server will be the handshake response. We need to check if the
@@ -255,7 +251,7 @@ impl UserDefinedSourceAck {
         let ack_handshake_response = ack_resp_stream
             .message()
             .await
-            .map_err(|e| Error::Grpc(e))?
+            .map_err(Error::Grpc)?
             .ok_or(Error::Source(
                 "failed to receive ack handshake response".to_string(),
             ))?;
@@ -287,7 +283,7 @@ impl SourceAcker for UserDefinedSourceAck {
             .ack_resp_stream
             .message()
             .await
-            .map_err(|e| Error::Grpc(e))?
+            .map_err(Error::Grpc)?
             .ok_or(Error::Source("failed to receive ack response".to_string()))?;
 
         Ok(())
@@ -311,7 +307,7 @@ impl LagReader for UserDefinedSourceLagReader {
             .source_client
             .pending_fn(Request::new(()))
             .await
-            .map_err(|e| Error::Grpc(e))?
+            .map_err(Error::Grpc)?
             .into_inner()
             .result
             .map(|r| r.count as usize))

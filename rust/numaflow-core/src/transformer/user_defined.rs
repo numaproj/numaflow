@@ -77,16 +77,17 @@ impl UserDefinedTransformer {
         let mut resp_stream = client
             .source_transform_fn(Request::new(read_stream))
             .await
-            .map_err(|e| Error::Grpc(e))?
+            .map_err(Error::Grpc)?
             .into_inner();
 
-        let handshake_response = resp_stream
-            .message()
-            .await
-            .map_err(|e| Error::Grpc(e))?
-            .ok_or(Error::Transformer(
-                "failed to receive handshake response".to_string(),
-            ))?;
+        let handshake_response =
+            resp_stream
+                .message()
+                .await
+                .map_err(Error::Grpc)?
+                .ok_or(Error::Transformer(
+                    "failed to receive handshake response".to_string(),
+                ))?;
 
         if handshake_response.handshake.map_or(true, |h| !h.sot) {
             return Err(Error::Transformer("invalid handshake response".to_string()));
