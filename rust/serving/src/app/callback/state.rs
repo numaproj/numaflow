@@ -50,7 +50,7 @@ where
     ) -> StoreResult<(String, oneshot::Receiver<Result<String, Error>>)> {
         // TODO: add an entry in Redis to note that the entry has been registered
 
-        let id = self.store.register(id).await?; // FIXME:
+        let id = self.store.register(id).await?;
 
         let (tx, rx) = oneshot::channel();
         {
@@ -197,7 +197,7 @@ where
             ));
         };
 
-        self.store.deregister(id.to_string()).await.unwrap(); // FIXME:
+        self.store.done(id.to_string()).await?;
 
         state
             .tx

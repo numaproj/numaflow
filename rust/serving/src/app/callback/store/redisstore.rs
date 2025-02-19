@@ -164,7 +164,7 @@ impl super::Store for RedisConnection {
             }
         }
     }
-    async fn deregister(&mut self, id: String) -> StoreResult<()> {
+    async fn done(&mut self, id: String) -> StoreResult<()> {
         let key = format!("request:{id}:status");
         let status: bool = redis::cmd("SET")
             .arg(&key)
@@ -365,7 +365,7 @@ mod tests {
 
         assert_eq!(datums.unwrap(), PipelineResult::Processing);
 
-        redis_conn.deregister(key.clone()).await.unwrap();
+        redis_conn.done(key.clone()).await.unwrap();
         let datums = redis_conn.retrieve_datum(&key).await.unwrap();
         let PipelineResult::Completed(datums) = datums else {
             panic!("Expected completed results");

@@ -53,6 +53,8 @@ impl Default for RedisConfig {
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct Settings {
+    /// The HTTP header used to communicate to the client about the unique id assigned for a request in the store
+    /// The client may also set the value of this header when sending the payload.
     pub tid_header: String,
     pub app_listen_port: u16,
     pub metrics_server_listen_port: u16,

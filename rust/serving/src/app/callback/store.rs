@@ -55,11 +55,12 @@ pub(crate) type Result<T> = std::result::Result<T, Error>;
 #[trait_variant::make(Store: Send)]
 #[allow(dead_code)]
 pub(crate) trait LocalStore {
-    /// Register a request id in the store. If user provides a request id, the same will be returned
-    /// if the same doesn't already exist in the store. An error is returned if the user-specified request id
-    /// already exists in the store. If the `id` is `None`, the store will generate a new unique request id.
+    /// Register a request id in the store. If user provides a request id, the same should be returned
+    /// if it doesn't already exist in the store. An error should be returned if the user-specified request id
+    /// already exists in the store. If the `id` is `None`, the store should generate a new unique request id.
     async fn register(&mut self, id: Option<String>) -> Result<String>;
-    async fn deregister(&mut self, id: String) -> Result<()>;
+    /// This method will be called when processing is completed for a request id.
+    async fn done(&mut self, id: String) -> Result<()>;
     async fn save(&mut self, messages: Vec<PayloadToSave>) -> Result<()>;
     /// retrieve the callback payloads
     async fn retrieve_callbacks(&mut self, id: &str) -> Result<Vec<Arc<Callback>>>;

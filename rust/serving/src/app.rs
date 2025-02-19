@@ -86,6 +86,10 @@ where
                         // We don't need request ID for these endpoints
                         return info_span!("request", method=?req.method(), path=req_path);
                     }
+
+                    // Generate a tid with good enough randomness and not too long
+                    // Example of a UUID v7: 01951b72-d0f4-711e-baba-4efe03d9cb76
+                    // We use the characters representing timestamp in milliseconds (without '-'), and last 5 characters for randomness.
                     let uuid = Uuid::now_v7().to_string();
                     let tid = format!("{}{}{}", &uuid[..8], &uuid[10..13], &uuid[uuid.len() - 5..]);
 

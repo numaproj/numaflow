@@ -321,7 +321,7 @@ mod tests {
         async fn register(&mut self, id: Option<String>) -> StoreResult<String> {
             Ok(id.unwrap_or_else(|| Uuid::now_v7().to_string()))
         }
-        async fn deregister(&mut self, _id: String) -> StoreResult<()> {
+        async fn done(&mut self, _id: String) -> StoreResult<()> {
             Ok(())
         }
         async fn save(&mut self, _messages: Vec<PayloadToSave>) -> StoreResult<()> {
