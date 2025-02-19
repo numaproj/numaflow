@@ -27,7 +27,6 @@ use tracing::{error, info};
 /// TrackerEntry represents the state of a tracked message.
 #[derive(Debug)]
 struct TrackerEntry {
-    offset: Offset,
     /// one shot to send the ack back
     ack_send: oneshot::Sender<ReadAck>,
     /// number of messages in flight. the count to reach 0 for the ack to happen.
@@ -132,15 +131,8 @@ impl TryFrom<&Message> for ServingCallbackInfo {
 
 impl Drop for Tracker {
     fn drop(&mut self) {
-        let keys: Vec<_> = self.entries.keys().cloned().collect();
-        info!("Dropping tracker with entries: {:?}", keys);
-        for offset in keys {
-            if let Some(entry) = self.entries.remove(&offset) {
-                info!(?offset, ?entry, "Dropping tracker entry");
-                if let Err(e) = entry.ack_send.send(ReadAck::Nak) {
-                    error!(?e, ?offset, "Failed to send nak");
-                }
-            }
+        if self.entries.len() > 0 {
+            error!("Tracker dropped with non-empty entries: {:?}", self.entries);
         }
     }
 }
@@ -163,10 +155,8 @@ impl Tracker {
     /// Runs the Tracker, processing incoming actor messages to update the state.
     async fn run(mut self) {
         while let Some(message) = self.receiver.recv().await {
-            info!(?message, "Received tracker actor message");
             self.handle_message(message).await;
         }
-        info!("Tracker actor stopped");
     }
 
     /// Handles incoming actor messages to update the state of tracked messages.
@@ -209,11 +199,9 @@ impl Tracker {
         watermark: Option<DateTime<Utc>>,
         respond_to: oneshot::Sender<ReadAck>,
     ) {
-        info!("Inserting offset into tracker: {:?}", offset);
         self.entries.insert(
             offset.clone(),
             TrackerEntry {
-                offset: offset.clone(),
                 ack_send: respond_to,
                 count: 0,
                 eof: true,
@@ -279,13 +267,10 @@ impl Tracker {
         let Some(entry) = self.entries.remove(&offset) else {
             return;
         };
-        info!(
-            "Discarding offset from tracker: {:?} and entry: {:?}",
-            offset, entry
-        );
-        if let Err(e) = entry.ack_send.send(ReadAck::Nak) {
-            error!(?e, ?offset, "***Failed to send nak***");
-        }
+        entry
+            .ack_send
+            .send(ReadAck::Nak)
+            .expect("Failed to send nak");
         if let Some(watermark_handle) = &self.watermark_handle {
             watermark_handle.remove_offset(offset).await;
         }
@@ -303,7 +288,6 @@ impl Tracker {
             ..
         } = entry;
 
-        info!("Deleting offset from the tracker: {:?}", offset);
         ack_send.send(ReadAck::Ack).expect("Failed to send ack");
 
         if let Some(watermark_handle) = &self.watermark_handle {

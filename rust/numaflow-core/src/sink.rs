@@ -108,6 +108,11 @@ pub(crate) enum SinkClientType {
 }
 
 /// SinkWriter is a writer that writes messages to the Sink.
+///
+/// Error handling and shutdown: There can non-retryable errors(udsink panics etc), in that case we will
+/// cancel the token to indicate the upstream not send any more messages to the sink, we drain any inflight
+/// messages that are in input stream and nack them using the tracker, when the upstream stops sending
+/// messages the input stream will be closed and we will stop the component.
 #[derive(Clone)]
 pub(super) struct SinkWriter {
     batch_size: usize,
@@ -116,6 +121,8 @@ pub(super) struct SinkWriter {
     sink_handle: mpsc::Sender<ActorMessage>,
     fb_sink_handle: Option<mpsc::Sender<ActorMessage>>,
     tracker_handle: TrackerHandle,
+    shutting_down: bool,
+    final_result: Result<()>,
 }
 
 /// SinkWriterBuilder is a builder to build a SinkWriter.
@@ -220,6 +227,8 @@ impl SinkWriterBuilder {
             sink_handle: sender,
             fb_sink_handle,
             tracker_handle: self.tracker_handle,
+            shutting_down: false,
+            final_result: Ok(()),
         })
     }
 }
@@ -279,6 +288,18 @@ impl SinkWriter {
                         }
                     };
 
+                    // we are in shutting down mode, we will not be writing to the sink
+                    // tell tracker to nack the messages.
+                    if self.shutting_down {
+                        for msg in batch.iter() {
+                            self.tracker_handle
+                                .discard(msg.offset.clone())
+                                .await
+                                .expect("Error discarding message");
+                        }
+                        continue;
+                    }
+
                     if batch.is_empty() {
                         continue;
                     }
@@ -301,17 +322,23 @@ impl SinkWriter {
                         Ok(_) => {
                             for offset in offsets {
                                 // Delete the message from the tracker
-                                self.tracker_handle.delete(offset).await?;
+                                self.tracker_handle
+                                    .delete(offset)
+                                    .await
+                                    .expect("tracker delete should never fail");
                             }
                         }
                         Err(e) => {
+                            // if there is a critical error, cancel the token and let upstream know
+                            // that we are shutting down and stop sending messages to the sink
                             error!(?e, "Error writing to sink");
                             cln_token.cancel();
                             for offset in offsets {
                                 // Discard the message from the tracker
                                 self.tracker_handle.discard(offset).await?;
                             }
-                            return Err(e);
+                            self.final_result = Err(e);
+                            self.shutting_down = true;
                         }
                     }
 
@@ -350,8 +377,7 @@ impl SinkWriter {
                         last_logged_at = std::time::Instant::now();
                     }
                 }
-
-                Ok(())
+                self.final_result.clone()
             }
         });
         Ok(handle)

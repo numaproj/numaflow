@@ -35,6 +35,11 @@ const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
 /// It accepts a cancellation token to stop infinite retries during shutdown.
 /// JetstreamWriter is one to many mapping of streams to write messages to. It also
 /// maintains the buffer usage metrics for each stream.
+///
+/// Error handling and shutdown: Unlike udf components we will not have non retryable
+/// errors here all the failures are infinitely retried until the message is successfully
+/// written. The cancellation token is used to short-circuit the retries during shutdown.
+/// We will always drain the stream from which we are reading messages.
 #[derive(Clone)]
 pub(crate) struct JetstreamWriter {
     config: Arc<Vec<ToVertexConfig>>,

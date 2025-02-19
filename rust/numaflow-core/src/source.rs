@@ -169,6 +169,12 @@ where
 
 /// Source is used to read, ack, and get the pending messages count from the source.
 /// Source is responsible for invoking the transformer.
+///
+/// Error handling and shutdown: Source will stop reading messages from the source when the
+/// cancellation token is cancelled(any downstream critical error). There can be critical
+/// non retryable errors in source as well(udsource crashing etc.), we will drop the downstream
+/// tokio stream to signal the shutdown to the downstream components and wait for all the inflight
+/// messages to be acked before shutting down the source.
 #[derive(Clone)]
 pub(crate) struct Source {
     read_batch_size: usize,
@@ -320,7 +326,7 @@ impl Source {
             loop {
                 if cln_token.is_cancelled() {
                     info!("Cancellation token is cancelled. Stopping the source.");
-                    return Ok(());
+                    break;
                 }
 
                 if !self.read_ahead {
@@ -402,6 +408,7 @@ impl Source {
                     })?;
                 }
             }
+            Ok(())
         });
         Ok((ReceiverStream::new(messages_rx), handle))
     }

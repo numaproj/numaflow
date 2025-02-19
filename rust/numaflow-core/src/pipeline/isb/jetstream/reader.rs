@@ -1,18 +1,7 @@
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
-
-use async_nats::jetstream::{
-    consumer::PullConsumer, AckKind, Context, Message as JetstreamMessage,
-};
-use prost::Message as ProtoMessage;
-use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
-use tokio::task::JoinHandle;
-use tokio::time::{self, Instant};
-use tokio_stream::wrappers::ReceiverStream;
-use tokio_stream::StreamExt;
-use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::warn;
 
 use crate::config::get_vertex_name;
 use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
@@ -25,13 +14,35 @@ use crate::shared::grpc::utc_from_timestamp;
 use crate::tracker::TrackerHandle;
 use crate::watermark::isb::ISBWatermarkHandle;
 use crate::{metrics, Result};
+use async_nats::jetstream::{
+    consumer::PullConsumer, AckKind, Context, Message as JetstreamMessage,
+};
+use backoff::retry::Retry;
+use backoff::strategy::fixed;
+use prost::Message as ProtoMessage;
+use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
+use tokio::task::JoinHandle;
+use tokio::time::{self, Instant};
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::StreamExt;
+use tokio_util::sync::CancellationToken;
+use tracing::{error, info};
 
+const ACK_RETRY_INTERVAL: u64 = 100;
+const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
 const MAX_ACK_PENDING: usize = 25000;
 
 /// The JetStreamReader is a handle to the background actor that continuously fetches messages from JetStream.
 /// It can be used to cancel the background task and stop reading from JetStream.
-/// The sender end of the channel is not stored in this struct, since the struct is clone-able and the mpsc channel is only closed when all the senders are dropped.
-/// Storing the Sender end of channel in this struct would make it difficult to close the channel with `cancel` method.
+///
+/// The sender end of the channel is not stored in this struct, since the struct is clone-able and the mpsc channel
+/// is only closed when all the senders are dropped. Storing the Sender end of channel in this struct would make it
+/// difficult to close the channel with `cancel` method.
+///
+/// Error handling and shutdown: The JetStreamReader will stop reading from JetStream when the cancellation token is
+/// cancelled(critical error in downstream or SIGTERM), there can't be any other cases where the JetStreamReader
+/// should stop reading messages. We just drop the tokio stream so that the downstream components can stop gracefully
+/// and before exiting we make sure all the work-in-progress(tasks) are completed.
 #[derive(Clone)]
 pub(crate) struct JetStreamReader {
     stream: Stream,
@@ -207,15 +218,12 @@ impl JetStreamReader {
 
                             // we can ignore the wmb messages
                             if let MessageType::WMB = message.typ {
-                                info!(?message, "Received WMB message");
                                 // ack the message and continue
                                 jetstream_message.ack().await.map_err(|e| {
                                     Error::ISB(format!("Failed to ack the wmb message: {:?}", e))
                                 })?;
                                 continue;
                             }
-
-                            info!(offset=?message.offset, "Read message from Jetstream");
 
                             if let Some(watermark_handle) = self.watermark_handle.as_ref() {
                                 let watermark = watermark_handle.fetch_watermark(message.offset.clone()).await;
@@ -234,6 +242,7 @@ impl JetStreamReader {
                                 ack_rx,
                                 self.config.wip_ack_interval,
                                 permit,
+                                cancel_token.clone(),
                             ));
 
                             messages_tx.send(message).await.expect("Failed to send message to channel");
@@ -251,7 +260,7 @@ impl JetStreamReader {
                     .acquire_many_owned(MAX_ACK_PENDING as u32)
                     .await
                     .expect("Failed to acquire semaphore permit");
-                info!(stream=?self.stream, "All permits released, returning from Jetstream reader");
+                info!(stream=?self.stream, "All inflight messages are successfully acked/nacked");
                 Ok(())
             }
         });
@@ -267,18 +276,18 @@ impl JetStreamReader {
         mut ack_rx: oneshot::Receiver<ReadAck>,
         tick: Duration,
         _permit: OwnedSemaphorePermit, // permit to release after acking the offsets.
+        cancel_token: CancellationToken,
     ) {
         let start = Instant::now();
         let mut interval = time::interval_at(start + tick, tick);
 
         info!(offset=?offset, "Starting work in progress for message");
+
         loop {
             let wip = async {
                 interval.tick().await;
                 let ack_result = msg.ack_with(AckKind::Progress).await;
                 if let Err(e) = ack_result {
-                    // We expect that the ack in the next iteration will be successful.
-                    // If its some unrecoverable Jetstream error, the fetching messages in the JetstreamReader implementation should also fail and cause the system to shut down.
                     error!(
                         ?e,
                         ?offset,
@@ -303,10 +312,9 @@ impl JetStreamReader {
 
             match ack {
                 ReadAck::Ack => {
-                    let ack_result = msg.ack().await;
-                    if let Err(e) = ack_result {
-                        error!(?e, ?offset, "Failed to send Ack to Jetstream for message");
-                    }
+                    Self::invoke_ack_with_retry(&msg, AckKind::Ack, &cancel_token, offset.clone())
+                        .await;
+
                     pipeline_metrics()
                         .forwarder
                         .ack_time
@@ -318,19 +326,59 @@ impl JetStreamReader {
                         .ack_total
                         .get_or_create(pipeline_isb_metric_labels())
                         .inc();
-                    info!(?offset, "Sent Ack to Jetstream for message");
                     return;
                 }
                 ReadAck::Nak => {
-                    let ack_result = msg.ack_with(AckKind::Nak(None)).await;
-                    if let Err(e) = ack_result {
-                        error!(?e, ?offset, "Failed to send Nak to Jetstream for message");
-                    }
-                    info!(?offset, "Sent Nak to Jetstream for message");
+                    Self::invoke_ack_with_retry(
+                        &msg,
+                        AckKind::Nak(None),
+                        &cancel_token,
+                        offset.clone(),
+                    )
+                    .await;
+
+                    warn!(?offset, "Sent Nak to Jetstream for message");
                     return;
                 }
             }
         }
+    }
+
+    // invokes the ack with infinite retries until the cancellation token is cancelled.
+    async fn invoke_ack_with_retry(
+        msg: &JetstreamMessage,
+        ack_kind: AckKind,
+        cancel_token: &CancellationToken,
+        offset: Offset,
+    ) {
+        let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
+        let _ = Retry::retry(
+            interval,
+            || async {
+                let result = match msg.ack_with(ack_kind).await {
+                    Ok(_) => Ok(()),
+                    Err(e) => {
+                        warn!(?e, "Failed to send {:?} to Jetstream for message", ack_kind);
+                        Err(Error::Connection(format!(
+                            "Failed to send {:?}: {:?}",
+                            ack_kind, e
+                        )))
+                    }
+                };
+                if result.is_err() && cancel_token.is_cancelled() {
+                    error!(
+                        ?result,
+                        ?offset,
+                        "Cancellation token received, stopping the {:?} retry loop",
+                        ack_kind
+                    );
+                    return Ok(());
+                }
+                result
+            },
+            |_: &Error| true,
+        )
+        .await;
     }
 
     pub(crate) async fn pending(&mut self) -> Result<Option<usize>> {
