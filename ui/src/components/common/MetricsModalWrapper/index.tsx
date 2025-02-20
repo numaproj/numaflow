@@ -4,6 +4,7 @@ import Box from "@mui/material/Box";
 import { MetricsModal } from "./partials/MetricsModal";
 import { useMetricsDiscoveryDataFetch } from "../../../utils/fetchWrappers/metricsDiscoveryDataFetch";
 import { dimensionReverseMap } from "../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/partials/PodDetails/partials/Metrics/utils/constants";
+import { Pod } from "../../../types/declarations/pods";
 
 import "./style.css";
 
@@ -16,6 +17,7 @@ interface MetricsModalWrapperProps {
   metricDisplayName: string;
   value: any;
   presets?: any;
+  pod?: Pod;
 }
 
 export function MetricsModalWrapper({
@@ -27,6 +29,7 @@ export function MetricsModalWrapper({
   metricDisplayName,
   value,
   presets,
+  pod,
 }: MetricsModalWrapperProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -46,12 +49,25 @@ export function MetricsModalWrapper({
   });
 
   const isClickable = useMemo(() => {
-    return (
+    if (
+      discoveredMetrics &&
       !discoveredMetricsError &&
-      !discoveredMetricsLoading &&
-      !disableMetricsCharts
-    );
-  }, [discoveredMetricsError, discoveredMetricsLoading, disableMetricsCharts]);
+      !discoveredMetricsLoading
+    ) {
+      return (
+        !disableMetricsCharts &&
+        discoveredMetrics?.data?.some(
+          (metric: any) => metric?.display_name === metricDisplayName
+        )
+      );
+    }
+    return false;
+  }, [
+    discoveredMetrics,
+    discoveredMetricsError,
+    discoveredMetricsLoading,
+    disableMetricsCharts,
+  ]);
 
   return (
     <Box>
@@ -82,6 +98,7 @@ export function MetricsModalWrapper({
         vertexId={vertexId}
         type={type}
         presets={presets}
+        pod={pod}
       />
     </Box>
   );
