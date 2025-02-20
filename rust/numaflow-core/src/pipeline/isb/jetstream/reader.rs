@@ -281,8 +281,6 @@ impl JetStreamReader {
         let start = Instant::now();
         let mut interval = time::interval_at(start + tick, tick);
 
-        info!(offset=?offset, "Starting work in progress for message");
-
         loop {
             let wip = async {
                 interval.tick().await;
