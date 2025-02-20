@@ -360,12 +360,14 @@ pub async fn create_source(
                 *get_vertex_replica(),
             )
             .await?;
+            // for serving we use batch size as one as we are not batching the messages
+            // and read ahead is enabled as it supports it.
             Ok((
                 Source::new(
-                    batch_size,
+                    1,
                     source::SourceType::Serving(serving),
                     tracker_handle,
-                    source_config.read_ahead,
+                    true,
                     transformer,
                     watermark_handle,
                 ),
