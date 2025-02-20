@@ -159,8 +159,34 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		return ctrl.Result{}, err
 	}
 
+	var servingRedisIsbSvc *dfv1.InterStepBufferService = nil
+	if vertex.IsASource() && vertex.Spec.Source.Serving != nil && strings.HasPrefix(*vertex.Spec.Source.Serving.Store.URL, "native-isb:") {
+		servingRedisIsbSvc = &dfv1.InterStepBufferService{}
+		isbSvcName := strings.TrimPrefix(*vertex.Spec.Source.Serving.Store.URL, "native-isb:")
+		err := r.client.Get(ctx, types.NamespacedName{Namespace: vertex.Namespace, Name: isbSvcName}, servingRedisIsbSvc)
+		if err != nil {
+			if apierrors.IsNotFound(err) {
+				e := fmt.Errorf("isbsvc %s not found", isbSvcName)
+				vertex.Status.MarkPhaseFailed("ISBSvcNotFound", e.Error())
+				return ctrl.Result{}, e
+			}
+			log.Errorw("Failed to get ISB Service", zap.String("isbsvc", isbSvcName), zap.Error(err))
+			vertex.Status.MarkPhaseFailed("FindISBSvcFailed", err.Error())
+			return ctrl.Result{}, err
+		}
+		if servingRedisIsbSvc.GetAnnotations()[dfv1.KeyInstance] != vertex.GetAnnotations()[dfv1.KeyInstance] {
+			log.Errorw("ISB Service is found but not managed by the same controller of this vertex", zap.String("isbsvc", isbSvcName), zap.Error(err))
+			return ctrl.Result{}, fmt.Errorf("isbsvc not managed by the same controller of this vertex")
+		}
+		if !servingRedisIsbSvc.Status.IsHealthy() {
+			log.Errorw("ISB Service is not in healthy status", zap.String("isbsvc", isbSvcName), zap.Error(err))
+			vertex.Status.MarkPhaseFailed("ISBSvcNotHealthy", "isbsvc not healthy")
+			return ctrl.Result{}, fmt.Errorf("isbsvc not healthy")
+		}
+	}
+
 	// Create pods
-	if err := r.orchestratePods(ctx, vertex, pipeline, isbSvc); err != nil {
+	if err := r.orchestratePods(ctx, vertex, pipeline, isbSvc, servingRedisIsbSvc); err != nil {
 		vertex.Status.MarkDeployFailed("OrchestratePodsFailed", err.Error())
 		r.recorder.Eventf(vertex, corev1.EventTypeWarning, "OrchestratePodsFailed", err.Error())
 		return ctrl.Result{}, err
@@ -193,7 +219,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 	return ctrl.Result{}, nil
 }
 
-func (r *vertexReconciler) orchestratePods(ctx context.Context, vertex *dfv1.Vertex, pipeline *dfv1.Pipeline, isbSvc *dfv1.InterStepBufferService) error {
+func (r *vertexReconciler) orchestratePods(ctx context.Context, vertex *dfv1.Vertex, pipeline *dfv1.Pipeline, isbSvc *dfv1.InterStepBufferService, servingRedisISB *dfv1.InterStepBufferService) error {
 	log := logging.FromContext(ctx)
 	desiredReplicas := vertex.GetReplicas()
 	vertex.Status.DesiredReplicas = uint32(desiredReplicas)
@@ -207,7 +233,7 @@ func (r *vertexReconciler) orchestratePods(ctx context.Context, vertex *dfv1.Ver
 	}()
 
 	// Build pod spec of the 1st replica to calculate the hash, which is used to determine whether the pod spec is changed
-	tmpSpec, err := r.buildPodSpec(vertex, pipeline, isbSvc.Status.Config, 0)
+	tmpSpec, err := r.buildPodSpec(vertex, pipeline, isbSvc.Status.Config, servingRedisISB.Status.Config.Redis, 0)
 	if err != nil {
 		return fmt.Errorf("failed to build a pod spec: %w", err)
 	}
@@ -234,7 +260,7 @@ func (r *vertexReconciler) orchestratePods(ctx context.Context, vertex *dfv1.Ver
 
 	if updatedReplicas > 0 {
 		// Make sure [0 - updatedReplicas] with hash are in place
-		if err := r.orchestratePodsFromTo(ctx, vertex, pipeline, isbSvc, 0, updatedReplicas, hash); err != nil {
+		if err := r.orchestratePodsFromTo(ctx, vertex, pipeline, isbSvc, servingRedisISB, 0, updatedReplicas, hash); err != nil {
 			return fmt.Errorf("failed to orchestrate vertex pods [0, %v): %w", updatedReplicas, err)
 		}
 		// Wait for the updated pods to be ready before moving on
@@ -263,7 +289,7 @@ func (r *vertexReconciler) orchestratePods(ctx context.Context, vertex *dfv1.Ver
 		// 1. Regular scaling operation 2. First time
 		// create (desiredReplicas-updatedReplicas) pods directly
 		if desiredReplicas > updatedReplicas {
-			if err := r.orchestratePodsFromTo(ctx, vertex, pipeline, isbSvc, updatedReplicas, desiredReplicas, hash); err != nil {
+			if err := r.orchestratePodsFromTo(ctx, vertex, pipeline, isbSvc, servingRedisISB, updatedReplicas, desiredReplicas, hash); err != nil {
 				return fmt.Errorf("failed to orchestrate vertex pods [%v, %v): %w", updatedReplicas, desiredReplicas, err)
 			}
 		}
@@ -294,7 +320,7 @@ func (r *vertexReconciler) orchestratePods(ctx context.Context, vertex *dfv1.Ver
 		log.Infof("Rolling update %d replicas, [%d, %d)", toBeUpdated, updatedReplicas, updatedReplicas+toBeUpdated)
 
 		// Create pods [updatedReplicas, updatedReplicas+toBeUpdated), and clean up any pods in that range that has a different hash
-		if err := r.orchestratePodsFromTo(ctx, vertex, pipeline, isbSvc, updatedReplicas, updatedReplicas+toBeUpdated, vertex.Status.UpdateHash); err != nil {
+		if err := r.orchestratePodsFromTo(ctx, vertex, pipeline, isbSvc, servingRedisISB, updatedReplicas, updatedReplicas+toBeUpdated, vertex.Status.UpdateHash); err != nil {
 			return fmt.Errorf("failed to orchestrate pods [%v, %v)]: %w", updatedReplicas, updatedReplicas+toBeUpdated, err)
 		}
 		vertex.Status.UpdatedReplicas = uint32(updatedReplicas + toBeUpdated)
@@ -317,14 +343,14 @@ func (r *vertexReconciler) orchestratePods(ctx context.Context, vertex *dfv1.Ver
 	return nil
 }
 
-func (r *vertexReconciler) orchestratePodsFromTo(ctx context.Context, vertex *dfv1.Vertex, pipeline *dfv1.Pipeline, isbSvc *dfv1.InterStepBufferService, fromReplica, toReplica int, newHash string) error {
+func (r *vertexReconciler) orchestratePodsFromTo(ctx context.Context, vertex *dfv1.Vertex, pipeline *dfv1.Pipeline, isbSvc, servingRedisISB *dfv1.InterStepBufferService, fromReplica, toReplica int, newHash string) error {
 	log := logging.FromContext(ctx)
 	existingPods, err := r.findExistingPods(ctx, vertex, fromReplica, toReplica)
 	if err != nil {
 		return fmt.Errorf("failed to find existing pods: %w", err)
 	}
 	for replica := fromReplica; replica < toReplica; replica++ {
-		podSpec, err := r.buildPodSpec(vertex, pipeline, isbSvc.Status.Config, replica)
+		podSpec, err := r.buildPodSpec(vertex, pipeline, isbSvc.Status.Config, servingRedisISB.Status.Config.Redis, replica)
 		if err != nil {
 			return fmt.Errorf("failed to generate pod spec: %w", err)
 		}
@@ -523,13 +549,15 @@ func (r *vertexReconciler) createOrUpdateServices(ctx context.Context, vertex *d
 	return nil
 }
 
-func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, isbSvcConfig dfv1.BufferServiceConfig, replicaIndex int) (*corev1.PodSpec, error) {
+func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, isbSvcConfig dfv1.BufferServiceConfig, servingRedisISBConfig *dfv1.RedisConfig, replicaIndex int) (*corev1.PodSpec, error) {
 	isbSvcType, envs := sharedutil.GetIsbSvcEnvVars(isbSvcConfig)
+	servingRedisISBEnvs := sharedutil.GetServingRedisIsbSvcEnvVars(servingRedisISBConfig)
 	podSpec, err := vertex.GetPodSpec(dfv1.GetVertexPodSpecReq{
 		ISBSvcType:              isbSvcType,
 		Image:                   r.image,
 		PullPolicy:              corev1.PullPolicy(sharedutil.LookupEnvStringOr(dfv1.EnvImagePullPolicy, "")),
 		Env:                     envs,
+		ServingEnv:              servingRedisISBEnvs,
 		SideInputsStoreName:     pl.GetSideInputsStoreName(),
 		ServingSourceStreamName: vertex.GetServingSourceStreamName(),
 		PipelineSpec:            pl.Spec,
