@@ -249,7 +249,7 @@ mod tests {
         assert_eq!(settings.app_listen_port, 3000);
         assert_eq!(settings.metrics_server_listen_port, 3001);
         assert_eq!(settings.upstream_addr, "localhost:8888");
-        assert_eq!(settings.drain_timeout_secs, 10);
+        assert_eq!(settings.drain_timeout_secs, 600);
         assert_eq!(settings.redis.addr, "redis://127.0.0.1:6379");
         assert_eq!(settings.redis.max_tasks, 50);
         assert_eq!(settings.redis.retries, 5);
@@ -279,7 +279,7 @@ mod tests {
             app_listen_port: 8443,
             metrics_server_listen_port: 3001,
             upstream_addr: "localhost:8888".into(),
-            drain_timeout_secs: 10,
+            drain_timeout_secs: 600,
             redis: RedisConfig {
                 addr: "redis://redis:6379".into(),
                 max_tasks: 50,
@@ -331,7 +331,7 @@ mod tests {
             app_listen_port: 8443,
             metrics_server_listen_port: 3001,
             upstream_addr: "localhost:8888".into(),
-            drain_timeout_secs: 10,
+            drain_timeout_secs: 600,
             redis: RedisConfig {
                 addr: "redis://redis:6379".into(),
                 max_tasks: 50,

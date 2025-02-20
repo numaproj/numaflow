@@ -352,16 +352,12 @@ pub async fn create_source(
                 None,
             ))
         }
+        // for serving we use batch size as 1 as we are not batching the messages
+        // and read ahead is enabled as it supports it.
         SourceType::Serving(config) => {
-            let serving = ServingSource::new(
-                Arc::clone(config),
-                batch_size,
-                read_timeout,
-                *get_vertex_replica(),
-            )
-            .await?;
-            // for serving we use batch size as one as we are not batching the messages
-            // and read ahead is enabled as it supports it.
+            let serving =
+                ServingSource::new(Arc::clone(config), 1, read_timeout, *get_vertex_replica())
+                    .await?;
             Ok((
                 Source::new(
                     1,
