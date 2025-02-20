@@ -136,7 +136,8 @@ impl super::Store for RedisConnection {
                 Ok(id)
             }
             None => {
-                // We use UUID v7 as the request id. Attempt for a maxium of 5 times to generate an id that doesn't currently exist in the Store.
+                // We use UUID v7 as the request id. Attempt for a maxium of 5 times to generate an 
+                // id that doesn't currently exist in the Store.
                 for _ in 0..5 {
                     let id = Uuid::now_v7().to_string();
                     let mut pipe = redis::pipe();

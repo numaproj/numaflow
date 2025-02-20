@@ -66,14 +66,14 @@ pub(crate) struct Edge {
 /// from the pipeline spec
 /// A monovertex is represented as a single source vertex with zero edges.
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
-pub struct PipelineDCG {
+pub(crate) struct PipelineDCG {
     pub(crate) vertices: Vec<Vertex>,
     pub(crate) edges: Vec<Edge>,
 }
 
 impl PipelineDCG {
     /// Monovertex is represented as a single vertex with zero edges.
-    pub fn monovertex() -> Self {
+    pub(crate) fn monovertex() -> Self {
         Self {
             vertices: vec![Vertex {
                 name: "source".into(),

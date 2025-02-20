@@ -94,7 +94,7 @@ impl MonovertexConfig {
             .metadata
             .as_ref()
             .and_then(|metadata| metadata.name.clone())
-            .ok_or_else(|| Error::Config("Monovertex name not found".to_string()))?;
+            .ok_or_else(|| Error::Config("MonoVertex name not found".to_string()))?;
 
         let transformer_config = mono_vertex_obj
             .spec
