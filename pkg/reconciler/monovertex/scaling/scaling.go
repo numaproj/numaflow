@@ -181,6 +181,11 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 		return nil
 	}
 
+	if monoVtx.Spec.Scale.GetMaxReplicas() == monoVtx.Spec.Scale.GetMinReplicas() {
+		log.Infof("MonoVertex %s has same scale.min and scale.max, skip scaling.", monoVtx.Name)
+		return nil
+	}
+
 	if monoVtx.Status.Replicas == 0 { // Was scaled to 0
 		// Periodically wake them up from 0 replicas to 1, to peek for the incoming messages
 		if secondsSinceLastScale >= float64(monoVtx.Spec.Scale.GetZeroReplicaSleepSeconds()) {

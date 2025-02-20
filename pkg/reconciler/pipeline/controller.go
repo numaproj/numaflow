@@ -365,6 +365,10 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 				// Keep the original replicas as much as possible
 				if originalReplicas >= newObj.Spec.Scale.GetMinReplicas() && originalReplicas <= newObj.Spec.Scale.GetMaxReplicas() {
 					oldObj.Spec.Replicas = &originalReplicas
+				} else if originalReplicas < newObj.Spec.Scale.GetMinReplicas() {
+					originalReplicas = newObj.Spec.Scale.GetMinReplicas()
+				} else {
+					originalReplicas = newObj.Spec.Scale.GetMaxReplicas()
 				}
 				oldObj.Annotations[dfv1.KeyHash] = newObj.GetAnnotations()[dfv1.KeyHash]
 				if err := r.client.Update(ctx, &oldObj); err != nil {
@@ -647,11 +651,11 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 			replicas = int32(partitions)
 		} else {
 			x := vCopy.Scale
-			if x.Min != nil && *x.Min > 1 && replicas < *x.Min {
-				replicas = *x.Min
+			if replicas < x.GetMinReplicas() {
+				replicas = x.GetMinReplicas()
 			}
-			if x.Max != nil && *x.Max > 1 && replicas > *x.Max {
-				replicas = *x.Max
+			if replicas > x.GetMaxReplicas() {
+				replicas = x.GetMaxReplicas()
 			}
 		}
 
