@@ -2350,6 +2350,11 @@ func (in *ServingSource) DeepCopyInto(out *ServingSource) {
 		*out = new(ServingStore)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.RequestTimeoutSecs != nil {
+		in, out := &in.RequestTimeoutSecs, &out.RequestTimeoutSecs
+		*out = new(uint32)
+		**out = **in
+	}
 	return
 }
 

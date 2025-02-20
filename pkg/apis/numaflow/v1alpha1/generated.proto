@@ -1546,6 +1546,10 @@ message ServingSource {
 
   // Persistent store for the callbacks for serving and tracking
   optional ServingStore store = 4;
+
+  // Request timeout in seconds. Default value is 120 seconds.
+  // +optional
+  optional uint32 requestTimeoutSeconds = 5;
 }
 
 // ServingStore to track and store data and metadata for tracking and serving.
