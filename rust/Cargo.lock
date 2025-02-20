@@ -3568,6 +3568,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "chrono",
+ "http 1.2.0",
  "hyper-util",
  "numaflow-models",
  "parking_lot",

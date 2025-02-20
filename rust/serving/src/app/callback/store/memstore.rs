@@ -1,10 +1,13 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use super::PayloadToSave;
+use uuid::Uuid;
+
+use super::{Error as StoreError, Result as StoreResult};
+use super::{PayloadToSave, ProcessingStatus};
 use crate::app::callback::Callback;
-use crate::consts::SAVED;
-use crate::Error;
+
+const STORE_KEY_SUFFIX: &str = "saved";
 
 /// `InMemoryStore` is an in-memory implementation of the `Store` trait.
 /// It uses a `HashMap` to store data in memory.
@@ -26,25 +29,32 @@ impl InMemoryStore {
 }
 
 impl super::Store for InMemoryStore {
+    async fn register(&mut self, id: Option<String>) -> StoreResult<String> {
+        Ok(id.unwrap_or_else(|| Uuid::now_v7().to_string()))
+    }
+    async fn done(&mut self, _id: String) -> StoreResult<()> {
+        Ok(())
+    }
     /// Saves a vector of `PayloadToSave` into the `HashMap`.
     /// Each `PayloadToSave` is serialized into bytes and stored in the `HashMap` under its key.
-    async fn save(&mut self, messages: Vec<PayloadToSave>) -> crate::Result<()> {
+    async fn save(&mut self, messages: Vec<PayloadToSave>) -> StoreResult<()> {
         let mut data = self.data.lock().unwrap();
         for msg in messages {
             match msg {
                 PayloadToSave::Callback { key, value } => {
                     if key.is_empty() {
-                        return Err(Error::StoreWrite("Key cannot be empty".to_string()));
+                        return Err(StoreError::StoreWrite("Key cannot be empty".to_string()));
                     }
-                    let bytes = serde_json::to_vec(&*value)
-                        .map_err(|e| Error::StoreWrite(format!("Serializing to bytes - {}", e)))?;
+                    let bytes = serde_json::to_vec(&*value).map_err(|e| {
+                        StoreError::StoreWrite(format!("Serializing to bytes - {}", e))
+                    })?;
                     data.entry(key).or_default().push(bytes);
                 }
                 PayloadToSave::DatumFromPipeline { key, value } => {
                     if key.is_empty() {
-                        return Err(Error::StoreWrite("Key cannot be empty".to_string()));
+                        return Err(StoreError::StoreWrite("Key cannot be empty".to_string()));
                     }
-                    data.entry(format!("{}_{}", key, SAVED))
+                    data.entry(format!("{key}_{STORE_KEY_SUFFIX}"))
                         .or_default()
                         .push(value.into());
                 }
@@ -55,7 +65,7 @@ impl super::Store for InMemoryStore {
 
     /// Retrieves callbacks for a given id from the `HashMap`.
     /// Each callback is deserialized from bytes into a `CallbackRequest`.
-    async fn retrieve_callbacks(&mut self, id: &str) -> Result<Vec<Arc<Callback>>, Error> {
+    async fn retrieve_callbacks(&mut self, id: &str) -> StoreResult<Vec<Arc<Callback>>> {
         let data = self.data.lock().unwrap();
         match data.get(id) {
             Some(result) => {
@@ -63,7 +73,7 @@ impl super::Store for InMemoryStore {
                     .iter()
                     .map(|msg| {
                         let cbr: Callback = serde_json::from_slice(msg).map_err(|_| {
-                            Error::StoreRead(
+                            StoreError::StoreRead(
                                 "Failed to parse CallbackRequest from bytes".to_string(),
                             )
                         })?;
@@ -72,18 +82,24 @@ impl super::Store for InMemoryStore {
                     .collect();
                 messages
             }
-            None => Err(Error::StoreRead(format!("No entry found for id: {}", id))),
+            None => Err(StoreError::StoreRead(format!(
+                "No entry found for id: {}",
+                id
+            ))),
         }
     }
 
     /// Retrieves data for a given id from the `HashMap`.
     /// Each piece of data is deserialized from bytes into a `String`.
-    async fn retrieve_datum(&mut self, id: &str) -> Result<Vec<Vec<u8>>, Error> {
-        let id = format!("{}_{}", id, SAVED);
+    async fn retrieve_datum(&mut self, id: &str) -> StoreResult<ProcessingStatus> {
+        let id = format!("{id}_{STORE_KEY_SUFFIX}");
         let data = self.data.lock().unwrap();
         match data.get(&id) {
-            Some(result) => Ok(result.to_vec()),
-            None => Err(Error::StoreRead(format!("No entry found for id: {}", id))),
+            Some(result) => Ok(ProcessingStatus::Completed(result.to_vec())),
+            None => Err(StoreError::InvalidRequestId(format!(
+                "No entry found for id: {}",
+                id
+            ))),
         }
     }
 
@@ -146,6 +162,9 @@ mod tests {
 
         // Retrieve the datum
         let retrieved = store.retrieve_datum(&key).await.unwrap();
+        let ProcessingStatus::Completed(retrieved) = retrieved else {
+            panic!("Expected pipeline processing to be completed");
+        };
 
         // Check that the retrieved datum is the same as the one we saved
         assert_eq!(retrieved.len(), 1);
