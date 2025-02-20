@@ -281,7 +281,7 @@ mod tests {
             app_listen_port: 8443,
             metrics_server_listen_port: 3001,
             upstream_addr: "localhost:8888".into(),
-            drain_timeout_secs: 10,
+            drain_timeout_secs: 120,
             redis: RedisConfig {
                 addr: "redis://redis:6379".into(),
                 max_tasks: 50,
@@ -333,7 +333,7 @@ mod tests {
             app_listen_port: 8443,
             metrics_server_listen_port: 3001,
             upstream_addr: "localhost:8888".into(),
-            drain_timeout_secs: 10,
+            drain_timeout_secs: 120,
             redis: RedisConfig {
                 addr: "redis://redis:6379".into(),
                 max_tasks: 50,
