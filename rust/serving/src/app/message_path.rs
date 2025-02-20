@@ -11,7 +11,7 @@ pub fn get_message_path<T: Send + Sync + Clone + Store + 'static>(
     callback_store: CallbackState<T>,
 ) -> Router {
     Router::new()
-        .route("/message", routing::get(message_path))
+        .route("/status", routing::get(message_path))
         .with_state(callback_store)
 }
 
@@ -60,7 +60,7 @@ mod tests {
 
         let res = Request::builder()
             .method("GET")
-            .uri("/message?id=test_id")
+            .uri("/status?id=test_id")
             .header(CONTENT_TYPE, "application/json")
             .body(Body::empty())
             .unwrap();
