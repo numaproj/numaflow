@@ -121,11 +121,9 @@ impl UserDefinedTransformer {
         while let Some(resp) = match resp_stream.message().await {
             Ok(message) => message,
             Err(e) => {
-                let error =
-                    Error::Transformer(format!("failed to receive transformer response: {}", e));
                 let mut senders = sender_map.lock().await;
                 for (_, (_, sender)) in senders.drain() {
-                    let _ = sender.send(Err(error.clone()));
+                    let _ = sender.send(Err(Error::Grpc(e.clone())));
                 }
                 None
             }

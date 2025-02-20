@@ -95,10 +95,9 @@ impl UserDefinedUnaryMap {
         while let Some(resp) = match resp_stream.message().await {
             Ok(message) => message,
             Err(e) => {
-                let error = Error::Mapper(format!("failed to receive map response: {}", e));
                 let mut senders = sender_map.lock().await;
                 for (_, (_, sender)) in senders.drain() {
-                    let _ = sender.send(Err(error.clone()));
+                    let _ = sender.send(Err(Error::Grpc(e.clone())));
                 }
                 None
             }
@@ -180,11 +179,10 @@ impl UserDefinedBatchMap {
         while let Some(resp) = match resp_stream.message().await {
             Ok(message) => message,
             Err(e) => {
-                let error = Error::Mapper(format!("failed to receive map response: {}", e));
                 let mut senders = sender_map.lock().await;
                 for (_, (_, sender)) in senders.drain() {
                     sender
-                        .send(Err(error.clone()))
+                        .send(Err(Error::Grpc(e.clone())))
                         .expect("failed to send error response");
                 }
                 None
@@ -343,10 +341,9 @@ impl UserDefinedStreamMap {
         while let Some(resp) = match resp_stream.message().await {
             Ok(message) => message,
             Err(e) => {
-                let error = Error::Mapper(format!("failed to receive map response: {}", e));
                 let mut senders = sender_map.lock().await;
                 for (_, (_, sender)) in senders.drain() {
-                    let _ = sender.send(Err(error.clone())).await;
+                    let _ = sender.send(Err(Error::Grpc(e.clone()))).await;
                 }
                 None
             }

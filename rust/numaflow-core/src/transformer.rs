@@ -177,7 +177,7 @@ impl Transformer {
         for task in tasks {
             match task.await {
                 Ok(Ok(mut msgs)) => transformed_messages.append(&mut msgs),
-                Ok(Err(e)) => return Err(Error::Transformer(format!("task failed: {}", e))),
+                Ok(Err(e)) => return Err(e),
                 Err(e) => return Err(Error::Transformer(format!("task join failed: {}", e))),
             }
         }
