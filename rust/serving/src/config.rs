@@ -64,7 +64,7 @@ pub struct Settings {
     /// The IP address of the numaserve pod. This will be used to construct the value for X-Numaflow-Callback-Url header
     pub host_ip: String,
     pub api_auth_token: Option<String>,
-    pub(crate) pipeline_spec: PipelineDCG,
+    pub pipeline_spec: PipelineDCG,
 }
 
 impl Default for Settings {
