@@ -45,7 +45,7 @@ where
 
     /// register a new connection
     /// The oneshot receiver will be notified when all callbacks for this connection is received from
-    /// the numaflow pipeline. 
+    /// the numaflow pipeline.
     pub(crate) async fn register(
         &mut self,
         id: Option<String>,
