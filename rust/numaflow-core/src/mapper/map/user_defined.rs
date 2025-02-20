@@ -243,7 +243,7 @@ async fn process_response(sender_map: &ResponseSenderMap, resp: MapResponse) {
     if let Some((msg_info, sender)) = sender_map.lock().await.remove(&msg_id) {
         let mut response_messages = vec![];
         for (i, result) in resp.results.into_iter().enumerate() {
-            response_messages.push(create_message(result, &msg_info, i as i32));
+            response_messages.push(UserDefinedMessage(result, &msg_info, i as i32).into());
         }
         sender
             .send(Ok(response_messages))
@@ -362,7 +362,9 @@ impl UserDefinedStreamMap {
 
             for (i, result) in resp.results.into_iter().enumerate() {
                 response_sender
-                    .send(Ok(create_message(result, &message_info, i as i32)))
+                    .send(Ok(
+                        UserDefinedMessage(result, &message_info, i as i32).into()
+                    ))
                     .await
                     .expect("failed to send response");
             }
@@ -401,26 +403,26 @@ impl UserDefinedStreamMap {
     }
 }
 
-fn create_message(
-    result: map::map_response::Result,
-    msg_info: &ParentMessageInfo,
-    index: i32,
-) -> Message {
-    Message {
-        typ: Default::default(),
-        id: MessageID {
-            vertex_name: get_vertex_name().to_string().into(),
-            index,
-            offset: msg_info.offset.to_string().into(),
-        },
-        keys: Arc::from(result.keys),
-        tags: Some(Arc::from(result.tags)),
-        value: result.value.into(),
-        offset: msg_info.offset.clone(),
-        event_time: msg_info.event_time,
-        headers: msg_info.headers.clone(),
-        watermark: None,
-        metadata: None,
+struct UserDefinedMessage<'a>(map::map_response::Result, &'a ParentMessageInfo, i32);
+
+impl From<UserDefinedMessage<'_>> for Message {
+    fn from(value: UserDefinedMessage<'_>) -> Self {
+        Message {
+            typ: Default::default(),
+            id: MessageID {
+                vertex_name: get_vertex_name().to_string().into(),
+                index: value.2,
+                offset: value.1.offset.to_string().into(),
+            },
+            keys: Arc::from(value.0.keys),
+            tags: Some(Arc::from(value.0.tags)),
+            value: value.0.value.into(),
+            offset: value.1.offset.clone(),
+            event_time: value.1.event_time,
+            headers: value.1.headers.clone(),
+            watermark: None,
+            metadata: None,
+        }
     }
 }
 

@@ -117,18 +117,16 @@ enum ActorSender {
     Stream(mpsc::Sender<StreamActorMessage>),
 }
 
-/// MapHandle is responsible for reading messages from the stream and invoke the
-/// map operation on those messages and send the mapped messages to the output
-/// stream.
+/// MapHandle is responsible for reading messages from the stream and invoke the map operation on
+/// those messages and send the mapped messages to the output stream.
 ///
-/// Error handling: There can be critical non-retryable errors in this component
-/// like udf failures etc, since we do concurrent processing of messages, the moment
-/// we encounter an error from any of the tasks, we will go to shutdown mode, we
-/// cancel the token to let upstream know that we are shutting down, we drain the
-/// input stream and nack the messages and exit when the stream is closed. We will
-/// drop the downstream stream so that the downstream components can shutdown.
-/// Structured concurrency is honoured here, we wait for all the concurrent tokio tasks
-/// to exit before shutting down the component.
+/// Error handling: There can be critical non-retryable errors in this component like udf failures
+/// etc., since we do concurrent processing of messages, the moment we encounter an error from any
+/// of the tasks, we will go to shut-down mode. We cancel the token to let upstream know that we are
+/// shutting down. We drain the input stream, nack the messages, and exit when the stream is
+/// closed. We will drop the downstream stream so that the downstream components can shutdown.
+/// Structured concurrency is honoured here, we wait for all the concurrent tokio tasks to exit.
+/// before shutting down the component.
 pub(crate) struct MapHandle {
     batch_size: usize,
     read_timeout: Duration,
@@ -136,8 +134,10 @@ pub(crate) struct MapHandle {
     tracker: TrackerHandle,
     actor_sender: ActorSender,
     task_handle: JoinHandle<()>,
+    /// this the final state of the component (any error will set this as Err)
     final_result: crate::Result<()>,
-    shutting_down: bool,
+    /// The moment we see an error, we will set this to true.
+    shutting_down_on_err: bool,
 }
 
 /// Abort all the background tasks when the mapper is dropped.
@@ -216,7 +216,7 @@ impl MapHandle {
             tracker: tracker_handle,
             task_handle,
             final_result: Ok(()),
-            shutting_down: false,
+            shutting_down_on_err: false,
         })
     }
 
@@ -233,6 +233,7 @@ impl MapHandle {
         let (error_tx, mut error_rx) = mpsc::channel(self.batch_size);
         let semaphore = Arc::new(Semaphore::new(self.concurrency));
 
+        // we spawn one of the 3 map types
         let handle = tokio::spawn(async move {
             let mut input_stream = input_stream;
             // we capture the first error that triggered the map component shutdown
@@ -250,28 +251,30 @@ impl MapHandle {
                             if self.final_result.is_ok() {
                                 error!(?error, "error received while performing unary map operation");
                                 cln_token.cancel();
+                                // we mark that we are in error state, but we cannot act on the error yet.
                                 self.final_result = Err(error);
-                                self.shutting_down = true;
+                                self.shutting_down_on_err = true;
                             }
                         },
                         read_msg = input_stream.next() => {
                             if let Some(read_msg) = read_msg {
-                                if self.shutting_down {
+                                // if there are errors then we need to drain the stream and nack
+                                if self.shutting_down_on_err {
                                     warn!(offset = ?read_msg.offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
                                     self.tracker.discard(read_msg.offset).await.expect("failed to discard message");
-                                    continue;
-                                }
-                                let permit = Arc::clone(&semaphore).acquire_owned()
+                                } else {
+                                    let permit = Arc::clone(&semaphore).acquire_owned()
                                         .await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {}", e)))?;
-                                Self::unary(
-                                    map_handle.clone(),
-                                    permit,
-                                    read_msg,
-                                    output_tx.clone(),
-                                    self.tracker.clone(),
-                                    error_tx.clone(),
-                                    cln_token.clone(),
-                                ).await;
+                                    Self::unary(
+                                        map_handle.clone(),
+                                        permit,
+                                        read_msg,
+                                        output_tx.clone(),
+                                        self.tracker.clone(),
+                                        error_tx.clone(),
+                                        cln_token.clone(),
+                                    ).await;
+                                }
                             } else {
                                 break;
                             }
@@ -308,7 +311,7 @@ impl MapHandle {
                                         .expect("failed to discard message");
                                 }
                                 cln_token.cancel();
-                                self.shutting_down = true;
+                                self.shutting_down_on_err = true;
                                 self.final_result = Err(e);
                                 break;
                             }
@@ -328,28 +331,29 @@ impl MapHandle {
                             if self.final_result.is_ok() {
                                 error!(?error, "error received while performing stream map operation");
                                 cln_token.cancel();
+                                // stop further reading since we have seen an error
                                 self.final_result = Err(error);
-                                self.shutting_down = true;
+                                self.shutting_down_on_err = true;
                             }
                         },
                         read_msg = input_stream.next() => {
                             if let Some(read_msg) = read_msg {
-                                if self.shutting_down {
+                                if self.shutting_down_on_err {
                                     warn!(offset = ?read_msg.offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
                                     self.tracker.discard(read_msg.offset).await.expect("failed to discard message");
-                                    continue;
+                                } else {
+                                    let permit = Arc::clone(&semaphore).acquire_owned().await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {}", e)))?;
+                                    let error_tx = error_tx.clone();
+                                    Self::stream(
+                                        map_handle.clone(),
+                                        permit,
+                                        read_msg,
+                                        output_tx.clone(),
+                                        self.tracker.clone(),
+                                        error_tx,
+                                        cln_token.clone(),
+                                    ).await;
                                 }
-                                let permit = Arc::clone(&semaphore).acquire_owned().await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {}", e)))?;
-                                let error_tx = error_tx.clone();
-                                Self::stream(
-                                    map_handle.clone(),
-                                    permit,
-                                    read_msg,
-                                    output_tx.clone(),
-                                    self.tracker.clone(),
-                                    error_tx,
-                                    cln_token.clone(),
-                                ).await;
                             } else {
                                 break;
                             }
@@ -357,6 +361,7 @@ impl MapHandle {
                     }
                 },
             }
+
             // wait for all the spawned tasks to finish before returning the final result
             info!("Map input stream ended, waiting for inflight messages to finish");
             let _permit = Arc::clone(&semaphore)
