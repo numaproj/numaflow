@@ -8354,6 +8354,73 @@ spec:
                     - msgIDHeaderKey
                     - store
                     type: object
+                  sqs:
+                    properties:
+                      attributeNames:
+                        items:
+                          type: string
+                        type: array
+                      auth:
+                        properties:
+                          credentials:
+                            properties:
+                              accessKeyId:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    default: ""
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                                x-kubernetes-map-type: atomic
+                              secretAccessKey:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    default: ""
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                                x-kubernetes-map-type: atomic
+                            required:
+                            - accessKeyId
+                            - secretAccessKey
+                            type: object
+                          roleARN:
+                            type: string
+                        type: object
+                      awsRegion:
+                        type: string
+                      endpointUrl:
+                        type: string
+                      maxNumberOfMessages:
+                        format: int32
+                        type: integer
+                      messageAttributeNames:
+                        items:
+                          type: string
+                        type: array
+                      queueName:
+                        type: string
+                      visibilityTimeout:
+                        format: int32
+                        type: integer
+                      waitTimeSeconds:
+                        format: int32
+                        type: integer
+                    required:
+                    - auth
+                    - awsRegion
+                    - queueName
+                    type: object
                   transformer:
                     properties:
                       builtin:
@@ -19729,6 +19796,73 @@ spec:
                           - msgIDHeaderKey
                           - store
                           type: object
+                        sqs:
+                          properties:
+                            attributeNames:
+                              items:
+                                type: string
+                              type: array
+                            auth:
+                              properties:
+                                credentials:
+                                  properties:
+                                    accessKeyId:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          default: ""
+                                          type: string
+                                        optional:
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                    secretAccessKey:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          default: ""
+                                          type: string
+                                        optional:
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                  required:
+                                  - accessKeyId
+                                  - secretAccessKey
+                                  type: object
+                                roleARN:
+                                  type: string
+                              type: object
+                            awsRegion:
+                              type: string
+                            endpointUrl:
+                              type: string
+                            maxNumberOfMessages:
+                              format: int32
+                              type: integer
+                            messageAttributeNames:
+                              items:
+                                type: string
+                              type: array
+                            queueName:
+                              type: string
+                            visibilityTimeout:
+                              format: int32
+                              type: integer
+                            waitTimeSeconds:
+                              format: int32
+                              type: integer
+                          required:
+                          - auth
+                          - awsRegion
+                          - queueName
+                          type: object
                         transformer:
                           properties:
                             builtin:
@@ -26278,6 +26412,73 @@ spec:
                     required:
                     - msgIDHeaderKey
                     - store
+                    type: object
+                  sqs:
+                    properties:
+                      attributeNames:
+                        items:
+                          type: string
+                        type: array
+                      auth:
+                        properties:
+                          credentials:
+                            properties:
+                              accessKeyId:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    default: ""
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                                x-kubernetes-map-type: atomic
+                              secretAccessKey:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    default: ""
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                                x-kubernetes-map-type: atomic
+                            required:
+                            - accessKeyId
+                            - secretAccessKey
+                            type: object
+                          roleARN:
+                            type: string
+                        type: object
+                      awsRegion:
+                        type: string
+                      endpointUrl:
+                        type: string
+                      maxNumberOfMessages:
+                        format: int32
+                        type: integer
+                      messageAttributeNames:
+                        items:
+                          type: string
+                        type: array
+                      queueName:
+                        type: string
+                      visibilityTimeout:
+                        format: int32
+                        type: integer
+                      waitTimeSeconds:
+                        format: int32
+                        type: integer
+                    required:
+                    - auth
+                    - awsRegion
+                    - queueName
                     type: object
                   transformer:
                     properties:

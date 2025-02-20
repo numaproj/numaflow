@@ -6,18 +6,17 @@
 //! - Robust error handling and retry logic
 //! - Configurable timeouts and batch sizes
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::time::Duration;
 
-use aws_config::{meta::region::RegionProviderChain, BehaviorVersion};
-use aws_sdk_sqs::config::Region;
 use aws_sdk_sqs::types::{MessageSystemAttributeName, QueueAttributeName};
 use aws_sdk_sqs::Client;
-use aws_smithy_types::timeout::TimeoutConfig;
 use bytes::Bytes;
 use chrono::{DateTime, TimeZone, Utc};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
 
+use crate::client::create_sqs_client;
 use crate::Error::ActorTaskTerminated;
 use crate::{Error, Result};
 
@@ -26,12 +25,115 @@ pub const SQS_DEFAULT_REGION: &str = "us-west-2";
 /// Configuration for an SQS message source.
 ///
 /// Used to initialize the SQS client with region and queue settings.
-/// Implements serde::Deserialize to support loading from configuration files.
-/// TODO: add support for all sqs configs and different ways to authenticate
-#[derive(serde::Deserialize, Clone, PartialEq)]
+/// TODO: use config in sqs actor methods
+#[derive(Debug, Clone, PartialEq)]
 pub struct SQSSourceConfig {
+    // Required fields
     pub region: String,
     pub queue_name: String,
+    pub auth: SQSAuth,
+
+    // Optional fields
+    pub visibility_timeout: Option<i32>,
+    pub max_number_of_messages: Option<i32>,
+    pub wait_time_seconds: Option<i32>,
+    pub endpoint_url: Option<String>,
+    pub attribute_names: Vec<String>,
+    pub message_attribute_names: Vec<String>,
+}
+
+impl SQSSourceConfig {
+    /// Validates the SQS source configuration
+    pub fn validate(&self) -> Result<()> {
+        // Validate required fields
+        if self.region.is_empty() {
+            return Err(Error::InvalidConfig("region is required".to_string()));
+        }
+        if self.queue_name.is_empty() {
+            return Err(Error::InvalidConfig("queue name is required".to_string()));
+        }
+
+        // Validate auth configuration
+        self.auth.validate()?;
+
+        // Validate optional fields if present
+        if let Some(timeout) = self.visibility_timeout {
+            if timeout < 0 || timeout > 43200 {
+                return Err(Error::InvalidConfig(format!(
+                    "visibility_timeout must be between 0 and 43200, got {}",
+                    timeout
+                )));
+            }
+        }
+
+        if let Some(max_msgs) = self.max_number_of_messages {
+            if max_msgs < 1 || max_msgs > 10 {
+                return Err(Error::InvalidConfig(format!(
+                    "max_number_of_messages must be between 1 and 10, got {}",
+                    max_msgs
+                )));
+            }
+        }
+
+        if let Some(wait_time) = self.wait_time_seconds {
+            if wait_time < 0 || wait_time > 20 {
+                return Err(Error::InvalidConfig(format!(
+                    "wait_time_seconds must be between 0 and 20, got {}",
+                    wait_time
+                )));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// AWS authentication configuration
+#[derive(Clone, PartialEq, Debug)]
+pub struct SQSAuth {
+    pub credentials: Option<AWSCredentials>,
+    pub role_arn: Option<String>,
+}
+
+impl SQSAuth {
+    /// Validates the authentication configuration
+    pub fn validate(&self) -> Result<()> {
+        match (&self.credentials, &self.role_arn) {
+            (None, None) => Err(Error::InvalidConfig(
+                "either credentials or roleARN must be provided".to_string(),
+            )),
+            (Some(_), Some(_)) => Err(Error::InvalidConfig(
+                "cannot specify both credentials and roleARN".to_string(),
+            )),
+            (Some(creds), None) => {
+                // Validate that both access key and secret key are provided
+                if creds.access_key_id.is_empty() {
+                    return Err(Error::InvalidConfig(
+                        "access key ID secret selector is invalid".to_string(),
+                    ));
+                }
+                if creds.secret_access_key.is_empty() {
+                    return Err(Error::InvalidConfig(
+                        "secret access key secret selector is invalid".to_string(),
+                    ));
+                }
+                Ok(())
+            }
+            (None, Some(role)) => {
+                if role.is_empty() {
+                    return Err(Error::InvalidConfig("role ARN cannot be empty".to_string()));
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+/// AWS credentials information
+#[derive(Clone, PartialEq, Debug)]
+pub struct AWSCredentials {
+    pub access_key_id: String,
+    pub secret_access_key: String,
 }
 
 /// Internal message types for the actor implementation.
@@ -80,42 +182,22 @@ struct SqsActor {
     handler_rx: mpsc::Receiver<SQSActorMessage>,
     client: Client,
     queue_url: String,
+    config: SQSSourceConfig,
 }
 
 impl SqsActor {
-    fn new(handler_rx: mpsc::Receiver<SQSActorMessage>, client: Client, queue_url: String) -> Self {
+    fn new(
+        handler_rx: mpsc::Receiver<SQSActorMessage>,
+        client: Client,
+        queue_url: String,
+        config: SQSSourceConfig,
+    ) -> Self {
         Self {
             handler_rx,
             client,
             queue_url,
+            config,
         }
-    }
-
-    async fn create_sqs_client(config: Option<SQSSourceConfig>) -> Client {
-        let region = match config {
-            Some(config) => config.region.clone(),
-            None => SQS_DEFAULT_REGION.to_string(),
-        };
-
-        tracing::info!(region = region.clone(), "Creating SQS client in region");
-
-        // read aws config
-        let region_provider = RegionProviderChain::first_try(Region::new(region.clone()))
-            .or_default_provider()
-            .or_else(Region::new(SQS_DEFAULT_REGION));
-
-        let shared_config = aws_config::defaults(BehaviorVersion::v2024_03_28())
-            .timeout_config(
-                TimeoutConfig::builder()
-                    .operation_attempt_timeout(Duration::from_secs(10))
-                    .build(),
-            )
-            .region(region_provider)
-            .load()
-            .await;
-
-        // create sqs client
-        Client::new(&shared_config)
     }
 
     async fn run(&mut self) {
@@ -168,22 +250,57 @@ impl SqsActor {
         // https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-short-and-long-polling.html#sqs-short-long-polling-differences
         // TODO: find a better way to handle user input timeout. should allow the users
         // to choose long/short polling. For now, we default to 1 second (long polling).
-        let remaining_time = if remaining_time.as_millis() < 1000 {
-            Duration::from_secs(1)
+        let wait_time = if remaining_time.as_millis() < 1000 {
+            1
         } else {
-            remaining_time
+            (remaining_time.as_secs() as i32).min(20) // SQS max wait time is 20 seconds
         };
 
-        let sdk_response = self
+        // Use configured max messages if provided, otherwise use the requested count
+        let max_messages = self.config.max_number_of_messages.unwrap_or(count).min(10); // SQS max batch size is 10
+
+        let mut receive_message_builder = self
             .client
             .receive_message()
-            .queue_url(self.queue_url.clone())
-            .max_number_of_messages(count)
-            .message_attribute_names("All")
-            .message_system_attribute_names(MessageSystemAttributeName::All)
-            .wait_time_seconds(remaining_time.as_secs() as i32)
-            .send()
-            .await;
+            .queue_url(&self.queue_url)
+            .max_number_of_messages(max_messages)
+            .wait_time_seconds(wait_time);
+
+        // Apply visibility timeout if configured
+        if let Some(visibility_timeout) = self.config.visibility_timeout {
+            receive_message_builder =
+                receive_message_builder.visibility_timeout(visibility_timeout);
+        }
+
+        // Apply attribute names if configured
+        if !self.config.attribute_names.is_empty() {
+            for attr in &self.config.attribute_names {
+                let attr_name = MessageSystemAttributeName::from_str(attr);
+                match attr_name {
+                    Ok(attr_name) => {
+                        receive_message_builder =
+                            receive_message_builder.message_system_attribute_names(attr_name);
+                    }
+                    Err(err) => {
+                        tracing::error!(?err, "failed to parse attribute name");
+                    }
+                }
+            }
+        } else {
+            receive_message_builder = receive_message_builder
+                .message_system_attribute_names(MessageSystemAttributeName::All);
+        }
+
+        // Apply message attribute names if configured
+        if !self.config.message_attribute_names.is_empty() {
+            for attr in &self.config.message_attribute_names {
+                receive_message_builder = receive_message_builder.message_attribute_names(attr);
+            }
+        } else {
+            receive_message_builder = receive_message_builder.message_attribute_names("All");
+        }
+
+        let sdk_response = receive_message_builder.send().await;
 
         let receive_message_output = match sdk_response {
             Ok(output) => output,
@@ -339,6 +456,7 @@ pub struct SQSSource {
     /// timeout for each batch read request
     timeout: Duration,
     actor_tx: mpsc::Sender<SQSActorMessage>,
+    vertex_replica: u16,
 }
 
 /// Builder for creating an `SqsSource`.
@@ -351,6 +469,7 @@ pub struct SqsSourceBuilder {
     batch_size: usize,
     timeout: Duration,
     client: Option<Client>,
+    vertex_replica: u16,
 }
 
 impl Default for SqsSourceBuilder {
@@ -358,6 +477,16 @@ impl Default for SqsSourceBuilder {
         Self::new(SQSSourceConfig {
             region: SQS_DEFAULT_REGION.to_string(),
             queue_name: "".to_string(),
+            auth: SQSAuth {
+                credentials: None,
+                role_arn: None,
+            },
+            visibility_timeout: None,
+            max_number_of_messages: None,
+            wait_time_seconds: None,
+            endpoint_url: None,
+            attribute_names: Vec::new(),
+            message_attribute_names: Vec::new(),
         })
     }
 }
@@ -369,6 +498,7 @@ impl SqsSourceBuilder {
             batch_size: 1,
             timeout: Duration::from_secs(1),
             client: None,
+            vertex_replica: 0,
         }
     }
     pub fn config(mut self, config: SQSSourceConfig) -> Self {
@@ -391,6 +521,11 @@ impl SqsSourceBuilder {
         self
     }
 
+    pub fn vertex_replica(mut self, vertex_replica: u16) -> Self {
+        self.vertex_replica = vertex_replica;
+        self
+    }
+
     /// Builds an `SqsSource` instance with the provided configuration.
     ///
     /// This method consumes `self` and initializes the SQS client, retrieves the queue URL,
@@ -401,9 +536,12 @@ impl SqsSourceBuilder {
     /// - `Ok(SqsSource)` if the source is successfully built.
     /// - `Err(Error)` if there is an error during the initialization process.
     pub async fn build(self) -> Result<SQSSource> {
+        // Validate the configuration
+        self.config.validate()?;
+
         let sqs_client = match self.client {
             Some(client) => client,
-            None => SqsActor::create_sqs_client(Some(self.config.clone())).await,
+            None => create_sqs_client(Some(self.config.clone())).await?,
         };
 
         let queue_name = self.config.queue_name.clone();
@@ -423,7 +561,7 @@ impl SqsSourceBuilder {
 
         let (handler_tx, handler_rx) = mpsc::channel(10);
         tokio::spawn(async move {
-            let mut actor = SqsActor::new(handler_rx, sqs_client, queue_url);
+            let mut actor = SqsActor::new(handler_rx, sqs_client, queue_url, self.config);
             actor.run().await;
         });
 
@@ -431,6 +569,7 @@ impl SqsSourceBuilder {
             batch_size: self.batch_size,
             timeout: self.timeout,
             actor_tx: handler_tx,
+            vertex_replica: self.vertex_replica,
         })
     }
 }
@@ -497,12 +636,13 @@ impl SQSSource {
     /// Note: It is implemented in the core to return the current vertex replica.
     /// See `numaflow-core/src/source/sqs.rs` for the implementation.
     pub fn partitions(&self) -> Vec<u16> {
-        unimplemented!()
+        vec![self.vertex_replica]
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use aws_sdk_sqs::config::BehaviorVersion;
     use aws_sdk_sqs::Config;
     use aws_smithy_mocks_experimental::{mock, MockResponseInterceptor, Rule, RuleMode};
     use aws_smithy_types::error::ErrorMetadata;
@@ -526,6 +666,19 @@ mod tests {
         let source = SqsSourceBuilder::new(SQSSourceConfig {
             region: SQS_DEFAULT_REGION.to_string(),
             queue_name: "test-q".to_string(),
+            auth: SQSAuth {
+                credentials: Some(AWSCredentials {
+                    access_key_id: "test-key".to_string(),
+                    secret_access_key: "test-secret".to_string(),
+                }),
+                role_arn: None,
+            },
+            visibility_timeout: None,
+            max_number_of_messages: None,
+            wait_time_seconds: None,
+            endpoint_url: None,
+            attribute_names: vec![],
+            message_attribute_names: vec![],
         })
         .batch_size(1)
         .timeout(Duration::from_secs(0))
@@ -566,6 +719,19 @@ mod tests {
         let source = SqsSourceBuilder::new(SQSSourceConfig {
             region: SQS_DEFAULT_REGION.to_string(),
             queue_name: "test-q".to_string(),
+            auth: SQSAuth {
+                credentials: Some(AWSCredentials {
+                    access_key_id: "test-key".to_string(),
+                    secret_access_key: "test-secret".to_string(),
+                }),
+                role_arn: None,
+            },
+            visibility_timeout: None,
+            max_number_of_messages: None,
+            wait_time_seconds: None,
+            endpoint_url: None,
+            attribute_names: vec![],
+            message_attribute_names: vec![],
         })
         .batch_size(1)
         .timeout(Duration::from_secs(0))
@@ -596,6 +762,19 @@ mod tests {
         let source = SqsSourceBuilder::new(SQSSourceConfig {
             region: SQS_DEFAULT_REGION.to_string(),
             queue_name: "test-q".to_string(),
+            auth: SQSAuth {
+                credentials: Some(AWSCredentials {
+                    access_key_id: "test-key".to_string(),
+                    secret_access_key: "test-secret".to_string(),
+                }),
+                role_arn: None,
+            },
+            visibility_timeout: None,
+            max_number_of_messages: None,
+            wait_time_seconds: None,
+            endpoint_url: None,
+            attribute_names: vec![],
+            message_attribute_names: vec![],
         })
         .batch_size(1)
         .timeout(Duration::from_secs(0))
@@ -621,6 +800,19 @@ mod tests {
         let source = SqsSourceBuilder::new(SQSSourceConfig {
             region: SQS_DEFAULT_REGION.to_string(),
             queue_name: "test-q".to_string(),
+            auth: SQSAuth {
+                credentials: Some(AWSCredentials {
+                    access_key_id: "test-key".to_string(),
+                    secret_access_key: "test-secret".to_string(),
+                }),
+                role_arn: None,
+            },
+            visibility_timeout: None,
+            max_number_of_messages: None,
+            wait_time_seconds: None,
+            endpoint_url: None,
+            attribute_names: vec![],
+            message_attribute_names: vec![],
         })
         .batch_size(1)
         .timeout(Duration::from_secs(0))
@@ -631,14 +823,14 @@ mod tests {
     }
 
     #[tokio::test]
-    #[should_panic(expected = "not implemented")]
     async fn test_partitions_unimplemented() {
         let source = SQSSource {
             batch_size: 1,
             timeout: Duration::from_secs(0),
             actor_tx: mpsc::channel(1).0,
+            vertex_replica: 1,
         };
-        source.partitions();
+        assert_eq!(source.partitions(), vec![1]);
     }
 
     fn get_queue_attributes_output() -> Rule {
