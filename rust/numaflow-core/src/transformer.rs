@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use tokio::sync::{mpsc, oneshot, Semaphore};
+use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
-use tracing::info;
 
 use crate::error::Error;
 use crate::message::Message;
@@ -54,7 +54,6 @@ impl TransformerActor {
         while let Some(msg) = self.receiver.recv().await {
             self.handle_message(msg).await;
         }
-        info!("transformer handler is stopping");
     }
 }
 
@@ -95,6 +94,7 @@ impl Transformer {
     async fn transform(
         transform_handle: mpsc::Sender<ActorMessage>,
         read_msg: Message,
+        cln_token: CancellationToken,
     ) -> Result<Vec<Message>> {
         let start_time = tokio::time::Instant::now();
 
@@ -111,9 +111,14 @@ impl Transformer {
             .map_err(|e| Error::Transformer(format!("failed to send message: {}", e)))?;
 
         // wait for the response
-        let response = receiver
-            .await
-            .map_err(|e| Error::Transformer(format!("failed to receive message: {}", e)))??;
+        let response = tokio::select! {
+            _ = cln_token.cancelled() => {
+                return Err(Error::Transformer("cancelled".to_string()));
+            }
+            response = receiver => {
+                response.map_err(|e| Error::Transformer(format!("failed to receive response: {}", e)))??
+            }
+        };
 
         monovertex_metrics()
             .transformer
@@ -125,7 +130,11 @@ impl Transformer {
     }
 
     /// Transforms a batch of messages concurrently.
-    pub(crate) async fn transform_batch(&self, messages: Vec<Message>) -> Result<Vec<Message>> {
+    pub(crate) async fn transform_batch(
+        &self,
+        messages: Vec<Message>,
+        cln_token: CancellationToken,
+    ) -> Result<Vec<Message>> {
         let transform_handle = self.sender.clone();
         let tracker_handle = self.tracker_handle.clone();
         let semaphore = Arc::new(Semaphore::new(self.concurrency));
@@ -136,6 +145,7 @@ impl Transformer {
                 let permit_fut = Arc::clone(&semaphore).acquire_owned();
                 let transform_handle = transform_handle.clone();
                 let tracker_handle = tracker_handle.clone();
+                let cln_token = cln_token.clone();
 
                 tokio::spawn(async move {
                     let permit = permit_fut.await.map_err(|e| {
@@ -143,8 +153,12 @@ impl Transformer {
                     })?;
                     let _permit = permit;
 
-                    let transformed_messages =
-                        Transformer::transform(transform_handle, read_msg.clone()).await?;
+                    let transformed_messages = Transformer::transform(
+                        transform_handle,
+                        read_msg.clone(),
+                        cln_token.clone(),
+                    )
+                    .await?;
 
                     // update the tracker with the number of responses for each message
                     for message in transformed_messages.iter() {
@@ -163,11 +177,10 @@ impl Transformer {
         for task in tasks {
             match task.await {
                 Ok(Ok(mut msgs)) => transformed_messages.append(&mut msgs),
-                Ok(Err(e)) => return Err(Error::Transformer(format!("task failed: {}", e))),
+                Ok(Err(e)) => return Err(e),
                 Err(e) => return Err(Error::Transformer(format!("task join failed: {}", e))),
             }
         }
-
         Ok(transformed_messages)
     }
 }
@@ -242,8 +255,12 @@ mod tests {
             metadata: None,
         };
 
-        let transformed_messages =
-            Transformer::transform(transformer.sender.clone(), message).await;
+        let transformed_messages = Transformer::transform(
+            transformer.sender.clone(),
+            message,
+            CancellationToken::new(),
+        )
+        .await;
 
         assert!(transformed_messages.is_ok());
         let transformed_messages = transformed_messages?;
@@ -311,7 +328,9 @@ mod tests {
             messages.push(message);
         }
 
-        let transformed_messages = transformer.transform_batch(messages).await?;
+        let transformed_messages = transformer
+            .transform_batch(messages, CancellationToken::new())
+            .await?;
 
         for (i, transformed_message) in transformed_messages.iter().enumerate() {
             assert_eq!(transformed_message.value, format!("value_{}", i));
@@ -385,7 +404,9 @@ mod tests {
             metadata: None,
         };
 
-        let result = transformer.transform_batch(vec![message]).await;
+        let result = transformer
+            .transform_batch(vec![message], CancellationToken::new())
+            .await;
         assert!(result.is_err(), "Expected an error due to panic");
         assert!(result.unwrap_err().to_string().contains("panic"));
 

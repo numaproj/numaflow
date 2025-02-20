@@ -1213,7 +1213,7 @@ mod tests {
         {
             for (i, (label, _)) in lookback_seconds_map.iter().enumerate() {
                 let mut metric_labels = mvtx_forward_metric_labels().clone();
-                metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
+                metric_labels.push((PENDING_PERIOD_LABEL.to_string(), (*label).to_string()));
                 let guage = monovertex_metrics()
                     .pending
                     .get_or_create(&metric_labels)
@@ -1310,7 +1310,7 @@ mod tests {
                 stored_values_stream_one[i] = guage;
 
                 let mut metric_labels = pipeline_forward_metric_labels("stream2").clone();
-                metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
+                metric_labels.push((PENDING_PERIOD_LABEL.to_string(), (*label).to_string()));
                 metric_labels.push((
                     PIPELINE_PARTITION_NAME_LABEL.to_string(),
                     "stream2".to_string(),
@@ -1350,9 +1350,9 @@ mod tests {
             123246.45850253566,
             730244.1067557991,
             4.32674871092222e+06,
-            2.5636296457956206e+07,
-            1.5189689533417246e+08,
-            8.999999999999983e+08,
+            2.563_629_645_795_620_6e7,
+            1.518_968_953_341_724_6e8,
+            8.999_999_999_999_983e8,
         ];
         for (i, bucket) in buckets.iter().enumerate() {
             assert!((bucket - expected[i]).abs() < 1e-2);

@@ -187,6 +187,7 @@ pub mod tests {
             None,
         );
 
+        let cln_token = CancellationToken::new();
         // create sink writer
         use crate::sink::{SinkClientType, SinkWriterBuilder};
         let sink_writer = SinkWriterBuilder::new(
@@ -200,15 +201,11 @@ pub mod tests {
         .unwrap();
 
         // create the forwarder with the source and sink writer
-        let cln_token = CancellationToken::new();
-        let forwarder = crate::monovertex::forwarder::Forwarder::new(
-            source.clone(),
-            sink_writer,
-            cln_token.clone(),
-        );
+        let forwarder = crate::monovertex::forwarder::Forwarder::new(source.clone(), sink_writer);
 
+        let cancel_token = cln_token.clone();
         let _forwarder_handle: JoinHandle<crate::error::Result<()>> = tokio::spawn(async move {
-            forwarder.start().await?;
+            forwarder.start(cancel_token).await?;
             Ok(())
         });
 

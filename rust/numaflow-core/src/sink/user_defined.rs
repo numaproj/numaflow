@@ -56,14 +56,20 @@ impl UserDefinedSink {
 
         let mut resp_stream = client
             .sink_fn(Request::new(sink_stream))
-            .await?
+            .await
+            .map_err(Error::Grpc)?
             .into_inner();
 
         // First response from the server will be the handshake response. We need to check if the
         // server has accepted the handshake.
-        let handshake_response = resp_stream.message().await?.ok_or(Error::Sink(
-            "failed to receive handshake response".to_string(),
-        ))?;
+        let handshake_response =
+            resp_stream
+                .message()
+                .await
+                .map_err(Error::Grpc)?
+                .ok_or(Error::Sink(
+                    "failed to receive handshake response".to_string(),
+                ))?;
 
         // Handshake cannot be None during the initial phase, and it has to set `sot` to true.
         if handshake_response.handshake.map_or(true, |h| !h.sot) {
@@ -112,7 +118,8 @@ impl Sink for UserDefinedSink {
             let response = self
                 .resp_stream
                 .message()
-                .await?
+                .await
+                .map_err(Error::Grpc)?
                 .ok_or(Error::Sink("failed to receive response".to_string()))?;
 
             if response.status.is_some_and(|s| s.eot) {

@@ -108,6 +108,11 @@ pub(crate) enum SinkClientType {
 }
 
 /// SinkWriter is a writer that writes messages to the Sink.
+///
+/// Error handling and shutdown: There can non-retryable errors(udsink panics etc), in that case we will
+/// cancel the token to indicate the upstream not send any more messages to the sink, we drain any inflight
+/// messages that are in input stream and nack them using the tracker, when the upstream stops sending
+/// messages the input stream will be closed and we will stop the component.
 #[derive(Clone)]
 pub(super) struct SinkWriter {
     batch_size: usize,
@@ -116,6 +121,8 @@ pub(super) struct SinkWriter {
     sink_handle: mpsc::Sender<ActorMessage>,
     fb_sink_handle: Option<mpsc::Sender<ActorMessage>>,
     tracker_handle: TrackerHandle,
+    shutting_down: bool,
+    final_result: Result<()>,
 }
 
 /// SinkWriterBuilder is a builder to build a SinkWriter.
@@ -220,6 +227,8 @@ impl SinkWriterBuilder {
             sink_handle: sender,
             fb_sink_handle,
             tracker_handle: self.tracker_handle,
+            shutting_down: false,
+            final_result: Ok(()),
         })
     }
 }
@@ -257,15 +266,14 @@ impl SinkWriter {
     /// Streaming write the messages to the Sink, it will keep writing messages until the stream is
     /// closed or the cancellation token is triggered.
     pub(super) async fn streaming_write(
-        &self,
+        mut self,
         messages_stream: ReceiverStream<Message>,
-        cancellation_token: CancellationToken,
+        cln_token: CancellationToken,
     ) -> Result<JoinHandle<Result<()>>> {
         let handle: JoinHandle<Result<()>> = tokio::spawn({
-            let mut this = self.clone();
             async move {
                 let chunk_stream =
-                    messages_stream.chunks_timeout(this.batch_size, this.chunk_timeout);
+                    messages_stream.chunks_timeout(self.batch_size, self.chunk_timeout);
 
                 pin!(chunk_stream);
 
@@ -279,6 +287,18 @@ impl SinkWriter {
                             break;
                         }
                     };
+
+                    // we are in shutting down mode, we will not be writing to the sink
+                    // tell tracker to nack the messages.
+                    if self.shutting_down {
+                        for msg in batch.iter() {
+                            self.tracker_handle
+                                .discard(msg.offset.clone())
+                                .await
+                                .expect("Error discarding message");
+                        }
+                        continue;
+                    }
 
                     if batch.is_empty() {
                         continue;
@@ -298,20 +318,27 @@ impl SinkWriter {
 
                     let sink_start = time::Instant::now();
                     let total_valid_msgs = batch.len();
-                    match this.write(batch.clone(), cancellation_token.clone()).await {
+                    match self.write(batch.clone(), cln_token.clone()).await {
                         Ok(_) => {
                             for offset in offsets {
                                 // Delete the message from the tracker
-                                this.tracker_handle.delete(offset).await?;
+                                self.tracker_handle
+                                    .delete(offset)
+                                    .await
+                                    .expect("tracker delete should never fail");
                             }
                         }
                         Err(e) => {
+                            // if there is a critical error, cancel the token and let upstream know
+                            // that we are shutting down and stop sending messages to the sink
                             error!(?e, "Error writing to sink");
+                            cln_token.cancel();
                             for offset in offsets {
                                 // Discard the message from the tracker
-                                this.tracker_handle.discard(offset).await?;
+                                self.tracker_handle.discard(offset).await?;
                             }
-                            return Err(e);
+                            self.final_result = Err(e);
+                            self.shutting_down = true;
                         }
                     }
 
@@ -350,8 +377,7 @@ impl SinkWriter {
                         last_logged_at = std::time::Instant::now();
                     }
                 }
-
-                Ok(())
+                self.final_result.clone()
             }
         });
         Ok(handle)
@@ -753,6 +779,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_write() {
+        let cln_token = CancellationToken::new();
         let mut sink_writer = SinkWriterBuilder::new(
             10,
             Duration::from_secs(1),
@@ -782,14 +809,13 @@ mod tests {
             })
             .collect();
 
-        let result = sink_writer
-            .write(messages.clone(), CancellationToken::new())
-            .await;
+        let result = sink_writer.write(messages.clone(), cln_token).await;
         assert!(result.is_ok());
     }
 
     #[tokio::test]
     async fn test_streaming_write() {
+        let cln_token = CancellationToken::new();
         let tracker_handle = TrackerHandle::new(None, None);
         let sink_writer = SinkWriterBuilder::new(
             10,
@@ -831,7 +857,7 @@ mod tests {
         drop(tx);
 
         let handle = sink_writer
-            .streaming_write(ReceiverStream::new(rx), CancellationToken::new())
+            .streaming_write(ReceiverStream::new(rx), cln_token)
             .await
             .unwrap();
 
@@ -930,6 +956,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fallback_write() {
+        let cln_token = CancellationToken::new();
         let tracker_handle = TrackerHandle::new(None, None);
 
         // start the server
@@ -994,9 +1021,8 @@ mod tests {
             let _ = tx.send(msg).await;
         }
         drop(tx);
-        let cln_token = CancellationToken::new();
         let handle = sink_writer
-            .streaming_write(ReceiverStream::new(rx), cln_token.clone())
+            .streaming_write(ReceiverStream::new(rx), cln_token)
             .await
             .unwrap();
 

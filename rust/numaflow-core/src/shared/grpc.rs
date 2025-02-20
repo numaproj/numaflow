@@ -111,10 +111,9 @@ pub(crate) fn prost_timestamp_from_utc(t: DateTime<Utc>) -> Timestamp {
 
 pub(crate) async fn create_rpc_channel(socket_path: PathBuf) -> error::Result<Channel> {
     const RECONNECT_INTERVAL: u64 = 1000;
-    const MAX_RECONNECT_ATTEMPTS: usize = 60;
+    const MAX_RECONNECT_ATTEMPTS: usize = usize::MAX;
 
     let interval = fixed::Interval::from_millis(RECONNECT_INTERVAL).take(MAX_RECONNECT_ATTEMPTS);
-
     let channel = Retry::retry(
         interval,
         || async {

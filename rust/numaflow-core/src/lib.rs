@@ -79,8 +79,11 @@ pub async fn run() -> Result<()> {
             info!("Starting monovertex forwarder with config: {:#?}", config);
             // Run the forwarder with cancellation token.
             if let Err(e) = monovertex::start_forwarder(cln_token, &config).await {
-                error!("Application error running monovertex: {:?}", e);
-
+                if let Error::Grpc(e) = e {
+                    error!(error=?e, "Monovertex failed because of UDF failure")
+                } else {
+                    error!(?e, "Error running monovertex");
+                }
                 // abort the signal handler task since we have an error and we are shutting down
                 if !shutdown_handle.is_finished() {
                     shutdown_handle.abort();
@@ -90,8 +93,11 @@ pub async fn run() -> Result<()> {
         CustomResourceType::Pipeline(config) => {
             info!("Starting pipeline forwarder with config: {:#?}", config);
             if let Err(e) = pipeline::start_forwarder(cln_token, config).await {
-                error!("Application error running pipeline: {:?}", e);
-
+                if let Error::Grpc(e) = e {
+                    error!(error=?e, "Pipeline failed because of UDF failure")
+                } else {
+                    error!(?e, "Error running pipeline");
+                }
                 // abort the signal handler task since we have an error and we are shutting down
                 if !shutdown_handle.is_finished() {
                     shutdown_handle.abort();

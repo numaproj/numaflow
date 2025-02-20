@@ -403,7 +403,7 @@ impl PipelineConfig {
             .spec
             .watermark
             .clone()
-            .map_or(true, |w| w.disabled.unwrap_or(true))
+            .map_or(true, |w| !w.disabled.unwrap_or(false))
         {
             Self::create_watermark_config(
                 vertex_obj.spec.watermark.clone(),
@@ -733,22 +733,7 @@ mod tests {
                 transformer_config: None,
             }),
             metrics_config: Default::default(),
-            watermark_config: Some(WatermarkConfig::Source(SourceWatermarkConfig {
-                max_delay: Default::default(),
-                source_bucket_config: BucketConfig {
-                    vertex: "in",
-                    partitions: 1,
-                    ot_bucket: "default-simple-pipeline-in_SOURCE_OT",
-                    hb_bucket: "default-simple-pipeline-in_SOURCE_PROCESSORS",
-                },
-                to_vertex_bucket_config: vec![BucketConfig {
-                    vertex: "out",
-                    partitions: 1,
-                    ot_bucket: "default-simple-pipeline-in-out_OT",
-                    hb_bucket: "default-simple-pipeline-in-out_PROCESSORS",
-                }],
-                idle_config: None,
-            })),
+            watermark_config: None,
             ..Default::default()
         };
 

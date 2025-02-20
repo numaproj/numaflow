@@ -563,7 +563,7 @@ mod tests {
         let handle = SourceWatermarkHandle::new(
             Duration::from_millis(100),
             js_context.clone(),
-            &vec![ToVertexConfig {
+            &[ToVertexConfig {
                 name: "edge_vertex",
                 writer_config: BufferWriterConfig {
                     streams: vec![Stream {

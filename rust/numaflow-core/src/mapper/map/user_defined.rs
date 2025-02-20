@@ -1,6 +1,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::config::get_vertex_name;
+use crate::error::{Error, Result};
+use crate::message::{Message, MessageID, Offset};
+use crate::shared::grpc::prost_timestamp_from_utc;
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::map::{self, map_client::MapClient, MapRequest, MapResponse};
 use tokio::sync::Mutex;
@@ -9,11 +13,6 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 use tracing::error;
-
-use crate::config::get_vertex_name;
-use crate::error::{Error, Result};
-use crate::message::{Message, MessageID, Offset};
-use crate::shared::grpc::prost_timestamp_from_utc;
 
 type ResponseSenderMap =
     Arc<Mutex<HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>>>;
@@ -96,10 +95,9 @@ impl UserDefinedUnaryMap {
         while let Some(resp) = match resp_stream.message().await {
             Ok(message) => message,
             Err(e) => {
-                let error = Error::Mapper(format!("failed to receive map response: {}", e));
                 let mut senders = sender_map.lock().await;
                 for (_, (_, sender)) in senders.drain() {
-                    let _ = sender.send(Err(error.clone()));
+                    let _ = sender.send(Err(Error::Grpc(e.clone())));
                 }
                 None
             }
@@ -124,12 +122,9 @@ impl UserDefinedUnaryMap {
         self.senders
             .lock()
             .await
-            .insert(key, (msg_info, respond_to));
+            .insert(key.clone(), (msg_info, respond_to));
 
-        self.read_tx
-            .send(message.into())
-            .await
-            .expect("failed to send message");
+        let _ = self.read_tx.send(message.into()).await;
     }
 }
 
@@ -184,11 +179,10 @@ impl UserDefinedBatchMap {
         while let Some(resp) = match resp_stream.message().await {
             Ok(message) => message,
             Err(e) => {
-                let error = Error::Mapper(format!("failed to receive map response: {}", e));
                 let mut senders = sender_map.lock().await;
                 for (_, (_, sender)) in senders.drain() {
                     sender
-                        .send(Err(error.clone()))
+                        .send(Err(Error::Grpc(e.clone())))
                         .expect("failed to send error response");
                 }
                 None
@@ -249,23 +243,7 @@ async fn process_response(sender_map: &ResponseSenderMap, resp: MapResponse) {
     if let Some((msg_info, sender)) = sender_map.lock().await.remove(&msg_id) {
         let mut response_messages = vec![];
         for (i, result) in resp.results.into_iter().enumerate() {
-            let message = Message {
-                typ: Default::default(),
-                id: MessageID {
-                    vertex_name: get_vertex_name().to_string().into(),
-                    index: i as i32,
-                    offset: msg_info.offset.to_string().into(),
-                },
-                keys: Arc::from(result.keys),
-                tags: Some(Arc::from(result.tags)),
-                value: result.value.into(),
-                offset: msg_info.offset.clone(),
-                event_time: msg_info.event_time,
-                headers: msg_info.headers.clone(),
-                watermark: None,
-                metadata: None,
-            };
-            response_messages.push(message);
+            response_messages.push(UserDefinedMessage(result, &msg_info, i as i32).into());
         }
         sender
             .send(Ok(response_messages))
@@ -293,12 +271,18 @@ async fn create_response_stream(
 
     let mut resp_stream = client
         .map_fn(Request::new(ReceiverStream::new(read_rx)))
-        .await?
+        .await
+        .map_err(Error::Grpc)?
         .into_inner();
 
-    let handshake_response = resp_stream.message().await?.ok_or(Error::Mapper(
-        "failed to receive handshake response".to_string(),
-    ))?;
+    let handshake_response =
+        resp_stream
+            .message()
+            .await
+            .map_err(Error::Grpc)?
+            .ok_or(Error::Mapper(
+                "failed to receive handshake response".to_string(),
+            ))?;
 
     if handshake_response.handshake.map_or(true, |h| !h.sot) {
         return Err(Error::Mapper("invalid handshake response".to_string()));
@@ -357,10 +341,9 @@ impl UserDefinedStreamMap {
         while let Some(resp) = match resp_stream.message().await {
             Ok(message) => message,
             Err(e) => {
-                let error = Error::Mapper(format!("failed to receive map response: {}", e));
                 let mut senders = sender_map.lock().await;
                 for (_, (_, sender)) in senders.drain() {
-                    let _ = sender.send(Err(error.clone())).await;
+                    let _ = sender.send(Err(Error::Grpc(e.clone()))).await;
                 }
                 None
             }
@@ -378,24 +361,10 @@ impl UserDefinedStreamMap {
             }
 
             for (i, result) in resp.results.into_iter().enumerate() {
-                let message = Message {
-                    typ: Default::default(),
-                    id: MessageID {
-                        vertex_name: get_vertex_name().to_string().into(),
-                        index: i as i32,
-                        offset: message_info.offset.to_string().into(),
-                    },
-                    keys: Arc::from(result.keys),
-                    tags: Some(Arc::from(result.tags)),
-                    value: result.value.into(),
-                    offset: message_info.offset.clone(),
-                    event_time: message_info.event_time,
-                    headers: message_info.headers.clone(),
-                    watermark: None,
-                    metadata: None,
-                };
                 response_sender
-                    .send(Ok(message))
+                    .send(Ok(
+                        UserDefinedMessage(result, &message_info, i as i32).into()
+                    ))
                     .await
                     .expect("failed to send response");
             }
@@ -431,6 +400,29 @@ impl UserDefinedStreamMap {
             .send(message.into())
             .await
             .expect("failed to send message");
+    }
+}
+
+struct UserDefinedMessage<'a>(map::map_response::Result, &'a ParentMessageInfo, i32);
+
+impl From<UserDefinedMessage<'_>> for Message {
+    fn from(value: UserDefinedMessage<'_>) -> Self {
+        Message {
+            typ: Default::default(),
+            id: MessageID {
+                vertex_name: get_vertex_name().to_string().into(),
+                index: value.2,
+                offset: value.1.offset.to_string().into(),
+            },
+            keys: Arc::from(value.0.keys),
+            tags: Some(Arc::from(value.0.tags)),
+            value: value.0.value.into(),
+            offset: value.1.offset.clone(),
+            event_time: value.1.event_time,
+            headers: value.1.headers.clone(),
+            watermark: None,
+            metadata: None,
+        }
     }
 }
 
