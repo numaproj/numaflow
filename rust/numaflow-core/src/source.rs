@@ -4,7 +4,6 @@
 //! [Source]: https://numaflow.numaproj.io/user-guide/sources/overview/
 //! [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 
-use std::cmp::max;
 use std::sync::Arc;
 use tracing::warn;
 
@@ -395,11 +394,7 @@ impl Source {
                     read_start_time,
                     self.sender.clone(),
                     ack_batch,
-                    if !self.read_ahead {
-                        Some(Arc::clone(&semaphore).acquire_owned().await.unwrap())
-                    } else {
-                        None
-                    },
+                    _permit,
                 ));
 
                 // transform the batch if the transformer is present, this need not
@@ -461,7 +456,7 @@ impl Source {
         e2e_start_time: Instant,
         source_handle: mpsc::Sender<ActorMessage>,
         ack_rx_batch: Vec<(Offset, oneshot::Receiver<ReadAck>)>,
-        _permit: Option<OwnedSemaphorePermit>, // permit to release after acking the offsets.
+        _permit: OwnedSemaphorePermit, // permit to release after acking the offsets.
     ) -> Result<()> {
         let n = ack_rx_batch.len();
         let mut offsets_to_ack = Vec::with_capacity(n);
