@@ -172,6 +172,9 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		log.Infof("Vertex not in Running phase, skip scaling.")
 		return nil
 	}
+	if vertex.Spec.Lifecycle.GetDesiredPhase() != dfv1.VertexPhaseRunning {
+		log.Infof("Vertex desired phase is not Running, skip scaling.")
+	}
 	if vertex.Status.UpdateHash != vertex.Status.CurrentHash && vertex.Status.UpdateHash != "" {
 		log.Info("Vertex is updating, skip scaling.")
 		return nil
