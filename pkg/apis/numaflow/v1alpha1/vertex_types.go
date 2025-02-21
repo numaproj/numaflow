@@ -30,13 +30,14 @@ import (
 	"k8s.io/utils/ptr"
 )
 
-// +kubebuilder:validation:Enum="";Running;Failed
+// +kubebuilder:validation:Enum="";Running;Paused;Failed
 type VertexPhase string
 
 const (
 	VertexPhaseUnknown VertexPhase = ""
 	VertexPhaseRunning VertexPhase = "Running"
 	VertexPhaseFailed  VertexPhase = "Failed"
+	VertexPhasePaused  VertexPhase = "Paused"
 
 	// VertexConditionDeployed has the status True when the vertex related sub resources are deployed.
 	VertexConditionDeployed ConditionType = "Deployed"
@@ -515,6 +516,10 @@ type VertexSpec struct {
 	// +kubebuilder:default={"disabled": false}
 	// +optional
 	Watermark Watermark `json:"watermark,omitempty" protobuf:"bytes,7,opt,name=watermark"`
+	// Lifecycle defines the Lifecycle properties of a ertex
+	// +kubebuilder:default={"desiredPhase": Running}
+	// +optional
+	Lifecycle VertexLifecycle `json:"lifecycle,omitempty" protobuf:"bytes,8,opt,name=lifecycle"`
 }
 
 type AbstractVertex struct {
@@ -564,6 +569,23 @@ type AbstractVertex struct {
 	// +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
 	// +optional
 	UpdateStrategy UpdateStrategy `json:"updateStrategy,omitempty" protobuf:"bytes,16,opt,name=updateStrategy"`
+}
+
+type VertexLifecycle struct {
+	// DesiredPhase used to bring the vertex from current phase to desired phase
+	// +kubebuilder:default=Running
+	// +optional
+	DesiredPhase VertexPhase `json:"desiredPhase,omitempty" protobuf:"bytes,1,opt,name=desiredPhase"`
+}
+
+// GetDesiredPhase is used to fetch the desired lifecycle phase for a Vertex
+func (vlc VertexLifecycle) GetDesiredPhase() VertexPhase {
+	switch vlc.DesiredPhase {
+	case VertexPhasePaused:
+		return VertexPhasePaused
+	default:
+		return VertexPhaseRunning
+	}
 }
 
 func (av AbstractVertex) GetVertexType() VertexType {

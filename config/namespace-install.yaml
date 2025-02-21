@@ -23402,6 +23402,19 @@ spec:
                 type: array
               interStepBufferServiceName:
                 type: string
+              lifecycle:
+                default:
+                  desiredPhase: Running
+                properties:
+                  desiredPhase:
+                    default: Running
+                    enum:
+                    - ""
+                    - Running
+                    - Paused
+                    - Failed
+                    type: string
+                type: object
               limits:
                 properties:
                   bufferMaxLength:
@@ -28240,6 +28253,7 @@ spec:
                 enum:
                 - ""
                 - Running
+                - Paused
                 - Failed
                 type: string
               readyReplicas:
