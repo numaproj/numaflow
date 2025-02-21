@@ -215,6 +215,8 @@ impl TryFrom<HashMap<String, String>> for Settings {
             Some(ttl) => Some(Duration::from(ttl).as_secs() as u32),
             None => Some(DEFAULT_REDIS_TTL_IN_SECS),
         };
+        settings.drain_timeout_secs =
+            serving_spec.request_timeout_seconds.unwrap_or(120).max(1) as u64; // Ensure timeout is atleast 1 second
 
         if let Some(auth) = serving_spec.auth {
             let token = auth.token.unwrap();

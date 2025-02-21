@@ -15,6 +15,9 @@ type ServingSource struct {
 	MsgIDHeaderKey *string `json:"msgIDHeaderKey" protobuf:"bytes,3,opt,name=msgIDHeaderKey"`
 	// Persistent store for the callbacks for serving and tracking
 	Store *ServingStore `json:"store" protobuf:"bytes,4,opt,name=store"`
+	// Request timeout in seconds. Default value is 120 seconds.
+	// +optional
+	RequestTimeoutSecs *uint32 `json:"requestTimeoutSeconds,omitempty" protobuf:"varint,5,opt,name=requestTimeoutSeconds"`
 }
 
 // ServingStore to track and store data and metadata for tracking and serving.

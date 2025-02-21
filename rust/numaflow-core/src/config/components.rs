@@ -147,6 +147,7 @@ pub(crate) mod source {
                 settings.redis.ttl_secs = Some(ttl_secs);
             }
             settings.redis.addr = cfg.store.url;
+            settings.drain_timeout_secs = cfg.request_timeout_seconds.unwrap_or(120).max(1) as u64; // Ensure timeout is atleast 1 second
 
             Ok(SourceType::Serving(Arc::new(settings)))
         }
