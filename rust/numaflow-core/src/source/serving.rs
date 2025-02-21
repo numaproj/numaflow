@@ -62,8 +62,6 @@ impl super::SourceReader for ServingSource {
 
 impl super::SourceAcker for ServingSource {
     /// HTTP response is sent only once we have confirmation that the message has been written to the ISB.
-    // TODO: Current implementation only works for `/v1/process/async` endpoint.
-    //       For `/v1/process/{sync,sync_serve}` endpoints: https://github.com/numaproj/numaflow/issues/2308
     async fn ack(&mut self, offsets: Vec<Offset>) -> Result<()> {
         let mut serving_offsets = vec![];
         for offset in offsets {

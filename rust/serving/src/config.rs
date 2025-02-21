@@ -23,7 +23,7 @@ pub const DEFAULT_ID_HEADER: &str = "X-Numaflow-Id";
 pub const DEFAULT_CALLBACK_URL_HEADER_KEY: &str = "X-Numaflow-Callback-Url";
 pub const DEFAULT_REDIS_TTL_IN_SECS: u32 = 86400;
 
-pub fn generate_certs() -> std::result::Result<(Certificate, KeyPair), String> {
+pub fn generate_certs() -> Result<(Certificate, KeyPair), String> {
     let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
         .map_err(|e| format!("Failed to generate cert {:?}", e))?;
     Ok((cert, key_pair))
@@ -74,7 +74,7 @@ impl Default for Settings {
             app_listen_port: 3000,
             metrics_server_listen_port: 3001,
             upstream_addr: "localhost:8888".to_owned(),
-            drain_timeout_secs: 10,
+            drain_timeout_secs: 600,
             redis: RedisConfig::default(),
             host_ip: "127.0.0.1".to_owned(),
             api_auth_token: None,
@@ -251,7 +251,7 @@ mod tests {
         assert_eq!(settings.app_listen_port, 3000);
         assert_eq!(settings.metrics_server_listen_port, 3001);
         assert_eq!(settings.upstream_addr, "localhost:8888");
-        assert_eq!(settings.drain_timeout_secs, 10);
+        assert_eq!(settings.drain_timeout_secs, 600);
         assert_eq!(settings.redis.addr, "redis://127.0.0.1:6379");
         assert_eq!(settings.redis.max_tasks, 50);
         assert_eq!(settings.redis.retries, 5);
@@ -281,7 +281,7 @@ mod tests {
             app_listen_port: 8443,
             metrics_server_listen_port: 3001,
             upstream_addr: "localhost:8888".into(),
-            drain_timeout_secs: 120,
+            drain_timeout_secs: 600,
             redis: RedisConfig {
                 addr: "redis://redis:6379".into(),
                 max_tasks: 50,
@@ -333,7 +333,7 @@ mod tests {
             app_listen_port: 8443,
             metrics_server_listen_port: 3001,
             upstream_addr: "localhost:8888".into(),
-            drain_timeout_secs: 120,
+            drain_timeout_secs: 600,
             redis: RedisConfig {
                 addr: "redis://redis:6379".into(),
                 max_tasks: 50,

@@ -55,6 +55,8 @@ use serving::ServingSource;
 use crate::transformer::Transformer;
 use crate::watermark::source::SourceWatermarkHandle;
 
+const MAX_ACK_PENDING: usize = 10000;
+
 /// Set of Read related items that has to be implemented to become a Source.
 pub(crate) trait SourceReader {
     #[allow(dead_code)]
@@ -321,8 +323,15 @@ impl Source {
         info!(?self.read_batch_size, "Started streaming source with batch size");
         let handle = tokio::spawn(async move {
             // this semaphore is used only if read-ahead is disabled. we hold this semaphore to
-            // make sure we can read only if the current inflight ones are ack'ed.
-            let semaphore = Arc::new(Semaphore::new(1));
+            // make sure we can read only if the current inflight ones are ack'ed. If read ahead
+            // is disabled you can have upto (max_ack_pending / read_batch_size) ack tasks. We
+            // divide by read_batch_size because we do batch acking in source.
+            let max_ack_tasks = match &self.read_ahead {
+                true => MAX_ACK_PENDING / self.read_batch_size,
+                false => 1,
+            };
+            let semaphore = Arc::new(Semaphore::new(max_ack_tasks));
+
             let mut result = Ok(());
             loop {
                 if cln_token.is_cancelled() {
@@ -330,14 +339,12 @@ impl Source {
                     break;
                 }
 
-                if !self.read_ahead {
-                    // Acquire the semaphore permit before reading the next batch to make
-                    // sure we are not reading ahead and all the inflight messages are acked.
-                    let _permit = Arc::clone(&semaphore)
-                        .acquire_owned()
-                        .await
-                        .expect("acquiring permit should not fail");
-                }
+                // Acquire the semaphore permit before reading the next batch to make
+                // sure we are not reading ahead and all the inflight messages are acked.
+                let _permit = Arc::clone(&semaphore)
+                    .acquire_owned()
+                    .await
+                    .expect("acquiring permit should not fail");
 
                 let read_start_time = Instant::now();
                 let messages = match Self::read(self.sender.clone()).await {
@@ -371,7 +378,6 @@ impl Source {
                 for message in messages.iter() {
                     let (resp_ack_tx, resp_ack_rx) = oneshot::channel();
                     let offset = message.offset.clone();
-                    println!("offset: {:?}", offset);
 
                     // insert the offset and the ack one shot in the tracker.
                     self.tracker_handle.insert(message, resp_ack_tx).await?;
@@ -388,11 +394,7 @@ impl Source {
                     read_start_time,
                     self.sender.clone(),
                     ack_batch,
-                    if !self.read_ahead {
-                        Some(Arc::clone(&semaphore).acquire_owned().await.unwrap())
-                    } else {
-                        None
-                    },
+                    _permit,
                 ));
 
                 // transform the batch if the transformer is present, this need not
@@ -436,8 +438,11 @@ impl Source {
                 }
             }
             info!(status=?result, "Source stopped, waiting for inflight messages to be acked");
+            // wait for all the ack tasks to be completed before stopping the source, since we give
+            // a permit for each ack task all the permits should be released when the ack tasks are
+            // done, we can verify this by trying to acquire the permit for max_ack_tasks.
             let _permit = Arc::clone(&semaphore)
-                .acquire_owned()
+                .acquire_many_owned(max_ack_tasks as u32)
                 .await
                 .expect("acquiring permit should not fail");
             info!("All inflight messages are acked. Source stopped.");
@@ -451,7 +456,7 @@ impl Source {
         e2e_start_time: Instant,
         source_handle: mpsc::Sender<ActorMessage>,
         ack_rx_batch: Vec<(Offset, oneshot::Receiver<ReadAck>)>,
-        _permit: Option<OwnedSemaphorePermit>, // permit to release after acking the offsets.
+        _permit: OwnedSemaphorePermit, // permit to release after acking the offsets.
     ) -> Result<()> {
         let n = ack_rx_batch.len();
         let mut offsets_to_ack = Vec::with_capacity(n);
