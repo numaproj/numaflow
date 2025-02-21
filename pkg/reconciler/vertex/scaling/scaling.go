@@ -202,8 +202,13 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		log.Info("Corresponding Pipeline not in Running state, skip scaling.")
 		return nil
 	}
-	if int(vertex.Status.Replicas) != vertex.GetReplicas() {
+	if vertex.Status.Replicas != vertex.Status.DesiredReplicas {
 		log.Infof("Vertex %s might be under processing, replicas mismatch, skip scaling.", vertex.Name)
+		return nil
+	}
+
+	if vertex.Spec.Scale.GetMaxReplicas() == vertex.Spec.Scale.GetMinReplicas() {
+		log.Infof("Vertex %s has same scale.min and scale.max, skip scaling.", vertex.Name)
 		return nil
 	}
 
