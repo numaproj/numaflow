@@ -88,17 +88,21 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		return fmt.Errorf("pipeline has no sink, at least one vertex with 'sink' defined is required")
 	}
 
-	var servingSource *dfv1.AbstractVertex
 	for _, srcVtx := range sources {
-		if srcVtx.Source.Serving != nil {
-			servingSource = &srcVtx
-			break
-		}
-	}
-	if servingSource != nil {
-		for _, v := range pl.Spec.Vertices {
-			if v.IsReduceUDF() {
-				return fmt.Errorf("pipeline has a Serving source %q and a reduce vertex %q. Reduce is not supported with Serving source", servingSource.Name, v.Name)
+		if servingSpec := srcVtx.Source.Serving; servingSpec != nil {
+			for _, v := range pl.Spec.Vertices {
+				if v.IsReduceUDF() {
+					return fmt.Errorf("pipeline has a Serving source %q and a reduce vertex %q. Reduce is not supported with Serving source", srcVtx.Name, v.Name)
+				}
+			}
+			if servingSpec.RequestTimeoutSecs != nil {
+				reqTimeout := *servingSpec.RequestTimeoutSecs
+				if reqTimeout == 0 {
+					return fmt.Errorf("requestTimeoutSecs for Serving source (vertex %q) can not be zero", srcVtx.Name)
+				}
+				if int64(reqTimeout+30) > pl.GetTerminationGracePeriodSeconds() {
+					return fmt.Errorf("pipeline.spec.lifecycle.deletionGracePeriodSeconds (value=%d) must be at-least 30 seconds higher than the requestTimeoutSecs (value=%d) configured for the Serving source (vertex=%q)", pl.GetTerminationGracePeriodSeconds(), reqTimeout, srcVtx.Name)
+				}
 			}
 		}
 	}
