@@ -57,7 +57,10 @@ where
 
     let handle = Handle::new();
     // Spawn a task to gracefully shutdown server.
-    tokio::spawn(graceful_shutdown(handle.clone()));
+    tokio::spawn(graceful_shutdown(
+        handle.clone(),
+        app.settings.drain_timeout_secs,
+    ));
 
     info!(?app_addr, "Starting application server");
 
@@ -132,7 +135,7 @@ where
 
 // Gracefully shutdown the server on receiving SIGINT or SIGTERM
 // by sending a shutdown signal to the server using the handle.
-async fn graceful_shutdown(handle: Handle) {
+async fn graceful_shutdown(handle: Handle, grace_period_secs: u64) {
     let ctrl_c = async {
         signal::ctrl_c()
             .await
@@ -155,7 +158,7 @@ async fn graceful_shutdown(handle: Handle) {
 
     // Signal the server to shutdown using Handle.
     // TODO: make the duration configurable
-    handle.graceful_shutdown(Some(Duration::from_secs(30)));
+    handle.graceful_shutdown(Some(Duration::from_secs(grace_period_secs)));
 }
 
 const PUBLISH_ENDPOINTS: [&str; 3] = [
