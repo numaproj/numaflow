@@ -8339,6 +8339,9 @@ spec:
                         type: object
                       msgIDHeaderKey:
                         type: string
+                      requestTimeoutSeconds:
+                        format: int32
+                        type: integer
                       service:
                         type: boolean
                       store:
@@ -19714,6 +19717,9 @@ spec:
                               type: object
                             msgIDHeaderKey:
                               type: string
+                            requestTimeoutSeconds:
+                              format: int32
+                              type: integer
                             service:
                               type: boolean
                             store:
@@ -26264,6 +26270,9 @@ spec:
                         type: object
                       msgIDHeaderKey:
                         type: string
+                      requestTimeoutSeconds:
+                        format: int32
+                        type: integer
                       service:
                         type: boolean
                       store:

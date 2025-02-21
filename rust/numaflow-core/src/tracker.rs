@@ -48,7 +48,11 @@ enum ActorMessage {
     },
     Update {
         offset: Offset,
-        responses: Option<Vec<String>>,
+        responses: Vec<Option<Vec<String>>>,
+    },
+    Append {
+        offset: Offset,
+        response: Option<Vec<String>>,
     },
     Delete {
         offset: Offset,
@@ -56,7 +60,7 @@ enum ActorMessage {
     Discard {
         offset: Offset,
     },
-    UpdateEOF {
+    EOF {
         offset: Offset,
     },
     #[cfg(test)]
@@ -93,8 +97,8 @@ impl TryFrom<&Message> for ServingCallbackInfo {
             .get(DEFAULT_CALLBACK_URL_HEADER_KEY)
             .ok_or_else(|| {
                 Error::Source(format!(
-                "{DEFAULT_CALLBACK_URL_HEADER_KEY} header is not present in the message headers",
-            ))
+                    "{DEFAULT_CALLBACK_URL_HEADER_KEY} header is not present in the message headers",
+                ))
             })?
             .to_owned();
         let uuid = message
@@ -114,17 +118,11 @@ impl TryFrom<&Message> for ServingCallbackInfo {
             .previous_vertex
             .clone();
 
-        let mut msg_tags = None;
-        if let Some(ref tags) = message.tags {
-            if !tags.is_empty() {
-                msg_tags = Some(tags.iter().cloned().collect());
-            }
-        };
         Ok(ServingCallbackInfo {
             id: uuid,
             callback_url,
             from_vertex,
-            responses: vec![msg_tags],
+            responses: vec![None],
         })
     }
 }
@@ -174,14 +172,17 @@ impl Tracker {
             ActorMessage::Update { offset, responses } => {
                 self.handle_update(offset, responses);
             }
-            ActorMessage::UpdateEOF { offset } => {
-                self.handle_update_eof(offset).await;
+            ActorMessage::EOF { offset } => {
+                self.handle_eof(offset).await;
             }
             ActorMessage::Delete { offset } => {
                 self.handle_delete(offset).await;
             }
             ActorMessage::Discard { offset } => {
                 self.handle_discard(offset).await;
+            }
+            ActorMessage::Append { offset, response } => {
+                self.handle_append(offset, response);
             }
             #[cfg(test)]
             ActorMessage::IsEmpty { respond_to } => {
@@ -215,19 +216,31 @@ impl Tracker {
     }
 
     /// Updates an existing entry in the tracker with the number of expected messages for this offset.
-    fn handle_update(&mut self, offset: Offset, responses: Option<Vec<String>>) {
+    fn handle_update(&mut self, offset: Offset, responses: Vec<Option<Vec<String>>>) {
+        let Some(entry) = self.entries.get_mut(&offset) else {
+            return;
+        };
+
+        entry.count += responses.len();
+        if let Some(cb) = entry.serving_callback_info.as_mut() {
+            cb.responses = responses;
+        }
+    }
+
+    /// Appends a response to the serving callback info for the given offset.
+    fn handle_append(&mut self, offset: Offset, response: Option<Vec<String>>) {
         let Some(entry) = self.entries.get_mut(&offset) else {
             return;
         };
 
         entry.count += 1;
         if let Some(cb) = entry.serving_callback_info.as_mut() {
-            cb.responses.push(responses);
+            cb.responses.push(response);
         }
     }
 
     /// Update whether we have seen the eof (end of stream) for this offset.
-    async fn handle_update_eof(&mut self, offset: Offset) {
+    async fn handle_eof(&mut self, offset: Offset) {
         let Some(entry) = self.entries.get_mut(&offset) else {
             return;
         };
@@ -370,18 +383,12 @@ impl TrackerHandle {
     pub(crate) async fn update(
         &self,
         offset: Offset,
-        message_tags: Option<Arc<[String]>>,
+        response_tags: Vec<Option<Arc<[String]>>>,
     ) -> Result<()> {
-        let responses: Option<Vec<String>> = match (self.enable_callbacks, message_tags) {
-            (true, Some(tags)) => {
-                if !tags.is_empty() {
-                    Some(tags.iter().cloned().collect::<Vec<String>>())
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        };
+        let responses = response_tags
+            .into_iter()
+            .map(|tags| tags.map(|tags| tags.iter().map(|tag| tag.to_string()).collect()))
+            .collect();
         let message = ActorMessage::Update { offset, responses };
         self.sender
             .send(message)
@@ -390,9 +397,29 @@ impl TrackerHandle {
         Ok(())
     }
 
+    pub(crate) async fn append(
+        &self,
+        offset: Offset,
+        message_tags: Option<Arc<[String]>>,
+    ) -> Result<()> {
+        let tags: Option<Vec<String>> = match message_tags {
+            Some(tags) => Some(tags.to_vec()),
+            None => None,
+        };
+        let message = ActorMessage::Append {
+            offset,
+            response: tags,
+        };
+        self.sender
+            .send(message)
+            .await
+            .map_err(|e| Error::Tracker(format!("{:?}", e)))?;
+        Ok(())
+    }
+
     /// Updates the EOF status for an offset in the Tracker
-    pub(crate) async fn update_eof(&self, offset: Offset) -> Result<()> {
-        let message = ActorMessage::UpdateEOF { offset };
+    pub(crate) async fn eof(&self, offset: Offset) -> Result<()> {
+        let message = ActorMessage::EOF { offset };
         self.sender
             .send(message)
             .await
@@ -523,10 +550,10 @@ mod tests {
 
         // Update the message
         handle
-            .update(message.offset.clone(), message.tags.clone())
+            .update(message.offset.clone(), vec![message.tags.clone()])
             .await
             .unwrap();
-        handle.update_eof(message.offset.clone()).await.unwrap();
+        handle.eof(message.offset.clone()).await.unwrap();
 
         // Delete the message
         handle.delete(message.offset).await.unwrap();
@@ -566,7 +593,7 @@ mod tests {
         // Update the message with a count of 3
         for message in messages {
             handle
-                .update(message.offset.clone(), message.tags.clone())
+                .update(message.offset.clone(), vec![message.tags.clone()])
                 .await
                 .unwrap();
         }
@@ -646,7 +673,7 @@ mod tests {
         let messages: Vec<Message> = std::iter::repeat(message.clone()).take(3).collect();
         for message in messages {
             handle
-                .update(message.offset.clone(), message.tags.clone())
+                .update(message.offset.clone(), vec![message.tags.clone()])
                 .await
                 .unwrap();
         }
@@ -744,7 +771,7 @@ mod tests {
 
         // Insert a new message
         handle.insert(&message, ack_send).await.unwrap();
-        handle.update_eof(offset).await.unwrap();
+        handle.eof(offset).await.unwrap();
 
         // Verify that the message was discarded and Ack was received
         let result = timeout(Duration::from_secs(1), ack_recv).await.unwrap();

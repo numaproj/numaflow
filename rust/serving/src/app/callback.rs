@@ -1,5 +1,5 @@
 use axum::{body::Bytes, extract::State, http::HeaderMap, routing, Json, Router};
-use tracing::error;
+use tracing::{error, info};
 
 use self::store::Store;
 use crate::app::response::ApiError;
@@ -61,6 +61,7 @@ async fn callback<T: Send + Sync + Clone + Store>(
     State(app_state): State<CallbackAppState<T>>,
     Json(payload): Json<Vec<Callback>>,
 ) -> Result<(), ApiError> {
+    info!(?payload, "Received callback request");
     app_state
         .callback_state
         .clone()

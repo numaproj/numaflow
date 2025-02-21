@@ -422,15 +422,17 @@ impl MapHandle {
                     match result {
                         Ok(Ok(mapped_messages)) => {
                             // update the tracker with the number of messages sent and send the mapped messages
-                            for message in mapped_messages.iter() {
-                                tracker_handle
-                                    .update(offset.clone(), message.tags.clone())
-                                    .await
-                                    .expect("failed to update tracker");
-                            }
+                            tracker_handle
+                                .update(
+                                    offset.clone(),
+                                    mapped_messages.iter().map(|m| m.tags.clone()).collect(),
+                                )
+                                .await
+                                .expect("failed to update tracker");
+
                             // done with the batch
                             tracker_handle
-                                .update_eof(offset)
+                                .eof(offset)
                                 .await
                                 .expect("failed to update eof");
                             // send messages downstream
@@ -504,12 +506,15 @@ impl MapHandle {
                         if offset.is_none() {
                             offset = Some(message.offset.clone());
                         }
-                        tracker_handle
-                            .update(message.offset.clone(), message.tags.clone())
-                            .await?;
                     }
                     if let Some(offset) = offset {
-                        tracker_handle.update_eof(offset).await?;
+                        tracker_handle
+                            .update(
+                                offset.clone(),
+                                mapped_messages.iter().map(|m| m.tags.clone()).collect(),
+                            )
+                            .await?;
+                        tracker_handle.eof(offset).await?;
                     }
                     for mapped_message in mapped_messages {
                         output_tx
@@ -570,13 +575,19 @@ impl MapHandle {
                 return;
             }
 
+            // we need update the tracker with no responses, because unlike unary and batch, we cannot update the
+            // responses here we will have to append the responses.
+            tracker_handle
+                .update(read_msg.offset.clone(), vec![])
+                .await
+                .expect("failed to update tracker");
             loop {
                 tokio::select! {
                     result = receiver.recv() => {
                         match result {
                             Some(Ok(mapped_message)) => {
                                 tracker_handle
-                                    .update(mapped_message.offset.clone(), mapped_message.tags.clone())
+                                    .append(mapped_message.offset.clone(), mapped_message.tags.clone())
                                     .await
                                     .expect("failed to update tracker");
                                 output_tx.send(mapped_message).await.expect("failed to send response");
@@ -607,7 +618,7 @@ impl MapHandle {
             }
 
             tracker_handle
-                .update_eof(read_msg.offset)
+                .eof(read_msg.offset)
                 .await
                 .expect("failed to update eof");
         });

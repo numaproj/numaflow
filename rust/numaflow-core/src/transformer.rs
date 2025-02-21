@@ -161,12 +161,16 @@ impl Transformer {
                     .await?;
 
                     // update the tracker with the number of responses for each message
-                    for message in transformed_messages.iter() {
-                        tracker_handle
-                            .update(read_msg.offset.clone(), message.tags.clone())
-                            .await?;
-                    }
-                    tracker_handle.update_eof(read_msg.offset.clone()).await?;
+                    tracker_handle
+                        .update(
+                            read_msg.offset.clone(),
+                            transformed_messages
+                                .iter()
+                                .map(|m| m.tags.clone())
+                                .collect(),
+                        )
+                        .await?;
+                    tracker_handle.eof(read_msg.offset.clone()).await?;
 
                     Ok::<Vec<Message>, Error>(transformed_messages)
                 })
