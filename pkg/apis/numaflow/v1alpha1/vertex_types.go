@@ -231,6 +231,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	for _, vtx := range req.PipelineSpec.Vertices {
 		if vtx.IsASource() && vtx.Source.Serving != nil {
 			commonEnvVars = append(commonEnvVars, corev1.EnvVar{Name: EnvCallbackEnabled, Value: "true"})
+			commonEnvVars = append(commonEnvVars, req.ServingEnv...)
 		}
 	}
 
