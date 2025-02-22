@@ -76,7 +76,8 @@ impl ServingSourceActor {
 
         let callback_url = format!(
             "https://{}:{}/v1/process/callback",
-            &settings.host_ip, &settings.app_listen_port
+            &settings.host_ip,
+            &settings.app_listen_port + 1
         );
         tokio::spawn(async move {
             let mut serving_actor = ServingSourceActor {

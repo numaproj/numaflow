@@ -55,6 +55,21 @@ where
         .parse()
         .map_err(|e| InitError(format!("{e:?}")))?;
 
+    let callback_app_addr: SocketAddr = format!("0.0.0.0:{}", &app.settings.app_listen_port + 1)
+        .parse()
+        .map_err(|e| InitError(format!("{e:?}")))?;
+    let callback_app_state = app.clone();
+    let callback_router = setup_callback_app(callback_app_state).await?;
+    let callback_tls_config = tls_config.clone();
+    tokio::spawn(async move {
+        tracing::info!(?callback_app_addr, "Starting callback server");
+        axum_server::bind_rustls(callback_app_addr, callback_tls_config)
+            .serve(callback_router.into_make_service())
+            .await
+            .map_err(|e| InitError(format!("Starting web server for metrics: {}", e)))
+            .unwrap();
+    });
+
     let handle = Handle::new();
     // Spawn a task to gracefully shutdown server.
     tokio::spawn(graceful_shutdown(
@@ -211,6 +226,17 @@ async fn auth_middleware(
     }
 }
 
+async fn setup_callback_app<T: Clone + Send + Sync + Store + 'static>(
+    app: AppState<T>,
+) -> crate::Result<Router> {
+    let parent = Router::new().with_state(app.clone());
+    let callback_router =
+        callback_handler(app.settings.tid_header.clone(), app.callback_state.clone());
+    let app = parent.nest("/v1/process", callback_router);
+
+    Ok(app)
+}
+
 async fn setup_app<T: Clone + Send + Sync + Store + 'static>(
     app: AppState<T>,
 ) -> crate::Result<Router> {
@@ -259,14 +285,8 @@ async fn routes<T: Clone + Send + Sync + Store + 'static>(
 ) -> crate::Result<Router> {
     let state = app_state.callback_state.clone();
     let jetstream_proxy = jetstream_proxy(app_state.clone()).await?;
-    let callback_router = callback_handler(
-        app_state.settings.tid_header.clone(),
-        app_state.callback_state.clone(),
-    );
     let message_path_handler = get_message_path(state);
-    Ok(jetstream_proxy
-        .merge(callback_router)
-        .merge(message_path_handler))
+    Ok(jetstream_proxy.merge(message_path_handler))
 }
 
 #[cfg(test)]
