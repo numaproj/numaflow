@@ -2498,6 +2498,7 @@ rather than each item in separate calls.</p>
 Each Datum has a unique ID tag, which will be used by Numaflow to ensure correctness.</li>
 <li>Ensure that the length of the BatchResponses list is equal to the number of requests received. This means that for 
 every input data item, there should be a corresponding response in the BatchResponses list.</li>
+<li>The total batch size can be up to <code>readBatchSize</code> long.</li>
 </ul>
 <p>Check the links below to see the UDF examples in batch mode for different languages.</p>
 <ul>
