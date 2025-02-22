@@ -55,22 +55,28 @@ where
         .parse()
         .map_err(|e| InitError(format!("{e:?}")))?;
 
+    let handle = Handle::new();
+
     let callback_app_addr: SocketAddr = format!("0.0.0.0:{}", &app.settings.app_listen_port + 1)
         .parse()
         .map_err(|e| InitError(format!("{e:?}")))?;
     let callback_app_state = app.clone();
     let callback_router = setup_callback_app(callback_app_state).await?;
     let callback_tls_config = tls_config.clone();
+    let app_server_handle = handle.clone();
+
     tokio::spawn(async move {
         tracing::info!(?callback_app_addr, "Starting callback server");
-        axum_server::bind_rustls(callback_app_addr, callback_tls_config)
+        let server = axum_server::bind_rustls(callback_app_addr, callback_tls_config)
             .serve(callback_router.into_make_service())
-            .await
-            .map_err(|e| InitError(format!("Starting web server for metrics: {}", e)))
-            .unwrap();
+            .await;
+        if let Err(e) = server {
+            tracing::error!(?e, "Failed to run callback server");
+        }
+        tracing::error!("Callback server is stoppped, shutting down app server");
+        app_server_handle.shutdown();
     });
 
-    let handle = Handle::new();
     // Spawn a task to gracefully shutdown server.
     tokio::spawn(graceful_shutdown(
         handle.clone(),
@@ -85,7 +91,7 @@ where
         .handle(handle)
         .serve(router.into_make_service())
         .await
-        .map_err(|e| InitError(format!("Starting web server for metrics: {}", e)))?;
+        .map_err(|e| InitError(format!("Starting web server: {}", e)))?;
 
     Ok(())
 }
