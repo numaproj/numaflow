@@ -493,6 +493,9 @@ type PipelineSpec struct {
 	// SideInputs defines the Side Inputs of a pipeline.
 	// +optional
 	SideInputs []SideInput `json:"sideInputs,omitempty" protobuf:"bytes,8,rep,name=sideInputs"`
+	// ServingStore defines the Serving Store for this pipeline.
+	// +optional
+	ServingStore *ServingStore `json:"servingStore,omitempty" protobuf:"bytes,9,rep,name=servingStore"`
 }
 
 func (pipeline PipelineSpec) GetMatchingVertices(f func(AbstractVertex) bool) map[string]*AbstractVertex {
@@ -522,6 +525,14 @@ func (pipeline PipelineSpec) GetSinksByName() map[string]*AbstractVertex {
 	return pipeline.GetMatchingVertices(func(v AbstractVertex) bool {
 		return v.IsASink()
 	})
+}
+
+func (pipeline PipelineSpec) GetStoreSpec(storeName string) *ServingStore {
+	// No serving store defined, we don't need to check further
+	if pipeline.ServingStore == nil || pipeline.ServingStore.Name != storeName {
+		return nil
+	}
+	return pipeline.ServingStore
 }
 
 type Watermark struct {

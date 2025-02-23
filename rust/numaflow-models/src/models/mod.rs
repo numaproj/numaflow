@@ -14,6 +14,8 @@ pub mod blackhole;
 pub use self::blackhole::Blackhole;
 pub mod buffer_service_config;
 pub use self::buffer_service_config::BufferServiceConfig;
+pub mod built_in_serving_store;
+pub use self::built_in_serving_store::BuiltInServingStore;
 pub mod combined_edge;
 pub use self::combined_edge::CombinedEdge;
 pub mod container;

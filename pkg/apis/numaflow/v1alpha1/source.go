@@ -58,6 +58,9 @@ func (s Source) getContainers(req getContainerReq) ([]corev1.Container, []corev1
 	if s.UDSource != nil {
 		sidecarContainers = append(sidecarContainers, s.getUDSourceContainer(req))
 	}
+	if req.servingStore != nil && req.servingStore.Container != nil {
+		sidecarContainers = append(sidecarContainers, req.servingStore.getUDStoreContainer(req))
+	}
 	return sidecarContainers, containers, nil
 }
 
