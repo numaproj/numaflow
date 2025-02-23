@@ -66,6 +66,7 @@ When using BatchMap, there are a few important considerations to keep in mind:
 Each Datum has a unique ID tag, which will be used by Numaflow to ensure correctness.
 - Ensure that the length of the BatchResponses list is equal to the number of requests received. This means that for 
 every input data item, there should be a corresponding response in the BatchResponses list.
+- The total batch size can be up to `readBatchSize` long.
 
 Check the links below to see the UDF examples in batch mode for different languages.
 
