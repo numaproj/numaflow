@@ -206,6 +206,10 @@ message AbstractVertex {
   // +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
   // +optional
   optional UpdateStrategy updateStrategy = 16;
+
+  // Names of the serving store used in this vertex.
+  // +optional
+  optional string servingStoreName = 17;
 }
 
 message Authorization {
@@ -1245,6 +1249,10 @@ message PipelineSpec {
   // SideInputs defines the Side Inputs of a pipeline.
   // +optional
   repeated SideInput sideInputs = 8;
+
+  // ServingStore defines the Serving Store for this pipeline.
+  // +optional
+  optional ServingStore servingStore = 9;
 }
 
 message PipelineStatus {
@@ -1543,19 +1551,13 @@ message ServingSource {
 
   // The header key from which the message id will be extracted
   optional string msgIDHeaderKey = 3;
-
-  // Persistent store for the callbacks for serving and tracking
-  optional ServingStore store = 4;
 }
 
-// ServingStore to track and store data and metadata for tracking and serving.
+// ServingStore defines information of a Serving Store used in a pipeline
 message ServingStore {
-  // URL of the persistent store to write the callbacks
-  optional string url = 1;
+  optional string name = 1;
 
-  // TTL for the data in the store and tracker
-  // +optional
-  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration ttl = 2;
+  optional Container container = 2;
 }
 
 // SessionWindow describes a session window
