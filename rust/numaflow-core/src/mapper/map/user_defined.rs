@@ -1,10 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::config::get_vertex_name;
-use crate::error::{Error, Result};
-use crate::message::{Message, MessageID, Offset};
-use crate::shared::grpc::prost_timestamp_from_utc;
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::map::{self, map_client::MapClient, MapRequest, MapResponse};
 use tokio::sync::Mutex;
@@ -13,6 +9,11 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 use tracing::error;
+
+use crate::config::get_vertex_name;
+use crate::error::{Error, Result};
+use crate::message::{Message, MessageID, Offset};
+use crate::shared::grpc::prost_timestamp_from_utc;
 
 type ResponseSenderMap =
     Arc<Mutex<HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>>>;

@@ -1,19 +1,7 @@
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
-use tracing::warn;
 
-use crate::config::get_vertex_name;
-use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
-use crate::error::Error;
-use crate::message::{IntOffset, Message, MessageID, MessageType, Metadata, Offset, ReadAck};
-use crate::metrics::{
-    pipeline_forward_metric_labels, pipeline_isb_metric_labels, pipeline_metrics,
-};
-use crate::shared::grpc::utc_from_timestamp;
-use crate::tracker::TrackerHandle;
-use crate::watermark::isb::ISBWatermarkHandle;
-use crate::{metrics, Result};
 use async_nats::jetstream::{
     consumer::PullConsumer, AckKind, Context, Message as JetstreamMessage,
 };
@@ -26,7 +14,20 @@ use tokio::time::{self, Instant};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
+use tracing::warn;
 use tracing::{error, info};
+
+use crate::config::get_vertex_name;
+use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
+use crate::error::Error;
+use crate::message::{IntOffset, Message, MessageID, MessageType, Metadata, Offset, ReadAck};
+use crate::metrics::{
+    pipeline_forward_metric_labels, pipeline_isb_metric_labels, pipeline_metrics,
+};
+use crate::shared::grpc::utc_from_timestamp;
+use crate::tracker::TrackerHandle;
+use crate::watermark::isb::ISBWatermarkHandle;
+use crate::{metrics, Result};
 
 const ACK_RETRY_INTERVAL: u64 = 100;
 const ACK_RETRY_ATTEMPTS: usize = usize::MAX;

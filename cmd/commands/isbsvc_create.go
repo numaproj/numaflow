@@ -36,11 +36,11 @@ import (
 func NewISBSvcCreateCommand() *cobra.Command {
 
 	var (
-		isbSvcType           string
-		buffers              []string
-		buckets              []string
-		sideInputsStore      string
-		servingSourceStreams []string
+		isbSvcType         string
+		buffers            []string
+		buckets            []string
+		sideInputsStore    string
+		servingSourceStore string
 	)
 
 	command := &cobra.Command{
@@ -89,7 +89,7 @@ func NewISBSvcCreateCommand() *cobra.Command {
 				return fmt.Errorf("unsupported isb service type %q", isbSvcType)
 			}
 
-			if err = isbsClient.CreateBuffersAndBuckets(ctx, buffers, buckets, sideInputsStore, servingSourceStreams, opts...); err != nil {
+			if err = isbsClient.CreateBuffersAndBuckets(ctx, buffers, buckets, sideInputsStore, servingSourceStore, opts...); err != nil {
 				logger.Errorw("Failed to create buffers, buckets and side inputs store.", zap.Error(err))
 				return err
 			}
@@ -102,6 +102,6 @@ func NewISBSvcCreateCommand() *cobra.Command {
 	command.Flags().StringSliceVar(&buffers, "buffers", []string{}, "Buffers to create") // --buffers=a,b, --buffers=c
 	command.Flags().StringSliceVar(&buckets, "buckets", []string{}, "Buckets to create") // --buckets=xxa,xxb --buckets=xxc
 	command.Flags().StringVar(&sideInputsStore, "side-inputs-store", "", "Name of the side inputs store")
-	command.Flags().StringSliceVar(&servingSourceStreams, "serving-source-streams", []string{}, "Serving source streams to create") // --serving-source-streams=a,b, --serving-source-streams=c
+	command.Flags().StringVar(&servingSourceStore, "serving-source-store", "", "Serving source streams to create") // --serving-source-store=a
 	return command
 }

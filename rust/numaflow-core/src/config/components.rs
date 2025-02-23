@@ -13,6 +13,7 @@ pub(crate) mod source {
     use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
     use tracing::warn;
 
+    use crate::config::{get_namespace, get_pipeline_name, get_vertex_name};
     use crate::error::Error;
     use crate::Result;
 
@@ -126,7 +127,7 @@ pub(crate) mod source {
                     .map_err(|e| Error::Config(format!("Reading API auth token secret: {e:?}")))?;
                     settings.api_auth_token = Some(secret);
                 } else {
-                    tracing::warn!("Authentication token for Serving API is specified, but the secret is empty");
+                    warn!("Authentication token for Serving API is specified, but the secret is empty");
                 };
             }
 
@@ -146,6 +147,8 @@ pub(crate) mod source {
                 }
                 settings.redis.ttl_secs = Some(ttl_secs);
             }
+            settings.js_store =
+                format!("{}-{}_SERVING_STORE", get_namespace(), get_pipeline_name(),);
             settings.redis.addr = cfg.store.url;
             settings.drain_timeout_secs = cfg.request_timeout_seconds.unwrap_or(120).max(1) as u64; // Ensure timeout is atleast 1 second
 

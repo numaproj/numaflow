@@ -14,15 +14,16 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use chrono::{DateTime, Utc};
+use serving::callback::CallbackHandler;
+use serving::DEFAULT_ID_HEADER;
+use tokio::sync::{mpsc, oneshot};
+use tracing::error;
+
 use crate::error::Error;
 use crate::message::{Message, Offset, ReadAck};
 use crate::watermark::isb::ISBWatermarkHandle;
 use crate::Result;
-use chrono::{DateTime, Utc};
-use serving::callback::CallbackHandler;
-use serving::{DEFAULT_CALLBACK_URL_HEADER_KEY, DEFAULT_ID_HEADER};
-use tokio::sync::{mpsc, oneshot};
-use tracing::error;
 
 /// TrackerEntry represents the state of a tracked message.
 #[derive(Debug)]
@@ -82,7 +83,6 @@ struct Tracker {
 #[derive(Debug)]
 struct ServingCallbackInfo {
     id: String,
-    callback_url: String,
     from_vertex: String,
     /// at the moment these are just tags.
     responses: Vec<Option<Vec<String>>>,
@@ -92,15 +92,6 @@ impl TryFrom<&Message> for ServingCallbackInfo {
     type Error = Error;
 
     fn try_from(message: &Message) -> std::result::Result<Self, Self::Error> {
-        let callback_url = message
-            .headers
-            .get(DEFAULT_CALLBACK_URL_HEADER_KEY)
-            .ok_or_else(|| {
-                Error::Source(format!(
-                    "{DEFAULT_CALLBACK_URL_HEADER_KEY} header is not present in the message headers",
-                ))
-            })?
-            .to_owned();
         let uuid = message
             .headers
             .get(DEFAULT_ID_HEADER)
@@ -120,7 +111,6 @@ impl TryFrom<&Message> for ServingCallbackInfo {
 
         Ok(ServingCallbackInfo {
             id: uuid,
-            callback_url,
             from_vertex,
             responses: vec![None],
         })
@@ -319,7 +309,6 @@ impl Tracker {
         let result = callback_handler
             .callback(
                 callback_info.id,
-                callback_info.callback_url,
                 callback_info.from_vertex,
                 callback_info.responses,
             )
@@ -464,11 +453,10 @@ impl TrackerHandle {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
 
-    use axum::routing::{get, post};
-    use axum::{http::StatusCode, Router};
+    use async_nats::jetstream;
+    use async_nats::jetstream::kv::Config;
     use bytes::Bytes;
     use tokio::sync::oneshot;
     use tokio::time::{timeout, Duration};
@@ -502,13 +490,10 @@ mod tests {
         assert!(callback_info.is_err());
 
         const CALLBACK_URL: &str = "https://localhost/v1/process/callback";
-        let headers = [
-            (DEFAULT_CALLBACK_URL_HEADER_KEY, CALLBACK_URL),
-            (DEFAULT_ID_HEADER, "1234"),
-        ]
-        .into_iter()
-        .map(|(k, v)| (k.to_string(), v.to_string()))
-        .collect();
+        let headers = [(DEFAULT_ID_HEADER, "1234")]
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
         message.headers = headers;
 
         const FROM_VERTEX_NAME: &str = "source-vertex";
@@ -518,7 +503,6 @@ mod tests {
 
         let callback_info: ServingCallbackInfo = TryFrom::try_from(&message).unwrap();
         assert_eq!(callback_info.id, "1234");
-        assert_eq!(callback_info.callback_url, CALLBACK_URL);
         assert_eq!(callback_info.from_vertex, FROM_VERTEX_NAME);
         assert_eq!(callback_info.responses, vec![None]);
     }
@@ -688,66 +672,29 @@ mod tests {
         assert!(handle.is_empty().await.unwrap(), "Tracker should be empty");
     }
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_tracker_with_callback_handler() -> Result<()> {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let port = listener
-            .local_addr()
-            .map_err(|e| format!("Failed to bind to 127.0.0.1:0: error={e:?}"))?
-            .port();
+        let store_name = "test_tracker_with_callback_handler";
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+        let callback_bucket = js_context
+            .create_key_value(Config {
+                bucket: store_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
 
-        let server_addr = format!("127.0.0.1:{port}");
-        let callback_url = format!("http://{server_addr}/v1/process/callback");
+        let callback_handler =
+            CallbackHandler::new("test".into(), js_context.clone(), store_name, 10).await;
 
-        let request_count = Arc::new(AtomicUsize::new(0));
-        let router = Router::new()
-            .route("/livez", get(|| async { StatusCode::OK }))
-            .route(
-                "/v1/process/callback",
-                post({
-                    let req_count = Arc::clone(&request_count);
-                    || async move {
-                        req_count.fetch_add(1, Ordering::Relaxed);
-                        StatusCode::OK
-                    }
-                }),
-            );
-
-        let server = tokio::spawn(async move {
-            axum::serve(listener, router).await.unwrap();
-        });
-
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(2))
-            .build()?;
-
-        // Wait for the server to be ready
-        let mut server_ready = false;
-        let health_url = format!("http://{server_addr}/livez");
-        for _ in 0..10 {
-            let Ok(resp) = client.get(&health_url).send().await else {
-                tokio::time::sleep(Duration::from_millis(5)).await;
-                continue;
-            };
-            if resp.status().is_success() {
-                server_ready = true;
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(5)).await;
-        }
-        assert!(server_ready, "Server is not ready");
-
-        let callback_handler = CallbackHandler::new("test".into(), 10);
         let handle = TrackerHandle::new(None, Some(callback_handler));
         let (ack_send, ack_recv) = oneshot::channel();
 
-        let headers = [
-            (DEFAULT_CALLBACK_URL_HEADER_KEY, callback_url),
-            (DEFAULT_ID_HEADER, "1234".into()),
-        ]
-        .into_iter()
-        .map(|(k, v)| (k.to_string(), v.to_string()))
-        .collect();
+        let mut headers = HashMap::new();
+        headers.insert(DEFAULT_ID_HEADER.to_string(), "1234".to_string());
 
         let offset = Offset::String(StringOffset::new("offset1".to_string(), 0));
         let message = Message {
@@ -779,17 +726,16 @@ mod tests {
         assert_eq!(result.unwrap(), ReadAck::Ack);
         assert!(handle.is_empty().await.unwrap(), "Tracker should be empty");
 
-        // Callback request is made after sending data on ack_send channel.
-        let mut received_callback_request = false;
-        for _ in 0..5 {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-            received_callback_request = request_count.load(Ordering::Relaxed) == 1;
-            if received_callback_request {
-                break;
-            }
-        }
-        assert!(received_callback_request, "Expected one callback request");
-        server.abort();
+        // Verify that the callback was written to the KV store
+        let callback_key = "1234";
+        let callback_value = callback_bucket.get(callback_key).await.unwrap();
+        assert!(
+            callback_value.is_some(),
+            "Callback should be written to the KV store"
+        );
+
+        // Clean up the KV store
+        js_context.delete_key_value(store_name).await.unwrap();
         Ok(())
     }
 }

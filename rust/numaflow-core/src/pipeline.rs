@@ -152,9 +152,19 @@ async fn start_source_forwarder(
     source_config: SourceVtxConfig,
     source_watermark_handle: Option<SourceWatermarkHandle>,
 ) -> Result<()> {
-    let serving_callback_handler = config.callback_config.as_ref().map(|cb_cfg| {
-        CallbackHandler::new(config.vertex_name.to_string(), cb_cfg.callback_concurrency)
-    });
+    let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
+        Some(
+            CallbackHandler::new(
+                config.vertex_name.to_string(),
+                js_context.clone(),
+                cb_cfg.callback_store,
+                cb_cfg.callback_concurrency,
+            )
+            .await,
+        )
+    } else {
+        None
+    };
     let tracker_handle = TrackerHandle::new(None, serving_callback_handler);
 
     let buffer_writer = create_buffer_writer(
@@ -175,6 +185,7 @@ async fn start_source_forwarder(
     .await?;
 
     let (source, source_grpc_client) = create_components::create_source(
+        Some(js_context.clone()),
         config.batch_size,
         config.read_timeout,
         &source_config.source_config,
@@ -227,9 +238,19 @@ async fn start_map_forwarder(
     let mut mapper_grpc_client = None;
     let mut isb_lag_readers = vec![];
 
-    let serving_callback_handler = config.callback_config.as_ref().map(|cb_cfg| {
-        CallbackHandler::new(config.vertex_name.to_string(), cb_cfg.callback_concurrency)
-    });
+    let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
+        Some(
+            CallbackHandler::new(
+                config.vertex_name.to_string(),
+                js_context.clone(),
+                cb_cfg.callback_store,
+                cb_cfg.callback_concurrency,
+            )
+            .await,
+        )
+    } else {
+        None
+    };
 
     // create tracker and buffer writer, they can be shared across all forwarders
     let tracker_handle =
@@ -326,9 +347,19 @@ async fn start_sink_forwarder(
         .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
         .reader_config;
 
-    let serving_callback_handler = config.callback_config.as_ref().map(|cb_cfg| {
-        CallbackHandler::new(config.vertex_name.to_string(), cb_cfg.callback_concurrency)
-    });
+    let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
+        Some(
+            CallbackHandler::new(
+                config.vertex_name.to_string(),
+                js_context.clone(),
+                cb_cfg.callback_store,
+                cb_cfg.callback_concurrency,
+            )
+            .await,
+        )
+    } else {
+        None
+    };
 
     // Create sink writers and buffer readers for each stream
     let mut sink_writers = vec![];

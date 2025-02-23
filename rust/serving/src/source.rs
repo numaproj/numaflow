@@ -2,12 +2,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use async_nats::jetstream::Context;
 use bytes::Bytes;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
 
+use crate::app::callback::cbstore::jetstreamstore::JSCallbackStore;
+use crate::app::callback::datumstore::redisstore::RedisConnection;
 use crate::app::callback::state::State as CallbackState;
-use crate::app::callback::store::redisstore::RedisConnection;
 use crate::app::tracker::MessageGraph;
 use crate::config::{DEFAULT_CALLBACK_URL_HEADER_KEY, DEFAULT_ID_HEADER};
 use crate::Settings;
@@ -56,6 +58,7 @@ struct ServingSourceActor {
 
 impl ServingSourceActor {
     async fn start(
+        js_context: Context,
         settings: Arc<Settings>,
         handler_rx: mpsc::Receiver<ActorMessage>,
         request_channel_buffer_size: usize,
@@ -72,7 +75,8 @@ impl ServingSourceActor {
                 e
             ))
         })?;
-        let callback_state = CallbackState::new(msg_graph, redis_store).await?;
+        let callback_store = JSCallbackStore::new(js_context, &settings.js_store).await?;
+        let callback_state = CallbackState::new(msg_graph, redis_store, callback_store).await?;
 
         let callback_url = format!(
             "https://{}:{}/v1/process/callback",
@@ -191,13 +195,21 @@ pub struct ServingSource {
 
 impl ServingSource {
     pub async fn new(
+        context: Context,
         settings: Arc<Settings>,
         batch_size: usize,
         timeout: Duration,
         vertex_replica_id: u16,
     ) -> Result<Self> {
         let (actor_tx, actor_rx) = mpsc::channel(2 * batch_size);
-        ServingSourceActor::start(settings, actor_rx, 2 * batch_size, vertex_replica_id).await?;
+        ServingSourceActor::start(
+            context,
+            settings,
+            actor_rx,
+            2 * batch_size,
+            vertex_replica_id,
+        )
+        .await?;
         Ok(Self {
             batch_size,
             timeout,
@@ -241,18 +253,34 @@ impl ServingSource {
 mod tests {
     use std::{sync::Arc, time::Duration};
 
+    use async_nats::jetstream;
+
     use super::ServingSource;
     use crate::Settings;
 
     type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
     #[tokio::test]
     async fn test_serving_source() -> Result<()> {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+
         // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
-        let settings = Arc::new(Settings::default());
-        let serving_source =
-            ServingSource::new(Arc::clone(&settings), 10, Duration::from_millis(1), 0).await?;
+        let mut settings = Arc::new(Settings {
+            js_store: "test_serving_source".to_string(),
+            ..Default::default()
+        });
+
+        let serving_source = ServingSource::new(
+            context,
+            Arc::clone(&settings),
+            10,
+            Duration::from_millis(1),
+            0,
+        )
+        .await?;
 
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(2))

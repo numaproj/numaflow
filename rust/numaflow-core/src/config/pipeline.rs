@@ -60,6 +60,7 @@ pub(crate) struct PipelineConfig {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ServingCallbackConfig {
+    pub(crate) callback_store: &'static str,
     pub(crate) callback_concurrency: usize,
 }
 
@@ -439,6 +440,9 @@ impl PipelineConfig {
                     ))
                 })?;
             callback_config = Some(ServingCallbackConfig {
+                callback_store: Box::leak(
+                    format!("{}-{}_SERVING_STORE", namespace, pipeline_name).into_boxed_str(),
+                ),
                 callback_concurrency,
             });
         }

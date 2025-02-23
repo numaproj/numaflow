@@ -3,34 +3,42 @@ kind: Pipeline
 metadata:
   name: simple-pipeline
 spec:
-  templates:
-    vertex:
-      metadata:
-        annotations:
-          numaflow.numaproj.io/callback: "true"
   vertices:
-    - name: in
+    - name: serving-in
       scale:
         min: 1
       source:
         serving:
           service: true
-          msgIDHeaderKey: "X-Request-ID"
+          msgIDHeaderKey: "X-Numaflow-Id"
           store:
             url: "redis://redis:6379"
+
     - name: cat
       scale:
         min: 1
       udf:
-        builtin:
-          name: cat # A built-in UDF which simply cats the message
-    - name: out
+        container:
+          image: quay.io/numaio/numaflow-go/map-forward-message:stable
+          env:
+            - name: RUST_BACKTRACE
+              value: "1"
+
+    - name: serve-sink
       scale:
         min: 1
       sink:
-        log: {}
+        udsink:
+          container:
+            image: docker.intuit.com/quay-rmt/numaio/servesink:v1.5.0-alpha1
+            env:
+              - name: NUMAFLOW_CALLBACK_URL_KEY
+                value: "X-Numaflow-Callback-Url"
+              - name: NUMAFLOW_MSG_ID_HEADER_KEY
+                value: "X-Numaflow-Id"
+
   edges:
-    - from: in
+    - from: serving-in
       to: cat
     - from: cat
-      to: out
+      to: serve-sink

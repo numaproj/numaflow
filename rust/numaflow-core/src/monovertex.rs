@@ -1,4 +1,3 @@
-use serving::callback::CallbackHandler;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -24,11 +23,12 @@ pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
     config: &MonovertexConfig,
 ) -> error::Result<()> {
-    let callback_handler = config
-        .callback_config
-        .as_ref()
-        .map(|cb_cfg| CallbackHandler::new(config.name.clone(), cb_cfg.callback_concurrency));
-    let tracker_handle = TrackerHandle::new(None, callback_handler);
+    // FIXME: (serving)
+    // let callback_handler = config
+    //     .callback_config
+    //     .as_ref()
+    //     .map(|cb_cfg| CallbackHandler::new(config.name.clone(), cb_cfg.callback_concurrency));
+    let tracker_handle = TrackerHandle::new(None, None);
 
     let (transformer, transformer_grpc_client) = create_components::create_transformer(
         config.batch_size,
@@ -39,6 +39,7 @@ pub(crate) async fn start_forwarder(
     .await?;
 
     let (source, source_grpc_client) = create_components::create_source(
+        None,
         config.batch_size,
         config.read_timeout,
         &config.source_config,

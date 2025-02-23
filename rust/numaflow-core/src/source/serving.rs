@@ -87,6 +87,7 @@ impl super::LagReader for ServingSource {
 mod tests {
     use std::{collections::HashMap, sync::Arc, time::Duration};
 
+    use async_nats::jetstream;
     use bytes::Bytes;
     use serving::{ServingSource, Settings};
 
@@ -139,19 +140,24 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "redis-tests")]
+    #[cfg(all(feature = "redis-tests", feature = "nats-tests"))]
     #[tokio::test]
     async fn test_serving_source_reader_acker() -> Result<()> {
         let settings = Settings {
             app_listen_port: 2000,
             ..Default::default()
         };
+
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+
         let settings = Arc::new(settings);
         // Set up the CryptoProvider (controls core cryptography used by rustls) for the process
         // ServingSource starts an Axum HTTPS server in the background. Rustls is used to generate
         // self-signed certs when starting the server.
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
         let mut serving_source = ServingSource::new(
+            js_context,
             Arc::clone(&settings),
             10,
             Duration::from_millis(1),

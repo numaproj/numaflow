@@ -7,7 +7,10 @@ use numaflow_models::models::MonoVertex;
 use serde_json::from_slice;
 
 use super::pipeline::ServingCallbackConfig;
-use super::{DEFAULT_CALLBACK_CONCURRENCY, ENV_CALLBACK_CONCURRENCY, ENV_CALLBACK_ENABLED};
+use super::{
+    get_namespace, get_pipeline_name, get_vertex_name, DEFAULT_CALLBACK_CONCURRENCY,
+    ENV_CALLBACK_CONCURRENCY, ENV_CALLBACK_ENABLED,
+};
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::source::{GeneratorConfig, SourceConfig};
@@ -158,6 +161,11 @@ impl MonovertexConfig {
                     ))
                 })?;
             callback_config = Some(ServingCallbackConfig {
+                callback_store: Box::leak(Box::new(format!(
+                    "{}-{}_SERVING_STORE",
+                    get_namespace(),
+                    get_pipeline_name(),
+                ))),
                 callback_concurrency,
             });
         }

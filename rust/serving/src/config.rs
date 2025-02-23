@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::time::Duration;
 
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use numaflow_models::models::{MonoVertex, Vertex};
 use rcgen::{generate_simple_self_signed, Certificate, CertifiedKey, KeyPair};
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
 
 use crate::{
     pipeline::PipelineDCG,
@@ -61,6 +61,7 @@ pub struct Settings {
     pub upstream_addr: String,
     pub drain_timeout_secs: u64,
     pub redis: RedisConfig,
+    pub js_store: String,
     /// The IP address of the numaserve pod. This will be used to construct the value for X-Numaflow-Callback-Url header
     pub host_ip: String,
     pub api_auth_token: Option<String>,
@@ -76,6 +77,7 @@ impl Default for Settings {
             upstream_addr: "localhost:8888".to_owned(),
             drain_timeout_secs: 600,
             redis: RedisConfig::default(),
+            js_store: "kv".to_owned(),
             host_ip: "127.0.0.1".to_owned(),
             api_auth_token: None,
             pipeline_spec: Default::default(),

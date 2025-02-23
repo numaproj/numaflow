@@ -5,7 +5,6 @@
 //! [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 
 use std::sync::Arc;
-use tracing::warn;
 
 use numaflow_pulsar::source::PulsarSource;
 use numaflow_sqs::source::SQSSource;
@@ -16,6 +15,7 @@ use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
+use tracing::warn;
 use tracing::{error, info};
 
 use crate::config::{get_vertex_name, is_mono_vertex};
