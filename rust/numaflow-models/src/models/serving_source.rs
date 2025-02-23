@@ -28,15 +28,21 @@ pub struct ServingSource {
     /// Whether to create a ClusterIP Service
     #[serde(rename = "service", skip_serializing_if = "Option::is_none")]
     pub service: Option<bool>,
+    #[serde(rename = "store")]
+    pub store: Box<crate::models::BuiltInServingStore>,
 }
 
 impl ServingSource {
     /// ServingSource is the HTTP endpoint for Numaflow.
-    pub fn new(msg_id_header_key: String) -> ServingSource {
+    pub fn new(
+        msg_id_header_key: String,
+        store: crate::models::BuiltInServingStore,
+    ) -> ServingSource {
         ServingSource {
             auth: None,
             msg_id_header_key,
             service: None,
+            store: Box::new(store),
         }
     }
 }
