@@ -3,8 +3,14 @@ kind: Pipeline
 metadata:
   name: simple-pipeline
 spec:
+  servingStore:
+    name: ips
+    container:
+      image: <container-image>
+      imagePullPolicy: Always
   vertices:
     - name: serving-in
+      servingStoreName: ips
       scale:
         min: 1
       source:
@@ -29,6 +35,7 @@ spec:
               value: "1"
 
     - name: serve-sink
+      servingStoreName: ips
       scale:
         min: 1
       sink:

@@ -1233,6 +1233,92 @@ JetStreamConfig </a> </em>
 
 </table>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.BuiltInServingStore">
+
+BuiltInServingStore
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServingSource">ServingSource</a>)
+</p>
+
+<p>
+
+<p>
+
+BuiltInServingStore to track and store data and metadata for tracking
+and serving.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>url</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+URL of the persistent store to write the callbacks
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>ttl</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+TTL for the data in the store and tracker
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.CombinedEdge">
 
 CombinedEdge
@@ -9992,6 +10078,26 @@ Whether to create a ClusterIP Service
 <p>
 
 The header key from which the message id will be extracted
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>store</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.BuiltInServingStore">
+BuiltInServingStore </a> </em>
+</td>
+
+<td>
+
+<p>
+
+Persistent store for the callbacks for serving and tracking
 </p>
 
 </td>

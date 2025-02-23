@@ -209,14 +209,12 @@ impl TryFrom<HashMap<String, String>> for Settings {
         // Update tid_header from source_spec
         settings.tid_header = serving_spec.msg_id_header_key;
 
-        // TODO(fixme-store): Change based on new serving store
-        //
-        // // Update redis.addr from source_spec, currently we only support redis as callback storage
-        // settings.redis.addr = serving_spec.store.url;
-        // settings.redis.ttl_secs = match serving_spec.store.ttl {
-        //     Some(ttl) => Some(Duration::from(ttl).as_secs() as u32),
-        //     None => Some(DEFAULT_REDIS_TTL_IN_SECS),
-        // };
+        // Update redis.addr from source_spec, currently we only support redis as callback storage
+        settings.redis.addr = serving_spec.store.url;
+        settings.redis.ttl_secs = match serving_spec.store.ttl {
+            Some(ttl) => Some(Duration::from(ttl).as_secs() as u32),
+            None => Some(DEFAULT_REDIS_TTL_IN_SECS),
+        };
 
         if let Some(auth) = serving_spec.auth {
             let token = auth.token.unwrap();

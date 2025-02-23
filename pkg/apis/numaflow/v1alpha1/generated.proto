@@ -252,6 +252,16 @@ message BufferServiceConfig {
   optional JetStreamConfig jetstream = 2;
 }
 
+// BuiltInServingStore to track and store data and metadata for tracking and serving.
+message BuiltInServingStore {
+  // URL of the persistent store to write the callbacks
+  optional string url = 1;
+
+  // TTL for the data in the store and tracker
+  // +optional
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration ttl = 2;
+}
+
 // CombinedEdge is a combination of Edge and some other properties such as vertex type, partitions, limits.
 // It's used to decorate the fromEdges and toEdges of the generated Vertex objects, so that in the vertex pod,
 // it knows the properties of the connected vertices, for example, how many partitioned buffers I should write
@@ -1551,6 +1561,9 @@ message ServingSource {
 
   // The header key from which the message id will be extracted
   optional string msgIDHeaderKey = 3;
+
+  // Persistent store for the callbacks for serving and tracking
+  optional BuiltInServingStore store = 4;
 }
 
 // ServingStore defines information of a Serving Store used in a pipeline
