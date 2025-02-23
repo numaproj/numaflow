@@ -35,12 +35,15 @@ pub struct ServingSource {
     #[serde(rename = "service", skip_serializing_if = "Option::is_none")]
     pub service: Option<bool>,
     #[serde(rename = "store")]
-    pub store: Box<crate::models::ServingStore>,
+    pub store: Box<crate::models::BuiltInServingStore>,
 }
 
 impl ServingSource {
     /// ServingSource is the HTTP endpoint for Numaflow.
-    pub fn new(msg_id_header_key: String, store: crate::models::ServingStore) -> ServingSource {
+    pub fn new(
+        msg_id_header_key: String,
+        store: crate::models::BuiltInServingStore,
+    ) -> ServingSource {
         ServingSource {
             auth: None,
             msg_id_header_key,

@@ -36,6 +36,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.BasicAuth":                        schema_pkg_apis_numaflow_v1alpha1_BasicAuth(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole":                        schema_pkg_apis_numaflow_v1alpha1_Blackhole(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.BufferServiceConfig":              schema_pkg_apis_numaflow_v1alpha1_BufferServiceConfig(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.BuiltInServingStore":              schema_pkg_apis_numaflow_v1alpha1_BuiltInServingStore(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CombinedEdge":                     schema_pkg_apis_numaflow_v1alpha1_CombinedEdge(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container":                        schema_pkg_apis_numaflow_v1alpha1_Container(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate":                schema_pkg_apis_numaflow_v1alpha1_ContainerTemplate(ref),
@@ -593,6 +594,13 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref common.ReferenceCallba
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy"),
 						},
 					},
+					"servingStoreName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Names of the serving store used in this vertex.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 				Required: []string{"name"},
 			},
@@ -709,6 +717,35 @@ func schema_pkg_apis_numaflow_v1alpha1_BufferServiceConfig(ref common.ReferenceC
 		},
 		Dependencies: []string{
 			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamConfig", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisConfig"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_BuiltInServingStore(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "BuiltInServingStore to track and store data and metadata for tracking and serving.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"url": {
+						SchemaProps: spec.SchemaProps{
+							Description: "URL of the persistent store to write the callbacks",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"ttl": {
+						SchemaProps: spec.SchemaProps{
+							Description: "TTL for the data in the store and tracker",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
+				},
+				Required: []string{"url"},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 
@@ -4156,11 +4193,17 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineSpec(ref common.ReferenceCallback
 							},
 						},
 					},
+					"servingStore": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ServingStore defines the Serving Store for this pipeline.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingStore"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractVertex", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Lifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInput", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractVertex", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Lifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingStore", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInput", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark"},
 	}
 }
 
@@ -4807,7 +4850,7 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingSource(ref common.ReferenceCallbac
 					"store": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Persistent store for the callbacks for serving and tracking",
-							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingStore"),
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.BuiltInServingStore"),
 						},
 					},
 					"requestTimeoutSeconds": {
@@ -4822,7 +4865,7 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingSource(ref common.ReferenceCallbac
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Authorization", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingStore"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Authorization", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.BuiltInServingStore"},
 	}
 }
 
@@ -4830,28 +4873,27 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingStore(ref common.ReferenceCallback
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "ServingStore to track and store data and metadata for tracking and serving.",
+				Description: "ServingStore defines information of a Serving Store used in a pipeline",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"url": {
+					"name": {
 						SchemaProps: spec.SchemaProps{
-							Description: "URL of the persistent store to write the callbacks",
-							Type:        []string{"string"},
-							Format:      "",
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
 						},
 					},
-					"ttl": {
+					"container": {
 						SchemaProps: spec.SchemaProps{
-							Description: "TTL for the data in the store and tracker",
-							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container"),
 						},
 					},
 				},
-				Required: []string{"url"},
+				Required: []string{"name", "container"},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container"},
 	}
 }
 
@@ -6017,6 +6059,13 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy"),
 						},
 					},
+					"servingStoreName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Names of the serving store used in this vertex.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"pipelineName": {
 						SchemaProps: spec.SchemaProps{
 							Default: "",
@@ -6791,11 +6840,16 @@ func schema_pkg_apis_numaflow_v1alpha1_getContainerReq(ref common.ReferenceCallb
 							Format:  "",
 						},
 					},
+					"servingStore": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingStore"),
+						},
+					},
 				},
-				Required: []string{"env", "isbSvcType", "imagePullPolicy", "image", "volumeMounts", "resources", "executeRustBinary"},
+				Required: []string{"env", "isbSvcType", "imagePullPolicy", "image", "volumeMounts", "resources", "executeRustBinary", "servingStore"},
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/api/core/v1.EnvVar", "k8s.io/api/core/v1.ResourceRequirements", "k8s.io/api/core/v1.VolumeMount"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingStore", "k8s.io/api/core/v1.EnvVar", "k8s.io/api/core/v1.ResourceRequirements", "k8s.io/api/core/v1.VolumeMount"},
 	}
 }

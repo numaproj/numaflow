@@ -206,6 +206,10 @@ message AbstractVertex {
   // +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
   // +optional
   optional UpdateStrategy updateStrategy = 16;
+
+  // Names of the serving store used in this vertex.
+  // +optional
+  optional string servingStoreName = 17;
 }
 
 message Authorization {
@@ -246,6 +250,16 @@ message BufferServiceConfig {
   optional RedisConfig redis = 1;
 
   optional JetStreamConfig jetstream = 2;
+}
+
+// BuiltInServingStore to track and store data and metadata for tracking and serving.
+message BuiltInServingStore {
+  // URL of the persistent store to write the callbacks
+  optional string url = 1;
+
+  // TTL for the data in the store and tracker
+  // +optional
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration ttl = 2;
 }
 
 // CombinedEdge is a combination of Edge and some other properties such as vertex type, partitions, limits.
@@ -1245,6 +1259,10 @@ message PipelineSpec {
   // SideInputs defines the Side Inputs of a pipeline.
   // +optional
   repeated SideInput sideInputs = 8;
+
+  // ServingStore defines the Serving Store for this pipeline.
+  // +optional
+  optional ServingStore servingStore = 9;
 }
 
 message PipelineStatus {
@@ -1545,21 +1563,14 @@ message ServingSource {
   optional string msgIDHeaderKey = 3;
 
   // Persistent store for the callbacks for serving and tracking
-  optional ServingStore store = 4;
-
-  // Request timeout in seconds. Default value is 120 seconds.
-  // +optional
-  optional uint32 requestTimeoutSeconds = 5;
+  optional BuiltInServingStore store = 4;
 }
 
-// ServingStore to track and store data and metadata for tracking and serving.
+// ServingStore defines information of a Serving Store used in a pipeline
 message ServingStore {
-  // URL of the persistent store to write the callbacks
-  optional string url = 1;
+  optional string name = 1;
 
-  // TTL for the data in the store and tracker
-  // +optional
-  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration ttl = 2;
+  optional Container container = 2;
 }
 
 // SessionWindow describes a session window
