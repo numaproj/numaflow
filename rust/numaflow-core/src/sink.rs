@@ -820,7 +820,7 @@ impl From<sink_response::Result> for ResponseFromSink {
             Success => ResponseStatusFromSink::Success,
             Failure => ResponseStatusFromSink::Failed(value.err_msg),
             Fallback => ResponseStatusFromSink::Fallback,
-            numaflow_pb::clients::sink::Status::Serve => ResponseStatusFromSink::Serve,
+            Serve => ResponseStatusFromSink::Serve,
         };
         Self {
             id: value.id,
