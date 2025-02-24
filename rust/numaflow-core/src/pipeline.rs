@@ -480,10 +480,9 @@ async fn create_buffer_reader(
 async fn create_js_context(config: pipeline::isb::jetstream::ClientConfig) -> Result<Context> {
     // TODO: make these configurable. today this is hardcoded on Golang code too.
     let mut opts = ConnectOptions::new()
-        .max_reconnects(None) // -1 for unlimited reconnects
+        .max_reconnects(None) // unlimited reconnects
         .ping_interval(Duration::from_secs(3))
         .max_reconnects(None)
-        .ping_interval(Duration::from_secs(3))
         .retry_on_initial_connect();
 
     if let (Some(user), Some(password)) = (config.user, config.password) {
