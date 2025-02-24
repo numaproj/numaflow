@@ -30,13 +30,14 @@ import (
 	"k8s.io/utils/ptr"
 )
 
-// +kubebuilder:validation:Enum="";Running;Failed
+// +kubebuilder:validation:Enum="";Running;Paused;Failed
 type VertexPhase string
 
 const (
 	VertexPhaseUnknown VertexPhase = ""
 	VertexPhaseRunning VertexPhase = "Running"
 	VertexPhaseFailed  VertexPhase = "Failed"
+	VertexPhasePaused  VertexPhase = "Paused"
 
 	// VertexConditionDeployed has the status True when the vertex related sub resources are deployed.
 	VertexConditionDeployed ConditionType = "Deployed"
@@ -210,14 +211,36 @@ func (v Vertex) sidecarEnvs() []corev1.EnvVar {
 	}
 }
 
-func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
-	vertexCopy := &Vertex{
+func (v Vertex) simpleCopy() Vertex {
+	m := Vertex{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: v.Namespace,
 			Name:      v.Name,
 		},
-		Spec: v.Spec.DeepCopyWithoutReplicas(),
+		Spec: v.Spec.DeepCopyWithoutReplicasAndLifecycle(),
 	}
+	if m.Spec.Limits == nil {
+		m.Spec.Limits = &VertexLimits{}
+	}
+	if m.Spec.Limits.ReadBatchSize == nil {
+		m.Spec.Limits.ReadBatchSize = ptr.To[uint64](DefaultReadBatchSize)
+	}
+	if m.Spec.Limits.ReadTimeout == nil {
+		m.Spec.Limits.ReadTimeout = &metav1.Duration{Duration: DefaultReadTimeout}
+	}
+	if m.Spec.Limits.BufferMaxLength == nil {
+		m.Spec.Limits.BufferMaxLength = ptr.To[uint64](DefaultBufferLength)
+	}
+	if m.Spec.Limits.BufferUsageLimit == nil {
+		m.Spec.Limits.BufferUsageLimit = ptr.To[uint32](100 * DefaultBufferUsageLimit)
+	}
+	m.Spec.UpdateStrategy = UpdateStrategy{}
+	return m
+}
+
+func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
+	vertexCopy := v.simpleCopy()
+	v.Spec.Scale = Scale{LookbackSeconds: ptr.To[uint32](uint32(v.Spec.Scale.GetLookbackSeconds()))}
 	vertexBytes, err := json.Marshal(vertexCopy)
 	if err != nil {
 		return nil, errors.New("failed to marshal vertex spec")
@@ -423,9 +446,10 @@ func (v Vertex) getInitContainers(req GetVertexPodSpecReq) []corev1.Container {
 	return append(initContainers, v.Spec.InitContainers...)
 }
 
-func (vs VertexSpec) DeepCopyWithoutReplicas() VertexSpec {
+func (vs VertexSpec) DeepCopyWithoutReplicasAndLifecycle() VertexSpec {
 	x := *vs.DeepCopy()
 	x.Replicas = ptr.To[int32](0)
+	x.Lifecycle = VertexLifecycle{}
 	return x
 }
 
@@ -473,19 +497,22 @@ func (v Vertex) GetToBuffers() []string {
 	return r
 }
 
-func (v Vertex) GetReplicas() int {
+func (v Vertex) getReplicas() int {
 	if v.IsReduceUDF() {
-		// Replicas will be 0 only when pausing a pipeline
-		if v.Spec.Replicas != nil && int(*v.Spec.Replicas) == 0 {
-			return 0
-		}
-		// Replica of a reduce vertex is determined by the partitions.
 		return v.GetPartitionCount()
 	}
-	desiredReplicas := 1
-	if x := v.Spec.Replicas; x != nil {
-		desiredReplicas = int(*x)
+	if v.Spec.Replicas == nil {
+		return 1
 	}
+	return int(*v.Spec.Replicas)
+}
+
+func (v Vertex) CalculateReplicas() int {
+	// If we are pausing the Pipeline/Vertex then we should have the desired replicas as 0
+	if v.Spec.Lifecycle.GetDesiredPhase() == VertexPhasePaused {
+		return 0
+	}
+	desiredReplicas := v.getReplicas()
 	// Don't allow replicas to be out of the range of min and max when auto scaling is enabled
 	if s := v.Spec.Scale; !s.Disabled {
 		max := int(s.GetMaxReplicas())
@@ -515,6 +542,10 @@ type VertexSpec struct {
 	// +kubebuilder:default={"disabled": false}
 	// +optional
 	Watermark Watermark `json:"watermark,omitempty" protobuf:"bytes,7,opt,name=watermark"`
+	// Lifecycle defines the Lifecycle properties of a ertex
+	// +kubebuilder:default={"desiredPhase": Running}
+	// +optional
+	Lifecycle VertexLifecycle `json:"lifecycle,omitempty" protobuf:"bytes,8,opt,name=lifecycle"`
 }
 
 type AbstractVertex struct {
@@ -564,6 +595,23 @@ type AbstractVertex struct {
 	// +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
 	// +optional
 	UpdateStrategy UpdateStrategy `json:"updateStrategy,omitempty" protobuf:"bytes,16,opt,name=updateStrategy"`
+}
+
+type VertexLifecycle struct {
+	// DesiredPhase used to bring the vertex from current phase to desired phase
+	// +kubebuilder:default=Running
+	// +optional
+	DesiredPhase VertexPhase `json:"desiredPhase,omitempty" protobuf:"bytes,1,opt,name=desiredPhase"`
+}
+
+// GetDesiredPhase is used to fetch the desired lifecycle phase for a Vertex
+func (vlc VertexLifecycle) GetDesiredPhase() VertexPhase {
+	switch vlc.DesiredPhase {
+	case VertexPhasePaused:
+		return VertexPhasePaused
+	default:
+		return VertexPhaseRunning
+	}
 }
 
 func (av AbstractVertex) GetVertexType() VertexType {
@@ -745,7 +793,7 @@ func (vs *VertexStatus) InitConditions() {
 
 // IsHealthy indicates whether the vertex is healthy or not
 func (vs *VertexStatus) IsHealthy() bool {
-	if vs.Phase != VertexPhaseRunning {
+	if vs.Phase != VertexPhaseRunning && vs.Phase != VertexPhasePaused {
 		return false
 	}
 	return vs.IsReady()

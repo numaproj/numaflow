@@ -318,7 +318,7 @@ func (mv MonoVertex) simpleCopy() MonoVertex {
 
 func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, error) {
 	copiedSpec := mv.simpleCopy()
-	copiedSpec.Spec.Scale = Scale{LookbackSeconds: mv.Spec.Scale.LookbackSeconds}
+	copiedSpec.Spec.Scale = Scale{LookbackSeconds: ptr.To[uint32](uint32(mv.Spec.Scale.GetLookbackSeconds()))}
 	monoVtxBytes, err := json.Marshal(copiedSpec)
 	if err != nil {
 		return nil, errors.New("failed to marshal mono vertex spec")
@@ -611,7 +611,7 @@ func (mvs *MonoVertexStatus) MarkPhaseRunning() {
 	mvs.MarkPhase(MonoVertexPhaseRunning, "", "")
 }
 
-// MarkPhasePaused set the Pipeline has been paused.
+// MarkPhasePaused set the MonoVertex has been paused.
 func (mvs *MonoVertexStatus) MarkPhasePaused() {
 	mvs.MarkPhase(MonoVertexPhasePaused, "", "MonoVertex paused")
 }
@@ -643,7 +643,7 @@ type MonoVertexList struct {
 }
 
 type MonoVertexLifecycle struct {
-	// DesiredPhase used to bring the pipeline from current phase to desired phase
+	// DesiredPhase used to bring the MonoVertex from current phase to desired phase
 	// +kubebuilder:default=Running
 	// +optional
 	DesiredPhase MonoVertexPhase `json:"desiredPhase,omitempty" protobuf:"bytes,1,opt,name=desiredPhase"`

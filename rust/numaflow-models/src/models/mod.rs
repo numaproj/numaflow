@@ -188,6 +188,8 @@ pub mod vertex;
 pub use self::vertex::Vertex;
 pub mod vertex_instance;
 pub use self::vertex_instance::VertexInstance;
+pub mod vertex_lifecycle;
+pub use self::vertex_lifecycle::VertexLifecycle;
 pub mod vertex_limits;
 pub use self::vertex_limits::VertexLimits;
 pub mod vertex_list;

@@ -923,7 +923,7 @@ message MonoVertex {
 }
 
 message MonoVertexLifecycle {
-  // DesiredPhase used to bring the pipeline from current phase to desired phase
+  // DesiredPhase used to bring the MonoVertex from current phase to desired phase
   // +kubebuilder:default=Running
   // +optional
   optional string desiredPhase = 1;
@@ -1794,6 +1794,13 @@ message VertexInstance {
   optional int32 replica = 3;
 }
 
+message VertexLifecycle {
+  // DesiredPhase used to bring the vertex from current phase to desired phase
+  // +kubebuilder:default=Running
+  // +optional
+  optional string desiredPhase = 1;
+}
+
 message VertexLimits {
   // Read batch size from the source or buffer.
   // It overrides the settings from pipeline limits.
@@ -1846,6 +1853,11 @@ message VertexSpec {
   // +kubebuilder:default={"disabled": false}
   // +optional
   optional Watermark watermark = 7;
+
+  // Lifecycle defines the Lifecycle properties of a ertex
+  // +kubebuilder:default={"desiredPhase": Running}
+  // +optional
+  optional VertexLifecycle lifecycle = 8;
 }
 
 message VertexStatus {

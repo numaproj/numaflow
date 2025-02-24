@@ -121,6 +121,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy":                   schema_pkg_apis_numaflow_v1alpha1_UpdateStrategy(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Vertex":                           schema_pkg_apis_numaflow_v1alpha1_Vertex(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexInstance":                   schema_pkg_apis_numaflow_v1alpha1_VertexInstance(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLifecycle":                  schema_pkg_apis_numaflow_v1alpha1_VertexLifecycle(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits":                     schema_pkg_apis_numaflow_v1alpha1_VertexLimits(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexList":                       schema_pkg_apis_numaflow_v1alpha1_VertexList(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexSpec":                       schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref),
@@ -3112,7 +3113,7 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexLifecycle(ref common.ReferenceC
 				Properties: map[string]spec.Schema{
 					"desiredPhase": {
 						SchemaProps: spec.SchemaProps{
-							Description: "DesiredPhase used to bring the pipeline from current phase to desired phase",
+							Description: "DesiredPhase used to bring the MonoVertex from current phase to desired phase",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -5650,6 +5651,25 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexInstance(ref common.ReferenceCallba
 	}
 }
 
+func schema_pkg_apis_numaflow_v1alpha1_VertexLifecycle(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"desiredPhase": {
+						SchemaProps: spec.SchemaProps{
+							Description: "DesiredPhase used to bring the vertex from current phase to desired phase",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_numaflow_v1alpha1_VertexLimits(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -6063,12 +6083,19 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark"),
 						},
 					},
+					"lifecycle": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Lifecycle defines the Lifecycle properties of a ertex",
+							Default:     map[string]interface{}{},
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLifecycle"),
+						},
+					},
 				},
 				Required: []string{"name", "pipelineName"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CombinedEdge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodResourceClaim", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CombinedEdge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodResourceClaim", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
 	}
 }
 
