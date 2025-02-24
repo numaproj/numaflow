@@ -308,7 +308,7 @@ func WaitForVertexPodRunning(kubeClient kubernetes.Interface, vertexClient flowp
 		if err != nil {
 			return fmt.Errorf("error getting vertex pod name: %w", err)
 		}
-		ok = ok && len(podList.Items) > 0 && len(podList.Items) == vertexList.Items[0].GetReplicas() // pod number should equal to desired replicas
+		ok = ok && len(podList.Items) > 0 && len(podList.Items) == vertexList.Items[0].CalculateReplicas() // pod number should equal to desired replicas
 		for _, p := range podList.Items {
 			ok = ok && isPodReady(p)
 		}

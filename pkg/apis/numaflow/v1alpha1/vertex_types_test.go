@@ -121,8 +121,13 @@ func TestGetToBuffersSink(t *testing.T) {
 func TestWithoutReplicas(t *testing.T) {
 	s := &VertexSpec{
 		Replicas: ptr.To[int32](3),
+		Lifecycle: VertexLifecycle{
+			DesiredPhase: VertexPhasePaused,
+		},
 	}
-	assert.Equal(t, int32(0), *s.DeepCopyWithoutReplicas().Replicas)
+	dc := s.DeepCopyWithoutReplicasAndLifecycle()
+	assert.Equal(t, int32(0), *dc.Replicas)
+	assert.Equal(t, VertexLifecycle{}, dc.Lifecycle)
 }
 
 func TestGetVertexReplicas(t *testing.T) {
@@ -133,11 +138,16 @@ func TestGetVertexReplicas(t *testing.T) {
 			},
 		},
 	}
-	assert.Equal(t, 1, v.GetReplicas())
+	v.Spec.Lifecycle.DesiredPhase = VertexPhasePaused
+	assert.Equal(t, 0, v.CalculateReplicas())
+	v.Spec.Lifecycle.DesiredPhase = VertexPhaseRunning
+	assert.Equal(t, 1, v.CalculateReplicas())
+	v.Spec.Lifecycle = VertexLifecycle{}
+	assert.Equal(t, 1, v.CalculateReplicas())
 	v.Spec.Replicas = ptr.To[int32](3)
-	assert.Equal(t, 3, v.GetReplicas())
+	assert.Equal(t, 3, v.CalculateReplicas())
 	v.Spec.Replicas = ptr.To[int32](0)
-	assert.Equal(t, 0, v.GetReplicas())
+	assert.Equal(t, 0, v.CalculateReplicas())
 	v.Spec.UDF = &UDF{
 		GroupBy: &GroupBy{},
 	}
@@ -145,16 +155,16 @@ func TestGetVertexReplicas(t *testing.T) {
 		{Edge: Edge{From: "a", To: "b"}},
 	}
 	v.Spec.Replicas = ptr.To[int32](5)
-	assert.Equal(t, 1, v.GetReplicas())
+	assert.Equal(t, 1, v.CalculateReplicas())
 	v.Spec.Replicas = ptr.To[int32](1000)
-	assert.Equal(t, 1, v.GetReplicas())
+	assert.Equal(t, 1, v.CalculateReplicas())
 	v.Spec.UDF.GroupBy = nil
 	v.Spec.Scale.Max = ptr.To[int32](40)
 	v.Spec.Scale.Min = ptr.To[int32](20)
 	v.Spec.Replicas = ptr.To[int32](300)
-	assert.Equal(t, 40, v.GetReplicas())
+	assert.Equal(t, 40, v.CalculateReplicas())
 	v.Spec.Replicas = ptr.To[int32](10)
-	assert.Equal(t, 20, v.GetReplicas())
+	assert.Equal(t, 20, v.CalculateReplicas())
 }
 
 func TestGetHeadlessSvcSpec(t *testing.T) {
