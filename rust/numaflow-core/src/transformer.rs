@@ -22,6 +22,9 @@ pub enum ActorMessage {
         message: Message,
         respond_to: oneshot::Sender<Result<Vec<Message>>>,
     },
+    IsReady {
+        respond_to: oneshot::Sender<bool>,
+    },
 }
 
 /// TransformerActor, handles the transformation of messages.
@@ -47,6 +50,9 @@ impl TransformerActor {
                 message,
                 respond_to,
             } => self.transformer.transform(message, respond_to).await,
+            ActorMessage::IsReady { respond_to } => {
+                let _ = respond_to.send(self.transformer.ready().await);
+            }
         }
     }
 
@@ -186,6 +192,14 @@ impl Transformer {
             }
         }
         Ok(transformed_messages)
+    }
+
+    pub(crate) async fn is_ready(&mut self) -> bool {
+        let (sender, receiver) = oneshot::channel();
+        let msg = ActorMessage::IsReady { respond_to: sender };
+
+        self.sender.send(msg).await.expect("failed to send message");
+        receiver.await.is_ok()
     }
 }
 

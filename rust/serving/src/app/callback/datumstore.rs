@@ -36,7 +36,6 @@ pub(crate) type Result<T> = std::result::Result<T, Error>;
 #[trait_variant::make(DatumStore: Send)]
 #[allow(dead_code)]
 pub(crate) trait LocalDatumStore {
-    async fn save(&mut self, id: &str, payload: bytes::Bytes) -> Result<()>;
     /// retrieve the data from the store
     async fn retrieve_datum(&mut self, id: &str) -> Result<Option<Vec<Vec<u8>>>>;
     /// check if the store is ready

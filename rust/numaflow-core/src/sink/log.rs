@@ -29,6 +29,10 @@ impl Sink for LogSink {
         }
         Ok(result)
     }
+
+    async fn is_ready(&mut self) -> bool {
+        true
+    }
 }
 
 #[cfg(test)]

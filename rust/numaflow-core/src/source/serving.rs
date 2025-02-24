@@ -58,6 +58,11 @@ impl super::SourceReader for ServingSource {
     async fn partitions(&mut self) -> Result<Vec<u16>> {
         Ok(vec![*get_vertex_replica()])
     }
+
+    // FIXME(spr): Implement this
+    async fn is_ready(&mut self) -> bool {
+        true
+    }
 }
 
 impl super::SourceAcker for ServingSource {

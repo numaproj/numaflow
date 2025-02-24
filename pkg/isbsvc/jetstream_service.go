@@ -346,5 +346,5 @@ func JetStreamSideInputsStoreKVName(sideInputStoreName string) string {
 }
 
 func JetStreamServingSourceStoreKVName(servingSourceStoreName string) string {
-	return fmt.Sprintf("%s_SERVING_STORE", servingSourceStoreName)
+	return fmt.Sprintf("%s_SERVING_KV_STORE", servingSourceStoreName)
 }

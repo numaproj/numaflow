@@ -12,7 +12,6 @@ use crate::app::callback::datumstore::redisstore::RedisConnection;
 use crate::app::callback::datumstore::user_defined::UserDefinedStore;
 use crate::app::callback::state::State as CallbackState;
 use crate::app::tracker::MessageGraph;
-use crate::callback::CallbackHandler;
 use crate::config::{StoreType, DEFAULT_ID_HEADER};
 use crate::{Error, Result};
 use crate::{Settings, DEFAULT_CALLBACK_URL_HEADER_KEY};
@@ -58,17 +57,6 @@ struct ServingSourceActor {
     callback_url: String,
 }
 
-/*
-Monovertex changes:
-    * Ingest callback handler for serving source actor.
-    * After reading the message, create a oneshot to accept callbacks(mvtx will have only one callback), and store the oneshot tx
-      in the callback handler using the register method(map(id -> oneshot_tx)).
-    * Create an in-memory callback store that will be store the oneshot rx for every payload(map(id -> oneshot_rx)).
-    * After reading the message register in the in-memory callback store to store the oneshot_rx
-    * when watch callbacks method is invoked wait for the oneshot_rx for that given id and return the callback
-    * deregister will delete the entry from the map
-    * mark as failed will delete the entry from the map
- */
 impl ServingSourceActor {
     async fn start(
         js_context: Context,

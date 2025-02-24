@@ -6,7 +6,7 @@ spec:
   servingStore:
     name: ips
     container:
-      image: quay.io/numaio/numaflow-go/serving-inmem-store:stable
+      image: numaflow-java-examples/serving-inmem-store:stable
       imagePullPolicy: Never
 
   vertices:
@@ -38,7 +38,8 @@ spec:
       sink:
         udsink:
           container:
-            image: docker.intuit.com/quay-rmt/numaio/servesink:v1.5.0-alpha1
+            image: quay.io/numaio/numaflow-go/serve-sink-log:stable
+            imagePullPolicy: Never
             env:
               - name: NUMAFLOW_CALLBACK_URL_KEY
                 value: "X-Numaflow-Callback-Url"

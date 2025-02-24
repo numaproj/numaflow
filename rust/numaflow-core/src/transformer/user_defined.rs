@@ -26,6 +26,7 @@ struct ParentMessageInfo {
 
 /// UserDefinedTransformer exposes methods to do user-defined transformations.
 pub(super) struct UserDefinedTransformer {
+    rpc_client: SourceTransformClient<Channel>,
     read_tx: mpsc::Sender<SourceTransformRequest>,
     senders: ResponseSenderMap,
     task_handle: tokio::task::JoinHandle<()>,
@@ -104,6 +105,7 @@ impl UserDefinedTransformer {
         ));
 
         let transformer = Self {
+            rpc_client: client,
             read_tx,
             senders: sender_map,
             task_handle,
@@ -176,6 +178,13 @@ impl UserDefinedTransformer {
             .insert(key, (msg_info, respond_to));
 
         let _ = self.read_tx.send(message.into()).await;
+    }
+
+    pub(super) async fn ready(&mut self) -> bool {
+        match self.rpc_client.is_ready(Request::new(())).await {
+            Ok(response) => response.into_inner().ready,
+            Err(_) => false,
+        }
     }
 }
 

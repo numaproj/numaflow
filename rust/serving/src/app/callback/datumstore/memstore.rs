@@ -27,10 +27,6 @@ impl InMemoryStore {
 }
 
 impl super::DatumStore for InMemoryStore {
-    async fn save(&mut self, _id: &str, _payload: Bytes) -> StoreResult<()> {
-        todo!()
-    }
-
     /// Retrieves data for a given id from the `HashMap`.
     /// Each piece of data is deserialized from bytes into a `String`.
     async fn retrieve_datum(&mut self, id: &str) -> StoreResult<Option<Vec<Vec<u8>>>> {

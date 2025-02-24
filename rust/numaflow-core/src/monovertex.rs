@@ -57,6 +57,7 @@ pub(crate) async fn start_forwarder(
             config.sink_config.clone(),
             config.fb_sink_config.clone(),
             tracker_handle,
+            None,
             &cln_token,
         )
         .await?;
