@@ -21,21 +21,36 @@ use crate::tracker::TrackerHandle;
 pub(super) mod user_defined;
 
 /// UnaryActorMessage is a message that is sent to the UnaryMapperActor.
-struct UnaryActorMessage {
-    message: Message,
-    respond_to: oneshot::Sender<error::Result<Vec<Message>>>,
+enum UnaryActorMessage {
+    Map {
+        message: Message,
+        respond_to: oneshot::Sender<error::Result<Vec<Message>>>,
+    },
+    IsReady {
+        respond_to: oneshot::Sender<bool>,
+    },
 }
 
 /// BatchActorMessage is a message that is sent to the BatchMapperActor.
-struct BatchActorMessage {
-    messages: Vec<Message>,
-    respond_to: Vec<oneshot::Sender<error::Result<Vec<Message>>>>,
+enum BatchActorMessage {
+    Map {
+        messages: Vec<Message>,
+        respond_to: Vec<oneshot::Sender<error::Result<Vec<Message>>>>,
+    },
+    IsReady {
+        respond_to: oneshot::Sender<bool>,
+    },
 }
 
 /// StreamActorMessage is a message that is sent to the StreamMapperActor.
-struct StreamActorMessage {
-    message: Message,
-    respond_to: mpsc::Sender<error::Result<Message>>,
+enum StreamActorMessage {
+    Map {
+        message: Message,
+        respond_to: mpsc::Sender<error::Result<Message>>,
+    },
+    IsReady {
+        respond_to: oneshot::Sender<bool>,
+    },
 }
 
 /// UnaryMapperActor is responsible for handling the unary map operation.
@@ -56,7 +71,17 @@ impl UnaryMapperActor {
     }
 
     async fn handle_message(&mut self, msg: UnaryActorMessage) {
-        self.mapper.unary_map(msg.message, msg.respond_to).await;
+        match msg {
+            UnaryActorMessage::Map {
+                message,
+                respond_to,
+            } => {
+                self.mapper.unary_map(message, respond_to).await;
+            }
+            UnaryActorMessage::IsReady { respond_to } => {
+                let _ = respond_to.send(self.mapper.is_ready().await);
+            }
+        }
     }
 
     async fn run(mut self) {
@@ -78,7 +103,17 @@ impl BatchMapActor {
     }
 
     async fn handle_message(&mut self, msg: BatchActorMessage) {
-        self.mapper.batch_map(msg.messages, msg.respond_to).await;
+        match msg {
+            BatchActorMessage::Map {
+                messages,
+                respond_to,
+            } => {
+                self.mapper.batch_map(messages, respond_to).await;
+            }
+            BatchActorMessage::IsReady { respond_to } => {
+                let _ = respond_to.send(self.mapper.is_ready().await);
+            }
+        }
     }
 
     async fn run(mut self) {
@@ -100,7 +135,17 @@ impl StreamMapActor {
     }
 
     async fn handle_message(&mut self, msg: StreamActorMessage) {
-        self.mapper.stream_map(msg.message, msg.respond_to).await;
+        match msg {
+            StreamActorMessage::Map {
+                message,
+                respond_to,
+            } => {
+                self.mapper.stream_map(message, respond_to).await;
+            }
+            StreamActorMessage::IsReady { respond_to } => {
+                let _ = respond_to.send(self.mapper.is_ready().await);
+            }
+        }
     }
 
     async fn run(mut self) {
@@ -128,24 +173,17 @@ enum ActorSender {
 /// closed. We will drop the downstream stream so that the downstream components can shutdown.
 /// Structured concurrency is honoured here, we wait for all the concurrent tokio tasks to exit.
 /// before shutting down the component.
+#[derive(Clone)]
 pub(crate) struct MapHandle {
     batch_size: usize,
     read_timeout: Duration,
     concurrency: usize,
     tracker: TrackerHandle,
     actor_sender: ActorSender,
-    task_handle: JoinHandle<()>,
     /// this the final state of the component (any error will set this as Err)
     final_result: crate::Result<()>,
     /// The moment we see an error, we will set this to true.
     shutting_down_on_err: bool,
-}
-
-/// Abort all the background tasks when the mapper is dropped.
-impl Drop for MapHandle {
-    fn drop(&mut self) {
-        self.task_handle.abort();
-    }
 }
 
 /// Response channel size for streaming map.
@@ -163,8 +201,6 @@ impl MapHandle {
         client: MapClient<Channel>,
         tracker_handle: TrackerHandle,
     ) -> error::Result<Self> {
-        let task_handle;
-
         // Based on the map mode, spawn the appropriate map actor
         // and store the sender handle in the actor_sender.
         let actor_sender = match map_mode {
@@ -174,11 +210,9 @@ impl MapHandle {
                     receiver,
                     UserDefinedUnaryMap::new(batch_size, client).await?,
                 );
-
-                let handle = tokio::spawn(async move {
+                tokio::spawn(async move {
                     mapper_actor.run().await;
                 });
-                task_handle = handle;
                 ActorSender::Unary(sender)
             }
             MapMode::Batch => {
@@ -187,11 +221,9 @@ impl MapHandle {
                     batch_receiver,
                     UserDefinedBatchMap::new(batch_size, client).await?,
                 );
-
-                let handle = tokio::spawn(async move {
+                tokio::spawn(async move {
                     batch_mapper_actor.run().await;
                 });
-                task_handle = handle;
                 ActorSender::Batch(batch_sender)
             }
             MapMode::Stream => {
@@ -200,11 +232,9 @@ impl MapHandle {
                     stream_receiver,
                     UserDefinedStreamMap::new(batch_size, client).await?,
                 );
-
-                let handle = tokio::spawn(async move {
+                tokio::spawn(async move {
                     stream_mapper_actor.run().await;
                 });
-                task_handle = handle;
                 ActorSender::Stream(stream_sender)
             }
         };
@@ -215,7 +245,6 @@ impl MapHandle {
             read_timeout,
             concurrency,
             tracker: tracker_handle,
-            task_handle,
             final_result: Ok(()),
             shutting_down_on_err: false,
         })
@@ -401,7 +430,7 @@ impl MapHandle {
 
             let offset = read_msg.offset.clone();
             let (sender, receiver) = oneshot::channel();
-            let msg = UnaryActorMessage {
+            let msg = UnaryActorMessage::Map {
                 message: read_msg.clone(),
                 respond_to: sender,
             };
@@ -489,7 +518,7 @@ impl MapHandle {
     ) -> error::Result<()> {
         let (senders, receivers): (Vec<_>, Vec<_>) =
             batch.iter().map(|_| oneshot::channel()).unzip();
-        let msg = BatchActorMessage {
+        let msg = BatchActorMessage::Map {
             messages: batch,
             respond_to: senders,
         };
@@ -559,7 +588,7 @@ impl MapHandle {
             let _permit = permit;
 
             let (sender, mut receiver) = mpsc::channel(STREAMING_MAP_RESP_CHANNEL_SIZE);
-            let msg = StreamActorMessage {
+            let msg = StreamActorMessage::Map {
                 message: read_msg.clone(),
                 respond_to: sender,
             };
@@ -623,6 +652,33 @@ impl MapHandle {
                 .await
                 .expect("failed to update eof");
         });
+    }
+
+    // Returns true if the mapper is ready to accept messages.
+    async fn is_ready(&mut self) -> bool {
+        let (tx, rx) = oneshot::channel();
+        match &self.actor_sender {
+            ActorSender::Unary(map_handle) => {
+                map_handle
+                    .send(UnaryActorMessage::IsReady { respond_to: tx })
+                    .await
+                    .expect("failed to send is_ready message");
+            }
+            ActorSender::Batch(map_handle) => {
+                map_handle
+                    .send(BatchActorMessage::IsReady { respond_to: tx })
+                    .await
+                    .expect("failed to send is_ready message");
+            }
+            ActorSender::Stream(map_handle) => {
+                map_handle
+                    .send(StreamActorMessage::IsReady { respond_to: tx })
+                    .await
+                    .expect("failed to send is_ready message");
+            }
+        }
+
+        rx.await.is_ok()
     }
 }
 

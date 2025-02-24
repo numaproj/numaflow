@@ -43,23 +43,17 @@ pub(crate) async fn start_forwarder(
 
             // create watermark handle, if watermark is enabled
             let source_watermark_handle = match &config.watermark_config {
-                Some(wm_config) => {
-                    if let WatermarkConfig::Source(source_config) = wm_config {
-                        Some(
-                            SourceWatermarkHandle::new(
-                                config.read_timeout,
-                                js_context.clone(),
-                                &config.to_vertex_config,
-                                source_config,
-                                cln_token.clone(),
-                            )
-                            .await?,
-                        )
-                    } else {
-                        None
-                    }
-                }
-                None => None,
+                Some(WatermarkConfig::Source(source_config)) => Some(
+                    SourceWatermarkHandle::new(
+                        config.read_timeout,
+                        js_context.clone(),
+                        &config.to_vertex_config,
+                        source_config,
+                        cln_token.clone(),
+                    )
+                    .await?,
+                ),
+                _ => None,
             };
 
             start_source_forwarder(
@@ -76,25 +70,19 @@ pub(crate) async fn start_forwarder(
 
             // create watermark handle, if watermark is enabled
             let edge_watermark_handle = match &config.watermark_config {
-                Some(wm_config) => {
-                    if let WatermarkConfig::Edge(edge_config) = wm_config {
-                        Some(
-                            ISBWatermarkHandle::new(
-                                config.vertex_name,
-                                config.replica,
-                                config.read_timeout,
-                                js_context.clone(),
-                                edge_config,
-                                &config.to_vertex_config,
-                                cln_token.clone(),
-                            )
-                            .await?,
-                        )
-                    } else {
-                        None
-                    }
-                }
-                None => None,
+                Some(WatermarkConfig::Edge(edge_config)) => Some(
+                    ISBWatermarkHandle::new(
+                        config.vertex_name,
+                        config.replica,
+                        config.read_timeout,
+                        js_context.clone(),
+                        edge_config,
+                        &config.to_vertex_config,
+                        cln_token.clone(),
+                    )
+                    .await?,
+                ),
+                _ => None,
             };
 
             start_sink_forwarder(
@@ -111,25 +99,19 @@ pub(crate) async fn start_forwarder(
 
             // create watermark handle, if watermark is enabled
             let edge_watermark_handle = match &config.watermark_config {
-                Some(wm_config) => {
-                    if let WatermarkConfig::Edge(edge_config) = wm_config {
-                        Some(
-                            ISBWatermarkHandle::new(
-                                config.vertex_name,
-                                config.replica,
-                                config.read_timeout,
-                                js_context.clone(),
-                                edge_config,
-                                &config.to_vertex_config,
-                                cln_token.clone(),
-                            )
-                            .await?,
-                        )
-                    } else {
-                        None
-                    }
-                }
-                None => None,
+                Some(WatermarkConfig::Edge(edge_config)) => Some(
+                    ISBWatermarkHandle::new(
+                        config.vertex_name,
+                        config.replica,
+                        config.read_timeout,
+                        js_context.clone(),
+                        edge_config,
+                        &config.to_vertex_config,
+                        cln_token.clone(),
+                    )
+                    .await?,
+                ),
+                _ => None,
             };
 
             start_map_forwarder(
@@ -386,6 +368,7 @@ async fn start_sink_forwarder(
             sink.sink_config.clone(),
             sink.fb_sink_config.clone(),
             tracker_handle,
+            sink.udstore_config.clone(),
             &cln_token,
         )
         .await?;
@@ -769,6 +752,7 @@ mod tests {
                     retry_config: None,
                 },
                 fb_sink_config: None,
+                udstore_config: None,
             }),
             metrics_config: MetricsConfig {
                 metrics_server_listen_port: 2469,

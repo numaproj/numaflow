@@ -1,6 +1,3 @@
-use backoff::retry::Retry;
-use backoff::strategy::fixed;
-use bytes::Bytes;
 use redis::aio::ConnectionManager;
 use redis::RedisError;
 use tracing::info;
@@ -51,43 +48,6 @@ impl RedisConnection {
         // Execute the pipeline
         pipe.exec_async(conn_manager).await
     }
-
-    // write to Redis with retries
-    async fn write_to_redis(&self, key: &str, value: &Vec<u8>) -> StoreResult<()> {
-        let interval = fixed::Interval::from_millis(self.config.retries_duration_millis.into())
-            .take(self.config.retries);
-
-        Retry::retry(
-            interval,
-            || async {
-                // https://hackmd.io/@compiler-errors/async-closures
-                Self::execute_redis_cmd(
-                    &mut self.conn_manager.clone(),
-                    self.config.ttl_secs,
-                    key,
-                    value,
-                )
-                .await
-            },
-            |e: &RedisError| !e.is_unrecoverable_error(),
-        )
-        .await
-        .map_err(|err| StoreError::StoreWrite(format!("Saving to redis: {}", err).to_string()))
-    }
-}
-
-async fn handle_write_requests(
-    redis_conn: RedisConnection,
-    key: &str,
-    value: Bytes,
-) -> StoreResult<()> {
-    // Write the byte array to Redis
-    // we have to differentiate between the saved responses and the callback requests
-    // saved responses are stored in "id_SAVED", callback requests are stored in "id"
-    let key = format!("request:{key}:results");
-    info!(?key, "Writing to Redis");
-    let value: Vec<u8> = value.into();
-    redis_conn.write_to_redis(&key, &value).await
 }
 
 // It is possible to move the methods defined here to be methods on the Redis actor and communicate through channels.
@@ -118,14 +78,6 @@ impl DatumStore for RedisConnection {
                 e
             ))),
         }
-    }
-
-    // Attempt to save all payloads. Returns error if we fail to save at least one message.
-    async fn save(&mut self, key: &str, payload: Bytes) -> StoreResult<()> {
-        // This is put in place not to overload Redis and also way some kind of
-        // flow control.
-        handle_write_requests(self.clone(), key, payload).await?;
-        Ok(())
     }
 
     // Check if the Redis connection is healthy

@@ -15,7 +15,9 @@ use crate::config::components::source::{SourceConfig, SourceType};
 use crate::config::components::transformer::TransformerConfig;
 use crate::config::get_vertex_replica;
 use crate::config::pipeline::map::{MapMode, MapType, MapVtxConfig};
-use crate::config::pipeline::{DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET};
+use crate::config::pipeline::{
+    UserDefinedStoreConfig, DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET,
+};
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
 use crate::shared::grpc;
@@ -37,13 +39,14 @@ pub(crate) async fn create_sink_writer(
     primary_sink: SinkConfig,
     fallback_sink: Option<SinkConfig>,
     tracker_handle: TrackerHandle,
+    udstore_config: Option<UserDefinedStoreConfig>,
     cln_token: &CancellationToken,
 ) -> error::Result<(
     SinkWriter,
     Option<SinkClient<Channel>>,
     Option<SinkClient<Channel>>,
 )> {
-    let (sink_writer_builder, sink_rpc_client) = match primary_sink.sink_type.clone() {
+    let (mut sink_writer_builder, sink_rpc_client) = match primary_sink.sink_type.clone() {
         SinkType::Log(_) => (
             SinkWriterBuilder::new(
                 batch_size,
@@ -153,6 +156,11 @@ pub(crate) async fn create_sink_writer(
             }
         };
     }
+
+    if let Some(udstore_config) = udstore_config {
+        sink_writer_builder = sink_writer_builder.ud_store_config(udstore_config);
+    }
+
     Ok((sink_writer_builder.build().await?, sink_rpc_client, None))
 }
 

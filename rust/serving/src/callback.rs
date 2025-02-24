@@ -4,7 +4,6 @@ use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::{
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},

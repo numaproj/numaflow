@@ -24,9 +24,14 @@ impl Sink for LogSink {
             result.push(ResponseFromSink {
                 id: msg.id.to_string(),
                 status: ResponseStatusFromSink::Success,
+                serve_response: None,
             })
         }
         Ok(result)
+    }
+
+    async fn is_ready(&mut self) -> bool {
+        true
     }
 }
 
@@ -84,6 +89,7 @@ mod tests {
             .map(|msg| ResponseFromSink {
                 status: ResponseStatusFromSink::Success,
                 id: msg.id.to_string(),
+                serve_response: None,
             })
             .collect::<Vec<ResponseFromSink>>();
 

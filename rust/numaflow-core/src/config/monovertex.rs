@@ -162,7 +162,7 @@ impl MonovertexConfig {
                 })?;
             callback_config = Some(ServingCallbackConfig {
                 callback_store: Box::leak(Box::new(format!(
-                    "{}-{}_SERVING_STORE",
+                    "{}-{}_SERVING_KV_STORE",
                     get_namespace(),
                     get_pipeline_name(),
                 ))),

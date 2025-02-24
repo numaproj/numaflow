@@ -5,6 +5,7 @@ use std::time::Duration;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use numaflow_models::models::{ForwardConditions, Vertex, Watermark};
+use serde::Deserialize;
 use serde_json::from_slice;
 use tracing::info;
 
@@ -36,6 +37,8 @@ const DEFAULT_MAP_SOCKET: &str = "/var/run/numaflow/map.sock";
 pub(crate) const DEFAULT_BATCH_MAP_SOCKET: &str = "/var/run/numaflow/batchmap.sock";
 pub(crate) const DEFAULT_STREAM_MAP_SOCKET: &str = "/var/run/numaflow/mapstream.sock";
 const DEFAULT_MAP_SERVER_INFO_FILE: &str = "/var/run/numaflow/mapper-server-info";
+const DEFAULT_SERVING_STORE_SOCKET: &str = "/var/run/numaflow/serving.sock";
+const DEFAULT_SERVING_STORE_SERVER_INFO_FILE: &str = "/var/run/numaflow/serving-server-info";
 
 pub(crate) mod isb;
 pub(crate) mod watermark;
@@ -175,6 +178,7 @@ pub(crate) mod map {
 pub(crate) struct SinkVtxConfig {
     pub(crate) sink_config: SinkConfig,
     pub(crate) fb_sink_config: Option<SinkConfig>,
+    pub(crate) udstore_config: Option<UserDefinedStoreConfig>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -182,6 +186,23 @@ pub(crate) enum VertexType {
     Source(SourceVtxConfig),
     Sink(SinkVtxConfig),
     Map(MapVtxConfig),
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct UserDefinedStoreConfig {
+    pub grpc_max_message_size: usize,
+    pub socket_path: String,
+    pub server_info_path: String,
+}
+
+impl Default for UserDefinedStoreConfig {
+    fn default() -> Self {
+        Self {
+            grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+            socket_path: DEFAULT_SERVING_STORE_SOCKET.to_string(),
+            server_info_path: DEFAULT_SERVING_STORE_SERVER_INFO_FILE.to_string(),
+        }
+    }
 }
 
 impl std::fmt::Display for VertexType {
@@ -282,12 +303,19 @@ impl PipelineConfig {
                 None
             };
 
+            let udstore_config = if vertex_obj.spec.serving_store_name.is_some() {
+                Some(UserDefinedStoreConfig::default())
+            } else {
+                None
+            };
+
             VertexType::Sink(SinkVtxConfig {
                 sink_config: SinkConfig {
                     sink_type: SinkType::primary_sinktype(&sink)?,
                     retry_config: None,
                 },
                 fb_sink_config,
+                udstore_config,
             })
         } else if let Some(map) = vertex_obj.spec.udf {
             VertexType::Map(MapVtxConfig {
@@ -630,6 +658,7 @@ mod tests {
                 retry_config: None,
             },
             fb_sink_config: None,
+            udstore_config: None,
         });
         assert_eq!(sink_type.to_string(), "Sink");
     }
@@ -668,6 +697,7 @@ mod tests {
                     retry_config: None,
                 },
                 fb_sink_config: None,
+                udstore_config: None,
             }),
             metrics_config: MetricsConfig {
                 metrics_server_listen_port: 2469,

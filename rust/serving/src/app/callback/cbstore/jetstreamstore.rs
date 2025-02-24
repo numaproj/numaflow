@@ -1,3 +1,4 @@
+use crate::callback::Callback;
 use std::sync::Arc;
 
 use async_nats::jetstream::kv::Store;
@@ -9,7 +10,6 @@ use tokio_stream::StreamExt;
 
 use crate::app::callback::cbstore::ProcessingStatus;
 use crate::app::callback::datumstore::{Error as StoreError, Result as StoreResult};
-use crate::app::callback::Callback;
 
 #[derive(Clone)]
 pub(crate) struct JSCallbackStore {

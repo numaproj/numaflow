@@ -67,6 +67,9 @@ pub(crate) trait SourceReader {
 
     /// number of partitions processed by this source.
     async fn partitions(&mut self) -> Result<Vec<u16>>;
+
+    /// Check if the source is ready to read.
+    async fn is_ready(&mut self) -> bool;
 }
 
 /// Set of Ack related items that has to be implemented to become a Source.
@@ -110,6 +113,9 @@ enum ActorMessage {
     },
     Partitions {
         respond_to: oneshot::Sender<Result<Vec<u16>>>,
+    },
+    IsReady {
+        respond_to: oneshot::Sender<bool>,
     },
 }
 
@@ -159,6 +165,10 @@ where
             ActorMessage::Partitions { respond_to } => {
                 let partitions = self.reader.partitions().await;
                 let _ = respond_to.send(partitions);
+            }
+            ActorMessage::IsReady { respond_to } => {
+                let is_ready = self.reader.is_ready().await;
+                let _ = respond_to.send(is_ready);
             }
         }
     }
@@ -547,6 +557,20 @@ impl Source {
                 .processed_time
                 .get_or_create(pipeline_isb_metric_labels())
                 .observe(e2e_start_time.elapsed().as_micros() as f64);
+        }
+    }
+
+    async fn is_ready(&mut self) -> bool {
+        let (tx, rx) = oneshot::channel();
+        self.sender
+            .send(ActorMessage::IsReady { respond_to: tx })
+            .await
+            .expect("send should not fail");
+
+        if let Some(transformer) = &mut self.transformer {
+            transformer.is_ready().await && rx.await.is_ok()
+        } else {
+            rx.await.is_ok()
         }
     }
 }

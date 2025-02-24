@@ -2,10 +2,9 @@ use crate::app::callback::datumstore::{DatumStore, Error as StoreError, Result a
 use crate::config::UserDefinedStoreConfig;
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
-use bytes::Bytes;
 use http::Uri;
 use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
-use numaflow_pb::clients::serving::PutRequest;
+use numaflow_pb::clients::serving::{GetRequest, PutRequest};
 use std::path::PathBuf;
 use tokio::net::UnixStream;
 use tonic::transport::{Channel, Endpoint};
@@ -20,30 +19,17 @@ pub(crate) struct UserDefinedStore {
 impl UserDefinedStore {
     pub(crate) async fn new(config: UserDefinedStoreConfig) -> crate::Result<Self> {
         let channel = create_rpc_channel(config.socket_path.into()).await?;
-        let client = ServingStoreClient::new(channel);
+        let client = ServingStoreClient::new(channel)
+            .max_encoding_message_size(config.grpc_max_message_size)
+            .max_decoding_message_size(config.grpc_max_message_size);
         Ok(Self { client })
     }
 }
 
 impl DatumStore for UserDefinedStore {
-    async fn save(&mut self, id: &str, payload: Bytes) -> StoreResult<()> {
-        let request = PutRequest {
-            origin: "user_defined_store".to_string(),
-            payloads: vec![numaflow_pb::clients::serving::Payload {
-                id: id.to_string(),
-                value: payload.to_vec(),
-            }],
-        };
-        self.client
-            .put(request)
-            .await
-            .map_err(|e| StoreError::StoreWrite(format!("gRPC Put request failed: {e:?}")))?;
-        Ok(())
-    }
-
     // FIXME(serving): we need to return the origin details along with the payload
     async fn retrieve_datum(&mut self, id: &str) -> StoreResult<Option<Vec<Vec<u8>>>> {
-        let request = numaflow_pb::clients::serving::GetRequest { id: id.to_string() };
+        let request = GetRequest { id: id.to_string() };
         let response = self
             .client
             .get(request)
@@ -53,12 +39,7 @@ impl DatumStore for UserDefinedStore {
         if payloads.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(
-                payloads
-                    .into_iter()
-                    .flat_map(|p| p.payloads.into_iter().map(|p| p.value))
-                    .collect(),
-            ))
+            Ok(Some(payloads.iter().map(|p| p.value.clone()).collect()))
         }
     }
 

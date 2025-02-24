@@ -21,7 +21,6 @@ use uuid::Uuid;
 use self::{
     direct_proxy::direct_proxy, jetstream_proxy::jetstream_proxy, message_path::get_message_path,
 };
-use crate::app::callback::callback_handler;
 use crate::app::callback::cbstore::CallbackStore;
 use crate::app::callback::datumstore::DatumStore;
 use crate::metrics::capture_metrics;
@@ -109,7 +108,7 @@ where
                             // 5xx responses will be logged at 'error' level in `on_failure`
                             return;
                         }
-                        tracing::info!(status=?response.status(), ?latency)
+                        info!(status=?response.status(), ?latency)
                     },
                 )
                 .on_failure(
@@ -268,14 +267,9 @@ async fn routes<
 ) -> crate::Result<Router> {
     let state = app_state.callback_state.clone();
     let jetstream_proxy = jetstream_proxy(app_state.clone()).await?;
-    let callback_router = callback_handler(
-        app_state.settings.tid_header.clone(),
-        app_state.callback_state.clone(),
-    );
+
     let message_path_handler = get_message_path(state);
-    Ok(jetstream_proxy
-        .merge(callback_router)
-        .merge(message_path_handler))
+    Ok(jetstream_proxy.merge(message_path_handler))
 }
 
 // #[cfg(test)]

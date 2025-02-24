@@ -115,19 +115,6 @@ where
             .map_err(Into::into)
     }
 
-    pub(crate) async fn save_response(
-        &mut self,
-        id: String,
-        body: axum::body::Bytes,
-    ) -> crate::Result<()> {
-        // we have to differentiate between the saved responses and the callback requests
-        // saved responses are stored in "id_SAVED", callback requests are stored in "id"
-        self.datum_store
-            .save(id.as_str(), body)
-            .await
-            .map_err(Into::into)
-    }
-
     /// Get the subgraph for the given ID from persistent store. This is used querying for the status from the service endpoint even after the
     /// request has been completed.
     pub(crate) async fn retrieve_subgraph_from_storage(

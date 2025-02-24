@@ -132,7 +132,7 @@ pub(crate) mod source {
             }
 
             settings.cb_js_store =
-                format!("{}-{}_SERVING_STORE", get_namespace(), get_pipeline_name(),);
+                format!("{}-{}_SERVING_KV_STORE", get_namespace(), get_pipeline_name(),);
 
             Ok(SourceType::Serving(Arc::new(settings)))
         }
@@ -217,10 +217,9 @@ pub(crate) mod sink {
 
     use std::fmt::Display;
 
-    use numaflow_models::models::{Backoff, RetryStrategy, Sink};
-
     use crate::error::Error;
     use crate::Result;
+    use numaflow_models::models::{Backoff, RetryStrategy, Sink};
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct SinkConfig {
