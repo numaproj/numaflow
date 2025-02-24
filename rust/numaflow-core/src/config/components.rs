@@ -131,26 +131,8 @@ pub(crate) mod source {
                 };
             }
 
-            if let Some(ttl) = cfg.store.ttl {
-                if ttl.is_negative() {
-                    return Err(Error::Config(format!(
-                        "TTL value for the store can not be negative. Provided value = {ttl:?}"
-                    )));
-                }
-                let ttl: std::time::Duration = ttl.into();
-                let ttl_secs = ttl.as_secs() as u32;
-                // TODO: Identify a minimum value
-                if ttl_secs < 1 {
-                    return Err(Error::Config(format!(
-                        "TTL value for the store must not be less than 1 second. Provided value = {ttl:?}"
-                    )));
-                }
-                settings.redis.ttl_secs = Some(ttl_secs);
-            }
-            settings.js_store =
+            settings.cb_js_store =
                 format!("{}-{}_SERVING_STORE", get_namespace(), get_pipeline_name(),);
-            settings.redis.addr = cfg.store.url;
-            settings.drain_timeout_secs = cfg.request_timeout_seconds.unwrap_or(120).max(1) as u64; // Ensure timeout is atleast 1 second
 
             Ok(SourceType::Serving(Arc::new(settings)))
         }

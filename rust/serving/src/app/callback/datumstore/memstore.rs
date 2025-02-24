@@ -27,7 +27,7 @@ impl InMemoryStore {
 }
 
 impl super::DatumStore for InMemoryStore {
-    async fn save(&mut self, id: &str, payload: Bytes) -> StoreResult<()> {
+    async fn save(&mut self, _id: &str, _payload: Bytes) -> StoreResult<()> {
         todo!()
     }
 

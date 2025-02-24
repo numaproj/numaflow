@@ -4853,13 +4853,6 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingSource(ref common.ReferenceCallbac
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.BuiltInServingStore"),
 						},
 					},
-					"requestTimeoutSeconds": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Request timeout in seconds. Default value is 120 seconds.",
-							Type:        []string{"integer"},
-							Format:      "int64",
-						},
-					},
 				},
 				Required: []string{"msgIDHeaderKey", "store"},
 			},

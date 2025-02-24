@@ -1,11 +1,8 @@
-use std::sync::Arc;
-
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use bytes::Bytes;
 use redis::aio::ConnectionManager;
 use redis::RedisError;
-use tokio::sync::Semaphore;
 use tracing::info;
 
 use crate::app::callback::datumstore::{DatumStore, Error as StoreError, Result as StoreResult};
@@ -14,9 +11,6 @@ use crate::config::RedisConfig;
 const LPUSH: &str = "LPUSH";
 const LRANGE: &str = "LRANGE";
 const EXPIRE: &str = "EXPIRE";
-
-const STATUS_PROCESSING: &str = "processing";
-const STATUS_COMPLETED: &str = "completed";
 
 // Handle to the Redis actor.
 #[derive(Clone)]

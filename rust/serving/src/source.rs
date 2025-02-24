@@ -9,11 +9,12 @@ use tokio::time::Instant;
 
 use crate::app::callback::cbstore::jetstreamstore::JSCallbackStore;
 use crate::app::callback::datumstore::redisstore::RedisConnection;
+use crate::app::callback::datumstore::user_defined::UserDefinedStore;
 use crate::app::callback::state::State as CallbackState;
 use crate::app::tracker::MessageGraph;
-use crate::config::{DEFAULT_CALLBACK_URL_HEADER_KEY, DEFAULT_ID_HEADER};
-use crate::Settings;
+use crate::config::{StoreType, DEFAULT_ID_HEADER};
 use crate::{Error, Result};
+use crate::{Settings, DEFAULT_CALLBACK_URL_HEADER_KEY};
 
 /// [Message] with a oneshot for notifying when the message has been completed processed.
 pub(crate) struct MessageWrapper {
@@ -66,8 +67,8 @@ impl ServingSourceActor {
     ) -> Result<()> {
         // Channel to which HTTP handlers will send request payload
         let (messages_tx, messages_rx) = mpsc::channel(request_channel_buffer_size);
-        // Create a redis store to store the callbacks and the custom responses
-        let redis_store = RedisConnection::new(settings.redis.clone()).await?;
+        // create a callback store for tracking
+        let callback_store = JSCallbackStore::new(js_context, &settings.cb_js_store).await?;
         // Create the message graph from the pipeline spec and the redis store
         let msg_graph = MessageGraph::from_pipeline(&settings.pipeline_spec).map_err(|e| {
             Error::InitError(format!(
@@ -75,13 +76,42 @@ impl ServingSourceActor {
                 e
             ))
         })?;
-        let callback_store = JSCallbackStore::new(js_context, &settings.js_store).await?;
-        let callback_state = CallbackState::new(msg_graph, redis_store, callback_store).await?;
 
         let callback_url = format!(
             "https://{}:{}/v1/process/callback",
             &settings.host_ip, &settings.app_listen_port
         );
+
+        // Create a redis store to store the callbacks and the custom responses
+        match &settings.store_type {
+            StoreType::Redis(config) => {
+                let redis_store = RedisConnection::new(config.clone()).await?;
+                let callback_state =
+                    CallbackState::new(msg_graph, redis_store, callback_store).await?;
+                let app = crate::AppState {
+                    message: messages_tx,
+                    settings,
+                    callback_state,
+                };
+                tokio::spawn(async move {
+                    crate::serve(app).await.unwrap();
+                });
+            }
+            StoreType::UserDefined(ud_config) => {
+                let ud_store = UserDefinedStore::new(ud_config.clone()).await?;
+                let callback_state =
+                    CallbackState::new(msg_graph, ud_store, callback_store).await?;
+                let app = crate::AppState {
+                    message: messages_tx,
+                    settings,
+                    callback_state,
+                };
+                tokio::spawn(async move {
+                    crate::serve(app).await.unwrap();
+                });
+            }
+        }
+
         tokio::spawn(async move {
             let mut serving_actor = ServingSourceActor {
                 messages: messages_rx,
@@ -92,14 +122,7 @@ impl ServingSourceActor {
             };
             serving_actor.run().await;
         });
-        let app = crate::AppState {
-            message: messages_tx,
-            settings,
-            callback_state,
-        };
-        tokio::spawn(async move {
-            crate::serve(app).await.unwrap();
-        });
+
         Ok(())
     }
 
@@ -268,8 +291,8 @@ mod tests {
         // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
-        let mut settings = Arc::new(Settings {
-            js_store: "test_serving_source".to_string(),
+        let settings = Arc::new(Settings {
+            cb_js_store: "test_serving_source".to_string(),
             ..Default::default()
         });
 

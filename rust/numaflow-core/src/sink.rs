@@ -397,6 +397,7 @@ impl SinkWriter {
         let mut attempts = 0;
         let mut error_map = HashMap::new();
         let mut fallback_msgs = Vec::new();
+        let mut serving_msgs = Vec::new();
         // start with the original set of message to be sent.
         // we will overwrite this vec with failed messages and will keep retrying.
         let mut messages_to_send = messages;
@@ -411,6 +412,7 @@ impl SinkWriter {
                     .write_to_sink_once(
                         &mut error_map,
                         &mut fallback_msgs,
+                        &mut serving_msgs,
                         &mut messages_to_send,
                         retry_config,
                     )
@@ -461,6 +463,10 @@ impl SinkWriter {
         if !fallback_msgs.is_empty() {
             self.handle_fallback_messages(fallback_msgs, retry_config)
                 .await?;
+        }
+
+        if !serving_msgs.is_empty() {
+            // TODO write to serving store (it could be nats object store/user defined store)
         }
 
         if is_mono_vertex() {
@@ -538,6 +544,7 @@ impl SinkWriter {
         &mut self,
         error_map: &mut HashMap<String, i32>,
         fallback_msgs: &mut Vec<Message>,
+        serving_msgs: &mut Vec<Message>,
         messages_to_send: &mut Vec<Message>,
         retry_config: &RetryConfig,
     ) -> Result<bool> {
@@ -564,6 +571,10 @@ impl SinkWriter {
                             }
                             ResponseStatusFromSink::Fallback => {
                                 fallback_msgs.push(msg.clone());
+                                false
+                            }
+                            ResponseStatusFromSink::Serve => {
+                                serving_msgs.push(msg.clone());
                                 false
                             }
                         };
@@ -696,6 +707,8 @@ pub(crate) enum ResponseStatusFromSink {
     Failed(String),
     /// Write to FallBack Sink.
     Fallback,
+    /// Write to serving store.
+    Serve,
 }
 
 /// Sink will give a response per [Message].
@@ -705,6 +718,7 @@ pub(crate) struct ResponseFromSink {
     pub(crate) id: String,
     /// Status of the "sink" operation per [Message].
     pub(crate) status: ResponseStatusFromSink,
+    pub(crate) serve_response: Option<Vec<u8>>,
 }
 
 impl From<sink_response::Result> for ResponseFromSink {
@@ -713,26 +727,12 @@ impl From<sink_response::Result> for ResponseFromSink {
             Success => ResponseStatusFromSink::Success,
             Failure => ResponseStatusFromSink::Failed(value.err_msg),
             Fallback => ResponseStatusFromSink::Fallback,
+            Serve => ResponseStatusFromSink::Serve,
         };
         Self {
             id: value.id,
             status,
-        }
-    }
-}
-
-impl From<ResponseFromSink> for sink_response::Result {
-    fn from(value: ResponseFromSink) -> Self {
-        let (status, err_msg) = match value.status {
-            ResponseStatusFromSink::Success => (Success, "".to_string()),
-            ResponseStatusFromSink::Failed(err) => (Failure, err.to_string()),
-            ResponseStatusFromSink::Fallback => (Fallback, "".to_string()),
-        };
-
-        Self {
-            id: value.id,
-            status: status as i32,
-            err_msg,
+            serve_response: value.serve_response,
         }
     }
 }
@@ -1063,6 +1063,7 @@ mod tests {
         let response = ResponseFromSink {
             id: "123".to_string(),
             status: ResponseStatusFromSink::Success,
+            serve_response: None,
         };
 
         let sink_result: sink_response::Result = response.into();
@@ -1076,6 +1077,7 @@ mod tests {
                 id: "123".to_string(),
                 status: Success as i32,
                 err_msg: "".to_string(),
+                serve_response: None,
             }],
             handshake: None,
             status: None,

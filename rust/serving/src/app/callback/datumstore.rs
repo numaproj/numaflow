@@ -4,6 +4,7 @@ use thiserror::Error;
 pub(crate) mod redisstore;
 // in-memory store
 pub(crate) mod memstore;
+pub(crate) mod user_defined;
 
 #[derive(Error, Debug, Clone)]
 pub(crate) enum Error {

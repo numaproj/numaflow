@@ -25,12 +25,6 @@ pub struct ServingSource {
     /// The header key from which the message id will be extracted
     #[serde(rename = "msgIDHeaderKey")]
     pub msg_id_header_key: String,
-    /// Request timeout in seconds. Default value is 120 seconds.
-    #[serde(
-        rename = "requestTimeoutSeconds",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub request_timeout_seconds: Option<i64>,
     /// Whether to create a ClusterIP Service
     #[serde(rename = "service", skip_serializing_if = "Option::is_none")]
     pub service: Option<bool>,
@@ -47,7 +41,6 @@ impl ServingSource {
         ServingSource {
             auth: None,
             msg_id_header_key,
-            request_timeout_seconds: None,
             service: None,
             store: Box::new(store),
         }

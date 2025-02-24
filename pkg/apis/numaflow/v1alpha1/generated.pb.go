@@ -8446,11 +8446,6 @@ func (m *ServingSource) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.RequestTimeoutSecs != nil {
-		i = encodeVarintGenerated(dAtA, i, uint64(*m.RequestTimeoutSecs))
-		i--
-		dAtA[i] = 0x28
-	}
 	if m.Store != nil {
 		{
 			size, err := m.Store.MarshalToSizedBuffer(dAtA[:i])
@@ -11845,9 +11840,6 @@ func (m *ServingSource) Size() (n int) {
 	if m.Store != nil {
 		l = m.Store.Size()
 		n += 1 + l + sovGenerated(uint64(l))
-	}
-	if m.RequestTimeoutSecs != nil {
-		n += 1 + sovGenerated(uint64(*m.RequestTimeoutSecs))
 	}
 	return n
 }
@@ -29931,26 +29923,6 @@ func (m *ServingSource) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 5:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field RequestTimeoutSecs", wireType)
-			}
-			var v uint32
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowGenerated
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= uint32(b&0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.RequestTimeoutSecs = &v
 		default:
 			iNdEx = preIndex
 			skippy, err := skipGenerated(dAtA[iNdEx:])

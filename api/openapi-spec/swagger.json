@@ -21945,11 +21945,6 @@
           "description": "The header key from which the message id will be extracted",
           "type": "string"
         },
-        "requestTimeoutSeconds": {
-          "description": "Request timeout in seconds. Default value is 120 seconds.",
-          "type": "integer",
-          "format": "int64"
-        },
         "service": {
           "description": "Whether to create a ClusterIP Service",
           "type": "boolean"
