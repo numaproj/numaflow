@@ -1,7 +1,7 @@
 use crate::callback::Callback;
 use std::sync::Arc;
 
-use async_nats::jetstream::kv::Store;
+use async_nats::jetstream::kv::{CreateErrorKind, Store};
 use async_nats::jetstream::Context;
 use bytes::Bytes;
 use tokio::task::JoinHandle;
@@ -28,22 +28,20 @@ impl JSCallbackStore {
 
 impl super::CallbackStore for JSCallbackStore {
     async fn register(&mut self, id: &str) -> StoreResult<()> {
-        let key = format!("{}=status", id);
-        println!("Registering key: {}", key);
-        let exists = self.kv_store.get(&key).await.map_err(|e| {
-            StoreError::StoreRead(format!("Failed to get request id in kv store: {e:?}"))
-        })?;
-        if exists.is_some() {
-            return Err(StoreError::DuplicateRequest(id.to_string()));
-        }
+        let key = format!("{id}=status");
+        tracing::info!(key, "Registering key in Jetstream KV store");
 
         self.kv_store
-            .put(&key, ProcessingStatus::InProgress.into())
+            .create(&key, ProcessingStatus::InProgress.into())
             .await
             .map_err(|e| {
-                StoreError::StoreWrite(format!(
-                    "Failed to register request id {key} in kv store: {e:?}"
-                ))
+                if e.kind() == CreateErrorKind::AlreadyExists {
+                    StoreError::DuplicateRequest(id.to_string())
+                } else {
+                    StoreError::StoreWrite(format!(
+                        "Failed to register request id {key} in kv store: {e:?}"
+                    ))
+                }
             })?;
 
         self.kv_store
@@ -101,7 +99,14 @@ impl super::CallbackStore for JSCallbackStore {
 
         let handle = tokio::spawn(async move {
             // TODO: handle watch errors
-            while let Some(Ok(entry)) = watcher.next().await {
+            while let Some(watch_event) = watcher.next().await {
+                let entry = match watch_event {
+                    Ok(event) => event,
+                    Err(e) => {
+                        tracing::error!(?e, "Received error from Jetstream KV watcher");
+                        continue;
+                    }
+                };
                 // all callbacks received
                 if entry.operation == async_nats::jetstream::kv::Operation::Delete {
                     break;
@@ -185,6 +190,9 @@ mod tests {
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
         let serving_store = "test_watch_callbacks";
+
+        // Delete bucket so that re-running the test won't fail
+        let _ = context.delete_key_value(serving_store).await;
 
         context
             .create_key_value(Config {
