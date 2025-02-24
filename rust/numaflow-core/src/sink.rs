@@ -660,6 +660,9 @@ impl SinkWriter {
                                     contains_fallback_status = true;
                                     false
                                 }
+                                ResponseStatusFromSink::Serve => {
+                                    todo!()
+                                }
                             }
                         } else {
                             false
@@ -727,7 +730,7 @@ impl From<sink_response::Result> for ResponseFromSink {
             Success => ResponseStatusFromSink::Success,
             Failure => ResponseStatusFromSink::Failed(value.err_msg),
             Fallback => ResponseStatusFromSink::Fallback,
-            Serve => ResponseStatusFromSink::Serve,
+            numaflow_pb::clients::sink::Status::Serve => ResponseStatusFromSink::Serve,
         };
         Self {
             id: value.id,
