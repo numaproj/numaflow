@@ -41,7 +41,7 @@ pub(crate) async fn create_sink_writer(
     primary_sink: SinkConfig,
     fallback_sink: Option<SinkConfig>,
     tracker_handle: TrackerHandle,
-    serving_store_config: Option<ServingStoreType>,
+    serving_store: Option<ServingStore>,
     cln_token: &CancellationToken,
 ) -> error::Result<(
     SinkWriter,
@@ -159,10 +159,8 @@ pub(crate) async fn create_sink_writer(
         };
     }
 
-    if let Some(ServingStoreType::UserDefined(config)) = serving_store_config {
-        sink_writer_builder = sink_writer_builder.serving_store(ServingStore::UserDefined(
-            UserDefinedStore::new(config).await?,
-        ));
+    if let Some(serving_store) = serving_store {
+        sink_writer_builder = sink_writer_builder.serving_store(serving_store);
     }
 
     Ok((sink_writer_builder.build().await?, sink_rpc_client, None))

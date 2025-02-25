@@ -1,15 +1,17 @@
-use crate::app::callback::datumstore::{DatumStore, Error as StoreError, Result as StoreResult};
-use crate::config::UserDefinedStoreConfig;
+use std::path::PathBuf;
+
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use http::Uri;
 use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
-use numaflow_pb::clients::serving::{GetRequest, PutRequest};
-use std::path::PathBuf;
+use numaflow_pb::clients::serving::GetRequest;
 use tokio::net::UnixStream;
 use tonic::transport::{Channel, Endpoint};
 use tower::service_fn;
 use tracing::warn;
+
+use crate::app::callback::datumstore::{DatumStore, Error as StoreError, Result as StoreResult};
+use crate::config::UserDefinedStoreConfig;
 
 #[derive(Clone)]
 pub(crate) struct UserDefinedStore {

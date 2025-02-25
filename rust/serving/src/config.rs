@@ -89,13 +89,13 @@ pub struct Settings {
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub enum StoreType {
-    Redis(RedisConfig),
     UserDefined(UserDefinedStoreConfig),
+    Nats,
 }
 
 impl Default for StoreType {
     fn default() -> Self {
-        StoreType::Redis(RedisConfig::default())
+        StoreType::Nats
     }
 }
 
@@ -226,7 +226,9 @@ impl TryFrom<HashMap<String, String>> for Settings {
                 let vertex_obj = serde_json::from_slice::<Vertex>(&source_spec_decoded)
                     .map_err(|e| ParseConfig(format!("parsing {ENV_VERTEX_OBJ}: {e:?}")))?;
 
-                if vertex_obj.spec.serving_store_name.is_some() {
+                if vertex_obj.spec.serving_store_name.is_some()
+                    && vertex_obj.spec.serving_store_name.as_ref().unwrap() != "default"
+                {
                     ud_store_enabled = true;
                 }
 
@@ -251,10 +253,7 @@ impl TryFrom<HashMap<String, String>> for Settings {
         settings.store_type = if ud_store_enabled {
             StoreType::UserDefined(UserDefinedStoreConfig::default())
         } else {
-            let redis_config = RedisConfig {
-                ..Default::default()
-            };
-            StoreType::Redis(redis_config)
+            StoreType::Nats
         };
 
         // FIXME(serving)
@@ -295,10 +294,7 @@ mod tests {
         assert_eq!(settings.metrics_server_listen_port, 3001);
         assert_eq!(settings.upstream_addr, "localhost:8888");
         assert_eq!(settings.drain_timeout_secs, 600);
-        assert_eq!(
-            settings.store_type,
-            StoreType::Redis(RedisConfig::default()),
-        );
+        assert_eq!(settings.store_type, StoreType::Nats,);
     }
 
     #[test]
@@ -325,13 +321,7 @@ mod tests {
             metrics_server_listen_port: 3001,
             upstream_addr: "localhost:8888".into(),
             drain_timeout_secs: 600,
-            store_type: StoreType::Redis(RedisConfig {
-                addr: "redis://redis:6379".into(),
-                max_tasks: 50,
-                retries: 5,
-                retries_duration_millis: 100,
-                ttl_secs: Some(DEFAULT_REDIS_TTL_IN_SECS),
-            }),
+            store_type: StoreType::Nats,
             host_ip: "10.2.3.5".into(),
             api_auth_token: None,
             pipeline_spec: PipelineDCG {
@@ -377,13 +367,7 @@ mod tests {
             metrics_server_listen_port: 3001,
             upstream_addr: "localhost:8888".into(),
             drain_timeout_secs: 600,
-            store_type: StoreType::Redis(RedisConfig {
-                addr: "redis://redis:6379".into(),
-                max_tasks: 50,
-                retries: 5,
-                retries_duration_millis: 100,
-                ttl_secs: Some(DEFAULT_REDIS_TTL_IN_SECS),
-            }),
+            store_type: StoreType::Nats,
             host_ip: "localhost".into(),
             api_auth_token: None,
             pipeline_spec: PipelineDCG {

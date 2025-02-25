@@ -18,7 +18,7 @@ use chrono::{DateTime, Utc};
 use serving::callback::CallbackHandler;
 use serving::DEFAULT_ID_HEADER;
 use tokio::sync::{mpsc, oneshot};
-use tracing::error;
+use tracing::{error, info};
 
 use crate::error::Error;
 use crate::message::{Message, Offset, ReadAck};
@@ -62,6 +62,9 @@ enum ActorMessage {
         offset: Offset,
     },
     EOF {
+        offset: Offset,
+    },
+    Refresh {
         offset: Offset,
     },
     #[cfg(test)]
@@ -174,6 +177,9 @@ impl Tracker {
             ActorMessage::Append { offset, response } => {
                 self.handle_append(offset, response);
             }
+            ActorMessage::Refresh { offset } => {
+                self.handle_refresh(offset);
+            }
             #[cfg(test)]
             ActorMessage::IsEmpty { respond_to } => {
                 let is_empty = self.entries.is_empty();
@@ -279,6 +285,19 @@ impl Tracker {
         }
     }
 
+    /// Resets the count and eof status for an offset in the tracker.
+    fn handle_refresh(&mut self, offset: Offset) {
+        let Some(mut entry) = self.entries.remove(&offset) else {
+            return;
+        };
+        entry.count = 0;
+        entry.eof = false;
+        if let Some(serving_info) = &mut entry.serving_callback_info {
+            serving_info.responses = vec![];
+        }
+        self.entries.insert(offset, entry);
+    }
+
     /// This function is called once the message has been successfully processed. This is where
     /// the bookkeeping for a successful message happens, things like,
     /// - ack back
@@ -379,6 +398,16 @@ impl TrackerHandle {
             .map(|tags| tags.map(|tags| tags.iter().map(|tag| tag.to_string()).collect()))
             .collect();
         let message = ActorMessage::Update { offset, responses };
+        self.sender
+            .send(message)
+            .await
+            .map_err(|e| Error::Tracker(format!("{:?}", e)))?;
+        Ok(())
+    }
+
+    /// resets the count and eof status for an offset in the tracker.
+    pub(crate) async fn refresh(&self, offset: Offset) -> Result<()> {
+        let message = ActorMessage::Refresh { offset };
         self.sender
             .send(message)
             .await

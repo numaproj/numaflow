@@ -8,8 +8,9 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
 
 use crate::app::callback::cbstore::jetstreamstore::JSCallbackStore;
-use crate::app::callback::datumstore::redisstore::RedisConnection;
+use crate::app::callback::datumstore::jetstreamstore::JetStreamDatumStore;
 use crate::app::callback::datumstore::user_defined::UserDefinedStore;
+use crate::app::callback::ssewatcher::SSEResponseWatcher;
 use crate::app::callback::state::State as CallbackState;
 use crate::app::tracker::MessageGraph;
 use crate::config::{StoreType, DEFAULT_ID_HEADER};
@@ -68,7 +69,8 @@ impl ServingSourceActor {
         // Channel to which HTTP handlers will send request payload
         let (messages_tx, messages_rx) = mpsc::channel(request_channel_buffer_size);
         // create a callback store for tracking
-        let callback_store = JSCallbackStore::new(js_context, &settings.cb_js_store).await?;
+        let callback_store =
+            JSCallbackStore::new(js_context.clone(), &settings.cb_js_store).await?;
         // Create the message graph from the pipeline spec and the redis store
         let msg_graph = MessageGraph::from_pipeline(&settings.pipeline_spec).map_err(|e| {
             Error::InitError(format!(
@@ -77,6 +79,9 @@ impl ServingSourceActor {
             ))
         })?;
 
+        let sse_watcher =
+            SSEResponseWatcher::new(js_context.clone(), &settings.cb_js_store).await?;
+
         let callback_url = format!(
             "https://{}:{}/v1/process/callback",
             &settings.host_ip, &settings.app_listen_port
@@ -84,10 +89,12 @@ impl ServingSourceActor {
 
         // Create a redis store to store the callbacks and the custom responses
         match &settings.store_type {
-            StoreType::Redis(config) => {
-                let redis_store = RedisConnection::new(config.clone()).await?;
+            StoreType::Nats => {
+                let nats_store =
+                    JetStreamDatumStore::new(js_context, &settings.cb_js_store).await?;
                 let callback_state =
-                    CallbackState::new(msg_graph, redis_store, callback_store).await?;
+                    CallbackState::new(msg_graph, nats_store, callback_store, sse_watcher.clone())
+                        .await?;
                 let app = crate::AppState {
                     message: messages_tx,
                     settings,
@@ -100,7 +107,8 @@ impl ServingSourceActor {
             StoreType::UserDefined(ud_config) => {
                 let ud_store = UserDefinedStore::new(ud_config.clone()).await?;
                 let callback_state =
-                    CallbackState::new(msg_graph, ud_store, callback_store).await?;
+                    CallbackState::new(msg_graph, ud_store, callback_store, sse_watcher.clone())
+                        .await?;
                 let app = crate::AppState {
                     message: messages_tx,
                     settings,

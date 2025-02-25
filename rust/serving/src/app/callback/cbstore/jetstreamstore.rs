@@ -1,4 +1,4 @@
-use crate::callback::Callback;
+use std::fmt::format;
 use std::sync::Arc;
 
 use async_nats::jetstream::kv::{CreateErrorKind, Store};
@@ -7,9 +7,11 @@ use bytes::Bytes;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
+use tracing::info;
 
 use crate::app::callback::cbstore::ProcessingStatus;
 use crate::app::callback::datumstore::{Error as StoreError, Result as StoreResult};
+use crate::callback::Callback;
 
 #[derive(Clone)]
 pub(crate) struct JSCallbackStore {
@@ -44,6 +46,17 @@ impl super::CallbackStore for JSCallbackStore {
                 }
             })?;
 
+        let response_key = format!("{id}=response");
+        // FIXME: we write empty data so keys are created
+        self.kv_store
+            .put(&response_key, Bytes::from_static(b""))
+            .await
+            .map_err(|e| {
+                StoreError::StoreWrite(format!(
+                    "Failed to register request id {id} in kv store: {e:?}"
+                ))
+            })?;
+        // FIXME: we write empty data so keys are created
         self.kv_store
             .put(id, Bytes::from_static(b""))
             .await
@@ -57,6 +70,7 @@ impl super::CallbackStore for JSCallbackStore {
     }
 
     async fn deregister(&mut self, id: &str, sub_graph: &str) -> StoreResult<()> {
+        info!(?id, "Unregistering key in Jetstream KV store");
         let key = format!("{}=status", id);
         let completed_value = format!("completed:{}", sub_graph);
         self.kv_store
@@ -68,6 +82,16 @@ impl super::CallbackStore for JSCallbackStore {
             .map_err(|e| {
                 StoreError::StoreWrite(format!("Failed to mark request as done in kv store: {e:?}"))
             })?;
+
+        // FIXME: use types or watch from revision
+        let response_key = format!("{id}=response");
+        self.kv_store
+            .put(&response_key, Bytes::from_static(b"deleted"))
+            .await
+            .map_err(|e| {
+                StoreError::StoreWrite(format!("Failed to mark request as done in kv store: {e:?}"))
+            })?;
+
         Ok(())
     }
 

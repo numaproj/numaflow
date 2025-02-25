@@ -608,14 +608,15 @@ impl MapHandle {
             // we need update the tracker with no responses, because unlike unary and batch, we cannot update the
             // responses here we will have to append the responses.
             tracker_handle
-                .update(read_msg.offset.clone(), vec![])
+                .refresh(read_msg.offset.clone())
                 .await
-                .expect("failed to update tracker");
+                .expect("failed to reset tracker");
             loop {
                 tokio::select! {
                     result = receiver.recv() => {
                         match result {
                             Some(Ok(mapped_message)) => {
+                                info!(?mapped_message, "Received mapped message");
                                 tracker_handle
                                     .append(mapped_message.offset.clone(), mapped_message.tags.clone())
                                     .await
@@ -647,6 +648,7 @@ impl MapHandle {
                 }
             }
 
+            info!(?read_msg.offset, "Stream map operation completed");
             tracker_handle
                 .eof(read_msg.offset)
                 .await

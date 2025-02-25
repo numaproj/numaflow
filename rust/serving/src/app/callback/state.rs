@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use tokio::sync::oneshot;
+use bytes::Bytes;
+use tokio::sync::{mpsc, oneshot};
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tracing::{error, info};
 
@@ -8,6 +10,7 @@ use super::datumstore::DatumStore;
 use crate::app::callback::cbstore::{CallbackStore, ProcessingStatus};
 use crate::app::callback::datumstore::Error as StoreError;
 use crate::app::callback::datumstore::Result as StoreResult;
+use crate::app::callback::ssewatcher::SSEResponseWatcher;
 use crate::app::tracker::MessageGraph;
 use crate::Error;
 
@@ -18,6 +21,7 @@ pub(crate) struct State<T, C> {
     // conn is to be used while reading and writing to redis.
     datum_store: T,
     callback_store: C,
+    sse_watcher: SSEResponseWatcher,
 }
 
 impl<T, C> State<T, C>
@@ -30,11 +34,13 @@ where
         msg_graph: MessageGraph,
         store: T,
         callback_store: C,
+        sse_watcher: SSEResponseWatcher,
     ) -> crate::Result<Self> {
         Ok(Self {
             msg_graph_generator: Arc::new(msg_graph),
             datum_store: store,
             callback_store,
+            sse_watcher,
         })
     }
 
@@ -113,6 +119,72 @@ where
             .retrieve_datum(id)
             .await
             .map_err(Into::into)
+    }
+
+    /// Listens on watcher events (SSE uses KV watch) and checks with the Graph is complete. Once
+    /// Graph is complete, it will deregister and closes the outbound SSE channel.  
+    pub(crate) async fn stream_response(
+        &mut self,
+        id: &str,
+    ) -> StoreResult<ReceiverStream<Arc<Bytes>>> {
+        let (tx, rx) = mpsc::channel(10);
+        let sub_graph_generator = Arc::clone(&self.msg_graph_generator);
+        let msg_id = id.to_string();
+        let mut subgraph = None;
+
+        // register the request in the store
+        self.callback_store.register(id).await?;
+
+        // start watching for callbacks
+        let (mut callbacks_stream, watch_handle) = self.callback_store.watch_callbacks(id).await?;
+
+        let mut cb_store = self.callback_store.clone();
+        tokio::spawn(async move {
+            let _handle = watch_handle;
+            let mut callbacks = Vec::new();
+
+            while let Some(cb) = callbacks_stream.next().await {
+                info!(?cb, ?msg_id, "Received callback");
+                callbacks.push(cb);
+                subgraph = match sub_graph_generator
+                    .generate_subgraph_from_callbacks(msg_id.clone(), callbacks.clone())
+                {
+                    Ok(subgraph) => subgraph,
+                    Err(e) => {
+                        error!(?e, "Failed to generate subgraph");
+                        break;
+                    }
+                };
+                if subgraph.is_some() {
+                    break;
+                }
+            }
+
+            if let Some(subgraph) = subgraph {
+                cb_store
+                    .deregister(&msg_id, &subgraph)
+                    .await
+                    .expect("Failed to deregister");
+            } else {
+                error!("Subgraph could not be generated for the given ID");
+
+                cb_store
+                    .mark_as_failed(&msg_id, "Subgraph could not be generated")
+                    .await
+                    .expect("Failed to mark as failed");
+            }
+        });
+
+        let mut sse_watcher = self.sse_watcher.clone();
+        let (mut response_stream, _handle) = sse_watcher.watch_response(id).await?;
+
+        tokio::spawn(async move {
+            while let Some(response) = response_stream.next().await {
+                tx.send(response).await.expect("Failed to send response");
+            }
+        });
+
+        Ok(ReceiverStream::new(rx))
     }
 
     /// Get the subgraph for the given ID from persistent store. This is used querying for the status from the service endpoint even after the
