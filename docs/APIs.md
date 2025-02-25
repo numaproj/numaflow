@@ -9998,6 +9998,25 @@ The header key from which the message id will be extracted
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>requestTimeoutSeconds</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Request timeout in seconds. Default value is 120 seconds.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>

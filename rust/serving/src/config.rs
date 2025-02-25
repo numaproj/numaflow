@@ -262,7 +262,8 @@ impl TryFrom<HashMap<String, String>> for Settings {
         };
 
         // FIXME(serving)
-        settings.drain_timeout_secs = 120;
+        settings.drain_timeout_secs =
+            serving_spec.request_timeout_seconds.unwrap_or(120).max(1) as u64; // Ensure timeout is atleast 1 second
 
         if let Some(auth) = serving_spec.auth {
             let token = auth.token.unwrap();
