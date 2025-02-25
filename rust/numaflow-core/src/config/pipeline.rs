@@ -178,7 +178,7 @@ pub(crate) mod map {
 pub(crate) struct SinkVtxConfig {
     pub(crate) sink_config: SinkConfig,
     pub(crate) fb_sink_config: Option<SinkConfig>,
-    pub(crate) udstore_config: Option<UserDefinedStoreConfig>,
+    pub(crate) serving_store_config: Option<ServingStoreType>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -189,10 +189,21 @@ pub(crate) enum VertexType {
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
-pub struct UserDefinedStoreConfig {
-    pub grpc_max_message_size: usize,
-    pub socket_path: String,
-    pub server_info_path: String,
+pub(crate) enum ServingStoreType {
+    UserDefined(UserDefinedStoreConfig),
+    Nats(NatsStoreConfig),
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub(crate) struct UserDefinedStoreConfig {
+    pub(crate) grpc_max_message_size: usize,
+    pub(crate) socket_path: String,
+    pub(crate) server_info_path: String,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub(crate) struct NatsStoreConfig {
+    pub(crate) name: String,
 }
 
 impl Default for UserDefinedStoreConfig {
@@ -303,8 +314,17 @@ impl PipelineConfig {
                 None
             };
 
-            let udstore_config = if vertex_obj.spec.serving_store_name.is_some() {
-                Some(UserDefinedStoreConfig::default())
+            let serving_store_config = if let Some(store_name) = vertex_obj.spec.serving_store_name
+            {
+                if store_name == "default" {
+                    Some(ServingStoreType::Nats(NatsStoreConfig {
+                        name: format!("{}-{}_SERVING_OBJECT_STORE", namespace, pipeline_name),
+                    }))
+                } else {
+                    Some(ServingStoreType::UserDefined(
+                        UserDefinedStoreConfig::default(),
+                    ))
+                }
             } else {
                 None
             };
@@ -315,7 +335,7 @@ impl PipelineConfig {
                     retry_config: None,
                 },
                 fb_sink_config,
-                udstore_config,
+                serving_store_config,
             })
         } else if let Some(map) = vertex_obj.spec.udf {
             VertexType::Map(MapVtxConfig {
@@ -469,7 +489,7 @@ impl PipelineConfig {
                 })?;
             callback_config = Some(ServingCallbackConfig {
                 callback_store: Box::leak(
-                    format!("{}-{}_SERVING_STORE", namespace, pipeline_name).into_boxed_str(),
+                    format!("{}-{}_SERVING_KV_STORE", namespace, pipeline_name).into_boxed_str(),
                 ),
                 callback_concurrency,
             });
@@ -658,7 +678,7 @@ mod tests {
                 retry_config: None,
             },
             fb_sink_config: None,
-            udstore_config: None,
+            serving_store_config: None,
         });
         assert_eq!(sink_type.to_string(), "Sink");
     }
@@ -697,7 +717,7 @@ mod tests {
                     retry_config: None,
                 },
                 fb_sink_config: None,
-                udstore_config: None,
+                serving_store_config: None,
             }),
             metrics_config: MetricsConfig {
                 metrics_server_listen_port: 2469,

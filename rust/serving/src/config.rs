@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::time::Duration;
 
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
@@ -253,11 +252,6 @@ impl TryFrom<HashMap<String, String>> for Settings {
             StoreType::UserDefined(UserDefinedStoreConfig::default())
         } else {
             let redis_config = RedisConfig {
-                addr: serving_spec.store.url,
-                ttl_secs: match serving_spec.store.ttl {
-                    Some(ttl) => Some(Duration::from(ttl).as_secs() as u32),
-                    None => Some(DEFAULT_REDIS_TTL_IN_SECS),
-                },
                 ..Default::default()
             };
             StoreType::Redis(redis_config)

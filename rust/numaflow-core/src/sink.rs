@@ -30,7 +30,8 @@ use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_forward_metric_labels,
     pipeline_metrics,
 };
-use crate::sink::udstore::UserDefinedStore;
+use crate::servingstore::user_defined::UserDefinedStore;
+use crate::servingstore::ServingStore;
 use crate::tracker::TrackerHandle;
 use crate::Result;
 
@@ -44,7 +45,6 @@ mod blackhole;
 /// [Log]: https://numaflow.numaproj.io/user-guide/sinks/log/
 mod log;
 
-mod udstore;
 /// [User-Defined Sink] extends Numaflow to add custom sources supported outside the builtins.
 ///
 /// [User-Defined Sink]: https://numaflow.numaproj.io/user-guide/sinks/user-defined-sinks/
@@ -137,7 +137,7 @@ pub(super) struct SinkWriter {
     tracker_handle: TrackerHandle,
     shutting_down: bool,
     final_result: Result<()>,
-    ud_store: Option<UserDefinedStore>,
+    serving_store: Option<ServingStore>,
 }
 
 /// SinkWriterBuilder is a builder to build a SinkWriter.
@@ -148,7 +148,7 @@ pub struct SinkWriterBuilder {
     sink_client: SinkClientType,
     fb_sink_client: Option<SinkClientType>,
     tracker_handle: TrackerHandle,
-    ud_store_config: Option<UserDefinedStoreConfig>,
+    serving_store: Option<ServingStore>,
 }
 
 impl SinkWriterBuilder {
@@ -165,7 +165,7 @@ impl SinkWriterBuilder {
             sink_client: sink_type,
             fb_sink_client: None,
             tracker_handle,
-            ud_store_config: None,
+            serving_store: None,
         }
     }
 
@@ -179,8 +179,8 @@ impl SinkWriterBuilder {
         self
     }
 
-    pub fn ud_store_config(mut self, ud_store_config: UserDefinedStoreConfig) -> Self {
-        self.ud_store_config = Some(ud_store_config);
+    pub fn serving_store(mut self, serving_store: ServingStore) -> Self {
+        self.serving_store = Some(serving_store);
         self
     }
 
@@ -242,14 +242,6 @@ impl SinkWriterBuilder {
             None
         };
 
-        let ud_store = match self.ud_store_config {
-            Some(config) => {
-                let ud_store = UserDefinedStore::new(config).await?;
-                Some(ud_store)
-            }
-            None => None,
-        };
-
         Ok(SinkWriter {
             batch_size: self.batch_size,
             chunk_timeout: self.chunk_timeout,
@@ -259,7 +251,7 @@ impl SinkWriterBuilder {
             tracker_handle: self.tracker_handle,
             shutting_down: false,
             final_result: Ok(()),
-            ud_store,
+            serving_store: self.serving_store,
         })
     }
 }
@@ -741,7 +733,7 @@ impl SinkWriter {
 
     // writes the serving messages to the serving store
     async fn handle_serving_messages(&mut self, serving_msgs: Vec<Message>) -> Result<()> {
-        let Some(ud_store) = &mut self.ud_store else {
+        let Some(serving_store) = &mut self.serving_store else {
             return Err(Error::Sink(
                 "Response contains serving messages but no serving store is configured".to_string(),
             ));
@@ -754,7 +746,14 @@ impl SinkWriter {
                 .get(NUMAFLOW_ID_HEADER)
                 .ok_or(Error::Sink("Missing numaflow id header".to_string()))?;
 
-            ud_store.put_datum(id, get_vertex_name(), payload).await?;
+            match serving_store {
+                ServingStore::UserDefined(ud_store) => {
+                    ud_store.put_datum(id, get_vertex_name(), payload).await?;
+                }
+                ServingStore::Nats(nats_store) => {
+                    nats_store.put_datum(id, get_vertex_name(), payload).await?;
+                }
+            }
         }
         Ok(())
     }

@@ -8341,18 +8341,8 @@ spec:
                         type: string
                       service:
                         type: boolean
-                      store:
-                        properties:
-                          ttl:
-                            type: string
-                          url:
-                            type: string
-                        required:
-                        - url
-                        type: object
                     required:
                     - msgIDHeaderKey
-                    - store
                     type: object
                   transformer:
                     properties:
@@ -20019,18 +20009,8 @@ spec:
                               type: string
                             service:
                               type: boolean
-                            store:
-                              properties:
-                                ttl:
-                                  type: string
-                                url:
-                                  type: string
-                              required:
-                              - url
-                              type: object
                           required:
                           - msgIDHeaderKey
-                          - store
                           type: object
                         transformer:
                           properties:
@@ -26571,18 +26551,8 @@ spec:
                         type: string
                       service:
                         type: boolean
-                      store:
-                        properties:
-                          ttl:
-                            type: string
-                          url:
-                            type: string
-                        required:
-                        - url
-                        type: object
                     required:
                     - msgIDHeaderKey
-                    - store
                     type: object
                   transformer:
                     properties:

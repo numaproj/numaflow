@@ -6,7 +6,7 @@ spec:
   servingStore:
     name: ips
     container:
-      image: numaflow-java-examples/serving-inmem-store:stable
+      image: quay.io/numaio/numaflow-go/serving-inmem-store:stable
       imagePullPolicy: Never
 
   vertices:
@@ -18,8 +18,6 @@ spec:
         serving:
           service: true
           msgIDHeaderKey: "X-Numaflow-Id"
-          store:
-            url: ""
 
     - name: cat
       scale:

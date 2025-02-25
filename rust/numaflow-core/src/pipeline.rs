@@ -19,7 +19,6 @@ use crate::pipeline::isb::jetstream::reader::JetStreamReader;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::pipeline::pipeline::isb::BufferReaderConfig;
 use crate::shared::create_components;
-use crate::shared::create_components::create_sink_writer;
 use crate::shared::metrics::start_metrics_server;
 use crate::tracker::TrackerHandle;
 use crate::watermark::isb::ISBWatermarkHandle;
@@ -362,16 +361,17 @@ async fn start_sink_forwarder(
         .await?;
         buffer_readers.push(buffer_reader);
 
-        let (sink_writer, sink_grpc_client, fb_sink_grpc_client) = create_sink_writer(
-            config.batch_size,
-            config.read_timeout,
-            sink.sink_config.clone(),
-            sink.fb_sink_config.clone(),
-            tracker_handle,
-            sink.udstore_config.clone(),
-            &cln_token,
-        )
-        .await?;
+        let (sink_writer, sink_grpc_client, fb_sink_grpc_client) =
+            create_components::create_sink_writer(
+                config.batch_size,
+                config.read_timeout,
+                sink.sink_config.clone(),
+                sink.fb_sink_config.clone(),
+                tracker_handle,
+                sink.serving_store_config.clone(),
+                &cln_token,
+            )
+            .await?;
         sink_writers.push((sink_writer, sink_grpc_client, fb_sink_grpc_client));
     }
 
@@ -751,7 +751,7 @@ mod tests {
                     retry_config: None,
                 },
                 fb_sink_config: None,
-                udstore_config: None,
+                serving_store_config: None,
             }),
             metrics_config: MetricsConfig {
                 metrics_server_listen_port: 2469,

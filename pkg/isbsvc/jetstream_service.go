@@ -91,7 +91,7 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 	}
 
 	if servingSourceStore != "" {
-		kvName := JetStreamServingSourceStoreKVName(sideInputsStore)
+		kvName := JetStreamServingSourceStoreKVName(servingSourceStore)
 		if _, err := jss.js.KeyValue(kvName); err != nil {
 			if !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
 				return fmt.Errorf("failed to query information of KV %q, %w", kvName, err)
@@ -99,7 +99,7 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 			if _, err := jss.js.CreateKeyValue(&nats.KeyValueConfig{
 				Bucket:       kvName,
 				MaxValueSize: 0,
-				History:      64,                 // No history
+				History:      64,
 				TTL:          time.Hour * 24 * 1, // 1 day
 				MaxBytes:     0,
 				Storage:      nats.FileStorage,
@@ -248,7 +248,7 @@ func (jss *jetStreamSvc) DeleteBuffersAndBuckets(ctx context.Context, buffers, b
 	}
 
 	if servingSourceStore != "" {
-		servingSourceStoreKVName := JetStreamServingSourceStoreKVName(sideInputsStore)
+		servingSourceStoreKVName := JetStreamServingSourceStoreKVName(servingSourceStore)
 		if err := jss.js.DeleteKeyValue(servingSourceStoreKVName); err != nil && !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
 			return fmt.Errorf("failed to serving source store %q, %w", servingSourceStoreKVName, err)
 		}
