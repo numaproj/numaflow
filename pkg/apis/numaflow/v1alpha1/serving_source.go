@@ -9,4 +9,8 @@ type ServingSource struct {
 	Service bool `json:"service" protobuf:"bytes,2,opt,name=service"`
 	// The header key from which the message id will be extracted
 	MsgIDHeaderKey *string `json:"msgIDHeaderKey" protobuf:"bytes,3,opt,name=msgIDHeaderKey"`
+
+	// Request timeout in seconds. Default value is 120 seconds.
+	// +optional
+	RequestTimeoutSecs *uint32 `json:"requestTimeoutSeconds,omitempty" protobuf:"varint,4,opt,name=requestTimeoutSeconds"`
 }
