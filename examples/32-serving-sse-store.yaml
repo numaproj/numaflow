@@ -1,14 +1,8 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: serving-pipeline
+  name: serving-sse-pipeline
 spec:
-#  servingStore:
-#    name: ips
-#    container:
-#      image: quay.io/numaio/numaflow-go/serving-redis-store:stable
-#      imagePullPolicy: Never
-
   vertices:
     - name: serving-in
       servingStoreName: default
@@ -24,7 +18,7 @@ spec:
         min: 1
       udf:
         container:
-          image: quay.io/numaio/numaflow-go/map-forward-message:stable
+          image: quay.io/numaio/numaflow-go/map-flatmap-stream:latest
 
     - name: serve-sink
       servingStoreName: default

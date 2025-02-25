@@ -227,12 +227,7 @@ impl TryFrom<HashMap<String, String>> for Settings {
                     .map_err(|e| ParseConfig(format!("parsing {ENV_VERTEX_OBJ}: {e:?}")))?;
 
                 if vertex_obj.spec.serving_store_name.is_some()
-                    && !vertex_obj
-                        .spec
-                        .serving_store_name
-                        .as_ref()
-                        .unwrap()
-                        .is_empty()
+                    && vertex_obj.spec.serving_store_name.as_ref().unwrap() != "default"
                 {
                     ud_store_enabled = true;
                 }
