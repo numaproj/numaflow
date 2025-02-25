@@ -1551,6 +1551,10 @@ message ServingSource {
 
   // The header key from which the message id will be extracted
   optional string msgIDHeaderKey = 3;
+
+  // Request timeout in seconds. Default value is 120 seconds.
+  // +optional
+  optional uint32 requestTimeoutSeconds = 4;
 }
 
 // ServingStore defines information of a Serving Store used in a pipeline

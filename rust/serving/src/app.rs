@@ -58,7 +58,10 @@ where
 
     let handle = Handle::new();
     // Spawn a task to gracefully shutdown server.
-    tokio::spawn(graceful_shutdown(handle.clone()));
+    tokio::spawn(graceful_shutdown(
+        handle.clone(),
+        app.settings.drain_timeout_secs,
+    ));
 
     info!(?app_addr, "Starting application server");
 
@@ -134,7 +137,7 @@ where
 
 // Gracefully shutdown the server on receiving SIGINT or SIGTERM
 // by sending a shutdown signal to the server using the handle.
-async fn graceful_shutdown(handle: Handle) {
+async fn graceful_shutdown(handle: Handle, duration_secs: u64) {
     let ctrl_c = async {
         signal::ctrl_c()
             .await
@@ -156,15 +159,10 @@ async fn graceful_shutdown(handle: Handle) {
     info!("sending graceful shutdown signal");
 
     // Signal the server to shutdown using Handle.
-    // TODO: make the duration configurable
-    handle.graceful_shutdown(Some(Duration::from_secs(30)));
+    handle.graceful_shutdown(Some(Duration::from_secs(duration_secs)));
 }
 
-const PUBLISH_ENDPOINTS: [&str; 3] = [
-    "/v1/process/sync",
-    "/v1/process/sync_serve",
-    "/v1/process/async",
-];
+const PUBLISH_ENDPOINTS: [&str; 3] = ["/v1/process/sync", "/v1/process/async", "/v1/process/fetch"];
 
 // auth middleware to do token based authentication for all user facing routes
 // if auth is enabled.

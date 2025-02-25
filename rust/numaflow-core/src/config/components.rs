@@ -131,8 +131,13 @@ pub(crate) mod source {
                 };
             }
 
-            settings.cb_js_store =
-                format!("{}-{}_SERVING_KV_STORE", get_namespace(), get_pipeline_name(),);
+            settings.cb_js_store = format!(
+                "{}-{}_SERVING_KV_STORE",
+                get_namespace(),
+                get_pipeline_name(),
+            );
+
+            settings.drain_timeout_secs = cfg.request_timeout_seconds.unwrap_or(120).max(1) as u64; // Ensure timeout is atleast 1 second
 
             Ok(SourceType::Serving(Arc::new(settings)))
         }

@@ -7,6 +7,7 @@ use serving::callback::CallbackHandler;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
+use crate::config::components::source::SourceType;
 use crate::config::is_mono_vertex;
 use crate::config::pipeline;
 use crate::config::pipeline::isb::Stream;
@@ -31,7 +32,7 @@ pub(crate) mod isb;
 
 /// Starts the appropriate forwarder based on the pipeline configuration.
 pub(crate) async fn start_forwarder(
-    cln_token: CancellationToken,
+    mut cln_token: CancellationToken,
     config: PipelineConfig,
 ) -> Result<()> {
     let js_context = create_js_context(config.js_client_config.clone()).await?;
@@ -39,6 +40,28 @@ pub(crate) async fn start_forwarder(
     match &config.vertex_type_config {
         pipeline::VertexType::Source(source) => {
             info!("Starting source forwarder");
+
+            // Create a new cancellation if the source is Serving.
+            // The new cancellation token gets cancelled only after the user specified
+            // request timeout + 30 seconds. The `cln_token` gets cancelled when SIGTERM is received.
+            // NOTE: The delay (sleep) we add here before the cancelling won't block the container
+            // from terminating if there are no in-flight requests. The axum server will shutdown
+            // immediately if there are no in-flight requests. This results in an error in reading from
+            // the serving source and thus shutting down of the source forwarder.
+            if let SourceType::Serving(ref serving_config) = source.source_config.source_type {
+                let serving_cln_token = CancellationToken::new();
+                tokio::spawn({
+                    let req_timeout = serving_config.drain_timeout_secs + 30;
+                    let cln_token = cln_token.clone();
+                    let serving_cln_token = serving_cln_token.clone();
+                    async move {
+                        cln_token.cancelled().await;
+                        tokio::time::sleep(Duration::from_secs(req_timeout)).await;
+                        serving_cln_token.cancel();
+                    }
+                });
+                cln_token = serving_cln_token;
+            }
 
             // create watermark handle, if watermark is enabled
             let source_watermark_handle = match &config.watermark_config {
