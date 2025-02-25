@@ -1,15 +1,25 @@
 use crate::config::pipeline::NatsStoreConfig;
+use async_nats::jetstream::kv::Store;
 use async_nats::jetstream::Context;
+use bytes::Bytes;
+use tracing::info;
 
 #[derive(Clone)]
-pub(crate) struct NatsObjectStore {}
+pub(crate) struct NatsServingStore {
+    store: Store,
+}
 
-impl NatsObjectStore {
+impl NatsServingStore {
     pub(crate) async fn new(
         js_context: Context,
         nats_store_config: NatsStoreConfig,
     ) -> crate::Result<Self> {
-        Ok(Self {})
+        let store = js_context
+            .get_key_value(nats_store_config.name.as_str())
+            .await
+            .map_err(|e| crate::Error::Connection(format!("Failed to get kv store: {e:?}")))?;
+        info!("Jetstream serving store created");
+        Ok(Self { store })
     }
 
     pub(crate) async fn put_datum(
@@ -18,6 +28,12 @@ impl NatsObjectStore {
         origin: &str,
         payload: Vec<u8>,
     ) -> crate::Result<()> {
-        todo!()
+        let id = format!("{id}=response");
+        info!(?id, "Putting datum in Jetstream serving store");
+        self.store
+            .put(id, Bytes::from(payload))
+            .await
+            .map_err(|e| crate::Error::Sink(format!("Failed to put datum: {e:?}")))?;
+        Ok(())
     }
 }

@@ -8,5 +8,5 @@ pub(crate) mod nats;
 #[derive(Clone)]
 pub(crate) enum ServingStore {
     UserDefined(user_defined::UserDefinedStore),
-    Nats(nats::NatsObjectStore),
+    Nats(nats::NatsServingStore),
 }

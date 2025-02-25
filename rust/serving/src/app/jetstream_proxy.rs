@@ -1,5 +1,9 @@
+use axum::response::Sse;
+use std::time::Duration;
 use std::{collections::HashMap, str::FromStr, sync::Arc};
+use tokio_stream::{Stream, StreamExt};
 
+use axum::response::sse::Event;
 use axum::{
     body::{Body, Bytes},
     extract::{Query, State},
@@ -48,6 +52,7 @@ pub(crate) async fn jetstream_proxy<
         .route("/async", post(async_publish))
         .route("/sync", post(sync_publish))
         .route("/fetch", get(fetch))
+        .route("/sse", get(sse_handler))
         .with_state(proxy_state);
     Ok(router)
 }
@@ -115,6 +120,54 @@ async fn fetch<
     (header_map, body).into_response()
 }
 
+async fn sse_handler<
+    T: Send + Sync + Clone + DatumStore + 'static,
+    C: Send + Sync + Clone + CallbackStore + 'static,
+>(
+    State(proxy_state): State<Arc<ProxyState<T, C>>>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>> {
+    let id = headers
+        .get(&proxy_state.tid_header)
+        .map(|v| String::from_utf8_lossy(v.as_bytes()).to_string())
+        .unwrap_or_else(|| Uuid::now_v7().to_string());
+
+    let mut msg_headers: HashMap<String, String> = HashMap::new();
+    for (key, value) in headers.iter() {
+        msg_headers.insert(
+            key.to_string(),
+            String::from_utf8_lossy(value.as_bytes()).to_string(),
+        );
+    }
+
+    let mut callback_state = proxy_state.callback.clone();
+    let response_stream = callback_state.stream_response(&id).await.unwrap();
+
+    let (confirm_save_tx, confirm_save_rx) = oneshot::channel();
+    let message = MessageWrapper {
+        confirm_save: confirm_save_tx,
+        message: Message {
+            value: body,
+            id: id.clone(),
+            headers: msg_headers,
+        },
+    };
+
+    proxy_state
+        .message
+        .send(message)
+        .await
+        .expect("failed to send message");
+
+    confirm_save_rx.await.unwrap();
+
+    let stream = response_stream
+        .map(|response| Ok(Event::default().data(String::from_utf8_lossy(&response).to_string())));
+
+    Sse::new(stream)
+}
+
 async fn sync_publish<
     T: Send + Sync + Clone + DatumStore + 'static,
     C: Send + Sync + Clone + CallbackStore + 'static,
@@ -166,6 +219,7 @@ async fn sync_publish<
             headers: msg_headers,
         },
     };
+
     proxy_state
         .message
         .send(message)

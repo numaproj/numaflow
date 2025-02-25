@@ -12,12 +12,15 @@ use crate::config::pipeline;
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::watermark::WatermarkConfig;
-use crate::config::pipeline::{PipelineConfig, SinkVtxConfig, SourceVtxConfig};
+use crate::config::pipeline::{PipelineConfig, ServingStoreType, SinkVtxConfig, SourceVtxConfig};
 use crate::metrics::{LagReader, PipelineContainerState, UserDefinedContainerState};
 use crate::pipeline::forwarder::source_forwarder;
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::pipeline::pipeline::isb::BufferReaderConfig;
+use crate::servingstore::nats::NatsServingStore;
+use crate::servingstore::user_defined::UserDefinedStore;
+use crate::servingstore::ServingStore;
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
 use crate::tracker::TrackerHandle;
@@ -342,6 +345,21 @@ async fn start_sink_forwarder(
         None
     };
 
+    let serving_store = match &sink.serving_store_config {
+        Some(serving_store_config) => match serving_store_config {
+            ServingStoreType::UserDefined(config) => {
+                let serving_store = UserDefinedStore::new(config.clone()).await?;
+                Some(ServingStore::UserDefined(serving_store))
+            }
+            ServingStoreType::Nats(config) => {
+                let serving_store =
+                    NatsServingStore::new(js_context.clone(), config.clone()).await?;
+                Some(ServingStore::Nats(serving_store))
+            }
+        },
+        None => None,
+    };
+
     // Create sink writers and buffer readers for each stream
     let mut sink_writers = vec![];
     let mut buffer_readers = vec![];
@@ -368,7 +386,7 @@ async fn start_sink_forwarder(
                 sink.sink_config.clone(),
                 sink.fb_sink_config.clone(),
                 tracker_handle,
-                sink.serving_store_config.clone(),
+                serving_store.clone(),
                 &cln_token,
             )
             .await?;

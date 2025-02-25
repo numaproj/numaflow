@@ -4,7 +4,7 @@ use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use http::Uri;
 use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
-use numaflow_pb::clients::serving::{GetRequest, PutRequest};
+use numaflow_pb::clients::serving::GetRequest;
 use std::path::PathBuf;
 use tokio::net::UnixStream;
 use tonic::transport::{Channel, Endpoint};

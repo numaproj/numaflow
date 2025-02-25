@@ -11,7 +11,7 @@ spec:
 
   vertices:
     - name: serving-in
-      servingStoreName: ips
+      servingStoreName: ""
       scale:
         min: 1
       source:
@@ -24,13 +24,14 @@ spec:
         min: 1
       udf:
         container:
-          image: quay.io/numaio/numaflow-go/map-forward-message:stable
+          image: quay.io/numaio/numaflow-go/map-flatmap-stream:stable
+          imagePullPolicy: Never
           env:
             - name: RUST_BACKTRACE
               value: "1"
 
     - name: serve-sink
-      servingStoreName: ips
+      servingStoreName: default
       scale:
         min: 1
       sink:

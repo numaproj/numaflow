@@ -9,7 +9,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use tokio::{sync::Semaphore, task::JoinHandle};
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 
 use crate::Error;
 
