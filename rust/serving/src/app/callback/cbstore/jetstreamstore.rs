@@ -46,6 +46,7 @@ impl super::CallbackStore for JSCallbackStore {
             })?;
 
         let response_key = format!("{id}=response");
+        // FIXME: we write empty data so keys are created
         self.kv_store
             .put(&response_key, Bytes::from_static(b""))
             .await
@@ -54,7 +55,7 @@ impl super::CallbackStore for JSCallbackStore {
                     "Failed to register request id {id} in kv store: {e:?}"
                 ))
             })?;
-
+        // FIXME: we write empty data so keys are created
         self.kv_store
             .put(id, Bytes::from_static(b""))
             .await
@@ -81,6 +82,7 @@ impl super::CallbackStore for JSCallbackStore {
                 StoreError::StoreWrite(format!("Failed to mark request as done in kv store: {e:?}"))
             })?;
 
+        // FIXME: use types or watch from revision
         let response_key = format!("{id}=response");
         self.kv_store
             .put(&response_key, Bytes::from_static(b"deleted"))

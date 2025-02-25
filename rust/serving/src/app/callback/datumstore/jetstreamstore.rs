@@ -25,6 +25,7 @@ impl DatumStore for JetStreamDatumStore {
         let id = format!("{id}=response");
         let mut watcher = self
             .kv_store
+            // FIXME: overflow could happen if rev > 64 (today we skip register event)
             .watch_from_revision(id, 1)
             .await
             .map_err(|e| {

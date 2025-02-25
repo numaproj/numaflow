@@ -608,7 +608,7 @@ impl MapHandle {
             // we need update the tracker with no responses, because unlike unary and batch, we cannot update the
             // responses here we will have to append the responses.
             tracker_handle
-                .reset(read_msg.offset.clone())
+                .refresh(read_msg.offset.clone())
                 .await
                 .expect("failed to reset tracker");
             loop {

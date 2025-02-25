@@ -64,7 +64,7 @@ enum ActorMessage {
     EOF {
         offset: Offset,
     },
-    Reset {
+    Refresh {
         offset: Offset,
     },
     #[cfg(test)]
@@ -177,8 +177,8 @@ impl Tracker {
             ActorMessage::Append { offset, response } => {
                 self.handle_append(offset, response);
             }
-            ActorMessage::Reset { offset } => {
-                self.handle_reset(offset);
+            ActorMessage::Refresh { offset } => {
+                self.handle_refresh(offset);
             }
             #[cfg(test)]
             ActorMessage::IsEmpty { respond_to } => {
@@ -286,7 +286,7 @@ impl Tracker {
     }
 
     /// Resets the count and eof status for an offset in the tracker.
-    fn handle_reset(&mut self, offset: Offset) {
+    fn handle_refresh(&mut self, offset: Offset) {
         let Some(mut entry) = self.entries.remove(&offset) else {
             return;
         };
@@ -406,8 +406,8 @@ impl TrackerHandle {
     }
 
     /// resets the count and eof status for an offset in the tracker.
-    pub(crate) async fn reset(&self, offset: Offset) -> Result<()> {
-        let message = ActorMessage::Reset { offset };
+    pub(crate) async fn refresh(&self, offset: Offset) -> Result<()> {
+        let message = ActorMessage::Refresh { offset };
         self.sender
             .send(message)
             .await

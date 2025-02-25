@@ -120,6 +120,8 @@ where
             .map_err(Into::into)
     }
 
+    /// Listens on watcher events (SSE uses KV watch) and checks with the Graph is complete. Once 
+    /// Graph is complete, it will deregister and closes the outbound SSE channel.  
     pub(crate) async fn stream_response(
         &mut self,
         id: &str,
