@@ -1,4 +1,3 @@
-use crate::callback::Callback;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -9,6 +8,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use crate::app::callback::cbstore::LocalCallbackStore;
 use crate::app::callback::datumstore::{Error as StoreError, Result as StoreResult};
+use crate::callback::Callback;
 
 #[derive(Clone)]
 pub(crate) struct InMemoryCallbackStore {

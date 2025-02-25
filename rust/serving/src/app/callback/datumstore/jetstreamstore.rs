@@ -1,9 +1,10 @@
-use crate::app::callback::datumstore::{DatumStore, Error as StoreError, Result as StoreResult};
 use async_nats::jetstream::kv::Store;
 use async_nats::jetstream::Context;
 use bytes::Bytes;
 use tokio_stream::StreamExt;
 use tracing::info;
+
+use crate::app::callback::datumstore::{DatumStore, Error as StoreError, Result as StoreResult};
 
 #[derive(Clone)]
 pub(crate) struct JetStreamDatumStore {

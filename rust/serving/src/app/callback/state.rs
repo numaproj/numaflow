@@ -1,5 +1,6 @@
-use bytes::Bytes;
 use std::sync::Arc;
+
+use bytes::Bytes;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
@@ -120,7 +121,7 @@ where
             .map_err(Into::into)
     }
 
-    /// Listens on watcher events (SSE uses KV watch) and checks with the Graph is complete. Once 
+    /// Listens on watcher events (SSE uses KV watch) and checks with the Graph is complete. Once
     /// Graph is complete, it will deregister and closes the outbound SSE channel.  
     pub(crate) async fn stream_response(
         &mut self,
@@ -148,9 +149,7 @@ where
                 subgraph = match sub_graph_generator
                     .generate_subgraph_from_callbacks(msg_id.clone(), callbacks.clone())
                 {
-                    Ok(subgraph) => {
-                        subgraph
-                    }
+                    Ok(subgraph) => subgraph,
                     Err(e) => {
                         error!(?e, "Failed to generate subgraph");
                         break;

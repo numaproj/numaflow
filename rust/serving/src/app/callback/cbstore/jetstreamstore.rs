@@ -1,9 +1,6 @@
-use crate::callback::Callback;
 use std::fmt::format;
 use std::sync::Arc;
 
-use crate::app::callback::cbstore::ProcessingStatus;
-use crate::app::callback::datumstore::{Error as StoreError, Result as StoreResult};
 use async_nats::jetstream::kv::{CreateErrorKind, Store};
 use async_nats::jetstream::Context;
 use bytes::Bytes;
@@ -11,6 +8,10 @@ use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tracing::info;
+
+use crate::app::callback::cbstore::ProcessingStatus;
+use crate::app::callback::datumstore::{Error as StoreError, Result as StoreResult};
+use crate::callback::Callback;
 
 #[derive(Clone)]
 pub(crate) struct JSCallbackStore {

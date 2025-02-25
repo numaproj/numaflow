@@ -1,8 +1,9 @@
-use crate::config::pipeline::UserDefinedStoreConfig;
-use crate::shared;
 use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
 use numaflow_pb::clients::serving::{Payload, PutRequest};
 use tonic::transport::Channel;
+
+use crate::config::pipeline::UserDefinedStoreConfig;
+use crate::shared;
 
 #[derive(Clone)]
 pub(crate) struct UserDefinedStore {

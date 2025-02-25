@@ -222,9 +222,10 @@ pub(crate) mod sink {
 
     use std::fmt::Display;
 
+    use numaflow_models::models::{Backoff, RetryStrategy, Sink};
+
     use crate::error::Error;
     use crate::Result;
-    use numaflow_models::models::{Backoff, RetryStrategy, Sink};
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct SinkConfig {

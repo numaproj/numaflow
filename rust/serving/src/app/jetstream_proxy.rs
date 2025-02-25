@@ -1,9 +1,8 @@
-use axum::response::Sse;
 use std::time::Duration;
 use std::{collections::HashMap, str::FromStr, sync::Arc};
-use tokio_stream::{Stream, StreamExt};
 
 use axum::response::sse::Event;
+use axum::response::Sse;
 use axum::{
     body::{Body, Bytes},
     extract::{Query, State},
@@ -15,6 +14,7 @@ use axum::{
 use serde::Deserialize;
 use serde_json::json;
 use tokio::sync::{mpsc, oneshot};
+use tokio_stream::{Stream, StreamExt};
 use tracing::error;
 use uuid::Uuid;
 
