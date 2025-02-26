@@ -566,7 +566,6 @@ func (mr *monoVertexReconciler) buildPodSpec(monoVtx *dfv1.MonoVertex) (*corev1.
 	vols, volMounts := sharedutil.VolumesFromSecretsAndConfigMaps(monoVtx)
 	podSpec.Volumes = append(podSpec.Volumes, vols...)
 	podSpec.Containers[0].VolumeMounts = append(podSpec.Containers[0].VolumeMounts, volMounts...)
-
 	return podSpec, nil
 }
 
