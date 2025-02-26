@@ -542,7 +542,7 @@ type VertexSpec struct {
 	// +kubebuilder:default={"disabled": false}
 	// +optional
 	Watermark Watermark `json:"watermark,omitempty" protobuf:"bytes,7,opt,name=watermark"`
-	// Lifecycle defines the Lifecycle properties of a ertex
+	// Lifecycle defines the Lifecycle properties of a vertex
 	// +kubebuilder:default={"desiredPhase": Running}
 	// +optional
 	Lifecycle VertexLifecycle `json:"lifecycle,omitempty" protobuf:"bytes,8,opt,name=lifecycle"`

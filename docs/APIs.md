@@ -11854,7 +11854,7 @@ VertexLifecycle </a> </em>
 <em>(Optional)</em>
 <p>
 
-Lifecycle defines the Lifecycle properties of a ertex
+Lifecycle defines the Lifecycle properties of a vertex
 </p>
 
 </td>
@@ -12340,7 +12340,7 @@ VertexLifecycle </a> </em>
 <em>(Optional)</em>
 <p>
 
-Lifecycle defines the Lifecycle properties of a ertex
+Lifecycle defines the Lifecycle properties of a vertex
 </p>
 
 </td>

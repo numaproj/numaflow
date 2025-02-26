@@ -29,6 +29,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -566,6 +567,23 @@ func (mr *monoVertexReconciler) buildPodSpec(monoVtx *dfv1.MonoVertex) (*corev1.
 	vols, volMounts := sharedutil.VolumesFromSecretsAndConfigMaps(monoVtx)
 	podSpec.Volumes = append(podSpec.Volumes, vols...)
 	podSpec.Containers[0].VolumeMounts = append(podSpec.Containers[0].VolumeMounts, volMounts...)
+
+	// Attach an EmptyDir for runtime info
+	emptyDirVolume := dfv1.EmptyDirVolume
+	podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{
+		Name: emptyDirVolume,
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{
+				Medium:    corev1.StorageMediumMemory,
+				SizeLimit: resource.NewQuantity(dfv1.EmptyDirSizeLimit, resource.BinarySI),
+			},
+		},
+	})
+	podSpec.Containers[0].VolumeMounts = append(podSpec.Containers[0].VolumeMounts, corev1.VolumeMount{
+		Name:      emptyDirVolume,
+		MountPath: dfv1.EmptyDirMountPath,
+	})
+
 	return podSpec, nil
 }
 

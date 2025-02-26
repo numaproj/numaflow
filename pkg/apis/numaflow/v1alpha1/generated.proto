@@ -1854,7 +1854,7 @@ message VertexSpec {
   // +optional
   optional Watermark watermark = 7;
 
-  // Lifecycle defines the Lifecycle properties of a ertex
+  // Lifecycle defines the Lifecycle properties of a vertex
   // +kubebuilder:default={"desiredPhase": Running}
   // +optional
   optional VertexLifecycle lifecycle = 8;

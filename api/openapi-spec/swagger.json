@@ -22483,7 +22483,7 @@
           "type": "string"
         },
         "lifecycle": {
-          "description": "Lifecycle defines the Lifecycle properties of a ertex",
+          "description": "Lifecycle defines the Lifecycle properties of a vertex",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.VertexLifecycle"
         },
         "limits": {

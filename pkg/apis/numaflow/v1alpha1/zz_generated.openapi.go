@@ -6085,7 +6085,7 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 					},
 					"lifecycle": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Lifecycle defines the Lifecycle properties of a ertex",
+							Description: "Lifecycle defines the Lifecycle properties of a vertex",
 							Default:     map[string]interface{}{},
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLifecycle"),
 						},
