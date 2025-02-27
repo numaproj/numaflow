@@ -6,13 +6,14 @@ use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use tonic::transport::Channel;
 use tonic::Request;
+use tracing::warn;
 
 pub mod proto {
     tonic::include_proto!("sink.v1");
 }
 
 const RECONNECT_INTERVAL: u64 = 1000;
-const MAX_RECONNECT_ATTEMPTS: usize = 5;
+const MAX_RECONNECT_ATTEMPTS: usize = usize::MAX;
 const SINK_SOCKET: &str = "/var/run/numaflow/sink.sock";
 const FB_SINK_SOCKET: &str = "/var/run/numaflow/fb-sink.sock";
 
@@ -61,7 +62,15 @@ impl SinkClient {
 
         let channel = Retry::retry(
             interval,
-            || async { connect_with_uds(config.socket_path.clone().into()).await },
+            || async {
+                match connect_with_uds(config.socket_path.clone().into()).await {
+                    Ok(channel) => Ok(channel),
+                    Err(e) => {
+                        warn!(?e, "Failed to connect to sink UDS socket");
+                        Err(e)
+                    }
+                }
+            },
             |_: &Error| true,
         )
         .await?;

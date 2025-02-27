@@ -6,6 +6,7 @@ use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use tonic::transport::Channel;
 use tonic::Request;
+use tracing::warn;
 
 pub mod proto {
     tonic::include_proto!("sourcetransformer.v1");
@@ -13,7 +14,7 @@ pub mod proto {
 
 const DROP: &str = "U+005C__DROP__";
 const RECONNECT_INTERVAL: u64 = 1000;
-const MAX_RECONNECT_ATTEMPTS: usize = 5;
+const MAX_RECONNECT_ATTEMPTS: usize = usize::MAX;
 const TRANSFORMER_SOCKET: &str = "/var/run/numaflow/sourcetransform.sock";
 const TRANSFORMER_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcetransformer-server-info";
 
@@ -48,7 +49,15 @@ impl TransformerClient {
 
         let channel = Retry::retry(
             interval,
-            || async { connect_with_uds(config.socket_path.clone().into()).await },
+            || async {
+                match connect_with_uds(config.socket_path.clone().into()).await {
+                    Ok(channel) => Ok(channel),
+                    Err(e) => {
+                        warn!(?e, "Failed to connect to transformer UDS socket");
+                        Err(e)
+                    }
+                }
+            },
             |_: &Error| true,
         )
         .await?;
