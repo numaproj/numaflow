@@ -285,6 +285,11 @@ const (
 	UDContainerLivezPeriodSeconds          = 60
 	UDContainerLivezTimeoutSeconds         = 30
 	UDContainerLivezFailureThreshold       = 5
+
+	//Runtime Info
+	RuntimeDirVolume    = "runtime-vol"
+	RuntimeDirMountPath = "/var/numaflow/runtime"
+	RuntimeDirSizeLimit = 20 * 1024 * 1024
 )
 
 var (
