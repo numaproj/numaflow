@@ -340,9 +340,9 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 			}},
 		},
 		{
-			Name: EmptyDirVolume,
+			Name: RuntimeDirVolume,
 			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{
-				SizeLimit: resource.NewQuantity(EmptyDirSizeLimit, resource.BinarySI),
+				SizeLimit: resource.NewQuantity(RuntimeDirSizeLimit, resource.BinarySI),
 			}},
 		},
 	}
@@ -400,8 +400,8 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 
 	// Attach an EmptyDir for runtime info
 	containers[0].VolumeMounts = append(containers[0].VolumeMounts, corev1.VolumeMount{
-		Name:      EmptyDirVolume,
-		MountPath: EmptyDirMountPath,
+		Name:      RuntimeDirVolume,
+		MountPath: RuntimeDirMountPath,
 	})
 
 	for i := 0; i < len(sidecarContainers); i++ { // udsink, udsource, udtransformer ...

@@ -287,9 +287,9 @@ const (
 	UDContainerLivezFailureThreshold       = 5
 
 	//Runtime Info
-	EmptyDirVolume    = "tmp-vol"
-	EmptyDirMountPath = "/var/numaflow/runtime"
-	EmptyDirSizeLimit = 20 * 1024 * 1024
+	RuntimeDirVolume    = "tmp-vol"
+	RuntimeDirMountPath = "/var/numaflow/runtime"
+	RuntimeDirSizeLimit = 20 * 1024 * 1024
 )
 
 var (

@@ -270,9 +270,9 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 			}},
 		},
 		{
-			Name: EmptyDirVolume,
+			Name: RuntimeDirVolume,
 			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{
-				SizeLimit: resource.NewQuantity(EmptyDirSizeLimit, resource.BinarySI),
+				SizeLimit: resource.NewQuantity(RuntimeDirSizeLimit, resource.BinarySI),
 			}},
 		},
 	}
@@ -336,8 +336,8 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 
 	// Attach an EmptyDir for runtime info
 	containers[0].VolumeMounts = append(containers[0].VolumeMounts, corev1.VolumeMount{
-		Name:      EmptyDirVolume,
-		MountPath: EmptyDirMountPath,
+		Name:      RuntimeDirVolume,
+		MountPath: RuntimeDirMountPath,
 	})
 
 	for i := 0; i < len(sidecarContainers); i++ { // udf, udsink, udsource, or source vertex specifies a udtransformer
