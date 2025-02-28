@@ -29,7 +29,7 @@ impl NatsServingStore {
         origin: &str,
         payload: Vec<u8>,
     ) -> crate::Result<()> {
-        let id = format!("{id}=response");
+        let id = format!("{id}.response");
         info!(?id, "Putting datum in Jetstream serving store");
         self.store
             .put(id, Bytes::from(payload))

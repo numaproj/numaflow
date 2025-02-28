@@ -28,7 +28,7 @@ impl SSEResponseWatcher {
         &mut self,
         id: &str,
     ) -> StoreResult<(ReceiverStream<Arc<Bytes>>, JoinHandle<()>)> {
-        let id = format!("{id}=response");
+        let id = format!("{id}.response");
         let mut watcher = self
             .kv_store
             .watch_from_revision(id, 1)

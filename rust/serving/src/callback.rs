@@ -10,7 +10,7 @@ use backoff::strategy::fixed;
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use tokio::{sync::Semaphore, task::JoinHandle};
-use tracing::{error, info, warn};
+use tracing::{error, warn};
 
 use crate::Error;
 
@@ -89,13 +89,14 @@ impl CallbackHandler {
         let permit = Arc::clone(&self.semaphore).acquire_owned().await.unwrap();
         let store = self.store.clone();
         let handle = tokio::spawn(async move {
+            let callbacks_key = format!("{id}.callbacks");
             let interval = fixed::Interval::from_millis(1000).take(2);
             let _permit = permit;
             let value = serde_json::to_string(&callback_payload).expect("Failed to serialize");
             let result = Retry::retry(
                 interval,
                 || async {
-                    match store.put(id.clone(), Bytes::from(value.clone())).await {
+                    match store.put(&callbacks_key, Bytes::from(value.clone())).await {
                         Ok(resp) => Ok(resp),
                         Err(e) => {
                             warn!(?e, "Failed to write callback to store, retrying..");
