@@ -162,7 +162,7 @@ async fn sse_handler<
     confirm_save_rx.await.unwrap();
 
     let stream = response_stream
-        .map(|response| Ok(Event::default().data(String::from_utf8_lossy(&response).to_string())));
+        .map(|response| Ok(Event::default().data(String::from_utf8_lossy(&response))));
 
     Sse::new(stream)
 }

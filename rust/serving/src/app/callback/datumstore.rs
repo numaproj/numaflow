@@ -1,7 +1,5 @@
 use thiserror::Error;
 
-// redis as the store
-pub(crate) mod redisstore;
 // in-memory store
 pub(crate) mod jetstreamstore;
 pub(crate) mod memstore;

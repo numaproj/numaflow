@@ -87,16 +87,11 @@ pub struct Settings {
     pub pipeline_spec: PipelineDCG,
 }
 
-#[derive(Debug, Deserialize, Clone, PartialEq)]
+#[derive(Default, Debug, Deserialize, Clone, PartialEq)]
 pub enum StoreType {
     UserDefined(UserDefinedStoreConfig),
+    #[default]
     Nats,
-}
-
-impl Default for StoreType {
-    fn default() -> Self {
-        StoreType::Nats
-    }
 }
 
 impl Default for Settings {

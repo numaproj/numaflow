@@ -72,11 +72,10 @@ impl super::CallbackStore for JSCallbackStore {
     async fn deregister(&mut self, id: &str, sub_graph: &str) -> StoreResult<()> {
         info!(?id, "Deregistering key in Jetstream KV store");
         let key = format!("{}.status", id);
-        let completed_value = format!("completed:{}", sub_graph);
         self.kv_store
             .put(
                 key,
-                ProcessingStatus::Completed(completed_value.to_string()).into(),
+                ProcessingStatus::Completed(sub_graph.to_string()).into(),
             )
             .await
             .map_err(|e| {
@@ -97,12 +96,8 @@ impl super::CallbackStore for JSCallbackStore {
 
     async fn mark_as_failed(&mut self, id: &str, error: &str) -> StoreResult<()> {
         let key = format!("{id}.status");
-        let failed_value = format!("failed:{error}");
         self.kv_store
-            .put(
-                key,
-                ProcessingStatus::Failed(failed_value.to_string()).into(),
-            )
+            .put(key, ProcessingStatus::Failed(error.to_string()).into())
             .await
             .map_err(|e| {
                 StoreError::StoreWrite(format!(
