@@ -170,14 +170,9 @@
 
 ## v1.3.4 (2025-02-28)
 
- * [1502541f](https://github.com/numaproj/numaflow/commit/1502541fb96eef69d1da8ba66eba273eb884c49a) Update manifests to v1.3.4
- * [618836fc](https://github.com/numaproj/numaflow/commit/618836fceda26f27734ad4ecf7f6a138305d86dd) codegen changes
- * [2e51c3f2](https://github.com/numaproj/numaflow/commit/2e51c3f28368a194a9a8a1478dfccdf97a1a4116) go mod tidy
- * [d88eccb2](https://github.com/numaproj/numaflow/commit/d88eccb27fb98be9d7ac6298a3b0cb5daa491224) cherry pick 2428
- * [2b502789](https://github.com/numaproj/numaflow/commit/2b50278926255c9e82406ae13342dc7d34557224) cherry pick 2339
- * [b2d24745](https://github.com/numaproj/numaflow/commit/b2d24745bedc0ce6e4687faccbbce5aaff2a8bb7) cherry pick 2290
- * [cd7e2582](https://github.com/numaproj/numaflow/commit/cd7e2582da7bd41d1626e48239dec2cb94408c1d) upgrade upload/download artifact
- * [eac4be70](https://github.com/numaproj/numaflow/commit/eac4be7046d437369ed238475ead99379f2844be) chore(deps): bump nanoid from 3.3.7 to 3.3.8 in /ui (#2289)
+ * [27e061f7](https://github.com/numaproj/numaflow/commit/27e061f7ecd69144e784f280a1b9cef0752a81e9) Update manifests to v1.3.4
+ * [ac161dfb](https://github.com/numaproj/numaflow/commit/ac161dfb83d57a6b066e6bb8599ba28c9b76ee15) chore(deps): security fixes
+ * [e2f6951d](https://github.com/numaproj/numaflow/commit/e2f6951d5cf2e0a83ad35d4335d0a3f7ae18d270) chore(deps): bump nanoid from 3.3.7 to 3.3.8 in /ui (#2289)
 
 ### Contributors
 
