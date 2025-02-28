@@ -1,6 +1,3 @@
-use crate::app::callback::cbstore::CallbackStore;
-use crate::app::callback::datumstore::DatumStore;
-
 /// in-memory state store including connection tracking
 pub(crate) mod state;
 

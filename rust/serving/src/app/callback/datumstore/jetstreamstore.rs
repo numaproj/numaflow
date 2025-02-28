@@ -2,7 +2,7 @@ use async_nats::jetstream::kv::Store;
 use async_nats::jetstream::Context;
 use bytes::Bytes;
 use tokio_stream::StreamExt;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::app::callback::datumstore::{DatumStore, Error as StoreError, Result as StoreResult};
 
@@ -23,7 +23,7 @@ impl JetStreamDatumStore {
 
 impl DatumStore for JetStreamDatumStore {
     async fn retrieve_datum(&mut self, id: &str) -> StoreResult<Option<Vec<Vec<u8>>>> {
-        let id = format!("{id}=response");
+        let id = format!("{id}.response");
         let mut watcher = self
             .kv_store
             // FIXME: overflow could happen if rev > 64 (today we skip register event)
@@ -44,7 +44,7 @@ impl DatumStore for JetStreamDatumStore {
                 }
             };
             if entry.value == Bytes::from_static(b"deleted") {
-                info!("Received delete event, breaking");
+                debug!("Received delete event, stopping watcher");
                 break;
             }
             if !entry.value.is_empty() {

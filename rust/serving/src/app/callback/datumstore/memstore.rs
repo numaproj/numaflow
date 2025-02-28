@@ -1,8 +1,5 @@
 use std::collections::HashMap;
-use std::future::Future;
 use std::sync::Arc;
-
-use bytes::Bytes;
 
 use crate::app::callback::datumstore::{Error as StoreError, Result as StoreResult};
 const STORE_KEY_SUFFIX: &str = "saved";

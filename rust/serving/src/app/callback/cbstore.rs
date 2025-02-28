@@ -54,9 +54,8 @@ impl From<ProcessingStatus> for Bytes {
 #[trait_variant::make(CallbackStore: Send)]
 #[allow(dead_code)]
 pub(crate) trait LocalCallbackStore {
-    /// Register a request id in the store. If user provides a request id, the same should be returned
-    /// if it doesn't already exist in the store. An error should be returned if the user-specified request id
-    /// already exists in the store. If the `id` is `None`, the store should generate a new unique request id.
+    /// Register a request id in the store. If the `id` already exists in the store,
+    /// `StoreError::DuplicateRequest` error is returned.
     async fn register(&mut self, id: &str) -> StoreResult<()>;
     /// This method will be called when processing is completed for a request id.
     async fn deregister(&mut self, id: &str, sub_graph: &str) -> StoreResult<()>;

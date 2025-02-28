@@ -1,4 +1,3 @@
-use std::fmt::format;
 use std::sync::Arc;
 
 use async_nats::jetstream::kv::{CreateErrorKind, Store};
@@ -30,7 +29,7 @@ impl JSCallbackStore {
 
 impl super::CallbackStore for JSCallbackStore {
     async fn register(&mut self, id: &str) -> StoreResult<()> {
-        let key = format!("{id}=status");
+        let key = format!("{id}.status");
         tracing::info!(key, "Registering key in Jetstream KV store");
 
         self.kv_store
@@ -46,7 +45,7 @@ impl super::CallbackStore for JSCallbackStore {
                 }
             })?;
 
-        let response_key = format!("{id}=response");
+        let response_key = format!("{id}.response");
         // FIXME: we write empty data so keys are created
         self.kv_store
             .put(&response_key, Bytes::from_static(b""))
@@ -56,9 +55,10 @@ impl super::CallbackStore for JSCallbackStore {
                     "Failed to register request id {id} in kv store: {e:?}"
                 ))
             })?;
-        // FIXME: we write empty data so keys are created
+
+        let callbacks_key = format!("{id}.callbacks");
         self.kv_store
-            .put(id, Bytes::from_static(b""))
+            .put(callbacks_key, Bytes::from_static(b""))
             .await
             .map_err(|e| {
                 StoreError::StoreWrite(format!(
@@ -70,13 +70,12 @@ impl super::CallbackStore for JSCallbackStore {
     }
 
     async fn deregister(&mut self, id: &str, sub_graph: &str) -> StoreResult<()> {
-        info!(?id, "Unregistering key in Jetstream KV store");
-        let key = format!("{}=status", id);
-        let completed_value = format!("completed:{}", sub_graph);
+        info!(?id, "Deregistering key in Jetstream KV store");
+        let key = format!("{}.status", id);
         self.kv_store
             .put(
                 key,
-                ProcessingStatus::Completed(completed_value.to_string()).into(),
+                ProcessingStatus::Completed(sub_graph.to_string()).into(),
             )
             .await
             .map_err(|e| {
@@ -84,7 +83,7 @@ impl super::CallbackStore for JSCallbackStore {
             })?;
 
         // FIXME: use types or watch from revision
-        let response_key = format!("{id}=response");
+        let response_key = format!("{id}.response");
         self.kv_store
             .put(&response_key, Bytes::from_static(b"deleted"))
             .await
@@ -96,13 +95,9 @@ impl super::CallbackStore for JSCallbackStore {
     }
 
     async fn mark_as_failed(&mut self, id: &str, error: &str) -> StoreResult<()> {
-        let key = format!("{}=status", id);
-        let failed_value = format!("failed:{}", error);
+        let key = format!("{id}.status");
         self.kv_store
-            .put(
-                key,
-                ProcessingStatus::Failed(failed_value.to_string()).into(),
-            )
+            .put(key, ProcessingStatus::Failed(error.to_string()).into())
             .await
             .map_err(|e| {
                 StoreError::StoreWrite(format!(
@@ -116,9 +111,14 @@ impl super::CallbackStore for JSCallbackStore {
         &mut self,
         id: &str,
     ) -> StoreResult<(ReceiverStream<Arc<Callback>>, JoinHandle<()>)> {
-        let mut watcher = self.kv_store.watch_with_history(id).await.map_err(|e| {
-            StoreError::StoreRead(format!("Failed to watch request id in kv store: {e:?}"))
-        })?;
+        let callbacks_key = format!("{id}.callbacks");
+        let mut watcher = self
+            .kv_store
+            .watch_with_history(callbacks_key)
+            .await
+            .map_err(|e| {
+                StoreError::StoreRead(format!("Failed to watch request id in kv store: {e:?}"))
+            })?;
         let (tx, rx) = tokio::sync::mpsc::channel(10);
 
         let handle = tokio::spawn(async move {
@@ -142,7 +142,7 @@ impl super::CallbackStore for JSCallbackStore {
 
                 let cbr: Callback = serde_json::from_slice(entry.value.as_ref())
                     .map_err(|e| {
-                        StoreError::StoreRead(format!("Parsing payload from bytes - {}", e))
+                        StoreError::StoreRead(format!("Parsing callback payload from bytes - {e}",))
                     })
                     .expect("Failed to parse callback from bytes");
                 tx.send(Arc::new(cbr))
@@ -155,7 +155,7 @@ impl super::CallbackStore for JSCallbackStore {
     }
 
     async fn status(&mut self, id: &str) -> StoreResult<ProcessingStatus> {
-        let key = format!("{}=status", id);
+        let key = format!("{id}.status");
         let status = self.kv_store.get(&key).await.map_err(|e| {
             StoreError::StoreRead(format!("Failed to get status for request id: {e:?}"))
         })?;

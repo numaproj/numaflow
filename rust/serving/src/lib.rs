@@ -26,7 +26,6 @@ pub use source::{Message, ServingSource};
 
 use crate::app::callback::cbstore::CallbackStore;
 use crate::app::callback::datumstore::DatumStore;
-use crate::app::callback::ssewatcher::SSEResponseWatcher;
 
 pub mod callback;
 
