@@ -9,7 +9,7 @@ on:
 jobs:
   ui:
     name: UI
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 6
     steps:
       - name: Checkout code
@@ -30,7 +30,7 @@ jobs:
         run: git diff --exit-code
   codegen:
     name: Codegen
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Checkout code
@@ -59,7 +59,7 @@ jobs:
 
   unit-tests:
     name: Unit Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     services:
       redis:
@@ -126,7 +126,7 @@ jobs:
       - name: Check Rust formatting
         working-directory: ./rust
         run: |
-            cargo fmt -- --check
+          cargo fmt -- --check
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4
@@ -137,7 +137,7 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
       GOPATH: /home/runner/go
@@ -195,7 +195,7 @@ jobs:
 
   e2e-tests:
     name: E2E Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [build-rust-amd64]
     timeout-minutes: 20
     strategy:
