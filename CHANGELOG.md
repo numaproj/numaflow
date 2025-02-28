@@ -1,5 +1,56 @@
 # Changelog
 
+## v1.4.3 (2025-02-28)
+
+ * [361ac50f](https://github.com/numaproj/numaflow/commit/361ac50feeeb81b3e3b8aca9be42399ab6ba94e9) Update manifests to v1.4.3
+ * [776781cb](https://github.com/numaproj/numaflow/commit/776781cb9f977f89f0b4a622bc460d18b90a7d73) fix(ci): actions/upload/download-artifact upgrade
+ * [868cc5b2](https://github.com/numaproj/numaflow/commit/868cc5b2e1b8a09713c221bbd645ce4290771593) chore(deps): bump github.com/go-jose/go-jose/v4 from 4.0.1 to 4.0.5 (#2428)
+ * [3b921554](https://github.com/numaproj/numaflow/commit/3b921554682af1b663f451aefe8ceb106bffebc8) refactor: introducing lifecycle to Vertex spec (#2419)
+ * [24882b3e](https://github.com/numaproj/numaflow/commit/24882b3e4953891bfa97c3dd907439da806a630c) fix(controller): replicas calculation for paused pipeline (#2412)
+ * [a7741f3c](https://github.com/numaproj/numaflow/commit/a7741f3c73e9cab7bba33e5be87bcdd86939ea24) fix: honor lookbackSeconds in monovertex and rust pipeline (#2258)
+ * [e636ada2](https://github.com/numaproj/numaflow/commit/e636ada2ebbc1fd9c9e64fac6db278fd603cde17) feat: Added support for kafka OAuth authentication (#2257)
+ * [64c019dc](https://github.com/numaproj/numaflow/commit/64c019dcd9268918425b9d2cb7d1794ec1ae5218) fix(controller): multiple issues related to min/max of a vertex (#2398)
+ * [4098fab5](https://github.com/numaproj/numaflow/commit/4098fab5b1adf8bec85fcba5049de51bdd9748ed) fix: more criteria to detect lifecycle changes, fixes: #2331 (#2346)
+ * [8b2871a8](https://github.com/numaproj/numaflow/commit/8b2871a8c4a6b69bd21f47ee221bf2ce1a138b35) chore(deps): bump golang.org/x/net from 0.29.0 to 0.34.0 (#2339)
+ * [d618aa9f](https://github.com/numaproj/numaflow/commit/d618aa9f6eed5e1fe1c4f0b9713a3b701f23b0c5) fix: clean up metrics for deleted mvtx (#2338)
+ * [35273adc](https://github.com/numaproj/numaflow/commit/35273adc1f15639e0d30295a5132ea932fe04e44) fix: lastScaledAt not updated during autoscaling down (#2323)
+ * [1170f2ea](https://github.com/numaproj/numaflow/commit/1170f2ea984ea5364cd08844bdbae29018df23c7) chore(deps): bump golang.org/x/crypto from 0.27.0 to 0.31.0 (#2290)
+ * [bff0d2d5](https://github.com/numaproj/numaflow/commit/bff0d2d5aa4d24c96086676988f2d7962f6f15ff) fix: sorting metrics chart tooltip values (#2401)
+ * [7b1b2425](https://github.com/numaproj/numaflow/commit/7b1b2425ae1ed2455975216f64923d2608734834) fix: filter out deamon pod and unnecessary containers from metrics output (#2394)
+ * [52c200f6](https://github.com/numaproj/numaflow/commit/52c200f6fa9ea1c897068c546b378cb775070c55) fix: error state & search/negate search in case of prev terminated logs (#2391)
+ * [82a80c70](https://github.com/numaproj/numaflow/commit/82a80c7041a3a35dec3aa76d5bfd8563efcee1cd) feat: updating chart lables and tooltip (#2387)
+ * [8eaa4787](https://github.com/numaproj/numaflow/commit/8eaa478771547642d7df0e3cf790f6abe6add290) feat: contextual flow for remaining metrics (#2379)
+ * [a5f2a5a8](https://github.com/numaproj/numaflow/commit/a5f2a5a87b19cc36715d04bf07ac4f6a7e6c6f46) feat: cpu memory metrics (#2332)
+ * [4d73e6fe](https://github.com/numaproj/numaflow/commit/4d73e6fe7a2a295c1a6a1c967ae0483b1c0e0f89) feat: moving ud containers logs as default in pods view (#2378)
+ * [ce5ff7ae](https://github.com/numaproj/numaflow/commit/ce5ff7ae70753e2ae8d88cf79f0e15a40d856a98) fix: timestamp and level filter fix for logs (#2374)
+ * [8ced82df](https://github.com/numaproj/numaflow/commit/8ced82dfabb5695b9cb51766931edffa73d624ab) fix: get status of init containers in pods-info API call (#2371)
+ * [b1c9a953](https://github.com/numaproj/numaflow/commit/b1c9a9534fdea531cadadb0794469b2d7ed22704) feat: rows/page dropbox. Fixes #1764 (#2337)
+ * [8472c4d4](https://github.com/numaproj/numaflow/commit/8472c4d489b3cace6a05516f6c5c811c65caf4f9) fix: units and tooltip content for metric charts (#2333)
+ * [01d422c4](https://github.com/numaproj/numaflow/commit/01d422c4a48e27a5bb643d73c3c2cf66e5eea260) feat: contextual flow for metrics (#2345)
+ * [dbb0b8be](https://github.com/numaproj/numaflow/commit/dbb0b8be90739b788a1b8adb26159d88b71c42b5) feat: logs enhancements (#2320)
+ * [26d925a3](https://github.com/numaproj/numaflow/commit/26d925a371d1fd1bbb054099eecc168906b9878a) feat: make unit and display name configurable (#2269)
+ * [846c469d](https://github.com/numaproj/numaflow/commit/846c469d64663f704326a7e3fb903ef0ee05fc3d) feat: enhance time range selector for metrics - include presets (#2292)
+ * [3baa00b3](https://github.com/numaproj/numaflow/commit/3baa00b35fc2017f7c8102ca885ec4bab77a97df) chore(deps): bump nanoid from 3.3.7 to 3.3.8 in /ui (#2289)
+ * [c8ef5218](https://github.com/numaproj/numaflow/commit/c8ef5218370ca6f7e985420ca4ae96aaf99a1fab) feat: pipeline gauge metrics (#2284)
+ * [14712cd2](https://github.com/numaproj/numaflow/commit/14712cd20b3507eb35ca1029f081893fc41b41e1) feat: counter metrics visualizer for mono-vertex (#2256)
+ * [0eaec8c8](https://github.com/numaproj/numaflow/commit/0eaec8c81103114cebd1e78c6be099ff4e055455) feat: mvtx gauge metrics support (#2259)
+ * [4db11c9d](https://github.com/numaproj/numaflow/commit/4db11c9d9dcfb56d4f78023ee227884f69fdbc2a) fix: "Loading Pods View" and "failed to get pod details" state on UI (#2248)
+ * [e4d920cc](https://github.com/numaproj/numaflow/commit/e4d920cc59ed374f1f6f63054b650526addd7a21) feat: counter metrics visualizer for pipeline (#2238)
+ * [f9bfa4ee](https://github.com/numaproj/numaflow/commit/f9bfa4ee40385559df24f184a404e1933f25d82a) fix: init container logs (#2245)
+ * [bca18d30](https://github.com/numaproj/numaflow/commit/bca18d308a4609e50e31f841da28e28043311f00) feat: unify metrics ( cleanup and add missing metrics ) (#2207)
+ * [ca182eb2](https://github.com/numaproj/numaflow/commit/ca182eb27430ff859322b4eca713a8c8381f6ae9) chore(deps): bump cross-spawn from 7.0.3 to 7.0.6 in /ui (#2228)
+
+### Contributors
+
+ * Adarsh Jain
+ * Derek Wang
+ * SaniyaKalamkar
+ * Sidhant Kohli
+ * SzymonZebrowski
+ * Vedant Gupta
+ * dependabot[bot]
+ * veds-g
+
 ## v1.4.2 (2024-12-11)
 
  * [c9dc38f4](https://github.com/numaproj/numaflow/commit/c9dc38f4cce2b5db598536a7539f2a35febcf1ca) Update manifests to v1.4.2
