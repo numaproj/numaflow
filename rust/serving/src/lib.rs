@@ -1,7 +1,6 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use app::callback::store::Store;
 use axum_server::tls_rustls::RustlsConfig;
 use tokio::sync::mpsc;
 use tracing::info;
@@ -25,20 +24,24 @@ pub mod source;
 use source::MessageWrapper;
 pub use source::{Message, ServingSource};
 
+use crate::app::callback::cbstore::CallbackStore;
+use crate::app::callback::datumstore::DatumStore;
+
 pub mod callback;
 
 #[derive(Clone)]
-pub(crate) struct AppState<T> {
+pub(crate) struct AppState<T, C> {
     pub(crate) message: mpsc::Sender<MessageWrapper>,
     pub(crate) settings: Arc<Settings>,
-    pub(crate) callback_state: CallbackState<T>,
+    pub(crate) callback_state: CallbackState<T, C>,
 }
 
-pub(crate) async fn serve<T>(
-    app: AppState<T>,
+pub(crate) async fn serve<T, C>(
+    app: AppState<T, C>,
 ) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>
 where
-    T: Clone + Send + Sync + Store + 'static,
+    T: Clone + Send + Sync + DatumStore + 'static,
+    C: Clone + Send + Sync + CallbackStore + 'static,
 {
     let (cert, key) = generate_certs()?;
 

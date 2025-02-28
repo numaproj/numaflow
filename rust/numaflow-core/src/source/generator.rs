@@ -355,6 +355,10 @@ impl source::SourceReader for GeneratorRead {
     async fn partitions(&mut self) -> crate::error::Result<Vec<u16>> {
         Ok(vec![*get_vertex_replica()])
     }
+
+    async fn is_ready(&mut self) -> bool {
+        true
+    }
 }
 
 pub(crate) struct GeneratorAck {}

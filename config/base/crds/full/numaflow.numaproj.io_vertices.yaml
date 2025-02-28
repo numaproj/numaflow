@@ -4622,20 +4622,13 @@ spec:
                         type: object
                       msgIDHeaderKey:
                         type: string
+                      requestTimeoutSeconds:
+                        format: int32
+                        type: integer
                       service:
                         type: boolean
-                      store:
-                        properties:
-                          ttl:
-                            type: string
-                          url:
-                            type: string
-                        required:
-                        - url
-                        type: object
                     required:
                     - msgIDHeaderKey
-                    - store
                     type: object
                   transformer:
                     properties:

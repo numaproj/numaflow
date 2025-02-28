@@ -81,6 +81,8 @@ pub mod sink_response {
         /// err_msg is the error message, set it if success is set to false.
         #[prost(string, tag = "3")]
         pub err_msg: ::prost::alloc::string::String,
+        #[prost(bytes = "vec", optional, tag = "4")]
+        pub serve_response: ::core::option::Option<::prost::alloc::vec::Vec<u8>>,
     }
 }
 ///
@@ -91,6 +93,7 @@ pub enum Status {
     Success = 0,
     Failure = 1,
     Fallback = 2,
+    Serve = 3,
 }
 impl Status {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -102,6 +105,7 @@ impl Status {
             Self::Success => "SUCCESS",
             Self::Failure => "FAILURE",
             Self::Fallback => "FALLBACK",
+            Self::Serve => "SERVE",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -110,6 +114,7 @@ impl Status {
             "SUCCESS" => Some(Self::Success),
             "FAILURE" => Some(Self::Failure),
             "FALLBACK" => Some(Self::Fallback),
+            "SERVE" => Some(Self::Serve),
             _ => None,
         }
     }

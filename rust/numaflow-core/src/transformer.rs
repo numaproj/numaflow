@@ -22,6 +22,9 @@ pub enum ActorMessage {
         message: Message,
         respond_to: oneshot::Sender<Result<Vec<Message>>>,
     },
+    IsReady {
+        respond_to: oneshot::Sender<bool>,
+    },
 }
 
 /// TransformerActor, handles the transformation of messages.
@@ -47,6 +50,9 @@ impl TransformerActor {
                 message,
                 respond_to,
             } => self.transformer.transform(message, respond_to).await,
+            ActorMessage::IsReady { respond_to } => {
+                let _ = respond_to.send(self.transformer.ready().await);
+            }
         }
     }
 
@@ -161,12 +167,16 @@ impl Transformer {
                     .await?;
 
                     // update the tracker with the number of responses for each message
-                    for message in transformed_messages.iter() {
-                        tracker_handle
-                            .update(read_msg.offset.clone(), message.tags.clone())
-                            .await?;
-                    }
-                    tracker_handle.update_eof(read_msg.offset.clone()).await?;
+                    tracker_handle
+                        .update(
+                            read_msg.offset.clone(),
+                            transformed_messages
+                                .iter()
+                                .map(|m| m.tags.clone())
+                                .collect(),
+                        )
+                        .await?;
+                    tracker_handle.eof(read_msg.offset.clone()).await?;
 
                     Ok::<Vec<Message>, Error>(transformed_messages)
                 })
@@ -182,6 +192,14 @@ impl Transformer {
             }
         }
         Ok(transformed_messages)
+    }
+
+    pub(crate) async fn is_ready(&mut self) -> bool {
+        let (sender, receiver) = oneshot::channel();
+        let msg = ActorMessage::IsReady { respond_to: sender };
+
+        self.sender.send(msg).await.expect("failed to send message");
+        receiver.await.is_ok()
     }
 }
 

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use async_nats::jetstream::Context;
 use numaflow_pb::clients::map::map_client::MapClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
@@ -14,9 +15,13 @@ use crate::config::components::source::{SourceConfig, SourceType};
 use crate::config::components::transformer::TransformerConfig;
 use crate::config::get_vertex_replica;
 use crate::config::pipeline::map::{MapMode, MapType, MapVtxConfig};
-use crate::config::pipeline::{DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET};
+use crate::config::pipeline::{
+    ServingStoreType, DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET,
+};
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
+use crate::servingstore::user_defined::UserDefinedStore;
+use crate::servingstore::ServingStore;
 use crate::shared::grpc;
 use crate::shared::server_info::{sdk_server_info, ContainerType};
 use crate::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
@@ -36,13 +41,14 @@ pub(crate) async fn create_sink_writer(
     primary_sink: SinkConfig,
     fallback_sink: Option<SinkConfig>,
     tracker_handle: TrackerHandle,
+    serving_store: Option<ServingStore>,
     cln_token: &CancellationToken,
 ) -> error::Result<(
     SinkWriter,
     Option<SinkClient<Channel>>,
     Option<SinkClient<Channel>>,
 )> {
-    let (sink_writer_builder, sink_rpc_client) = match primary_sink.sink_type.clone() {
+    let (mut sink_writer_builder, sink_rpc_client) = match primary_sink.sink_type.clone() {
         SinkType::Log(_) => (
             SinkWriterBuilder::new(
                 batch_size,
@@ -152,6 +158,11 @@ pub(crate) async fn create_sink_writer(
             }
         };
     }
+
+    if let Some(serving_store) = serving_store {
+        sink_writer_builder = sink_writer_builder.serving_store(serving_store);
+    }
+
     Ok((sink_writer_builder.build().await?, sink_rpc_client, None))
 }
 
@@ -268,6 +279,7 @@ pub(crate) async fn create_mapper(
 
 /// Creates a source type based on the configuration
 pub async fn create_source(
+    js_context: Option<Context>,
     batch_size: usize,
     read_timeout: Duration,
     source_config: &SourceConfig,
@@ -352,20 +364,23 @@ pub async fn create_source(
                 None,
             ))
         }
+        // for serving we use batch size as 1 as we are not batching the messages
+        // and read ahead is enabled as it supports it.
         SourceType::Serving(config) => {
             let serving = ServingSource::new(
+                js_context.expect("Jetstream context is required for serving source"),
                 Arc::clone(config),
-                batch_size,
+                1,
                 read_timeout,
                 *get_vertex_replica(),
             )
             .await?;
             Ok((
                 Source::new(
-                    batch_size,
+                    1,
                     source::SourceType::Serving(serving),
                     tracker_handle,
-                    source_config.read_ahead,
+                    true,
                     transformer,
                     watermark_handle,
                 ),
