@@ -3,7 +3,7 @@ name: release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
     branches:
       - main
       - dev-release*
@@ -24,7 +24,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: "1.23"
 
       - name: Build binaries
         run: |
@@ -33,7 +33,7 @@ jobs:
       - name: Make checksums
         run: make checksums
       - name: store artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: binaries
           path: dist
@@ -48,7 +48,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1.9.0
         with:
-          rustflags: ''
+          rustflags: ""
       - name: Install dependencies
         run: sudo apt-get install -y protobuf-compiler
       - name: Build binary
@@ -56,7 +56,7 @@ jobs:
       - name: Rename binary
         run: cp -pv target/x86_64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-amd64
       - name: Upload numaflow binary
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: numaflow-rs-linux-amd64
           path: rust/numaflow-rs-linux-amd64
@@ -74,7 +74,7 @@ jobs:
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1.9.0
         with:
-          rustflags: ''
+          rustflags: ""
       - name: Install dependenices
         run: sudo apt-get install -y gcc-aarch64-linux-gnu protobuf-compiler
       - name: Build binary
@@ -82,19 +82,19 @@ jobs:
       - name: Rename binary
         run: cp -pv target/aarch64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-arm64
       - name: Upload numaflow binary
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: numaflow-rs-linux-arm64
           path: rust/numaflow-rs-linux-arm64
 
   build-push-linux-multi:
     name: Build & push linux/amd64 and linux/arm64
-    needs: [ build-go-binaries, build-rust-amd64, build-rust-arm64]
+    needs: [build-go-binaries, build-rust-amd64, build-rust-arm64]
     runs-on: ubuntu-20.04
     if: github.repository == 'numaproj/numaflow'
     strategy:
       matrix:
-        target: [ numaflow ]
+        target: [numaflow]
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node
@@ -111,19 +111,19 @@ jobs:
         uses: docker/setup-buildx-action@v2
 
       - name: Download Go binaries
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: binaries
           path: dist/
 
       - name: Download Rust amd64 binaries
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: numaflow-rs-linux-amd64
           path: dist/
 
       - name: Download Rust arm64 binaries
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: numaflow-rs-linux-arm64
           path: dist/
@@ -151,7 +151,7 @@ jobs:
   Bom:
     runs-on: ubuntu-latest
     if: github.repository == 'numaproj/numaflow'
-    needs: [ build-push-linux-multi ]
+    needs: [build-push-linux-multi]
     steps:
       # https://stackoverflow.com/questions/58033366/how-to-get-current-branch-within-github-actions
       - run: |
@@ -162,7 +162,7 @@ jobs:
           fi
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: "1.23"
       - uses: actions/checkout@v4
       - run: go install sigs.k8s.io/bom/cmd/bom@v0.2.0
       - run: go install github.com/spdx/spdx-sbom-generator/cmd/generator@v0.0.13
@@ -171,7 +171,7 @@ jobs:
       - run: bom generate --image quay.io/numaproj/numaflow:$VERSION -o /tmp/numaflow.spdx
       # pack the boms into one file to make it easy to download
       - run: cd /tmp && tar -zcf sbom.tar.gz *.spdx
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: sbom.tar.gz
           path: /tmp/sbom.tar.gz
@@ -179,7 +179,7 @@ jobs:
   Release:
     runs-on: ubuntu-latest
     if: github.repository == 'numaproj/numaflow'
-    needs: [ build-push-linux-multi, bom ]
+    needs: [build-push-linux-multi, bom]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -191,11 +191,11 @@ jobs:
             echo "VERSION=${GITHUB_REF##*/}" >> $GITHUB_ENV
           fi
       - name: Download binaries
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: binaries
           path: dist/
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: sbom.tar.gz
           path: /tmp
@@ -208,7 +208,7 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@v2.8.1
         with:
-          cosign-release: 'v1.13.1'
+          cosign-release: "v1.13.1"
 
       - name: Install crane to get digest of image
         uses: imjasonh/setup-crane@v0.2
