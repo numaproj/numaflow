@@ -140,6 +140,12 @@ impl Forwarder {
             Error::Forwarder(format!("Failed to read messages from source {:?}", e))
         })?;
 
+        let msg_count = messages.len() as u64;
+        forward_mvtx_metrics()
+            .read_total
+            .get_or_create(&self.common_labels)
+            .inc_by(msg_count);
+
         debug!(
             "Read batch size: {} and latency - {}ms",
             messages.len(),
@@ -155,12 +161,6 @@ impl Forwarder {
             .read_time
             .get_or_create(&self.common_labels)
             .observe(start_time.elapsed().as_micros() as f64);
-
-        let msg_count = messages.len() as u64;
-        forward_mvtx_metrics()
-            .read_total
-            .get_or_create(&self.common_labels)
-            .inc_by(msg_count);
 
         let (offsets, bytes_count): (Vec<Offset>, u64) = messages.iter().try_fold(
             (Vec::with_capacity(messages.len()), 0),
