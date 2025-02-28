@@ -76,7 +76,7 @@ jobs:
         with:
           rustflags: ""
       - name: Install dependenices
-        run: sudo apt-get install -y gcc-aarch64-linux-gnu protobuf-compiler
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu protobuf-compiler
       - name: Build binary
         run: RUSTFLAGS='-C target-feature=+crt-static -C linker=aarch64-linux-gnu-gcc' cargo build --release --target aarch64-unknown-linux-gnu
       - name: Rename binary
@@ -148,8 +148,8 @@ jobs:
         run: |
           IMAGE_NAMESPACE=${{ secrets.QUAYIO_ORG }} VERSION=${{ steps.version.outputs.VERSION }} DOCKER_PUSH=true make image-multi
 
-  Bom:
-    runs-on: ubuntu-latest
+  bom:
+    runs-on: ubuntu-24.04
     if: github.repository == 'numaproj/numaflow'
     needs: [build-push-linux-multi]
     steps:
@@ -176,8 +176,8 @@ jobs:
           name: sbom.tar.gz
           path: /tmp/sbom.tar.gz
 
-  Release:
-    runs-on: ubuntu-latest
+  release:
+    runs-on: ubuntu-24.04
     if: github.repository == 'numaproj/numaflow'
     needs: [build-push-linux-multi, bom]
     steps:
