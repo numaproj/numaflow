@@ -181,5 +181,4 @@ jobs:
     if: github.repository == 'numaproj/numaflow'
     needs: [build-push-linux-multi, bom]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
