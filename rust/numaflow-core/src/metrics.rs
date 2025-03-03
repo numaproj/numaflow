@@ -1,6 +1,8 @@
 use std::collections::{BTreeMap, HashMap};
+use std::fs;
 use std::iter;
 use std::net::SocketAddr;
+use std::path::Path;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
@@ -10,6 +12,7 @@ use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
 use axum::{routing::get, Router};
 use axum_server::tls_rustls::RustlsConfig;
+use chrono::{DateTime, Utc};
 use numaflow_pb::clients::map::map_client::MapClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
@@ -20,15 +23,18 @@ use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::metrics::histogram::Histogram;
 use prometheus_client::registry::Registry;
+use prost::Message;
 use rcgen::{generate_simple_self_signed, CertifiedKey};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time;
 use tonic::transport::Channel;
-use tonic::Request;
+use tonic::{Request, Status};
 use tracing::{debug, error, info};
 
-use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica};
+use crate::config::{
+    get_pipeline_name, get_vertex_name, get_vertex_replica, RUNTIME_DIR_MOUNT_PATH,
+};
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
 use crate::source::Source;
 use crate::Error;
@@ -621,6 +627,7 @@ fn metrics_router(metrics_state: UserDefinedContainerState) -> Router {
         .route("/livez", get(livez))
         .route("/readyz", get(sidecar_livez))
         .route("/sidecar-livez", get(sidecar_livez))
+        .route("/runtime/errors", get(errors_handler))
         .with_state(metrics_state)
 }
 
@@ -994,6 +1001,64 @@ async fn calculate_pending(seconds: i64, pending_stats: &[TimestampedPending]) -
     }
 
     result
+}
+
+#[derive(Debug)]
+struct ErrorEntry {
+    container_name: String,
+    timestamp: String,
+    code: i32,
+    message: String,
+    details: String,
+}
+
+async fn errors_handler() -> impl IntoResponse {
+    let path = Path::new(RUNTIME_DIR_MOUNT_PATH);
+    let mut errors = Vec::new();
+
+    if path.exists() && path.is_dir() {
+        if let Ok(paths) = fs::read_dir(path) {
+            for container_path in paths.flatten() {
+                if let Some(container_name) = container_path
+                    .file_name()
+                    .map(|s| s.to_string_lossy().into_owned().as_str())
+                {
+                    if let Ok(file_paths) = fs::read_dir(&container_path) {
+                        for file_entry in file_paths.flatten() {
+                            process_file_entry(&file_entry, container_name, &mut errors);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    (StatusCode::OK, Json(errors))
+}
+
+fn process_file_entry(
+    file_entry: &fs::DirEntry,
+    container_name: &str,
+    errors: &mut Vec<ErrorEntry>,
+) {
+    let file_path = file_entry.path();
+    if file_path.is_file() {
+        if let Some(file_name_str) = file_path.file_name().and_then(|s| s.to_str()) {
+            if let Ok(timestamp) = file_name_str.parse::<i64>() {
+                if let Ok(content) = fs::read_to_string(&file_path) {
+                    let datetime = DateTime::<Utc>::from_timestamp(timestamp, 0).unwrap();
+                    let rfc3339_timestamp = datetime.to_rfc3339();
+                    errors.push(ErrorEntry {
+                        container_name: container_name.to_string(),
+                        timestamp: rfc3339_timestamp,
+                        code: 1,
+                        message: String::from("udf_error"),
+                        details: content,
+                    });
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]

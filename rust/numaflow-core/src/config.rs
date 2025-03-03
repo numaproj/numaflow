@@ -25,6 +25,7 @@ pub(crate) mod pipeline;
 pub const NUMAFLOW_MONO_VERTEX_NAME: &str = "NUMAFLOW_MONO_VERTEX_NAME";
 const NUMAFLOW_VERTEX_NAME: &str = "NUMAFLOW_VERTEX_NAME";
 const NUMAFLOW_REPLICA: &str = "NUMAFLOW_REPLICA";
+pub const RUNTIME_DIR_MOUNT_PATH: &str = "/var/numaflow/runtime";
 static VERTEX_NAME: OnceLock<String> = OnceLock::new();
 
 /// fetch the vertex name from the environment variable
