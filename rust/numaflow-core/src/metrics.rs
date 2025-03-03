@@ -6,11 +6,15 @@ use std::path::Path;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
-use axum::body::Body;
-use axum::extract::State;
-use axum::http::{Response, StatusCode};
-use axum::response::IntoResponse;
-use axum::{routing::get, Router};
+use axum::{
+    body::Body,
+    extract::State,
+    http::StatusCode,
+    response::{
+        Json, {IntoResponse, Response},
+    },
+    {routing::get, Router},
+};
 use axum_server::tls_rustls::RustlsConfig;
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::map::map_client::MapClient;
@@ -23,13 +27,12 @@ use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::metrics::histogram::Histogram;
 use prometheus_client::registry::Registry;
-use prost::Message;
 use rcgen::{generate_simple_self_signed, CertifiedKey};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time;
 use tonic::transport::Channel;
-use tonic::{Request, Status};
+use tonic::Request;
 use tracing::{debug, error, info};
 
 use crate::config::{
@@ -1003,29 +1006,56 @@ async fn calculate_pending(seconds: i64, pending_stats: &[TimestampedPending]) -
     result
 }
 
-#[derive(Debug)]
-struct ErrorEntry {
+#[derive(Debug, serde::Serialize)]
+struct RuntimeErrorEntry {
     container_name: String,
     timestamp: String,
-    code: i32,
+    code: String,
     message: String,
     details: String,
 }
 
+#[derive(serde::Serialize)]
+struct ApiResponse {
+    vertex_name: String,
+    replica: String,
+    host_name: String,
+    now: String,
+    errors: Vec<RuntimeErrorEntry>,
+}
+/*
+File Structure
+root - /var/numaflow/runtime
+            -- /udsource
+                -- /t1.pb
+                -- /t2.pb
+            -- /udsink
+                -- /t3.pb
+                -- /t4.pb
+            -- /transformer
+                -- /t5.pb
+                -- /t6.pb
+
+*/
 async fn errors_handler() -> impl IntoResponse {
     let path = Path::new(RUNTIME_DIR_MOUNT_PATH);
     let mut errors = Vec::new();
 
+    //TO DO: check async (tokio::fs) instead of sync operation for reading files.
     if path.exists() && path.is_dir() {
         if let Ok(paths) = fs::read_dir(path) {
-            for container_path in paths.flatten() {
-                if let Some(container_name) = container_path
-                    .file_name()
-                    .map(|s| s.to_string_lossy().into_owned().as_str())
-                {
-                    if let Ok(file_paths) = fs::read_dir(&container_path) {
-                        for file_entry in file_paths.flatten() {
-                            process_file_entry(&file_entry, container_name, &mut errors);
+            for container in paths.flatten() {
+                let container_path = container.path();
+                if container_path.is_dir() {
+                    if let Some(container_name) = container_path
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .map(|s| s.to_string())
+                    {
+                        if let Ok(file_paths) = fs::read_dir(&container_path) {
+                            for file_entry in file_paths.flatten() {
+                                process_file_entry(&file_entry, &container_name, &mut errors);
+                            }
                         }
                     }
                 }
@@ -1033,13 +1063,47 @@ async fn errors_handler() -> impl IntoResponse {
         }
     }
 
-    (StatusCode::OK, Json(errors))
+    /*
+        {
+           "vertex_name": "vertex-name",
+           "replica": 0,
+           "host_name": "simple-pipeline-cat-0-ta6gr",
+           "now": "2025-02-10T00:49:11.818617423Z",
+           "errors": [
+                {
+                    "container_name": "udsource",
+                    "timestamp": "2025-03-03T00:22:17.812617488Z",
+                    "code": 2,
+                    "message": "UDF_EXECUTION_ERROR(source)- fn panicked at source handler",
+                    "details": "The stacktrace"
+                },
+                {
+                    "container_name": "udsink",
+                    "timestamp": "2025-03-03T00:22:17.812617488Z",
+                    "code": 2,
+                    "message": "UDF_EXECUTION_ERROR(sink)- fn panicked at sink handler",
+                    "details": "The stacktrace"
+               },
+           ]
+        }
+    */
+
+    //TO DO: get vertex name, replica, host etc
+    let api_response = ApiResponse {
+        vertex_name: String::from("vertex"),
+        host_name: String::from("host"),
+        replica: 0.to_string(),
+        now: Utc::now().to_rfc3339(),
+        errors,
+    };
+
+    Json(api_response)
 }
 
 fn process_file_entry(
     file_entry: &fs::DirEntry,
     container_name: &str,
-    errors: &mut Vec<ErrorEntry>,
+    errors: &mut Vec<RuntimeErrorEntry>,
 ) {
     let file_path = file_entry.path();
     if file_path.is_file() {
@@ -1048,12 +1112,13 @@ fn process_file_entry(
                 if let Ok(content) = fs::read_to_string(&file_path) {
                     let datetime = DateTime::<Utc>::from_timestamp(timestamp, 0).unwrap();
                     let rfc3339_timestamp = datetime.to_rfc3339();
-                    errors.push(ErrorEntry {
+                    // TO DO: deserialize proto bytes to get code, message and details
+                    errors.push(RuntimeErrorEntry {
                         container_name: container_name.to_string(),
                         timestamp: rfc3339_timestamp,
-                        code: 1,
+                        code: 1.to_string(),
                         message: String::from("udf_error"),
-                        details: content,
+                        details: String::from("the stacktrace"),
                     });
                 }
             }
@@ -1066,6 +1131,7 @@ mod tests {
     use std::net::SocketAddr;
     use std::time::Instant;
 
+    use http::StatusCode;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
     use tokio::sync::mpsc::Sender;
