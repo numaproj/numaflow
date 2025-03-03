@@ -5,12 +5,14 @@ use tracing::info;
 
 use crate::config::pipeline::NatsStoreConfig;
 
+/// Nats serving store to store the serving responses.
 #[derive(Clone)]
 pub(crate) struct NatsServingStore {
     store: Store,
 }
 
 impl NatsServingStore {
+    /// Create a new Nats serving store.
     pub(crate) async fn new(
         js_context: Context,
         nats_store_config: NatsStoreConfig,
@@ -23,6 +25,7 @@ impl NatsServingStore {
         Ok(Self { store })
     }
 
+    /// Puts a datum into the serving store.
     pub(crate) async fn put_datum(
         &mut self,
         id: &str,

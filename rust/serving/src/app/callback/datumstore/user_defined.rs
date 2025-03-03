@@ -1,11 +1,14 @@
-use std::path::PathBuf;
-
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
+use bytes::Bytes;
 use http::Uri;
 use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
 use numaflow_pb::clients::serving::GetRequest;
+use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::net::UnixStream;
+use tokio::task::JoinHandle;
+use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::{Channel, Endpoint};
 use tower::service_fn;
 use tracing::warn;
@@ -43,6 +46,13 @@ impl DatumStore for UserDefinedStore {
         } else {
             Ok(Some(payloads.iter().map(|p| p.value.clone()).collect()))
         }
+    }
+
+    async fn stream_response(
+        &mut self,
+        id: &str,
+    ) -> StoreResult<(ReceiverStream<Arc<Bytes>>, JoinHandle<()>)> {
+        unimplemented!()
     }
 
     async fn ready(&mut self) -> bool {

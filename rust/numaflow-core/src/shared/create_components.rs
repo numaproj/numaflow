@@ -15,12 +15,9 @@ use crate::config::components::source::{SourceConfig, SourceType};
 use crate::config::components::transformer::TransformerConfig;
 use crate::config::get_vertex_replica;
 use crate::config::pipeline::map::{MapMode, MapType, MapVtxConfig};
-use crate::config::pipeline::{
-    ServingStoreType, DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET,
-};
+use crate::config::pipeline::{DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET};
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
-use crate::servingstore::user_defined::UserDefinedStore;
 use crate::servingstore::ServingStore;
 use crate::shared::grpc;
 use crate::shared::server_info::{sdk_server_info, ContainerType};

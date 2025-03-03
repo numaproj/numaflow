@@ -158,7 +158,7 @@ async fn graceful_shutdown(handle: Handle, duration_secs: u64) {
 
     info!("sending graceful shutdown signal");
 
-    // Signal the server to shutdown using Handle.
+    // Signal the server to shut down using Handle.
     handle.graceful_shutdown(Some(Duration::from_secs(duration_secs)));
 }
 

@@ -1,4 +1,8 @@
+use bytes::Bytes;
+use std::sync::Arc;
 use thiserror::Error;
+use tokio::task::JoinHandle;
+use tokio_stream::wrappers::ReceiverStream;
 
 // in-memory store
 pub(crate) mod jetstreamstore;
@@ -37,6 +41,11 @@ pub(crate) type Result<T> = std::result::Result<T, Error>;
 pub(crate) trait LocalDatumStore {
     /// retrieve the data from the store
     async fn retrieve_datum(&mut self, id: &str) -> Result<Option<Vec<Vec<u8>>>>;
+    /// streams the responses
+    async fn stream_response(
+        &mut self,
+        id: &str,
+    ) -> Result<(ReceiverStream<Arc<Bytes>>, JoinHandle<()>)>;
     /// check if the store is ready
     async fn ready(&mut self) -> bool;
 }

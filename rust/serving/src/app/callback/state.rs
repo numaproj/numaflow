@@ -10,7 +10,6 @@ use super::datumstore::DatumStore;
 use crate::app::callback::cbstore::{CallbackStore, ProcessingStatus};
 use crate::app::callback::datumstore::Error as StoreError;
 use crate::app::callback::datumstore::Result as StoreResult;
-use crate::app::callback::ssewatcher::SSEResponseWatcher;
 use crate::app::tracker::MessageGraph;
 use crate::Error;
 
@@ -21,7 +20,6 @@ pub(crate) struct State<T, C> {
     // conn is to be used while reading and writing to redis.
     datum_store: T,
     callback_store: C,
-    sse_watcher: SSEResponseWatcher,
 }
 
 impl<T, C> State<T, C>
@@ -34,13 +32,11 @@ where
         msg_graph: MessageGraph,
         store: T,
         callback_store: C,
-        sse_watcher: SSEResponseWatcher,
     ) -> crate::Result<Self> {
         Ok(Self {
             msg_graph_generator: Arc::new(msg_graph),
             datum_store: store,
             callback_store,
-            sse_watcher,
         })
     }
 
@@ -175,9 +171,7 @@ where
             }
         });
 
-        let mut sse_watcher = self.sse_watcher.clone();
-        let (mut response_stream, _handle) = sse_watcher.watch_response(id).await?;
-
+        let (mut response_stream, _handle) = self.datum_store.stream_response(id).await?;
         tokio::spawn(async move {
             while let Some(response) = response_stream.next().await {
                 tx.send(response).await.expect("Failed to send response");

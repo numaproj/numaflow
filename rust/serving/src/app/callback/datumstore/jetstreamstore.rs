@@ -1,6 +1,9 @@
 use async_nats::jetstream::kv::Store;
 use async_nats::jetstream::Context;
 use bytes::Bytes;
+use std::sync::Arc;
+use tokio::task::JoinHandle;
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tracing::{debug, info};
 
@@ -26,14 +29,13 @@ impl DatumStore for JetStreamDatumStore {
         let id = format!("{id}.response");
         let mut watcher = self
             .kv_store
-            // FIXME: overflow could happen if rev > 64 (today we skip register event)
             .watch_from_revision(id, 1)
             .await
             .map_err(|e| {
                 StoreError::StoreRead(format!("Failed to watch request id in kv store: {e:?}"))
             })?;
-        let mut results = Vec::new();
 
+        let mut results = Vec::new();
         while let Some(watch_event) = watcher.next().await {
             info!(?watch_event, "Received watch event");
             let entry = match watch_event {
@@ -43,13 +45,13 @@ impl DatumStore for JetStreamDatumStore {
                     continue;
                 }
             };
-            if entry.value == Bytes::from_static(b"deleted") {
+
+            if entry.operation == async_nats::jetstream::kv::Operation::Delete {
                 debug!("Received delete event, stopping watcher");
                 break;
             }
-            if !entry.value.is_empty() {
-                results.push(entry.value.to_vec());
-            }
+
+            results.push(entry.value.to_vec());
         }
 
         if results.is_empty() {
@@ -57,6 +59,45 @@ impl DatumStore for JetStreamDatumStore {
         } else {
             Ok(Some(results))
         }
+    }
+
+    async fn stream_response(
+        &mut self,
+        id: &str,
+    ) -> StoreResult<(ReceiverStream<Arc<Bytes>>, JoinHandle<()>)> {
+        let id = format!("{id}.response");
+        let mut watcher = self
+            .kv_store
+            .watch_from_revision(id, 1)
+            .await
+            .map_err(|e| {
+                StoreError::StoreRead(format!("Failed to watch request id in kv store: {e:?}"))
+            })?;
+        let (tx, rx) = tokio::sync::mpsc::channel(10);
+
+        let handle = tokio::spawn(async move {
+            while let Some(watch_event) = watcher.next().await {
+                let entry = match watch_event {
+                    Ok(event) => event,
+                    Err(e) => {
+                        tracing::error!(?e, "Received error from Jetstream KV watcher");
+                        continue;
+                    }
+                };
+
+                if entry.operation == async_nats::jetstream::kv::Operation::Delete {
+                    break;
+                }
+
+                if !entry.value.is_empty() {
+                    tx.send(Arc::new(entry.value))
+                        .await
+                        .expect("Failed to send response");
+                }
+            }
+        });
+
+        Ok((ReceiverStream::new(rx), handle))
     }
 
     async fn ready(&mut self) -> bool {

@@ -29,18 +29,18 @@ impl JSCallbackStore {
 
 impl super::CallbackStore for JSCallbackStore {
     async fn register(&mut self, id: &str) -> StoreResult<()> {
-        let key = format!("{id}.status");
-        tracing::info!(key, "Registering key in Jetstream KV store");
+        let status_key = format!("{id}.status");
+        info!(id, "Registering key in Jetstream KV store");
 
         self.kv_store
-            .create(&key, ProcessingStatus::InProgress.into())
+            .create(&status_key, ProcessingStatus::InProgress.into())
             .await
             .map_err(|e| {
                 if e.kind() == CreateErrorKind::AlreadyExists {
                     StoreError::DuplicateRequest(id.to_string())
                 } else {
                     StoreError::StoreWrite(format!(
-                        "Failed to register request id {key} in kv store: {e:?}"
+                        "Failed to register request id {status_key} in kv store: {e:?}"
                     ))
                 }
             })?;
@@ -48,21 +48,25 @@ impl super::CallbackStore for JSCallbackStore {
         let response_key = format!("{id}.response");
         // FIXME: we write empty data so keys are created
         self.kv_store
-            .put(&response_key, Bytes::from_static(b""))
+            .create(&response_key, Bytes::from_static(b""))
             .await
             .map_err(|e| {
-                StoreError::StoreWrite(format!(
-                    "Failed to register request id {id} in kv store: {e:?}"
-                ))
+                if e.kind() == CreateErrorKind::AlreadyExists {
+                    StoreError::DuplicateRequest(id.to_string())
+                } else {
+                    StoreError::StoreWrite(format!(
+                        "Failed to register request id {response_key} in kv store: {e:?}"
+                    ))
+                }
             })?;
 
         let callbacks_key = format!("{id}.callbacks");
         self.kv_store
-            .put(callbacks_key, Bytes::from_static(b""))
+            .put(&callbacks_key, Bytes::from_static(b""))
             .await
             .map_err(|e| {
                 StoreError::StoreWrite(format!(
-                    "Failed to register request id {id} in kv store: {e:?}"
+                    "Failed to register request id {callbacks_key} in kv store: {e:?}"
                 ))
             })?;
 
@@ -70,7 +74,6 @@ impl super::CallbackStore for JSCallbackStore {
     }
 
     async fn deregister(&mut self, id: &str, sub_graph: &str) -> StoreResult<()> {
-        info!(?id, "Deregistering key in Jetstream KV store");
         let key = format!("{}.status", id);
         self.kv_store
             .put(
@@ -82,15 +85,15 @@ impl super::CallbackStore for JSCallbackStore {
                 StoreError::StoreWrite(format!("Failed to mark request as done in kv store: {e:?}"))
             })?;
 
-        // FIXME: use types or watch from revision
         let response_key = format!("{id}.response");
-        self.kv_store
-            .put(&response_key, Bytes::from_static(b"deleted"))
-            .await
-            .map_err(|e| {
-                StoreError::StoreWrite(format!("Failed to mark request as done in kv store: {e:?}"))
-            })?;
+        self.kv_store.delete(&response_key).await.map_err(|e| {
+            StoreError::StoreWrite(format!("Failed to mark request as done in kv store: {e:?}"))
+        })?;
 
+        let callbacks_key = format!("{id}.callbacks");
+        self.kv_store.delete(&callbacks_key).await.map_err(|e| {
+            StoreError::StoreWrite(format!("Failed to mark request as done in kv store: {e:?}"))
+        })?;
         Ok(())
     }
 
@@ -114,7 +117,7 @@ impl super::CallbackStore for JSCallbackStore {
         let callbacks_key = format!("{id}.callbacks");
         let mut watcher = self
             .kv_store
-            .watch_with_history(callbacks_key)
+            .watch_with_history(&callbacks_key)
             .await
             .map_err(|e| {
                 StoreError::StoreRead(format!("Failed to watch request id in kv store: {e:?}"))
@@ -122,8 +125,8 @@ impl super::CallbackStore for JSCallbackStore {
         let (tx, rx) = tokio::sync::mpsc::channel(10);
 
         let handle = tokio::spawn(async move {
-            // TODO: handle watch errors
             while let Some(watch_event) = watcher.next().await {
+                println!("Received watch event: {:?}", watch_event);
                 let entry = match watch_event {
                     Ok(event) => event,
                     Err(e) => {
@@ -131,13 +134,10 @@ impl super::CallbackStore for JSCallbackStore {
                         continue;
                     }
                 };
+                println!("Received entry: {:?}", entry);
                 // all callbacks received
                 if entry.operation == async_nats::jetstream::kv::Operation::Delete {
                     break;
-                }
-
-                if entry.value.is_empty() {
-                    continue;
                 }
 
                 let cbr: Callback = serde_json::from_slice(entry.value.as_ref())
@@ -145,10 +145,12 @@ impl super::CallbackStore for JSCallbackStore {
                         StoreError::StoreRead(format!("Parsing callback payload from bytes - {e}",))
                     })
                     .expect("Failed to parse callback from bytes");
+
                 tx.send(Arc::new(cbr))
                     .await
                     .expect("Failed to send callback");
             }
+            println!("Callback stream ended");
         });
 
         Ok((ReceiverStream::new(rx), handle))
@@ -221,7 +223,8 @@ mod tests {
         context
             .create_key_value(Config {
                 bucket: serving_store.to_string(),
-                history: 1,
+                description: "test_description".to_string(),
+                history: 15,
                 ..Default::default()
             })
             .await
@@ -262,5 +265,30 @@ mod tests {
 
         // delete store
         context.delete_key_value(serving_store).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn watch_from_revision() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+
+        let context = async_nats::jetstream::new(client);
+
+        let kv = context
+            .create_key_value(async_nats::jetstream::kv::Config {
+                bucket: "bucket".into(),
+                description: "test_description".into(),
+                history: 15,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        kv.put("callbacks.id0.1", "value".into()).await.unwrap();
+        kv.put("callbacks.id0.2", "value".into()).await.unwrap();
+        kv.put("callbacks.id0.3", "value".into()).await.unwrap();
+
+        let values = kv.get("callbacks.id0.>").await.unwrap();
+        println!("{:?}", values);
     }
 }
