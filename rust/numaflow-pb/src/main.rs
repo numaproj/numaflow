@@ -31,7 +31,11 @@ fn build_objects() {
     prost_build::Config::new()
         .out_dir("src/objects")
         .compile_protos(
-            &["proto/isb/message.proto", "proto/watermark/watermark.proto"],
+            &[
+                "proto/isb/message.proto",
+                "proto/watermark/watermark.proto",
+                "proto/grpc_error/status.proto",
+            ],
             &["proto"],
         )
         .expect("failed to compile protos");

@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package grpc.error;
+
+import "google/protobuf/any.proto";
+
+option go_package = "google.golang.org/genproto/googleapis/rpc/status;status";
+
+// The Status Type defines the standard error model for gRPC.
+message Status {
+    // The status code, which will be one of the `google.rpc.Code` values.
+    int32 code = 1;
+    
+    // A developer-facing error message, which should be in English.
+    string message = 2;
+    
+    // A list of additional properties associated with the error.
+    repeated google.protobuf.Any details = 3;
+}
+
+message DebugInfo {
+    string detail = 1;
+}
