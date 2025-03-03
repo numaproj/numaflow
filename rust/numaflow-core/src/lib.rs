@@ -3,16 +3,16 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
+use crate::config::{config, CustomResourceType};
+use chrono::Utc;
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::Path;
-use chrono::Utc;
-use crate::config::{config, CustomResourceType};
-// use crate::config::runtime::DEFAULT_RUNTIME_MOUNT_PATH;
 
 /// Custom Error handling.
 mod error;
 pub(crate) use crate::error::{Error, Result};
+use crate::runtime::Runtime;
 
 /// [MonoVertex] is a simplified version of the [Pipeline] spec which is ideal for high TPS, low latency
 /// use-cases which do not require [ISB].
@@ -67,37 +67,8 @@ mod mapper;
 /// [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 mod watermark;
 
-// /// Runtime to write data to an emptyDir in a Kubernetes pod.
-// mod runtime;
-pub struct Runtime {
-    empty_dir_path: String,
-}
-
-impl Runtime {
-    /// Creates a new Runtime instance with the specified emptyDir path.
-    pub fn new(empty_dir_path: &str) -> Self {
-        Runtime {
-            empty_dir_path: empty_dir_path.to_string(),
-        }
-    }
-
-    /// Writes data to a file in the emptyDir.
-    pub fn write_to_empty_dir(&self, container_name: &str, data: &str) -> io::Result<()> {
-        let timestamp = Utc::now().timestamp();
-        let file_name = format!("{}.pb", timestamp);
-        let file_path = Path::new(&self.empty_dir_path).join(container_name).join(file_name);
-        println!("Writing to {}", file_path.display());
-        let mut file = File::create(&file_path)?;
-        file.write_all(data.as_bytes())?;
-        Ok(())
-    }
-
-    /// Reads data from a file in the emptyDir.
-    pub fn read_from_empty_dir(&self, file_name: &str) -> io::Result<String> {
-        let file_path = Path::new(&self.empty_dir_path).join(file_name);
-        fs::read_to_string(file_path)
-    }
-}
+/// Runtime to persist the runtime information of the pod (e.g. application errors)
+mod runtime;
 
 pub async fn run() -> Result<()> {
     let cln_token = CancellationToken::new();
@@ -121,8 +92,10 @@ pub async fn run() -> Result<()> {
             if let Err(e) = monovertex::start_forwarder(cln_token, &config).await {
                 if let Error::Grpc(e) = e {
                     error!(error=?e, "Monovertex failed because of UDF failure");
-                    println!("Grpc error: {:?}", e.message());
-                    runtime.write_to_empty_dir("numa", &format!("Grpc error: {:?}", e)).expect("Failed to write error to emptyDir");
+                    // marshal the status object
+                    runtime
+                        .persist_application_error("numa", e)
+                        .expect("Failed to write error to emptyDir");
                 } else {
                     error!(?e, "Error running monovertex");
                 }
