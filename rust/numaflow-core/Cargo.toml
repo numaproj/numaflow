@@ -50,6 +50,7 @@ pin-project = "1.1.5"
 rand = "0.8.5"
 async-nats = "0.38.0"
 derive_builder = "0.20.2"
+regex = "1.11.1"
 
 [dev-dependencies]
 tempfile = "3.11.0"

@@ -4,15 +4,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use crate::config::{config, CustomResourceType};
-use chrono::Utc;
-use std::fs::{self, File};
-use std::io::{self, Write};
-use std::path::Path;
 
 /// Custom Error handling.
 mod error;
 pub(crate) use crate::error::{Error, Result};
-use crate::runtime::Runtime;
 
 /// [MonoVertex] is a simplified version of the [Pipeline] spec which is ideal for high TPS, low latency
 /// use-cases which do not require [ISB].
@@ -69,6 +64,7 @@ mod watermark;
 
 /// Runtime to persist the runtime information of the pod (e.g. application errors)
 mod runtime;
+use crate::runtime::Runtime;
 
 pub async fn run() -> Result<()> {
     let cln_token = CancellationToken::new();
@@ -92,10 +88,9 @@ pub async fn run() -> Result<()> {
             if let Err(e) = monovertex::start_forwarder(cln_token, &config).await {
                 if let Error::Grpc(e) = e {
                     error!(error=?e, "Monovertex failed because of UDF failure");
-                    // marshal the status object
                     runtime
-                        .persist_application_error("numa", e)
-                        .expect("Failed to write error to emptyDir");
+                        .persist_application_error(e)
+                        .expect("Failed to persist the application error");
                 } else {
                     error!(?e, "Error running monovertex");
                 }
@@ -110,8 +105,9 @@ pub async fn run() -> Result<()> {
             if let Err(e) = pipeline::start_forwarder(cln_token, config).await {
                 if let Error::Grpc(e) = e {
                     error!(error=?e, "Pipeline failed because of UDF failure");
-                    println!("Grpc error: {:?}", e);
-                    // runtime.write_to_empty_dir("error.log", &format!("Grpc error: {:?}", e)).expect("Failed to write error to emptyDir");
+                    runtime
+                        .persist_application_error(e)
+                        .expect("Failed to persist the application error");
                 } else {
                     error!(?e, "Error running pipeline");
                 }
