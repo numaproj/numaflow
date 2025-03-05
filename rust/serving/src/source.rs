@@ -7,7 +7,7 @@ use bytes::Bytes;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
 
-use crate::app::callback::cbstore::jetstreamstore::JSCallbackStore;
+use crate::app::callback::cbstore::jetstreamstore::JetstreamCallbackStore;
 use crate::app::callback::datumstore::jetstreamstore::JetStreamDatumStore;
 use crate::app::callback::datumstore::user_defined::UserDefinedStore;
 use crate::app::callback::state::State as CallbackState;
@@ -69,7 +69,7 @@ impl ServingSourceActor {
         let (messages_tx, messages_rx) = mpsc::channel(request_channel_buffer_size);
         // create a callback store for tracking
         let callback_store =
-            JSCallbackStore::new(js_context.clone(), &settings.cb_js_store).await?;
+            JetstreamCallbackStore::new(js_context.clone(), &settings.cb_js_store).await?;
         // Create the message graph from the pipeline spec and the redis store
         let msg_graph = MessageGraph::from_pipeline(&settings.pipeline_spec).map_err(|e| {
             Error::InitError(format!(

@@ -1,9 +1,9 @@
+use crate::config::pipeline::NatsStoreConfig;
 use async_nats::jetstream::kv::Store;
 use async_nats::jetstream::Context;
 use bytes::Bytes;
+use chrono::Utc;
 use tracing::info;
-
-use crate::config::pipeline::NatsStoreConfig;
 
 /// Nats serving store to store the serving responses.
 #[derive(Clone)]
@@ -32,7 +32,12 @@ impl NatsServingStore {
         origin: &str,
         payload: Vec<u8>,
     ) -> crate::Result<()> {
-        let id = format!("{id}.response");
+        let id = format!(
+            "response.{id}.{}.{}",
+            origin,
+            Utc::now().timestamp_nanos_opt().unwrap()
+        );
+
         info!(?id, "Putting datum in Jetstream serving store");
         self.store
             .put(id, Bytes::from(payload))
