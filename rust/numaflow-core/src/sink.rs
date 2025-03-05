@@ -126,7 +126,7 @@ pub(crate) enum SinkClientType {
 /// Error handling and shutdown: There can non-retryable errors(udsink panics etc), in that case we will
 /// cancel the token to indicate the upstream not send any more messages to the sink, we drain any inflight
 /// messages that are in input stream and nack them using the tracker, when the upstream stops sending
-/// messages the input stream will be closed and we will stop the component.
+/// messages the input stream will be closed, and we will stop the component.
 #[derive(Clone)]
 pub(super) struct SinkWriter {
     batch_size: usize,
@@ -265,7 +265,7 @@ impl SinkWriter {
             respond_to: tx,
         };
         let _ = self.sink_handle.send(msg).await;
-        rx.await.unwrap()
+        rx.await.expect("Error receiving response from sink actor")
     }
 
     /// Sink the messages to the Fallback Sink.
@@ -488,6 +488,7 @@ impl SinkWriter {
                 .await?;
         }
 
+        // If there are serving messages, write them to the serving store
         if !serving_msgs.is_empty() {
             self.handle_serving_messages(serving_msgs).await?;
         }
@@ -653,11 +654,6 @@ impl SinkWriter {
             let start_time = time::Instant::now();
             match self.fb_sink(messages_to_send.clone()).await {
                 Ok(fb_response) => {
-                    debug!(
-                        "Fallback sink latency - {}ms",
-                        start_time.elapsed().as_millis()
-                    );
-
                     // create a map of id to result, since there is no strict requirement
                     // for the udsink to return the results in the same order as the requests
                     let result_map = fb_response

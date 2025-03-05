@@ -1,7 +1,9 @@
+use crate::app::callback::datumstore::{Error as StoreError, Result as StoreResult};
+use bytes::Bytes;
 use std::collections::HashMap;
 use std::sync::Arc;
-
-use crate::app::callback::datumstore::{Error as StoreError, Result as StoreResult};
+use tokio::task::JoinHandle;
+use tokio_stream::wrappers::ReceiverStream;
 const STORE_KEY_SUFFIX: &str = "saved";
 
 /// `InMemoryStore` is an in-memory implementation of the `Store` trait.
@@ -36,6 +38,13 @@ impl super::DatumStore for InMemoryStore {
                 id
             ))),
         }
+    }
+
+    async fn stream_response(
+        &mut self,
+        id: &str,
+    ) -> StoreResult<(ReceiverStream<Arc<Bytes>>, JoinHandle<()>)> {
+        unimplemented!()
     }
 
     async fn ready(&mut self) -> bool {

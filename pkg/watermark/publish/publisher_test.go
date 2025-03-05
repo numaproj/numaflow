@@ -44,6 +44,49 @@ func createAndLaterDeleteBucket(js nats.JetStreamContext, kvConfig *nats.KeyValu
 	}, nil
 }
 
+func TestKVWatcher(t *testing.T) {
+	s := natstest.RunJetStreamServer(t)
+	defer natstest.ShutdownJetStreamServer(t, s)
+
+	client := natsclient.NewTestClientWithServer(t, s)
+	defer client.Close()
+
+	js, err := client.JetStreamContext()
+	assert.NoError(t, err)
+
+	kvName := "test_kv"
+
+	kvStore, err := js.CreateKeyValue(&nats.KeyValueConfig{Bucket: kvName, History: 10})
+	assert.NoError(t, err)
+
+	rev, err := kvStore.Put("foo_bar", []byte("baz"))
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), rev)
+
+	rev, err = kvStore.Put("foo_barr", []byte("baz"))
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(2), rev)
+
+	rev, err = kvStore.Put("foo_bar", []byte("bar"))
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(3), rev)
+
+	err = kvStore.Delete("foo_bar")
+	assert.NoError(t, err)
+
+	watcher, err := kvStore.Watch("foo_bar", nats.IncludeHistory())
+	assert.NoError(t, err)
+
+	kvEntryChannel := watcher.Updates()
+
+	for entry := range kvEntryChannel {
+		if entry.Operation() == nats.KeyValueDelete {
+			break
+		}
+		println(entry.Key(), " ", string(entry.Value()), " ", entry.Revision())
+	}
+}
+
 func TestPublisherWithSharedOTBucket(t *testing.T) {
 	s := natstest.RunJetStreamServer(t)
 	defer natstest.ShutdownJetStreamServer(t, s)

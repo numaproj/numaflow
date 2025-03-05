@@ -654,17 +654,12 @@ mod tests {
             // Spawn a child task
             task::spawn(async {
                 for i in 1..=5 {
-                    println!("Child task running: {}", i);
                     sleep(Duration::from_secs(1)).await;
                 }
             });
 
             // Parent task logic
-            println!("Parent task running");
             sleep(Duration::from_secs(2)).await;
-
-            // Parent task returns early
-            println!("Parent task returning early");
         });
 
         drop(parent_task);

@@ -8,8 +8,8 @@ use serde_json::from_slice;
 
 use super::pipeline::ServingCallbackConfig;
 use super::{
-    get_namespace, get_pipeline_name, get_vertex_name, DEFAULT_CALLBACK_CONCURRENCY,
-    ENV_CALLBACK_CONCURRENCY, ENV_CALLBACK_ENABLED,
+    get_namespace, get_pipeline_name, DEFAULT_CALLBACK_CONCURRENCY, ENV_CALLBACK_CONCURRENCY,
+    ENV_CALLBACK_ENABLED,
 };
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::sink::SinkConfig;

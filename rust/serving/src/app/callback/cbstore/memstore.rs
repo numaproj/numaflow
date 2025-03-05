@@ -10,15 +10,16 @@ use crate::app::callback::cbstore::LocalCallbackStore;
 use crate::app::callback::datumstore::{Error as StoreError, Result as StoreResult};
 use crate::callback::Callback;
 
+/// An in-memory implementation of the callback store.
 #[derive(Clone)]
 pub(crate) struct InMemoryCallbackStore {
     data: Arc<Mutex<HashMap<String, Vec<Arc<Callback>>>>>,
 }
 
 impl InMemoryCallbackStore {
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(callback_map: Option<HashMap<String, Vec<Arc<Callback>>>>) -> Self {
         Self {
-            data: Arc::new(Mutex::new(HashMap::new())),
+            data: Arc::new(Mutex::new(callback_map.unwrap_or_default())),
         }
     }
 }
@@ -33,7 +34,7 @@ impl LocalCallbackStore for InMemoryCallbackStore {
         Ok(())
     }
 
-    async fn deregister(&mut self, id: &str, sub_graph: &str) -> StoreResult<()> {
+    async fn deregister(&mut self, id: &str, _sub_graph: &str) -> StoreResult<()> {
         let mut data = self.data.lock().await;
         if data.remove(id).is_none() {
             return Err(StoreError::InvalidRequestId(id.to_string()));
@@ -67,7 +68,7 @@ impl LocalCallbackStore for InMemoryCallbackStore {
         true
     }
 
-    async fn status(&mut self, id: &str) -> StoreResult<super::ProcessingStatus> {
-        unimplemented!();
+    async fn status(&mut self, _id: &str) -> StoreResult<super::ProcessingStatus> {
+        Ok(super::ProcessingStatus::InProgress)
     }
 }

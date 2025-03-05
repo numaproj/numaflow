@@ -13,7 +13,7 @@ pub(crate) mod source {
     use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
     use tracing::warn;
 
-    use crate::config::{get_namespace, get_pipeline_name, get_vertex_name};
+    use crate::config::{get_namespace, get_pipeline_name};
     use crate::error::Error;
     use crate::Result;
 
