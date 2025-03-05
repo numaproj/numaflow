@@ -1,15 +1,24 @@
-use chrono::Utc;
-use std::str;
+use chrono::{DateTime, Utc};
+use regex::Regex;
+use serde::{Deserialize, Serialize};
+use std::error::Error;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
+use std::str;
 use std::{fs, io};
 use tonic::Status;
-use regex::Regex;
-use serde_json::json;
-use std::error::Error;
 pub struct Runtime {
     empty_dir_path: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct RuntimeErrorEntry {
+    pub container_name: String,
+    pub timestamp: String,
+    pub code: String,
+    pub message: String,
+    pub details: String,
 }
 
 impl Runtime {
@@ -21,10 +30,7 @@ impl Runtime {
     }
 
     /// Writes data to a file in the emptyDir.
-    pub fn persist_application_error(
-        &self,
-        grpc_status: Status,
-    ) -> io::Result<()> {
+    pub fn persist_application_error(&self, grpc_status: Status) -> io::Result<()> {
         // we can extract the type of udf based on the error message
         let container_name = match get_container_name(grpc_status.message()) {
             Ok(name) => name,
@@ -33,7 +39,7 @@ impl Runtime {
             }
         };
 
-        let dir_path = Path::new(&self.empty_dir_path).join(container_name);
+        let dir_path = Path::new(&self.empty_dir_path).join(&container_name);
         if !dir_path.exists() {
             fs::create_dir_all(&dir_path)?;
         }
@@ -41,7 +47,7 @@ impl Runtime {
         let timestamp = Utc::now().timestamp();
         let file_name = format!("{}.json", timestamp);
 
-        let json_str = grpc_status_to_json(&grpc_status)
+        let json_str = grpc_status_to_json(&grpc_status, container_name.as_str(), timestamp)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
 
         let file_path = dir_path.join(file_name);
@@ -50,21 +56,11 @@ impl Runtime {
 
         Ok(())
     }
-
-    /// Reads data from a file in the emptyDir.
-    /*
-     * We need to fetch errors per container (container -> error)
-     */
-    pub fn read_from_empty_dir(&self, file_name: &str) -> io::Result<String> {
-        let file_path = Path::new(&self.empty_dir_path).join(file_name);
-        fs::read_to_string(file_path)
-    }
 }
 
 fn get_container_name(error_message: &str) -> Result<String, String> {
-    extract_container_name(error_message).ok_or_else(|| {
-        "Failed to extract container name from error message".to_string()
-    })
+    extract_container_name(error_message)
+        .ok_or_else(|| "Failed to extract container name from error message".to_string())
 }
 
 fn extract_container_name(error_message: &str) -> Option<String> {
@@ -74,7 +70,11 @@ fn extract_container_name(error_message: &str) -> Option<String> {
 }
 
 /// Converts gRPC status to a JSON object with code, message, and details.
-pub fn grpc_status_to_json(grpc_status: &Status) -> Result<String, Box<dyn Error>> {
+pub fn grpc_status_to_json(
+    grpc_status: &Status,
+    container_name: &str,
+    timestamp: i64,
+) -> Result<String, Box<dyn Error>> {
     // Extract code, message, and details
     let code = grpc_status.code().to_string();
     let message = grpc_status.message().to_string();
@@ -83,13 +83,19 @@ pub fn grpc_status_to_json(grpc_status: &Status) -> Result<String, Box<dyn Error
     // Convert details from bytes to a string
     let details_str = String::from_utf8_lossy(details_bytes);
 
-    // Create JSON object
-    let json_object = json!({
-        "code": code,
-        "message": message,
-        "details": details_str,
-    });
+    // Convert timestamp to RFC 3339 string
+    let datetime = DateTime::<Utc>::from_timestamp(timestamp, 0).unwrap();
+    let rfc3339_timestamp = datetime.to_rfc3339();
+    // Create a RuntimeErrorEntry instance
+    let runtime_error_entry = RuntimeErrorEntry {
+        container_name: container_name.to_string(),
+        timestamp: rfc3339_timestamp,
+        code,
+        message,
+        details: details_str.to_string(),
+    };
 
-    // Serialize JSON object to a string
-    Ok(json_object.to_string())
+    // Serialize the RuntimeErrorEntry instance to a JSON string
+    let json_str = serde_json::to_string(&runtime_error_entry)?;
+    Ok(json_str)
 }

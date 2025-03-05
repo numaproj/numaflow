@@ -371,7 +371,7 @@ impl Source {
                 for message in messages.iter() {
                     let (resp_ack_tx, resp_ack_rx) = oneshot::channel();
                     let offset = message.offset.clone();
-                    println!("offset: {:?}", offset);
+                    // println!("offset: {:?}", offset);
 
                     // insert the offset and the ack one shot in the tracker.
                     self.tracker_handle.insert(message, resp_ack_tx).await?;

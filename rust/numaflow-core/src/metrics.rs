@@ -1,4 +1,3 @@
-use prost::Message;
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::iter;
@@ -17,12 +16,11 @@ use axum::{
     {routing::get, Router},
 };
 use axum_server::tls_rustls::RustlsConfig;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use numaflow_pb::clients::map::map_client::MapClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use numaflow_pb::objects::grpc_status::Status as RpcStatus;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
@@ -41,6 +39,7 @@ use crate::config::{
     get_pipeline_name, get_vertex_name, get_vertex_replica, RUNTIME_DIR_MOUNT_PATH,
 };
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
+use crate::runtime::RuntimeErrorEntry;
 use crate::source::Source;
 use crate::Error;
 
@@ -1007,16 +1006,6 @@ async fn calculate_pending(seconds: i64, pending_stats: &[TimestampedPending]) -
 
     result
 }
-
-#[derive(Debug, serde::Serialize)]
-struct RuntimeErrorEntry {
-    container_name: String,
-    timestamp: String,
-    code: String,
-    message: String,
-    details: String,
-}
-
 #[derive(serde::Serialize)]
 struct ApiResponse {
     vertex_name: String,
@@ -1037,110 +1026,65 @@ File Structure
 
 */
 async fn errors_handler() -> impl IntoResponse {
-    let path = Path::new(RUNTIME_DIR_MOUNT_PATH);
+    let root_path = Path::new(RUNTIME_DIR_MOUNT_PATH);
     let mut errors = Vec::new();
 
     //TO DO: check async (tokio::fs) instead of sync operation for reading files.
-    if path.exists() && path.is_dir() {
-        if let Ok(paths) = fs::read_dir(path) {
-            for container in paths.flatten() {
-                let container_path = container.path();
-                if container_path.is_dir() {
-                    if let Some(container_name) = container_path
-                        .file_name()
-                        .and_then(|s| s.to_str())
-                        .map(|s| s.to_string())
-                    {
-                        if let Ok(file_paths) = fs::read_dir(&container_path) {
-                            for file_entry in file_paths.flatten() {
-                                process_file_entry(&file_entry, &container_name, &mut errors);
-                            }
-                        }
-                    }
+    if !root_path.exists() || !root_path.is_dir() {
+        error!("returning as root path does not exist!");
+        return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
+    }
+    let paths = match fs::read_dir(root_path) {
+        Ok(path) => path,
+        Err(e) => {
+            error!("Failed to read directory: {:?}", e);
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    for entry in paths.flatten() {
+        let sub_dir_path = entry.path();
+        if sub_dir_path.is_dir() {
+            if let Ok(file_paths) = fs::read_dir(&sub_dir_path) {
+                for file_entry in file_paths.flatten() {
+                    process_file_entry(&file_entry, &mut errors);
                 }
             }
         }
     }
 
-    /*
-        {
-           "vertex_name": "vertex-name",
-           "replica": 0,
-           "host_name": "simple-pipeline-cat-0-ta6gr",
-           "now": "2025-02-10T00:49:11.818617423Z",
-           "errors": [
-                {
-                    "container_name": "udsource",
-                    "timestamp": "2025-03-03T00:22:17.812617488Z",
-                    "code": 2,
-                    "message": "UDF_EXECUTION_ERROR(source)- fn panicked at source handler",
-                    "details": "The stacktrace"
-                },
-                {
-                    "container_name": "udsink",
-                    "timestamp": "2025-03-03T00:22:17.812617488Z",
-                    "code": 2,
-                    "message": "UDF_EXECUTION_ERROR(sink)- fn panicked at sink handler",
-                    "details": "The stacktrace"
-               },
-           ]
-        }
-    */
-
-    //TO DO: get vertex name, replica, host etc
     let api_response = ApiResponse {
         vertex_name: get_vertex_name().to_string(),
         replica: get_vertex_replica().to_string(),
         now: Utc::now().to_rfc3339(),
         errors,
     };
-
-    Json(api_response)
+    (StatusCode::OK, Json(api_response)).into_response()
 }
 
-fn process_file_entry(
-    file_entry: &fs::DirEntry,
-    container_name: &str,
-    errors: &mut Vec<RuntimeErrorEntry>,
-) {
+fn process_file_entry(file_entry: &fs::DirEntry, errors: &mut Vec<RuntimeErrorEntry>) {
     let file_path = file_entry.path();
-    if file_path.is_file() {
-        if let Some(file_name_str) = file_path.file_name().and_then(|s| s.to_str()) {
-            if let Ok(timestamp) = file_name_str.parse::<i64>() {
-                if let Ok(content) = fs::read_to_string(&file_path) {
-                    /*
-                    while writing to the file
-                        status is gRPC status we receive from server
-                        let rpc_status = RpcStatus {
-                            code: status.code(),
-                            message: status.message(),
-                            details: status.details(),
-                        };
-                        let mut buf = Vec::new();
-                        rpc_status.encode(&mut buf).unwrap();
-                     */
-                    // deserialize proto bytes
-                    if let Ok(grpc_status) = RpcStatus::decode(content.as_bytes()) {
-                        let datetime = DateTime::<Utc>::from_timestamp(timestamp, 0).unwrap();
-                        let rfc3339_timestamp = datetime.to_rfc3339();
-                        errors.push(RuntimeErrorEntry {
-                            container_name: container_name.to_string(),
-                            timestamp: rfc3339_timestamp,
-                            code: grpc_status.code.to_string(),
-                            message: grpc_status.message.to_string(),
-                            details: grpc_status
-                                .details
-                                .iter()
-                                .map(|d| format!("{:?}", d))
-                                .collect::<Vec<_>>()
-                                .join(", "),
-                        });
-                    } else {
-                        println!("failed to decode gRPC status from file: {:?}", file_path);
-                    }
-                }
-            }
+    if !file_path.is_file() || !file_path.exists() {
+        return;
+    }
+    match fs::read(&file_path) {
+        Err(e) => {
+            error!("Failed to read file content: {:?}", e);
         }
+        Ok(content) => match serde_json::from_slice::<RuntimeErrorEntry>(&content) {
+            Ok(payload) => {
+                errors.push(RuntimeErrorEntry {
+                    container_name: payload.container_name,
+                    timestamp: payload.timestamp,
+                    code: payload.code,
+                    message: payload.message,
+                    details: payload.details,
+                });
+            }
+            Err(e) => {
+                error!("Failed to deserialize content: {:?}", e);
+            }
+        },
     }
 }
 
