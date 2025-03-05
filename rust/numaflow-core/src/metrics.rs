@@ -1016,13 +1016,13 @@ struct ApiResponse {
 /*
 File Structure
 
-/var/numaflow/runtime/
-└── udsource/
-        ├── ts1.pb
-        └── ts2.pb
-└── udsink/
-        ├── ts3.pb
-        └── ts4.pb
+Root: /var/numaflow/runtime/
+                        └── udsource/
+                                ├── ts1.pb
+                                └── ts2.pb
+                        └── udsink/
+                                ├── ts3.pb
+                                └── ts4.pb
 
 */
 async fn errors_handler() -> impl IntoResponse {
@@ -1042,7 +1042,10 @@ async fn errors_handler() -> impl IntoResponse {
         }
     };
 
+    // iterate over all subdirectories and its files
     for entry in paths.flatten() {
+        // A ud container will have its own directory
+        // TO DO: think of platform errors file structure
         let sub_dir_path = entry.path();
         if sub_dir_path.is_dir() {
             if let Ok(file_paths) = fs::read_dir(&sub_dir_path) {
@@ -1067,6 +1070,7 @@ fn process_file_entry(file_entry: &fs::DirEntry, errors: &mut Vec<RuntimeErrorEn
     if !file_path.is_file() || !file_path.exists() {
         return;
     }
+    //TO DO: check if runtime's read fn can be invoked here!
     match fs::read(&file_path) {
         Err(e) => {
             error!("Failed to read file content: {:?}", e);
