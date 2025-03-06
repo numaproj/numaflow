@@ -30,8 +30,6 @@ pub struct GetContainerReq {
     pub isb_svc_type: String,
     #[serde(rename = "resources")]
     pub resources: k8s_openapi::api::core::v1::ResourceRequirements,
-    #[serde(rename = "servingStore")]
-    pub serving_store: Box<crate::models::ServingStore>,
     #[serde(rename = "volumeMounts")]
     pub volume_mounts: Vec<k8s_openapi::api::core::v1::VolumeMount>,
 }
@@ -44,7 +42,6 @@ impl GetContainerReq {
         image_pull_policy: String,
         isb_svc_type: String,
         resources: k8s_openapi::api::core::v1::ResourceRequirements,
-        serving_store: crate::models::ServingStore,
         volume_mounts: Vec<k8s_openapi::api::core::v1::VolumeMount>,
     ) -> GetContainerReq {
         GetContainerReq {
@@ -54,7 +51,6 @@ impl GetContainerReq {
             image_pull_policy,
             isb_svc_type,
             resources,
-            serving_store: Box::new(serving_store),
             volume_mounts,
         }
     }

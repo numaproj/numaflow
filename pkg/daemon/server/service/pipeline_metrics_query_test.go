@@ -109,7 +109,7 @@ func TestGetVertexMetrics(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: pipelineName},
 		Spec:       v1alpha1.PipelineSpec{Vertices: []v1alpha1.AbstractVertex{{Name: vertexName, Partitions: &vertexPartition}}},
 	}
-	client, _ := isbsvc.NewISBJetStreamSvc(pipelineName, jsc)
+	client, _ := isbsvc.NewISBJetStreamSvc(jsc)
 	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(client, pipeline, nil, &mockRater_TestGetVertexMetrics{})
 	assert.NoError(t, err)
 

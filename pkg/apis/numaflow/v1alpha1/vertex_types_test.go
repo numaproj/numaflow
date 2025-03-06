@@ -953,19 +953,6 @@ func Test_GetToBuckets(t *testing.T) {
 	})
 }
 
-func TestGetServingSourceStreamName(t *testing.T) {
-	v := Vertex{
-		Spec: VertexSpec{
-			PipelineName: "test-pipeline",
-			AbstractVertex: AbstractVertex{
-				Name: "test-vertex",
-			},
-		},
-	}
-	expected := "test-pipeline-test-vertex-serving-source"
-	assert.Equal(t, expected, v.GetServingSourceStreamName())
-}
-
 func Test_VertexStatus_IsHealthy(t *testing.T) {
 	tests := []struct {
 		name  string
