@@ -23,11 +23,6 @@ pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
     config: &MonovertexConfig,
 ) -> error::Result<()> {
-    // FIXME: (serving)
-    // let callback_handler = config
-    //     .callback_config
-    //     .as_ref()
-    //     .map(|cb_cfg| CallbackHandler::new(config.name.clone(), cb_cfg.callback_concurrency));
     let tracker_handle = TrackerHandle::new(None, None);
 
     let (transformer, transformer_grpc_client) = create_components::create_transformer(

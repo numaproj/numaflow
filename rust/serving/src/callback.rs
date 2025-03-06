@@ -8,6 +8,7 @@ use async_nats::jetstream::Context;
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use bytes::Bytes;
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use tokio::{sync::Semaphore, task::JoinHandle};
 use tracing::{error, warn};
@@ -109,8 +110,10 @@ impl CallbackHandler {
         let permit = Arc::clone(&self.semaphore).acquire_owned().await.unwrap();
         let store = self.store.clone();
         let handle = tokio::spawn(async move {
-            let callbacks_key = format!("callback.{id}.{}", vertex_name);
+            let timestamp = Utc::now().timestamp_nanos_opt().unwrap();
+            let callbacks_key = format!("cb.{id}.{vertex_name}.{timestamp}");
             let interval = fixed::Interval::from_millis(1000).take(2);
+
             let _permit = permit;
             let value = serde_json::to_string(&callback_payload).expect("Failed to serialize");
             let result = Retry::retry(
@@ -141,8 +144,9 @@ impl CallbackHandler {
 
 #[cfg(test)]
 mod tests {
-    use crate::callback::{Callback, CallbackHandler, Response};
+    use crate::callback::{Callback, CallbackHandler};
     use async_nats::jetstream;
+    use tokio_stream::StreamExt;
 
     type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -184,13 +188,14 @@ mod tests {
             .await
             .unwrap();
 
+        let mut keys = kv_store.keys().await.unwrap();
         let value = kv_store
-            .get(&format!("callback.{id}.test_vertex"))
+            .get(keys.next().await.unwrap().unwrap())
             .await
             .unwrap()
             .unwrap();
-        let callback: Callback = serde_json::from_slice(&value).unwrap();
 
+        let callback: Callback = serde_json::from_slice(&value).unwrap();
         assert_eq!(callback.id, callback_payload.id);
         Ok(())
     }

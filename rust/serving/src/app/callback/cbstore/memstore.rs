@@ -6,7 +6,6 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::app::callback::cbstore::LocalCallbackStore;
 use crate::app::callback::datumstore::{Error as StoreError, Result as StoreResult};
 use crate::callback::Callback;
 
@@ -24,7 +23,9 @@ impl InMemoryCallbackStore {
     }
 }
 
-impl LocalCallbackStore for InMemoryCallbackStore {
+impl super::CallbackStore for InMemoryCallbackStore {
+    /// Register a request id in the store. If the `id` already exists in the store,
+    /// `StoreError::DuplicateRequest` error is returned.
     async fn register(&mut self, id: &str) -> StoreResult<()> {
         let mut data = self.data.lock().await;
         if data.contains_key(id) {
@@ -34,6 +35,8 @@ impl LocalCallbackStore for InMemoryCallbackStore {
         Ok(())
     }
 
+    /// De-register a request id from the store. If the `id` does not exist in the store,
+    /// `StoreError::InvalidRequestId` error is returned.
     async fn deregister(&mut self, id: &str, _sub_graph: &str) -> StoreResult<()> {
         let mut data = self.data.lock().await;
         if data.remove(id).is_none() {
@@ -64,11 +67,11 @@ impl LocalCallbackStore for InMemoryCallbackStore {
         Ok((ReceiverStream::new(rx), tokio::spawn(async {})))
     }
 
-    async fn ready(&mut self) -> bool {
-        true
-    }
-
     async fn status(&mut self, _id: &str) -> StoreResult<super::ProcessingStatus> {
         Ok(super::ProcessingStatus::InProgress)
+    }
+
+    async fn ready(&mut self) -> bool {
+        true
     }
 }

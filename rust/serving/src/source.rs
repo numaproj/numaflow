@@ -69,7 +69,7 @@ impl ServingSourceActor {
         let (messages_tx, messages_rx) = mpsc::channel(request_channel_buffer_size);
         // create a callback store for tracking
         let callback_store =
-            JetstreamCallbackStore::new(js_context.clone(), &settings.cb_js_store).await?;
+            JetstreamCallbackStore::new(js_context.clone(), &settings.js_store).await?;
         // Create the message graph from the pipeline spec and the redis store
         let msg_graph = MessageGraph::from_pipeline(&settings.pipeline_spec).map_err(|e| {
             Error::InitError(format!(
@@ -86,8 +86,7 @@ impl ServingSourceActor {
         // Create a redis store to store the callbacks and the custom responses
         match &settings.store_type {
             StoreType::Nats => {
-                let nats_store =
-                    JetStreamDatumStore::new(js_context, &settings.cb_js_store).await?;
+                let nats_store = JetStreamDatumStore::new(js_context, &settings.js_store).await?;
                 let callback_state =
                     CallbackState::new(msg_graph, nats_store, callback_store).await?;
                 let app = crate::AppState {
@@ -274,7 +273,6 @@ impl ServingSource {
     }
 }
 
-#[cfg(feature = "redis-tests")]
 #[cfg(test)]
 mod tests {
     use std::{sync::Arc, time::Duration};
@@ -290,12 +288,24 @@ mod tests {
         let js_url = "localhost:4222";
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
+        let store_name = "test_serving_source";
+
+        let _ = context.delete_key_value(store_name).await;
+        context
+            .create_key_value(jetstream::kv::Config {
+                bucket: store_name.to_string(),
+                history: 5,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
 
         // Set up the CryptoProvider (controls core cryptography used by rustls) for the process
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
         let settings = Arc::new(Settings {
-            cb_js_store: "test_serving_source".to_string(),
+            js_store: store_name.to_string(),
+            app_listen_port: 2444,
             ..Default::default()
         });
 

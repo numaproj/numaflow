@@ -3,15 +3,14 @@ kind: Pipeline
 metadata:
   name: serving-pipeline
 spec:
-#  servingStore:
-#    name: ips
-#    container:
-#      image: quay.io/numaio/numaflow-go/serving-redis-store:stable
-#      imagePullPolicy: Never
+  servingStore:
+    name: redis
+    container:
+      image: quay.io/numaio/numaflow-go/serving-redis-store:stable
 
   vertices:
     - name: serving-in
-      servingStoreName: default
+      servingStoreName: redis
       scale:
         min: 1
       source:
@@ -27,18 +26,13 @@ spec:
           image: quay.io/numaio/numaflow-go/map-forward-message:stable
 
     - name: serve-sink
-      servingStoreName: default
+      servingStoreName: redis
       scale:
         min: 1
       sink:
         udsink:
           container:
             image: quay.io/numaio/numaflow-go/sink-serve:stable
-            env:
-              - name: NUMAFLOW_CALLBACK_URL_KEY
-                value: "X-Numaflow-Callback-Url"
-              - name: NUMAFLOW_MSG_ID_HEADER_KEY
-                value: "X-Numaflow-Id"
 
   edges:
     - from: serving-in

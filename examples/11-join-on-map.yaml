@@ -4,34 +4,30 @@ metadata:
   name: join-on-map
 spec:
   vertices:
-    - name: http-one
-      scale:
-        min: 1
+    - name: http-in
       source:
         http: {}
-    - name: http-two
-      scale:
-        min: 1
+    - name: kafka-in
       source:
-        http: {}
+        kafka:
+          brokers:
+            - my-broker1:19700
+            - my-broker2:19700
+          topic: my-topic
+          consumerGroup: my-consumer-group
     # Both of the incoming Vertices join on this Map Vertex
     - name: cat
-      scale:
-        min: 1
       udf:
-        container:
-          image: quay.io/numaio/numaflow-go/map-stream-sorter:stable
-          imagePullPolicy: Never
+        builtin:
+          name: cat # A built-in UDF which simply cats the message
     - name: out
-      scale:
-        min: 1
       sink:
         # A simple log printing sink
         log: {}
   edges:
-    - from: http-one
+    - from: http-in
       to: cat
-    - from: http-two
+    - from: kafka-in
       to: cat
     - from: cat
       to: out

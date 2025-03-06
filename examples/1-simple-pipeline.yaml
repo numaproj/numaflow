@@ -16,9 +16,8 @@ spec:
       scale:
         min: 1
       udf:
-        container:
-          image: quay.io/numaio/numaflow-go/map-flatmap-stream:stable
-          imagePullPolicy: Never
+        builtin:
+          name: cat # A built-in UDF which simply cats the message
     - name: out
       scale:
         min: 1

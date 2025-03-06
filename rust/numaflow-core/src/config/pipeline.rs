@@ -316,7 +316,7 @@ impl PipelineConfig {
 
             let serving_store_config = if let Some(store_name) = vertex_obj.spec.serving_store_name
             {
-                if store_name == "" || store_name == "default" {
+                if store_name == "default" {
                     Some(ServingStoreType::Nats(NatsStoreConfig {
                         name: format!("{}-{}_SERVING_KV_STORE", namespace, pipeline_name),
                     }))

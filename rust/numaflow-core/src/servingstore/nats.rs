@@ -33,7 +33,7 @@ impl NatsServingStore {
         payload: Vec<u8>,
     ) -> crate::Result<()> {
         let id = format!(
-            "response.{id}.{}.{}",
+            "rs.{id}.{}.{}",
             origin,
             Utc::now().timestamp_nanos_opt().unwrap()
         );

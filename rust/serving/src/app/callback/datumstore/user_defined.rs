@@ -50,9 +50,9 @@ impl DatumStore for UserDefinedStore {
 
     async fn stream_response(
         &mut self,
-        id: &str,
+        _id: &str,
     ) -> StoreResult<(ReceiverStream<Arc<Bytes>>, JoinHandle<()>)> {
-        unimplemented!()
+        unimplemented!("stream_response is not supported for UserDefinedStore")
     }
 
     async fn ready(&mut self) -> bool {

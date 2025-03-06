@@ -5,14 +5,13 @@ metadata:
 spec:
   vertices:
     - name: serving-in
+      servingStoreName: default
       scale:
         min: 1
       source:
         serving:
           service: true
           msgIDHeaderKey: "X-Numaflow-Id"
-          store:
-            url: "redis://redis:6379"
 
     - name: cat
       scale:
@@ -25,18 +24,13 @@ spec:
               value: "1"
 
     - name: serve-sink
+      servingStoreName: default
       scale:
         min: 1
       sink:
         udsink:
           container:
-            image: quay.io/numaio/numaflow-go/serve-sink-log:stable
-            imagePullPolicy: Never
-            env:
-              - name: NUMAFLOW_CALLBACK_URL_KEY
-                value: "X-Numaflow-Callback-Url"
-              - name: NUMAFLOW_MSG_ID_HEADER_KEY
-                value: "X-Numaflow-Id"
+            image: quay.io/numaio/numaflow-go/sink-serve:stable
 
   edges:
     - from: serving-in

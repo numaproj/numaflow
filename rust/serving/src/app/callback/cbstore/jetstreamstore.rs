@@ -45,7 +45,7 @@ impl super::CallbackStore for JetstreamCallbackStore {
                 }
             })?;
 
-        let response_key = format!("response.{id}.init");
+        let response_key = format!("rs.{id}.start.processing");
         self.kv_store
             .create(&response_key, Bytes::from_static(b""))
             .await
@@ -59,7 +59,7 @@ impl super::CallbackStore for JetstreamCallbackStore {
                 }
             })?;
 
-        let callbacks_key = format!("callback.{id}.init");
+        let callbacks_key = format!("cb.{id}.start.processing");
         self.kv_store
             .create(&callbacks_key, Bytes::from_static(b""))
             .await
@@ -88,7 +88,7 @@ impl super::CallbackStore for JetstreamCallbackStore {
                 StoreError::StoreWrite(format!("Failed to mark request as done in kv store: {e:?}"))
             })?;
 
-        let callbacks_key = format!("callback.{id}.done");
+        let callbacks_key = format!("cb.{id}.done.processing");
         self.kv_store
             .put(
                 callbacks_key,
@@ -99,7 +99,7 @@ impl super::CallbackStore for JetstreamCallbackStore {
                 StoreError::StoreWrite(format!("Failed to mark request as done in kv store: {e:?}"))
             })?;
 
-        let response_key = format!("response.{id}.done");
+        let response_key = format!("rs.{id}.done.processing");
         self.kv_store
             .put(
                 response_key,
@@ -130,7 +130,7 @@ impl super::CallbackStore for JetstreamCallbackStore {
         &mut self,
         id: &str,
     ) -> StoreResult<(ReceiverStream<Arc<Callback>>, JoinHandle<()>)> {
-        let callbacks_key = format!("callback.{id}.*");
+        let callbacks_key = format!("cb.{id}.*.*");
         let mut watcher = self
             .kv_store
             .watch_from_revision(&callbacks_key, 1)
@@ -141,8 +141,8 @@ impl super::CallbackStore for JetstreamCallbackStore {
 
         let (tx, rx) = tokio::sync::mpsc::channel(10);
 
-        let callbacks_done_key = format!("callback.{id}.done");
-        let callbacks_init_key = format!("callback.{id}.init");
+        let callbacks_init_key = format!("cb.{id}.start.processing");
+        let callbacks_done_key = format!("cb.{id}.done.processing");
 
         let handle = tokio::spawn(async move {
             while let Some(watch_event) = watcher.next().await {
@@ -196,12 +196,12 @@ impl super::CallbackStore for JetstreamCallbackStore {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::app::callback::cbstore::CallbackStore;
     use async_nats::jetstream;
     use async_nats::jetstream::kv::Config;
     use bytes::Bytes;
-
-    use super::*;
-    use crate::app::callback::cbstore::CallbackStore;
+    use chrono::Utc;
 
     #[tokio::test]
     async fn test_register() {
@@ -268,7 +268,7 @@ mod tests {
             from_vertex: "test_from_vertex".to_string(),
             responses: vec![],
         };
-        let key = format!("callback.{id}.0");
+        let key = format!("cb.{id}.0.{}", Utc::now().timestamp());
         store
             .kv_store
             .put(key, Bytes::from(serde_json::to_vec(&callback).unwrap()))

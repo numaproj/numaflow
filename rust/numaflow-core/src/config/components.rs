@@ -131,7 +131,7 @@ pub(crate) mod source {
                 };
             }
 
-            settings.cb_js_store = format!(
+            settings.js_store = format!(
                 "{}-{}_SERVING_KV_STORE",
                 get_namespace(),
                 get_pipeline_name(),

@@ -5,7 +5,7 @@ use std::sync::Arc;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
-use tracing::{debug, info};
+use tracing::info;
 
 use crate::app::callback::datumstore::{DatumStore, Error as StoreError, Result as StoreResult};
 
@@ -26,7 +26,7 @@ impl JetStreamDatumStore {
 
 impl DatumStore for JetStreamDatumStore {
     async fn retrieve_datum(&mut self, id: &str) -> StoreResult<Option<Vec<Vec<u8>>>> {
-        let watch_key = format!("response.{id}.*");
+        let watch_key = format!("rs.{id}.*.*");
         let mut watcher = self
             .kv_store
             .watch_from_revision(&watch_key, 1)
@@ -35,8 +35,8 @@ impl DatumStore for JetStreamDatumStore {
                 StoreError::StoreRead(format!("Failed to watch request id in kv store: {e:?}"))
             })?;
 
-        let response_init_key = format!("response.{id}.init");
-        let response_done_key = format!("response.{id}.done");
+        let response_init_key = format!("rs.{id}.start.processing");
+        let response_done_key = format!("rs.{id}.done.processing");
 
         let mut results = Vec::new();
         while let Some(watch_event) = watcher.next().await {
@@ -72,7 +72,7 @@ impl DatumStore for JetStreamDatumStore {
         &mut self,
         id: &str,
     ) -> StoreResult<(ReceiverStream<Arc<Bytes>>, JoinHandle<()>)> {
-        let watch_key = format!("response.{id}.*");
+        let watch_key = format!("rs.{id}.*.*");
 
         let mut watcher = self
             .kv_store
@@ -83,8 +83,9 @@ impl DatumStore for JetStreamDatumStore {
             })?;
 
         let (tx, rx) = tokio::sync::mpsc::channel(10);
-        let response_init_key = format!("response.{id}.init");
-        let response_done_key = format!("response.{id}.done");
+        let response_init_key = format!("rs.{id}.start.processing");
+        let response_done_key = format!("rs.{id}.done.processing");
+
         let handle = tokio::spawn(async move {
             while let Some(watch_event) = watcher.next().await {
                 let entry = match watch_event {
@@ -124,6 +125,7 @@ mod tests {
     use async_nats::jetstream;
     use async_nats::jetstream::kv::Config;
     use bytes::Bytes;
+    use chrono::Utc;
     use tokio_stream::StreamExt;
 
     use super::*;
@@ -152,14 +154,14 @@ mod tests {
             .unwrap();
 
         let id = "test-id";
-        let key = format!("response.{id}.0");
+        let key = format!("rs.{id}.0.{}", Utc::now().timestamp());
         store
             .kv_store
             .put(key, Bytes::from_static(b"test_payload"))
             .await
             .unwrap();
 
-        let done_key = format!("response.{id}.done");
+        let done_key = format!("rs.{id}.done.processing");
         store.kv_store.put(done_key, Bytes::new()).await.unwrap();
 
         let result = store.retrieve_datum(id).await.unwrap();
@@ -192,7 +194,7 @@ mod tests {
 
         let id = "test_stream_id";
         // Simulate a response being added to the store
-        let key = format!("response.{id}.0");
+        let key = format!("rs.{id}.0.1234");
         let payload = Bytes::from_static(b"test_payload");
         store.kv_store.put(key, payload.clone()).await.unwrap();
 
