@@ -64,7 +64,7 @@ func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string) {
 			}
 		}
 	}
-	// Container restart happened 2 in the last 2 mins
+	// Container restart happened in the last 2 mins
 	if !lastRestartTime.IsZero() && lastRestartTime.Add(2*time.Minute).After(time.Now()) {
 		return false, "RecentRestart"
 	}
