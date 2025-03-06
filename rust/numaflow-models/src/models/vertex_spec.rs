@@ -51,6 +51,8 @@ pub struct VertexSpec {
         skip_serializing_if = "Option::is_none"
     )]
     pub inter_step_buffer_service_name: Option<String>,
+    #[serde(rename = "lifecycle", skip_serializing_if = "Option::is_none")]
+    pub lifecycle: Option<Box<crate::models::VertexLifecycle>>,
     #[serde(rename = "limits", skip_serializing_if = "Option::is_none")]
     pub limits: Option<Box<crate::models::VertexLimits>>,
     #[serde(rename = "metadata", skip_serializing_if = "Option::is_none")]
@@ -132,6 +134,7 @@ impl VertexSpec {
             init_container_template: None,
             init_containers: None,
             inter_step_buffer_service_name: None,
+            lifecycle: None,
             limits: None,
             metadata: None,
             name,

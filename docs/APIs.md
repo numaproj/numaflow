@@ -6084,7 +6084,7 @@ MonoVertexPhase </a> </em>
 <em>(Optional)</em>
 <p>
 
-DesiredPhase used to bring the pipeline from current phase to desired
+DesiredPhase used to bring the MonoVertex from current phase to desired
 phase
 </p>
 
@@ -11888,6 +11888,27 @@ from the pipeline watermark settings.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>lifecycle</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.VertexLifecycle">
+VertexLifecycle </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Lifecycle defines the Lifecycle properties of a vertex
+</p>
+
+</td>
+
+</tr>
+
 </table>
 
 </td>
@@ -11987,6 +12008,69 @@ Description
 </td>
 
 <td>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.VertexLifecycle">
+
+VertexLifecycle
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.VertexSpec">VertexSpec</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>desiredPhase</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.VertexPhase"> VertexPhase </a>
+</em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+DesiredPhase used to bring the vertex from current phase to desired
+phase
+</p>
 
 </td>
 
@@ -12131,6 +12215,7 @@ VertexPhase (<code>string</code> alias)
 <p>
 
 (<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.VertexLifecycle">VertexLifecycle</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.VertexStatus">VertexStatus</a>)
 </p>
 
@@ -12283,6 +12368,27 @@ Description
 
 Watermark indicates watermark progression in the vertex, it’s populated
 from the pipeline watermark settings.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>lifecycle</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.VertexLifecycle">
+VertexLifecycle </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Lifecycle defines the Lifecycle properties of a vertex
 </p>
 
 </td>

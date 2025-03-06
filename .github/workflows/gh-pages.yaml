@@ -11,7 +11,7 @@ on:
 jobs:
   docs:
     if: github.repository == 'numaproj/numaflow'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Setup Python
@@ -21,7 +21,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: "1.23"
       - name: build
         run: make docs
       - name: deploy

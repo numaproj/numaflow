@@ -7,7 +7,7 @@ on:
 jobs:
   generate_changelog:
     if: github.repository == 'numaproj/numaflow'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     name: Generate changelog
     steps:
       - uses: actions/checkout@v4
@@ -19,6 +19,6 @@ jobs:
       - run: ./hack/changelog.sh > CHANGELOG.md
       - uses: peter-evans/create-pull-request@v6
         with:
-          title: 'docs: updated CHANGELOG.md'
-          commit-message: 'docs: updated CHANGELOG.md'
+          title: "docs: updated CHANGELOG.md"
+          commit-message: "docs: updated CHANGELOG.md"
           signoff: true

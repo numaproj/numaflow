@@ -20991,7 +20991,7 @@
       "type": "object",
       "properties": {
         "desiredPhase": {
-          "description": "DesiredPhase used to bring the pipeline from current phase to desired phase",
+          "description": "DesiredPhase used to bring the MonoVertex from current phase to desired phase",
           "type": "string"
         }
       }
@@ -22375,6 +22375,15 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.VertexLifecycle": {
+      "type": "object",
+      "properties": {
+        "desiredPhase": {
+          "description": "DesiredPhase used to bring the vertex from current phase to desired phase",
+          "type": "string"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.VertexLimits": {
       "type": "object",
       "properties": {
@@ -22479,6 +22488,10 @@
         },
         "interStepBufferServiceName": {
           "type": "string"
+        },
+        "lifecycle": {
+          "description": "Lifecycle defines the Lifecycle properties of a vertex",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.VertexLifecycle"
         },
         "limits": {
           "description": "Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings",
