@@ -52,7 +52,6 @@ func CheckPodsStatus(pods *corev1.PodList) (healthy bool, reason string, message
 func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string) {
 	var lastRestartTime time.Time
 	for _, c := range pod.Status.ContainerStatuses {
-
 		if c.State.Waiting != nil && slices.Contains(unhealthyWaitingStatus, c.State.Waiting.Reason) {
 			return false, c.State.Waiting.Reason
 		}
