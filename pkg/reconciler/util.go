@@ -19,6 +19,7 @@ package reconciler
 import (
 	"fmt"
 	"slices"
+	"time"
 
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -49,13 +50,24 @@ func CheckPodsStatus(pods *corev1.PodList) (healthy bool, reason string, message
 }
 
 func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string) {
+	var lastRestartTime time.Time
 	for _, c := range pod.Status.ContainerStatuses {
+
 		if c.State.Waiting != nil && slices.Contains(unhealthyWaitingStatus, c.State.Waiting.Reason) {
 			return false, c.State.Waiting.Reason
 		}
 		if c.State.Terminated != nil && c.State.Terminated.Reason == "Error" {
 			return false, c.State.Terminated.Reason
 		}
+		if x := c.LastTerminationState.Terminated; x != nil && !x.FinishedAt.Time.IsZero() {
+			if lastRestartTime.IsZero() || x.FinishedAt.Time.After(lastRestartTime) {
+				lastRestartTime = x.FinishedAt.Time
+			}
+		}
+	}
+	// Container restart happened 2 in the last 2 mins
+	if !lastRestartTime.IsZero() && lastRestartTime.Add(2*time.Minute).After(time.Now()) {
+		return false, "RecentRestart"
 	}
 	return true, ""
 }
