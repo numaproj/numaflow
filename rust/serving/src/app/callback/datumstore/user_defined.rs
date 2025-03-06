@@ -1,11 +1,12 @@
+use std::path::PathBuf;
+use std::sync::Arc;
+
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use bytes::Bytes;
 use http::Uri;
 use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
 use numaflow_pb::clients::serving::GetRequest;
-use std::path::PathBuf;
-use std::sync::Arc;
 use tokio::net::UnixStream;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;

@@ -567,11 +567,13 @@ impl Source {
             .await
             .expect("send should not fail");
 
-        if let Some(transformer) = &mut self.transformer {
-            transformer.is_ready().await && rx.await.is_ok()
+        let transformer_is_ready = if let Some(transformer) = &mut self.transformer {
+            transformer.is_ready().await
         } else {
-            rx.await.is_ok()
-        }
+            true
+        };
+
+        transformer_is_ready && rx.await.is_ok()
     }
 }
 

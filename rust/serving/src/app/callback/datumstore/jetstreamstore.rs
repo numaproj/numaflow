@@ -1,7 +1,8 @@
+use std::sync::Arc;
+
 use async_nats::jetstream::kv::Store;
 use async_nats::jetstream::Context;
 use bytes::Bytes;
-use std::sync::Arc;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;

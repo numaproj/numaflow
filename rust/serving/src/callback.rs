@@ -144,9 +144,10 @@ impl CallbackHandler {
 
 #[cfg(test)]
 mod tests {
-    use crate::callback::{Callback, CallbackHandler};
     use async_nats::jetstream;
     use tokio_stream::StreamExt;
+
+    use crate::callback::{Callback, CallbackHandler};
 
     type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 

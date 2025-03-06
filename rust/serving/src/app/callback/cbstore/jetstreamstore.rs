@@ -205,12 +205,13 @@ impl super::CallbackStore for JetstreamCallbackStore {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::app::callback::cbstore::CallbackStore;
     use async_nats::jetstream;
     use async_nats::jetstream::kv::Config;
     use bytes::Bytes;
     use chrono::Utc;
+
+    use super::*;
+    use crate::app::callback::cbstore::CallbackStore;
 
     #[tokio::test]
     async fn test_register() {

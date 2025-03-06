@@ -1,9 +1,10 @@
-use crate::config::pipeline::NatsStoreConfig;
 use async_nats::jetstream::kv::Store;
 use async_nats::jetstream::Context;
 use bytes::Bytes;
 use chrono::Utc;
 use tracing::info;
+
+use crate::config::pipeline::NatsStoreConfig;
 
 /// Nats serving store to store the serving responses.
 #[derive(Clone)]

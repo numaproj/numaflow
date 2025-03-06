@@ -85,26 +85,23 @@ const SINK_TIME: &str = "time";
 
 const PIPELINE_FORWARDER_READ_TOTAL: &str = "data_read";
 
-/// Only user defined functions will have containers since rest
-/// are builtins. We save the gRPC clients to retrieve metrics and also
-/// to do liveness checks.
+/// Only user defined functions will have containers since rest are builtins. We save the gRPC
+/// clients to retrieve metrics and also to do liveness checks.
 #[derive(Clone)]
 pub(crate) enum UserDefinedContainerState {
     Monovertex(MonovertexComponents),
     Pipeline(PipelineComponents),
 }
 
-/// MonovertexContainerState is used to store the gRPC clients for the
-/// monovtx. These will be optionals since
-/// we do not require these for builtins.
+/// MonovertexComponents is used to store the gRPC clients for the monovtx. These will be optionals
+/// since we do not require these for builtins.
 #[derive(Clone)]
 pub(crate) struct MonovertexComponents {
-    pub source: Source,
-    pub sink: SinkWriter,
+    pub(crate) source: Source,
+    pub(crate) sink: SinkWriter,
 }
 
-/// PipelineContainerState is used to store the gRPC clients for the
-/// pipeline.
+/// PipelineContainerState is used to store the gRPC clients for the pipeline.
 #[derive(Clone)]
 pub(crate) enum PipelineComponents {
     Source(Source),
@@ -956,17 +953,18 @@ mod tests {
     use std::net::SocketAddr;
     use std::time::Instant;
 
+    use numaflow::source::{Message, Offset, SourceReadRequest};
+    use numaflow::{sink, source, sourcetransform};
+    use numaflow_pb::clients::sink::sink_client::SinkClient;
+    use numaflow_pb::clients::source::source_client::SourceClient;
+    use tokio::sync::mpsc::Sender;
+
     use super::*;
     use crate::shared::grpc::create_rpc_channel;
     use crate::sink::{SinkClientType, SinkWriterBuilder};
     use crate::source::user_defined::new_source;
     use crate::source::SourceType;
     use crate::tracker::TrackerHandle;
-    use numaflow::source::{Message, Offset, SourceReadRequest};
-    use numaflow::{sink, source, sourcetransform};
-    use numaflow_pb::clients::sink::sink_client::SinkClient;
-    use numaflow_pb::clients::source::source_client::SourceClient;
-    use tokio::sync::mpsc::Sender;
 
     struct SimpleSource;
     #[tonic::async_trait]

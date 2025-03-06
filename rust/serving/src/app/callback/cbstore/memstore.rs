@@ -80,12 +80,14 @@ impl super::CallbackStore for InMemoryCallbackStore {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    use tokio_stream::StreamExt;
+
     use super::*;
     use crate::app::callback::cbstore::{CallbackStore, ProcessingStatus};
     use crate::callback::Callback;
-    use std::collections::HashMap;
-    use std::sync::Arc;
-    use tokio_stream::StreamExt;
 
     fn create_test_store() -> InMemoryCallbackStore {
         let mut callback_map: HashMap<String, Vec<Arc<Callback>>> = HashMap::new();

@@ -1,9 +1,11 @@
-use crate::app::callback::datumstore::{Error as StoreError, Result as StoreResult};
-use bytes::Bytes;
 use std::collections::HashMap;
 use std::sync::Arc;
+
+use bytes::Bytes;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
+
+use crate::app::callback::datumstore::{Error as StoreError, Result as StoreResult};
 const STORE_KEY_SUFFIX: &str = "saved";
 
 /// `InMemoryStore` is an in-memory implementation of the `Store` trait.
@@ -65,12 +67,14 @@ impl super::DatumStore for InMemoryDatumStore {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
+    use bytes::Bytes;
+    use tokio_stream::StreamExt;
+
     use super::*;
     use crate::app::callback::datumstore::memstore::InMemoryDatumStore;
     use crate::app::callback::datumstore::DatumStore;
-    use bytes::Bytes;
-    use std::collections::HashMap;
-    use tokio_stream::StreamExt;
 
     fn create_test_store() -> InMemoryDatumStore {
         let mut datum_map: HashMap<String, Vec<Vec<u8>>> = HashMap::new();
