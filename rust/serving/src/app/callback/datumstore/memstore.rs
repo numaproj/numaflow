@@ -9,6 +9,7 @@ const STORE_KEY_SUFFIX: &str = "saved";
 /// `InMemoryStore` is an in-memory implementation of the `Store` trait.
 /// It uses a `HashMap` to store data in memory.
 #[derive(Clone)]
+#[allow(dead_code)]
 pub(crate) struct InMemoryDatumStore {
     /// The data field is a `HashMap` where the key is a `String` and the value is a `Vec<Vec<u8>>`.
     /// It is wrapped in an `Arc<Mutex<_>>` to allow shared ownership and thread safety.

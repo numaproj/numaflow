@@ -14,7 +14,7 @@ use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::{PipelineConfig, ServingStoreType, SinkVtxConfig, SourceVtxConfig};
-use crate::metrics::{LagReader, PipelineContainerState, UserDefinedContainerState};
+use crate::metrics::{LagReader, PipelineComponents, UserDefinedContainerState};
 use crate::pipeline::forwarder::source_forwarder;
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
@@ -183,7 +183,7 @@ async fn start_source_forwarder(
     )
     .await;
 
-    let (transformer, transformer_grpc_client) = create_components::create_transformer(
+    let transformer = create_components::create_transformer(
         config.batch_size,
         source_config.transformer_config.clone(),
         tracker_handle.clone(),
@@ -191,7 +191,7 @@ async fn start_source_forwarder(
     )
     .await?;
 
-    let (source, source_grpc_client) = create_components::create_source(
+    let source = create_components::create_source(
         Some(js_context.clone()),
         config.batch_size,
         config.read_timeout,
@@ -212,10 +212,7 @@ async fn start_source_forwarder(
 
     start_metrics_server(
         config.metrics_config.clone(),
-        UserDefinedContainerState::Pipeline(PipelineContainerState::Source((
-            source_grpc_client,
-            transformer_grpc_client,
-        ))),
+        UserDefinedContainerState::Pipeline(PipelineComponents::Source(source.clone())),
     )
     .await;
 
@@ -242,7 +239,7 @@ async fn start_map_forwarder(
 
     // Create buffer writers and buffer readers
     let mut forwarder_components = vec![];
-    let mut mapper_grpc_client = None;
+    let mut mapper_handle = None;
     let mut isb_lag_readers = vec![];
 
     let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
@@ -286,7 +283,7 @@ async fn start_map_forwarder(
         .await?;
 
         isb_lag_readers.push(buffer_reader.clone());
-        let (mapper, mapper_rpc_client) = create_components::create_mapper(
+        let mapper = create_components::create_mapper(
             config.batch_size,
             config.read_timeout,
             map_vtx_config.clone(),
@@ -295,9 +292,10 @@ async fn start_map_forwarder(
         )
         .await?;
 
-        if let Some(mapper_rpc_client) = mapper_rpc_client {
-            mapper_grpc_client = Some(mapper_rpc_client);
+        if mapper_handle.is_none() {
+            mapper_handle = Some(mapper.clone());
         }
+
         forwarder_components.push((buffer_reader, buffer_writer.clone(), mapper));
     }
 
@@ -310,7 +308,9 @@ async fn start_map_forwarder(
 
     start_metrics_server(
         config.metrics_config.clone(),
-        UserDefinedContainerState::Pipeline(PipelineContainerState::Map(mapper_grpc_client)),
+        UserDefinedContainerState::Pipeline(PipelineComponents::Map(
+            mapper_handle.unwrap().clone(),
+        )),
     )
     .await;
 
@@ -402,18 +402,17 @@ async fn start_sink_forwarder(
         .await?;
         buffer_readers.push(buffer_reader);
 
-        let (sink_writer, sink_grpc_client, fb_sink_grpc_client) =
-            create_components::create_sink_writer(
-                config.batch_size,
-                config.read_timeout,
-                sink.sink_config.clone(),
-                sink.fb_sink_config.clone(),
-                tracker_handle,
-                serving_store.clone(),
-                &cln_token,
-            )
-            .await?;
-        sink_writers.push((sink_writer, sink_grpc_client, fb_sink_grpc_client));
+        let sink_writer = create_components::create_sink_writer(
+            config.batch_size,
+            config.read_timeout,
+            sink.sink_config.clone(),
+            sink.fb_sink_config.clone(),
+            tracker_handle,
+            serving_store.clone(),
+            &cln_token,
+        )
+        .await?;
+        sink_writers.push(sink_writer);
     }
 
     let pending_reader = shared::metrics::create_pending_reader(
@@ -424,20 +423,17 @@ async fn start_sink_forwarder(
     let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
     // Start the metrics server with one of the clients
-    if let Some((_, sink, fb_sink)) = sink_writers.first() {
+    if let Some(sink_handle) = sink_writers.first() {
         start_metrics_server(
             config.metrics_config.clone(),
-            UserDefinedContainerState::Pipeline(PipelineContainerState::Sink((
-                sink.clone(),
-                fb_sink.clone(),
-            ))),
+            UserDefinedContainerState::Pipeline(PipelineComponents::Sink(sink_handle.clone())),
         )
         .await;
     }
 
     // Start a new forwarder for each buffer reader
     let mut forwarder_tasks = Vec::new();
-    for (buffer_reader, (sink_writer, _, _)) in buffer_readers.into_iter().zip(sink_writers) {
+    for (buffer_reader, sink_writer) in buffer_readers.into_iter().zip(sink_writers) {
         info!(%buffer_reader, "Starting forwarder for buffer reader");
         let forwarder =
             forwarder::sink_forwarder::SinkForwarder::new(buffer_reader, sink_writer).await;

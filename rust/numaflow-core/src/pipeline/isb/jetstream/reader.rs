@@ -653,7 +653,7 @@ mod tests {
         let parent_task = task::spawn(async {
             // Spawn a child task
             task::spawn(async {
-                for i in 1..=5 {
+                for _ in 1..=5 {
                     sleep(Duration::from_secs(1)).await;
                 }
             });

@@ -560,7 +560,7 @@ impl Source {
         }
     }
 
-    async fn is_ready(&mut self) -> bool {
+    pub(crate) async fn is_ready(&mut self) -> bool {
         let (tx, rx) = oneshot::channel();
         self.sender
             .send(ActorMessage::IsReady { respond_to: tx })

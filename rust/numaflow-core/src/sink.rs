@@ -18,11 +18,10 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 use user_defined::UserDefinedSink;
 
 use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
-use crate::config::pipeline::UserDefinedStoreConfig;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
 use crate::message::Message;
@@ -30,7 +29,6 @@ use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_forward_metric_labels,
     pipeline_metrics,
 };
-use crate::servingstore::user_defined::UserDefinedStore;
 use crate::servingstore::ServingStore;
 use crate::tracker::TrackerHandle;
 use crate::Result;
@@ -651,7 +649,6 @@ impl SinkWriter {
         let sleep_interval = default_retry.interval.unwrap();
 
         while attempts < max_attempts {
-            let start_time = time::Instant::now();
             match self.fb_sink(messages_to_send.clone()).await {
                 Ok(fb_response) => {
                     // create a map of id to result, since there is no strict requirement
@@ -755,7 +752,7 @@ impl SinkWriter {
     }
 
     // Check if the Sink is ready to accept messages.
-    async fn is_ready(&self) -> bool {
+    pub(crate) async fn is_ready(&self) -> bool {
         let (tx, rx) = oneshot::channel();
 
         self.sink_handle

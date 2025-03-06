@@ -18,7 +18,7 @@ use chrono::{DateTime, Utc};
 use serving::callback::CallbackHandler;
 use serving::DEFAULT_ID_HEADER;
 use tokio::sync::{mpsc, oneshot};
-use tracing::{error, info};
+use tracing::error;
 
 use crate::error::Error;
 use crate::message::{Message, Offset, ReadAck};
@@ -518,7 +518,6 @@ mod tests {
         let callback_info: super::Result<ServingCallbackInfo> = TryFrom::try_from(&message);
         assert!(callback_info.is_err());
 
-        const CALLBACK_URL: &str = "https://localhost/v1/process/callback";
         let headers = [(DEFAULT_ID_HEADER, "1234")]
             .into_iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))

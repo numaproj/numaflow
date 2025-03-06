@@ -657,7 +657,7 @@ impl MapHandle {
     }
 
     // Returns true if the mapper is ready to accept messages.
-    async fn is_ready(&mut self) -> bool {
+    pub(crate) async fn is_ready(&mut self) -> bool {
         let (tx, rx) = oneshot::channel();
         match &self.actor_sender {
             ActorSender::Unary(map_handle) => {

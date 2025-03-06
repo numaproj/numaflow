@@ -11,11 +11,13 @@ use crate::callback::Callback;
 
 /// An in-memory implementation of the callback store.
 #[derive(Clone)]
+#[allow(dead_code)]
 pub(crate) struct InMemoryCallbackStore {
     data: Arc<Mutex<HashMap<String, Vec<Arc<Callback>>>>>,
 }
 
 impl InMemoryCallbackStore {
+    #[allow(dead_code)]
     pub(crate) fn new(callback_map: Option<HashMap<String, Vec<Arc<Callback>>>>) -> Self {
         Self {
             data: Arc::new(Mutex::new(callback_map.unwrap_or_default())),

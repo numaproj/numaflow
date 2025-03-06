@@ -38,11 +38,6 @@ mod message_path; // TODO: merge message_path and tracker
 mod response;
 pub(crate) mod tracker;
 
-/// Everything for numaserve starts here. The routing, middlewares, proxying, etc.
-// TODO
-// - [ ] implement an proxy and pass in UUID in the header if not present
-// - [ ] outer fallback for /v1/direct
-
 /// Start the main application Router and the axum server.
 pub(crate) async fn start_main_server<T, C>(
     app: AppState<T, C>,
