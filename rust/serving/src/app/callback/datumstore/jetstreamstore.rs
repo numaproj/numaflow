@@ -5,10 +5,10 @@ use std::sync::Arc;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
-use tracing::info;
 
 use crate::app::callback::datumstore::{DatumStore, Error as StoreError, Result as StoreResult};
 
+/// A JetStream implementation of the datum store.
 #[derive(Clone)]
 pub(crate) struct JetStreamDatumStore {
     kv_store: Store,
@@ -25,7 +25,10 @@ impl JetStreamDatumStore {
 }
 
 impl DatumStore for JetStreamDatumStore {
+    /// Retrieve a datum from the store. If the datum is not found, `None` is returned.
     async fn retrieve_datum(&mut self, id: &str) -> StoreResult<Option<Vec<Vec<u8>>>> {
+        // the responses in kv bucket are stored in the format rs.{id}.{vertex_name}.{timestamp}
+        // so we should watch for all keys that start with rs.{id}
         let watch_key = format!("rs.{id}.*.*");
         let mut watcher = self
             .kv_store
@@ -40,7 +43,6 @@ impl DatumStore for JetStreamDatumStore {
 
         let mut results = Vec::new();
         while let Some(watch_event) = watcher.next().await {
-            info!(?watch_event, "Received watch event");
             let entry = match watch_event {
                 Ok(event) => event,
                 Err(e) => {
@@ -48,16 +50,12 @@ impl DatumStore for JetStreamDatumStore {
                     continue;
                 }
             };
-
             if entry.key == response_init_key {
                 continue;
             }
-
             if entry.key == response_done_key {
-                info!("Received done event, stopping watcher");
                 break;
             }
-
             results.push(entry.value.to_vec());
         }
 
@@ -68,10 +66,13 @@ impl DatumStore for JetStreamDatumStore {
         }
     }
 
+    /// Stream the response from the store. The response is streamed as it is added to the store.
     async fn stream_response(
         &mut self,
         id: &str,
     ) -> StoreResult<(ReceiverStream<Arc<Bytes>>, JoinHandle<()>)> {
+        // the responses in kv bucket are stored in the format rs.{id}.{vertex_name}.{timestamp}
+        // so we should watch for all keys that start with rs.{id}
         let watch_key = format!("rs.{id}.*.*");
 
         let mut watcher = self

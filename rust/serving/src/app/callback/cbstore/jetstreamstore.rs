@@ -12,6 +12,7 @@ use crate::app::callback::cbstore::ProcessingStatus;
 use crate::app::callback::datumstore::{Error as StoreError, Result as StoreResult};
 use crate::callback::Callback;
 
+/// Jetstream implementation of the callback store.
 #[derive(Clone)]
 pub(crate) struct JetstreamCallbackStore {
     kv_store: Store,
@@ -28,7 +29,10 @@ impl JetstreamCallbackStore {
 }
 
 impl super::CallbackStore for JetstreamCallbackStore {
+    /// registers a request id in the store. If the `id` already exists in the store,
+    /// `StoreError::DuplicateRequest` error is returned.
     async fn register(&mut self, id: &str) -> StoreResult<()> {
+        // status.{id} is the key for the status of the request, we set it to InProgress
         let status_key = format!("status.{id}");
         info!(id, "Registering key in Jetstream KV store");
 
@@ -76,6 +80,8 @@ impl super::CallbackStore for JetstreamCallbackStore {
         Ok(())
     }
 
+    /// de-registers a request id from the store. If the `id` does not exist in the store,
+    /// `StoreError::InvalidRequestId` error is returned.
     async fn deregister(&mut self, id: &str, sub_graph: &str) -> StoreResult<()> {
         let key = format!("status.{id}");
         self.kv_store
@@ -113,6 +119,7 @@ impl super::CallbackStore for JetstreamCallbackStore {
         Ok(())
     }
 
+    /// marks a request as failed in the store.
     async fn mark_as_failed(&mut self, id: &str, error: &str) -> StoreResult<()> {
         let key = format!("status.{id}");
         self.kv_store
@@ -126,6 +133,7 @@ impl super::CallbackStore for JetstreamCallbackStore {
         Ok(())
     }
 
+    /// watches for callbacks in the store for a given request id.
     async fn watch_callbacks(
         &mut self,
         id: &str,
@@ -177,6 +185,7 @@ impl super::CallbackStore for JetstreamCallbackStore {
         Ok((ReceiverStream::new(rx), handle))
     }
 
+    /// returns the status of a request in the store.
     async fn status(&mut self, id: &str) -> StoreResult<ProcessingStatus> {
         let key = format!("status.{id}");
         let status = self.kv_store.get(&key).await.map_err(|e| {

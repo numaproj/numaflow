@@ -1,7 +1,7 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: simple-pipeline
+  name: simple-serving-pipeline
 spec:
   vertices:
     - name: serving-in

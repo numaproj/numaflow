@@ -62,3 +62,48 @@ impl super::DatumStore for InMemoryDatumStore {
         true
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::callback::datumstore::memstore::InMemoryDatumStore;
+    use crate::app::callback::datumstore::DatumStore;
+    use bytes::Bytes;
+    use std::collections::HashMap;
+    use tokio_stream::StreamExt;
+
+    fn create_test_store() -> InMemoryDatumStore {
+        let mut datum_map: HashMap<String, Vec<Vec<u8>>> = HashMap::new();
+        datum_map.insert("test_id_saved".to_string(), vec![b"test_payload".to_vec()]);
+        InMemoryDatumStore::new(Some(datum_map))
+    }
+
+    #[tokio::test]
+    async fn test_retrieve_datum() {
+        let mut store = create_test_store();
+        let id = "test_id";
+        let result = store.retrieve_datum(id).await.unwrap();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap()[0], b"test_payload");
+    }
+
+    #[tokio::test]
+    async fn test_retrieve_datum_not_found() {
+        let mut store = create_test_store();
+        let id = "non_existent_id";
+        let result = store.retrieve_datum(id).await;
+        assert!(matches!(result, Err(StoreError::InvalidRequestId(_))));
+    }
+
+    #[tokio::test]
+    async fn test_stream_response() {
+        let mut store = create_test_store();
+        let id = "test_id_saved";
+        let (mut rx, _handle) = store.stream_response(id).await.unwrap();
+        let received_response = rx.next().await.unwrap();
+        assert_eq!(
+            received_response,
+            Arc::new(Bytes::from_static(b"test_payload"))
+        );
+    }
+}
