@@ -19691,23 +19691,6 @@
       },
       "type": "object"
     },
-    "io.numaproj.numaflow.v1alpha1.BuiltInServingStore": {
-      "description": "BuiltInServingStore to track and store data and metadata for tracking and serving.",
-      "properties": {
-        "ttl": {
-          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
-          "description": "TTL for the data in the store and tracker"
-        },
-        "url": {
-          "description": "URL of the persistent store to write the callbacks",
-          "type": "string"
-        }
-      },
-      "required": [
-        "url"
-      ],
-      "type": "object"
-    },
     "io.numaproj.numaflow.v1alpha1.CombinedEdge": {
       "description": "CombinedEdge is a combination of Edge and some other properties such as vertex type, partitions, limits. It's used to decorate the fromEdges and toEdges of the generated Vertex objects, so that in the vertex pod, it knows the properties of the connected vertices, for example, how many partitioned buffers I should write to, what is the write buffer length, etc.",
       "properties": {
@@ -21954,18 +21937,18 @@
           "description": "The header key from which the message id will be extracted",
           "type": "string"
         },
+        "requestTimeoutSeconds": {
+          "description": "Request timeout in seconds. Default value is 120 seconds.",
+          "format": "int64",
+          "type": "integer"
+        },
         "service": {
           "description": "Whether to create a ClusterIP Service",
           "type": "boolean"
-        },
-        "store": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.BuiltInServingStore",
-          "description": "Persistent store for the callbacks for serving and tracking"
         }
       },
       "required": [
-        "msgIDHeaderKey",
-        "store"
+        "msgIDHeaderKey"
       ],
       "type": "object"
     },

@@ -74,6 +74,11 @@ impl source::SourceReader for PulsarSource {
     async fn partitions(&mut self) -> crate::error::Result<Vec<u16>> {
         Ok(self.partitions_vec())
     }
+
+    // FIXME(spr): Implement this
+    async fn is_ready(&mut self) -> bool {
+        true
+    }
 }
 
 impl source::SourceAcker for PulsarSource {

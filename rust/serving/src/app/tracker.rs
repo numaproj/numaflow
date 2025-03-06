@@ -225,7 +225,7 @@ impl MessageGraph {
                                 .map_or(
                                     tags.operator.as_ref() == Some(&OperatorType::Not),
                                     |callback_tags| {
-                                        tags.operator.as_ref().map_or(false, |operator| {
+                                        tags.operator.as_ref().is_some_and(|operator| {
                                             // If there is no operator, default to false (i.e., do not proceed with the edge)
                                             // If there is an operator, compare the current callback's tags with the edge's tags
                                             compare_slice(operator, callback_tags, &tags.values)

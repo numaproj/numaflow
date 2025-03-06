@@ -527,7 +527,7 @@ func TestGetServingSourceStreamNames(t *testing.T) {
 			},
 		}
 		var expected []string
-		assert.Equal(t, expected, p.GetServingSourceStreamNames())
+		assert.Equal(t, expected, p.GetServingSourceStoreName())
 	})
 
 	t.Run("with serving sources", func(t *testing.T) {
@@ -545,7 +545,7 @@ func TestGetServingSourceStreamNames(t *testing.T) {
 			},
 		}
 		expected := []string{"test-pipeline-v1-serving-source", "test-pipeline-v2-serving-source"}
-		assert.Equal(t, expected, p.GetServingSourceStreamNames())
+		assert.Equal(t, expected, p.GetServingSourceStoreName())
 	})
 }
 

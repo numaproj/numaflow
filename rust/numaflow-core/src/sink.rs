@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::sink_response;
-use numaflow_pb::clients::sink::Status::{Failure, Fallback, Success};
+use numaflow_pb::clients::sink::Status::{Failure, Fallback, Serve, Success};
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -18,17 +18,18 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 use user_defined::UserDefinedSink;
 
 use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
-use crate::config::is_mono_vertex;
+use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
 use crate::message::Message;
 use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_forward_metric_labels,
     pipeline_metrics,
 };
+use crate::servingstore::ServingStore;
 use crate::tracker::TrackerHandle;
 use crate::Result;
 
@@ -47,6 +48,8 @@ mod log;
 /// [User-Defined Sink]: https://numaflow.numaproj.io/user-guide/sinks/user-defined-sinks/
 mod user_defined;
 
+const NUMAFLOW_ID_HEADER: &str = "X-Numaflow-Id";
+
 /// Set of items to be implemented be a Numaflow Sink.
 ///
 /// [Sink]: https://numaflow.numaproj.io/user-guide/sinks/overview/
@@ -55,6 +58,8 @@ mod user_defined;
 pub(crate) trait LocalSink {
     /// Write the messages to the Sink.
     async fn sink(&mut self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>>;
+    /// Check if the Sink is ready to accept messages.
+    async fn is_ready(&mut self) -> bool;
 }
 
 /// ActorMessage is a message that is sent to the SinkActor.
@@ -62,6 +67,9 @@ enum ActorMessage {
     Sink {
         messages: Vec<Message>,
         respond_to: oneshot::Sender<Result<Vec<ResponseFromSink>>>,
+    },
+    IsReady {
+        respond_to: oneshot::Sender<bool>,
     },
 }
 
@@ -91,6 +99,10 @@ where
                 let response = self.sink.sink(messages).await;
                 let _ = respond_to.send(response);
             }
+            ActorMessage::IsReady { respond_to } => {
+                let response = self.sink.is_ready().await;
+                let _ = respond_to.send(response);
+            }
         }
     }
 
@@ -112,7 +124,7 @@ pub(crate) enum SinkClientType {
 /// Error handling and shutdown: There can non-retryable errors(udsink panics etc), in that case we will
 /// cancel the token to indicate the upstream not send any more messages to the sink, we drain any inflight
 /// messages that are in input stream and nack them using the tracker, when the upstream stops sending
-/// messages the input stream will be closed and we will stop the component.
+/// messages the input stream will be closed, and we will stop the component.
 #[derive(Clone)]
 pub(super) struct SinkWriter {
     batch_size: usize,
@@ -123,6 +135,7 @@ pub(super) struct SinkWriter {
     tracker_handle: TrackerHandle,
     shutting_down: bool,
     final_result: Result<()>,
+    serving_store: Option<ServingStore>,
 }
 
 /// SinkWriterBuilder is a builder to build a SinkWriter.
@@ -133,6 +146,7 @@ pub struct SinkWriterBuilder {
     sink_client: SinkClientType,
     fb_sink_client: Option<SinkClientType>,
     tracker_handle: TrackerHandle,
+    serving_store: Option<ServingStore>,
 }
 
 impl SinkWriterBuilder {
@@ -149,6 +163,7 @@ impl SinkWriterBuilder {
             sink_client: sink_type,
             fb_sink_client: None,
             tracker_handle,
+            serving_store: None,
         }
     }
 
@@ -159,6 +174,11 @@ impl SinkWriterBuilder {
 
     pub fn fb_sink_client(mut self, fb_sink_client: SinkClientType) -> Self {
         self.fb_sink_client = Some(fb_sink_client);
+        self
+    }
+
+    pub fn serving_store(mut self, serving_store: ServingStore) -> Self {
+        self.serving_store = Some(serving_store);
         self
     }
 
@@ -229,6 +249,7 @@ impl SinkWriterBuilder {
             tracker_handle: self.tracker_handle,
             shutting_down: false,
             final_result: Ok(()),
+            serving_store: self.serving_store,
         })
     }
 }
@@ -242,7 +263,7 @@ impl SinkWriter {
             respond_to: tx,
         };
         let _ = self.sink_handle.send(msg).await;
-        rx.await.unwrap()
+        rx.await.expect("Error receiving response from sink actor")
     }
 
     /// Sink the messages to the Fallback Sink.
@@ -397,6 +418,7 @@ impl SinkWriter {
         let mut attempts = 0;
         let mut error_map = HashMap::new();
         let mut fallback_msgs = Vec::new();
+        let mut serving_msgs = Vec::new();
         // start with the original set of message to be sent.
         // we will overwrite this vec with failed messages and will keep retrying.
         let mut messages_to_send = messages;
@@ -411,6 +433,7 @@ impl SinkWriter {
                     .write_to_sink_once(
                         &mut error_map,
                         &mut fallback_msgs,
+                        &mut serving_msgs,
                         &mut messages_to_send,
                         retry_config,
                     )
@@ -461,6 +484,11 @@ impl SinkWriter {
         if !fallback_msgs.is_empty() {
             self.handle_fallback_messages(fallback_msgs, retry_config)
                 .await?;
+        }
+
+        // If there are serving messages, write them to the serving store
+        if !serving_msgs.is_empty() {
+            self.handle_serving_messages(serving_msgs).await?;
         }
 
         if is_mono_vertex() {
@@ -538,6 +566,7 @@ impl SinkWriter {
         &mut self,
         error_map: &mut HashMap<String, i32>,
         fallback_msgs: &mut Vec<Message>,
+        serving_msgs: &mut Vec<Message>,
         messages_to_send: &mut Vec<Message>,
         retry_config: &RetryConfig,
     ) -> Result<bool> {
@@ -564,6 +593,10 @@ impl SinkWriter {
                             }
                             ResponseStatusFromSink::Fallback => {
                                 fallback_msgs.push(msg.clone());
+                                false
+                            }
+                            ResponseStatusFromSink::Serve => {
+                                serving_msgs.push(msg.clone());
                                 false
                             }
                         };
@@ -616,14 +649,8 @@ impl SinkWriter {
         let sleep_interval = default_retry.interval.unwrap();
 
         while attempts < max_attempts {
-            let start_time = time::Instant::now();
             match self.fb_sink(messages_to_send.clone()).await {
                 Ok(fb_response) => {
-                    debug!(
-                        "Fallback sink latency - {}ms",
-                        start_time.elapsed().as_millis()
-                    );
-
                     // create a map of id to result, since there is no strict requirement
                     // for the udsink to return the results in the same order as the requests
                     let result_map = fb_response
@@ -632,6 +659,7 @@ impl SinkWriter {
                         .collect::<HashMap<_, _>>();
 
                     let mut contains_fallback_status = false;
+                    let mut contains_serving_status = false;
 
                     fallback_error_map.clear();
                     // drain all the messages that were successfully written
@@ -649,6 +677,10 @@ impl SinkWriter {
                                     contains_fallback_status = true;
                                     false
                                 }
+                                ResponseStatusFromSink::Serve => {
+                                    contains_serving_status = true;
+                                    false
+                                }
                             }
                         } else {
                             false
@@ -659,6 +691,12 @@ impl SinkWriter {
                     if contains_fallback_status {
                         return Err(Error::Sink(
                             "Fallback response contains fallback status".to_string(),
+                        ));
+                    }
+
+                    if contains_serving_status {
+                        return Err(Error::Sink(
+                            "Fallback response contains serving status".to_string(),
                         ));
                     }
 
@@ -685,6 +723,64 @@ impl SinkWriter {
         }
         Ok(())
     }
+
+    // writes the serving messages to the serving store
+    async fn handle_serving_messages(&mut self, serving_msgs: Vec<Message>) -> Result<()> {
+        let Some(serving_store) = &mut self.serving_store else {
+            return Err(Error::Sink(
+                "Response contains serving messages but no serving store is configured".to_string(),
+            ));
+        };
+
+        for msg in serving_msgs {
+            let payload = msg.value.clone().into();
+            let id = msg
+                .headers
+                .get(NUMAFLOW_ID_HEADER)
+                .ok_or(Error::Sink("Missing numaflow id header".to_string()))?;
+
+            match serving_store {
+                ServingStore::UserDefined(ud_store) => {
+                    ud_store.put_datum(id, get_vertex_name(), payload).await?;
+                }
+                ServingStore::Nats(nats_store) => {
+                    nats_store.put_datum(id, get_vertex_name(), payload).await?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    // Check if the Sink is ready to accept messages.
+    pub(crate) async fn is_ready(&self) -> bool {
+        let (tx, rx) = oneshot::channel();
+
+        self.sink_handle
+            .send(ActorMessage::IsReady { respond_to: tx })
+            .await
+            .expect("Error sending message to sink actor");
+
+        let is_primary_sink_ready = rx.await.unwrap_or_else(|_| false);
+        if !is_primary_sink_ready {
+            warn!("Primary sink is not ready");
+        }
+
+        // If there is a fallback sink, check if it is ready
+        if let Some(fb_sink_handle) = &self.fb_sink_handle {
+            let (tx, rx) = oneshot::channel();
+            fb_sink_handle
+                .send(ActorMessage::IsReady { respond_to: tx })
+                .await
+                .expect("Error sending message to fallback sink actor");
+            let is_fallback_sink_ready = rx.await.unwrap_or_else(|_| false);
+            if !is_fallback_sink_ready {
+                warn!("Fallback sink is not ready");
+            }
+            is_primary_sink_ready && is_fallback_sink_ready
+        } else {
+            is_primary_sink_ready
+        }
+    }
 }
 
 /// Sink's status for each [Message] written to Sink.
@@ -696,6 +792,8 @@ pub(crate) enum ResponseStatusFromSink {
     Failed(String),
     /// Write to FallBack Sink.
     Fallback,
+    /// Write to serving store.
+    Serve,
 }
 
 /// Sink will give a response per [Message].
@@ -705,6 +803,7 @@ pub(crate) struct ResponseFromSink {
     pub(crate) id: String,
     /// Status of the "sink" operation per [Message].
     pub(crate) status: ResponseStatusFromSink,
+    pub(crate) serve_response: Option<Vec<u8>>,
 }
 
 impl From<sink_response::Result> for ResponseFromSink {
@@ -713,26 +812,12 @@ impl From<sink_response::Result> for ResponseFromSink {
             Success => ResponseStatusFromSink::Success,
             Failure => ResponseStatusFromSink::Failed(value.err_msg),
             Fallback => ResponseStatusFromSink::Fallback,
+            Serve => ResponseStatusFromSink::Serve,
         };
         Self {
             id: value.id,
             status,
-        }
-    }
-}
-
-impl From<ResponseFromSink> for sink_response::Result {
-    fn from(value: ResponseFromSink) -> Self {
-        let (status, err_msg) = match value.status {
-            ResponseStatusFromSink::Success => (Success, "".to_string()),
-            ResponseStatusFromSink::Failed(err) => (Failure, err.to_string()),
-            ResponseStatusFromSink::Fallback => (Fallback, "".to_string()),
-        };
-
-        Self {
-            id: value.id,
-            status: status as i32,
-            err_msg,
+            serve_response: value.serve_response,
         }
     }
 }
@@ -1059,23 +1144,13 @@ mod tests {
     }
 
     #[test]
-    fn test_response_from_sink_to_sink_response() {
-        let response = ResponseFromSink {
-            id: "123".to_string(),
-            status: ResponseStatusFromSink::Success,
-        };
-
-        let sink_result: sink_response::Result = response.into();
-        assert_eq!(sink_result.status, Success as i32);
-    }
-
-    #[test]
     fn test_sink_response_to_response_from_sink() {
         let sink_response = SinkResponse {
             results: vec![sink_response::Result {
                 id: "123".to_string(),
                 status: Success as i32,
                 err_msg: "".to_string(),
+                serve_response: None,
             }],
             handshake: None,
             status: None,

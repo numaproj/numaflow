@@ -1,4 +1,3 @@
-use serving::callback::CallbackHandler;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -24,13 +23,9 @@ pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
     config: &MonovertexConfig,
 ) -> error::Result<()> {
-    let callback_handler = config
-        .callback_config
-        .as_ref()
-        .map(|cb_cfg| CallbackHandler::new(config.name.clone(), cb_cfg.callback_concurrency));
-    let tracker_handle = TrackerHandle::new(None, callback_handler);
+    let tracker_handle = TrackerHandle::new(None, None);
 
-    let (transformer, transformer_grpc_client) = create_components::create_transformer(
+    let transformer = create_components::create_transformer(
         config.batch_size,
         config.transformer_config.clone(),
         tracker_handle.clone(),
@@ -38,7 +33,8 @@ pub(crate) async fn start_forwarder(
     )
     .await?;
 
-    let (source, source_grpc_client) = create_components::create_source(
+    let source = create_components::create_source(
+        None,
         config.batch_size,
         config.read_timeout,
         &config.source_config,
@@ -49,26 +45,24 @@ pub(crate) async fn start_forwarder(
     )
     .await?;
 
-    let (sink_writer, sink_grpc_client, fb_sink_grpc_client) =
-        create_components::create_sink_writer(
-            config.batch_size,
-            config.read_timeout,
-            config.sink_config.clone(),
-            config.fb_sink_config.clone(),
-            tracker_handle,
-            &cln_token,
-        )
-        .await?;
+    let sink_writer = create_components::create_sink_writer(
+        config.batch_size,
+        config.read_timeout,
+        config.sink_config.clone(),
+        config.fb_sink_config.clone(),
+        tracker_handle,
+        None,
+        &cln_token,
+    )
+    .await?;
 
     // Start the metrics server in a separate background async spawn,
     // This should be running throughout the lifetime of the application, hence the handle is not
     // joined.
     let metrics_state =
-        metrics::UserDefinedContainerState::Monovertex(metrics::MonovertexContainerState {
-            source_client: source_grpc_client.clone(),
-            sink_client: sink_grpc_client.clone(),
-            transformer_client: transformer_grpc_client.clone(),
-            fb_sink_client: fb_sink_grpc_client.clone(),
+        metrics::UserDefinedContainerState::Monovertex(metrics::MonovertexComponents {
+            source: source.clone(),
+            sink: sink_writer.clone(),
         });
 
     // start the metrics server

@@ -1,9 +1,10 @@
+use tokio_util::sync::CancellationToken;
+use tracing::error;
+
 use crate::error::Error;
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
 use crate::sink::SinkWriter;
 use crate::Result;
-use tokio_util::sync::CancellationToken;
-use tracing::error;
 
 /// Sink forwarder is a component which starts a streaming reader and a sink writer
 /// and manages the lifecycle of these components.

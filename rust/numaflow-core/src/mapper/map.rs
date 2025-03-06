@@ -1,14 +1,6 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::config::pipeline::map::MapMode;
-use crate::error;
-use crate::error::Error;
-use crate::mapper::map::user_defined::{
-    UserDefinedBatchMap, UserDefinedStreamMap, UserDefinedUnaryMap,
-};
-use crate::message::{Message, Offset};
-use crate::tracker::TrackerHandle;
 use numaflow_pb::clients::map::map_client::MapClient;
 use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinHandle;
@@ -17,24 +9,48 @@ use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::{info, warn};
+
+use crate::config::pipeline::map::MapMode;
+use crate::error;
+use crate::error::Error;
+use crate::mapper::map::user_defined::{
+    UserDefinedBatchMap, UserDefinedStreamMap, UserDefinedUnaryMap,
+};
+use crate::message::{Message, Offset};
+use crate::tracker::TrackerHandle;
 pub(super) mod user_defined;
 
 /// UnaryActorMessage is a message that is sent to the UnaryMapperActor.
-struct UnaryActorMessage {
-    message: Message,
-    respond_to: oneshot::Sender<error::Result<Vec<Message>>>,
+enum UnaryActorMessage {
+    Map {
+        message: Message,
+        respond_to: oneshot::Sender<error::Result<Vec<Message>>>,
+    },
+    IsReady {
+        respond_to: oneshot::Sender<bool>,
+    },
 }
 
 /// BatchActorMessage is a message that is sent to the BatchMapperActor.
-struct BatchActorMessage {
-    messages: Vec<Message>,
-    respond_to: Vec<oneshot::Sender<error::Result<Vec<Message>>>>,
+enum BatchActorMessage {
+    Map {
+        messages: Vec<Message>,
+        respond_to: Vec<oneshot::Sender<error::Result<Vec<Message>>>>,
+    },
+    IsReady {
+        respond_to: oneshot::Sender<bool>,
+    },
 }
 
 /// StreamActorMessage is a message that is sent to the StreamMapperActor.
-struct StreamActorMessage {
-    message: Message,
-    respond_to: mpsc::Sender<error::Result<Message>>,
+enum StreamActorMessage {
+    Map {
+        message: Message,
+        respond_to: mpsc::Sender<error::Result<Message>>,
+    },
+    IsReady {
+        respond_to: oneshot::Sender<bool>,
+    },
 }
 
 /// UnaryMapperActor is responsible for handling the unary map operation.
@@ -55,7 +71,17 @@ impl UnaryMapperActor {
     }
 
     async fn handle_message(&mut self, msg: UnaryActorMessage) {
-        self.mapper.unary_map(msg.message, msg.respond_to).await;
+        match msg {
+            UnaryActorMessage::Map {
+                message,
+                respond_to,
+            } => {
+                self.mapper.unary_map(message, respond_to).await;
+            }
+            UnaryActorMessage::IsReady { respond_to } => {
+                let _ = respond_to.send(self.mapper.is_ready().await);
+            }
+        }
     }
 
     async fn run(mut self) {
@@ -77,7 +103,17 @@ impl BatchMapActor {
     }
 
     async fn handle_message(&mut self, msg: BatchActorMessage) {
-        self.mapper.batch_map(msg.messages, msg.respond_to).await;
+        match msg {
+            BatchActorMessage::Map {
+                messages,
+                respond_to,
+            } => {
+                self.mapper.batch_map(messages, respond_to).await;
+            }
+            BatchActorMessage::IsReady { respond_to } => {
+                let _ = respond_to.send(self.mapper.is_ready().await);
+            }
+        }
     }
 
     async fn run(mut self) {
@@ -99,7 +135,17 @@ impl StreamMapActor {
     }
 
     async fn handle_message(&mut self, msg: StreamActorMessage) {
-        self.mapper.stream_map(msg.message, msg.respond_to).await;
+        match msg {
+            StreamActorMessage::Map {
+                message,
+                respond_to,
+            } => {
+                self.mapper.stream_map(message, respond_to).await;
+            }
+            StreamActorMessage::IsReady { respond_to } => {
+                let _ = respond_to.send(self.mapper.is_ready().await);
+            }
+        }
     }
 
     async fn run(mut self) {
@@ -127,24 +173,17 @@ enum ActorSender {
 /// closed. We will drop the downstream stream so that the downstream components can shutdown.
 /// Structured concurrency is honoured here, we wait for all the concurrent tokio tasks to exit.
 /// before shutting down the component.
+#[derive(Clone)]
 pub(crate) struct MapHandle {
     batch_size: usize,
     read_timeout: Duration,
     concurrency: usize,
     tracker: TrackerHandle,
     actor_sender: ActorSender,
-    task_handle: JoinHandle<()>,
     /// this the final state of the component (any error will set this as Err)
     final_result: crate::Result<()>,
     /// The moment we see an error, we will set this to true.
     shutting_down_on_err: bool,
-}
-
-/// Abort all the background tasks when the mapper is dropped.
-impl Drop for MapHandle {
-    fn drop(&mut self) {
-        self.task_handle.abort();
-    }
 }
 
 /// Response channel size for streaming map.
@@ -162,8 +201,6 @@ impl MapHandle {
         client: MapClient<Channel>,
         tracker_handle: TrackerHandle,
     ) -> error::Result<Self> {
-        let task_handle;
-
         // Based on the map mode, spawn the appropriate map actor
         // and store the sender handle in the actor_sender.
         let actor_sender = match map_mode {
@@ -173,11 +210,9 @@ impl MapHandle {
                     receiver,
                     UserDefinedUnaryMap::new(batch_size, client).await?,
                 );
-
-                let handle = tokio::spawn(async move {
+                tokio::spawn(async move {
                     mapper_actor.run().await;
                 });
-                task_handle = handle;
                 ActorSender::Unary(sender)
             }
             MapMode::Batch => {
@@ -186,11 +221,9 @@ impl MapHandle {
                     batch_receiver,
                     UserDefinedBatchMap::new(batch_size, client).await?,
                 );
-
-                let handle = tokio::spawn(async move {
+                tokio::spawn(async move {
                     batch_mapper_actor.run().await;
                 });
-                task_handle = handle;
                 ActorSender::Batch(batch_sender)
             }
             MapMode::Stream => {
@@ -199,11 +232,9 @@ impl MapHandle {
                     stream_receiver,
                     UserDefinedStreamMap::new(batch_size, client).await?,
                 );
-
-                let handle = tokio::spawn(async move {
+                tokio::spawn(async move {
                     stream_mapper_actor.run().await;
                 });
-                task_handle = handle;
                 ActorSender::Stream(stream_sender)
             }
         };
@@ -214,7 +245,6 @@ impl MapHandle {
             read_timeout,
             concurrency,
             tracker: tracker_handle,
-            task_handle,
             final_result: Ok(()),
             shutting_down_on_err: false,
         })
@@ -400,7 +430,7 @@ impl MapHandle {
 
             let offset = read_msg.offset.clone();
             let (sender, receiver) = oneshot::channel();
-            let msg = UnaryActorMessage {
+            let msg = UnaryActorMessage::Map {
                 message: read_msg.clone(),
                 respond_to: sender,
             };
@@ -422,15 +452,17 @@ impl MapHandle {
                     match result {
                         Ok(Ok(mapped_messages)) => {
                             // update the tracker with the number of messages sent and send the mapped messages
-                            for message in mapped_messages.iter() {
-                                tracker_handle
-                                    .update(offset.clone(), message.tags.clone())
-                                    .await
-                                    .expect("failed to update tracker");
-                            }
+                            tracker_handle
+                                .update(
+                                    offset.clone(),
+                                    mapped_messages.iter().map(|m| m.tags.clone()).collect(),
+                                )
+                                .await
+                                .expect("failed to update tracker");
+
                             // done with the batch
                             tracker_handle
-                                .update_eof(offset)
+                                .eof(offset)
                                 .await
                                 .expect("failed to update eof");
                             // send messages downstream
@@ -486,7 +518,7 @@ impl MapHandle {
     ) -> error::Result<()> {
         let (senders, receivers): (Vec<_>, Vec<_>) =
             batch.iter().map(|_| oneshot::channel()).unzip();
-        let msg = BatchActorMessage {
+        let msg = BatchActorMessage::Map {
             messages: batch,
             respond_to: senders,
         };
@@ -504,12 +536,15 @@ impl MapHandle {
                         if offset.is_none() {
                             offset = Some(message.offset.clone());
                         }
-                        tracker_handle
-                            .update(message.offset.clone(), message.tags.clone())
-                            .await?;
                     }
                     if let Some(offset) = offset {
-                        tracker_handle.update_eof(offset).await?;
+                        tracker_handle
+                            .update(
+                                offset.clone(),
+                                mapped_messages.iter().map(|m| m.tags.clone()).collect(),
+                            )
+                            .await?;
+                        tracker_handle.eof(offset).await?;
                     }
                     for mapped_message in mapped_messages {
                         output_tx
@@ -553,7 +588,7 @@ impl MapHandle {
             let _permit = permit;
 
             let (sender, mut receiver) = mpsc::channel(STREAMING_MAP_RESP_CHANNEL_SIZE);
-            let msg = StreamActorMessage {
+            let msg = StreamActorMessage::Map {
                 message: read_msg.clone(),
                 respond_to: sender,
             };
@@ -570,13 +605,20 @@ impl MapHandle {
                 return;
             }
 
+            // we need update the tracker with no responses, because unlike unary and batch, we cannot update the
+            // responses here we will have to append the responses.
+            tracker_handle
+                .refresh(read_msg.offset.clone())
+                .await
+                .expect("failed to reset tracker");
             loop {
                 tokio::select! {
                     result = receiver.recv() => {
                         match result {
                             Some(Ok(mapped_message)) => {
+                                info!(?mapped_message, "Received mapped message");
                                 tracker_handle
-                                    .update(mapped_message.offset.clone(), mapped_message.tags.clone())
+                                    .append(mapped_message.offset.clone(), mapped_message.tags.clone())
                                     .await
                                     .expect("failed to update tracker");
                                 output_tx.send(mapped_message).await.expect("failed to send response");
@@ -606,11 +648,39 @@ impl MapHandle {
                 }
             }
 
+            info!(?read_msg.offset, "Stream map operation completed");
             tracker_handle
-                .update_eof(read_msg.offset)
+                .eof(read_msg.offset)
                 .await
                 .expect("failed to update eof");
         });
+    }
+
+    // Returns true if the mapper is ready to accept messages.
+    pub(crate) async fn is_ready(&mut self) -> bool {
+        let (tx, rx) = oneshot::channel();
+        match &self.actor_sender {
+            ActorSender::Unary(map_handle) => {
+                map_handle
+                    .send(UnaryActorMessage::IsReady { respond_to: tx })
+                    .await
+                    .expect("failed to send is_ready message");
+            }
+            ActorSender::Batch(map_handle) => {
+                map_handle
+                    .send(BatchActorMessage::IsReady { respond_to: tx })
+                    .await
+                    .expect("failed to send is_ready message");
+            }
+            ActorSender::Stream(map_handle) => {
+                map_handle
+                    .send(StreamActorMessage::IsReady { respond_to: tx })
+                    .await
+                    .expect("failed to send is_ready message");
+            }
+        }
+
+        rx.await.is_ok()
     }
 }
 
@@ -618,17 +688,18 @@ impl MapHandle {
 mod tests {
     use std::time::Duration;
 
+    use numaflow::{batchmap, map, mapstream};
+    use numaflow_pb::clients::map::map_client::MapClient;
+    use tempfile::TempDir;
+    use tokio::sync::{mpsc::Sender, oneshot};
+    use tokio::time::sleep;
+
     use super::*;
     use crate::{
         message::{MessageID, Offset, StringOffset},
         shared::grpc::create_rpc_channel,
         Result,
     };
-    use numaflow::{batchmap, map, mapstream};
-    use numaflow_pb::clients::map::map_client::MapClient;
-    use tempfile::TempDir;
-    use tokio::sync::{mpsc::Sender, oneshot};
-    use tokio::time::sleep;
 
     struct SimpleMapper;
 
