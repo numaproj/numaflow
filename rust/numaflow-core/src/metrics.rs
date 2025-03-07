@@ -85,23 +85,24 @@ const SINK_TIME: &str = "time";
 
 const PIPELINE_FORWARDER_READ_TOTAL: &str = "data_read";
 
-/// Only user defined functions will have containers since rest are builtins. We save the gRPC
-/// clients to retrieve metrics and also to do liveness checks.
+/// A deep healthcheck for components. Each component should implement IsReady for both builtins and
+/// user-defined containers.
 #[derive(Clone)]
-pub(crate) enum UserDefinedContainerState {
+pub(crate) enum ComponentHealthChecks {
     Monovertex(MonovertexComponents),
     Pipeline(PipelineComponents),
 }
 
-/// MonovertexComponents is used to store the gRPC clients for the monovtx. These will be optionals
-/// since we do not require these for builtins.
+/// MonovertexComponents is used to store the all the components required for running mvtx. Transformer
+/// and Fallback Sink ism missing because they are internally referenced by Source and Sink.
 #[derive(Clone)]
 pub(crate) struct MonovertexComponents {
     pub(crate) source: Source,
     pub(crate) sink: SinkWriter,
 }
 
-/// PipelineContainerState is used to store the gRPC clients for the pipeline.
+/// PipelineComponents is used to store the all the components required for running pipeline. Transformer
+/// and Fallback Sink ism missing because they are internally referenced by Source and Sink.
 #[derive(Clone)]
 pub(crate) enum PipelineComponents {
     Source(Source),
@@ -577,7 +578,7 @@ pub async fn metrics_handler() -> impl IntoResponse {
 
 pub(crate) async fn start_metrics_https_server(
     addr: SocketAddr,
-    metrics_state: UserDefinedContainerState,
+    metrics_state: ComponentHealthChecks,
 ) -> crate::Result<()> {
     // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
@@ -601,7 +602,7 @@ pub(crate) async fn start_metrics_https_server(
 }
 
 /// router for metrics and k8s health endpoints
-fn metrics_router(metrics_state: UserDefinedContainerState) -> Router {
+fn metrics_router(metrics_state: ComponentHealthChecks) -> Router {
     Router::new()
         .route("/metrics", get(metrics_handler))
         .route("/livez", get(livez))
@@ -614,9 +615,10 @@ async fn livez() -> impl IntoResponse {
     StatusCode::NO_CONTENT
 }
 
-async fn sidecar_livez(State(state): State<UserDefinedContainerState>) -> impl IntoResponse {
+async fn sidecar_livez(State(state): State<ComponentHealthChecks>) -> impl IntoResponse {
     match state {
-        UserDefinedContainerState::Monovertex(mut monovertex_state) => {
+        ComponentHealthChecks::Monovertex(mut monovertex_state) => {
+            // this call also check the health of transformer if it is configured in the Source.
             if !monovertex_state.source.is_ready().await {
                 error!("Monovertex source component is not ready");
                 return StatusCode::INTERNAL_SERVER_ERROR;
@@ -626,7 +628,7 @@ async fn sidecar_livez(State(state): State<UserDefinedContainerState>) -> impl I
                 return StatusCode::INTERNAL_SERVER_ERROR;
             }
         }
-        UserDefinedContainerState::Pipeline(pipeline_state) => match pipeline_state {
+        ComponentHealthChecks::Pipeline(pipeline_state) => match pipeline_state {
             PipelineComponents::Source(mut source) => {
                 if !source.is_ready().await {
                     error!("Pipeline source component is not ready");
@@ -634,6 +636,7 @@ async fn sidecar_livez(State(state): State<UserDefinedContainerState>) -> impl I
                 }
             }
             PipelineComponents::Sink(sink) => {
+                // this call also check for fbsink if it is there
                 if !sink.is_ready().await {
                     error!("Pipeline sink component is not ready");
                     return StatusCode::INTERNAL_SERVER_ERROR;
@@ -1102,7 +1105,7 @@ mod tests {
         .await
         .unwrap();
 
-        let metrics_state = UserDefinedContainerState::Monovertex(MonovertexComponents {
+        let metrics_state = ComponentHealthChecks::Monovertex(MonovertexComponents {
             source,
             sink: sink_writer,
         });

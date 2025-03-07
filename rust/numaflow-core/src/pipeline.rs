@@ -14,7 +14,7 @@ use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::{PipelineConfig, ServingStoreType, SinkVtxConfig, SourceVtxConfig};
-use crate::metrics::{LagReader, PipelineComponents, UserDefinedContainerState};
+use crate::metrics::{ComponentHealthChecks, LagReader, PipelineComponents};
 use crate::pipeline::forwarder::source_forwarder;
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
@@ -59,6 +59,7 @@ pub(crate) async fn start_forwarder(
                     let serving_cln_token = serving_cln_token.clone();
                     async move {
                         cln_token.cancelled().await;
+                        // FIXME: we should only wait until the draining is complete, not a blind sleep
                         tokio::time::sleep(Duration::from_secs(req_timeout)).await;
                         serving_cln_token.cancel();
                     }
@@ -212,7 +213,7 @@ async fn start_source_forwarder(
 
     start_metrics_server(
         config.metrics_config.clone(),
-        UserDefinedContainerState::Pipeline(PipelineComponents::Source(source.clone())),
+        ComponentHealthChecks::Pipeline(PipelineComponents::Source(source.clone())),
     )
     .await;
 
@@ -308,9 +309,7 @@ async fn start_map_forwarder(
 
     start_metrics_server(
         config.metrics_config.clone(),
-        UserDefinedContainerState::Pipeline(PipelineComponents::Map(
-            mapper_handle.unwrap().clone(),
-        )),
+        ComponentHealthChecks::Pipeline(PipelineComponents::Map(mapper_handle.unwrap().clone())),
     )
     .await;
 
@@ -426,7 +425,7 @@ async fn start_sink_forwarder(
     if let Some(sink_handle) = sink_writers.first() {
         start_metrics_server(
             config.metrics_config.clone(),
-            UserDefinedContainerState::Pipeline(PipelineComponents::Sink(sink_handle.clone())),
+            ComponentHealthChecks::Pipeline(PipelineComponents::Sink(sink_handle.clone())),
         )
         .await;
     }

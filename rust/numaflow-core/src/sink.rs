@@ -139,7 +139,7 @@ pub(super) struct SinkWriter {
 }
 
 /// SinkWriterBuilder is a builder to build a SinkWriter.
-pub struct SinkWriterBuilder {
+pub(crate) struct SinkWriterBuilder {
     batch_size: usize,
     chunk_timeout: Duration,
     retry_config: RetryConfig,
@@ -150,7 +150,7 @@ pub struct SinkWriterBuilder {
 }
 
 impl SinkWriterBuilder {
-    pub fn new(
+    pub(crate) fn new(
         batch_size: usize,
         chunk_timeout: Duration,
         sink_type: SinkClientType,
@@ -167,23 +167,23 @@ impl SinkWriterBuilder {
         }
     }
 
-    pub fn retry_config(mut self, retry_config: RetryConfig) -> Self {
+    pub(crate) fn retry_config(mut self, retry_config: RetryConfig) -> Self {
         self.retry_config = retry_config;
         self
     }
 
-    pub fn fb_sink_client(mut self, fb_sink_client: SinkClientType) -> Self {
+    pub(crate) fn fb_sink_client(mut self, fb_sink_client: SinkClientType) -> Self {
         self.fb_sink_client = Some(fb_sink_client);
         self
     }
 
-    pub fn serving_store(mut self, serving_store: ServingStore) -> Self {
+    pub(crate) fn serving_store(mut self, serving_store: ServingStore) -> Self {
         self.serving_store = Some(serving_store);
         self
     }
 
     /// Build the SinkWriter, it also starts the SinkActor to handle messages.
-    pub async fn build(self) -> Result<SinkWriter> {
+    pub(crate) async fn build(self) -> Result<SinkWriter> {
         let (sender, receiver) = mpsc::channel(self.batch_size);
 
         match self.sink_client {
