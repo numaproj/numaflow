@@ -5,9 +5,13 @@ use thiserror::Error;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 
-// in-memory store
+/// jetstream based datum store
 pub(crate) mod jetstreamstore;
+
+/// in-memory based datum store
 pub(crate) mod memstore;
+
+/// user defined datum store
 pub(crate) mod user_defined;
 
 #[derive(Error, Debug, Clone)]
@@ -36,14 +40,14 @@ impl From<Error> for crate::Error {
 
 pub(crate) type Result<T> = std::result::Result<T, Error>;
 
-/// Store trait to datastore the callback information.
-#[trait_variant::make(DatumStore: Send)]
+/// Store trait to get the result from the store.
+#[trait_variant::make(DataStore: Send)]
 #[allow(dead_code)]
-pub(crate) trait LocalDatumStore {
+pub(crate) trait LocalDataStore {
     /// retrieve the data from the store
-    async fn retrieve_datum(&mut self, id: &str) -> Result<Option<Vec<Vec<u8>>>>;
-    /// streams the responses
-    async fn stream_response(
+    async fn retrieve_data(&mut self, id: &str) -> Result<Option<Vec<Vec<u8>>>>;
+    /// streams the data from the store
+    async fn stream_data(
         &mut self,
         id: &str,
     ) -> Result<(ReceiverStream<Arc<Bytes>>, JoinHandle<()>)>;

@@ -7,15 +7,15 @@ use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
-use crate::app::callback::datumstore::{DatumStore, Error as StoreError, Result as StoreResult};
+use crate::app::callback::datastore::{DataStore, Error as StoreError, Result as StoreResult};
 
-/// A JetStream implementation of the datum store.
+/// A JetStream implementation of the data store.
 #[derive(Clone)]
-pub(crate) struct JetStreamDatumStore {
+pub(crate) struct JetStreamDataStore {
     kv_store: Store,
 }
 
-impl JetStreamDatumStore {
+impl JetStreamDataStore {
     pub(crate) async fn new(js_context: Context, datum_store_name: &str) -> StoreResult<Self> {
         let kv_store = js_context
             .get_key_value(datum_store_name)
@@ -25,9 +25,9 @@ impl JetStreamDatumStore {
     }
 }
 
-impl DatumStore for JetStreamDatumStore {
-    /// Retrieve a datum from the store. If the datum is not found, `None` is returned.
-    async fn retrieve_datum(&mut self, id: &str) -> StoreResult<Option<Vec<Vec<u8>>>> {
+impl DataStore for JetStreamDataStore {
+    /// Retrieve a data from the store. If the datum is not found, `None` is returned.
+    async fn retrieve_data(&mut self, id: &str) -> StoreResult<Option<Vec<Vec<u8>>>> {
         // the responses in kv bucket are stored in the format rs.{id}.{vertex_name}.{timestamp}
         // so we should watch for all keys that start with rs.{id}
         let watch_key = format!("rs.{id}.*.*");
@@ -74,7 +74,7 @@ impl DatumStore for JetStreamDatumStore {
     }
 
     /// Stream the response from the store. The response is streamed as it is added to the store.
-    async fn stream_response(
+    async fn stream_data(
         &mut self,
         id: &str,
     ) -> StoreResult<(ReceiverStream<Arc<Bytes>>, JoinHandle<()>)> {
@@ -140,7 +140,7 @@ mod tests {
     use tokio_stream::StreamExt;
 
     use super::*;
-    use crate::app::callback::datumstore::DatumStore;
+    use crate::app::callback::datastore::DataStore;
 
     #[tokio::test]
     async fn test_retrieve_datum() {
@@ -160,7 +160,7 @@ mod tests {
             .await
             .unwrap();
 
-        let mut store = JetStreamDatumStore::new(context.clone(), datum_store_name)
+        let mut store = JetStreamDataStore::new(context.clone(), datum_store_name)
             .await
             .unwrap();
 
@@ -175,7 +175,7 @@ mod tests {
         let done_key = format!("rs.{id}.done.processing");
         store.kv_store.put(done_key, Bytes::new()).await.unwrap();
 
-        let result = store.retrieve_datum(id).await.unwrap();
+        let result = store.retrieve_data(id).await.unwrap();
         assert!(result.is_some());
         assert_eq!(result.unwrap()[0], b"test_payload");
 
@@ -199,7 +199,7 @@ mod tests {
             .await
             .unwrap();
 
-        let mut store = JetStreamDatumStore::new(context.clone(), datum_store_name)
+        let mut store = JetStreamDataStore::new(context.clone(), datum_store_name)
             .await
             .unwrap();
 
@@ -209,7 +209,7 @@ mod tests {
         let payload = Bytes::from_static(b"test_payload");
         store.kv_store.put(key, payload.clone()).await.unwrap();
 
-        let (mut rx, handle) = store.stream_response(id).await.unwrap();
+        let (mut rx, handle) = store.stream_data(id).await.unwrap();
 
         // Verify that the response is received
         let received_response = rx.next().await.unwrap();

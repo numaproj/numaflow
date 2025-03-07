@@ -4,18 +4,21 @@ use bytes::Bytes;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::app::callback::datumstore::Result as StoreResult;
+use crate::app::callback::datastore::Result as StoreResult;
 use crate::callback::Callback;
 
+/// jetstream based callback store
 pub(crate) mod jetstreamstore;
+
+/// In-memory based callback store
 pub(crate) mod memstore;
 
-#[derive(Debug, PartialEq)]
 /// Represents the current processing status of a request id in the `Store`.
+#[derive(Debug, PartialEq)]
 pub(crate) enum ProcessingStatus {
     InProgress,
-    Completed(String), // Store subgraph string
-    Failed(String),    // Store error string
+    Completed(String), // subgraph of the completed request
+    Failed(String),    // error message of the failed request
 }
 
 impl From<Bytes> for ProcessingStatus {

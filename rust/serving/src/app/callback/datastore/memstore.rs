@@ -5,20 +5,19 @@ use bytes::Bytes;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::app::callback::datumstore::{Error as StoreError, Result as StoreResult};
+use crate::app::callback::datastore::{Error as StoreError, Result as StoreResult};
 const STORE_KEY_SUFFIX: &str = "saved";
 
-/// `InMemoryStore` is an in-memory implementation of the `Store` trait.
-/// It uses a `HashMap` to store data in memory.
+/// In-memory implementation of data store.
 #[derive(Clone)]
 #[allow(dead_code)]
-pub(crate) struct InMemoryDatumStore {
+pub(crate) struct InMemoryDataStore {
     /// The data field is a `HashMap` where the key is a `String` and the value is a `Vec<Vec<u8>>`.
     /// It is wrapped in an `Arc<Mutex<_>>` to allow shared ownership and thread safety.
     pub(crate) data: Arc<tokio::sync::Mutex<HashMap<String, Vec<Vec<u8>>>>>,
 }
 
-impl InMemoryDatumStore {
+impl InMemoryDataStore {
     /// Creates a new `InMemoryStore` with an empty `HashMap`.
     #[allow(dead_code)]
     pub(crate) fn new(datum_map: Option<HashMap<String, Vec<Vec<u8>>>>) -> Self {
@@ -28,10 +27,10 @@ impl InMemoryDatumStore {
     }
 }
 
-impl super::DatumStore for InMemoryDatumStore {
+impl super::DataStore for InMemoryDataStore {
     /// Retrieves data for a given id from the `HashMap`.
     /// Each piece of data is deserialized from bytes into a `String`.
-    async fn retrieve_datum(&mut self, id: &str) -> StoreResult<Option<Vec<Vec<u8>>>> {
+    async fn retrieve_data(&mut self, id: &str) -> StoreResult<Option<Vec<Vec<u8>>>> {
         let id = format!("{id}_{STORE_KEY_SUFFIX}");
         let data = self.data.lock().await;
         match data.get(&id) {
@@ -44,7 +43,7 @@ impl super::DatumStore for InMemoryDatumStore {
     }
 
     /// Streams the responses for a given id from the `HashMap`.
-    async fn stream_response(
+    async fn stream_data(
         &mut self,
         id: &str,
     ) -> StoreResult<(ReceiverStream<Arc<Bytes>>, JoinHandle<()>)> {
@@ -73,20 +72,20 @@ mod tests {
     use tokio_stream::StreamExt;
 
     use super::*;
-    use crate::app::callback::datumstore::memstore::InMemoryDatumStore;
-    use crate::app::callback::datumstore::DatumStore;
+    use crate::app::callback::datastore::memstore::InMemoryDataStore;
+    use crate::app::callback::datastore::DataStore;
 
-    fn create_test_store() -> InMemoryDatumStore {
+    fn create_test_store() -> InMemoryDataStore {
         let mut datum_map: HashMap<String, Vec<Vec<u8>>> = HashMap::new();
         datum_map.insert("test_id_saved".to_string(), vec![b"test_payload".to_vec()]);
-        InMemoryDatumStore::new(Some(datum_map))
+        InMemoryDataStore::new(Some(datum_map))
     }
 
     #[tokio::test]
     async fn test_retrieve_datum() {
         let mut store = create_test_store();
         let id = "test_id";
-        let result = store.retrieve_datum(id).await.unwrap();
+        let result = store.retrieve_data(id).await.unwrap();
         assert!(result.is_some());
         assert_eq!(result.unwrap()[0], b"test_payload");
     }
@@ -95,7 +94,7 @@ mod tests {
     async fn test_retrieve_datum_not_found() {
         let mut store = create_test_store();
         let id = "non_existent_id";
-        let result = store.retrieve_datum(id).await;
+        let result = store.retrieve_data(id).await;
         assert!(matches!(result, Err(StoreError::InvalidRequestId(_))));
     }
 
@@ -103,7 +102,7 @@ mod tests {
     async fn test_stream_response() {
         let mut store = create_test_store();
         let id = "test_id_saved";
-        let (mut rx, _handle) = store.stream_response(id).await.unwrap();
+        let (mut rx, _handle) = store.stream_data(id).await.unwrap();
         let received_response = rx.next().await.unwrap();
         assert_eq!(
             received_response,

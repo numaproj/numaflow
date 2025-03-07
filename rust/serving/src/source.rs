@@ -8,8 +8,8 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
 
 use crate::app::callback::cbstore::jetstreamstore::JetstreamCallbackStore;
-use crate::app::callback::datumstore::jetstreamstore::JetStreamDatumStore;
-use crate::app::callback::datumstore::user_defined::UserDefinedStore;
+use crate::app::callback::datastore::jetstreamstore::JetStreamDataStore;
+use crate::app::callback::datastore::user_defined::UserDefinedStore;
 use crate::app::callback::state::State as CallbackState;
 use crate::app::tracker::MessageGraph;
 use crate::config::{StoreType, DEFAULT_ID_HEADER};
@@ -86,7 +86,7 @@ impl ServingSourceActor {
         // Create a redis store to store the callbacks and the custom responses
         match &settings.store_type {
             StoreType::Nats => {
-                let nats_store = JetStreamDatumStore::new(js_context, &settings.js_store).await?;
+                let nats_store = JetStreamDataStore::new(js_context, &settings.js_store).await?;
                 let callback_state =
                     CallbackState::new(msg_graph, nats_store, callback_store).await?;
                 let app = crate::AppState {

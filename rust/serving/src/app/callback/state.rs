@@ -6,10 +6,10 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tracing::{error, info};
 
-use super::datumstore::DatumStore;
+use super::datastore::DataStore;
 use crate::app::callback::cbstore::{CallbackStore, ProcessingStatus};
-use crate::app::callback::datumstore::Error as StoreError;
-use crate::app::callback::datumstore::Result as StoreResult;
+use crate::app::callback::datastore::Error as StoreError;
+use crate::app::callback::datastore::Result as StoreResult;
 use crate::app::tracker::MessageGraph;
 use crate::Error;
 
@@ -24,7 +24,7 @@ pub(crate) struct State<T, C> {
 
 impl<T, C> State<T, C>
 where
-    T: Clone + Send + Sync + DatumStore + 'static,
+    T: Clone + Send + Sync + DataStore + 'static,
     C: Clone + Send + Sync + CallbackStore + 'static,
 {
     /// Create a new State to track connections and callback data
@@ -110,10 +110,7 @@ where
         &mut self,
         id: &str,
     ) -> Result<Option<Vec<Vec<u8>>>, StoreError> {
-        self.datum_store
-            .retrieve_datum(id)
-            .await
-            .map_err(Into::into)
+        self.datum_store.retrieve_data(id).await.map_err(Into::into)
     }
 
     /// Listens on watcher events (SSE uses KV watch) and checks with the Graph is complete. Once
@@ -171,7 +168,7 @@ where
             }
         });
 
-        let (mut response_stream, _handle) = self.datum_store.stream_response(id).await?;
+        let (mut response_stream, _handle) = self.datum_store.stream_data(id).await?;
         tokio::spawn(async move {
             while let Some(response) = response_stream.next().await {
                 tx.send(response).await.expect("Failed to send response");
@@ -217,7 +214,7 @@ mod tests {
 
     use super::*;
     use crate::app::callback::cbstore::jetstreamstore::JetstreamCallbackStore;
-    use crate::app::callback::datumstore::jetstreamstore::JetStreamDatumStore;
+    use crate::app::callback::datastore::jetstreamstore::JetStreamDataStore;
     use crate::callback::{Callback, Response};
     use crate::pipeline::PipelineDCG;
 
@@ -248,7 +245,7 @@ mod tests {
             .await
             .expect("Failed to create callback store");
 
-        let datum_store = JetStreamDatumStore::new(context.clone(), store_name)
+        let datum_store = JetStreamDataStore::new(context.clone(), store_name)
             .await
             .expect("Failed to create datum store");
 
@@ -368,7 +365,7 @@ mod tests {
             .await
             .expect("Failed to create callback store");
 
-        let datum_store = JetStreamDatumStore::new(context.clone(), store_name)
+        let datum_store = JetStreamDataStore::new(context.clone(), store_name)
             .await
             .expect("Failed to create datum store");
 

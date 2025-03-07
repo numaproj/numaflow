@@ -2,5 +2,5 @@
 pub(crate) mod state;
 
 pub(crate) mod cbstore;
-/// datumstore for storing the state
-pub(crate) mod datumstore;
+/// datastore for storing the state
+pub(crate) mod datastore;

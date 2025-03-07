@@ -25,7 +25,7 @@ use source::MessageWrapper;
 pub use source::{Message, ServingSource};
 
 use crate::app::callback::cbstore::CallbackStore;
-use crate::app::callback::datumstore::DatumStore;
+use crate::app::callback::datastore::DataStore;
 
 pub mod callback;
 
@@ -40,7 +40,7 @@ pub(crate) async fn serve<T, C>(
     app: AppState<T, C>,
 ) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>
 where
-    T: Clone + Send + Sync + DatumStore + 'static,
+    T: Clone + Send + Sync + DataStore + 'static,
     C: Clone + Send + Sync + CallbackStore + 'static,
 {
     let (cert, key) = generate_certs()?;

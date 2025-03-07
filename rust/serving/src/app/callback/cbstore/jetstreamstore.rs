@@ -3,16 +3,18 @@ use std::sync::Arc;
 use async_nats::jetstream::kv::{CreateErrorKind, Store};
 use async_nats::jetstream::Context;
 use bytes::Bytes;
+use chrono::Utc;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tracing::info;
 
 use crate::app::callback::cbstore::ProcessingStatus;
-use crate::app::callback::datumstore::{Error as StoreError, Result as StoreResult};
+use crate::app::callback::datastore::{Error as StoreError, Result as StoreResult};
 use crate::callback::Callback;
 
-/// Jetstream implementation of the callback store.
+/// Jetstream implementation of the callback store. Jetstream KV store is used to store the
+/// callback and status information.
 #[derive(Clone)]
 pub(crate) struct JetstreamCallbackStore {
     kv_store: Store,
@@ -49,9 +51,10 @@ impl super::CallbackStore for JetstreamCallbackStore {
                 }
             })?;
 
+        let current_timestamp = Utc::now().timestamp().to_string();
         let response_key = format!("rs.{id}.start.processing");
         self.kv_store
-            .create(&response_key, Bytes::from_static(b""))
+            .create(&response_key, Bytes::from(current_timestamp.clone()))
             .await
             .map_err(|e| {
                 if e.kind() == CreateErrorKind::AlreadyExists {
@@ -65,7 +68,7 @@ impl super::CallbackStore for JetstreamCallbackStore {
 
         let callbacks_key = format!("cb.{id}.start.processing");
         self.kv_store
-            .create(&callbacks_key, Bytes::from_static(b""))
+            .create(&callbacks_key, Bytes::from(current_timestamp))
             .await
             .map_err(|e| {
                 if e.kind() == CreateErrorKind::AlreadyExists {
@@ -79,9 +82,8 @@ impl super::CallbackStore for JetstreamCallbackStore {
 
         Ok(())
     }
-
-    /// de-registers a request id from the store. If the `id` does not exist in the store,
-    /// `StoreError::InvalidRequestId` error is returned.
+    /// de-registers a request id from the store. Updates the status of the request to completed and
+    /// stores the subgraph of the request.
     async fn deregister(&mut self, id: &str, sub_graph: &str) -> StoreResult<()> {
         let key = format!("status.{id}");
         self.kv_store
@@ -94,12 +96,12 @@ impl super::CallbackStore for JetstreamCallbackStore {
                 StoreError::StoreWrite(format!("Failed to mark request as done in kv store: {e:?}"))
             })?;
 
+        // we need to update the callbacks and response keys to signal the end of processing so that
+        // the watchers can stop watching for new callbacks and responses.
+        let current_timestamp = Utc::now().timestamp().to_string();
         let callbacks_key = format!("cb.{id}.done.processing");
         self.kv_store
-            .put(
-                callbacks_key,
-                ProcessingStatus::Completed(sub_graph.to_string()).into(),
-            )
+            .put(callbacks_key, Bytes::from(current_timestamp.clone()))
             .await
             .map_err(|e| {
                 StoreError::StoreWrite(format!("Failed to mark request as done in kv store: {e:?}"))
@@ -107,10 +109,7 @@ impl super::CallbackStore for JetstreamCallbackStore {
 
         let response_key = format!("rs.{id}.done.processing");
         self.kv_store
-            .put(
-                response_key,
-                ProcessingStatus::Completed(sub_graph.to_string()).into(),
-            )
+            .put(response_key, Bytes::from(current_timestamp.clone()))
             .await
             .map_err(|e| {
                 StoreError::StoreWrite(format!("Failed to mark request as done in kv store: {e:?}"))
@@ -119,7 +118,7 @@ impl super::CallbackStore for JetstreamCallbackStore {
         Ok(())
     }
 
-    /// marks a request as failed in the store.
+    /// updates the status of a request in the store to failed and stores the error message.
     async fn mark_as_failed(&mut self, id: &str, error: &str) -> StoreResult<()> {
         let key = format!("status.{id}");
         self.kv_store
@@ -138,6 +137,8 @@ impl super::CallbackStore for JetstreamCallbackStore {
         &mut self,
         id: &str,
     ) -> StoreResult<(ReceiverStream<Arc<Callback>>, JoinHandle<()>)> {
+        // the callbacks are stored in the format cb.{id}.{vertex_name}.{timestamp}
+        // so we can watch for all keys that start with cb.{id}.*
         let callbacks_key = format!("cb.{id}.*.*");
         let mut watcher = self
             .kv_store
@@ -153,6 +154,7 @@ impl super::CallbackStore for JetstreamCallbackStore {
         let callbacks_done_key = format!("cb.{id}.done.processing");
 
         let handle = tokio::spawn(async move {
+            // FIXME(FMEA): Handle errors from the watcher.
             while let Some(watch_event) = watcher.next().await {
                 let entry = match watch_event {
                     Ok(event) => event,
@@ -190,9 +192,11 @@ impl super::CallbackStore for JetstreamCallbackStore {
     /// returns the status of a request in the store.
     async fn status(&mut self, id: &str) -> StoreResult<ProcessingStatus> {
         let key = format!("status.{id}");
+        println!("status: {:?}", key);
         let status = self.kv_store.get(&key).await.map_err(|e| {
             StoreError::StoreRead(format!("Failed to get status for request id: {e:?}"))
         })?;
+        println!("status: {:?}", status);
         let Some(status) = status else {
             return Err(StoreError::InvalidRequestId(id.to_string()));
         };

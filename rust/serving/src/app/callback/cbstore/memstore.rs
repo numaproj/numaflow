@@ -6,7 +6,7 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::app::callback::datumstore::{Error as StoreError, Result as StoreResult};
+use crate::app::callback::datastore::{Error as StoreError, Result as StoreResult};
 use crate::callback::Callback;
 
 /// An in-memory implementation of the callback store. Only used for testing.
@@ -70,6 +70,10 @@ impl super::CallbackStore for InMemoryCallbackStore {
     }
 
     async fn status(&mut self, _id: &str) -> StoreResult<super::ProcessingStatus> {
+        let data = self.data.lock().await;
+        if data.get(_id).is_none() {
+            return Err(StoreError::InvalidRequestId(_id.to_string()));
+        }
         Ok(super::ProcessingStatus::InProgress)
     }
 

@@ -14,9 +14,10 @@ use tonic::transport::{Channel, Endpoint};
 use tower::service_fn;
 use tracing::warn;
 
-use crate::app::callback::datumstore::{DatumStore, Error as StoreError, Result as StoreResult};
+use crate::app::callback::datastore::{DataStore, Error as StoreError, Result as StoreResult};
 use crate::config::UserDefinedStoreConfig;
 
+/// A user-defined implementation of the datum store.
 #[derive(Clone)]
 pub(crate) struct UserDefinedStore {
     client: ServingStoreClient<Channel>,
@@ -32,9 +33,9 @@ impl UserDefinedStore {
     }
 }
 
-impl DatumStore for UserDefinedStore {
+impl DataStore for UserDefinedStore {
     // FIXME(serving): we need to return the origin details along with the payload
-    async fn retrieve_datum(&mut self, id: &str) -> StoreResult<Option<Vec<Vec<u8>>>> {
+    async fn retrieve_data(&mut self, id: &str) -> StoreResult<Option<Vec<Vec<u8>>>> {
         let request = GetRequest { id: id.to_string() };
         let response = self
             .client
@@ -49,7 +50,7 @@ impl DatumStore for UserDefinedStore {
         }
     }
 
-    async fn stream_response(
+    async fn stream_data(
         &mut self,
         _id: &str,
     ) -> StoreResult<(ReceiverStream<Arc<Bytes>>, JoinHandle<()>)> {
