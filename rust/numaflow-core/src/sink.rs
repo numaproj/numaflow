@@ -29,7 +29,7 @@ use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_forward_metric_labels,
     pipeline_metrics,
 };
-use crate::servingstore::ServingStore;
+use crate::serving_store::ServingStore;
 use crate::tracker::TrackerHandle;
 use crate::Result;
 

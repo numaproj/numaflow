@@ -56,7 +56,9 @@ mod tracker;
 /// [Map]: https://numaflow.numaproj.io/user-guide/user-defined-functions/map/map/
 mod mapper;
 
-mod servingstore;
+/// Serving store to store the result of the serving pipeline.
+mod serving_store;
+
 /// [Watermark] _is a monotonically increasing timestamp of the oldest work/event not yet completed_
 ///
 ///

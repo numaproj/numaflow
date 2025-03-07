@@ -162,10 +162,7 @@ func (v Vertex) GetServingStoreName() string {
 }
 
 func (v Vertex) HasServingStore() bool {
-	if v.Spec.ServingStoreName != nil {
-		return true
-	}
-	return false
+	return v.Spec.ServingStoreName != nil
 }
 
 func (v Vertex) getServiceObj(name string, headless bool, port int32, servicePortName string) *corev1.Service {
