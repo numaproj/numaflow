@@ -1,83 +1,61 @@
 use chrono::Utc;
 use regex::Regex;
-use reqwest::Client;
-use serde::{Deserialize, Serialize};
-use std::error::Error;
 
+use crate::config::get_vertex_replica;
+use numaflow_pb::clients::mvtxdaemon::mono_vertex_daemon_service_client::MonoVertexDaemonServiceClient;
+use numaflow_pb::clients::mvtxdaemon::PersistRuntimeErrorRequest;
 use std::str;
+use tonic::transport::Channel;
 use tonic::Status;
+use tracing::error;
 
-use crate::config::{get_vertex_name, get_vertex_replica};
-pub struct Runtime {}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct RuntimeErrorEntry {
-    pub container_name: String,
-    pub timestamp: String,
-    pub code: String,
-    pub message: String,
-    pub details: String,
-    pub mvtx_name: String,
-    pub replica: String,
+#[derive(Clone)]
+pub(crate) struct Runtime {
+    pub(crate) client: MonoVertexDaemonServiceClient<Channel>,
 }
 
 impl Runtime {
     /// Creates a new Runtime instance with the specified emptyDir path.
-    pub fn new() -> Self {
-        Runtime {}
+    pub(crate) async fn new(addr: String) -> Self {
+        let client = MonoVertexDaemonServiceClient::connect(addr)
+            .await
+            .expect("failed to connect to daemon server");
+        Runtime { client }
     }
 
     // Call daemon server
-    pub async fn persist_application_error(
-        &self,
-        grpc_status: Status,
-    ) -> Result<(), Box<dyn Error>> {
+    pub async fn persist_application_error(&mut self, grpc_status: Status) {
         // we can extract the type of udf based on the error message
-        let container_name = match get_container_name(grpc_status.message()) {
-            Ok(name) => name,
-            Err(_err) => String::from(""),
-        };
+        let container_name =
+            extract_container_name(grpc_status.message()).expect("container name not found");
 
         let timestamp = Utc::now().to_rfc3339();
-        let vertex_name = get_vertex_name().to_string();
         let replica = get_vertex_replica().to_string();
         let code = grpc_status.code().to_string();
         let message = grpc_status.message().to_string();
-        let details_bytes = grpc_status.details();
-        let details_str = String::from_utf8_lossy(details_bytes).to_string();
-        let daemon_url =
-            "http://simple-mono-vertex-mv-daemon-svc.default.svc.cluster.local:4327/api/v1/runtime/errors";
+        let details = String::from_utf8_lossy(grpc_status.details()).to_string();
 
-        let error_entry = RuntimeErrorEntry {
+        let request = PersistRuntimeErrorRequest {
             container_name,
             timestamp,
             code,
             message,
-            details: details_str,
-            mvtx_name: vertex_name,
+            details,
             replica,
         };
 
-        let client = Client::new();
-        let response = client.post(daemon_url).json(&error_entry).send().await?;
-
-        if response.status().is_success() {
-            println!("Runtime error reported successfully");
-        } else {
-            println!("Failed to report runtime error: {}", response.status());
-        }
-
-        Ok(())
+        if let Err(e) = self.client.persist_runtime_error(request).await {
+            error!(
+                ?e,
+                "failed to post runtime error information to daemon server"
+            );
+        };
     }
 }
 
-fn get_container_name(error_message: &str) -> Result<String, String> {
-    extract_container_name(error_message)
-        .ok_or_else(|| "Failed to extract container name from error message".to_string())
-}
-
+/// extracts the container information from the error message by doing regex matching
 fn extract_container_name(error_message: &str) -> Option<String> {
-    let re = Regex::new(r"\((.*?)\)").unwrap();
+    let re = Regex::new(r"\((.*?)\)").expect("error message should have container information");
     re.captures(error_message)
         .and_then(|caps| caps.get(1).map(|m| m.as_str().to_string()))
 }

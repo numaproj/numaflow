@@ -178,3 +178,11 @@ func (mvs *MonoVertexService) startHealthCheck(ctx context.Context) {
 		}
 	}
 }
+
+func (s *MonoVertexService) PersistRuntimeError(ctx context.Context, req *mvtxdaemon.PersistRuntimeErrorRequest) (*mvtxdaemon.PersistRuntimeErrorResponse, error) {
+	logging.FromContext(ctx).Errorw("Received runtime error", zap.Any("request", req))
+	// FIXME: Implement this method
+	return &mvtxdaemon.PersistRuntimeErrorResponse{
+		Status: "Success",
+	}, nil
+}

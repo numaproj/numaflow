@@ -3,7 +3,7 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-use crate::config::{config, CustomResourceType};
+use crate::config::{config, get_vertex_name, CustomResourceType};
 
 /// Custom Error handling.
 mod error;
@@ -70,8 +70,16 @@ pub async fn run() -> Result<()> {
     let cln_token = CancellationToken::new();
     let shutdown_cln_token = cln_token.clone();
 
-    // Initialize Runtime
-    let runtime = Runtime::new();
+    // FIXME: get it from config
+    let daemon_addr = format!(
+        "http://{}.{}.svc:{}",
+        format!("{}-mv-daemon-svc", get_vertex_name()),
+        "default",
+        4327
+    );
+
+    info!(?daemon_addr, "connecting to daemon server");
+    let mut runtime = Runtime::new(daemon_addr).await;
 
     // wait for SIG{INT,TERM} and invoke cancellation token.
     let shutdown_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
@@ -88,9 +96,7 @@ pub async fn run() -> Result<()> {
             if let Err(e) = monovertex::start_forwarder(cln_token, &config).await {
                 if let Error::Grpc(e) = e {
                     error!(error=?e, "Monovertex failed because of UDF failure");
-                    if let Err(err) = runtime.persist_application_error(e).await {
-                        error!(error=?err, "Failed to persist the application error");
-                    }
+                    runtime.persist_application_error(e).await;
                 } else {
                     error!(?e, "Error running monovertex");
                 }

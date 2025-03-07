@@ -55,8 +55,7 @@ message PersistRuntimeErrorRequest {
   string code = 3;
   string message = 4;
   string details = 5;
-  string mvtx_name = 6;
-  string replica = 7;
+  string replica = 6;
 }
 
 message PersistRuntimeErrorResponse {
@@ -76,29 +75,8 @@ service MonoVertexDaemonService {
     option (google.api.http).get = "/api/v1/status";
   };
 
-}
-
-// MonoVertexRuntimeService is a grpc service that is used to provide any vertex runtime info.
-service MonoVertexRuntimeService {
   rpc PersistRuntimeError (PersistRuntimeErrorRequest) returns (PersistRuntimeErrorResponse) {
     option (google.api.http).post = "/api/v1/runtime/errors";
     option (google.api.http).body = "*";
-  }
-}
-
-service Greeter {
-  rpc SayHello (HelloRequest) returns (HelloReply){
-    option (google.api.http) = {
-      post: "/api/v1/hello"
-      body: "*"
-    };
-  }
-}
-
-message HelloRequest {
-  string name = 1;
-}
-
-message HelloReply {
-  string message = 1;
+  };
 }
