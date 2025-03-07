@@ -60,7 +60,11 @@ func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string) {
 		}
 		if x := c.LastTerminationState.Terminated; x != nil && !x.FinishedAt.Time.IsZero() {
 			if lastRestartTime.IsZero() || x.FinishedAt.Time.After(lastRestartTime) {
-				lastRestartTime = x.FinishedAt.Time
+				// Only check OOM or exit with Error
+				// TODO: revisit later if needed.
+				if x.ExitCode == 137 || (x.ExitCode == 143 && x.Reason == "Error") {
+					lastRestartTime = x.FinishedAt.Time
+				}
 			}
 		}
 	}

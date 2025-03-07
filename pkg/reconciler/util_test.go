@@ -103,6 +103,7 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 								FinishedAt: metav1.Time{
 									Time: time.Now().Add(-1 * time.Minute),
 								},
+								ExitCode: 137,
 							},
 						},
 					},
