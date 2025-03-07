@@ -207,7 +207,7 @@ func TestMonoVertexGetPodSpec(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(podSpec.Containers))
 		assert.Equal(t, 3, len(podSpec.InitContainers))
-		assert.Equal(t, 2, len(podSpec.Volumes))
+		assert.Equal(t, 1, len(podSpec.Volumes))
 		assert.Equal(t, "my-image", podSpec.Containers[0].Image)
 		assert.Equal(t, corev1.PullIfNotPresent, podSpec.Containers[0].ImagePullPolicy)
 		assert.Equal(t, "100m", podSpec.Containers[0].Resources.Requests.Cpu().String())
@@ -217,10 +217,8 @@ func TestMonoVertexGetPodSpec(t *testing.T) {
 		assert.Equal(t, "test-image1", podSpec.InitContainers[0].Image)
 		assert.Equal(t, "test-image2", podSpec.InitContainers[1].Image)
 		assert.Equal(t, "test-image3", podSpec.InitContainers[2].Image)
-		for i, c := range podSpec.Containers {
-			if i != 0 {
-				assert.Equal(t, 1, len(c.VolumeMounts))
-			}
+		for _, c := range podSpec.Containers {
+			assert.Equal(t, 1, len(c.VolumeMounts))
 		}
 		for _, c := range podSpec.InitContainers {
 			assert.Equal(t, 1, len(c.VolumeMounts))
@@ -231,7 +229,6 @@ func TestMonoVertexGetPodSpec(t *testing.T) {
 		}
 		assert.Contains(t, envNames, "ENV_VAR_NAME")
 		assert.Contains(t, envNames, EnvMonoVertexObject)
-		assert.Equal(t, 2, len(podSpec.Containers[0].VolumeMounts))
 		assert.NotNil(t, podSpec.Containers[0].ReadinessProbe)
 		assert.Equal(t, int32(24), podSpec.Containers[0].ReadinessProbe.InitialDelaySeconds)
 		assert.Equal(t, int32(25), podSpec.Containers[0].ReadinessProbe.PeriodSeconds)

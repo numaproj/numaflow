@@ -30,6 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -461,6 +462,27 @@ func (r *pipelineReconciler) createOrUpdateDaemonDeployment(ctx context.Context,
 		pl.Status.MarkDeployFailed("BuildDaemonDeployFailed", err.Error())
 		return fmt.Errorf("failed to build daemon deployment spec, %w", err)
 	}
+
+	// Define the emptyDir volume
+	emptyDirVolume := corev1.Volume{
+		Name: dfv1.RuntimeDirVolume,
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{
+				SizeLimit: resource.NewQuantity(dfv1.RuntimeDirSizeLimit, resource.BinarySI),
+			},
+		},
+	}
+	// Add the emptyDir volume to the pod spec
+	deploy.Spec.Template.Spec.Volumes = append(deploy.Spec.Template.Spec.Volumes, emptyDirVolume)
+
+	// Mount the emptyDir volume in the main container
+	deploy.Spec.Template.Spec.Containers[0].VolumeMounts = append(deploy.Spec.Template.Spec.Containers[0].VolumeMounts,
+		corev1.VolumeMount{
+			Name:      dfv1.RuntimeDirVolume,
+			MountPath: dfv1.RuntimeDirMountPath,
+		},
+	)
+
 	deployHash := sharedutil.MustHash(deploy.Spec)
 	deploy.Annotations = map[string]string{dfv1.KeyHash: deployHash}
 	existingDeploy := &appv1.Deployment{}

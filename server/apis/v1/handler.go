@@ -1212,6 +1212,7 @@ func (h *handler) ListMonoVertexPods(c *gin.Context) {
 func (h *handler) GetMonoVertexMetrics(c *gin.Context) {
 	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
 
+	fmt.Println("ns: ", ns)
 	client, err := h.getMonoVertexDaemonClient(ns, monoVertex)
 	if err != nil || client == nil {
 		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for mono vertex %q, %s", monoVertex, err.Error()))
@@ -1585,6 +1586,7 @@ func (h *handler) getPipelineDaemonClient(ns, pipeline string) (daemonclient.Dae
 }
 
 func (h *handler) getMonoVertexDaemonClient(ns, mvtName string) (mvtdaemonclient.MonoVertexDaemonClient, error) {
+	fmt.Println("service address: ", monoVertexDaemonSvcAddress(ns, mvtName))
 	if mvtDaemonClient, ok := h.mvtDaemonClientsCache.Get(monoVertexDaemonSvcAddress(ns, mvtName)); !ok {
 		var err error
 		var c mvtdaemonclient.MonoVertexDaemonClient

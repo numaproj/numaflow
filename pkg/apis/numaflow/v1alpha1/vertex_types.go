@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
-	resource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/env"
@@ -269,12 +268,6 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 				Medium: corev1.StorageMediumMemory,
 			}},
 		},
-		{
-			Name: RuntimeDirVolume,
-			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{
-				SizeLimit: resource.NewQuantity(RuntimeDirSizeLimit, resource.BinarySI),
-			}},
-		},
 	}
 	volumeMounts := []corev1.VolumeMount{{Name: varVolumeName, MountPath: PathVarRun}}
 	executeRustBinary, _ := env.GetBool(EnvExecuteRustBinary, false)
@@ -333,12 +326,6 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	containers[0].Ports = []corev1.ContainerPort{
 		{Name: VertexMetricsPortName, ContainerPort: VertexMetricsPort},
 	}
-
-	// Attach an EmptyDir for runtime info
-	containers[0].VolumeMounts = append(containers[0].VolumeMounts, corev1.VolumeMount{
-		Name:      RuntimeDirVolume,
-		MountPath: RuntimeDirMountPath,
-	})
 
 	for i := 0; i < len(sidecarContainers); i++ { // udf, udsink, udsource, or source vertex specifies a udtransformer
 		sidecarContainers[i].Env = append(sidecarContainers[i].Env, v.commonEnvs()...)

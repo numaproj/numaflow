@@ -108,6 +108,8 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 		}
 	}()
 
+	//to do:: build the cache from emptyDir
+
 	version := numaflow.GetVersion()
 	// Todo: clean it up in v1.6
 	deprecatedMonoVertexInfo.WithLabelValues(version.Version, version.Platform, ds.monoVtx.Name).Set(1)
@@ -136,7 +138,9 @@ func (ds *daemonServer) newGRPCServer(rater rateServer.MonoVtxRatable) (*grpc.Se
 	if err != nil {
 		return nil, err
 	}
+	mvtxRuntimeService := service.NewMonoVertexRuntimeService()
 	mvtxdaemon.RegisterMonoVertexDaemonServiceServer(grpcServer, mvtxService)
+	mvtxdaemon.RegisterMonoVertexRuntimeServiceServer(grpcServer, mvtxRuntimeService)
 	ds.mvtxService = mvtxService
 	return grpcServer, nil
 }
@@ -162,6 +166,13 @@ func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *
 	)
 	if err := mvtxdaemon.RegisterMonoVertexDaemonServiceHandlerFromEndpoint(ctx, gwmux, endpoint, dialOpts); err != nil {
 		log.Errorw("Failed to register daemon handler on HTTP Server", zap.Error(err))
+	}
+
+	if err := mvtxdaemon.RegisterMonoVertexRuntimeServiceHandlerFromEndpoint(ctx, gwmux, endpoint, dialOpts); err != nil {
+		log.Errorw("Failed to register daemon runtime handler on HTTP server", zap.Error(err))
+	}
+	if err := mvtxdaemon.RegisterGreeterHandlerFromEndpoint(ctx, gwmux, endpoint, dialOpts); err != nil {
+		log.Errorw("Failed to register daemon greeter handler on HTTP server", zap.Error(err))
 	}
 	mux := http.NewServeMux()
 	httpServer := http.Server{

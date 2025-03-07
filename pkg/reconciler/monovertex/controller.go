@@ -27,8 +27,10 @@ import (
 	"go.uber.org/zap"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	resource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -521,6 +523,27 @@ func (mr *monoVertexReconciler) createOrUpdateDaemonDeployment(ctx context.Conte
 	if err != nil {
 		return fmt.Errorf("failed to build mono vertex daemon deployment spec: %w", err)
 	}
+
+	// Define the emptyDir volume
+	emptyDirVolume := corev1.Volume{
+		Name: dfv1.RuntimeDirVolume,
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{
+				SizeLimit: resource.NewQuantity(dfv1.RuntimeDirSizeLimit, resource.BinarySI),
+			},
+		},
+	}
+	// Add the emptyDir volume to the pod spec
+	deploy.Spec.Template.Spec.Volumes = append(deploy.Spec.Template.Spec.Volumes, emptyDirVolume)
+
+	// Mount the emptyDir volume in the main container
+	deploy.Spec.Template.Spec.Containers[0].VolumeMounts = append(deploy.Spec.Template.Spec.Containers[0].VolumeMounts,
+		corev1.VolumeMount{
+			Name:      dfv1.RuntimeDirVolume,
+			MountPath: dfv1.RuntimeDirMountPath,
+		},
+	)
+
 	deployHash := sharedutil.MustHash(deploy.Spec)
 	deploy.Annotations = map[string]string{dfv1.KeyHash: deployHash}
 	existingDeploy := &appv1.Deployment{}

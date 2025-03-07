@@ -62,9 +62,16 @@ mod mapper;
 /// [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 mod watermark;
 
+/// Runtime to persist the runtime information of the pod (e.g. application errors)
+mod runtime;
+use crate::runtime::Runtime;
+
 pub async fn run() -> Result<()> {
     let cln_token = CancellationToken::new();
     let shutdown_cln_token = cln_token.clone();
+
+    // Initialize Runtime
+    let runtime = Runtime::new();
 
     // wait for SIG{INT,TERM} and invoke cancellation token.
     let shutdown_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
@@ -80,7 +87,10 @@ pub async fn run() -> Result<()> {
             // Run the forwarder with cancellation token.
             if let Err(e) = monovertex::start_forwarder(cln_token, &config).await {
                 if let Error::Grpc(e) = e {
-                    error!(error=?e, "Monovertex failed because of UDF failure")
+                    error!(error=?e, "Monovertex failed because of UDF failure");
+                    if let Err(err) = runtime.persist_application_error(e).await {
+                        error!(error=?err, "Failed to persist the application error");
+                    }
                 } else {
                     error!(?e, "Error running monovertex");
                 }
