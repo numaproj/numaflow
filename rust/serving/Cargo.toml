@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-redis-tests = []
-all-tests = ["redis-tests"]
+nats-tests = []
+all-tests = ["nats-tests"]
 
 [lints]
 workspace = true

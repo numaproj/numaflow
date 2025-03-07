@@ -1045,6 +1045,7 @@ mod tests {
                 .await
                 .unwrap();
         });
+
         let fb_server_socket = fb_sink_sock_file.clone();
         let fb_server_info = fb_sink_server_info.clone();
         let fb_sink_server_handle = tokio::spawn(async move {
@@ -1097,13 +1098,16 @@ mod tests {
             10,
             Duration::from_millis(100),
             SinkClientType::UserDefined(SinkClient::new(
-                create_rpc_channel(sock_file).await.unwrap(),
+                create_rpc_channel(sink_sock_file).await.unwrap(),
             )),
             tracker.clone(),
         )
+        .fb_sink_client(SinkClientType::UserDefined(SinkClient::new(
+            create_rpc_channel(fb_sink_sock_file).await.unwrap(),
+        )))
         .build()
         .await
-        .unwrap();
+        .expect("failed to create sink writer");
 
         let metrics_state = ComponentHealthChecks::Monovertex(MonovertexComponents {
             source,

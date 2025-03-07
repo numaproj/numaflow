@@ -145,16 +145,27 @@ mod tests {
         }
     }
 
-    #[cfg(all(feature = "redis-tests", feature = "nats-tests"))]
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_serving_source_reader_acker() -> Result<()> {
         let settings = Settings {
             app_listen_port: 2000,
+            js_store: "test_serving_source_reader_acker".to_string(),
             ..Default::default()
         };
 
         let client = async_nats::connect("localhost:4222").await.unwrap();
         let js_context = jetstream::new(client);
+
+        let _ = js_context.delete_key_value(&settings.js_store).await;
+        let _ = js_context
+            .create_key_value(jetstream::kv::Config {
+                bucket: settings.js_store.clone(),
+                history: 5,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
 
         let settings = Arc::new(settings);
         // Set up the CryptoProvider (controls core cryptography used by rustls) for the process

@@ -151,6 +151,7 @@ mod tests {
 
     type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_successful_callback() -> Result<()> {
         let js_url = "localhost:4222";

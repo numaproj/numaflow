@@ -142,6 +142,7 @@ mod tests {
     use super::*;
     use crate::app::callback::datastore::DataStore;
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_retrieve_datum() {
         let js_url = "localhost:4222";
@@ -183,6 +184,7 @@ mod tests {
         context.delete_key_value(datum_store_name).await.unwrap();
     }
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_stream_response() {
         let js_url = "localhost:4222";

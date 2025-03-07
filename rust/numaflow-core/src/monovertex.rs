@@ -66,7 +66,8 @@ pub(crate) async fn start_forwarder(
 
     // start the metrics server
     // FIXME: what to do with the handle
-    shared::metrics::start_metrics_server(config.metrics_config.clone(), metrics_state).await;
+    let _metrics_server_handle =
+        shared::metrics::start_metrics_server(config.metrics_config.clone(), metrics_state).await;
 
     start(config.clone(), source, sink_writer, cln_token).await?;
 

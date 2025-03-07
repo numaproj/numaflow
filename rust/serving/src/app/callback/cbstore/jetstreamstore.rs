@@ -192,11 +192,9 @@ impl super::CallbackStore for JetstreamCallbackStore {
     /// returns the status of a request in the store.
     async fn status(&mut self, id: &str) -> StoreResult<ProcessingStatus> {
         let key = format!("status.{id}");
-        println!("status: {:?}", key);
         let status = self.kv_store.get(&key).await.map_err(|e| {
             StoreError::StoreRead(format!("Failed to get status for request id: {e:?}"))
         })?;
-        println!("status: {:?}", status);
         let Some(status) = status else {
             return Err(StoreError::InvalidRequestId(id.to_string()));
         };
@@ -219,6 +217,7 @@ mod tests {
     use super::*;
     use crate::app::callback::cbstore::CallbackStore;
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_register() {
         let js_url = "localhost:4222";
@@ -247,6 +246,7 @@ mod tests {
         context.delete_key_value(serving_store).await.unwrap();
     }
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_watch_callbacks() {
         let js_url = "localhost:4222";
@@ -305,6 +305,7 @@ mod tests {
         context.delete_key_value(serving_store).await.unwrap();
     }
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_deregister() {
         let js_url = "localhost:4222";

@@ -283,6 +283,8 @@ mod tests {
     use crate::Settings;
 
     type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_serving_source() -> Result<()> {
         let js_url = "localhost:4222";

@@ -482,11 +482,12 @@ impl TrackerHandle {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
     use async_nats::jetstream;
     use async_nats::jetstream::kv::Config;
     use bytes::Bytes;
+    use futures::StreamExt;
+    use std::sync::Arc;
+    use std::thread::sleep;
     use tokio::sync::oneshot;
     use tokio::time::{timeout, Duration};
 
@@ -700,12 +701,14 @@ mod tests {
         assert!(handle.is_empty().await.unwrap(), "Tracker should be empty");
     }
 
-    #[cfg(feature = "nats-tests")]
+    // #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_tracker_with_callback_handler() -> Result<()> {
         let store_name = "test_tracker_with_callback_handler";
         let client = async_nats::connect("localhost:4222").await.unwrap();
         let js_context = jetstream::new(client);
+
+        let _ = js_context.delete_key_value(store_name).await;
         let callback_bucket = js_context
             .create_key_value(Config {
                 bucket: store_name.to_string(),
@@ -755,12 +758,18 @@ mod tests {
         assert!(handle.is_empty().await.unwrap(), "Tracker should be empty");
 
         // Verify that the callback was written to the KV store
-        let callback_key = "1234";
-        let callback_value = callback_bucket.get(callback_key).await.unwrap();
-        assert!(
-            callback_value.is_some(),
-            "Callback should be written to the KV store"
-        );
+        let result = timeout(Duration::from_secs(1), async {
+            loop {
+                let mut keys = callback_bucket.keys().await.unwrap();
+                if let Some(_) = keys.next().await {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+
+        assert!(result.is_ok(), "callback was not written to the KV store");
 
         // Clean up the KV store
         js_context.delete_key_value(store_name).await.unwrap();
