@@ -39,7 +39,7 @@ func NewTimestampedCounts(t int64) *TimestampedCounts {
 }
 
 // Update updates the count of processed messages for a pod
-func (tc *TimestampedCounts) Update(podReadCount *PodReadCount) {
+func (tc *TimestampedCounts) Update(podReadCount *PodMetricsCount) {
 	tc.lock.Lock()
 	defer tc.lock.Unlock()
 	if podReadCount == nil {

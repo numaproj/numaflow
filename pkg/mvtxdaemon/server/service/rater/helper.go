@@ -29,10 +29,12 @@ const (
 	// rateNotAvailable is returned when the processing rate cannot be derived from the currently
 	// available pod data, a negative min is returned to indicate this.
 	rateNotAvailable = float64(math.MinInt)
+	// pendingNotAvailable default value returned when Pending not available
+	pendingNotAvailable = -1
 )
 
 // UpdateCount updates the count for a given timestamp in the queue.
-func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podReadCounts *PodReadCount) {
+func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podReadCounts *PodMetricsCount) {
 	items := q.Items()
 
 	// find the element matching the input timestamp and update it
@@ -77,6 +79,34 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 		delta += calculatePodDelta(counts[i], counts[i+1])
 	}
 	return delta / float64(timeDiff)
+}
+
+// CalculatePending calculates the pending of a MonoVertex for a given lookback period.
+func CalculatePending(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64) int64 {
+	counts := q.Items()
+	if len(counts) <= 1 {
+		return pendingNotAvailable //TODO: Check what should be the behavior when pending isnt available
+	}
+	startIndex := findStartIndex(lookbackSeconds, counts)
+	// we consider the last but one element as the end index because the last element might be incomplete
+	// we can be sure that the last but one element in the queue is complete.
+	endIndex := len(counts) - 2
+	if startIndex == indexNotFound {
+		return pendingNotAvailable
+	}
+	delta := int64(0)
+	num := int64(0)
+	for i := startIndex; i < endIndex; i++ {
+		currentPending := counts[i].PodCountSnapshot()
+		for _, pendingCount := range currentPending {
+			delta += int64(pendingCount)
+			num++
+		}
+	}
+	if num > 0 {
+		return delta / num
+	}
+	return delta
 }
 
 // findStartIndex finds the index of the first element in the queue that is within the lookback seconds
