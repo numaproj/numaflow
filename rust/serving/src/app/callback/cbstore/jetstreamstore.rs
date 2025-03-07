@@ -162,12 +162,14 @@ impl super::CallbackStore for JetstreamCallbackStore {
                     }
                 };
 
+                // init key is used to signal the start of processing, the value will be empty
+                // we can skip the init key
                 if entry.key == callbacks_init_key {
                     continue;
                 }
 
+                // done key is used to signal the end of processing, we can break the loop
                 if entry.key == callbacks_done_key {
-                    info!("Received done event, stopping watcher");
                     break;
                 }
 

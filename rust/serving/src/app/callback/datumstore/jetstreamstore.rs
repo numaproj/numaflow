@@ -51,12 +51,18 @@ impl DatumStore for JetStreamDatumStore {
                     continue;
                 }
             };
+
+            // init key is used to signal the start of processing, the value will be empty
+            // we can skip the init key
             if entry.key == response_init_key {
                 continue;
             }
+
+            // done key is used to signal the end of processing, we can break the loop
             if entry.key == response_done_key {
                 break;
             }
+
             results.push(entry.value.to_vec());
         }
 
@@ -98,10 +104,13 @@ impl DatumStore for JetStreamDatumStore {
                     }
                 };
 
+                // init key is used to signal the start of processing, the value will be empty
+                // we can skip the init key
                 if entry.key == response_init_key {
                     continue;
                 }
 
+                // done key is used to signal the end of processing, we can break the loop
                 if entry.key == response_done_key {
                     break;
                 }

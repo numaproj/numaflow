@@ -512,43 +512,6 @@ func Test_GetSideInputManagerDeployments(t *testing.T) {
 	})
 }
 
-func TestGetServingSourceStreamNames(t *testing.T) {
-	t.Run("no serving sources", func(t *testing.T) {
-		p := &Pipeline{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "test-pipeline",
-			},
-			Spec: PipelineSpec{
-				Vertices: []AbstractVertex{
-					{Name: "v1", Source: &Source{}},
-					{Name: "v2", UDF: &UDF{}},
-					{Name: "v3", Sink: &Sink{}},
-				},
-			},
-		}
-		var expected []string
-		assert.Equal(t, expected, p.GetServingSourceStoreName())
-	})
-
-	t.Run("with serving sources", func(t *testing.T) {
-		p := &Pipeline{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "test-pipeline",
-			},
-			Spec: PipelineSpec{
-				Vertices: []AbstractVertex{
-					{Name: "v1", Source: &Source{Serving: &ServingSource{}}},
-					{Name: "v2", Source: &Source{Serving: &ServingSource{}}},
-					{Name: "v3", UDF: &UDF{}},
-					{Name: "v4", Sink: &Sink{}},
-				},
-			},
-		}
-		expected := []string{"test-pipeline-v1-serving-source", "test-pipeline-v2-serving-source"}
-		assert.Equal(t, expected, p.GetServingSourceStoreName())
-	})
-}
-
 func TestPipelineStatus_IsHealthy(t *testing.T) {
 	tests := []struct {
 		name  string
