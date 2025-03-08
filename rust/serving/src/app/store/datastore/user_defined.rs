@@ -14,7 +14,7 @@ use tonic::transport::{Channel, Endpoint};
 use tower::service_fn;
 use tracing::warn;
 
-use crate::app::callback::datastore::{DataStore, Error as StoreError, Result as StoreResult};
+use crate::app::store::datastore::{DataStore, Error as StoreError, Result as StoreResult};
 use crate::config::UserDefinedStoreConfig;
 
 /// A user-defined implementation of the datum store.

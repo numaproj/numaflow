@@ -1,3 +1,4 @@
+//! The results of the processing from the Sinks are stored in the Data Store.
 use std::sync::Arc;
 
 use bytes::Bytes;
@@ -5,7 +6,7 @@ use thiserror::Error;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 
-/// jetstream based datum store
+/// JetStream based datum store
 pub(crate) mod jetstreamstore;
 
 /// in-memory based datum store

@@ -6,10 +6,10 @@ use tokio::sync::mpsc;
 use tracing::info;
 
 pub use self::error::{Error, Result};
-use crate::app::callback::state::State as CallbackState;
 use crate::app::start_main_server;
 use crate::config::generate_certs;
 use crate::metrics::start_https_metrics_server;
+use app::orchestrator::State as CallbackState;
 
 mod app;
 
@@ -24,9 +24,10 @@ pub mod source;
 use source::MessageWrapper;
 pub use source::{Message, ServingSource};
 
-use crate::app::callback::cbstore::CallbackStore;
-use crate::app::callback::datastore::DataStore;
+use crate::app::store::cbstore::CallbackStore;
+use crate::app::store::datastore::DataStore;
 
+///
 pub mod callback;
 
 #[derive(Clone)]

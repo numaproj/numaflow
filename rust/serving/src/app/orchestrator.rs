@@ -1,16 +1,19 @@
+//! To process a message in Serving, we need to track the progress of the processing state of the message
+//! and then fetch the messages once the results of the processing is stored in [crate::app::store::datastore] by
+//! different Sink. This subtly means that we even support streaming the results. The processing state
+//! is stored in [crate::app::store::cbstore].
 use std::sync::Arc;
 
+use crate::app::store::cbstore::{CallbackStore, ProcessingStatus};
+use crate::app::store::datastore::DataStore;
+use crate::app::store::datastore::Result as StoreResult;
+use crate::app::tracker::MessageGraph;
+use crate::Error;
 use bytes::Bytes;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tracing::{error, info};
-
-use super::datastore::DataStore;
-use crate::app::callback::cbstore::{CallbackStore, ProcessingStatus};
-use crate::app::callback::datastore::Result as StoreResult;
-use crate::app::tracker::MessageGraph;
-use crate::Error;
 
 #[derive(Clone)]
 pub(crate) struct State<T, C> {
@@ -104,7 +107,7 @@ where
         Ok(rx)
     }
 
-    /// Retrieves the output of the processed request
+    /// Retrieves the output of the processed request after checking whether the processing is complete.
     pub(crate) async fn retrieve_saved(&mut self, id: &str) -> Result<Option<Vec<Vec<u8>>>, Error> {
         // check the status of the request, if its completed, then retrieve the data
         let status = self.callback_store.status(id).await?;
@@ -222,8 +225,8 @@ mod tests {
     use chrono::Utc;
 
     use super::*;
-    use crate::app::callback::cbstore::jetstreamstore::JetstreamCallbackStore;
-    use crate::app::callback::datastore::jetstreamstore::JetStreamDataStore;
+    use crate::app::store::cbstore::jetstreamstore::JetStreamCallbackStore;
+    use crate::app::store::datastore::jetstreamstore::JetStreamDataStore;
     use crate::callback::{Callback, Response};
     use crate::pipeline::PipelineDCG;
 
@@ -251,7 +254,7 @@ mod tests {
             .await
             .unwrap();
 
-        let callback_store = JetstreamCallbackStore::new(context.clone(), store_name)
+        let callback_store = JetStreamCallbackStore::new(context.clone(), store_name)
             .await
             .expect("Failed to create callback store");
 
@@ -372,7 +375,7 @@ mod tests {
             .await
             .unwrap();
 
-        let callback_store = JetstreamCallbackStore::new(context.clone(), store_name)
+        let callback_store = JetStreamCallbackStore::new(context.clone(), store_name)
             .await
             .expect("Failed to create callback store");
 

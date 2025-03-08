@@ -1,3 +1,4 @@
+//! TODO(doc):
 use std::sync::Arc;
 
 use async_nats::jetstream::kv::Store;
@@ -7,7 +8,7 @@ use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
-use crate::app::callback::datastore::{DataStore, Error as StoreError, Result as StoreResult};
+use crate::app::store::datastore::{DataStore, Error as StoreError, Result as StoreResult};
 
 /// A JetStream implementation of the data store.
 #[derive(Clone)]
@@ -136,7 +137,7 @@ mod tests {
     use tokio_stream::StreamExt;
 
     use super::*;
-    use crate::app::callback::datastore::DataStore;
+    use crate::app::store::datastore::DataStore;
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]

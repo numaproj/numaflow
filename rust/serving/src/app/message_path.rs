@@ -3,10 +3,10 @@ use axum::{
     routing, Router,
 };
 
-use super::callback::state::State as CallbackState;
-use crate::app::callback::cbstore::CallbackStore;
-use crate::app::callback::datastore::DataStore;
+use crate::app::orchestrator::State as CallbackState;
 use crate::app::response::ApiError;
+use crate::app::store::cbstore::CallbackStore;
+use crate::app::store::datastore::DataStore;
 
 pub fn get_message_path<
     T: Send + Sync + Clone + DataStore + 'static,
@@ -45,8 +45,8 @@ async fn message_path<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::callback::cbstore::memstore::InMemoryCallbackStore;
-    use crate::app::callback::datastore::memstore::InMemoryDataStore;
+    use crate::app::store::cbstore::memstore::InMemoryCallbackStore;
+    use crate::app::store::datastore::memstore::InMemoryDataStore;
     use crate::app::tracker::MessageGraph;
     use crate::pipeline::PipelineDCG;
     use axum::body::Body;

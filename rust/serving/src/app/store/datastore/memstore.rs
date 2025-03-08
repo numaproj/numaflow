@@ -5,7 +5,7 @@ use bytes::Bytes;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::app::callback::datastore::{Error as StoreError, Result as StoreResult};
+use crate::app::store::datastore::{Error as StoreError, Result as StoreResult};
 const STORE_KEY_SUFFIX: &str = "saved";
 
 /// In-memory implementation of data store.
@@ -72,8 +72,8 @@ mod tests {
     use tokio_stream::StreamExt;
 
     use super::*;
-    use crate::app::callback::datastore::memstore::InMemoryDataStore;
-    use crate::app::callback::datastore::DataStore;
+    use crate::app::store::datastore::memstore::InMemoryDataStore;
+    use crate::app::store::datastore::DataStore;
 
     fn create_test_store() -> InMemoryDataStore {
         let mut datum_map: HashMap<String, Vec<Vec<u8>>> = HashMap::new();

@@ -6,7 +6,7 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 
-use crate::app::callback::datastore::{Error as StoreError, Result as StoreResult};
+use crate::app::store::datastore::{Error as StoreError, Result as StoreResult};
 use crate::callback::Callback;
 
 /// An in-memory implementation of the callback store. Only used for testing.
@@ -90,7 +90,7 @@ mod tests {
     use tokio_stream::StreamExt;
 
     use super::*;
-    use crate::app::callback::cbstore::{CallbackStore, ProcessingStatus};
+    use crate::app::store::cbstore::{CallbackStore, ProcessingStatus};
     use crate::callback::Callback;
 
     fn create_test_store() -> InMemoryCallbackStore {

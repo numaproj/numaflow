@@ -17,11 +17,11 @@ use tokio_stream::{Stream, StreamExt};
 use tracing::error;
 use uuid::Uuid;
 
-use super::{callback::datastore::DataStore, AppState};
-use crate::app::callback::cbstore::CallbackStore;
-use crate::app::callback::datastore::Error as StoreError;
+use super::{orchestrator, store::datastore::DataStore, AppState};
 use crate::app::response::{ApiError, ServeResponse};
-use crate::{app::callback::state, Error, Message, MessageWrapper};
+use crate::app::store::cbstore::CallbackStore;
+use crate::app::store::datastore::Error as StoreError;
+use crate::{Error, Message, MessageWrapper};
 
 const NUMAFLOW_RESP_ARRAY_LEN: &str = "Numaflow-Array-Len";
 const NUMAFLOW_RESP_ARRAY_IDX_LEN: &str = "Numaflow-Array-Index-Len";
@@ -31,7 +31,7 @@ struct ProxyState<T, C> {
     tid_header: String,
     /// Lets the HTTP handlers know whether they are in a Monovertex or a Pipeline
     monovertex: bool,
-    callback: state::State<T, C>,
+    callback: orchestrator::State<T, C>,
 }
 
 pub(crate) async fn jetstream_proxy<
@@ -378,9 +378,9 @@ async fn async_publish<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::callback::cbstore::jetstreamstore::JetstreamCallbackStore;
-    use crate::app::callback::datastore::jetstreamstore::JetStreamDataStore;
-    use crate::app::callback::state::State as CallbackState;
+    use crate::app::orchestrator::State as CallbackState;
+    use crate::app::store::cbstore::jetstreamstore::JetStreamCallbackStore;
+    use crate::app::store::datastore::jetstreamstore::JetStreamDataStore;
     use crate::app::tracker::MessageGraph;
     use crate::callback::{Callback, Response};
     use crate::config::DEFAULT_ID_HEADER;
@@ -421,7 +421,7 @@ mod tests {
             .await
             .unwrap();
 
-        let callback_store = JetstreamCallbackStore::new(context.clone(), store_name)
+        let callback_store = JetStreamCallbackStore::new(context.clone(), store_name)
             .await
             .expect("Failed to create callback store");
 
@@ -543,7 +543,7 @@ mod tests {
             .await
             .unwrap();
 
-        let callback_store = JetstreamCallbackStore::new(context.clone(), store_name)
+        let callback_store = JetStreamCallbackStore::new(context.clone(), store_name)
             .await
             .expect("Failed to create callback store");
 
@@ -629,7 +629,7 @@ mod tests {
             .await
             .unwrap();
 
-        let callback_store = JetstreamCallbackStore::new(context.clone(), store_name)
+        let callback_store = JetStreamCallbackStore::new(context.clone(), store_name)
             .await
             .expect("Failed to create callback store");
 

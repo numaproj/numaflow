@@ -1,3 +1,6 @@
+//! TODO(doc)
+//!
+
 use std::sync::Arc;
 
 use async_nats::jetstream::kv::{CreateErrorKind, Store};
@@ -9,18 +12,19 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tracing::info;
 
-use crate::app::callback::cbstore::ProcessingStatus;
-use crate::app::callback::datastore::{Error as StoreError, Result as StoreResult};
+use crate::app::store::cbstore::ProcessingStatus;
+use crate::app::store::datastore::{Error as StoreError, Result as StoreResult};
 use crate::callback::Callback;
 
-/// Jetstream implementation of the callback store. Jetstream KV store is used to store the
-/// callback and status information.
+/// JetStream implementation of the callback store. JetStream KV store is used to store the
+/// callback and status information. We use the Watch feature of JetStream to monitor the status
+/// of the processing.
 #[derive(Clone)]
-pub(crate) struct JetstreamCallbackStore {
+pub(crate) struct JetStreamCallbackStore {
     kv_store: Store,
 }
 
-impl JetstreamCallbackStore {
+impl JetStreamCallbackStore {
     pub(crate) async fn new(js_context: Context, bucket_name: &str) -> StoreResult<Self> {
         let kv_store = js_context
             .get_key_value(bucket_name)
@@ -30,7 +34,7 @@ impl JetstreamCallbackStore {
     }
 }
 
-impl super::CallbackStore for JetstreamCallbackStore {
+impl super::CallbackStore for JetStreamCallbackStore {
     /// registers a request id in the store. If the `id` already exists in the store,
     /// `StoreError::DuplicateRequest` error is returned.
     async fn register(&mut self, id: &str) -> StoreResult<()> {
@@ -54,6 +58,8 @@ impl super::CallbackStore for JetstreamCallbackStore {
         let current_timestamp = Utc::now().timestamp().to_string();
         let response_key = format!("rs.{id}.start.processing");
         self.kv_store
+            // we start with some key so that JetStream won't return early thinking there is
+            // nothing to watch.
             .create(&response_key, Bytes::from(current_timestamp.clone()))
             .await
             .map_err(|e| {
@@ -68,6 +74,7 @@ impl super::CallbackStore for JetstreamCallbackStore {
 
         let callbacks_key = format!("cb.{id}.start.processing");
         self.kv_store
+            // same as above
             .create(&callbacks_key, Bytes::from(current_timestamp))
             .await
             .map_err(|e| {
@@ -164,8 +171,7 @@ impl super::CallbackStore for JetstreamCallbackStore {
                     }
                 };
 
-                // init key is used to signal the start of processing, the value will be empty
-                // we can skip the init key
+                // init key is used to signal the start of processing, the value will be the timestamp.
                 if entry.key == callbacks_init_key {
                     continue;
                 }
@@ -202,7 +208,8 @@ impl super::CallbackStore for JetstreamCallbackStore {
     }
 
     async fn ready(&mut self) -> bool {
-        // Implement a health check for the JetStream connection if possible
+        // we do not need to implement a health check for the JetStream connection because it is the
+        // ISB and it has to be up.
         true
     }
 }
@@ -215,7 +222,7 @@ mod tests {
     use chrono::Utc;
 
     use super::*;
-    use crate::app::callback::cbstore::CallbackStore;
+    use crate::app::store::cbstore::CallbackStore;
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
@@ -234,7 +241,7 @@ mod tests {
             .await
             .unwrap();
 
-        let mut store = JetstreamCallbackStore::new(context.clone(), serving_store)
+        let mut store = JetStreamCallbackStore::new(context.clone(), serving_store)
             .await
             .unwrap();
 
@@ -267,7 +274,7 @@ mod tests {
             .await
             .unwrap();
 
-        let mut store = JetstreamCallbackStore::new(context.clone(), serving_store)
+        let mut store = JetStreamCallbackStore::new(context.clone(), serving_store)
             .await
             .unwrap();
 
@@ -326,7 +333,7 @@ mod tests {
             .await
             .unwrap();
 
-        let mut store = JetstreamCallbackStore::new(context.clone(), serving_store)
+        let mut store = JetStreamCallbackStore::new(context.clone(), serving_store)
             .await
             .unwrap();
 
