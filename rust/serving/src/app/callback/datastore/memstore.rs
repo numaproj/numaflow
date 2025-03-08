@@ -30,11 +30,11 @@ impl InMemoryDataStore {
 impl super::DataStore for InMemoryDataStore {
     /// Retrieves data for a given id from the `HashMap`.
     /// Each piece of data is deserialized from bytes into a `String`.
-    async fn retrieve_data(&mut self, id: &str) -> StoreResult<Option<Vec<Vec<u8>>>> {
+    async fn retrieve_data(&mut self, id: &str) -> StoreResult<Vec<Vec<u8>>> {
         let id = format!("{id}_{STORE_KEY_SUFFIX}");
         let data = self.data.lock().await;
         match data.get(&id) {
-            Some(result) => Ok(Some(result.to_vec())),
+            Some(result) => Ok(result.to_vec()),
             None => Err(StoreError::InvalidRequestId(format!(
                 "No entry found for id: {}",
                 id
@@ -86,8 +86,8 @@ mod tests {
         let mut store = create_test_store();
         let id = "test_id";
         let result = store.retrieve_data(id).await.unwrap();
-        assert!(result.is_some());
-        assert_eq!(result.unwrap()[0], b"test_payload");
+        assert!(result.len() > 0);
+        assert_eq!(result[0], b"test_payload");
     }
 
     #[tokio::test]

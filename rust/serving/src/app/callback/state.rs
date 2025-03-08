@@ -8,7 +8,6 @@ use tracing::{error, info};
 
 use super::datastore::DataStore;
 use crate::app::callback::cbstore::{CallbackStore, ProcessingStatus};
-use crate::app::callback::datastore::Error as StoreError;
 use crate::app::callback::datastore::Result as StoreResult;
 use crate::app::tracker::MessageGraph;
 use crate::Error;
@@ -105,12 +104,21 @@ where
         Ok(rx)
     }
 
-    /// Retrieves the output of the numaflow pipeline
-    pub(crate) async fn retrieve_saved(
-        &mut self,
-        id: &str,
-    ) -> Result<Option<Vec<Vec<u8>>>, StoreError> {
-        self.datum_store.retrieve_data(id).await.map_err(Into::into)
+    /// Retrieves the output of the processed request
+    pub(crate) async fn retrieve_saved(&mut self, id: &str) -> Result<Option<Vec<Vec<u8>>>, Error> {
+        // check the status of the request, if its completed, then retrieve the data
+        let status = self.callback_store.status(id).await?;
+        match status {
+            ProcessingStatus::InProgress => Ok(None),
+            ProcessingStatus::Completed(_) => {
+                let data = self.datum_store.retrieve_data(id).await?;
+                Ok(Some(data))
+            }
+            ProcessingStatus::Failed(error) => {
+                error!(?error, "Request failed");
+                Err(Error::Other(format!("Request failed: {}", error)))
+            }
+        }
     }
 
     /// Listens on watcher events (SSE uses KV watch) and checks with the Graph is complete. Once
@@ -118,7 +126,7 @@ where
     pub(crate) async fn stream_response(
         &mut self,
         id: &str,
-    ) -> StoreResult<ReceiverStream<Arc<Bytes>>> {
+    ) -> Result<ReceiverStream<Arc<Bytes>>, Error> {
         let (tx, rx) = mpsc::channel(10);
         let sub_graph_generator = Arc::clone(&self.msg_graph_generator);
         let msg_id = id.to_string();
@@ -195,6 +203,7 @@ where
         }
     }
 
+    /// marks the request as failed
     pub(crate) async fn mark_as_failed(&mut self, id: &str, error: &str) -> Result<(), Error> {
         self.callback_store.mark_as_failed(id, error).await?;
         Ok(())

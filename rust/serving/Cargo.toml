@@ -27,18 +27,13 @@ hyper-util = { version = "0.1.6", features = ["client-legacy"] }
 serde_json = "1.0.120"
 tower-http = { version = "0.5.2", features = ["trace", "timeout"] }
 uuid = { version = "1.10.0", features = ["std", "v7"] }
-redis = { version = "0.26.0", features = [
-    "tokio-comp",
-    "aio",
-    "connection-manager",
-] }
 trait-variant = "0.1.2"
 chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.22.1"
 rcgen = "0.13.1"
 parking_lot = "0.12.3"
-prometheus-client = "0.22.3"
-thiserror = "1.0.63"
+prometheus-client = "0.23.1"
+thiserror = "2.0.12"
 reqwest = { workspace = true, features = ["rustls-tls", "json"] }
 http = "1.2.0"
 async-nats = "0.39.0"
@@ -48,3 +43,5 @@ tonic = "0.12.3"
 [dev-dependencies]
 reqwest = { workspace = true, features = ["json"] }
 rustls.workspace = true
+numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "ede9bb565bfeb0f5a7256dc3222bf2c7c524a5de" }
+tempfile = "3.14.0"

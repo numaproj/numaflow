@@ -707,8 +707,8 @@ mod tests {
     impl map::Mapper for SimpleMapper {
         async fn map(&self, input: map::MapRequest) -> Vec<map::Message> {
             let message = map::Message::new(input.value)
-                .keys(input.keys)
-                .tags(vec!["test".to_string()]);
+                .with_keys(input.keys)
+                .with_tags(vec!["test".to_string()]);
             vec![message]
         }
     }
@@ -1217,8 +1217,8 @@ mod tests {
 
             for split in splits {
                 let message = mapstream::Message::new(split.as_bytes().to_vec())
-                    .keys(input.keys.clone())
-                    .tags(vec![]);
+                    .with_keys(input.keys.clone())
+                    .with_tags(vec![]);
                 if tx.send(message).await.is_err() {
                     break;
                 }

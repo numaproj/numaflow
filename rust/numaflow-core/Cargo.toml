@@ -51,7 +51,7 @@ async-nats = "0.39.0"
 
 [dev-dependencies]
 tempfile = "3.11.0"
-numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "9ca9362ad511084501520e5a37d40cdcd0cdc9d9" }
+numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "ede9bb565bfeb0f5a7256dc3222bf2c7c524a5de" }
 pulsar = { version = "6.3.0", default-features = false, features = [
     "tokio-rustls-runtime",
 ] }

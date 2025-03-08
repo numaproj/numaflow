@@ -21,7 +21,7 @@ use super::{callback::datastore::DataStore, AppState};
 use crate::app::callback::cbstore::CallbackStore;
 use crate::app::callback::datastore::Error as StoreError;
 use crate::app::response::{ApiError, ServeResponse};
-use crate::{app::callback::state, Message, MessageWrapper};
+use crate::{app::callback::state, Error, Message, MessageWrapper};
 
 const NUMAFLOW_RESP_ARRAY_LEN: &str = "Numaflow-Array-Len";
 const NUMAFLOW_RESP_ARRAY_IDX_LEN: &str = "Numaflow-Array-Index-Len";
@@ -71,16 +71,16 @@ async fn fetch<
     let pipeline_result = match proxy_state.callback.clone().retrieve_saved(&id).await {
         Ok(result) => result,
         Err(e) => {
-            if let StoreError::InvalidRequestId(id) = e {
+            if let Error::Store(e) = e {
                 return Response::builder()
                     .status(StatusCode::NOT_FOUND)
                     .body(Body::new(format!(
-                        "Specified request id {id} is not found in the store"
+                        "Failed to fetch response for {id} from store: {e}"
                     )))
                     .expect("creating response");
             }
-            error!(error = ?e, "Failed to retrieve from store");
-            return ApiError::InternalServerError("Failed to retrieve from redis".to_string())
+            error!(error = ?e, "Failed to retrieve data");
+            return ApiError::InternalServerError("Failed to retrieve data".to_string())
                 .into_response();
         }
     };
@@ -554,7 +554,7 @@ mod tests {
         let pipeline_spec: PipelineDCG = PIPELINE_SPEC_ENCODED.parse().unwrap();
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec).unwrap();
 
-        let mut callback_state = CallbackState::new(msg_graph, datum_store, callback_store)
+        let callback_state = CallbackState::new(msg_graph, datum_store, callback_store)
             .await
             .unwrap();
 
@@ -640,7 +640,7 @@ mod tests {
         let pipeline_spec: PipelineDCG = PIPELINE_SPEC_ENCODED.parse().unwrap();
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec).unwrap();
 
-        let mut callback_state = CallbackState::new(msg_graph, datum_store, callback_store)
+        let callback_state = CallbackState::new(msg_graph, datum_store, callback_store)
             .await
             .unwrap();
 

@@ -49,7 +49,7 @@ mod tests {
     use crate::app::callback::datastore::memstore::InMemoryDataStore;
     use crate::app::tracker::MessageGraph;
     use crate::pipeline::PipelineDCG;
-    use axum::body::{to_bytes, Body};
+    use axum::body::Body;
     use axum::extract::Request;
     use axum::http::header::CONTENT_TYPE;
     use http::StatusCode;

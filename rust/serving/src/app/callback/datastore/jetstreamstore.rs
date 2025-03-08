@@ -27,7 +27,7 @@ impl JetStreamDataStore {
 
 impl DataStore for JetStreamDataStore {
     /// Retrieve a data from the store. If the datum is not found, `None` is returned.
-    async fn retrieve_data(&mut self, id: &str) -> StoreResult<Option<Vec<Vec<u8>>>> {
+    async fn retrieve_data(&mut self, id: &str) -> StoreResult<Vec<Vec<u8>>> {
         // the responses in kv bucket are stored in the format rs.{id}.{vertex_name}.{timestamp}
         // so we should watch for all keys that start with rs.{id}
         let watch_key = format!("rs.{id}.*.*");
@@ -66,11 +66,7 @@ impl DataStore for JetStreamDataStore {
             results.push(entry.value.to_vec());
         }
 
-        if results.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(results))
-        }
+        Ok(results)
     }
 
     /// Stream the response from the store. The response is streamed as it is added to the store.
@@ -177,8 +173,8 @@ mod tests {
         store.kv_store.put(done_key, Bytes::new()).await.unwrap();
 
         let result = store.retrieve_data(id).await.unwrap();
-        assert!(result.is_some());
-        assert_eq!(result.unwrap()[0], b"test_payload");
+        assert!(result.len() > 0);
+        assert_eq!(result[0], b"test_payload");
 
         // delete store
         context.delete_key_value(datum_store_name).await.unwrap();

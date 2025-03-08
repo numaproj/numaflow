@@ -45,7 +45,7 @@ pub(crate) type Result<T> = std::result::Result<T, Error>;
 #[allow(dead_code)]
 pub(crate) trait LocalDataStore {
     /// retrieve the data from the store
-    async fn retrieve_data(&mut self, id: &str) -> Result<Option<Vec<Vec<u8>>>>;
+    async fn retrieve_data(&mut self, id: &str) -> Result<Vec<Vec<u8>>>;
     /// streams the data from the store
     async fn stream_data(
         &mut self,

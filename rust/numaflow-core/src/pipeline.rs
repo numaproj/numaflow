@@ -847,8 +847,8 @@ mod tests {
     impl map::Mapper for SimpleCat {
         async fn map(&self, input: map::MapRequest) -> Vec<map::Message> {
             let message = map::Message::new(input.value)
-                .keys(input.keys)
-                .tags(vec!["test-forwarder".to_string()]);
+                .with_keys(input.keys)
+                .with_tags(vec!["test-forwarder".to_string()]);
             vec![message]
         }
     }

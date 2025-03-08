@@ -190,7 +190,8 @@ mod tests {
             &self,
             input: sourcetransform::SourceTransformRequest,
         ) -> Vec<sourcetransform::Message> {
-            let message = sourcetransform::Message::new(input.value, Utc::now()).keys(input.keys);
+            let message =
+                sourcetransform::Message::new(input.value, Utc::now()).with_keys(input.keys);
             vec![message]
         }
     }
@@ -319,8 +320,8 @@ mod tests {
             let mut output = vec![];
             for i in 0..5 {
                 let message = sourcetransform::Message::new(i.to_string().into_bytes(), Utc::now())
-                    .keys(vec![format!("key-{}", i)])
-                    .tags(vec![]);
+                    .with_keys(vec![format!("key-{}", i)])
+                    .with_tags(vec![]);
                 output.push(message);
             }
             output

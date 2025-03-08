@@ -487,7 +487,6 @@ mod tests {
     use bytes::Bytes;
     use futures::StreamExt;
     use std::sync::Arc;
-    use std::thread::sleep;
     use tokio::sync::oneshot;
     use tokio::time::{timeout, Duration};
 

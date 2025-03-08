@@ -226,7 +226,7 @@ mod tests {
             input: sourcetransform::SourceTransformRequest,
         ) -> Vec<sourcetransform::Message> {
             let message = sourcetransform::Message::new(input.value, chrono::offset::Utc::now())
-                .keys(input.keys);
+                .with_keys(input.keys);
             vec![message]
         }
     }
