@@ -307,7 +307,7 @@ async fn start_map_forwarder(
     .await;
     let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
-    start_metrics_server(
+    let metrics_server_handle = start_metrics_server(
         config.metrics_config.clone(),
         ComponentHealthChecks::Pipeline(PipelineComponents::Map(mapper_handle.unwrap().clone())),
     )
@@ -333,6 +333,9 @@ async fn start_map_forwarder(
         error!(?result, "Forwarder task failed");
         result?;
     }
+
+    // abort the metrics server
+    metrics_server_handle.abort();
 
     info!("All forwarders have stopped successfully");
     Ok(())
