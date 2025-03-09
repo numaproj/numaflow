@@ -72,7 +72,7 @@ mod tests {
     use tokio_stream::StreamExt;
 
     use super::*;
-    use crate::app::store::datastore::memstore::InMemoryDataStore;
+    use crate::app::store::datastore::inmemory::InMemoryDataStore;
     use crate::app::store::datastore::DataStore;
 
     fn create_test_store() -> InMemoryDataStore {

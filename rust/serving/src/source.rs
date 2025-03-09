@@ -7,9 +7,9 @@ use bytes::Bytes;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
 
-use crate::app::orchestrator::State as CallbackState;
+use crate::app::orchestrator::OrchestratorState as CallbackState;
 use crate::app::store::cbstore::jetstreamstore::JetStreamCallbackStore;
-use crate::app::store::datastore::jetstreamstore::JetStreamDataStore;
+use crate::app::store::datastore::jetstream::JetStreamDataStore;
 use crate::app::store::datastore::user_defined::UserDefinedStore;
 use crate::app::tracker::MessageGraph;
 use crate::config::{StoreType, DEFAULT_ID_HEADER};
@@ -92,7 +92,7 @@ impl ServingSourceActor {
                 let app = crate::AppState {
                     message: messages_tx,
                     settings,
-                    callback_state,
+                    orchestrator_state: callback_state,
                 };
                 tokio::spawn(async move {
                     crate::serve(app).await.unwrap();
@@ -105,7 +105,7 @@ impl ServingSourceActor {
                 let app = crate::AppState {
                     message: messages_tx,
                     settings,
-                    callback_state,
+                    orchestrator_state: callback_state,
                 };
                 tokio::spawn(async move {
                     crate::serve(app).await.unwrap();

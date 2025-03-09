@@ -3,16 +3,16 @@ use axum::{
     routing, Router,
 };
 
-use crate::app::orchestrator::State as CallbackState;
+use crate::app::orchestrator::OrchestratorState as CallbackState;
 use crate::app::response::ApiError;
 use crate::app::store::cbstore::CallbackStore;
 use crate::app::store::datastore::DataStore;
 
 pub fn get_message_path<
     T: Send + Sync + Clone + DataStore + 'static,
-    C: Send + Sync + Clone + CallbackStore + 'static,
+    U: Send + Sync + Clone + CallbackStore + 'static,
 >(
-    callback_store: CallbackState<T, C>,
+    callback_store: CallbackState<T, U>,
 ) -> Router {
     Router::new()
         .route("/status", routing::get(message_path))
@@ -26,9 +26,9 @@ struct MessagePath {
 
 async fn message_path<
     T: Clone + Send + Sync + DataStore + 'static,
-    C: Clone + Send + Sync + CallbackStore + 'static,
+    U: Clone + Send + Sync + CallbackStore + 'static,
 >(
-    State(mut state): State<CallbackState<T, C>>,
+    State(mut state): State<CallbackState<T, U>>,
     Query(MessagePath { id }): Query<MessagePath>,
 ) -> Result<String, ApiError> {
     match state.retrieve_subgraph_from_storage(&id).await {
@@ -46,7 +46,7 @@ async fn message_path<
 mod tests {
     use super::*;
     use crate::app::store::cbstore::memstore::InMemoryCallbackStore;
-    use crate::app::store::datastore::memstore::InMemoryDataStore;
+    use crate::app::store::datastore::inmemory::InMemoryDataStore;
     use crate::app::tracker::MessageGraph;
     use crate::pipeline::PipelineDCG;
     use axum::body::Body;

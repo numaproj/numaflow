@@ -9,7 +9,7 @@ pub use self::error::{Error, Result};
 use crate::app::start_main_server;
 use crate::config::generate_certs;
 use crate::metrics::start_https_metrics_server;
-use app::orchestrator::State as CallbackState;
+use app::orchestrator::OrchestratorState;
 
 mod app;
 
@@ -31,18 +31,18 @@ use crate::app::store::datastore::DataStore;
 pub mod callback;
 
 #[derive(Clone)]
-pub(crate) struct AppState<T, C> {
+pub(crate) struct AppState<T, U> {
     pub(crate) message: mpsc::Sender<MessageWrapper>,
     pub(crate) settings: Arc<Settings>,
-    pub(crate) callback_state: CallbackState<T, C>,
+    pub(crate) orchestrator_state: OrchestratorState<T, U>,
 }
 
-pub(crate) async fn serve<T, C>(
-    app: AppState<T, C>,
+pub(crate) async fn serve<T, U>(
+    app: AppState<T, U>,
 ) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>
 where
     T: Clone + Send + Sync + DataStore + 'static,
-    C: Clone + Send + Sync + CallbackStore + 'static,
+    U: Clone + Send + Sync + CallbackStore + 'static,
 {
     let (cert, key) = generate_certs()?;
 
