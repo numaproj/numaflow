@@ -11,9 +11,14 @@ impl Sink for BlackholeSink {
             .map(|msg| ResponseFromSink {
                 status: ResponseStatusFromSink::Success,
                 id: msg.id.to_string(),
+                serve_response: None,
             })
             .collect();
         Ok(output)
+    }
+
+    async fn is_ready(&mut self) -> bool {
+        true
     }
 }
 
@@ -71,6 +76,7 @@ mod tests {
             .map(|msg| ResponseFromSink {
                 status: ResponseStatusFromSink::Success,
                 id: msg.id.to_string(),
+                serve_response: None,
             })
             .collect::<Vec<ResponseFromSink>>();
 

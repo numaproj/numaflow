@@ -13,6 +13,7 @@ pub(crate) mod source {
     use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
     use tracing::warn;
 
+    use crate::config::{get_namespace, get_pipeline_name};
     use crate::error::Error;
     use crate::Result;
 
@@ -126,27 +127,17 @@ pub(crate) mod source {
                     .map_err(|e| Error::Config(format!("Reading API auth token secret: {e:?}")))?;
                     settings.api_auth_token = Some(secret);
                 } else {
-                    tracing::warn!("Authentication token for Serving API is specified, but the secret is empty");
+                    warn!("Authentication token for Serving API is specified, but the secret is empty");
                 };
             }
 
-            if let Some(ttl) = cfg.store.ttl {
-                if ttl.is_negative() {
-                    return Err(Error::Config(format!(
-                        "TTL value for the store can not be negative. Provided value = {ttl:?}"
-                    )));
-                }
-                let ttl: std::time::Duration = ttl.into();
-                let ttl_secs = ttl.as_secs() as u32;
-                // TODO: Identify a minimum value
-                if ttl_secs < 1 {
-                    return Err(Error::Config(format!(
-                        "TTL value for the store must not be less than 1 second. Provided value = {ttl:?}"
-                    )));
-                }
-                settings.redis.ttl_secs = Some(ttl_secs);
-            }
-            settings.redis.addr = cfg.store.url;
+            settings.js_store = format!(
+                "{}-{}_SERVING_KV_STORE",
+                get_namespace(),
+                get_pipeline_name(),
+            );
+
+            settings.drain_timeout_secs = cfg.request_timeout_seconds.unwrap_or(120).max(1) as u64; // Ensure timeout is atleast 1 second
 
             Ok(SourceType::Serving(Arc::new(settings)))
         }

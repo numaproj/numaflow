@@ -35,6 +35,9 @@ func ValidateMonoVertex(mvtx *dfv1.MonoVertex) error {
 	if mvtx.Spec.Source == nil {
 		return fmt.Errorf("source is not defined")
 	}
+	if mvtx.Spec.Source.Serving != nil {
+		return fmt.Errorf("serving source is not supported with Monovertex yet")
+	}
 	if err := validateSource(*mvtx.Spec.Source); err != nil {
 		return fmt.Errorf("invalid source: %w", err)
 	}

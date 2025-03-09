@@ -1,0 +1,79 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+syntax = "proto3";
+
+option go_package = "github.com/numaproj/numaflow-go/pkg/apis/proto/serving/v1";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+package serving.v1;
+
+// ServingStore defines a set of methods to interface with a user-defined Store.
+service ServingStore {
+  // Put is to put the PutRequest into the Store.
+  rpc Put(PutRequest) returns (PutResponse);
+
+  // Get gets the GetRequest from the Store.
+  rpc Get(GetRequest) returns (GetResponse);
+
+  // IsReady checks the health of the container interfacing the Store.
+  rpc IsReady(google.protobuf.Empty) returns (ReadyResponse);
+}
+
+// Payload that represent the output that is to be written into to the store.
+message Payload {
+  // Origin is the Vertex that generated this result.
+  string origin = 1;
+  // Value is the result of the computation.
+  bytes value = 2;
+}
+
+// PutRequest is the request sent to the Store.
+message PutRequest {
+  // ID is the unique id as provided by the user in the original request. If not provided, it will be a system generated
+  // uuid.
+  string id = 1;
+  // Payloads are one or more results generated (could be more than one due to flat-map).
+  repeated Payload payloads = 2;
+}
+
+// PutResponse is the result of the Put call.
+message PutResponse {
+  bool success = 1;
+}
+
+// GetRequest is the call to get the result stored in the Store.
+message GetRequest {
+  // ID is the unique id as provided by the user in the original request. If not provided, it will be a system generated
+  // uuid.
+  string id = 1;
+}
+
+// GetResponse is the result stored in the Store.
+message GetResponse {
+  string id = 1;
+  // Payloads are one or more results generated (could be more than one due to flat-map).
+  repeated Payload payloads = 2;
+}
+
+/**
+ * ReadyResponse is the health check result.
+ */
+message ReadyResponse {
+  bool ready = 1;
+}

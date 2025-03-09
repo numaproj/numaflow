@@ -211,6 +211,13 @@ impl SourceReader for UserDefinedSourceRead {
 
         Ok(partitions.iter().map(|p| *p as u16).collect())
     }
+
+    async fn is_ready(&mut self) -> bool {
+        match self.source_client.is_ready(Request::new(())).await {
+            Ok(response) => response.into_inner().ready,
+            Err(_) => false,
+        }
+    }
 }
 
 impl UserDefinedSourceAck {

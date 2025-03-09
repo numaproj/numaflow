@@ -1,10 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::config::get_vertex_name;
-use crate::error::{Error, Result};
-use crate::message::{Message, MessageID, Offset};
-use crate::shared::grpc::prost_timestamp_from_utc;
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::map::{self, map_client::MapClient, MapRequest, MapResponse};
 use tokio::sync::Mutex;
@@ -13,6 +9,11 @@ use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 use tracing::error;
+
+use crate::config::get_vertex_name;
+use crate::error::{Error, Result};
+use crate::message::{Message, MessageID, Offset};
+use crate::shared::grpc::prost_timestamp_from_utc;
 
 type ResponseSenderMap =
     Arc<Mutex<HashMap<String, (ParentMessageInfo, oneshot::Sender<Result<Vec<Message>>>)>>>;
@@ -46,6 +47,7 @@ impl From<Message> for MapRequest {
 /// UserDefinedUnaryMap is a grpc client that sends unary requests to the map server
 /// and forwards the responses.
 pub(in crate::mapper) struct UserDefinedUnaryMap {
+    unary_map_client: MapClient<Channel>,
     read_tx: mpsc::Sender<MapRequest>,
     senders: ResponseSenderMap,
     task_handle: tokio::task::JoinHandle<()>,
@@ -78,6 +80,7 @@ impl UserDefinedUnaryMap {
         ));
 
         let mapper = Self {
+            unary_map_client: client,
             read_tx,
             senders: sender_map,
             task_handle,
@@ -126,11 +129,19 @@ impl UserDefinedUnaryMap {
 
         let _ = self.read_tx.send(message.into()).await;
     }
+
+    pub(in crate::mapper) async fn is_ready(&mut self) -> bool {
+        match self.unary_map_client.is_ready(Request::new(())).await {
+            Ok(response) => response.into_inner().ready,
+            Err(_) => false,
+        }
+    }
 }
 
 /// UserDefinedBatchMap is a grpc client that sends batch requests to the map server
 /// and forwards the responses.
 pub(in crate::mapper) struct UserDefinedBatchMap {
+    batch_map_client: MapClient<Channel>,
     read_tx: mpsc::Sender<MapRequest>,
     senders: ResponseSenderMap,
     task_handle: tokio::task::JoinHandle<()>,
@@ -163,6 +174,7 @@ impl UserDefinedBatchMap {
         ));
 
         let mapper = Self {
+            batch_map_client: client,
             read_tx,
             senders: sender_map,
             task_handle,
@@ -234,6 +246,13 @@ impl UserDefinedBatchMap {
             .await
             .expect("failed to send eot request");
     }
+
+    pub(in crate::mapper) async fn is_ready(&mut self) -> bool {
+        match self.batch_map_client.is_ready(Request::new(())).await {
+            Ok(response) => response.into_inner().ready,
+            Err(_) => false,
+        }
+    }
 }
 
 /// Processes the response from the server and sends it to the appropriate oneshot sender
@@ -293,6 +312,7 @@ async fn create_response_stream(
 
 /// UserDefinedStreamMap is a grpc client that sends stream requests to the map server
 pub(in crate::mapper) struct UserDefinedStreamMap {
+    stream_map_client: MapClient<Channel>,
     read_tx: mpsc::Sender<MapRequest>,
     senders: StreamResponseSenderMap,
     task_handle: tokio::task::JoinHandle<()>,
@@ -325,6 +345,7 @@ impl UserDefinedStreamMap {
         ));
 
         let mapper = Self {
+            stream_map_client: client,
             read_tx,
             senders: sender_map,
             task_handle,
@@ -401,6 +422,13 @@ impl UserDefinedStreamMap {
             .await
             .expect("failed to send message");
     }
+
+    pub(in crate::mapper) async fn is_ready(&mut self) -> bool {
+        match self.stream_map_client.is_ready(Request::new(())).await {
+            Ok(response) => response.into_inner().ready,
+            Err(_) => false,
+        }
+    }
 }
 
 struct UserDefinedMessage<'a>(map::map_response::Result, &'a ParentMessageInfo, i32);
@@ -449,7 +477,9 @@ mod tests {
     #[tonic::async_trait]
     impl map::Mapper for Cat {
         async fn map(&self, input: map::MapRequest) -> Vec<map::Message> {
-            let message = map::Message::new(input.value).keys(input.keys).tags(vec![]);
+            let message = map::Message::new(input.value)
+                .with_keys(input.keys)
+                .with_tags(vec![]);
             vec![message]
         }
     }
@@ -650,8 +680,8 @@ mod tests {
 
             for split in splits {
                 let message = mapstream::Message::new(split.as_bytes().to_vec())
-                    .keys(input.keys.clone())
-                    .tags(vec![]);
+                    .with_keys(input.keys.clone())
+                    .with_tags(vec![]);
                 if tx.send(message).await.is_err() {
                     break;
                 }

@@ -29,3 +29,7 @@ pub mod sessionreduce;
 #[path = "clients/sideinput.v1.rs"]
 #[rustfmt::skip]
 pub mod sideinput;
+
+#[path = "clients/serving.v1.rs"]
+#[rustfmt::skip]
+pub mod serving;

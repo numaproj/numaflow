@@ -154,6 +154,17 @@ func (v Vertex) GetServingSourceStreamName() string {
 	return fmt.Sprintf("%s-%s-serving-source", v.Spec.PipelineName, v.Spec.Name)
 }
 
+func (v Vertex) GetServingStoreName() string {
+	if v.HasServingStore() {
+		return *v.Spec.ServingStoreName
+	}
+	return ""
+}
+
+func (v Vertex) HasServingStore() bool {
+	return v.Spec.ServingStoreName != nil
+}
+
 func (v Vertex) getServiceObj(name string, headless bool, port int32, servicePortName string) *corev1.Service {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -276,6 +287,8 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 			}},
 		},
 	}
+
+	servingStore := req.PipelineSpec.GetStoreSpec(v.GetServingStoreName())
 	volumeMounts := []corev1.VolumeMount{{Name: varVolumeName, MountPath: PathVarRun}}
 	executeRustBinary, _ := env.GetBool(EnvExecuteRustBinary, false)
 	sidecarContainers, containers, err := v.Spec.getType().getContainers(getContainerReq{
@@ -286,6 +299,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		resources:         req.DefaultResources,
 		volumeMounts:      volumeMounts,
 		executeRustBinary: executeRustBinary,
+		servingStore:      servingStore,
 	})
 	if err != nil {
 		return nil, err
@@ -608,6 +622,9 @@ type AbstractVertex struct {
 	// +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
 	// +optional
 	UpdateStrategy UpdateStrategy `json:"updateStrategy,omitempty" protobuf:"bytes,16,opt,name=updateStrategy"`
+	// Names of the serving store used in this vertex.
+	// +optional
+	ServingStoreName *string `json:"servingStoreName,omitempty" protobuf:"bytes,17,opt,name=servingStoreName"`
 }
 
 type VertexLifecycle struct {
@@ -681,6 +698,10 @@ func (av AbstractVertex) IsMapUDF() bool {
 
 func (av AbstractVertex) IsReduceUDF() bool {
 	return av.UDF != nil && av.UDF.GroupBy != nil
+}
+
+func (av AbstractVertex) IsAServingSource() bool {
+	return av.Source != nil && av.Source.Serving != nil
 }
 
 func (av AbstractVertex) OwnedBufferNames(namespace, pipeline string) []string {
