@@ -83,13 +83,12 @@ where
             }
 
             if let Some(subgraph) = subgraph {
-                tx.send(Ok(subgraph.clone()))
-                    .expect("Failed to send subgraph");
-
                 cb_store
                     .deregister(&msg_id, &subgraph)
                     .await
                     .expect("Failed to deregister");
+                tx.send(Ok(subgraph.clone()))
+                    .expect("Failed to send subgraph");
             } else {
                 error!("Subgraph could not be generated for the given ID");
                 tx.send(Err(Error::SubGraphNotFound(
