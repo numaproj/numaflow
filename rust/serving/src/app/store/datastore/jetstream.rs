@@ -1,4 +1,13 @@
-//! TODO(doc):
+//! Stores the response from the processing in a JetStream key-value store. Each response is stored
+//! as a new key-value pair in the store, so that no responses are lost. We cannot use the same key
+//! and overwrite the value, since the history of the kv store is not per key, but for the entire
+//! store.
+//!
+//! **JetStream Response Entry Format**
+//!
+//! Response Key - rs.{id}.{vertex_name}.{timestamp}
+//!
+//! Response Value - response_payload
 use std::sync::Arc;
 
 use async_nats::jetstream::kv::Store;
