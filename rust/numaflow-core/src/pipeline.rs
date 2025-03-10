@@ -47,10 +47,6 @@ pub(crate) async fn start_forwarder(
             // Create a new cancellation if the source is Serving.
             // The new cancellation token gets cancelled only after the user specified
             // request timeout + 30 seconds. The `cln_token` gets cancelled when SIGTERM is received.
-            // NOTE: The delay (sleep) we add here before the cancelling won't block the container
-            // from terminating if there are no in-flight requests. The axum server will shutdown
-            // immediately if there are no in-flight requests. This results in an error in reading from
-            // the serving source and thus shutting down of the source forwarder.
             if let SourceType::Serving(ref serving_config) = source.source_config.source_type {
                 let serving_cln_token = CancellationToken::new();
                 tokio::spawn({
@@ -59,7 +55,11 @@ pub(crate) async fn start_forwarder(
                     let serving_cln_token = serving_cln_token.clone();
                     async move {
                         cln_token.cancelled().await;
-                        // FIXME: we should only wait until the draining is complete, not a blind sleep
+                        // The delay (sleep) we add here before cancelling won't block the container
+                        // from terminating if there are no in-flight requests. The axum server will
+                        // shutdown immediately if there are no in-flight requests. This results in
+                        // an error in reading from the serving source and thus shutting down of the
+                        // source forwarder.
                         tokio::time::sleep(Duration::from_secs(req_timeout)).await;
                         serving_cln_token.cancel();
                     }
@@ -504,7 +504,6 @@ async fn create_js_context(config: pipeline::isb::jetstream::ClientConfig) -> Re
     let mut opts = ConnectOptions::new()
         .max_reconnects(None) // unlimited reconnects
         .ping_interval(Duration::from_secs(3))
-        .max_reconnects(None)
         .retry_on_initial_connect();
 
     if let (Some(user), Some(password)) = (config.user, config.password) {

@@ -102,7 +102,7 @@ pub(crate) struct MonovertexComponents {
 }
 
 /// PipelineComponents is used to store the all the components required for running pipeline. Transformer
-/// and Fallback Sink ism missing because they are internally referenced by Source and Sink.
+/// and Fallback Sink is missing because they are internally referenced by Source and Sink.
 #[derive(Clone)]
 pub(crate) enum PipelineComponents {
     Source(Source),
@@ -1081,8 +1081,7 @@ mod tests {
         let (src_read, src_ack, lag_reader) =
             new_source(src_client, 5, Duration::from_millis(1000))
                 .await
-                .map_err(|e| panic!("failed to create source reader: {:?}", e))
-                .unwrap();
+                .expect("Failed to create source reader");
 
         let tracker = TrackerHandle::new(None, None);
         let source = Source::new(
