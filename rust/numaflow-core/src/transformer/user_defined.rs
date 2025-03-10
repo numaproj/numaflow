@@ -192,7 +192,7 @@ impl UserDefinedTransformer {
 mod tests {
     use std::error::Error;
     use std::result::Result;
-    use std::time::{Duration, SystemTime};
+    use std::time::Duration;
 
     use chrono::{TimeZone, Utc};
     use numaflow::sourcetransform;
@@ -210,7 +210,7 @@ mod tests {
             &self,
             input: sourcetransform::SourceTransformRequest,
         ) -> Vec<sourcetransform::Message> {
-            let message = sourcetransform::Message::new(input.value, SystemTime::now())
+            let message = sourcetransform::Message::new(input.value, Utc::now())
                 .with_keys(input.keys)
                 .with_tags(vec![]);
             vec![message]

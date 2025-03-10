@@ -43,5 +43,5 @@ tonic = "0.12.3"
 [dev-dependencies]
 reqwest = { workspace = true, features = ["json"] }
 rustls.workspace = true
-numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "ede9bb565bfeb0f5a7256dc3222bf2c7c524a5de" }
+numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "4b37e79cc9c235fbffdc74e36a0f9d9363fc0dda" }
 tempfile = "3.14.0"

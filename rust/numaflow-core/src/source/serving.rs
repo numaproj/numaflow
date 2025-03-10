@@ -123,7 +123,7 @@ mod tests {
         assert_eq!(
             message.id,
             MessageID {
-                vertex_name: Bytes::new(),
+                vertex_name: Bytes::from("default"),
                 offset: format!("{MSG_ID}-0").into(),
                 index: 0
             }

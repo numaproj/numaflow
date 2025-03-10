@@ -328,7 +328,6 @@ mod tests {
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow_pb::clients::source::source_client::SourceClient;
     use std::collections::{HashMap, HashSet};
-    use std::time::{SystemTime, UNIX_EPOCH};
     use tokio::sync::mpsc::Sender;
 
     use super::*;
@@ -352,14 +351,10 @@ mod tests {
     #[tonic::async_trait]
     impl source::Sourcer for SimpleSource {
         async fn read(&self, request: SourceReadRequest, transmitter: Sender<Message>) {
-            let event_time = SystemTime::now();
+            let event_time = Utc::now();
             let mut message_offsets = Vec::with_capacity(request.count);
             for i in 0..request.count {
-                let offset = format!(
-                    "{}-{}",
-                    event_time.duration_since(UNIX_EPOCH).unwrap().as_nanos(),
-                    i
-                );
+                let offset = format!("{}-{}", event_time.timestamp_nanos_opt().unwrap(), i);
                 transmitter
                     .send(Message {
                         value: self.num.to_le_bytes().to_vec(),

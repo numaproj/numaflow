@@ -2236,27 +2236,7 @@ dependencies = [
 [[package]]
 name = "numaflow"
 version = "0.2.1"
-source = "git+https://github.com/numaproj/numaflow-rs.git?rev=7965cac132a0c0df0be3087e3b3e8211a503cedf#7965cac132a0c0df0be3087e3b3e8211a503cedf"
-dependencies = [
- "hyper-util",
- "prost 0.13.3",
- "prost-types 0.13.3",
- "serde",
- "serde_json",
- "thiserror 2.0.12",
- "tokio",
- "tokio-stream",
- "tokio-util",
- "tonic",
- "tonic-build",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "numaflow"
-version = "0.2.1"
-source = "git+https://github.com/numaproj/numaflow-rs.git?rev=ede9bb565bfeb0f5a7256dc3222bf2c7c524a5de#ede9bb565bfeb0f5a7256dc3222bf2c7c524a5de"
+source = "git+https://github.com/numaproj/numaflow-rs.git?rev=4b37e79cc9c235fbffdc74e36a0f9d9363fc0dda#4b37e79cc9c235fbffdc74e36a0f9d9363fc0dda"
 dependencies = [
  "chrono",
  "hyper-util",
@@ -2294,7 +2274,7 @@ dependencies = [
  "http 1.2.0",
  "hyper-util",
  "kube",
- "numaflow 0.2.1 (git+https://github.com/numaproj/numaflow-rs.git?rev=7965cac132a0c0df0be3087e3b3e8211a503cedf)",
+ "numaflow 0.2.1",
  "numaflow-models",
  "numaflow-pb",
  "numaflow-pulsar",
@@ -3492,7 +3472,7 @@ dependencies = [
  "chrono",
  "http 1.2.0",
  "hyper-util",
- "numaflow 0.2.1 (git+https://github.com/numaproj/numaflow-rs.git?rev=ede9bb565bfeb0f5a7256dc3222bf2c7c524a5de)",
+ "numaflow 0.2.1",
  "numaflow-models",
  "numaflow-pb",
  "parking_lot",
