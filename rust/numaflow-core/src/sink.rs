@@ -760,7 +760,7 @@ impl SinkWriter {
             .await
             .expect("Error sending message to sink actor");
 
-        let is_primary_sink_ready = rx.await.unwrap_or_else(|_| false);
+        let is_primary_sink_ready = rx.await.unwrap_or(false);
         if !is_primary_sink_ready {
             warn!("Primary sink is not ready");
         }
@@ -772,7 +772,7 @@ impl SinkWriter {
                 .send(ActorMessage::IsReady { respond_to: tx })
                 .await
                 .expect("Error sending message to fallback sink actor");
-            let is_fallback_sink_ready = rx.await.unwrap_or_else(|_| false);
+            let is_fallback_sink_ready = rx.await.unwrap_or(false);
             if !is_fallback_sink_ready {
                 warn!("Fallback sink is not ready");
             }
@@ -828,17 +828,20 @@ impl Drop for SinkWriter {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
+    use super::*;
+    use crate::config::pipeline::NatsStoreConfig;
+    use crate::message::{IntOffset, Message, MessageID, Offset, ReadAck};
+    use crate::serving_store::nats::NatsServingStore;
+    use crate::shared::grpc::create_rpc_channel;
+    use async_nats::jetstream;
+    use async_nats::jetstream::kv::Config;
     use chrono::{TimeZone, Utc};
+    use futures::StreamExt;
     use numaflow::sink;
     use numaflow_pb::clients::sink::{SinkRequest, SinkResponse};
+    use std::sync::Arc;
     use tokio::time::Duration;
     use tokio_util::sync::CancellationToken;
-
-    use super::*;
-    use crate::message::{IntOffset, Message, MessageID, Offset, ReadAck};
-    use crate::shared::grpc::create_rpc_channel;
 
     struct SimpleSink;
     #[tonic::async_trait]
@@ -854,6 +857,8 @@ mod tests {
                         datum.id,
                         "simple error".to_string(),
                     ));
+                } else if datum.keys.first().unwrap() == "serve" {
+                    responses.push(sink::Response::serve(datum.id, "serve-response".into()));
                 } else {
                     responses.push(sink::Response::ok(datum.id));
                 }
@@ -1118,6 +1123,123 @@ mod tests {
 
         // check if the tracker is empty
         assert!(tracker_handle.is_empty().await.unwrap());
+    }
+
+    // #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_serving_write() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let serving_store = "test_serving_write";
+
+        // Delete bucket so that re-running the test won't fail
+        let _ = context.delete_key_value(serving_store).await;
+
+        let kv_store = context
+            .create_key_value(Config {
+                bucket: serving_store.to_string(),
+                description: "test_description".to_string(),
+                history: 15,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let tracker_handle = TrackerHandle::new(None, None);
+        let serving_store = ServingStore::Nats(
+            NatsServingStore::new(
+                context.clone(),
+                NatsStoreConfig {
+                    name: serving_store.to_string(),
+                },
+            )
+            .await
+            .unwrap(),
+        );
+
+        // start the server
+        let (_shutdown_tx, shutdown_rx) = oneshot::channel();
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("sink.sock");
+        let server_info_file = tmp_dir.path().join("sink-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+
+        let _server_handle = tokio::spawn(async move {
+            sink::Server::new(SimpleSink)
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("failed to start sink server");
+        });
+
+        // wait for the server to start
+        sleep(Duration::from_millis(100)).await;
+
+        let sink_writer = SinkWriterBuilder::new(
+            10,
+            Duration::from_millis(100),
+            SinkClientType::UserDefined(SinkClient::new(
+                create_rpc_channel(sock_file).await.unwrap(),
+            )),
+            tracker_handle.clone(),
+        )
+        .serving_store(serving_store.clone())
+        .build()
+        .await
+        .unwrap();
+
+        let messages: Vec<Message> = (0..10)
+            .map(|i| {
+                let mut headers = HashMap::new();
+                headers.insert(NUMAFLOW_ID_HEADER.to_string(), format!("id_{}", i));
+                Message {
+                    typ: Default::default(),
+                    keys: Arc::from(vec!["serve".to_string()]),
+                    tags: None,
+                    value: vec![1, 2, 3].into(),
+                    offset: Offset::Int(IntOffset::new(i, 0)),
+                    event_time: Default::default(),
+                    watermark: None,
+                    id: MessageID {
+                        vertex_name: "vertex".to_string().into(),
+                        offset: "123".to_string().into(),
+                        index: i as i32,
+                    },
+                    headers,
+                    metadata: None,
+                }
+            })
+            .collect();
+
+        let (tx, rx) = mpsc::channel(10);
+        let mut ack_rxs = vec![];
+        for msg in messages {
+            let (ack_tx, ack_rx) = oneshot::channel();
+            ack_rxs.push(ack_rx);
+            tracker_handle.insert(&msg, ack_tx).await.unwrap();
+            let _ = tx.send(msg).await;
+        }
+        drop(tx);
+        let cln_token = CancellationToken::new();
+        let handle = sink_writer
+            .streaming_write(ReceiverStream::new(rx), cln_token.clone())
+            .await
+            .unwrap();
+
+        let _ = handle.await.unwrap();
+        for ack_rx in ack_rxs {
+            assert_eq!(ack_rx.await.unwrap(), ReadAck::Ack);
+        }
+
+        // check if the tracker is empty
+        assert!(tracker_handle.is_empty().await.unwrap());
+
+        let keys: Vec<_> = kv_store.keys().await.unwrap().collect().await;
+        assert_eq!(keys.len(), 10);
     }
 
     #[test]

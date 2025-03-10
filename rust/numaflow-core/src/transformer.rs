@@ -205,7 +205,7 @@ impl Transformer {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    use std::time::{Duration, SystemTime};
 
     use numaflow::sourcetransform;
     use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
@@ -225,8 +225,8 @@ mod tests {
             &self,
             input: sourcetransform::SourceTransformRequest,
         ) -> Vec<sourcetransform::Message> {
-            let message = sourcetransform::Message::new(input.value, chrono::offset::Utc::now())
-                .with_keys(input.keys);
+            let message =
+                sourcetransform::Message::new(input.value, SystemTime::now()).with_keys(input.keys);
             vec![message]
         }
     }

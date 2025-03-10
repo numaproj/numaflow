@@ -20,7 +20,6 @@ const ENV_MONOVERTEX_OBJ: &str = "NUMAFLOW_MONO_VERTEX_OBJECT";
 
 pub const DEFAULT_ID_HEADER: &str = "X-Numaflow-Id";
 pub const DEFAULT_CALLBACK_URL_HEADER_KEY: &str = "X-Numaflow-Callback-Url";
-pub const DEFAULT_REDIS_TTL_IN_SECS: u32 = 86400;
 const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
 const DEFAULT_SERVING_STORE_SOCKET: &str = "/var/run/numaflow/serving.sock";
 const DEFAULT_SERVING_STORE_SERVER_INFO_FILE: &str = "/var/run/numaflow/serving-server-info";
@@ -44,28 +43,6 @@ impl Default for UserDefinedStoreConfig {
             grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
             socket_path: DEFAULT_SERVING_STORE_SOCKET.to_string(),
             server_info_path: DEFAULT_SERVING_STORE_SERVER_INFO_FILE.to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Deserialize, Clone, PartialEq)]
-pub struct RedisConfig {
-    pub addr: String,
-    pub max_tasks: usize,
-    pub retries: usize,
-    pub retries_duration_millis: u16,
-    pub ttl_secs: Option<u32>,
-}
-
-impl Default for RedisConfig {
-    fn default() -> Self {
-        Self {
-            addr: "redis://127.0.0.1:6379".to_owned(),
-            max_tasks: 50,
-            retries: 5,
-            retries_duration_millis: 100,
-            // TODO: we might need an option type here. Zero value of u32 can be used instead of None
-            ttl_secs: Some(DEFAULT_REDIS_TTL_IN_SECS),
         }
     }
 }

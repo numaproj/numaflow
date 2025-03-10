@@ -92,9 +92,9 @@ impl Forwarder {
 mod tests {
     use std::collections::HashSet;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::time::Duration;
+    use std::time::UNIX_EPOCH;
+    use std::time::{Duration, SystemTime};
 
-    use chrono::Utc;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{source, sourcetransform};
     use numaflow_pb::clients::source::source_client::SourceClient;
@@ -133,7 +133,7 @@ mod tests {
     #[tonic::async_trait]
     impl source::Sourcer for SimpleSource {
         async fn read(&self, request: SourceReadRequest, transmitter: Sender<Message>) {
-            let event_time = Utc::now();
+            let event_time = SystemTime::now();
             let mut message_offsets = Vec::with_capacity(request.count);
 
             for i in 0..request.count {
@@ -141,7 +141,11 @@ mod tests {
                     return;
                 }
 
-                let offset = format!("{}-{}", event_time.timestamp_nanos_opt().unwrap(), i);
+                let offset = format!(
+                    "{}-{}",
+                    event_time.duration_since(UNIX_EPOCH).unwrap().as_nanos(),
+                    i
+                );
                 transmitter
                     .send(Message {
                         value: b"hello".to_vec(),
@@ -191,7 +195,7 @@ mod tests {
             input: sourcetransform::SourceTransformRequest,
         ) -> Vec<sourcetransform::Message> {
             let message =
-                sourcetransform::Message::new(input.value, Utc::now()).with_keys(input.keys);
+                sourcetransform::Message::new(input.value, SystemTime::now()).with_keys(input.keys);
             vec![message]
         }
     }
@@ -319,9 +323,10 @@ mod tests {
         ) -> Vec<sourcetransform::Message> {
             let mut output = vec![];
             for i in 0..5 {
-                let message = sourcetransform::Message::new(i.to_string().into_bytes(), Utc::now())
-                    .with_keys(vec![format!("key-{}", i)])
-                    .with_tags(vec![]);
+                let message =
+                    sourcetransform::Message::new(i.to_string().into_bytes(), SystemTime::now())
+                        .with_keys(vec![format!("key-{}", i)])
+                        .with_tags(vec![]);
                 output.push(message);
             }
             output

@@ -61,6 +61,7 @@ enum ActorMessage {
     Discard {
         offset: Offset,
     },
+    #[allow(clippy::upper_case_acronyms)]
     EOF {
         offset: Offset,
     },
@@ -420,10 +421,7 @@ impl TrackerHandle {
         offset: Offset,
         message_tags: Option<Arc<[String]>>,
     ) -> Result<()> {
-        let tags: Option<Vec<String>> = match message_tags {
-            Some(tags) => Some(tags.to_vec()),
-            None => None,
-        };
+        let tags = message_tags.map(|tags| tags.to_vec());
         let message = ActorMessage::Append {
             offset,
             response: tags,

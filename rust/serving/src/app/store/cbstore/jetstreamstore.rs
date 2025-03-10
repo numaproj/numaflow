@@ -351,4 +351,46 @@ mod tests {
         // delete store
         context.delete_key_value(serving_store).await.unwrap();
     }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_mark_as_failed() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let serving_store = "test_mark_as_failed_store";
+
+        // Delete bucket so that re-running the test won't fail
+        let _ = context.delete_key_value(serving_store).await;
+
+        context
+            .create_key_value(Config {
+                bucket: serving_store.to_string(),
+                description: "test_description".to_string(),
+                history: 15,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let mut store = JetStreamCallbackStore::new(context.clone(), serving_store)
+            .await
+            .unwrap();
+
+        assert!(store.ready().await);
+
+        let id = "test_mark_as_failed_id";
+        store.register(id).await.unwrap();
+
+        let error_message = "test_error_message";
+        let result = store.mark_as_failed(id, error_message).await;
+        assert!(result.is_ok());
+
+        // Verify that the status is marked as failed
+        let status = store.status(id).await.unwrap();
+        assert!(matches!(status, ProcessingStatus::Failed(_)));
+
+        // delete store
+        context.delete_key_value(serving_store).await.unwrap();
+    }
 }

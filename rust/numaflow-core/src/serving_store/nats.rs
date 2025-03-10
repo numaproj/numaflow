@@ -2,7 +2,6 @@ use async_nats::jetstream::kv::Store;
 use async_nats::jetstream::Context;
 use bytes::Bytes;
 use chrono::Utc;
-use tracing::info;
 
 use crate::config::pipeline::NatsStoreConfig;
 
@@ -22,7 +21,6 @@ impl NatsServingStore {
             .get_key_value(nats_store_config.name.as_str())
             .await
             .map_err(|e| crate::Error::Connection(format!("Failed to get kv store: {e:?}")))?;
-        info!("Jetstream serving store created");
         Ok(Self { store })
     }
 
@@ -39,7 +37,6 @@ impl NatsServingStore {
             Utc::now().timestamp_nanos_opt().unwrap()
         );
 
-        info!(?id, "Putting datum in Jetstream serving store");
         self.store
             .put(id, Bytes::from(payload))
             .await

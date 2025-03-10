@@ -134,7 +134,7 @@ pub(crate) async fn create_sink_writer(
         sink_writer_builder = sink_writer_builder.serving_store(serving_store);
     }
 
-    Ok(sink_writer_builder.build().await?)
+    sink_writer_builder.build().await
 }
 
 /// Creates a transformer if it is configured
@@ -243,6 +243,7 @@ pub(crate) async fn create_mapper(
 }
 
 /// Creates a source type based on the configuration
+#[allow(clippy::too_many_arguments)]
 pub async fn create_source(
     js_context: Option<Context>,
     batch_size: usize,
