@@ -1125,7 +1125,7 @@ mod tests {
         assert!(tracker_handle.is_empty().await.unwrap());
     }
 
-    // #[cfg(feature = "nats-tests")]
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_serving_write() {
         let js_url = "localhost:4222";

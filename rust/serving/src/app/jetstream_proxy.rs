@@ -380,7 +380,7 @@ async fn async_publish<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::orchestrator::OrchestratorState as CallbackState;
+    use crate::app::orchestrator::OrchestratorState;
     use crate::app::store::cbstore::jetstreamstore::JetStreamCallbackStore;
     use crate::app::store::datastore::jetstream::JetStreamDataStore;
     use crate::app::tracker::MessageGraph;
@@ -434,7 +434,8 @@ mod tests {
 
         let pipeline_spec = PIPELINE_SPEC_ENCODED.parse().unwrap();
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec)?;
-        let callback_state = CallbackState::new(msg_graph, datum_store, callback_store).await?;
+        let orchestrator_state =
+            OrchestratorState::new(msg_graph, datum_store, callback_store).await?;
 
         let (messages_tx, mut messages_rx) = mpsc::channel::<MessageWrapper>(10);
         let response_collector = tokio::spawn(async move {
@@ -450,7 +451,7 @@ mod tests {
         let app_state = AppState {
             message: messages_tx,
             settings: Arc::new(settings),
-            orchestrator_state: callback_state,
+            orchestrator_state,
         };
 
         let app = jetstream_proxy(app_state).await?;
@@ -557,7 +558,7 @@ mod tests {
         let pipeline_spec: PipelineDCG = PIPELINE_SPEC_ENCODED.parse().unwrap();
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec).unwrap();
 
-        let callback_state = CallbackState::new(msg_graph, datum_store, callback_store)
+        let orchestrator_state = OrchestratorState::new(msg_graph, datum_store, callback_store)
             .await
             .unwrap();
 
@@ -576,7 +577,7 @@ mod tests {
         let app_state = AppState {
             message: messages_tx,
             settings: Arc::new(settings),
-            orchestrator_state: callback_state.clone(),
+            orchestrator_state,
         };
 
         let app = jetstream_proxy(app_state).await.unwrap();
@@ -643,7 +644,7 @@ mod tests {
         let pipeline_spec: PipelineDCG = PIPELINE_SPEC_ENCODED.parse().unwrap();
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec).unwrap();
 
-        let callback_state = CallbackState::new(msg_graph, datum_store, callback_store)
+        let orchestrator_state = OrchestratorState::new(msg_graph, datum_store, callback_store)
             .await
             .unwrap();
 
@@ -662,7 +663,7 @@ mod tests {
         let app_state = AppState {
             message: messages_tx,
             settings,
-            orchestrator_state: callback_state.clone(),
+            orchestrator_state,
         };
 
         let app = jetstream_proxy(app_state).await.unwrap();
@@ -718,7 +719,7 @@ mod tests {
         let req = Request::builder()
             .method("GET")
             .uri(format!("/fetch?id={ID_VALUE}"))
-            .body(axum::body::Body::empty())
+            .body(Body::empty())
             .unwrap();
         let response = app.clone().oneshot(req).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
@@ -764,7 +765,8 @@ mod tests {
 
         let pipeline_spec = PIPELINE_SPEC_ENCODED.parse().unwrap();
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec)?;
-        let callback_state = CallbackState::new(msg_graph, datum_store, callback_store).await?;
+        let orchestrator_state =
+            OrchestratorState::new(msg_graph, datum_store, callback_store).await?;
 
         let (messages_tx, mut messages_rx) = mpsc::channel::<MessageWrapper>(10);
         tokio::spawn(async move {
@@ -780,7 +782,7 @@ mod tests {
         let app_state = AppState {
             message: messages_tx,
             settings: Arc::new(settings),
-            callback_state,
+            orchestrator_state,
         };
 
         let app = jetstream_proxy(app_state).await?;
