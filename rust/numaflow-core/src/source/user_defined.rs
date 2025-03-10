@@ -211,6 +211,13 @@ impl SourceReader for UserDefinedSourceRead {
 
         Ok(partitions.iter().map(|p| *p as u16).collect())
     }
+
+    async fn is_ready(&mut self) -> bool {
+        match self.source_client.is_ready(Request::new(())).await {
+            Ok(response) => response.into_inner().ready,
+            Err(_) => false,
+        }
+    }
 }
 
 impl UserDefinedSourceAck {
@@ -316,12 +323,11 @@ impl LagReader for UserDefinedSourceLagReader {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{HashMap, HashSet};
-
     use chrono::{TimeZone, Utc};
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow_pb::clients::source::source_client::SourceClient;
+    use std::collections::{HashMap, HashSet};
     use tokio::sync::mpsc::Sender;
 
     use super::*;

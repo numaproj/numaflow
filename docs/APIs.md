@@ -861,6 +861,25 @@ The strategy to use to replace existing pods with new ones.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>servingStoreName</code></br> <em> string </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Names of the serving store used in this vertex.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -1420,6 +1439,7 @@ Container
 <p>
 
 (<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServingStore">ServingStore</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.SideInput">SideInput</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.UDF">UDF</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.UDSink">UDSink</a>,
@@ -7692,6 +7712,27 @@ SideInputs defines the Side Inputs of a pipeline.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>servingStore</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServingStore"> ServingStore </a>
+</em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+ServingStore defines the Serving Store for this pipeline.
+</p>
+
+</td>
+
+</tr>
+
 </table>
 
 </td>
@@ -8047,6 +8088,27 @@ for the Pipeline
 <p>
 
 SideInputs defines the Side Inputs of a pipeline.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>servingStore</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServingStore"> ServingStore </a>
+</em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+ServingStore defines the Serving Store for this pipeline.
 </p>
 
 </td>
@@ -9940,16 +10002,15 @@ The header key from which the message id will be extracted
 
 <td>
 
-<code>store</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.ServingStore"> ServingStore </a>
-</em>
+<code>requestTimeoutSeconds</code></br> <em> uint32 </em>
 </td>
 
 <td>
 
+<em>(Optional)</em>
 <p>
 
-Persistent store for the callbacks for serving and tracking
+Request timeout in seconds. Default value is 120 seconds.
 </p>
 
 </td>
@@ -9968,15 +10029,14 @@ ServingStore
 <p>
 
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.ServingSource">ServingSource</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>)
 </p>
 
 <p>
 
 <p>
 
-ServingStore to track and store data and metadata for tracking and
-serving.
+ServingStore defines information of a Serving Store used in a pipeline
 </p>
 
 </p>
@@ -10007,15 +10067,10 @@ Description
 
 <td>
 
-<code>url</code></br> <em> string </em>
+<code>name</code></br> <em> string </em>
 </td>
 
 <td>
-
-<p>
-
-URL of the persistent store to write the callbacks
-</p>
 
 </td>
 
@@ -10025,18 +10080,11 @@ URL of the persistent store to write the callbacks
 
 <td>
 
-<code>ttl</code></br> <em>
-<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
-Kubernetes meta/v1.Duration </a> </em>
+<code>container</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Container"> Container </a> </em>
 </td>
 
 <td>
-
-<em>(Optional)</em>
-<p>
-
-TTL for the data in the store and tracker
-</p>
 
 </td>
 

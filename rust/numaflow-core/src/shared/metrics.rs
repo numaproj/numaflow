@@ -6,14 +6,14 @@ use tracing::error;
 
 use crate::config::components::metrics::MetricsConfig;
 use crate::metrics::{
-    start_metrics_https_server, LagReader, PendingReader, PendingReaderBuilder,
-    UserDefinedContainerState,
+    start_metrics_https_server, ComponentHealthChecks, LagReader, PendingReader,
+    PendingReaderBuilder,
 };
 
 /// Starts the metrics server
 pub(crate) async fn start_metrics_server(
     metrics_config: MetricsConfig,
-    metrics_state: UserDefinedContainerState,
+    metrics_state: ComponentHealthChecks,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         // Start the metrics server, which server the prometheus metrics.

@@ -156,7 +156,8 @@ mod tests {
             &self,
             input: sourcetransform::SourceTransformRequest,
         ) -> Vec<sourcetransform::Message> {
-            let message = sourcetransform::Message::new(input.value, Utc::now()).keys(input.keys);
+            let message =
+                sourcetransform::Message::new(input.value, Utc::now()).with_keys(input.keys);
             vec![message]
         }
     }
