@@ -76,6 +76,7 @@ const (
 	CtrInitSideInputs    = "init-side-inputs"
 	CtrSideInputsWatcher = "side-inputs-synchronizer"
 	CtrServing           = "serving"
+	CtrUdStore           = "udstore"
 
 	// user-defined container types
 	UDContainerFunction     = "udf"
@@ -84,7 +85,7 @@ const (
 	UDContainerTransformer  = "transformer"
 	UDContainerSource       = "udsource"
 	UDContainerSideInputs   = "udsi"
-	ServingSourceContainer  = "serving"
+	UDContainerStore        = "udstore"
 
 	// components
 	ComponentISBSvc            = "isbsvc"
@@ -145,13 +146,11 @@ const (
 	EnvMemoryLimit                      = "NUMAFLOW_MEMORY_LIMIT"
 	EnvGoDebug                          = "GODEBUG"
 	EnvServingJetstreamStream           = "NUMAFLOW_SERVING_JETSTREAM_STREAM"
-	EnvServingObject                    = "NUMAFLOW_SERVING_SOURCE_OBJECT"
 	EnvServingPort                      = "NUMAFLOW_SERVING_APP_LISTEN_PORT"
-	EnvServingAuthToken                 = "NUMAFLOW_SERVING_AUTH_TOKEN"
 	EnvServingMinPipelineSpec           = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC"
 	EnvServingHostIP                    = "NUMAFLOW_SERVING_HOST_IP"
-	EnvServingStoreTTL                  = "NUMAFLOW_SERVING_STORE_TTL"
-	EnvExecuteRustBinary                = "NUMAFLOW_EXECUTE_RUST_BINARY"
+
+	EnvExecuteRustBinary = "NUMAFLOW_EXECUTE_RUST_BINARY"
 
 	EnvK8sServerVersion = "K8S_SERVER_VERSION"
 

@@ -25,6 +25,8 @@ pub(crate) mod pipeline;
 pub const NUMAFLOW_MONO_VERTEX_NAME: &str = "NUMAFLOW_MONO_VERTEX_NAME";
 const NUMAFLOW_VERTEX_NAME: &str = "NUMAFLOW_VERTEX_NAME";
 const NUMAFLOW_REPLICA: &str = "NUMAFLOW_REPLICA";
+const NUMAFLOW_PIPELINE_NAME: &str = "NUMAFLOW_PIPELINE_NAME";
+const NUMAFLOW_NAMESPACE: &str = "NUMAFLOW_NAMESPACE";
 static VERTEX_NAME: OnceLock<String> = OnceLock::new();
 
 /// fetch the vertex name from the environment variable
@@ -32,7 +34,7 @@ pub(crate) fn get_vertex_name() -> &'static str {
     VERTEX_NAME.get_or_init(|| {
         env::var(NUMAFLOW_MONO_VERTEX_NAME)
             .or_else(|_| env::var(NUMAFLOW_VERTEX_NAME))
-            .unwrap_or_default()
+            .unwrap_or("default".to_string())
     })
 }
 
@@ -59,7 +61,7 @@ pub(crate) fn get_component_type() -> &'static str {
 static PIPELINE_NAME: OnceLock<String> = OnceLock::new();
 
 pub(crate) fn get_pipeline_name() -> &'static str {
-    PIPELINE_NAME.get_or_init(|| env::var("NUMAFLOW_PIPELINE_NAME").unwrap_or_default())
+    PIPELINE_NAME.get_or_init(|| env::var(NUMAFLOW_PIPELINE_NAME).unwrap_or("default".to_string()))
 }
 
 static VERTEX_REPLICA: OnceLock<u16> = OnceLock::new();
@@ -70,8 +72,15 @@ pub(crate) fn get_vertex_replica() -> &'static u16 {
         env::var(NUMAFLOW_REPLICA)
             .unwrap_or_default()
             .parse()
-            .unwrap_or_default()
+            .unwrap_or(0)
     })
+}
+
+static NAMESPACE: OnceLock<String> = OnceLock::new();
+
+/// fetch the namespace from the environment variable
+pub(crate) fn get_namespace() -> &'static str {
+    NAMESPACE.get_or_init(|| env::var(NUMAFLOW_NAMESPACE).unwrap_or("default".to_string()))
 }
 
 /// Exposes the [Settings] via lazy loading.

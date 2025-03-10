@@ -5,6 +5,7 @@ use std::time::Duration;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use numaflow_models::models::{ForwardConditions, Vertex, Watermark};
+use serde::Deserialize;
 use serde_json::from_slice;
 use tracing::info;
 
@@ -36,6 +37,8 @@ const DEFAULT_MAP_SOCKET: &str = "/var/run/numaflow/map.sock";
 pub(crate) const DEFAULT_BATCH_MAP_SOCKET: &str = "/var/run/numaflow/batchmap.sock";
 pub(crate) const DEFAULT_STREAM_MAP_SOCKET: &str = "/var/run/numaflow/mapstream.sock";
 const DEFAULT_MAP_SERVER_INFO_FILE: &str = "/var/run/numaflow/mapper-server-info";
+const DEFAULT_SERVING_STORE_SOCKET: &str = "/var/run/numaflow/serving.sock";
+const DEFAULT_SERVING_STORE_SERVER_INFO_FILE: &str = "/var/run/numaflow/serving-server-info";
 
 pub(crate) mod isb;
 pub(crate) mod watermark;
@@ -60,6 +63,7 @@ pub(crate) struct PipelineConfig {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ServingCallbackConfig {
+    pub(crate) callback_store: &'static str,
     pub(crate) callback_concurrency: usize,
 }
 
@@ -174,6 +178,7 @@ pub(crate) mod map {
 pub(crate) struct SinkVtxConfig {
     pub(crate) sink_config: SinkConfig,
     pub(crate) fb_sink_config: Option<SinkConfig>,
+    pub(crate) serving_store_config: Option<ServingStoreType>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -181,6 +186,34 @@ pub(crate) enum VertexType {
     Source(SourceVtxConfig),
     Sink(SinkVtxConfig),
     Map(MapVtxConfig),
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub(crate) enum ServingStoreType {
+    UserDefined(UserDefinedStoreConfig),
+    Nats(NatsStoreConfig),
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub(crate) struct UserDefinedStoreConfig {
+    pub(crate) grpc_max_message_size: usize,
+    pub(crate) socket_path: String,
+    pub(crate) server_info_path: String,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub(crate) struct NatsStoreConfig {
+    pub(crate) name: String,
+}
+
+impl Default for UserDefinedStoreConfig {
+    fn default() -> Self {
+        Self {
+            grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+            socket_path: DEFAULT_SERVING_STORE_SOCKET.to_string(),
+            server_info_path: DEFAULT_SERVING_STORE_SERVER_INFO_FILE.to_string(),
+        }
+    }
 }
 
 impl std::fmt::Display for VertexType {
@@ -281,12 +314,28 @@ impl PipelineConfig {
                 None
             };
 
+            let serving_store_config = if let Some(store_name) = vertex_obj.spec.serving_store_name
+            {
+                if store_name == "default" {
+                    Some(ServingStoreType::Nats(NatsStoreConfig {
+                        name: format!("{}-{}_SERVING_KV_STORE", namespace, pipeline_name),
+                    }))
+                } else {
+                    Some(ServingStoreType::UserDefined(
+                        UserDefinedStoreConfig::default(),
+                    ))
+                }
+            } else {
+                None
+            };
+
             VertexType::Sink(SinkVtxConfig {
                 sink_config: SinkConfig {
                     sink_type: SinkType::primary_sinktype(&sink)?,
                     retry_config: None,
                 },
                 fb_sink_config,
+                serving_store_config,
             })
         } else if let Some(map) = vertex_obj.spec.udf {
             VertexType::Map(MapVtxConfig {
@@ -439,6 +488,9 @@ impl PipelineConfig {
                     ))
                 })?;
             callback_config = Some(ServingCallbackConfig {
+                callback_store: Box::leak(
+                    format!("{}-{}_SERVING_KV_STORE", namespace, pipeline_name).into_boxed_str(),
+                ),
                 callback_concurrency,
             });
         }
@@ -626,6 +678,7 @@ mod tests {
                 retry_config: None,
             },
             fb_sink_config: None,
+            serving_store_config: None,
         });
         assert_eq!(sink_type.to_string(), "Sink");
     }
@@ -664,6 +717,7 @@ mod tests {
                     retry_config: None,
                 },
                 fb_sink_config: None,
+                serving_store_config: None,
             }),
             metrics_config: MetricsConfig {
                 metrics_server_listen_port: 2469,

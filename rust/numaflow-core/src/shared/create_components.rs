@@ -1,13 +1,13 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use async_nats::jetstream::Context;
 use numaflow_pb::clients::map::map_client::MapClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use serving::ServingSource;
 use tokio_util::sync::CancellationToken;
-use tonic::transport::Channel;
 
 use crate::config::components::sink::{SinkConfig, SinkType};
 use crate::config::components::source::{SourceConfig, SourceType};
@@ -17,6 +17,7 @@ use crate::config::pipeline::map::{MapMode, MapType, MapVtxConfig};
 use crate::config::pipeline::{DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET};
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
+use crate::serving_store::ServingStore;
 use crate::shared::grpc;
 use crate::shared::server_info::{sdk_server_info, ContainerType};
 use crate::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
@@ -36,30 +37,21 @@ pub(crate) async fn create_sink_writer(
     primary_sink: SinkConfig,
     fallback_sink: Option<SinkConfig>,
     tracker_handle: TrackerHandle,
+    serving_store: Option<ServingStore>,
     cln_token: &CancellationToken,
-) -> error::Result<(
-    SinkWriter,
-    Option<SinkClient<Channel>>,
-    Option<SinkClient<Channel>>,
-)> {
-    let (sink_writer_builder, sink_rpc_client) = match primary_sink.sink_type.clone() {
-        SinkType::Log(_) => (
-            SinkWriterBuilder::new(
-                batch_size,
-                read_timeout,
-                SinkClientType::Log,
-                tracker_handle,
-            ),
-            None,
+) -> error::Result<SinkWriter> {
+    let mut sink_writer_builder = match primary_sink.sink_type.clone() {
+        SinkType::Log(_) => SinkWriterBuilder::new(
+            batch_size,
+            read_timeout,
+            SinkClientType::Log,
+            tracker_handle,
         ),
-        SinkType::Blackhole(_) => (
-            SinkWriterBuilder::new(
-                batch_size,
-                read_timeout,
-                SinkClientType::Blackhole,
-                tracker_handle,
-            ),
-            None,
+        SinkType::Blackhole(_) => SinkWriterBuilder::new(
+            batch_size,
+            read_timeout,
+            SinkClientType::Blackhole,
+            tracker_handle,
         ),
         SinkType::UserDefined(ud_config) => {
             let sink_server_info =
@@ -85,37 +77,26 @@ pub(crate) async fn create_sink_writer(
             .max_encoding_message_size(ud_config.grpc_max_message_size)
             .max_decoding_message_size(ud_config.grpc_max_message_size);
             grpc::wait_until_sink_ready(cln_token, &mut sink_grpc_client).await?;
-            (
-                SinkWriterBuilder::new(
-                    batch_size,
-                    read_timeout,
-                    SinkClientType::UserDefined(sink_grpc_client.clone()),
-                    tracker_handle,
-                )
-                .retry_config(primary_sink.retry_config.unwrap_or_default()),
-                Some(sink_grpc_client),
+            SinkWriterBuilder::new(
+                batch_size,
+                read_timeout,
+                SinkClientType::UserDefined(sink_grpc_client.clone()),
+                tracker_handle,
             )
+            .retry_config(primary_sink.retry_config.unwrap_or_default())
         }
     };
 
     if let Some(fb_sink) = fallback_sink {
         return match fb_sink.sink_type.clone() {
-            SinkType::Log(_) => Ok((
-                sink_writer_builder
-                    .fb_sink_client(SinkClientType::Log)
-                    .build()
-                    .await?,
-                sink_rpc_client.clone(),
-                None,
-            )),
-            SinkType::Blackhole(_) => Ok((
-                sink_writer_builder
-                    .fb_sink_client(SinkClientType::Blackhole)
-                    .build()
-                    .await?,
-                sink_rpc_client.clone(),
-                None,
-            )),
+            SinkType::Log(_) => Ok(sink_writer_builder
+                .fb_sink_client(SinkClientType::Log)
+                .build()
+                .await?),
+            SinkType::Blackhole(_) => Ok(sink_writer_builder
+                .fb_sink_client(SinkClientType::Blackhole)
+                .build()
+                .await?),
             SinkType::UserDefined(ud_config) => {
                 let fb_server_info =
                     sdk_server_info(ud_config.server_info_path.clone().into(), cln_token.clone())
@@ -141,18 +122,19 @@ pub(crate) async fn create_sink_writer(
                 .max_decoding_message_size(ud_config.grpc_max_message_size);
                 grpc::wait_until_sink_ready(cln_token, &mut sink_grpc_client).await?;
 
-                Ok((
-                    sink_writer_builder
-                        .fb_sink_client(SinkClientType::UserDefined(sink_grpc_client.clone()))
-                        .build()
-                        .await?,
-                    sink_rpc_client.clone(),
-                    Some(sink_grpc_client),
-                ))
+                Ok(sink_writer_builder
+                    .fb_sink_client(SinkClientType::UserDefined(sink_grpc_client.clone()))
+                    .build()
+                    .await?)
             }
         };
     }
-    Ok((sink_writer_builder.build().await?, sink_rpc_client, None))
+
+    if let Some(serving_store) = serving_store {
+        sink_writer_builder = sink_writer_builder.serving_store(serving_store);
+    }
+
+    sink_writer_builder.build().await
 }
 
 /// Creates a transformer if it is configured
@@ -161,7 +143,7 @@ pub(crate) async fn create_transformer(
     transformer_config: Option<TransformerConfig>,
     tracker_handle: TrackerHandle,
     cln_token: CancellationToken,
-) -> error::Result<(Option<Transformer>, Option<SourceTransformClient<Channel>>)> {
+) -> error::Result<Option<Transformer>> {
     if let Some(transformer_config) = transformer_config {
         if let config::components::transformer::TransformerType::UserDefined(ud_transformer) =
             &transformer_config.transformer_type
@@ -189,21 +171,18 @@ pub(crate) async fn create_transformer(
             .max_encoding_message_size(ud_transformer.grpc_max_message_size)
             .max_decoding_message_size(ud_transformer.grpc_max_message_size);
             grpc::wait_until_transformer_ready(&cln_token, &mut transformer_grpc_client).await?;
-            return Ok((
-                Some(
-                    Transformer::new(
-                        batch_size,
-                        transformer_config.concurrency,
-                        transformer_grpc_client.clone(),
-                        tracker_handle,
-                    )
-                    .await?,
-                ),
-                Some(transformer_grpc_client),
+            return Ok(Some(
+                Transformer::new(
+                    batch_size,
+                    transformer_config.concurrency,
+                    transformer_grpc_client.clone(),
+                    tracker_handle,
+                )
+                .await?,
             ));
         }
     }
-    Ok((None, None))
+    Ok(None)
 }
 
 pub(crate) async fn create_mapper(
@@ -212,7 +191,7 @@ pub(crate) async fn create_mapper(
     map_config: MapVtxConfig,
     tracker_handle: TrackerHandle,
     cln_token: CancellationToken,
-) -> error::Result<(MapHandle, Option<MapClient<Channel>>)> {
+) -> error::Result<MapHandle> {
     match map_config.map_type {
         MapType::UserDefined(mut config) => {
             let server_info =
@@ -249,25 +228,24 @@ pub(crate) async fn create_mapper(
                     .max_encoding_message_size(config.grpc_max_message_size)
                     .max_decoding_message_size(config.grpc_max_message_size);
             grpc::wait_until_mapper_ready(&cln_token, &mut map_grpc_client).await?;
-            Ok((
-                MapHandle::new(
-                    server_info.get_map_mode().unwrap_or(MapMode::Unary),
-                    batch_size,
-                    read_timeout,
-                    map_config.concurrency,
-                    map_grpc_client.clone(),
-                    tracker_handle,
-                )
-                .await?,
-                Some(map_grpc_client),
-            ))
+            Ok(MapHandle::new(
+                server_info.get_map_mode().unwrap_or(MapMode::Unary),
+                batch_size,
+                read_timeout,
+                map_config.concurrency,
+                map_grpc_client.clone(),
+                tracker_handle,
+            )
+            .await?)
         }
         MapType::Builtin(_) => Err(Error::Mapper("Builtin mapper is not supported".to_string())),
     }
 }
 
 /// Creates a source type based on the configuration
+#[allow(clippy::too_many_arguments)]
 pub async fn create_source(
+    js_context: Option<Context>,
     batch_size: usize,
     read_timeout: Duration,
     source_config: &SourceConfig,
@@ -275,21 +253,18 @@ pub async fn create_source(
     transformer: Option<Transformer>,
     watermark_handle: Option<SourceWatermarkHandle>,
     cln_token: CancellationToken,
-) -> error::Result<(Source, Option<SourceClient<Channel>>)> {
+) -> error::Result<Source> {
     match &source_config.source_type {
         SourceType::Generator(generator_config) => {
             let (generator_read, generator_ack, generator_lag) =
                 new_generator(generator_config.clone(), batch_size)?;
-            Ok((
-                Source::new(
-                    batch_size,
-                    source::SourceType::Generator(generator_read, generator_ack, generator_lag),
-                    tracker_handle,
-                    source_config.read_ahead,
-                    transformer,
-                    watermark_handle,
-                ),
-                None,
+            Ok(Source::new(
+                batch_size,
+                source::SourceType::Generator(generator_read, generator_ack, generator_lag),
+                tracker_handle,
+                source_config.read_ahead,
+                transformer,
+                watermark_handle,
             ))
         }
         SourceType::UserDefined(udsource_config) => {
@@ -320,16 +295,13 @@ pub async fn create_source(
             grpc::wait_until_source_ready(&cln_token, &mut source_grpc_client).await?;
             let (ud_read, ud_ack, ud_lag) =
                 new_source(source_grpc_client.clone(), batch_size, read_timeout).await?;
-            Ok((
-                Source::new(
-                    batch_size,
-                    source::SourceType::UserDefinedSource(ud_read, ud_ack, ud_lag),
-                    tracker_handle,
-                    source_config.read_ahead,
-                    transformer,
-                    watermark_handle,
-                ),
-                Some(source_grpc_client),
+            Ok(Source::new(
+                batch_size,
+                source::SourceType::UserDefinedSource(ud_read, ud_ack, ud_lag),
+                tracker_handle,
+                source_config.read_ahead,
+                transformer,
+                watermark_handle,
             ))
         }
         SourceType::Pulsar(pulsar_config) => {
@@ -340,36 +312,33 @@ pub async fn create_source(
                 *get_vertex_replica(),
             )
             .await?;
-            Ok((
-                Source::new(
-                    batch_size,
-                    source::SourceType::Pulsar(pulsar),
-                    tracker_handle,
-                    source_config.read_ahead,
-                    transformer,
-                    watermark_handle,
-                ),
-                None,
+            Ok(Source::new(
+                batch_size,
+                source::SourceType::Pulsar(pulsar),
+                tracker_handle,
+                source_config.read_ahead,
+                transformer,
+                watermark_handle,
             ))
         }
+        // for serving we use batch size as 1 as we are not batching the messages
+        // and read ahead is enabled as it supports it.
         SourceType::Serving(config) => {
             let serving = ServingSource::new(
+                js_context.expect("Jetstream context is required for serving source"),
                 Arc::clone(config),
-                batch_size,
+                1,
                 read_timeout,
                 *get_vertex_replica(),
             )
             .await?;
-            Ok((
-                Source::new(
-                    batch_size,
-                    source::SourceType::Serving(serving),
-                    tracker_handle,
-                    source_config.read_ahead,
-                    transformer,
-                    watermark_handle,
-                ),
-                None,
+            Ok(Source::new(
+                1,
+                source::SourceType::Serving(serving),
+                tracker_handle,
+                true,
+                transformer,
+                watermark_handle,
             ))
         }
     }
