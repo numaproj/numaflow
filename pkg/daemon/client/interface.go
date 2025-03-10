@@ -31,4 +31,5 @@ type DaemonClient interface {
 	GetVertexMetrics(ctx context.Context, pipeline, vertex string) ([]*daemon.VertexMetrics, error)
 	GetPipelineWatermarks(ctx context.Context, pipeline string) ([]*daemon.EdgeWatermark, error)
 	GetPipelineStatus(ctx context.Context, pipeline string) (*daemon.PipelineStatus, error)
+	GetVertexErrors(ctx context.Context, pipeline, vertex, replica string) ([]*daemon.VertexError, error)
 }

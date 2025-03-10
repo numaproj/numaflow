@@ -1262,6 +1262,42 @@ func (h *handler) GetMonoVertexHealth(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
 }
 
+func (h *handler) GetVertexErrors(c *gin.Context) {
+	ns, pipeline, vertex, replica := c.Param("namespace"), c.Param("pipeline"), c.Param("vertex"), c.Param("replica")
+
+	client, err := h.getPipelineDaemonClient(ns, pipeline)
+	if err != nil || client == nil {
+		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
+		return
+	}
+
+	errors, err := client.GetVertexErrors(c, pipeline, vertex, replica)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to get the errors for pipeline %q vertex %q: %s", pipeline, vertex, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, errors))
+}
+
+func (h *handler) GetMonoVertexErrors(c *gin.Context) {
+	ns, monoVertex, replica := c.Param("namespace"), c.Param("mono-vertex"), c.Param("replica")
+
+	client, err := h.getMonoVertexDaemonClient(ns, monoVertex)
+	if err != nil || client == nil {
+		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for mono vertex %q, %s", monoVertex, err.Error()))
+		return
+	}
+
+	errors, err := client.GetMonoVertexErrors(c, monoVertex, replica)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to get the errors for mono vertex %q: %s", monoVertex, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, errors))
+}
+
 func (h *handler) GetMetricData(c *gin.Context) {
 	var requestBody MetricsRequestBody
 	if h.promQlServiceObj == nil {

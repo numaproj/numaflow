@@ -40,12 +40,23 @@ import (
 // Note: Please keep consistent with the definitions in rust/monovertex/sc/metrics.rs
 const MonoVtxPendingMetric = "monovtx_pending"
 
+type PodReplica string
+
+type ErrorDetails struct {
+	Container string `json:"container"`
+	Timestamp string `json:"timestamp"`
+	Code      string `json:"code"`
+	Message   string `json:"message"`
+	Details   string `json:"details"`
+}
+
 type MonoVertexService struct {
 	mvtxdaemon.UnimplementedMonoVertexDaemonServiceServer
 	monoVtx       *v1alpha1.MonoVertex
 	httpClient    *http.Client
 	rater         raterPkg.MonoVtxRatable
 	healthChecker *HealthChecker
+	localCache    map[PodReplica][]ErrorDetails
 }
 
 var _ mvtxdaemon.MonoVertexDaemonServiceServer = (*MonoVertexService)(nil)
@@ -65,6 +76,26 @@ func NewMoveVertexService(
 		},
 		rater:         rater,
 		healthChecker: NewHealthChecker(monoVtx),
+		localCache: map[PodReplica][]ErrorDetails{
+			"simple-mono-vertex-mv-0": {
+				{
+					Container: "container1",
+					Timestamp: "2023-10-01T12:00:00Z",
+					Code:      "Error 1",
+					Message:   "Sample error message 1",
+					Details:   "Detailed description of error 1",
+				},
+			},
+			"simple-mono-vertex-mv-1": {
+				{
+					Container: "container2",
+					Timestamp: "2023-10-02T13:00:00Z",
+					Code:      "Error 2",
+					Message:   "Sample error message 2",
+					Details:   "Detailed description of error 2",
+				},
+			},
+		},
 	}
 	return &mv, nil
 }
@@ -177,4 +208,28 @@ func (mvs *MonoVertexService) startHealthCheck(ctx context.Context) {
 			return
 		}
 	}
+}
+
+func (mvs *MonoVertexService) GetMonoVertexErrors(ctx context.Context, request *mvtxdaemon.GetMonoVertexErrorsRequest) (*mvtxdaemon.GetMonoVertexErrorsResponse, error) {
+	monoVertex, replica := request.GetMonoVertex(), request.GetReplica()
+	podReplica := fmt.Sprintf("%s-mv-%s", monoVertex, replica)
+
+	resp := new(mvtxdaemon.GetMonoVertexErrorsResponse)
+
+	// If the errors are present in the local cache, return the errors.
+	if errors, ok := mvs.localCache[PodReplica(podReplica)]; ok {
+		replicaError := make([]*mvtxdaemon.MonoVertexError, len(errors))
+		for i, err := range errors {
+			replicaError[i] = &mvtxdaemon.MonoVertexError{
+				Container: err.Container,
+				Timestamp: err.Timestamp,
+				Code:      err.Code,
+				Message:   err.Message,
+				Details:   err.Details,
+			}
+		}
+		resp.Errors = replicaError
+	}
+
+	return resp, nil
 }
