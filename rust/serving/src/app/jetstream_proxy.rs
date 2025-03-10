@@ -26,25 +26,25 @@ use crate::{Error, Message, MessageWrapper};
 const NUMAFLOW_RESP_ARRAY_LEN: &str = "Numaflow-Array-Len";
 const NUMAFLOW_RESP_ARRAY_IDX_LEN: &str = "Numaflow-Array-Index-Len";
 
-struct ProxyState<T, C> {
+struct ProxyState<T, U> {
     message: mpsc::Sender<MessageWrapper>,
     tid_header: String,
     /// Lets the HTTP handlers know whether they are in a Monovertex or a Pipeline
     monovertex: bool,
-    callback: orchestrator::State<T, C>,
+    orchestrator: orchestrator::OrchestratorState<T, U>,
 }
 
 pub(crate) async fn jetstream_proxy<
     T: Clone + Send + Sync + DataStore + 'static,
-    C: Clone + Send + Sync + CallbackStore + 'static,
+    U: Clone + Send + Sync + CallbackStore + 'static,
 >(
-    state: AppState<T, C>,
+    state: AppState<T, U>,
 ) -> crate::Result<Router> {
     let proxy_state = Arc::new(ProxyState {
         message: state.message.clone(),
         tid_header: state.settings.tid_header.clone(),
         monovertex: state.settings.pipeline_spec.edges.is_empty(),
-        callback: state.callback_state.clone(),
+        orchestrator: state.orchestrator_state.clone(),
     });
 
     let router = Router::new()
@@ -63,12 +63,12 @@ struct ServeQueryParams {
 
 async fn fetch<
     T: Send + Sync + Clone + DataStore + 'static,
-    C: Send + Sync + Clone + CallbackStore + 'static,
+    U: Send + Sync + Clone + CallbackStore + 'static,
 >(
-    State(proxy_state): State<Arc<ProxyState<T, C>>>,
+    State(proxy_state): State<Arc<ProxyState<T, U>>>,
     Query(ServeQueryParams { id }): Query<ServeQueryParams>,
 ) -> Response {
-    let pipeline_result = match proxy_state.callback.clone().retrieve_saved(&id).await {
+    let pipeline_result = match proxy_state.orchestrator.clone().retrieve_saved(&id).await {
         Ok(result) => result,
         Err(e) => {
             if let Error::Store(e) = e {
@@ -121,9 +121,9 @@ async fn fetch<
 
 async fn sse_handler<
     T: Send + Sync + Clone + DataStore + 'static,
-    C: Send + Sync + Clone + CallbackStore + 'static,
+    U: Send + Sync + Clone + CallbackStore + 'static,
 >(
-    State(proxy_state): State<Arc<ProxyState<T, C>>>,
+    State(proxy_state): State<Arc<ProxyState<T, U>>>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>> {
@@ -140,8 +140,8 @@ async fn sse_handler<
         );
     }
 
-    let mut callback_state = proxy_state.callback.clone();
-    let response_stream = callback_state.stream_response(&id).await.unwrap();
+    let mut orchestrator_state = proxy_state.orchestrator.clone();
+    let response_stream = orchestrator_state.stream_response(&id).await.unwrap();
 
     let (confirm_save_tx, confirm_save_rx) = oneshot::channel();
     let message = MessageWrapper {
@@ -159,8 +159,10 @@ async fn sse_handler<
         .await
         .expect("failed to send message");
 
+    // we are certain that the message has been written to ISB for processing
     confirm_save_rx.await.unwrap();
 
+    // create a watcher stream
     let stream = response_stream
         .map(|response| Ok(Event::default().data(String::from_utf8_lossy(&response))));
 
@@ -169,9 +171,9 @@ async fn sse_handler<
 
 async fn sync_publish<
     T: Send + Sync + Clone + DataStore + 'static,
-    C: Send + Sync + Clone + CallbackStore + 'static,
+    U: Send + Sync + Clone + CallbackStore + 'static,
 >(
-    State(proxy_state): State<Arc<ProxyState<T, C>>>,
+    State(proxy_state): State<Arc<ProxyState<T, U>>>,
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
@@ -190,7 +192,7 @@ async fn sync_publish<
 
     // Register the ID in the callback proxy state
     let notify = match proxy_state
-        .callback
+        .orchestrator
         .clone()
         .process_request(id.as_str())
         .await
@@ -228,7 +230,7 @@ async fn sync_publish<
     if let Err(e) = confirm_save_rx.await {
         // Deregister the ID in the callback proxy state if waiting for ack fails
         let _ = proxy_state
-            .callback
+            .orchestrator
             .clone()
             .mark_as_failed(&id, e.to_string().as_str())
             .await;
@@ -247,7 +249,7 @@ async fn sync_publish<
         ));
     }
 
-    let result = match proxy_state.callback.clone().retrieve_saved(&id).await {
+    let result = match proxy_state.orchestrator.clone().retrieve_saved(&id).await {
         Ok(result) => result,
         Err(e) => {
             error!(error = ?e, "Failed to retrieve from store");
@@ -291,9 +293,9 @@ async fn sync_publish<
 
 async fn async_publish<
     T: Send + Sync + Clone + DataStore + 'static,
-    C: Send + Sync + Clone + CallbackStore + 'static,
+    U: Send + Sync + Clone + CallbackStore + 'static,
 >(
-    State(proxy_state): State<Arc<ProxyState<T, C>>>,
+    State(proxy_state): State<Arc<ProxyState<T, U>>>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Json<ServeResponse>, ApiError> {
@@ -316,7 +318,7 @@ async fn async_publish<
 
     // Register request in Redis
     let notify = match proxy_state
-        .callback
+        .orchestrator
         .clone()
         .process_request(id.as_str())
         .await
@@ -378,9 +380,9 @@ async fn async_publish<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::orchestrator::State as CallbackState;
+    use crate::app::orchestrator::OrchestratorState as CallbackState;
     use crate::app::store::cbstore::jetstreamstore::JetStreamCallbackStore;
-    use crate::app::store::datastore::jetstreamstore::JetStreamDataStore;
+    use crate::app::store::datastore::jetstream::JetStreamDataStore;
     use crate::app::tracker::MessageGraph;
     use crate::callback::{Callback, Response};
     use crate::config::DEFAULT_ID_HEADER;
@@ -448,7 +450,7 @@ mod tests {
         let app_state = AppState {
             message: messages_tx,
             settings: Arc::new(settings),
-            callback_state,
+            orchestrator_state: callback_state,
         };
 
         let app = jetstream_proxy(app_state).await?;
@@ -574,7 +576,7 @@ mod tests {
         let app_state = AppState {
             message: messages_tx,
             settings: Arc::new(settings),
-            callback_state: callback_state.clone(),
+            orchestrator_state: callback_state.clone(),
         };
 
         let app = jetstream_proxy(app_state).await.unwrap();
@@ -660,7 +662,7 @@ mod tests {
         let app_state = AppState {
             message: messages_tx,
             settings,
-            callback_state: callback_state.clone(),
+            orchestrator_state: callback_state.clone(),
         };
 
         let app = jetstream_proxy(app_state).await.unwrap();

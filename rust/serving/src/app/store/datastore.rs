@@ -7,10 +7,10 @@ use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 
 /// JetStream based datum store
-pub(crate) mod jetstreamstore;
+pub(crate) mod jetstream;
 
 /// in-memory based datum store
-pub(crate) mod memstore;
+pub(crate) mod inmemory;
 
 /// user defined datum store
 pub(crate) mod user_defined;

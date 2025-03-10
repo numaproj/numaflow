@@ -16,24 +16,24 @@ use tokio_stream::StreamExt;
 use tracing::{error, info};
 
 #[derive(Clone)]
-pub(crate) struct State<T, C> {
+pub(crate) struct OrchestratorState<T, U> {
     // generator to generate subgraph
     msg_graph_generator: Arc<MessageGraph>,
     // conn is to be used while reading and writing to redis.
     datum_store: T,
-    callback_store: C,
+    callback_store: U,
 }
 
-impl<T, C> State<T, C>
+impl<T, U> OrchestratorState<T, U>
 where
     T: Clone + Send + Sync + DataStore + 'static,
-    C: Clone + Send + Sync + CallbackStore + 'static,
+    U: Clone + Send + Sync + CallbackStore + 'static,
 {
     /// Create a new State to track connections and callback data
     pub(crate) async fn new(
         msg_graph: MessageGraph,
         datum_store: T,
-        callback_store: C,
+        callback_store: U,
     ) -> crate::Result<Self> {
         Ok(Self {
             msg_graph_generator: Arc::new(msg_graph),
@@ -42,9 +42,9 @@ where
         })
     }
 
-    /// register a new connection
-    /// The oneshot receiver will be notified when all callbacks for this connection is received from
-    /// the numaflow pipeline.
+    /// register a new connection and spwans a watcher to watch on the callback stream. An oneshot rx is
+    /// returned. This oneshot rx will be notified when all callbacks for this connection is received
+    /// from the numaflow pipeline.
     pub(crate) async fn process_request(
         &mut self,
         id: &str,
@@ -124,7 +124,8 @@ where
     }
 
     /// Listens on watcher events (SSE uses KV watch) and checks with the Graph is complete. Once
-    /// Graph is complete, it will deregister and closes the outbound SSE channel.
+    /// Graph is complete, it will deregister and closes the outbound SSE channel. The returned
+    /// rx contains the stream of results (result per sink).
     pub(crate) async fn stream_response(
         &mut self,
         id: &str,
@@ -178,6 +179,7 @@ where
             }
         });
 
+        // watch for data stored in the datastore
         let (mut response_stream, _handle) = self.datum_store.stream_data(id).await?;
         tokio::spawn(async move {
             while let Some(response) = response_stream.next().await {
@@ -225,7 +227,7 @@ mod tests {
 
     use super::*;
     use crate::app::store::cbstore::jetstreamstore::JetStreamCallbackStore;
-    use crate::app::store::datastore::jetstreamstore::JetStreamDataStore;
+    use crate::app::store::datastore::jetstream::JetStreamDataStore;
     use crate::callback::{Callback, Response};
     use crate::pipeline::PipelineDCG;
 
@@ -261,7 +263,7 @@ mod tests {
             .await
             .expect("Failed to create datum store");
 
-        let mut state = State::new(msg_graph, datum_store, callback_store)
+        let mut state = OrchestratorState::new(msg_graph, datum_store, callback_store)
             .await
             .unwrap();
 
@@ -386,7 +388,7 @@ mod tests {
 
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec).unwrap();
 
-        let mut state = State::new(msg_graph, datum_store, callback_store)
+        let mut state = OrchestratorState::new(msg_graph, datum_store, callback_store)
             .await
             .unwrap();
 
