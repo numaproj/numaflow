@@ -26,6 +26,7 @@ import (
 
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	resource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
@@ -318,7 +319,7 @@ func (mv MonoVertex) simpleCopy() MonoVertex {
 
 func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, error) {
 	copiedSpec := mv.simpleCopy()
-	copiedSpec.Spec.Scale = Scale{LookbackSeconds: mv.Spec.Scale.LookbackSeconds}
+	copiedSpec.Spec.Scale = Scale{LookbackSeconds: ptr.To[uint32](uint32(mv.Spec.Scale.GetLookbackSeconds()))}
 	monoVtxBytes, err := json.Marshal(copiedSpec)
 	if err != nil {
 		return nil, errors.New("failed to marshal mono vertex spec")
@@ -336,6 +337,12 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 			Name: varVolumeName,
 			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{
 				Medium: corev1.StorageMediumMemory,
+			}},
+		},
+		{
+			Name: RuntimeDirVolume,
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{
+				SizeLimit: resource.NewQuantity(RuntimeDirSizeLimit, resource.BinarySI),
 			}},
 		},
 	}
@@ -390,6 +397,12 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 	containers[0].Ports = []corev1.ContainerPort{
 		{Name: MonoVertexMetricsPortName, ContainerPort: MonoVertexMetricsPort},
 	}
+
+	// Attach an EmptyDir for runtime info
+	containers[0].VolumeMounts = append(containers[0].VolumeMounts, corev1.VolumeMount{
+		Name:      RuntimeDirVolume,
+		MountPath: RuntimeDirMountPath,
+	})
 
 	for i := 0; i < len(sidecarContainers); i++ { // udsink, udsource, udtransformer ...
 		sidecarContainers[i].Env = append(sidecarContainers[i].Env, mv.commonEnvs()...)
@@ -611,7 +624,7 @@ func (mvs *MonoVertexStatus) MarkPhaseRunning() {
 	mvs.MarkPhase(MonoVertexPhaseRunning, "", "")
 }
 
-// MarkPhasePaused set the Pipeline has been paused.
+// MarkPhasePaused set the MonoVertex has been paused.
 func (mvs *MonoVertexStatus) MarkPhasePaused() {
 	mvs.MarkPhase(MonoVertexPhasePaused, "", "MonoVertex paused")
 }
@@ -643,7 +656,7 @@ type MonoVertexList struct {
 }
 
 type MonoVertexLifecycle struct {
-	// DesiredPhase used to bring the pipeline from current phase to desired phase
+	// DesiredPhase used to bring the MonoVertex from current phase to desired phase
 	// +kubebuilder:default=Running
 	// +optional
 	DesiredPhase MonoVertexPhase `json:"desiredPhase,omitempty" protobuf:"bytes,1,opt,name=desiredPhase"`

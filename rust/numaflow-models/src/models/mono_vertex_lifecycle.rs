@@ -18,7 +18,7 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct MonoVertexLifecycle {
-    /// DesiredPhase used to bring the pipeline from current phase to desired phase
+    /// DesiredPhase used to bring the MonoVertex from current phase to desired phase
     #[serde(rename = "desiredPhase", skip_serializing_if = "Option::is_none")]
     pub desired_phase: Option<String>,
 }

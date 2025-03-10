@@ -14,6 +14,7 @@ pub(crate) mod source {
     use numaflow_sqs::source::{AWSCredentials, SQSAuth, SQSSourceConfig};
     use tracing::warn;
 
+    use crate::config::{get_namespace, get_pipeline_name};
     use crate::error::Error;
     use crate::Result;
 
@@ -84,7 +85,7 @@ pub(crate) mod source {
             let auth: Option<PulsarAuth> = match value.auth {
                 Some(auth) => 'out: {
                     let Some(token) = auth.token else {
-                        tracing::warn!("JWT Token authentication is specified, but token is empty");
+                        warn!("JWT Token authentication is specified, but token is empty");
                         break 'out None;
                     };
                     let secret = crate::shared::create_components::get_secret_from_volume(
@@ -112,11 +113,14 @@ pub(crate) mod source {
         type Error = Error;
 
         fn try_from(value: Box<SqsSource>) -> Result<Self> {
+            if value.aws_region.is_empty() {
+                return Err(Error::Config(
+                    "AWS region is required for SQS source".to_string(),
+                ));
+            }
+
             let auth = if value.auth.role_arn.is_some() {
-                SQSAuth {
-                    credentials: None,
-                    role_arn: value.auth.role_arn,
-                }
+                SQSAuth::RoleArn(value.auth.role_arn.unwrap())
             } else if value.auth.credentials.is_some() {
                 let creds = value.auth.credentials.unwrap();
                 let access_key_id = crate::shared::create_components::get_secret_from_volume(
@@ -131,13 +135,10 @@ pub(crate) mod source {
                 )
                 .unwrap();
 
-                SQSAuth {
-                    credentials: Some(AWSCredentials {
-                        access_key_id,
-                        secret_access_key,
-                    }),
-                    role_arn: None,
-                }
+                SQSAuth::Credentials(AWSCredentials {
+                    access_key_id,
+                    secret_access_key,
+                })
             } else {
                 return Err(Error::Config(
                     "No authentication method provided for SQS source".to_string(),
@@ -180,27 +181,17 @@ pub(crate) mod source {
                     .map_err(|e| Error::Config(format!("Reading API auth token secret: {e:?}")))?;
                     settings.api_auth_token = Some(secret);
                 } else {
-                    tracing::warn!("Authentication token for Serving API is specified, but the secret is empty");
+                    warn!("Authentication token for Serving API is specified, but the secret is empty");
                 };
             }
 
-            if let Some(ttl) = cfg.store.ttl {
-                if ttl.is_negative() {
-                    return Err(Error::Config(format!(
-                        "TTL value for the store can not be negative. Provided value = {ttl:?}"
-                    )));
-                }
-                let ttl: std::time::Duration = ttl.into();
-                let ttl_secs = ttl.as_secs() as u32;
-                // TODO: Identify a minimum value
-                if ttl_secs < 1 {
-                    return Err(Error::Config(format!(
-                        "TTL value for the store must not be less than 1 second. Provided value = {ttl:?}"
-                    )));
-                }
-                settings.redis.ttl_secs = Some(ttl_secs);
-            }
-            settings.redis.addr = cfg.store.url;
+            settings.js_store = format!(
+                "{}-{}_SERVING_KV_STORE",
+                get_namespace(),
+                get_pipeline_name(),
+            );
+
+            settings.drain_timeout_secs = cfg.request_timeout_seconds.unwrap_or(120).max(1) as u64; // Ensure timeout is atleast 1 second
 
             Ok(SourceType::Serving(Arc::new(settings)))
         }

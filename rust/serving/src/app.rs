@@ -19,37 +19,35 @@ use tracing::{info, info_span, Span};
 use uuid::Uuid;
 
 use self::{
-    callback::callback_handler, direct_proxy::direct_proxy, jetstream_proxy::jetstream_proxy,
-    message_path::get_message_path,
+    direct_proxy::direct_proxy, jetstream_proxy::jetstream_proxy, message_path::get_message_path,
 };
-use crate::app::callback::store::Store;
+use crate::app::store::cbstore::CallbackStore;
+use crate::app::store::datastore::DataStore;
 use crate::metrics::capture_metrics;
 use crate::AppState;
 use crate::Error::InitError;
 
-/// manage callbacks
-pub(crate) mod callback;
 /// simple direct reverse-proxy
 mod direct_proxy;
 /// write the incoming messages to jetstream
 mod jetstream_proxy;
 /// Return message path in response to UI requests
 mod message_path; // TODO: merge message_path and tracker
+/// in-memory state store including connection tracking
+pub(crate) mod orchestrator;
 mod response;
+/// manage callbacks
+pub(crate) mod store;
 pub(crate) mod tracker;
 
-/// Everything for numaserve starts here. The routing, middlewares, proxying, etc.
-// TODO
-// - [ ] implement an proxy and pass in UUID in the header if not present
-// - [ ] outer fallback for /v1/direct
-
 /// Start the main application Router and the axum server.
-pub(crate) async fn start_main_server<T>(
-    app: AppState<T>,
+pub(crate) async fn start_main_server<T, U>(
+    app: AppState<T, U>,
     tls_config: RustlsConfig,
 ) -> crate::Result<()>
 where
-    T: Clone + Send + Sync + Store + 'static,
+    T: Clone + Send + Sync + DataStore + 'static,
+    U: Clone + Send + Sync + CallbackStore + 'static,
 {
     let app_addr: SocketAddr = format!("0.0.0.0:{}", &app.settings.app_listen_port)
         .parse()
@@ -57,7 +55,10 @@ where
 
     let handle = Handle::new();
     // Spawn a task to gracefully shutdown server.
-    tokio::spawn(graceful_shutdown(handle.clone()));
+    tokio::spawn(graceful_shutdown(
+        handle.clone(),
+        app.settings.drain_timeout_secs,
+    ));
 
     info!(?app_addr, "Starting application server");
 
@@ -72,11 +73,11 @@ where
     Ok(())
 }
 
-pub(crate) async fn router_with_auth<T>(app: AppState<T>) -> crate::Result<Router>
+pub(crate) async fn router_with_auth<T, U>(app: AppState<T, U>) -> crate::Result<Router>
 where
-    T: Clone + Send + Sync + Store + 'static,
+    T: Clone + Send + Sync + DataStore + 'static,
+    U: Clone + Send + Sync + CallbackStore + 'static,
 {
-    let tid_header = app.settings.tid_header.clone();
     let layers = ServiceBuilder::new()
         // Add tracing to all requests
         .layer(
@@ -87,12 +88,12 @@ where
                         // We don't need request ID for these endpoints
                         return info_span!("request", method=?req.method(), path=req_path);
                     }
-                    let tid = req
-                        .headers()
-                        .get(&tid_header)
-                        .and_then(|v| v.to_str().ok())
-                        .map(|v| v.to_string())
-                        .unwrap_or_else(|| Uuid::new_v4().to_string());
+
+                    // Generate a tid with good enough randomness and not too long
+                    // Example of a UUID v7: 01951b72-d0f4-711e-baba-4efe03d9cb76
+                    // We use the characters representing timestamp in milliseconds (without '-'), and last 5 characters for randomness.
+                    let uuid = Uuid::now_v7().to_string();
+                    let tid = format!("{}{}{}", &uuid[..8], &uuid[10..13], &uuid[uuid.len() - 5..]);
 
                     let matched_path = req
                         .extensions()
@@ -107,7 +108,7 @@ where
                             // 5xx responses will be logged at 'error' level in `on_failure`
                             return;
                         }
-                        tracing::info!(status=?response.status(), ?latency)
+                        info!(status=?response.status(), ?latency)
                     },
                 )
                 .on_failure(
@@ -133,7 +134,7 @@ where
 
 // Gracefully shutdown the server on receiving SIGINT or SIGTERM
 // by sending a shutdown signal to the server using the handle.
-async fn graceful_shutdown(handle: Handle) {
+async fn graceful_shutdown(handle: Handle, duration_secs: u64) {
     let ctrl_c = async {
         signal::ctrl_c()
             .await
@@ -154,16 +155,11 @@ async fn graceful_shutdown(handle: Handle) {
 
     info!("sending graceful shutdown signal");
 
-    // Signal the server to shutdown using Handle.
-    // TODO: make the duration configurable
-    handle.graceful_shutdown(Some(Duration::from_secs(30)));
+    // Signal the server to shut down using Handle.
+    handle.graceful_shutdown(Some(Duration::from_secs(duration_secs)));
 }
 
-const PUBLISH_ENDPOINTS: [&str; 3] = [
-    "/v1/process/sync",
-    "/v1/process/sync_serve",
-    "/v1/process/async",
-];
+const PUBLISH_ENDPOINTS: [&str; 3] = ["/v1/process/sync", "/v1/process/async", "/v1/process/fetch"];
 
 // auth middleware to do token based authentication for all user facing routes
 // if auth is enabled.
@@ -209,8 +205,11 @@ async fn auth_middleware(
     }
 }
 
-async fn setup_app<T: Clone + Send + Sync + Store + 'static>(
-    app: AppState<T>,
+async fn setup_app<
+    T: Clone + Send + Sync + DataStore + 'static,
+    U: Clone + Send + Sync + CallbackStore + 'static,
+>(
+    app: AppState<T, U>,
 ) -> crate::Result<Router> {
     let parent = Router::new()
         .route("/health", get(health_check))
@@ -242,43 +241,45 @@ async fn livez() -> impl IntoResponse {
     StatusCode::NO_CONTENT
 }
 
-async fn readyz<T: Send + Sync + Clone + Store + 'static>(
-    State(app): State<AppState<T>>,
+async fn readyz<
+    T: Send + Sync + Clone + DataStore + 'static,
+    U: Send + Sync + Clone + CallbackStore + 'static,
+>(
+    State(app): State<AppState<T, U>>,
 ) -> impl IntoResponse {
-    if app.callback_state.clone().ready().await {
+    if app.orchestrator_state.clone().ready().await {
         StatusCode::NO_CONTENT
     } else {
         StatusCode::INTERNAL_SERVER_ERROR
     }
 }
 
-async fn routes<T: Clone + Send + Sync + Store + 'static>(
-    app_state: AppState<T>,
+async fn routes<
+    T: Clone + Send + Sync + DataStore + 'static,
+    U: Send + Sync + Clone + CallbackStore + 'static,
+>(
+    app_state: AppState<T, U>,
 ) -> crate::Result<Router> {
-    let state = app_state.callback_state.clone();
+    let state = app_state.orchestrator_state.clone();
     let jetstream_proxy = jetstream_proxy(app_state.clone()).await?;
-    let callback_router = callback_handler(
-        app_state.settings.tid_header.clone(),
-        app_state.callback_state.clone(),
-    );
+
     let message_path_handler = get_message_path(state);
-    Ok(jetstream_proxy
-        .merge(callback_router)
-        .merge(message_path_handler))
+    Ok(jetstream_proxy.merge(message_path_handler))
 }
 
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
 
+    use crate::app::orchestrator::OrchestratorState as CallbackState;
     use axum::http::StatusCode;
-    use callback::state::State as CallbackState;
     use tokio::sync::mpsc;
     use tower::ServiceExt;
     use tracker::MessageGraph;
 
     use super::*;
-    use crate::app::callback::store::memstore::InMemoryStore;
+    use crate::app::store::cbstore::memstore::InMemoryCallbackStore;
+    use crate::app::store::datastore::inmemory::InMemoryDataStore;
     use crate::Settings;
 
     const PIPELINE_SPEC_ENCODED: &str = "eyJ2ZXJ0aWNlcyI6W3sibmFtZSI6ImluIiwic291cmNlIjp7InNlcnZpbmciOnsiYXV0aCI6bnVsbCwic2VydmljZSI6dHJ1ZSwibXNnSURIZWFkZXJLZXkiOiJYLU51bWFmbG93LUlkIiwic3RvcmUiOnsidXJsIjoicmVkaXM6Ly9yZWRpczo2Mzc5In19fSwiY29udGFpbmVyVGVtcGxhdGUiOnsicmVzb3VyY2VzIjp7fSwiaW1hZ2VQdWxsUG9saWN5IjoiTmV2ZXIiLCJlbnYiOlt7Im5hbWUiOiJSVVNUX0xPRyIsInZhbHVlIjoiZGVidWcifV19LCJzY2FsZSI6eyJtaW4iOjF9LCJ1cGRhdGVTdHJhdGVneSI6eyJ0eXBlIjoiUm9sbGluZ1VwZGF0ZSIsInJvbGxpbmdVcGRhdGUiOnsibWF4VW5hdmFpbGFibGUiOiIyNSUifX19LHsibmFtZSI6InBsYW5uZXIiLCJ1ZGYiOnsiY29udGFpbmVyIjp7ImltYWdlIjoiYXNjaWk6MC4xIiwiYXJncyI6WyJwbGFubmVyIl0sInJlc291cmNlcyI6e30sImltYWdlUHVsbFBvbGljeSI6Ik5ldmVyIn0sImJ1aWx0aW4iOm51bGwsImdyb3VwQnkiOm51bGx9LCJjb250YWluZXJUZW1wbGF0ZSI6eyJyZXNvdXJjZXMiOnt9LCJpbWFnZVB1bGxQb2xpY3kiOiJOZXZlciJ9LCJzY2FsZSI6eyJtaW4iOjF9LCJ1cGRhdGVTdHJhdGVneSI6eyJ0eXBlIjoiUm9sbGluZ1VwZGF0ZSIsInJvbGxpbmdVcGRhdGUiOnsibWF4VW5hdmFpbGFibGUiOiIyNSUifX19LHsibmFtZSI6InRpZ2VyIiwidWRmIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6ImFzY2lpOjAuMSIsImFyZ3MiOlsidGlnZXIiXSwicmVzb3VyY2VzIjp7fSwiaW1hZ2VQdWxsUG9saWN5IjoiTmV2ZXIifSwiYnVpbHRpbiI6bnVsbCwiZ3JvdXBCeSI6bnVsbH0sImNvbnRhaW5lclRlbXBsYXRlIjp7InJlc291cmNlcyI6e30sImltYWdlUHVsbFBvbGljeSI6Ik5ldmVyIn0sInNjYWxlIjp7Im1pbiI6MX0sInVwZGF0ZVN0cmF0ZWd5Ijp7InR5cGUiOiJSb2xsaW5nVXBkYXRlIiwicm9sbGluZ1VwZGF0ZSI6eyJtYXhVbmF2YWlsYWJsZSI6IjI1JSJ9fX0seyJuYW1lIjoiZG9nIiwidWRmIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6ImFzY2lpOjAuMSIsImFyZ3MiOlsiZG9nIl0sInJlc291cmNlcyI6e30sImltYWdlUHVsbFBvbGljeSI6Ik5ldmVyIn0sImJ1aWx0aW4iOm51bGwsImdyb3VwQnkiOm51bGx9LCJjb250YWluZXJUZW1wbGF0ZSI6eyJyZXNvdXJjZXMiOnt9LCJpbWFnZVB1bGxQb2xpY3kiOiJOZXZlciJ9LCJzY2FsZSI6eyJtaW4iOjF9LCJ1cGRhdGVTdHJhdGVneSI6eyJ0eXBlIjoiUm9sbGluZ1VwZGF0ZSIsInJvbGxpbmdVcGRhdGUiOnsibWF4VW5hdmFpbGFibGUiOiIyNSUifX19LHsibmFtZSI6ImVsZXBoYW50IiwidWRmIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6ImFzY2lpOjAuMSIsImFyZ3MiOlsiZWxlcGhhbnQiXSwicmVzb3VyY2VzIjp7fSwiaW1hZ2VQdWxsUG9saWN5IjoiTmV2ZXIifSwiYnVpbHRpbiI6bnVsbCwiZ3JvdXBCeSI6bnVsbH0sImNvbnRhaW5lclRlbXBsYXRlIjp7InJlc291cmNlcyI6e30sImltYWdlUHVsbFBvbGljeSI6Ik5ldmVyIn0sInNjYWxlIjp7Im1pbiI6MX0sInVwZGF0ZVN0cmF0ZWd5Ijp7InR5cGUiOiJSb2xsaW5nVXBkYXRlIiwicm9sbGluZ1VwZGF0ZSI6eyJtYXhVbmF2YWlsYWJsZSI6IjI1JSJ9fX0seyJuYW1lIjoiYXNjaWlhcnQiLCJ1ZGYiOnsiY29udGFpbmVyIjp7ImltYWdlIjoiYXNjaWk6MC4xIiwiYXJncyI6WyJhc2NpaWFydCJdLCJyZXNvdXJjZXMiOnt9LCJpbWFnZVB1bGxQb2xpY3kiOiJOZXZlciJ9LCJidWlsdGluIjpudWxsLCJncm91cEJ5IjpudWxsfSwiY29udGFpbmVyVGVtcGxhdGUiOnsicmVzb3VyY2VzIjp7fSwiaW1hZ2VQdWxsUG9saWN5IjoiTmV2ZXIifSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19fSx7Im5hbWUiOiJzZXJ2ZS1zaW5rIiwic2luayI6eyJ1ZHNpbmsiOnsiY29udGFpbmVyIjp7ImltYWdlIjoic2VydmVzaW5rOjAuMSIsImVudiI6W3sibmFtZSI6Ik5VTUFGTE9XX0NBTExCQUNLX1VSTF9LRVkiLCJ2YWx1ZSI6IlgtTnVtYWZsb3ctQ2FsbGJhY2stVXJsIn0seyJuYW1lIjoiTlVNQUZMT1dfTVNHX0lEX0hFQURFUl9LRVkiLCJ2YWx1ZSI6IlgtTnVtYWZsb3ctSWQifV0sInJlc291cmNlcyI6e30sImltYWdlUHVsbFBvbGljeSI6Ik5ldmVyIn19LCJyZXRyeVN0cmF0ZWd5Ijp7fX0sImNvbnRhaW5lclRlbXBsYXRlIjp7InJlc291cmNlcyI6e30sImltYWdlUHVsbFBvbGljeSI6Ik5ldmVyIn0sInNjYWxlIjp7Im1pbiI6MX0sInVwZGF0ZVN0cmF0ZWd5Ijp7InR5cGUiOiJSb2xsaW5nVXBkYXRlIiwicm9sbGluZ1VwZGF0ZSI6eyJtYXhVbmF2YWlsYWJsZSI6IjI1JSJ9fX0seyJuYW1lIjoiZXJyb3Itc2luayIsInNpbmsiOnsidWRzaW5rIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6InNlcnZlc2luazowLjEiLCJlbnYiOlt7Im5hbWUiOiJOVU1BRkxPV19DQUxMQkFDS19VUkxfS0VZIiwidmFsdWUiOiJYLU51bWFmbG93LUNhbGxiYWNrLVVybCJ9LHsibmFtZSI6Ik5VTUFGTE9XX01TR19JRF9IRUFERVJfS0VZIiwidmFsdWUiOiJYLU51bWFmbG93LUlkIn1dLCJyZXNvdXJjZXMiOnt9LCJpbWFnZVB1bGxQb2xpY3kiOiJOZXZlciJ9fSwicmV0cnlTdHJhdGVneSI6e319LCJjb250YWluZXJUZW1wbGF0ZSI6eyJyZXNvdXJjZXMiOnt9LCJpbWFnZVB1bGxQb2xpY3kiOiJOZXZlciJ9LCJzY2FsZSI6eyJtaW4iOjF9LCJ1cGRhdGVTdHJhdGVneSI6eyJ0eXBlIjoiUm9sbGluZ1VwZGF0ZSIsInJvbGxpbmdVcGRhdGUiOnsibWF4VW5hdmFpbGFibGUiOiIyNSUifX19XSwiZWRnZXMiOlt7ImZyb20iOiJpbiIsInRvIjoicGxhbm5lciIsImNvbmRpdGlvbnMiOm51bGx9LHsiZnJvbSI6InBsYW5uZXIiLCJ0byI6ImFzY2lpYXJ0IiwiY29uZGl0aW9ucyI6eyJ0YWdzIjp7Im9wZXJhdG9yIjoib3IiLCJ2YWx1ZXMiOlsiYXNjaWlhcnQiXX19fSx7ImZyb20iOiJwbGFubmVyIiwidG8iOiJ0aWdlciIsImNvbmRpdGlvbnMiOnsidGFncyI6eyJvcGVyYXRvciI6Im9yIiwidmFsdWVzIjpbInRpZ2VyIl19fX0seyJmcm9tIjoicGxhbm5lciIsInRvIjoiZG9nIiwiY29uZGl0aW9ucyI6eyJ0YWdzIjp7Im9wZXJhdG9yIjoib3IiLCJ2YWx1ZXMiOlsiZG9nIl19fX0seyJmcm9tIjoicGxhbm5lciIsInRvIjoiZWxlcGhhbnQiLCJjb25kaXRpb25zIjp7InRhZ3MiOnsib3BlcmF0b3IiOiJvciIsInZhbHVlcyI6WyJlbGVwaGFudCJdfX19LHsiZnJvbSI6InRpZ2VyIiwidG8iOiJzZXJ2ZS1zaW5rIiwiY29uZGl0aW9ucyI6bnVsbH0seyJmcm9tIjoiZG9nIiwidG8iOiJzZXJ2ZS1zaW5rIiwiY29uZGl0aW9ucyI6bnVsbH0seyJmcm9tIjoiZWxlcGhhbnQiLCJ0byI6InNlcnZlLXNpbmsiLCJjb25kaXRpb25zIjpudWxsfSx7ImZyb20iOiJhc2NpaWFydCIsInRvIjoic2VydmUtc2luayIsImNvbmRpdGlvbnMiOm51bGx9LHsiZnJvbSI6InBsYW5uZXIiLCJ0byI6ImVycm9yLXNpbmsiLCJjb25kaXRpb25zIjp7InRhZ3MiOnsib3BlcmF0b3IiOiJvciIsInZhbHVlcyI6WyJlcnJvciJdfX19XSwibGlmZWN5Y2xlIjp7fSwid2F0ZXJtYXJrIjp7fX0=";
@@ -290,16 +291,18 @@ mod tests {
     async fn test_setup_app() -> Result<()> {
         let settings = Arc::new(Settings::default());
 
-        let mem_store = InMemoryStore::new();
+        let datum_store = InMemoryDataStore::new(None);
+        let callback_store = InMemoryCallbackStore::new(None);
+
         let pipeline_spec = PIPELINE_SPEC_ENCODED.parse().unwrap();
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec)?;
 
-        let callback_state = CallbackState::new(msg_graph, mem_store).await?;
+        let callback_state = CallbackState::new(msg_graph, datum_store, callback_store).await?;
         let (tx, _) = mpsc::channel(10);
         let app = AppState {
             message: tx,
             settings,
-            callback_state,
+            orchestrator_state: callback_state,
         };
 
         let result = setup_app(app).await;
@@ -311,15 +314,17 @@ mod tests {
     async fn test_health_check_endpoints() -> Result<()> {
         let settings = Arc::new(Settings::default());
 
-        let mem_store = InMemoryStore::new();
+        let datum_store = InMemoryDataStore::new(None);
+        let callback_store = InMemoryCallbackStore::new(None);
+
         let msg_graph = MessageGraph::from_pipeline(&settings.pipeline_spec)?;
-        let callback_state = CallbackState::new(msg_graph, mem_store).await?;
+        let callback_state = CallbackState::new(msg_graph, datum_store, callback_store).await?;
 
         let (messages_tx, _messages_rx) = mpsc::channel(10);
         let app = AppState {
             message: messages_tx,
             settings,
-            callback_state,
+            orchestrator_state: callback_state,
         };
 
         let router = setup_app(app).await.unwrap();
@@ -345,17 +350,19 @@ mod tests {
             ..Default::default()
         };
 
-        let mem_store = InMemoryStore::new();
+        let datum_store = InMemoryDataStore::new(None);
+        let callback_store = InMemoryCallbackStore::new(None);
+
         let pipeline_spec = PIPELINE_SPEC_ENCODED.parse().unwrap();
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec)?;
-        let callback_state = CallbackState::new(msg_graph, mem_store).await?;
+        let callback_state = CallbackState::new(msg_graph, datum_store, callback_store).await?;
 
         let (messages_tx, _messages_rx) = mpsc::channel(10);
 
         let app_state = AppState {
             message: messages_tx,
             settings: Arc::new(settings),
-            callback_state,
+            orchestrator_state: callback_state,
         };
 
         let router = router_with_auth(app_state).await.unwrap();

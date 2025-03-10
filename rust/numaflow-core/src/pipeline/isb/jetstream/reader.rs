@@ -5,13 +5,16 @@ use std::time::Duration;
 use async_nats::jetstream::{
     consumer::PullConsumer, AckKind, Context, Message as JetstreamMessage,
 };
+use backoff::retry::Retry;
+use backoff::strategy::fixed;
 use prost::Message as ProtoMessage;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 use tokio::task::JoinHandle;
 use tokio::time::{self, Instant};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
+use tracing::warn;
 use tracing::{error, info};
 
 use crate::config::get_vertex_name;
@@ -26,10 +29,21 @@ use crate::tracker::TrackerHandle;
 use crate::watermark::isb::ISBWatermarkHandle;
 use crate::{metrics, Result};
 
+const ACK_RETRY_INTERVAL: u64 = 100;
+const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
+const MAX_ACK_PENDING: usize = 25000;
+
 /// The JetStreamReader is a handle to the background actor that continuously fetches messages from JetStream.
 /// It can be used to cancel the background task and stop reading from JetStream.
-/// The sender end of the channel is not stored in this struct, since the struct is clone-able and the mpsc channel is only closed when all the senders are dropped.
-/// Storing the Sender end of channel in this struct would make it difficult to close the channel with `cancel` method.
+///
+/// The sender end of the channel is not stored in this struct, since the struct is clone-able and the mpsc channel
+/// is only closed when all the senders are dropped. Storing the Sender end of channel in this struct would make it
+/// difficult to close the channel with `cancel` method.
+///
+/// Error handling and shutdown: The JetStreamReader will stop reading from JetStream when the cancellation token is
+/// cancelled(critical error in downstream or SIGTERM), there can't be any other cases where the JetStreamReader
+/// should stop reading messages. We just drop the tokio stream so that the downstream components can stop gracefully
+/// and before exiting we make sure all the work-in-progress(tasks) are completed.
 #[derive(Clone)]
 pub(crate) struct JetStreamReader {
     stream: Stream,
@@ -151,28 +165,21 @@ impl JetStreamReader {
     /// cancellationToken cancellation during the permit reservation and fetching messages,
     /// since rest of the operations should finish immediately.
     pub(crate) async fn streaming_read(
-        &self,
+        self,
         cancel_token: CancellationToken,
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let (messages_tx, messages_rx) = mpsc::channel(2 * self.batch_size);
 
         let handle: JoinHandle<Result<()>> = tokio::spawn({
-            let consumer = self.consumer.clone();
-            let stream = self.stream.clone();
-            let config = self.config.clone();
-            let tracker_handle = self.tracker_handle.clone();
-            let cancel_token = cancel_token.clone();
-            let watermark_handle = self.watermark_handle.clone();
-            let vertex_type = self.vertex_type.clone();
-
             async move {
-                let mut labels = pipeline_forward_metric_labels(&vertex_type).clone();
+                let mut labels = pipeline_forward_metric_labels(&self.vertex_type).clone();
+                let semaphore = Arc::new(Semaphore::new(MAX_ACK_PENDING));
                 labels.push((
                     metrics::PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                    stream.name.to_string(),
+                    self.stream.name.to_string(),
                 ));
 
-                let mut message_stream = consumer.messages().await.map_err(|e| {
+                let mut message_stream = self.consumer.messages().await.map_err(|e| {
                     Error::ISB(format!(
                         "Failed to get message stream from Jetstream: {:?}",
                         e
@@ -182,26 +189,26 @@ impl JetStreamReader {
                 loop {
                     tokio::select! {
                         _ = cancel_token.cancelled() => { // should we drain from the stream when token is cancelled?
-                            info!(?stream, "Cancellation token received, stopping the reader.");
+                            info!(stream=?self.stream, "Cancellation token received, stopping the reader.");
                             break;
                         }
                         message = message_stream.next() => {
                             let Some(message) = message else {
                                 // stream has been closed because we got none
-                                info!(?stream, "Stream has been closed");
+                                info!(stream=?self.stream, "Stream has been closed");
                                 break;
                             };
 
                             let jetstream_message = match message {
                                 Ok(message) => message,
                                 Err(e) => {
-                                    error!(?e, ?stream, "Failed to fetch messages from the Jetstream");
+                                    error!(?e, stream=?self.stream, "Failed to fetch messages from the Jetstream");
                                     continue;
                                 }
                             };
 
                             let js_message = JSWrappedMessage {
-                                partition_idx: stream.partition,
+                                partition_idx: self.stream.partition,
                                 message: jetstream_message.clone(),
                                 vertex_name: get_vertex_name().to_string(),
                             };
@@ -219,31 +226,27 @@ impl JetStreamReader {
                                 continue;
                             }
 
-                            if let Some(watermark_handle) = watermark_handle.as_ref() {
+                            if let Some(watermark_handle) = self.watermark_handle.as_ref() {
                                 let watermark = watermark_handle.fetch_watermark(message.offset.clone()).await;
                                 message.watermark = Some(watermark);
                             }
 
                             // Insert the message into the tracker and wait for the ack to be sent back.
                             let (ack_tx, ack_rx) = oneshot::channel();
-                            tracker_handle.insert(&message, ack_tx).await?;
+                            self.tracker_handle.insert(&message, ack_tx).await?;
 
+                            // Reserve a permit before sending the message to the channel.
+                            let permit = Arc::clone(&semaphore).acquire_owned().await.expect("Failed to acquire semaphore permit");
                             tokio::spawn(Self::start_work_in_progress(
+                                message.offset.clone(),
                                 jetstream_message,
                                 ack_rx,
-                                config.wip_ack_interval,
+                                self.config.wip_ack_interval,
+                                permit,
+                                cancel_token.clone(),
                             ));
 
-                            let offset = message.offset.clone();
-                            if let Err(e) = messages_tx.send(message).await {
-                                // nak the read message and return
-                                tracker_handle.discard(offset).await?;
-                                return Err(Error::ISB(format!(
-                                    "Failed to send message to receiver: {:?}",
-                                    e
-                                )));
-                            }
-
+                            messages_tx.send(message).await.expect("Failed to send message to channel");
                             pipeline_metrics()
                                 .forwarder
                                 .read_total
@@ -252,6 +255,13 @@ impl JetStreamReader {
                         }
                     }
                 }
+                info!(stream=?self.stream, "Jetstream reader stopped, waiting for ack tasks to complete");
+                // wait for all the permits to be released before returning
+                let _permit = Arc::clone(&semaphore)
+                    .acquire_many_owned(MAX_ACK_PENDING as u32)
+                    .await
+                    .expect("Failed to acquire semaphore permit");
+                info!(stream=?self.stream, "All inflight messages are successfully acked/nacked");
                 Ok(())
             }
         });
@@ -262,21 +272,26 @@ impl JetStreamReader {
     // We will continuously retry if there is an error in acknowledging the message as work-in-progress.
     // If the sender end of the ack_rx channel was dropped before sending a final Ack or Nak (due to some unhandled/unknown failure), we will send a Nak to Jetstream.
     async fn start_work_in_progress(
+        offset: Offset,
         msg: JetstreamMessage,
         mut ack_rx: oneshot::Receiver<ReadAck>,
         tick: Duration,
+        _permit: OwnedSemaphorePermit, // permit to release after acking the offsets.
+        cancel_token: CancellationToken,
     ) {
-        let mut interval = time::interval_at(Instant::now() + tick, tick);
         let start = Instant::now();
+        let mut interval = time::interval_at(start + tick, tick);
 
         loop {
             let wip = async {
                 interval.tick().await;
                 let ack_result = msg.ack_with(AckKind::Progress).await;
                 if let Err(e) = ack_result {
-                    // We expect that the ack in the next iteration will be successful.
-                    // If its some unrecoverable Jetstream error, the fetching messages in the JetstreamReader implementation should also fail and cause the system to shut down.
-                    error!(?e, "Failed to send InProgress Ack to Jetstream for message");
+                    error!(
+                        ?e,
+                        ?offset,
+                        "Failed to send InProgress Ack to Jetstream for message"
+                    );
                 }
             };
 
@@ -286,16 +301,19 @@ impl JetStreamReader {
             };
 
             let ack = ack.unwrap_or_else(|e| {
-                error!(?e, "Received error while waiting for Ack oneshot channel");
+                error!(
+                    ?e,
+                    ?offset,
+                    "Received error while waiting for Ack oneshot channel"
+                );
                 ReadAck::Nak
             });
 
             match ack {
                 ReadAck::Ack => {
-                    let ack_result = msg.ack().await;
-                    if let Err(e) = ack_result {
-                        error!(?e, "Failed to send Ack to Jetstream for message");
-                    }
+                    Self::invoke_ack_with_retry(&msg, AckKind::Ack, &cancel_token, offset.clone())
+                        .await;
+
                     pipeline_metrics()
                         .forwarder
                         .ack_time
@@ -310,14 +328,56 @@ impl JetStreamReader {
                     return;
                 }
                 ReadAck::Nak => {
-                    let ack_result = msg.ack_with(AckKind::Nak(None)).await;
-                    if let Err(e) = ack_result {
-                        error!(?e, "Failed to send Nak to Jetstream for message");
-                    }
+                    Self::invoke_ack_with_retry(
+                        &msg,
+                        AckKind::Nak(None),
+                        &cancel_token,
+                        offset.clone(),
+                    )
+                    .await;
+
+                    warn!(?offset, "Sent Nak to Jetstream for message");
                     return;
                 }
             }
         }
+    }
+
+    // invokes the ack with infinite retries until the cancellation token is cancelled.
+    async fn invoke_ack_with_retry(
+        msg: &JetstreamMessage,
+        ack_kind: AckKind,
+        cancel_token: &CancellationToken,
+        offset: Offset,
+    ) {
+        let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
+        let _ = Retry::retry(
+            interval,
+            || async {
+                let result = match msg.ack_with(ack_kind).await {
+                    Ok(_) => Ok(()),
+                    Err(e) => {
+                        warn!(?e, "Failed to send {:?} to Jetstream for message", ack_kind);
+                        Err(Error::Connection(format!(
+                            "Failed to send {:?}: {:?}",
+                            ack_kind, e
+                        )))
+                    }
+                };
+                if result.is_err() && cancel_token.is_cancelled() {
+                    error!(
+                        ?result,
+                        ?offset,
+                        "Cancellation token received, stopping the {:?} retry loop",
+                        ack_kind
+                    );
+                    return Ok(());
+                }
+                result
+            },
+            |_: &Error| true,
+        )
+        .await;
     }
 
     pub(crate) async fn pending(&mut self) -> Result<Option<usize>> {
@@ -396,12 +456,13 @@ mod tests {
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
         };
+        let tracker = TrackerHandle::new(None, None);
         let js_reader = JetStreamReader::new(
             "Map".to_string(),
             stream.clone(),
             context.clone(),
             buf_reader_config,
-            TrackerHandle::new(None, None),
+            tracker.clone(),
             500,
             None,
         )
@@ -414,13 +475,16 @@ mod tests {
             .await
             .unwrap();
 
+        let mut offsets = vec![];
         for i in 0..10 {
+            let offset = Offset::Int(IntOffset::new(i + 1, 0));
+            offsets.push(offset.clone());
             let message = Message {
                 typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: Offset::Int(IntOffset::new(i, 0)),
+                offset,
                 event_time: Utc::now(),
                 watermark: None,
                 id: MessageID {
@@ -452,6 +516,9 @@ mod tests {
             "Expected 10 messages from the jetstream reader"
         );
 
+        for offset in offsets {
+            tracker.discard(offset).await.unwrap();
+        }
         reader_cancel_token.cancel();
         js_reader_task.await.unwrap().unwrap();
 
@@ -575,5 +642,29 @@ mod tests {
         js_reader_task.await.unwrap().unwrap();
 
         context.delete_stream(js_stream.name).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_child_tasks_not_aborted() {
+        use tokio::task;
+        use tokio::time::{sleep, Duration};
+
+        // Parent task
+        let parent_task = task::spawn(async {
+            // Spawn a child task
+            task::spawn(async {
+                for _ in 1..=5 {
+                    sleep(Duration::from_secs(1)).await;
+                }
+            });
+
+            // Parent task logic
+            sleep(Duration::from_secs(2)).await;
+        });
+
+        drop(parent_task);
+
+        // Give some time to observe the child task behavior
+        sleep(Duration::from_secs(8)).await;
     }
 }

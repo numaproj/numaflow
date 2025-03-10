@@ -16,8 +16,9 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use serving::callback::CallbackHandler;
-use serving::{DEFAULT_CALLBACK_URL_HEADER_KEY, DEFAULT_ID_HEADER};
+use serving::DEFAULT_ID_HEADER;
 use tokio::sync::{mpsc, oneshot};
+use tracing::error;
 
 use crate::error::Error;
 use crate::message::{Message, Offset, ReadAck};
@@ -38,6 +39,7 @@ struct TrackerEntry {
 }
 
 /// ActorMessage represents the messages that can be sent to the Tracker actor.
+#[derive(Debug)]
 enum ActorMessage {
     Insert {
         offset: Offset,
@@ -47,7 +49,11 @@ enum ActorMessage {
     },
     Update {
         offset: Offset,
-        responses: Option<Vec<String>>,
+        responses: Vec<Option<Vec<String>>>,
+    },
+    Append {
+        offset: Offset,
+        response: Option<Vec<String>>,
     },
     Delete {
         offset: Offset,
@@ -55,10 +61,13 @@ enum ActorMessage {
     Discard {
         offset: Offset,
     },
-    UpdateEOF {
+    #[allow(clippy::upper_case_acronyms)]
+    EOF {
         offset: Offset,
     },
-    DiscardAll, // New variant for discarding all messages
+    Refresh {
+        offset: Offset,
+    },
     #[cfg(test)]
     IsEmpty {
         respond_to: oneshot::Sender<bool>,
@@ -78,7 +87,6 @@ struct Tracker {
 #[derive(Debug)]
 struct ServingCallbackInfo {
     id: String,
-    callback_url: String,
     from_vertex: String,
     /// at the moment these are just tags.
     responses: Vec<Option<Vec<String>>>,
@@ -88,15 +96,6 @@ impl TryFrom<&Message> for ServingCallbackInfo {
     type Error = Error;
 
     fn try_from(message: &Message) -> std::result::Result<Self, Self::Error> {
-        let callback_url = message
-            .headers
-            .get(DEFAULT_CALLBACK_URL_HEADER_KEY)
-            .ok_or_else(|| {
-                Error::Source(format!(
-                "{DEFAULT_CALLBACK_URL_HEADER_KEY} header is not present in the message headers",
-            ))
-            })?
-            .to_owned();
         let uuid = message
             .headers
             .get(DEFAULT_ID_HEADER)
@@ -114,29 +113,18 @@ impl TryFrom<&Message> for ServingCallbackInfo {
             .previous_vertex
             .clone();
 
-        let mut msg_tags = None;
-        if let Some(ref tags) = message.tags {
-            if !tags.is_empty() {
-                msg_tags = Some(tags.iter().cloned().collect());
-            }
-        };
         Ok(ServingCallbackInfo {
             id: uuid,
-            callback_url,
             from_vertex,
-            responses: vec![msg_tags],
+            responses: vec![None],
         })
     }
 }
 
 impl Drop for Tracker {
     fn drop(&mut self) {
-        // clear the entries from the map and send nak
-        for (_, entry) in self.entries.drain() {
-            entry
-                .ack_send
-                .send(ReadAck::Nak)
-                .expect("Failed to send nak");
+        if !self.entries.is_empty() {
+            error!("Tracker dropped with non-empty entries: {:?}", self.entries);
         }
     }
 }
@@ -178,8 +166,8 @@ impl Tracker {
             ActorMessage::Update { offset, responses } => {
                 self.handle_update(offset, responses);
             }
-            ActorMessage::UpdateEOF { offset } => {
-                self.handle_update_eof(offset).await;
+            ActorMessage::EOF { offset } => {
+                self.handle_eof(offset).await;
             }
             ActorMessage::Delete { offset } => {
                 self.handle_delete(offset).await;
@@ -187,8 +175,11 @@ impl Tracker {
             ActorMessage::Discard { offset } => {
                 self.handle_discard(offset).await;
             }
-            ActorMessage::DiscardAll => {
-                self.handle_discard_all().await;
+            ActorMessage::Append { offset, response } => {
+                self.handle_append(offset, response);
+            }
+            ActorMessage::Refresh { offset } => {
+                self.handle_refresh(offset);
             }
             #[cfg(test)]
             ActorMessage::IsEmpty { respond_to } => {
@@ -222,19 +213,31 @@ impl Tracker {
     }
 
     /// Updates an existing entry in the tracker with the number of expected messages for this offset.
-    fn handle_update(&mut self, offset: Offset, responses: Option<Vec<String>>) {
+    fn handle_update(&mut self, offset: Offset, responses: Vec<Option<Vec<String>>>) {
+        let Some(entry) = self.entries.get_mut(&offset) else {
+            return;
+        };
+
+        entry.count += responses.len();
+        if let Some(cb) = entry.serving_callback_info.as_mut() {
+            cb.responses = responses;
+        }
+    }
+
+    /// Appends a response to the serving callback info for the given offset.
+    fn handle_append(&mut self, offset: Offset, response: Option<Vec<String>>) {
         let Some(entry) = self.entries.get_mut(&offset) else {
             return;
         };
 
         entry.count += 1;
         if let Some(cb) = entry.serving_callback_info.as_mut() {
-            cb.responses.push(responses);
+            cb.responses.push(response);
         }
     }
 
     /// Update whether we have seen the eof (end of stream) for this offset.
-    async fn handle_update_eof(&mut self, offset: Offset) {
+    async fn handle_eof(&mut self, offset: Offset) {
         let Some(entry) = self.entries.get_mut(&offset) else {
             return;
         };
@@ -283,14 +286,17 @@ impl Tracker {
         }
     }
 
-    /// Discards all entries from the tracker and sends a nak for each.
-    async fn handle_discard_all(&mut self) {
-        for (_, entry) in self.entries.drain() {
-            entry
-                .ack_send
-                .send(ReadAck::Nak)
-                .expect("Failed to send nak");
+    /// Resets the count and eof status for an offset in the tracker.
+    fn handle_refresh(&mut self, offset: Offset) {
+        let Some(mut entry) = self.entries.remove(&offset) else {
+            return;
+        };
+        entry.count = 0;
+        entry.eof = false;
+        if let Some(serving_info) = &mut entry.serving_callback_info {
+            serving_info.responses = vec![];
         }
+        self.entries.insert(offset, entry);
     }
 
     /// This function is called once the message has been successfully processed. This is where
@@ -315,7 +321,7 @@ impl Tracker {
             return;
         };
         let Some(callback_info) = callback_info else {
-            tracing::error!("Callback is enabled, but Tracker doesn't contain callback info");
+            error!("Callback is enabled, but Tracker doesn't contain callback info");
             return;
         };
 
@@ -323,13 +329,12 @@ impl Tracker {
         let result = callback_handler
             .callback(
                 callback_info.id,
-                callback_info.callback_url,
                 callback_info.from_vertex,
                 callback_info.responses,
             )
             .await;
         if let Err(e) = result {
-            tracing::error!(?e, id, "Failed to send callback");
+            error!(?e, id, "Failed to send callback");
         }
     }
 }
@@ -387,18 +392,12 @@ impl TrackerHandle {
     pub(crate) async fn update(
         &self,
         offset: Offset,
-        message_tags: Option<Arc<[String]>>,
+        response_tags: Vec<Option<Arc<[String]>>>,
     ) -> Result<()> {
-        let responses: Option<Vec<String>> = match (self.enable_callbacks, message_tags) {
-            (true, Some(tags)) => {
-                if !tags.is_empty() {
-                    Some(tags.iter().cloned().collect::<Vec<String>>())
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        };
+        let responses = response_tags
+            .into_iter()
+            .map(|tags| tags.map(|tags| tags.iter().map(|tag| tag.to_string()).collect()))
+            .collect();
         let message = ActorMessage::Update { offset, responses };
         self.sender
             .send(message)
@@ -407,9 +406,36 @@ impl TrackerHandle {
         Ok(())
     }
 
+    /// resets the count and eof status for an offset in the tracker.
+    pub(crate) async fn refresh(&self, offset: Offset) -> Result<()> {
+        let message = ActorMessage::Refresh { offset };
+        self.sender
+            .send(message)
+            .await
+            .map_err(|e| Error::Tracker(format!("{:?}", e)))?;
+        Ok(())
+    }
+
+    pub(crate) async fn append(
+        &self,
+        offset: Offset,
+        message_tags: Option<Arc<[String]>>,
+    ) -> Result<()> {
+        let tags = message_tags.map(|tags| tags.to_vec());
+        let message = ActorMessage::Append {
+            offset,
+            response: tags,
+        };
+        self.sender
+            .send(message)
+            .await
+            .map_err(|e| Error::Tracker(format!("{:?}", e)))?;
+        Ok(())
+    }
+
     /// Updates the EOF status for an offset in the Tracker
-    pub(crate) async fn update_eof(&self, offset: Offset) -> Result<()> {
-        let message = ActorMessage::UpdateEOF { offset };
+    pub(crate) async fn eof(&self, offset: Offset) -> Result<()> {
+        let message = ActorMessage::EOF { offset };
         self.sender
             .send(message)
             .await
@@ -437,16 +463,6 @@ impl TrackerHandle {
         Ok(())
     }
 
-    /// Discards all messages from the Tracker and sends a nak for each.
-    pub(crate) async fn discard_all(&self) -> Result<()> {
-        let message = ActorMessage::DiscardAll;
-        self.sender
-            .send(message)
-            .await
-            .map_err(|e| Error::Tracker(format!("{:?}", e)))?;
-        Ok(())
-    }
-
     /// Checks if the Tracker is empty. Used for testing to make sure all messages are acknowledged.
     #[cfg(test)]
     pub(crate) async fn is_empty(&self) -> Result<bool> {
@@ -464,12 +480,11 @@ impl TrackerHandle {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::Arc;
-
-    use axum::routing::{get, post};
-    use axum::{http::StatusCode, Router};
+    use async_nats::jetstream;
+    use async_nats::jetstream::kv::Config;
     use bytes::Bytes;
+    use futures::StreamExt;
+    use std::sync::Arc;
     use tokio::sync::oneshot;
     use tokio::time::{timeout, Duration};
 
@@ -501,14 +516,10 @@ mod tests {
         let callback_info: super::Result<ServingCallbackInfo> = TryFrom::try_from(&message);
         assert!(callback_info.is_err());
 
-        const CALLBACK_URL: &str = "https://localhost/v1/process/callback";
-        let headers = [
-            (DEFAULT_CALLBACK_URL_HEADER_KEY, CALLBACK_URL),
-            (DEFAULT_ID_HEADER, "1234"),
-        ]
-        .into_iter()
-        .map(|(k, v)| (k.to_string(), v.to_string()))
-        .collect();
+        let headers = [(DEFAULT_ID_HEADER, "1234")]
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
         message.headers = headers;
 
         const FROM_VERTEX_NAME: &str = "source-vertex";
@@ -518,7 +529,6 @@ mod tests {
 
         let callback_info: ServingCallbackInfo = TryFrom::try_from(&message).unwrap();
         assert_eq!(callback_info.id, "1234");
-        assert_eq!(callback_info.callback_url, CALLBACK_URL);
         assert_eq!(callback_info.from_vertex, FROM_VERTEX_NAME);
         assert_eq!(callback_info.responses, vec![None]);
     }
@@ -550,10 +560,10 @@ mod tests {
 
         // Update the message
         handle
-            .update(message.offset.clone(), message.tags.clone())
+            .update(message.offset.clone(), vec![message.tags.clone()])
             .await
             .unwrap();
-        handle.update_eof(message.offset.clone()).await.unwrap();
+        handle.eof(message.offset.clone()).await.unwrap();
 
         // Delete the message
         handle.delete(message.offset).await.unwrap();
@@ -593,7 +603,7 @@ mod tests {
         // Update the message with a count of 3
         for message in messages {
             handle
-                .update(message.offset.clone(), message.tags.clone())
+                .update(message.offset.clone(), vec![message.tags.clone()])
                 .await
                 .unwrap();
         }
@@ -673,7 +683,7 @@ mod tests {
         let messages: Vec<Message> = std::iter::repeat(message.clone()).take(3).collect();
         for message in messages {
             handle
-                .update(message.offset.clone(), message.tags.clone())
+                .update(message.offset.clone(), vec![message.tags.clone()])
                 .await
                 .unwrap();
         }
@@ -688,66 +698,31 @@ mod tests {
         assert!(handle.is_empty().await.unwrap(), "Tracker should be empty");
     }
 
+    // #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_tracker_with_callback_handler() -> Result<()> {
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let port = listener
-            .local_addr()
-            .map_err(|e| format!("Failed to bind to 127.0.0.1:0: error={e:?}"))?
-            .port();
+        let store_name = "test_tracker_with_callback_handler";
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
 
-        let server_addr = format!("127.0.0.1:{port}");
-        let callback_url = format!("http://{server_addr}/v1/process/callback");
+        let _ = js_context.delete_key_value(store_name).await;
+        let callback_bucket = js_context
+            .create_key_value(Config {
+                bucket: store_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
 
-        let request_count = Arc::new(AtomicUsize::new(0));
-        let router = Router::new()
-            .route("/livez", get(|| async { StatusCode::OK }))
-            .route(
-                "/v1/process/callback",
-                post({
-                    let req_count = Arc::clone(&request_count);
-                    || async move {
-                        req_count.fetch_add(1, Ordering::Relaxed);
-                        StatusCode::OK
-                    }
-                }),
-            );
+        let callback_handler =
+            CallbackHandler::new("test".into(), js_context.clone(), store_name, 10).await;
 
-        let server = tokio::spawn(async move {
-            axum::serve(listener, router).await.unwrap();
-        });
-
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(2))
-            .build()?;
-
-        // Wait for the server to be ready
-        let mut server_ready = false;
-        let health_url = format!("http://{server_addr}/livez");
-        for _ in 0..10 {
-            let Ok(resp) = client.get(&health_url).send().await else {
-                tokio::time::sleep(Duration::from_millis(5)).await;
-                continue;
-            };
-            if resp.status().is_success() {
-                server_ready = true;
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(5)).await;
-        }
-        assert!(server_ready, "Server is not ready");
-
-        let callback_handler = CallbackHandler::new("test".into(), 10);
         let handle = TrackerHandle::new(None, Some(callback_handler));
         let (ack_send, ack_recv) = oneshot::channel();
 
-        let headers = [
-            (DEFAULT_CALLBACK_URL_HEADER_KEY, callback_url),
-            (DEFAULT_ID_HEADER, "1234".into()),
-        ]
-        .into_iter()
-        .map(|(k, v)| (k.to_string(), v.to_string()))
-        .collect();
+        let mut headers = HashMap::new();
+        headers.insert(DEFAULT_ID_HEADER.to_string(), "1234".to_string());
 
         let offset = Offset::String(StringOffset::new("offset1".to_string(), 0));
         let message = Message {
@@ -771,7 +746,7 @@ mod tests {
 
         // Insert a new message
         handle.insert(&message, ack_send).await.unwrap();
-        handle.update_eof(offset).await.unwrap();
+        handle.eof(offset).await.unwrap();
 
         // Verify that the message was discarded and Ack was received
         let result = timeout(Duration::from_secs(1), ack_recv).await.unwrap();
@@ -779,17 +754,22 @@ mod tests {
         assert_eq!(result.unwrap(), ReadAck::Ack);
         assert!(handle.is_empty().await.unwrap(), "Tracker should be empty");
 
-        // Callback request is made after sending data on ack_send channel.
-        let mut received_callback_request = false;
-        for _ in 0..5 {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-            received_callback_request = request_count.load(Ordering::Relaxed) == 1;
-            if received_callback_request {
-                break;
+        // Verify that the callback was written to the KV store
+        let result = timeout(Duration::from_secs(1), async {
+            loop {
+                let mut keys = callback_bucket.keys().await.unwrap();
+                if let Some(_) = keys.next().await {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
             }
-        }
-        assert!(received_callback_request, "Expected one callback request");
-        server.abort();
+        })
+        .await;
+
+        assert!(result.is_ok(), "callback was not written to the KV store");
+
+        // Clean up the KV store
+        js_context.delete_key_value(store_name).await.unwrap();
         Ok(())
     }
 }

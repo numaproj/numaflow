@@ -6,9 +6,8 @@ edition = "2021"
 [features]
 nats-tests = []
 pulsar-tests = []
-redis-tests = []
 sqs-tests = []
-all-tests = ["nats-tests", "pulsar-tests", "redis-tests", "sqs-tests"]
+all-tests = ["nats-tests", "pulsar-tests", "sqs-tests"]
 
 [lints]
 workspace = true
@@ -48,12 +47,11 @@ kube = "0.95.0"
 futures = "0.3.30"
 pin-project = "1.1.5"
 rand = "0.8.5"
-async-nats = "0.38.0"
-derive_builder = "0.20.2"
+async-nats = "0.39.0"
 
 [dev-dependencies]
 tempfile = "3.11.0"
-numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "9ca9362ad511084501520e5a37d40cdcd0cdc9d9" }
+numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "4b37e79cc9c235fbffdc74e36a0f9d9363fc0dda" }
 pulsar = { version = "6.3.0", default-features = false, features = [
     "tokio-rustls-runtime",
 ] }

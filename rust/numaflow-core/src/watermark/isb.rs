@@ -467,7 +467,7 @@ mod tests {
             Duration::from_millis(100),
             js_context.clone(),
             &edge_config,
-            &vec![ToVertexConfig {
+            &[ToVertexConfig {
                 name: "to_vertex",
                 partitions: 0,
                 writer_config: BufferWriterConfig {
@@ -647,7 +647,7 @@ mod tests {
             Duration::from_millis(100),
             js_context.clone(),
             &edge_config,
-            &vec![ToVertexConfig {
+            &[ToVertexConfig {
                 name: "from_vertex",
                 partitions: 0,
                 writer_config: BufferWriterConfig {
@@ -793,7 +793,7 @@ mod tests {
             Duration::from_millis(10), // Set idle timeout to a very short duration
             js_context.clone(),
             &edge_config,
-            &vec![ToVertexConfig {
+            &[ToVertexConfig {
                 name: "to_vertex",
                 partitions: 0,
                 writer_config: BufferWriterConfig {

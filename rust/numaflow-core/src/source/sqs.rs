@@ -77,6 +77,11 @@ impl source::SourceReader for SQSSource {
     async fn partitions(&mut self) -> crate::Result<Vec<u16>> {
         Ok(vec![*get_vertex_replica()])
     }
+
+    // FIXME(chichu): Implement this
+    async fn is_ready(&mut self) -> bool {
+        true
+    }
 }
 
 impl source::SourceAcker for SQSSource {
@@ -170,13 +175,10 @@ pub mod tests {
         let sqs_source = SqsSourceBuilder::new(SQSSourceConfig {
             region: SQS_DEFAULT_REGION.to_string(),
             queue_name: "test-q".to_string(),
-            auth: SQSAuth {
-                credentials: Some(AWSCredentials {
-                    access_key_id: "test-key".to_string(),
-                    secret_access_key: "test-secret".to_string(),
-                }),
-                role_arn: None,
-            },
+            auth: SQSAuth::Credentials(AWSCredentials {
+                access_key_id: "test-key".to_string(),
+                secret_access_key: "test-secret".to_string(),
+            }),
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,
@@ -203,6 +205,7 @@ pub mod tests {
             None,
         );
 
+        let cln_token = CancellationToken::new();
         // create sink writer
         use crate::sink::{SinkClientType, SinkWriterBuilder};
         let sink_writer = SinkWriterBuilder::new(
@@ -216,15 +219,11 @@ pub mod tests {
         .unwrap();
 
         // create the forwarder with the source and sink writer
-        let cln_token = CancellationToken::new();
-        let forwarder = crate::monovertex::forwarder::Forwarder::new(
-            source.clone(),
-            sink_writer,
-            cln_token.clone(),
-        );
+        let forwarder = crate::monovertex::forwarder::Forwarder::new(source.clone(), sink_writer);
 
+        let cancel_token = cln_token.clone();
         let _forwarder_handle: JoinHandle<crate::error::Result<()>> = tokio::spawn(async move {
-            forwarder.start().await?;
+            forwarder.start(cancel_token).await?;
             Ok(())
         });
 

@@ -121,8 +121,13 @@ func TestGetToBuffersSink(t *testing.T) {
 func TestWithoutReplicas(t *testing.T) {
 	s := &VertexSpec{
 		Replicas: ptr.To[int32](3),
+		Lifecycle: VertexLifecycle{
+			DesiredPhase: VertexPhasePaused,
+		},
 	}
-	assert.Equal(t, int32(0), *s.DeepCopyWithoutReplicas().Replicas)
+	dc := s.DeepCopyWithoutReplicasAndLifecycle()
+	assert.Equal(t, int32(0), *dc.Replicas)
+	assert.Equal(t, VertexLifecycle{}, dc.Lifecycle)
 }
 
 func TestGetVertexReplicas(t *testing.T) {
@@ -133,11 +138,16 @@ func TestGetVertexReplicas(t *testing.T) {
 			},
 		},
 	}
-	assert.Equal(t, 1, v.GetReplicas())
+	v.Spec.Lifecycle.DesiredPhase = VertexPhasePaused
+	assert.Equal(t, 0, v.CalculateReplicas())
+	v.Spec.Lifecycle.DesiredPhase = VertexPhaseRunning
+	assert.Equal(t, 1, v.CalculateReplicas())
+	v.Spec.Lifecycle = VertexLifecycle{}
+	assert.Equal(t, 1, v.CalculateReplicas())
 	v.Spec.Replicas = ptr.To[int32](3)
-	assert.Equal(t, 3, v.GetReplicas())
+	assert.Equal(t, 3, v.CalculateReplicas())
 	v.Spec.Replicas = ptr.To[int32](0)
-	assert.Equal(t, 0, v.GetReplicas())
+	assert.Equal(t, 0, v.CalculateReplicas())
 	v.Spec.UDF = &UDF{
 		GroupBy: &GroupBy{},
 	}
@@ -145,16 +155,16 @@ func TestGetVertexReplicas(t *testing.T) {
 		{Edge: Edge{From: "a", To: "b"}},
 	}
 	v.Spec.Replicas = ptr.To[int32](5)
-	assert.Equal(t, 1, v.GetReplicas())
+	assert.Equal(t, 1, v.CalculateReplicas())
 	v.Spec.Replicas = ptr.To[int32](1000)
-	assert.Equal(t, 1, v.GetReplicas())
+	assert.Equal(t, 1, v.CalculateReplicas())
 	v.Spec.UDF.GroupBy = nil
 	v.Spec.Scale.Max = ptr.To[int32](40)
 	v.Spec.Scale.Min = ptr.To[int32](20)
 	v.Spec.Replicas = ptr.To[int32](300)
-	assert.Equal(t, 40, v.GetReplicas())
+	assert.Equal(t, 40, v.CalculateReplicas())
 	v.Spec.Replicas = ptr.To[int32](10)
-	assert.Equal(t, 20, v.GetReplicas())
+	assert.Equal(t, 20, v.CalculateReplicas())
 }
 
 func TestGetHeadlessSvcSpec(t *testing.T) {
@@ -278,6 +288,8 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Contains(t, s.Containers[0].Args, "processor")
 		assert.Contains(t, s.Containers[0].Args, "--type="+string(VertexTypeSource))
 		assert.Equal(t, 1, len(s.InitContainers))
+		assert.Equal(t, 2, len(s.Volumes))
+		assert.Equal(t, 2, len(s.Containers[0].VolumeMounts))
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
 		assert.Equal(t, "200m", s.Containers[0].Resources.Requests.Cpu().String())
 		assert.Equal(t, "200m", s.Containers[0].Resources.Limits.Cpu().String())
@@ -297,9 +309,6 @@ func TestGetPodSpec(t *testing.T) {
 			Serving: &ServingSource{
 				Auth: &Authorization{
 					Token: &corev1.SecretKeySelector{},
-				},
-				Store: &ServingStore{
-					URL: ptr.To[string]("redis://localhost:6379"),
 				},
 			},
 		}
@@ -331,11 +340,7 @@ func TestGetPodSpec(t *testing.T) {
 
 		req := req.DeepCopy()
 		req.PipelineSpec.Vertices = append(req.PipelineSpec.Vertices, AbstractVertex{Name: "serving-src", Source: &Source{
-			Serving: &ServingSource{
-				Store: &ServingStore{
-					URL: ptr.To[string]("redis://localhost:6379"),
-				},
-			},
+			Serving: &ServingSource{},
 		}})
 
 		s, err := testObj.GetPodSpec(*req)
@@ -373,6 +378,8 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Contains(t, s.Containers[0].Args, "processor")
 		assert.Contains(t, s.Containers[0].Args, "--type="+string(VertexTypeSource))
 		assert.Equal(t, 1, len(s.InitContainers))
+		assert.Equal(t, 2, len(s.Volumes))
+		assert.Equal(t, 2, len(s.Containers[0].VolumeMounts))
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
 		assert.Equal(t, "200m", s.Containers[0].Resources.Requests.Cpu().String())
 		assert.Equal(t, "200m", s.Containers[0].Resources.Limits.Cpu().String())
@@ -404,6 +411,8 @@ func TestGetPodSpec(t *testing.T) {
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(s.Containers))
+		assert.Equal(t, 2, len(s.Volumes))
+		assert.Equal(t, 2, len(s.Containers[0].VolumeMounts))
 		assert.Equal(t, CtrMain, s.Containers[0].Name)
 		assert.Equal(t, testFlowImage, s.Containers[0].Image)
 		assert.Equal(t, corev1.PullIfNotPresent, s.Containers[0].ImagePullPolicy)
@@ -459,6 +468,8 @@ func TestGetPodSpec(t *testing.T) {
 		}
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
+		assert.Equal(t, 2, len(s.Volumes))
+		assert.Equal(t, 2, len(s.Containers[0].VolumeMounts))
 		assert.Equal(t, 1, len(s.Containers))
 		assert.Equal(t, 2, len(s.InitContainers))
 		assert.Equal(t, "image", s.InitContainers[1].Image)
@@ -497,6 +508,8 @@ func TestGetPodSpec(t *testing.T) {
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(s.Containers))
+		assert.Equal(t, 2, len(s.Volumes))
+		assert.Equal(t, 2, len(s.Containers[0].VolumeMounts))
 		assert.Equal(t, 3, len(s.InitContainers))
 
 		for i := 1; i < len(s.InitContainers); i++ {
@@ -525,6 +538,8 @@ func TestGetPodSpec(t *testing.T) {
 		}
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
+		assert.Equal(t, 2, len(s.Volumes))
+		assert.Equal(t, 2, len(s.Containers[0].VolumeMounts))
 		assert.Equal(t, 1, len(s.Containers))
 		assert.Equal(t, 2, len(s.InitContainers))
 		assert.Equal(t, CtrMain, s.Containers[0].Name)
@@ -569,6 +584,8 @@ func TestGetPodSpec(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 2, len(s.Containers))
 		assert.Equal(t, CtrMain, s.Containers[0].Name)
+		assert.Equal(t, 3, len(s.Volumes))
+		assert.Equal(t, 2, len(s.Containers[0].VolumeMounts))
 		assert.Equal(t, CtrSideInputsWatcher, s.Containers[1].Name)
 		assert.Equal(t, 3, len(s.InitContainers))
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
@@ -588,13 +605,13 @@ func TestGetPodSpec(t *testing.T) {
 	t.Run("test serving source", func(t *testing.T) {
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.Source = &Source{
-			Serving: &ServingSource{
-				Store: &ServingStore{},
-			},
+			Serving: &ServingSource{},
 		}
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(s.Containers))
+		assert.Equal(t, 2, len(s.Volumes))
+		assert.Equal(t, 2, len(s.Containers[0].VolumeMounts))
 		assert.Equal(t, CtrMain, s.Containers[0].Name)
 		assert.Equal(t, testFlowImage, s.Containers[0].Image)
 		assert.Equal(t, corev1.PullIfNotPresent, s.Containers[0].ImagePullPolicy)

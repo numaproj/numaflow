@@ -89,14 +89,20 @@ impl UserDefinedSourceRead {
 
         let mut resp_stream = client
             .read_fn(Request::new(read_stream))
-            .await?
+            .await
+            .map_err(Error::Grpc)?
             .into_inner();
 
         // first response from the server will be the handshake response. We need to check if the
         // server has accepted the handshake.
-        let handshake_response = resp_stream.message().await?.ok_or(Error::Source(
-            "failed to receive handshake response".to_string(),
-        ))?;
+        let handshake_response =
+            resp_stream
+                .message()
+                .await
+                .map_err(Error::Grpc)?
+                .ok_or(Error::Source(
+                    "failed to receive handshake response".to_string(),
+                ))?;
         // handshake cannot to None during the initial phase, and it has to set `sot` to true.
         if handshake_response.handshake.map_or(true, |h| !h.sot) {
             return Err(Error::Source("invalid handshake response".to_string()));
@@ -178,7 +184,7 @@ impl SourceReader for UserDefinedSourceRead {
 
         let mut messages = Vec::with_capacity(self.num_records);
 
-        while let Some(response) = self.resp_stream.message().await? {
+        while let Some(response) = self.resp_stream.message().await.map_err(Error::Grpc)? {
             if response.status.is_some_and(|status| status.eot) {
                 break;
             }
@@ -204,6 +210,13 @@ impl SourceReader for UserDefinedSourceRead {
             .partitions;
 
         Ok(partitions.iter().map(|p| *p as u16).collect())
+    }
+
+    async fn is_ready(&mut self) -> bool {
+        match self.source_client.is_ready(Request::new(())).await {
+            Ok(response) => response.into_inner().ready,
+            Err(_) => false,
+        }
     }
 }
 
@@ -234,14 +247,22 @@ impl UserDefinedSourceAck {
             .await
             .map_err(|e| Error::Source(format!("failed to send ack handshake request: {}", e)))?;
 
-        let mut ack_resp_stream = client.ack_fn(Request::new(ack_stream)).await?.into_inner();
+        let mut ack_resp_stream = client
+            .ack_fn(Request::new(ack_stream))
+            .await
+            .map_err(Error::Grpc)?
+            .into_inner();
 
         // first response from the server will be the handshake response. We need to check if the
         // server has accepted the handshake.
-        let ack_handshake_response = ack_resp_stream.message().await?.ok_or(Error::Source(
-            "failed to receive ack handshake response".to_string(),
-        ))?;
-        // handshake cannot to None during the initial phase and it has to set `sot` to true.
+        let ack_handshake_response = ack_resp_stream
+            .message()
+            .await
+            .map_err(Error::Grpc)?
+            .ok_or(Error::Source(
+                "failed to receive ack handshake response".to_string(),
+            ))?;
+        // handshake cannot to None during the initial phase, and it has to set `sot` to true.
         if ack_handshake_response.handshake.map_or(true, |h| !h.sot) {
             return Err(Error::Source("invalid ack handshake response".to_string()));
         }
@@ -268,7 +289,8 @@ impl SourceAcker for UserDefinedSourceAck {
         let _ = self
             .ack_resp_stream
             .message()
-            .await?
+            .await
+            .map_err(Error::Grpc)?
             .ok_or(Error::Source("failed to receive ack response".to_string()))?;
 
         Ok(())
@@ -291,7 +313,8 @@ impl LagReader for UserDefinedSourceLagReader {
         Ok(self
             .source_client
             .pending_fn(Request::new(()))
-            .await?
+            .await
+            .map_err(Error::Grpc)?
             .into_inner()
             .result
             .map(|r| r.count as usize))
@@ -300,12 +323,11 @@ impl LagReader for UserDefinedSourceLagReader {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{HashMap, HashSet};
-
     use chrono::{TimeZone, Utc};
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow_pb::clients::source::source_client::SourceClient;
+    use std::collections::{HashMap, HashSet};
     use tokio::sync::mpsc::Sender;
 
     use super::*;

@@ -49,6 +49,7 @@ impl SQSSourceConfig {
         if self.region.is_empty() {
             return Err(Error::InvalidConfig("region is required".to_string()));
         }
+
         if self.queue_name.is_empty() {
             return Err(Error::InvalidConfig("queue name is required".to_string()));
         }
@@ -90,42 +91,30 @@ impl SQSSourceConfig {
 
 /// AWS authentication configuration
 #[derive(Clone, PartialEq, Debug)]
-pub struct SQSAuth {
-    pub credentials: Option<AWSCredentials>,
-    pub role_arn: Option<String>,
+pub enum SQSAuth {
+    Credentials(AWSCredentials),
+    RoleArn(String),
 }
 
 impl SQSAuth {
     /// Validates the authentication configuration
     pub fn validate(&self) -> Result<()> {
-        match (&self.credentials, &self.role_arn) {
-            (None, None) => Err(Error::InvalidConfig(
-                "either credentials or roleARN must be provided".to_string(),
-            )),
-            (Some(_), Some(_)) => Err(Error::InvalidConfig(
-                "cannot specify both credentials and roleARN".to_string(),
-            )),
-            (Some(creds), None) => {
+        match &self {
+            SQSAuth::Credentials(creds) => {
                 // Validate that both access key and secret key are provided
                 if creds.access_key_id.is_empty() {
                     return Err(Error::InvalidConfig(
                         "access key ID secret selector is invalid".to_string(),
                     ));
                 }
-                if creds.secret_access_key.is_empty() {
-                    return Err(Error::InvalidConfig(
-                        "secret access key secret selector is invalid".to_string(),
-                    ));
-                }
-                Ok(())
             }
-            (None, Some(role)) => {
-                if role.is_empty() {
+            SQSAuth::RoleArn(role_arn) => {
+                if role_arn.is_empty() {
                     return Err(Error::InvalidConfig("role ARN cannot be empty".to_string()));
                 }
-                Ok(())
             }
         }
+        Ok(())
     }
 }
 
@@ -477,10 +466,10 @@ impl Default for SqsSourceBuilder {
         Self::new(SQSSourceConfig {
             region: SQS_DEFAULT_REGION.to_string(),
             queue_name: "".to_string(),
-            auth: SQSAuth {
-                credentials: None,
-                role_arn: None,
-            },
+            auth: SQSAuth::Credentials(AWSCredentials {
+                access_key_id: "".to_string(),
+                secret_access_key: "".to_string(),
+            }),
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,
@@ -666,13 +655,10 @@ mod tests {
         let source = SqsSourceBuilder::new(SQSSourceConfig {
             region: SQS_DEFAULT_REGION.to_string(),
             queue_name: "test-q".to_string(),
-            auth: SQSAuth {
-                credentials: Some(AWSCredentials {
-                    access_key_id: "test-key".to_string(),
-                    secret_access_key: "test-secret".to_string(),
-                }),
-                role_arn: None,
-            },
+            auth: SQSAuth::Credentials(AWSCredentials {
+                access_key_id: "test-key".to_string(),
+                secret_access_key: "test-secret".to_string(),
+            }),
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,
@@ -719,13 +705,10 @@ mod tests {
         let source = SqsSourceBuilder::new(SQSSourceConfig {
             region: SQS_DEFAULT_REGION.to_string(),
             queue_name: "test-q".to_string(),
-            auth: SQSAuth {
-                credentials: Some(AWSCredentials {
-                    access_key_id: "test-key".to_string(),
-                    secret_access_key: "test-secret".to_string(),
-                }),
-                role_arn: None,
-            },
+            auth: SQSAuth::Credentials(AWSCredentials {
+                access_key_id: "test-key".to_string(),
+                secret_access_key: "test-secret".to_string(),
+            }),
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,
@@ -762,13 +745,10 @@ mod tests {
         let source = SqsSourceBuilder::new(SQSSourceConfig {
             region: SQS_DEFAULT_REGION.to_string(),
             queue_name: "test-q".to_string(),
-            auth: SQSAuth {
-                credentials: Some(AWSCredentials {
-                    access_key_id: "test-key".to_string(),
-                    secret_access_key: "test-secret".to_string(),
-                }),
-                role_arn: None,
-            },
+            auth: SQSAuth::Credentials(AWSCredentials {
+                access_key_id: "test-key".to_string(),
+                secret_access_key: "test-secret".to_string(),
+            }),
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,
@@ -800,13 +780,10 @@ mod tests {
         let source = SqsSourceBuilder::new(SQSSourceConfig {
             region: SQS_DEFAULT_REGION.to_string(),
             queue_name: "test-q".to_string(),
-            auth: SQSAuth {
-                credentials: Some(AWSCredentials {
-                    access_key_id: "test-key".to_string(),
-                    secret_access_key: "test-secret".to_string(),
-                }),
-                role_arn: None,
-            },
+            auth: SQSAuth::Credentials(AWSCredentials {
+                access_key_id: "test-key".to_string(),
+                secret_access_key: "test-secret".to_string(),
+            }),
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,

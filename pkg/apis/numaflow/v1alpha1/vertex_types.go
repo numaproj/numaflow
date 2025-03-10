@@ -24,19 +24,21 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	resource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/env"
 	"k8s.io/utils/ptr"
 )
 
-// +kubebuilder:validation:Enum="";Running;Failed
+// +kubebuilder:validation:Enum="";Running;Paused;Failed
 type VertexPhase string
 
 const (
 	VertexPhaseUnknown VertexPhase = ""
 	VertexPhaseRunning VertexPhase = "Running"
 	VertexPhaseFailed  VertexPhase = "Failed"
+	VertexPhasePaused  VertexPhase = "Paused"
 
 	// VertexConditionDeployed has the status True when the vertex related sub resources are deployed.
 	VertexConditionDeployed ConditionType = "Deployed"
@@ -152,6 +154,17 @@ func (v Vertex) GetServingSourceStreamName() string {
 	return fmt.Sprintf("%s-%s-serving-source", v.Spec.PipelineName, v.Spec.Name)
 }
 
+func (v Vertex) GetServingStoreName() string {
+	if v.HasServingStore() {
+		return *v.Spec.ServingStoreName
+	}
+	return ""
+}
+
+func (v Vertex) HasServingStore() bool {
+	return v.Spec.ServingStoreName != nil
+}
+
 func (v Vertex) getServiceObj(name string, headless bool, port int32, servicePortName string) *corev1.Service {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -210,14 +223,36 @@ func (v Vertex) sidecarEnvs() []corev1.EnvVar {
 	}
 }
 
-func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
-	vertexCopy := &Vertex{
+func (v Vertex) simpleCopy() Vertex {
+	m := Vertex{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: v.Namespace,
 			Name:      v.Name,
 		},
-		Spec: v.Spec.DeepCopyWithoutReplicas(),
+		Spec: v.Spec.DeepCopyWithoutReplicasAndLifecycle(),
 	}
+	if m.Spec.Limits == nil {
+		m.Spec.Limits = &VertexLimits{}
+	}
+	if m.Spec.Limits.ReadBatchSize == nil {
+		m.Spec.Limits.ReadBatchSize = ptr.To[uint64](DefaultReadBatchSize)
+	}
+	if m.Spec.Limits.ReadTimeout == nil {
+		m.Spec.Limits.ReadTimeout = &metav1.Duration{Duration: DefaultReadTimeout}
+	}
+	if m.Spec.Limits.BufferMaxLength == nil {
+		m.Spec.Limits.BufferMaxLength = ptr.To[uint64](DefaultBufferLength)
+	}
+	if m.Spec.Limits.BufferUsageLimit == nil {
+		m.Spec.Limits.BufferUsageLimit = ptr.To[uint32](100 * DefaultBufferUsageLimit)
+	}
+	m.Spec.UpdateStrategy = UpdateStrategy{}
+	return m
+}
+
+func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
+	vertexCopy := v.simpleCopy()
+	v.Spec.Scale = Scale{LookbackSeconds: ptr.To[uint32](uint32(v.Spec.Scale.GetLookbackSeconds()))}
 	vertexBytes, err := json.Marshal(vertexCopy)
 	if err != nil {
 		return nil, errors.New("failed to marshal vertex spec")
@@ -245,7 +280,15 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 				Medium: corev1.StorageMediumMemory,
 			}},
 		},
+		{
+			Name: RuntimeDirVolume,
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{
+				SizeLimit: resource.NewQuantity(RuntimeDirSizeLimit, resource.BinarySI),
+			}},
+		},
 	}
+
+	servingStore := req.PipelineSpec.GetStoreSpec(v.GetServingStoreName())
 	volumeMounts := []corev1.VolumeMount{{Name: varVolumeName, MountPath: PathVarRun}}
 	executeRustBinary, _ := env.GetBool(EnvExecuteRustBinary, false)
 	sidecarContainers, containers, err := v.Spec.getType().getContainers(getContainerReq{
@@ -256,6 +299,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		resources:         req.DefaultResources,
 		volumeMounts:      volumeMounts,
 		executeRustBinary: executeRustBinary,
+		servingStore:      servingStore,
 	})
 	if err != nil {
 		return nil, err
@@ -303,6 +347,12 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	containers[0].Ports = []corev1.ContainerPort{
 		{Name: VertexMetricsPortName, ContainerPort: VertexMetricsPort},
 	}
+
+	// Attach an EmptyDir for runtime info
+	containers[0].VolumeMounts = append(containers[0].VolumeMounts, corev1.VolumeMount{
+		Name:      RuntimeDirVolume,
+		MountPath: RuntimeDirMountPath,
+	})
 
 	for i := 0; i < len(sidecarContainers); i++ { // udf, udsink, udsource, or source vertex specifies a udtransformer
 		sidecarContainers[i].Env = append(sidecarContainers[i].Env, v.commonEnvs()...)
@@ -423,9 +473,10 @@ func (v Vertex) getInitContainers(req GetVertexPodSpecReq) []corev1.Container {
 	return append(initContainers, v.Spec.InitContainers...)
 }
 
-func (vs VertexSpec) DeepCopyWithoutReplicas() VertexSpec {
+func (vs VertexSpec) DeepCopyWithoutReplicasAndLifecycle() VertexSpec {
 	x := *vs.DeepCopy()
 	x.Replicas = ptr.To[int32](0)
+	x.Lifecycle = VertexLifecycle{}
 	return x
 }
 
@@ -473,19 +524,22 @@ func (v Vertex) GetToBuffers() []string {
 	return r
 }
 
-func (v Vertex) GetReplicas() int {
+func (v Vertex) getReplicas() int {
 	if v.IsReduceUDF() {
-		// Replicas will be 0 only when pausing a pipeline
-		if v.Spec.Replicas != nil && int(*v.Spec.Replicas) == 0 {
-			return 0
-		}
-		// Replica of a reduce vertex is determined by the partitions.
 		return v.GetPartitionCount()
 	}
-	desiredReplicas := 1
-	if x := v.Spec.Replicas; x != nil {
-		desiredReplicas = int(*x)
+	if v.Spec.Replicas == nil {
+		return 1
 	}
+	return int(*v.Spec.Replicas)
+}
+
+func (v Vertex) CalculateReplicas() int {
+	// If we are pausing the Pipeline/Vertex then we should have the desired replicas as 0
+	if v.Spec.Lifecycle.GetDesiredPhase() == VertexPhasePaused {
+		return 0
+	}
+	desiredReplicas := v.getReplicas()
 	// Don't allow replicas to be out of the range of min and max when auto scaling is enabled
 	if s := v.Spec.Scale; !s.Disabled {
 		max := int(s.GetMaxReplicas())
@@ -515,6 +569,10 @@ type VertexSpec struct {
 	// +kubebuilder:default={"disabled": false}
 	// +optional
 	Watermark Watermark `json:"watermark,omitempty" protobuf:"bytes,7,opt,name=watermark"`
+	// Lifecycle defines the Lifecycle properties of a vertex
+	// +kubebuilder:default={"desiredPhase": Running}
+	// +optional
+	Lifecycle VertexLifecycle `json:"lifecycle,omitempty" protobuf:"bytes,8,opt,name=lifecycle"`
 }
 
 type AbstractVertex struct {
@@ -564,6 +622,26 @@ type AbstractVertex struct {
 	// +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
 	// +optional
 	UpdateStrategy UpdateStrategy `json:"updateStrategy,omitempty" protobuf:"bytes,16,opt,name=updateStrategy"`
+	// Names of the serving store used in this vertex.
+	// +optional
+	ServingStoreName *string `json:"servingStoreName,omitempty" protobuf:"bytes,17,opt,name=servingStoreName"`
+}
+
+type VertexLifecycle struct {
+	// DesiredPhase used to bring the vertex from current phase to desired phase
+	// +kubebuilder:default=Running
+	// +optional
+	DesiredPhase VertexPhase `json:"desiredPhase,omitempty" protobuf:"bytes,1,opt,name=desiredPhase"`
+}
+
+// GetDesiredPhase is used to fetch the desired lifecycle phase for a Vertex
+func (vlc VertexLifecycle) GetDesiredPhase() VertexPhase {
+	switch vlc.DesiredPhase {
+	case VertexPhasePaused:
+		return VertexPhasePaused
+	default:
+		return VertexPhaseRunning
+	}
 }
 
 func (av AbstractVertex) GetVertexType() VertexType {
@@ -620,6 +698,10 @@ func (av AbstractVertex) IsMapUDF() bool {
 
 func (av AbstractVertex) IsReduceUDF() bool {
 	return av.UDF != nil && av.UDF.GroupBy != nil
+}
+
+func (av AbstractVertex) IsAServingSource() bool {
+	return av.Source != nil && av.Source.Serving != nil
 }
 
 func (av AbstractVertex) OwnedBufferNames(namespace, pipeline string) []string {
@@ -745,7 +827,7 @@ func (vs *VertexStatus) InitConditions() {
 
 // IsHealthy indicates whether the vertex is healthy or not
 func (vs *VertexStatus) IsHealthy() bool {
-	if vs.Phase != VertexPhaseRunning {
+	if vs.Phase != VertexPhaseRunning && vs.Phase != VertexPhasePaused {
 		return false
 	}
 	return vs.IsReady()

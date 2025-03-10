@@ -10,10 +10,6 @@ use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
 use axum::{routing::get, Router};
 use axum_server::tls_rustls::RustlsConfig;
-use numaflow_pb::clients::map::map_client::MapClient;
-use numaflow_pb::clients::sink::sink_client::SinkClient;
-use numaflow_pb::clients::source::source_client::SourceClient;
-use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
@@ -24,12 +20,12 @@ use rcgen::{generate_simple_self_signed, CertifiedKey};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time;
-use tonic::transport::Channel;
-use tonic::Request;
 use tracing::{debug, error, info};
 
 use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica};
+use crate::mapper::map::MapHandle;
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
+use crate::sink::SinkWriter;
 use crate::source::Source;
 use crate::Error;
 
@@ -89,38 +85,29 @@ const SINK_TIME: &str = "time";
 
 const PIPELINE_FORWARDER_READ_TOTAL: &str = "data_read";
 
-/// Only user defined functions will have containers since rest
-/// are builtins. We save the gRPC clients to retrieve metrics and also
-/// to do liveness checks.
+/// A deep healthcheck for components. Each component should implement IsReady for both builtins and
+/// user-defined containers.
 #[derive(Clone)]
-pub(crate) enum UserDefinedContainerState {
-    Monovertex(MonovertexContainerState),
-    Pipeline(PipelineContainerState),
+pub(crate) enum ComponentHealthChecks {
+    Monovertex(MonovertexComponents),
+    Pipeline(PipelineComponents),
 }
 
-/// MonovertexContainerState is used to store the gRPC clients for the
-/// monovtx. These will be optionals since
-/// we do not require these for builtins.
+/// MonovertexComponents is used to store the all the components required for running mvtx. Transformer
+/// and Fallback Sink ism missing because they are internally referenced by Source and Sink.
 #[derive(Clone)]
-pub(crate) struct MonovertexContainerState {
-    pub source_client: Option<SourceClient<Channel>>,
-    pub sink_client: Option<SinkClient<Channel>>,
-    pub transformer_client: Option<SourceTransformClient<Channel>>,
-    pub fb_sink_client: Option<SinkClient<Channel>>,
+pub(crate) struct MonovertexComponents {
+    pub(crate) source: Source,
+    pub(crate) sink: SinkWriter,
 }
 
-/// PipelineContainerState is used to store the gRPC clients for the
-/// pipeline.
+/// PipelineComponents is used to store the all the components required for running pipeline. Transformer
+/// and Fallback Sink is missing because they are internally referenced by Source and Sink.
 #[derive(Clone)]
-pub(crate) enum PipelineContainerState {
-    Source(
-        (
-            Option<SourceClient<Channel>>,
-            Option<SourceTransformClient<Channel>>,
-        ),
-    ),
-    Sink((Option<SinkClient<Channel>>, Option<SinkClient<Channel>>)),
-    Map(Option<MapClient<Channel>>),
+pub(crate) enum PipelineComponents {
+    Source(Source),
+    Sink(SinkWriter),
+    Map(MapHandle),
 }
 
 /// The global register of all metrics.
@@ -591,7 +578,7 @@ pub async fn metrics_handler() -> impl IntoResponse {
 
 pub(crate) async fn start_metrics_https_server(
     addr: SocketAddr,
-    metrics_state: UserDefinedContainerState,
+    metrics_state: ComponentHealthChecks,
 ) -> crate::Result<()> {
     // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
@@ -615,7 +602,7 @@ pub(crate) async fn start_metrics_https_server(
 }
 
 /// router for metrics and k8s health endpoints
-fn metrics_router(metrics_state: UserDefinedContainerState) -> Router {
+fn metrics_router(metrics_state: ComponentHealthChecks) -> Router {
     Router::new()
         .route("/metrics", get(metrics_handler))
         .route("/livez", get(livez))
@@ -628,69 +615,37 @@ async fn livez() -> impl IntoResponse {
     StatusCode::NO_CONTENT
 }
 
-async fn sidecar_livez(State(state): State<UserDefinedContainerState>) -> impl IntoResponse {
+async fn sidecar_livez(State(state): State<ComponentHealthChecks>) -> impl IntoResponse {
     match state {
-        UserDefinedContainerState::Monovertex(monovertex_state) => {
-            if let Some(mut source_client) = monovertex_state.source_client {
-                if source_client.is_ready(Request::new(())).await.is_err() {
-                    error!("Monovertex source client is not ready");
-                    return StatusCode::INTERNAL_SERVER_ERROR;
-                }
+        ComponentHealthChecks::Monovertex(mut monovertex_state) => {
+            // this call also check the health of transformer if it is configured in the Source.
+            if !monovertex_state.source.is_ready().await {
+                error!("Monovertex source component is not ready");
+                return StatusCode::INTERNAL_SERVER_ERROR;
             }
-            if let Some(mut sink_client) = monovertex_state.sink_client {
-                if sink_client.is_ready(Request::new(())).await.is_err() {
-                    error!("Monovertex sink client is not ready");
-                    return StatusCode::INTERNAL_SERVER_ERROR;
-                }
-            }
-            if let Some(mut transformer_client) = monovertex_state.transformer_client {
-                if transformer_client.is_ready(Request::new(())).await.is_err() {
-                    error!("Monovertex transformer client is not ready");
-                    return StatusCode::INTERNAL_SERVER_ERROR;
-                }
-            }
-            if let Some(mut fb_sink_client) = monovertex_state.fb_sink_client {
-                if fb_sink_client.is_ready(Request::new(())).await.is_err() {
-                    error!("Monovertex fallback sink client is not ready");
-                    return StatusCode::INTERNAL_SERVER_ERROR;
-                }
+            if !monovertex_state.sink.is_ready().await {
+                error!("Monovertex sink client is not ready");
+                return StatusCode::INTERNAL_SERVER_ERROR;
             }
         }
-        UserDefinedContainerState::Pipeline(pipeline_state) => match pipeline_state {
-            PipelineContainerState::Source((source_client, transformer_client)) => {
-                if let Some(mut source_client) = source_client {
-                    if source_client.is_ready(Request::new(())).await.is_err() {
-                        error!("Pipeline source client is not ready");
-                        return StatusCode::INTERNAL_SERVER_ERROR;
-                    }
-                }
-                if let Some(mut transformer_client) = transformer_client {
-                    if transformer_client.is_ready(Request::new(())).await.is_err() {
-                        error!("Pipeline transformer client is not ready");
-                        return StatusCode::INTERNAL_SERVER_ERROR;
-                    }
+        ComponentHealthChecks::Pipeline(pipeline_state) => match pipeline_state {
+            PipelineComponents::Source(mut source) => {
+                if !source.is_ready().await {
+                    error!("Pipeline source component is not ready");
+                    return StatusCode::INTERNAL_SERVER_ERROR;
                 }
             }
-            PipelineContainerState::Sink((sink_client, fb_sink_client)) => {
-                if let Some(mut sink_client) = sink_client {
-                    if sink_client.is_ready(Request::new(())).await.is_err() {
-                        error!("Pipeline sink client is not ready");
-                        return StatusCode::INTERNAL_SERVER_ERROR;
-                    }
-                }
-                if let Some(mut fb_sink_client) = fb_sink_client {
-                    if fb_sink_client.is_ready(Request::new(())).await.is_err() {
-                        error!("Pipeline fallback sink client is not ready");
-                        return StatusCode::INTERNAL_SERVER_ERROR;
-                    }
+            PipelineComponents::Sink(sink) => {
+                // this call also check for fbsink if it is there
+                if !sink.is_ready().await {
+                    error!("Pipeline sink component is not ready");
+                    return StatusCode::INTERNAL_SERVER_ERROR;
                 }
             }
-            PipelineContainerState::Map(map_client) => {
-                if let Some(mut map_client) = map_client {
-                    if map_client.is_ready(Request::new(())).await.is_err() {
-                        error!("Pipeline map client is not ready");
-                        return StatusCode::INTERNAL_SERVER_ERROR;
-                    }
+            PipelineComponents::Map(mut map) => {
+                if !map.is_ready().await {
+                    error!("Pipeline map component is not ready");
+                    return StatusCode::INTERNAL_SERVER_ERROR;
                 }
             }
         },
@@ -1003,10 +958,16 @@ mod tests {
 
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
+    use numaflow_pb::clients::sink::sink_client::SinkClient;
+    use numaflow_pb::clients::source::source_client::SourceClient;
     use tokio::sync::mpsc::Sender;
 
     use super::*;
     use crate::shared::grpc::create_rpc_channel;
+    use crate::sink::{SinkClientType, SinkWriterBuilder};
+    use crate::source::user_defined::new_source;
+    use crate::source::SourceType;
+    use crate::tracker::TrackerHandle;
 
     struct SimpleSource;
     #[tonic::async_trait]
@@ -1084,6 +1045,7 @@ mod tests {
                 .await
                 .unwrap();
         });
+
         let fb_server_socket = fb_sink_sock_file.clone();
         let fb_server_info = fb_sink_server_info.clone();
         let fb_sink_server_handle = tokio::spawn(async move {
@@ -1114,19 +1076,41 @@ mod tests {
         // wait for the servers to start
         // FIXME: we need to have a better way, this is flaky
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let metrics_state = UserDefinedContainerState::Monovertex(MonovertexContainerState {
-            source_client: Some(SourceClient::new(
-                create_rpc_channel(src_sock_file).await.unwrap(),
-            )),
-            sink_client: Some(SinkClient::new(
+
+        let src_client = SourceClient::new(create_rpc_channel(src_sock_file).await.unwrap());
+        let (src_read, src_ack, lag_reader) =
+            new_source(src_client, 5, Duration::from_millis(1000))
+                .await
+                .expect("Failed to create source reader");
+
+        let tracker = TrackerHandle::new(None, None);
+        let source = Source::new(
+            5,
+            SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
+            tracker.clone(),
+            true,
+            None,
+            None,
+        );
+
+        let sink_writer = SinkWriterBuilder::new(
+            10,
+            Duration::from_millis(100),
+            SinkClientType::UserDefined(SinkClient::new(
                 create_rpc_channel(sink_sock_file).await.unwrap(),
             )),
-            transformer_client: Some(SourceTransformClient::new(
-                create_rpc_channel(sock_file).await.unwrap(),
-            )),
-            fb_sink_client: Some(SinkClient::new(
-                create_rpc_channel(fb_sink_sock_file).await.unwrap(),
-            )),
+            tracker.clone(),
+        )
+        .fb_sink_client(SinkClientType::UserDefined(SinkClient::new(
+            create_rpc_channel(fb_sink_sock_file).await.unwrap(),
+        )))
+        .build()
+        .await
+        .expect("failed to create sink writer");
+
+        let metrics_state = ComponentHealthChecks::Monovertex(MonovertexComponents {
+            source,
+            sink: sink_writer,
         });
 
         let addr: SocketAddr = "127.0.0.1:9091".parse().unwrap();
@@ -1213,7 +1197,7 @@ mod tests {
         {
             for (i, (label, _)) in lookback_seconds_map.iter().enumerate() {
                 let mut metric_labels = mvtx_forward_metric_labels().clone();
-                metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
+                metric_labels.push((PENDING_PERIOD_LABEL.to_string(), (*label).to_string()));
                 let guage = monovertex_metrics()
                     .pending
                     .get_or_create(&metric_labels)
@@ -1310,7 +1294,7 @@ mod tests {
                 stored_values_stream_one[i] = guage;
 
                 let mut metric_labels = pipeline_forward_metric_labels("stream2").clone();
-                metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
+                metric_labels.push((PENDING_PERIOD_LABEL.to_string(), (*label).to_string()));
                 metric_labels.push((
                     PIPELINE_PARTITION_NAME_LABEL.to_string(),
                     "stream2".to_string(),
@@ -1350,9 +1334,9 @@ mod tests {
             123246.45850253566,
             730244.1067557991,
             4.32674871092222e+06,
-            2.5636296457956206e+07,
-            1.5189689533417246e+08,
-            8.999999999999983e+08,
+            2.563_629_645_795_620_6e7,
+            1.518_968_953_341_724_6e8,
+            8.999_999_999_999_983e8,
         ];
         for (i, bucket) in buckets.iter().enumerate() {
             assert!((bucket - expected[i]).abs() < 1e-2);

@@ -1,4 +1,5 @@
 use tokio_util::sync::CancellationToken;
+use tracing::error;
 
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
@@ -12,7 +13,6 @@ pub(crate) struct MapForwarder {
     jetstream_reader: JetStreamReader,
     mapper: MapHandle,
     jetstream_writer: JetstreamWriter,
-    cln_token: CancellationToken,
 }
 
 impl MapForwarder {
@@ -20,44 +20,58 @@ impl MapForwarder {
         jetstream_reader: JetStreamReader,
         mapper: MapHandle,
         jetstream_writer: JetstreamWriter,
-        cln_token: CancellationToken,
     ) -> Self {
         Self {
             jetstream_reader,
             mapper,
             jetstream_writer,
-            cln_token,
         }
     }
 
-    pub(crate) async fn start(&self) -> Result<()> {
-        // Create a child cancellation token only for the reader so that we can stop the reader first
-        let reader_cancellation_token = self.cln_token.child_token();
+    pub(crate) async fn start(self, cln_token: CancellationToken) -> Result<()> {
+        let child_token = cln_token.child_token();
+        // only the reader need to listen on the cancellation token, if the reader stops all
+        // other components will stop gracefully because they are chained using tokio streams.
         let (read_messages_stream, reader_handle) = self
             .jetstream_reader
-            .streaming_read(reader_cancellation_token.clone())
+            .streaming_read(child_token.clone())
             .await?;
 
-        let (mapped_messages_stream, mapper_handle) =
-            self.mapper.streaming_map(read_messages_stream).await?;
+        let (mapped_messages_stream, mapper_handle) = self
+            .mapper
+            .streaming_map(read_messages_stream, child_token.clone())
+            .await?;
 
         let writer_handle = self
             .jetstream_writer
-            .streaming_write(mapped_messages_stream)
+            .streaming_write(mapped_messages_stream, child_token)
             .await?;
 
         // Join the reader, mapper, and writer
-        match tokio::try_join!(reader_handle, mapper_handle, writer_handle) {
-            Ok((reader_result, mapper_result, writer_result)) => {
-                writer_result?;
-                mapper_result?;
-                reader_result?;
-                Ok(())
-            }
-            Err(e) => Err(Error::Forwarder(format!(
-                "Error while joining reader, mapper, and writer: {:?}",
-                e
-            ))),
-        }
+        let (reader_result, mapper_result, writer_result) =
+            tokio::try_join!(reader_handle, mapper_handle, writer_handle).map_err(|e| {
+                error!(?e, "Error while joining reader, mapper, and writer");
+                Error::Forwarder(format!(
+                    "Error while joining reader, mapper, and writer: {:?}",
+                    e
+                ))
+            })?;
+
+        writer_result.inspect_err(|e| {
+            error!(?e, "Error while writing messages");
+            cln_token.cancel();
+        })?;
+
+        mapper_result.inspect_err(|e| {
+            error!(?e, "Error while mapping messages");
+            cln_token.cancel();
+        })?;
+
+        reader_result.inspect_err(|e| {
+            error!(?e, "Error while reading messages");
+            cln_token.cancel();
+        })?;
+
+        Ok(())
     }
 }

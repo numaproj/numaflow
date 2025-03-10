@@ -33,6 +33,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         tokio::time::sleep(Duration::from_secs(300)).await;
         return Err(e);
     }
+    info!("Exiting...");
     Ok(())
 }
 

@@ -1,23 +1,21 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use app::callback::store::Store;
 use axum_server::tls_rustls::RustlsConfig;
 use tokio::sync::mpsc;
 use tracing::info;
 
 pub use self::error::{Error, Result};
-use crate::app::callback::state::State as CallbackState;
 use crate::app::start_main_server;
 use crate::config::generate_certs;
 use crate::metrics::start_https_metrics_server;
+use app::orchestrator::OrchestratorState;
 
 mod app;
 
 mod config;
 pub use {config::Settings, config::DEFAULT_CALLBACK_URL_HEADER_KEY, config::DEFAULT_ID_HEADER};
 
-mod consts;
 mod error;
 mod metrics;
 mod pipeline;
@@ -26,20 +24,25 @@ pub mod source;
 use source::MessageWrapper;
 pub use source::{Message, ServingSource};
 
+use crate::app::store::cbstore::CallbackStore;
+use crate::app::store::datastore::DataStore;
+
+///
 pub mod callback;
 
 #[derive(Clone)]
-pub(crate) struct AppState<T> {
+pub(crate) struct AppState<T, U> {
     pub(crate) message: mpsc::Sender<MessageWrapper>,
     pub(crate) settings: Arc<Settings>,
-    pub(crate) callback_state: CallbackState<T>,
+    pub(crate) orchestrator_state: OrchestratorState<T, U>,
 }
 
-pub(crate) async fn serve<T>(
-    app: AppState<T>,
+pub(crate) async fn serve<T, U>(
+    app: AppState<T, U>,
 ) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>
 where
-    T: Clone + Send + Sync + Store + 'static,
+    T: Clone + Send + Sync + DataStore + 'static,
+    U: Clone + Send + Sync + CallbackStore + 'static,
 {
     let (cert, key) = generate_certs()?;
 
@@ -70,20 +73,5 @@ async fn flatten<T>(handle: tokio::task::JoinHandle<Result<T>>) -> Result<T> {
         Ok(Ok(result)) => Ok(result),
         Ok(Err(err)) => Err(err),
         Err(err) => Err(Error::Other(format!("Spawning the server: {err:?}"))),
-    }
-}
-
-#[cfg(test)]
-pub mod test_utils {
-    use std::sync::{
-        atomic::{AtomicU16, Ordering},
-        OnceLock,
-    };
-
-    static CELL: OnceLock<AtomicU16> = OnceLock::new();
-
-    pub(crate) fn get_port() -> u16 {
-        let val = CELL.get_or_init(|| AtomicU16::new(62000));
-        val.fetch_add(1, Ordering::Relaxed)
     }
 }

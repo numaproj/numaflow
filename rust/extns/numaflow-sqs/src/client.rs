@@ -52,13 +52,10 @@ mod tests {
         let config = SQSSourceConfig {
             region: "us-west-2".to_string(),
             queue_name: "test-queue".to_string(),
-            auth: SQSAuth {
-                credentials: Some(AWSCredentials {
-                    access_key_id: "test-key".to_string(),
-                    secret_access_key: "test-secret".to_string(),
-                }),
-                role_arn: None,
-            },
+            auth: SQSAuth::Credentials(AWSCredentials {
+                access_key_id: "test-key".to_string(),
+                secret_access_key: "test-secret".to_string(),
+            }),
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,
@@ -76,13 +73,10 @@ mod tests {
         let mut config = SQSSourceConfig {
             region: "us-west-2".to_string(),
             queue_name: "test-queue".to_string(),
-            auth: SQSAuth {
-                credentials: Some(AWSCredentials {
-                    access_key_id: "test-key".to_string(),
-                    secret_access_key: "test-secret".to_string(),
-                }),
-                role_arn: None,
-            },
+            auth: SQSAuth::Credentials(AWSCredentials {
+                access_key_id: "test-key".to_string(),
+                secret_access_key: "test-secret".to_string(),
+            }),
             visibility_timeout: Some(30),
             max_number_of_messages: Some(5),
             wait_time_seconds: Some(10),
@@ -110,13 +104,10 @@ mod tests {
         let config = SQSSourceConfig {
             region: "".to_string(),
             queue_name: "test-queue".to_string(),
-            auth: SQSAuth {
-                credentials: Some(AWSCredentials {
-                    access_key_id: "test-key".to_string(),
-                    secret_access_key: "test-secret".to_string(),
-                }),
-                role_arn: None,
-            },
+            auth: SQSAuth::Credentials(AWSCredentials {
+                access_key_id: "test-key".to_string(),
+                secret_access_key: "test-secret".to_string(),
+            }),
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,
@@ -133,13 +124,10 @@ mod tests {
         let config = SQSSourceConfig {
             region: "us-west-2".to_string(),
             queue_name: "test-queue".to_string(),
-            auth: SQSAuth {
-                credentials: Some(AWSCredentials {
-                    access_key_id: "test-key".to_string(),
-                    secret_access_key: "test-secret".to_string(),
-                }),
-                role_arn: None,
-            },
+            auth: SQSAuth::Credentials(AWSCredentials {
+                access_key_id: "test-key".to_string(),
+                secret_access_key: "test-secret".to_string(),
+            }),
             visibility_timeout: Some(50000),  // Invalid: > 43200
             max_number_of_messages: Some(20), // Invalid: > 10
             wait_time_seconds: Some(30),      // Invalid: > 20

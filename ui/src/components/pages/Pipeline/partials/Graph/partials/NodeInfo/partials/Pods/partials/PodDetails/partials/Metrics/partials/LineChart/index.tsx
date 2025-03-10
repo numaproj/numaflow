@@ -82,8 +82,14 @@ const CustomTooltip = ({
 }: TooltipProps & { displayName: string }) => {
   if (!active || !payload || !payload.length) return null;
 
-  const maxWidth =
-    Math.max(...payload.map((entry) => entry?.name?.length)) * 9.5;
+  // sorting tooltip based on values in descending order
+  payload?.sort((a, b) => {
+    const period1 = a?.value;
+    const period2 = b?.value;
+    return period2 - period1;
+  });
+
+  const maxWidth = Math.max(...payload.map((entry) => entry?.name?.length));
   const timestamp = payload[0]?.payload?.timestamp;
 
   return (
@@ -102,7 +108,7 @@ const CustomTooltip = ({
           <Box key={`item-${index}`} sx={{ display: "flex" }}>
             <Box
               sx={{
-                width: `${maxWidth / 9}rem`,
+                width: `${maxWidth + 1}rem`,
                 display: "inline-block",
                 paddingRight: "1rem",
                 color: entry?.color,
@@ -369,6 +375,12 @@ const LineChartComponent = ({
     [labelVal]: parseFloat(value),
   });
 
+  const periodOrder = {
+    "1m": 1,
+    "5m": 2,
+    "15m": 3,
+  };
+
   const updateChartData = useCallback(() => {
     if (!chartData) return;
 
@@ -377,15 +389,34 @@ const LineChartComponent = ({
     let filteredChartData = chartData;
     const label = groupByLabel(metricsReq?.dimension, metricsReq?.display_name);
 
-    if (Array.isArray(label) && label.length === 1 && label[0] === "container"){
-      filteredChartData = chartData?.filter((item) => {
-        return pod?.containers?.includes(item?.metric?.["container"])
-      })
+    if (
+      [VERTEX_PENDING_MESSAGES, MONO_VERTEX_PENDING_MESSAGES]?.includes(
+        metricsReq?.display_name
+      )
+    )
+      filteredChartData = filteredChartData
+        // Filter out default period for pending messages
+        ?.filter((item) => item?.metric?.["period"] !== "default")
+        ?.sort((a, b) => {
+          const period1: "1m" | "5m" | "15m" = a?.metric?.["period"];
+          const period2: "1m" | "5m" | "15m" = b?.metric?.["period"];
+          return (periodOrder[period1] || 0) - (periodOrder[period2] || 0);
+        });
+
+    if (
+      Array.isArray(label) &&
+      label.length === 1 &&
+      label[0] === "container"
+    ) {
+      filteredChartData = filteredChartData?.filter((item) => {
+        return pod?.containers?.includes(item?.metric?.["container"]);
+      });
     }
-    if (Array.isArray(label) && label.length === 1 && label[0] === "pod"){
-      filteredChartData = chartData?.filter((item) => {
-        return !item?.metric?.["pod"]?.includes("daemon")
-      })
+
+    if (Array.isArray(label) && label.length === 1 && label[0] === "pod") {
+      filteredChartData = filteredChartData?.filter((item) => {
+        return !item?.metric?.["pod"]?.includes("daemon");
+      });
     }
 
     filteredChartData?.forEach((item) => {
@@ -486,31 +517,31 @@ const LineChartComponent = ({
 
       {filtersList?.filter((filterEle: any) => !filterEle?.required)?.length >
         0 && (
-          <Box
-            sx={{
-              display: fromModal ? "none" : "flex",
-              alignItems: "center",
-              justifyContent: "space-around",
-              mt: "1rem",
-              mb: "2rem",
-              px: "6rem",
-            }}
-          >
-            <Box sx={{ mr: "1rem" }}>Filters</Box>
-            <FiltersDropdown
-              items={filtersList?.filter(
-                (filterEle: any) => !filterEle?.required
-              )}
-              namespaceId={namespaceId}
-              pipelineId={pipelineId}
-              type={type}
-              vertexId={vertexId}
-              setFilters={setFilters}
-              selectedPodName={pod?.name}
-              metric={metric}
-            />
-          </Box>
-        )}
+        <Box
+          sx={{
+            display: fromModal ? "none" : "flex",
+            alignItems: "center",
+            justifyContent: "space-around",
+            mt: "1rem",
+            mb: "2rem",
+            px: "6rem",
+          }}
+        >
+          <Box sx={{ mr: "1rem" }}>Filters</Box>
+          <FiltersDropdown
+            items={filtersList?.filter(
+              (filterEle: any) => !filterEle?.required
+            )}
+            namespaceId={namespaceId}
+            pipelineId={pipelineId}
+            type={type}
+            vertexId={vertexId}
+            setFilters={setFilters}
+            selectedPodName={pod?.name}
+            metric={metric}
+          />
+        </Box>
+      )}
 
       {isLoading && (
         <Box

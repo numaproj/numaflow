@@ -8339,20 +8339,13 @@ spec:
                         type: object
                       msgIDHeaderKey:
                         type: string
+                      requestTimeoutSeconds:
+                        format: int32
+                        type: integer
                       service:
                         type: boolean
-                      store:
-                        properties:
-                          ttl:
-                            type: string
-                          url:
-                            type: string
-                        required:
-                        - url
-                        type: object
                     required:
                     - msgIDHeaderKey
-                    - store
                     type: object
                   sqs:
                     properties:
@@ -10095,6 +10088,307 @@ spec:
                   readTimeout:
                     default: 1s
                     type: string
+                type: object
+              servingStore:
+                properties:
+                  container:
+                    properties:
+                      args:
+                        items:
+                          type: string
+                        type: array
+                      command:
+                        items:
+                          type: string
+                        type: array
+                      env:
+                        items:
+                          properties:
+                            name:
+                              type: string
+                            value:
+                              type: string
+                            valueFrom:
+                              properties:
+                                configMapKeyRef:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      default: ""
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  required:
+                                  - key
+                                  type: object
+                                  x-kubernetes-map-type: atomic
+                                fieldRef:
+                                  properties:
+                                    apiVersion:
+                                      type: string
+                                    fieldPath:
+                                      type: string
+                                  required:
+                                  - fieldPath
+                                  type: object
+                                  x-kubernetes-map-type: atomic
+                                resourceFieldRef:
+                                  properties:
+                                    containerName:
+                                      type: string
+                                    divisor:
+                                      anyOf:
+                                      - type: integer
+                                      - type: string
+                                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                      x-kubernetes-int-or-string: true
+                                    resource:
+                                      type: string
+                                  required:
+                                  - resource
+                                  type: object
+                                  x-kubernetes-map-type: atomic
+                                secretKeyRef:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      default: ""
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  required:
+                                  - key
+                                  type: object
+                                  x-kubernetes-map-type: atomic
+                              type: object
+                          required:
+                          - name
+                          type: object
+                        type: array
+                      envFrom:
+                        items:
+                          properties:
+                            configMapRef:
+                              properties:
+                                name:
+                                  default: ""
+                                  type: string
+                                optional:
+                                  type: boolean
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            prefix:
+                              type: string
+                            secretRef:
+                              properties:
+                                name:
+                                  default: ""
+                                  type: string
+                                optional:
+                                  type: boolean
+                              type: object
+                              x-kubernetes-map-type: atomic
+                          type: object
+                        type: array
+                      image:
+                        type: string
+                      imagePullPolicy:
+                        type: string
+                      livenessProbe:
+                        properties:
+                          failureThreshold:
+                            format: int32
+                            type: integer
+                          initialDelaySeconds:
+                            format: int32
+                            type: integer
+                          periodSeconds:
+                            format: int32
+                            type: integer
+                          successThreshold:
+                            format: int32
+                            type: integer
+                          timeoutSeconds:
+                            format: int32
+                            type: integer
+                        type: object
+                      ports:
+                        items:
+                          properties:
+                            containerPort:
+                              format: int32
+                              type: integer
+                            hostIP:
+                              type: string
+                            hostPort:
+                              format: int32
+                              type: integer
+                            name:
+                              type: string
+                            protocol:
+                              default: TCP
+                              type: string
+                          required:
+                          - containerPort
+                          type: object
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - containerPort
+                        - protocol
+                        x-kubernetes-list-type: map
+                      readinessProbe:
+                        properties:
+                          failureThreshold:
+                            format: int32
+                            type: integer
+                          initialDelaySeconds:
+                            format: int32
+                            type: integer
+                          periodSeconds:
+                            format: int32
+                            type: integer
+                          successThreshold:
+                            format: int32
+                            type: integer
+                          timeoutSeconds:
+                            format: int32
+                            type: integer
+                        type: object
+                      resources:
+                        properties:
+                          claims:
+                            items:
+                              properties:
+                                name:
+                                  type: string
+                                request:
+                                  type: string
+                              required:
+                              - name
+                              type: object
+                            type: array
+                            x-kubernetes-list-map-keys:
+                            - name
+                            x-kubernetes-list-type: map
+                          limits:
+                            additionalProperties:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            type: object
+                          requests:
+                            additionalProperties:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            type: object
+                        type: object
+                      securityContext:
+                        properties:
+                          allowPrivilegeEscalation:
+                            type: boolean
+                          appArmorProfile:
+                            properties:
+                              localhostProfile:
+                                type: string
+                              type:
+                                type: string
+                            required:
+                            - type
+                            type: object
+                          capabilities:
+                            properties:
+                              add:
+                                items:
+                                  type: string
+                                type: array
+                                x-kubernetes-list-type: atomic
+                              drop:
+                                items:
+                                  type: string
+                                type: array
+                                x-kubernetes-list-type: atomic
+                            type: object
+                          privileged:
+                            type: boolean
+                          procMount:
+                            type: string
+                          readOnlyRootFilesystem:
+                            type: boolean
+                          runAsGroup:
+                            format: int64
+                            type: integer
+                          runAsNonRoot:
+                            type: boolean
+                          runAsUser:
+                            format: int64
+                            type: integer
+                          seLinuxOptions:
+                            properties:
+                              level:
+                                type: string
+                              role:
+                                type: string
+                              type:
+                                type: string
+                              user:
+                                type: string
+                            type: object
+                          seccompProfile:
+                            properties:
+                              localhostProfile:
+                                type: string
+                              type:
+                                type: string
+                            required:
+                            - type
+                            type: object
+                          windowsOptions:
+                            properties:
+                              gmsaCredentialSpec:
+                                type: string
+                              gmsaCredentialSpecName:
+                                type: string
+                              hostProcess:
+                                type: boolean
+                              runAsUserName:
+                                type: string
+                            type: object
+                        type: object
+                      volumeMounts:
+                        items:
+                          properties:
+                            mountPath:
+                              type: string
+                            mountPropagation:
+                              type: string
+                            name:
+                              type: string
+                            readOnly:
+                              type: boolean
+                            recursiveReadOnly:
+                              type: string
+                            subPath:
+                              type: string
+                            subPathExpr:
+                              type: string
+                          required:
+                          - mountPath
+                          - name
+                          type: object
+                        type: array
+                    type: object
+                  name:
+                    type: string
+                required:
+                - container
+                - name
                 type: object
               sideInputs:
                 items:
@@ -17096,6 +17390,8 @@ spec:
                       type: object
                     serviceAccountName:
                       type: string
+                    servingStoreName:
+                      type: string
                     sideInputs:
                       items:
                         type: string
@@ -19781,20 +20077,13 @@ spec:
                               type: object
                             msgIDHeaderKey:
                               type: string
+                            requestTimeoutSeconds:
+                              format: int32
+                              type: integer
                             service:
                               type: boolean
-                            store:
-                              properties:
-                                ttl:
-                                  type: string
-                                url:
-                                  type: string
-                              required:
-                              - url
-                              type: object
                           required:
                           - msgIDHeaderKey
-                          - store
                           type: object
                         sqs:
                           properties:
@@ -23536,6 +23825,19 @@ spec:
                 type: array
               interStepBufferServiceName:
                 type: string
+              lifecycle:
+                default:
+                  desiredPhase: Running
+                properties:
+                  desiredPhase:
+                    default: Running
+                    enum:
+                    - ""
+                    - Running
+                    - Paused
+                    - Failed
+                    type: string
+                type: object
               limits:
                 properties:
                   bufferMaxLength:
@@ -23712,6 +24014,8 @@ spec:
                     type: object
                 type: object
               serviceAccountName:
+                type: string
+              servingStoreName:
                 type: string
               sideInputs:
                 items:
@@ -26398,20 +26702,13 @@ spec:
                         type: object
                       msgIDHeaderKey:
                         type: string
+                      requestTimeoutSeconds:
+                        format: int32
+                        type: integer
                       service:
                         type: boolean
-                      store:
-                        properties:
-                          ttl:
-                            type: string
-                          url:
-                            type: string
-                        required:
-                        - url
-                        type: object
                     required:
                     - msgIDHeaderKey
-                    - store
                     type: object
                   sqs:
                     properties:
@@ -28441,6 +28738,7 @@ spec:
                 enum:
                 - ""
                 - Running
+                - Paused
                 - Failed
                 type: string
               readyReplicas:
@@ -29298,8 +29596,6 @@ spec:
       - args:
         - controller
         env:
-        - name: NUMAFLOW_EXECUTE_RUST_BINARY
-          value: "true"
         - name: NUMAFLOW_IMAGE
           value: quay.io/numaproj/numaflow:latest
         - name: NAMESPACE
