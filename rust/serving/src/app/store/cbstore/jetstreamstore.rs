@@ -1,5 +1,21 @@
-//! TODO(doc)
+//! Stores the callback and status information in JetStream KV store. Each callback from the vertex
+//! will be stored as a new entry in the store. The status of the request will be updated as the
+//! processing progresses.
 //!
+//! **JetStream Callback Entry Format**
+//!
+//! Callback key - cb.{id}.{vertex_name}.{timestamp}
+//!
+//! Callback value - JSON serialized Callback struct
+//!
+//! NOTE: cb.{id}.start.processing and cb.{id}.done.processing keys are used to signal the start and
+//! end of processing so that the watchers can stop watching for new callbacks.
+//!
+//! **Status Entry Format**
+//!
+//! Status Key - status.{id}
+//!
+//! Status Value - JSON serialized [ProcessingStatus] enum
 
 use std::sync::Arc;
 
