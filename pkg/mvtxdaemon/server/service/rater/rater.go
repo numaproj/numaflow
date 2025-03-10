@@ -176,7 +176,7 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 	}
 	now := time.Now().Add(CountWindow).Truncate(CountWindow).Unix()
 	UpdateCount(r.timestampedPodCounts, now, podReadCount)
-	// TODO: Check if this only be inserted for pInfo.replica == 0 as pending is only counted for 0
+	// Pending is only fetched from replica 0. Only maintain that in the timeline
 	if pInfo.replica == 0 {
 		UpdateCount(r.timestampedPendingCount, now, podPendingCount)
 	}
@@ -241,8 +241,9 @@ func (r *Rater) GetPending() map[string]*wrapperspb.Int64Value {
 	// calculate pending for each lookback seconds
 	for n, i := range r.buildLookbackSecondsMap() {
 		pending := CalculatePending(r.timestampedPendingCount, i)
-		// 	Add expose metric pending.WithLabelValues(ms.vertex.Spec.PipelineName, ms.vertex.Spec.Name, n, partitionName).Set(float64(p))
 		result[n] = wrapperspb.Int64(pending)
+		// Expose the metric for pending
+		metrics.MonoVertexPendingMessages.WithLabelValues(r.monoVertex.Name, n).Set(float64(pending))
 	}
 	r.log.Debugf("Got Pending for MonoVertex %s: %v", r.monoVertex.Name, result)
 	return result
