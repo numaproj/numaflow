@@ -49,6 +49,8 @@ pub struct PersistRuntimeErrorRequest {
     pub details: ::prost::alloc::string::String,
     #[prost(string, tag = "6")]
     pub replica: ::prost::alloc::string::String,
+    #[prost(string, tag = "7")]
+    pub mvtx_name: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PersistRuntimeErrorResponse {

@@ -20,7 +20,9 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -40,12 +42,24 @@ import (
 // Note: Please keep consistent with the definitions in rust/monovertex/sc/metrics.rs
 const MonoVtxPendingMetric = "monovtx_pending"
 
+type PodReplica string
+
+type ErrorDetails struct {
+	Container string `json:"container"`
+	Timestamp string `json:"timestamp"`
+	Code      string `json:"code"`
+	Message   string `json:"message"`
+	Details   string `json:"details"`
+}
+
 type MonoVertexService struct {
 	mvtxdaemon.UnimplementedMonoVertexDaemonServiceServer
 	monoVtx       *v1alpha1.MonoVertex
 	httpClient    *http.Client
 	rater         raterPkg.MonoVtxRatable
 	healthChecker *HealthChecker
+	localCache    map[PodReplica][]ErrorDetails
+	mu            sync.Mutex
 }
 
 var _ mvtxdaemon.MonoVertexDaemonServiceServer = (*MonoVertexService)(nil)
@@ -65,6 +79,7 @@ func NewMoveVertexService(
 		},
 		rater:         rater,
 		healthChecker: NewHealthChecker(monoVtx),
+		localCache:    make(map[PodReplica][]ErrorDetails), // Initialize localCache
 	}
 	return &mv, nil
 }
@@ -181,7 +196,24 @@ func (mvs *MonoVertexService) startHealthCheck(ctx context.Context) {
 
 func (s *MonoVertexService) PersistRuntimeError(ctx context.Context, req *mvtxdaemon.PersistRuntimeErrorRequest) (*mvtxdaemon.PersistRuntimeErrorResponse, error) {
 	logging.FromContext(ctx).Errorw("Received runtime error", zap.Any("request", req))
-	// FIXME: Implement this method
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	cacheKey := PodReplica(req.GetMvtxName() + req.GetReplica())
+	_, ok := s.localCache[cacheKey]
+	if !ok {
+		s.localCache[cacheKey] = make([]ErrorDetails, 0)
+	}
+	log.Print("persisting error in local cache")
+	s.localCache[cacheKey] = append(s.localCache[cacheKey], ErrorDetails{
+		Container: req.GetContainerName(),
+		Timestamp: req.GetTimestamp(),
+		Code:      req.GetCode(),
+		Message:   req.GetMessage(),
+		Details:   req.GetDetails(),
+	})
+
 	return &mvtxdaemon.PersistRuntimeErrorResponse{
 		Status: "Success",
 	}, nil

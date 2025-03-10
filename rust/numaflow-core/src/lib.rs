@@ -72,14 +72,16 @@ pub async fn run() -> Result<()> {
 
     // FIXME: get it from config
     let daemon_addr = format!(
-        "http://{}.{}.svc:{}",
+        "https://{}.{}.svc:{}",
         format!("{}-mv-daemon-svc", get_vertex_name()),
         "default",
         4327
     );
 
     info!(?daemon_addr, "connecting to daemon server");
-    let mut runtime = Runtime::new(daemon_addr).await;
+    let mut runtime = Runtime::new(daemon_addr)
+        .await
+        .map_err(|e| println!("error while initiating runtime! : {:?}", e));
 
     // wait for SIG{INT,TERM} and invoke cancellation token.
     let shutdown_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
@@ -96,7 +98,9 @@ pub async fn run() -> Result<()> {
             if let Err(e) = monovertex::start_forwarder(cln_token, &config).await {
                 if let Error::Grpc(e) = e {
                     error!(error=?e, "Monovertex failed because of UDF failure");
-                    runtime.persist_application_error(e).await;
+                    if let Ok(ref mut rt) = runtime {
+                        rt.persist_application_error(e).await;
+                    }
                 } else {
                     error!(?e, "Error running monovertex");
                 }
