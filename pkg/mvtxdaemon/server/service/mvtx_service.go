@@ -40,16 +40,6 @@ import (
 // Note: Please keep consistent with the definitions in rust/monovertex/sc/metrics.rs
 const MonoVtxPendingMetric = "monovtx_pending"
 
-type PodReplica string
-
-type ErrorDetails struct {
-	Container string `json:"container"`
-	Timestamp string `json:"timestamp"`
-	Code      string `json:"code"`
-	Message   string `json:"message"`
-	Details   string `json:"details"`
-}
-
 type MonoVertexService struct {
 	mvtxdaemon.UnimplementedMonoVertexDaemonServiceServer
 	monoVtx       *v1alpha1.MonoVertex
