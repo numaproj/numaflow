@@ -1,11 +1,8 @@
 [package]
-name = "serving"
+name = "numaflow-runtime"
 version = "0.1.0"
 edition = "2021"
 
-[features]
-nats-tests = []
-all-tests = ["nats-tests"]
 
 [lints]
 workspace = true
@@ -33,11 +30,10 @@ redis = { version = "0.26.0", features = [
 ] }
 trait-variant = "0.1.2"
 chrono = { version = "0.4", features = ["serde"] }
-base64 = "0.22.1"
 rcgen = "0.13.1"
 parking_lot = "0.12.3"
 prometheus-client = "0.22.3"
-thiserror = "1.0.63"
+thiserror = "2.0.12"
 reqwest = { workspace = true, features = ["rustls-tls", "json"] }
 http = "1.2.0"
 

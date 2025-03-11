@@ -40,11 +40,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 async fn run() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
     // Based on the argument, run the appropriate component.
-    if args.contains(&"--servesink".to_string()) {
-        servesink::servesink()
-            .await
-            .map_err(|e| format!("Error running servesink: {e:?}"))?;
-    } else if args.contains(&"--rust".to_string()) {
+    if args.contains(&"--rust".to_string()) {
         numaflow_core::run()
             .await
             .map_err(|e| format!("Error running rust binary: {e:?}"))?;
