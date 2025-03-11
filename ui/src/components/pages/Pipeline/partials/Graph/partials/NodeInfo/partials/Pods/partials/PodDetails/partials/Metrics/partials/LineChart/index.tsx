@@ -286,7 +286,7 @@ const LineChartComponent = ({
     setPinnedTooltip(null);
     setTooltipX(undefined);
     setTooltipY(undefined);
-  }, [previousDimension]);
+  }, [metricsReq, filters]);
 
   // required filters
   const getFilterValue = useCallback(
