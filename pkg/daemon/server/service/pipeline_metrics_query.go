@@ -47,11 +47,11 @@ type metricsHttpClient interface {
 type PodReplica string
 
 type ErrorDetails struct {
-	Container string `json:"container"`
-	Timestamp string `json:"timestamp"`
-	Code      string `json:"code"`
-	Message   string `json:"message"`
-	Details   string `json:"details"`
+	Container string
+	Timestamp string
+	Code      string
+	Message   string
+	Details   string
 }
 
 // PipelineMetadataQuery has the metadata required for the pipeline queries
@@ -84,26 +84,7 @@ func NewPipelineMetadataQuery(
 		watermarkFetchers: wmFetchers,
 		rater:             rater,
 		healthChecker:     NewHealthChecker(pipeline, isbSvcClient),
-		localCache: map[PodReplica][]ErrorDetails{
-			"simple-pipeline-in-0": {
-				{
-					Container: "container1",
-					Timestamp: "2023-10-01T12:00:00Z",
-					Code:      "Error 1",
-					Message:   "Sample error message 1",
-					Details:   "Detailed description of error 1",
-				},
-			},
-			"simple-pipeline-cat-0": {
-				{
-					Container: "container2",
-					Timestamp: "2023-10-02T13:00:00Z",
-					Code:      "Error 2",
-					Message:   "Sample error message 2",
-					Details:   "Detailed description of error 2",
-				},
-			},
-		},
+		localCache:        make(map[PodReplica][]ErrorDetails),
 	}
 	return &ps, nil
 }

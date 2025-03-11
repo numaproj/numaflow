@@ -43,11 +43,11 @@ const MonoVtxPendingMetric = "monovtx_pending"
 type PodReplica string
 
 type ErrorDetails struct {
-	Container string `json:"container"`
-	Timestamp string `json:"timestamp"`
-	Code      string `json:"code"`
-	Message   string `json:"message"`
-	Details   string `json:"details"`
+	Container string
+	Timestamp string
+	Code      string
+	Message   string
+	Details   string
 }
 
 type MonoVertexService struct {
@@ -76,26 +76,7 @@ func NewMoveVertexService(
 		},
 		rater:         rater,
 		healthChecker: NewHealthChecker(monoVtx),
-		localCache: map[PodReplica][]ErrorDetails{
-			"simple-mono-vertex-mv-0": {
-				{
-					Container: "container1",
-					Timestamp: "2023-10-01T12:00:00Z",
-					Code:      "Error 1",
-					Message:   "Sample error message 1",
-					Details:   "Detailed description of error 1",
-				},
-			},
-			"simple-mono-vertex-mv-1": {
-				{
-					Container: "container2",
-					Timestamp: "2023-10-02T13:00:00Z",
-					Code:      "Error 2",
-					Message:   "Sample error message 2",
-					Details:   "Detailed description of error 2",
-				},
-			},
-		},
+		localCache:    make(map[PodReplica][]ErrorDetails),
 	}
 	return &mv, nil
 }
