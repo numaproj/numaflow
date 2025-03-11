@@ -32,7 +32,7 @@ pub(crate) async fn start_main_server(
 fn monitor_router() -> Router {
     Router::new()
         .route("/runtime/errors", get(handle_runtime_app_errors))
-        .route("runtime/platform-errors", get(|| async { "To Do" }))
+        .route("/runtime/platform-errors", get(|| async { "To Do" }))
 }
 
 async fn graceful_shutdown(handle: Handle, server_config: MonitorServerConfig) {

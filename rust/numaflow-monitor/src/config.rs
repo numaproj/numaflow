@@ -7,7 +7,7 @@ pub fn generate_certs() -> std::result::Result<(Certificate, KeyPair), String> {
 }
 
 pub(crate) mod server {
-    const DEFAULT_METRICS_PORT: u16 = 2469;
+    const DEFAULT_METRICS_PORT: u16 = 2470;
     const DEFAULT_SHUTDOWN_DURATION: u64 = 30;
     #[derive(Debug)]
     pub(crate) struct MonitorServerConfig {

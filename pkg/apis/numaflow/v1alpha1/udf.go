@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	resource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -46,7 +47,18 @@ type UDF struct {
 }
 
 func (in UDF) getContainers(req getContainerReq) ([]corev1.Container, []corev1.Container, error) {
-	return []corev1.Container{in.getUDFContainer(req)}, []corev1.Container{in.getMainContainer(req)}, nil
+	monitorContainer := containerBuilder{}.
+		name("monitor").
+		imagePullPolicy(req.imagePullPolicy).
+		appendVolumeMounts(req.volumeMounts...).
+		image(req.image).
+		resources(corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("10m"),
+				corev1.ResourceMemory: resource.MustParse("32Mi"),
+			},
+		}).asSidecar().command(NumaflowRustBinary).args("--monitor").build()
+	return []corev1.Container{monitorContainer, in.getUDFContainer(req)}, []corev1.Container{in.getMainContainer(req)}, nil
 }
 
 func (in UDF) getMainContainer(req getContainerReq) corev1.Container {

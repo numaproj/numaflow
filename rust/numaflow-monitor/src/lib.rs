@@ -19,15 +19,14 @@ pub async fn run() -> std::result::Result<(), Box<dyn std::error::Error + Send +
 
     let server_config = MonitorServerConfig::default();
 
-    info!(config = ?server_config, "Starting server with config");
+    info!(?server_config, "Starting server with config");
 
     // Start the metrics server, which serves the prometheus metrics.
     let app_addr: SocketAddr = format!("0.0.0.0:{}", server_config.server_listen_port)
         .parse()
         .map_err(|e| Error::InitError(format!("{e:?}")))?;
-
     // Start the main server, which serves the application.
-    tokio::spawn(start_main_server(app_addr, tls_config, server_config));
+    start_main_server(app_addr, tls_config, server_config).await?;
 
     Ok(())
 }

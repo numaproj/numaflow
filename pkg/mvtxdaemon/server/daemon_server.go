@@ -108,8 +108,6 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 		}
 	}()
 
-	//to do:: build the cache from emptyDir
-
 	version := numaflow.GetVersion()
 	// Todo: clean it up in v1.6
 	deprecatedMonoVertexInfo.WithLabelValues(version.Version, version.Platform, ds.monoVtx.Name).Set(1)

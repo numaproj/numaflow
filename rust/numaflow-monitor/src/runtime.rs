@@ -47,7 +47,6 @@ pub async fn handle_runtime_app_errors() -> impl IntoResponse {
         }
     }
 
-    // FIXME: This is a dummy response, need to replace with actual response
     let api_response = ApiResponse { errors };
     (StatusCode::OK, Json(api_response)).into_response()
 }
