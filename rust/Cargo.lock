@@ -2334,34 +2334,12 @@ dependencies = [
  "backoff",
  "numaflow-core",
  "numaflow-models",
+ "numaflow-monitor",
  "rustls 0.23.23",
- "servesink",
  "serving",
  "tokio",
  "tracing",
  "tracing-subscriber",
-]
-
-[[package]]
-name = "numaflow"
-version = "0.1.1"
-source = "git+https://github.com/numaproj/numaflow-rs.git?rev=ddd879588e11455921f1ca958ea2b3c076689293#ddd879588e11455921f1ca958ea2b3c076689293"
-dependencies = [
- "chrono",
- "futures-util",
- "hyper-util",
- "prost 0.13.3",
- "prost-types 0.13.3",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
- "tokio-stream",
- "tokio-util",
- "tonic",
- "tonic-build",
- "tracing",
- "uuid",
 ]
 
 [[package]]
@@ -2432,7 +2410,7 @@ dependencies = [
  "serde_json",
  "serving",
  "tempfile",
- "thiserror 2.0.8",
+ "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -2457,6 +2435,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "numaflow-monitor"
+version = "0.1.0"
+dependencies = [
+ "axum 0.8.2",
+ "axum-macros",
+ "axum-server",
+ "backoff",
+ "bytes",
+ "chrono",
+ "http 1.2.0",
+ "hyper-util",
+ "numaflow-models",
+ "parking_lot",
+ "prometheus-client",
+ "rcgen",
+ "redis",
+ "reqwest 0.12.12",
+ "rustls 0.23.23",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-util",
+ "tower 0.5.2",
+ "tower-http",
+ "tracing",
+ "trait-variant",
+ "uuid",
+]
+
+[[package]]
 name = "numaflow-pb"
 version = "0.1.0"
 dependencies = [
@@ -2476,7 +2485,7 @@ dependencies = [
  "prost 0.11.9",
  "pulsar",
  "serde",
- "thiserror 2.0.8",
+ "thiserror 2.0.12",
  "tokio",
  "tonic",
  "tracing",
@@ -3007,7 +3016,7 @@ dependencies = [
  "rustc-hash 2.1.0",
  "rustls 0.23.23",
  "socket2",
- "thiserror 2.0.8",
+ "thiserror 2.0.12",
  "tokio",
  "tracing",
 ]
@@ -3026,7 +3035,7 @@ dependencies = [
  "rustls 0.23.23",
  "rustls-pki-types",
  "slab",
- "thiserror 2.0.8",
+ "thiserror 2.0.12",
  "tinyvec",
  "tracing",
  "web-time",
@@ -3643,17 +3652,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "servesink"
-version = "0.1.0"
-dependencies = [
- "numaflow 0.1.1",
- "reqwest 0.12.12",
- "tokio",
- "tonic",
- "tracing",
-]
-
-[[package]]
 name = "serving"
 version = "0.1.0"
 dependencies = [
@@ -3910,11 +3908,11 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "2.0.8"
+version = "2.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08f5383f3e0071702bf93ab5ee99b52d26936be9dedd9413067cbdcddcb6141a"
+checksum = "567b8a2dae586314f7be2a752ec7474332959c6460e02bde30d702a66d488708"
 dependencies = [
- "thiserror-impl 2.0.8",
+ "thiserror-impl 2.0.12",
 ]
 
 [[package]]
@@ -3930,9 +3928,9 @@ dependencies = [
 
 [[package]]
 name = "thiserror-impl"
-version = "2.0.8"
+version = "2.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2f357fcec90b3caef6623a099691be676d033b40a058ac95d2a6ade6fa0c943"
+checksum = "7f7cf42b4507d8ea322120659672cf1b9dbb93f8f2d4ecfd6e51350ff5b17a1d"
 dependencies = [
  "proc-macro2",
  "quote",

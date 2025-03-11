@@ -1,148 +1,79 @@
-use crate::config::get_vertex_replica;
-use crate::get_vertex_name;
-use chrono::Utc;
-use hyper::Uri;
-use hyper_rustls::HttpsConnector;
-use hyper_util::client::legacy::connect::HttpConnector;
-use hyper_util::rt::TokioExecutor;
-use numaflow_pb::clients::mvtxdaemon::mono_vertex_daemon_service_client::MonoVertexDaemonServiceClient;
-use numaflow_pb::clients::mvtxdaemon::PersistRuntimeErrorRequest;
-use regex::Regex;
-use rustls::{self, pki_types::CertificateDer, ClientConfig};
-use std::str;
-use std::sync::Arc;
-use tonic::body::BoxBody;
-use tonic::Status;
-use tracing::error;
+use axum::{response::IntoResponse, Json};
+use http::StatusCode;
+use serde::{Deserialize, Serialize};
+use std::{fs, path::Path};
 
-#[derive(Debug)]
-struct SkipServerVerification;
+use crate::{config::info::RuntimeInfoConfig, error::Error};
 
-// TLS server certificate verifier to accept self-signed certs when using rustls.
-// The rustls does not provide a direct option to equivalent to Golang's `tls.Config.InsecureSkipVerify`.
-impl SkipServerVerification {
-    fn new() -> Arc<Self> {
-        Arc::new(Self)
-    }
+#[derive(serde::Serialize)]
+struct ApiResponse {
+    errors: Vec<RuntimeErrorEntry>,
 }
 
-impl rustls::client::danger::ServerCertVerifier for SkipServerVerification {
-    fn verify_server_cert(
-        &self,
-        _end_entity: &CertificateDer<'_>,
-        _intermediates: &[CertificateDer<'_>],
-        _server_name: &rustls::pki_types::ServerName<'_>,
-        _ocsp_response: &[u8],
-        _now: rustls::pki_types::UnixTime,
-    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
-        Ok(rustls::client::danger::ServerCertVerified::assertion())
+#[derive(Serialize, Deserialize, Debug)]
+pub struct RuntimeErrorEntry {
+    pub container_name: String,
+    pub timestamp: String,
+    pub code: String,
+    pub message: String,
+    pub details: String,
+}
+pub async fn handle_runtime_app_errors() -> impl IntoResponse {
+    let runtime_info_config = RuntimeInfoConfig::default();
+    let app_err_path = Path::new(runtime_info_config.app_error_path.as_str());
+    let mut errors = Vec::new();
+    if !app_err_path.exists() || !app_err_path.is_dir() {
+        Error::FileError("returning as app error path does not exist".to_string());
+        return (StatusCode::INTERNAL_SERVER_ERROR).into_response();
+    }
+    let paths = match fs::read_dir(app_err_path) {
+        Ok(path) => path,
+        Err(e) => {
+            Error::FileError(format!("Failed to read directory: {:?}", e));
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    // iterate over all subdirectories and its files
+    for entry in paths.flatten() {
+        // A ud container will have its own directory
+        let sub_dir_path = entry.path();
+        if sub_dir_path.is_dir() {
+            if let Ok(file_paths) = fs::read_dir(&sub_dir_path) {
+                for file_entry in file_paths.flatten() {
+                    process_file_entry(&file_entry, &mut errors);
+                }
+            }
+        }
     }
 
-    fn verify_tls12_signature(
-        &self,
-        _message: &[u8],
-        _cert: &CertificateDer<'_>,
-        _dss: &rustls::DigitallySignedStruct,
-    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
-    }
-
-    fn verify_tls13_signature(
-        &self,
-        _message: &[u8],
-        _cert: &CertificateDer<'_>,
-        _dss: &rustls::DigitallySignedStruct,
-    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
-    }
-
-    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        vec![
-            rustls::SignatureScheme::RSA_PKCS1_SHA1,
-            rustls::SignatureScheme::ECDSA_SHA1_Legacy,
-            rustls::SignatureScheme::RSA_PKCS1_SHA256,
-            rustls::SignatureScheme::ECDSA_NISTP256_SHA256,
-            rustls::SignatureScheme::RSA_PKCS1_SHA384,
-            rustls::SignatureScheme::ECDSA_NISTP384_SHA384,
-            rustls::SignatureScheme::RSA_PKCS1_SHA512,
-            rustls::SignatureScheme::ECDSA_NISTP521_SHA512,
-            rustls::SignatureScheme::RSA_PSS_SHA256,
-            rustls::SignatureScheme::RSA_PSS_SHA384,
-            rustls::SignatureScheme::RSA_PSS_SHA512,
-            rustls::SignatureScheme::ED25519,
-            rustls::SignatureScheme::ED448,
-        ]
-    }
+    // FIXME: This is a dummy response, need to replace with actual response
+    let api_response = ApiResponse { errors };
+    (StatusCode::OK, Json(api_response)).into_response()
 }
 
-#[derive(Clone)]
-pub(crate) struct Runtime {
-    pub(crate) client: MonoVertexDaemonServiceClient<
-        hyper_util::client::legacy::Client<HttpsConnector<HttpConnector>, BoxBody>,
-    >,
-}
-
-impl Runtime {
-    /// Creates a new Runtime instance with the specified emptyDir path.
-    pub(crate) async fn new(addr: String) -> Result<Self, Box<dyn std::error::Error>> {
-        let tls = ClientConfig::builder()
-            .dangerous()
-            .with_custom_certificate_verifier(SkipServerVerification::new())
-            .with_no_client_auth();
-
-        let mut http = HttpConnector::new();
-        http.enforce_http(false);
-
-        let connector = hyper_rustls::HttpsConnectorBuilder::new()
-            .with_tls_config(tls)
-            .https_only()
-            .enable_http2()
-            .wrap_connector(http);
-
-        let client = hyper_util::client::legacy::Client::builder(TokioExecutor::new())
-            .http2_only(true)
-            .build(connector);
-
-        let uri = Uri::try_from(addr.as_str())?;
-        let client = MonoVertexDaemonServiceClient::with_origin(client, uri);
-        Ok(Runtime { client })
+fn process_file_entry(file_entry: &fs::DirEntry, errors: &mut Vec<RuntimeErrorEntry>) {
+    let file_path = file_entry.path();
+    if !file_path.is_file() || !file_path.exists() {
+        return;
     }
-
-    // Call daemon server
-    pub async fn persist_application_error(&mut self, grpc_status: Status) {
-        // we can extract the type of udf based on the error message
-        let container_name =
-            extract_container_name(grpc_status.message()).expect("container name not found");
-
-        let timestamp = Utc::now().to_rfc3339();
-        let replica = get_vertex_replica().to_string();
-        let code = grpc_status.code().to_string();
-        let message = grpc_status.message().to_string();
-        let details = String::from_utf8_lossy(grpc_status.details()).to_string();
-        let mvtx_name = get_vertex_name().to_string();
-
-        let request = PersistRuntimeErrorRequest {
-            container_name,
-            timestamp,
-            code,
-            message,
-            details,
-            replica,
-            mvtx_name,
-        };
-
-        if let Err(e) = self.client.persist_runtime_error(request).await {
-            error!(
-                ?e,
-                "failed to post runtime error information to daemon server"
-            );
-        };
+    match fs::read(&file_path) {
+        Err(e) => {
+            Error::FileError(format!("Failed to read file content: {:?}", e));
+        }
+        Ok(content) => match serde_json::from_slice::<RuntimeErrorEntry>(&content) {
+            Ok(payload) => {
+                errors.push(RuntimeErrorEntry {
+                    container_name: payload.container_name,
+                    timestamp: payload.timestamp,
+                    code: payload.code,
+                    message: payload.message,
+                    details: payload.details,
+                });
+            }
+            Err(e) => {
+                Error::AppErrHandler(format!("Failed to deserialize content: {:?}", e));
+            }
+        },
     }
-}
-
-/// extracts the container information from the error message by doing regex matching
-fn extract_container_name(error_message: &str) -> Option<String> {
-    let re = Regex::new(r"\((.*?)\)").expect("error message should have container information");
-    re.captures(error_message)
-        .and_then(|caps| caps.get(1).map(|m| m.as_str().to_string()))
 }

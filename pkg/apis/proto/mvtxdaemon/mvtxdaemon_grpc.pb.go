@@ -37,7 +37,6 @@ const _ = grpc.SupportPackageIsVersion8
 const (
 	MonoVertexDaemonService_GetMonoVertexMetrics_FullMethodName = "/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexMetrics"
 	MonoVertexDaemonService_GetMonoVertexStatus_FullMethodName  = "/mvtxdaemon.MonoVertexDaemonService/GetMonoVertexStatus"
-	MonoVertexDaemonService_PersistRuntimeError_FullMethodName  = "/mvtxdaemon.MonoVertexDaemonService/PersistRuntimeError"
 )
 
 // MonoVertexDaemonServiceClient is the client API for MonoVertexDaemonService service.
@@ -48,7 +47,6 @@ const (
 type MonoVertexDaemonServiceClient interface {
 	GetMonoVertexMetrics(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetMonoVertexMetricsResponse, error)
 	GetMonoVertexStatus(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*GetMonoVertexStatusResponse, error)
-	PersistRuntimeError(ctx context.Context, in *PersistRuntimeErrorRequest, opts ...grpc.CallOption) (*PersistRuntimeErrorResponse, error)
 }
 
 type monoVertexDaemonServiceClient struct {
@@ -79,16 +77,6 @@ func (c *monoVertexDaemonServiceClient) GetMonoVertexStatus(ctx context.Context,
 	return out, nil
 }
 
-func (c *monoVertexDaemonServiceClient) PersistRuntimeError(ctx context.Context, in *PersistRuntimeErrorRequest, opts ...grpc.CallOption) (*PersistRuntimeErrorResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PersistRuntimeErrorResponse)
-	err := c.cc.Invoke(ctx, MonoVertexDaemonService_PersistRuntimeError_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // MonoVertexDaemonServiceServer is the server API for MonoVertexDaemonService service.
 // All implementations must embed UnimplementedMonoVertexDaemonServiceServer
 // for forward compatibility
@@ -97,7 +85,6 @@ func (c *monoVertexDaemonServiceClient) PersistRuntimeError(ctx context.Context,
 type MonoVertexDaemonServiceServer interface {
 	GetMonoVertexMetrics(context.Context, *emptypb.Empty) (*GetMonoVertexMetricsResponse, error)
 	GetMonoVertexStatus(context.Context, *emptypb.Empty) (*GetMonoVertexStatusResponse, error)
-	PersistRuntimeError(context.Context, *PersistRuntimeErrorRequest) (*PersistRuntimeErrorResponse, error)
 	mustEmbedUnimplementedMonoVertexDaemonServiceServer()
 }
 
@@ -110,9 +97,6 @@ func (UnimplementedMonoVertexDaemonServiceServer) GetMonoVertexMetrics(context.C
 }
 func (UnimplementedMonoVertexDaemonServiceServer) GetMonoVertexStatus(context.Context, *emptypb.Empty) (*GetMonoVertexStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetMonoVertexStatus not implemented")
-}
-func (UnimplementedMonoVertexDaemonServiceServer) PersistRuntimeError(context.Context, *PersistRuntimeErrorRequest) (*PersistRuntimeErrorResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PersistRuntimeError not implemented")
 }
 func (UnimplementedMonoVertexDaemonServiceServer) mustEmbedUnimplementedMonoVertexDaemonServiceServer() {
 }
@@ -164,24 +148,6 @@ func _MonoVertexDaemonService_GetMonoVertexStatus_Handler(srv interface{}, ctx c
 	return interceptor(ctx, in, info, handler)
 }
 
-func _MonoVertexDaemonService_PersistRuntimeError_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PersistRuntimeErrorRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(MonoVertexDaemonServiceServer).PersistRuntimeError(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: MonoVertexDaemonService_PersistRuntimeError_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MonoVertexDaemonServiceServer).PersistRuntimeError(ctx, req.(*PersistRuntimeErrorRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // MonoVertexDaemonService_ServiceDesc is the grpc.ServiceDesc for MonoVertexDaemonService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -196,10 +162,6 @@ var MonoVertexDaemonService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetMonoVertexStatus",
 			Handler:    _MonoVertexDaemonService_GetMonoVertexStatus_Handler,
-		},
-		{
-			MethodName: "PersistRuntimeError",
-			Handler:    _MonoVertexDaemonService_PersistRuntimeError_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

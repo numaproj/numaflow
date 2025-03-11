@@ -21,9 +21,6 @@ fn build_client() {
                 "proto/reduce/v1/reduce.proto",
                 "proto/sessionreduce/v1/sessionreduce.proto",
                 "proto/sideinput/v1/sideinput.proto",
-                "proto/mvtxdaemon/mvtxdaemon.proto",
-                "proto/google/api/annotations.proto",
-                "proto/google/api/http.proto",
             ],
             &["proto"],
         )
