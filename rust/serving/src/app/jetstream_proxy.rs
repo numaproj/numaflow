@@ -119,14 +119,15 @@ async fn fetch<
     (header_map, body).into_response()
 }
 
-async fn sse_handler<
-    T: Send + Sync + Clone + DataStore + 'static,
-    U: Send + Sync + Clone + CallbackStore + 'static,
->(
+async fn sse_handler<T, U>(
     State(proxy_state): State<Arc<ProxyState<T, U>>>,
     headers: HeaderMap,
     body: Bytes,
-) -> Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>> {
+) -> Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>
+where
+    T: Send + Sync + Clone + DataStore + 'static,
+    U: Send + Sync + Clone + CallbackStore + 'static,
+{
     let id = headers
         .get(&proxy_state.tid_header)
         .map(|v| String::from_utf8_lossy(v.as_bytes()).to_string())

@@ -8,12 +8,11 @@ use crate::app::response::ApiError;
 use crate::app::store::cbstore::CallbackStore;
 use crate::app::store::datastore::DataStore;
 
-pub fn get_message_path<
+pub fn get_message_path<T, U>(callback_store: CallbackState<T, U>) -> Router
+where
     T: Send + Sync + Clone + DataStore + 'static,
     U: Send + Sync + Clone + CallbackStore + 'static,
->(
-    callback_store: CallbackState<T, U>,
-) -> Router {
+{
     Router::new()
         .route("/status", routing::get(message_path))
         .with_state(callback_store)
@@ -24,13 +23,14 @@ struct MessagePath {
     id: String,
 }
 
-async fn message_path<
-    T: Clone + Send + Sync + DataStore + 'static,
-    U: Clone + Send + Sync + CallbackStore + 'static,
->(
+async fn message_path<T, U>(
     State(mut state): State<CallbackState<T, U>>,
     Query(MessagePath { id }): Query<MessagePath>,
-) -> Result<String, ApiError> {
+) -> Result<String, ApiError>
+where
+    T: Clone + Send + Sync + DataStore + 'static,
+    U: Clone + Send + Sync + CallbackStore + 'static,
+{
     match state.retrieve_subgraph_from_storage(&id).await {
         Ok(subgraph) => Ok(subgraph),
         Err(e) => {
