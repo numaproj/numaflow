@@ -84,7 +84,7 @@ func (h *ServingController) SendMessage(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Write(body)
+	_, _ = w.Write(body)
 }
 
 func (h *ServingController) FetchResults(w http.ResponseWriter, r *http.Request) {
@@ -124,7 +124,7 @@ func (h *ServingController) FetchResults(w http.ResponseWriter, r *http.Request)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Write(body)
+	_, _ = w.Write(body)
 }
 
 // Close closes the http client
