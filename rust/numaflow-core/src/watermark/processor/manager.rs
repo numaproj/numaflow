@@ -335,7 +335,6 @@ impl ProcessorManager {
         processors: Arc<RwLock<HashMap<Bytes, Processor>>>,
     ) {
         let mut hb_watcher = Self::create_watcher(hb_bucket.clone()).await;
-
         loop {
             let Some(val) = hb_watcher.next().await else {
                 warn!("HB watcher stopped, recreating watcher");
@@ -416,7 +415,6 @@ impl ProcessorManager {
     /// creates a watcher for the given bucket, will retry infinitely until it succeeds
     async fn create_watcher(bucket: async_nats::jetstream::kv::Store) -> Watch {
         const RECONNECT_INTERVAL: u64 = 1000;
-
         // infinite retry
         let interval = fixed::Interval::from_millis(RECONNECT_INTERVAL).take(usize::MAX);
 

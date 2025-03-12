@@ -46,8 +46,15 @@ type UDF struct {
 }
 
 func (in UDF) getContainers(req getContainerReq) ([]corev1.Container, []corev1.Container, error) {
-	monitorContainer := createMonitorContainer(req)
-	return []corev1.Container{monitorContainer, in.getUDFContainer(req)}, []corev1.Container{in.getMainContainer(req)}, nil
+	containers := []corev1.Container{
+		in.getMainContainer(req),
+	}
+	sidecarContainers := []corev1.Container{createMonitorContainer(req), in.getUDFContainer(req)}
+
+	if req.servingStore != nil && req.servingStore.Container != nil {
+		sidecarContainers = append(sidecarContainers, req.servingStore.getUDStoreContainer(req))
+	}
+	return sidecarContainers, containers, nil
 }
 
 func (in UDF) getMainContainer(req getContainerReq) corev1.Container {

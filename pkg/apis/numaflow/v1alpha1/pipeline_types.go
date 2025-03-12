@@ -213,14 +213,8 @@ func (p Pipeline) GetSideInputsStoreName() string {
 	return fmt.Sprintf("%s-%s", p.Namespace, p.Name)
 }
 
-func (p Pipeline) GetServingSourceStreamNames() []string {
-	var servingSourceNames []string
-	for _, srcVertex := range p.Spec.Vertices {
-		if srcVertex.IsASource() && srcVertex.Source.Serving != nil {
-			servingSourceNames = append(servingSourceNames, fmt.Sprintf("%s-%s-serving-source", p.Name, srcVertex.Name))
-		}
-	}
-	return servingSourceNames
+func (p Pipeline) GetServingSourceStoreName() string {
+	return fmt.Sprintf("%s-%s", p.Namespace, p.Name)
 }
 
 func (p Pipeline) GetSideInputsManagerDeployments(req GetSideInputDeploymentReq) ([]*appv1.Deployment, error) {
@@ -493,6 +487,9 @@ type PipelineSpec struct {
 	// SideInputs defines the Side Inputs of a pipeline.
 	// +optional
 	SideInputs []SideInput `json:"sideInputs,omitempty" protobuf:"bytes,8,rep,name=sideInputs"`
+	// ServingStore defines the Serving Store for this pipeline.
+	// +optional
+	ServingStore *ServingStore `json:"servingStore,omitempty" protobuf:"bytes,9,rep,name=servingStore"`
 }
 
 func (pipeline PipelineSpec) GetMatchingVertices(f func(AbstractVertex) bool) map[string]*AbstractVertex {
@@ -522,6 +519,14 @@ func (pipeline PipelineSpec) GetSinksByName() map[string]*AbstractVertex {
 	return pipeline.GetMatchingVertices(func(v AbstractVertex) bool {
 		return v.IsASink()
 	})
+}
+
+func (pipeline PipelineSpec) GetStoreSpec(storeName string) *ServingStore {
+	// No serving store defined, we don't need to check further
+	if pipeline.ServingStore == nil || pipeline.ServingStore.Name != storeName {
+		return nil
+	}
+	return pipeline.ServingStore
 }
 
 type Watermark struct {

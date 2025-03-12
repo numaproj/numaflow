@@ -7,19 +7,22 @@ use serving::callback::CallbackHandler;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
+use crate::config::components::source::SourceType;
 use crate::config::is_mono_vertex;
 use crate::config::pipeline;
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::watermark::WatermarkConfig;
-use crate::config::pipeline::{PipelineConfig, SinkVtxConfig, SourceVtxConfig};
-use crate::metrics::{LagReader, PipelineContainerState, UserDefinedContainerState};
+use crate::config::pipeline::{PipelineConfig, ServingStoreType, SinkVtxConfig, SourceVtxConfig};
+use crate::metrics::{ComponentHealthChecks, LagReader, PipelineComponents};
 use crate::pipeline::forwarder::source_forwarder;
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::pipeline::pipeline::isb::BufferReaderConfig;
+use crate::serving_store::nats::NatsServingStore;
+use crate::serving_store::user_defined::UserDefinedStore;
+use crate::serving_store::ServingStore;
 use crate::shared::create_components;
-use crate::shared::create_components::create_sink_writer;
 use crate::shared::metrics::start_metrics_server;
 use crate::tracker::TrackerHandle;
 use crate::watermark::isb::ISBWatermarkHandle;
@@ -32,7 +35,7 @@ pub(crate) mod isb;
 
 /// Starts the appropriate forwarder based on the pipeline configuration.
 pub(crate) async fn start_forwarder(
-    cln_token: CancellationToken,
+    mut cln_token: CancellationToken,
     config: PipelineConfig,
 ) -> Result<()> {
     let js_context = create_js_context(config.js_client_config.clone()).await?;
@@ -41,25 +44,42 @@ pub(crate) async fn start_forwarder(
         pipeline::VertexType::Source(source) => {
             info!("Starting source forwarder");
 
+            // Create a new cancellation if the source is Serving.
+            // The new cancellation token gets cancelled only after the user specified
+            // request timeout + 30 seconds. The `cln_token` gets cancelled when SIGTERM is received.
+            if let SourceType::Serving(ref serving_config) = source.source_config.source_type {
+                let serving_cln_token = CancellationToken::new();
+                tokio::spawn({
+                    let req_timeout = serving_config.drain_timeout_secs + 30;
+                    let cln_token = cln_token.clone();
+                    let serving_cln_token = serving_cln_token.clone();
+                    async move {
+                        cln_token.cancelled().await;
+                        // The delay (sleep) we add here before cancelling won't block the container
+                        // from terminating if there are no in-flight requests. The axum server will
+                        // shutdown immediately if there are no in-flight requests. This results in
+                        // an error in reading from the serving source and thus shutting down of the
+                        // source forwarder.
+                        tokio::time::sleep(Duration::from_secs(req_timeout)).await;
+                        serving_cln_token.cancel();
+                    }
+                });
+                cln_token = serving_cln_token;
+            }
+
             // create watermark handle, if watermark is enabled
             let source_watermark_handle = match &config.watermark_config {
-                Some(wm_config) => {
-                    if let WatermarkConfig::Source(source_config) = wm_config {
-                        Some(
-                            SourceWatermarkHandle::new(
-                                config.read_timeout,
-                                js_context.clone(),
-                                &config.to_vertex_config,
-                                source_config,
-                                cln_token.clone(),
-                            )
-                            .await?,
-                        )
-                    } else {
-                        None
-                    }
-                }
-                None => None,
+                Some(WatermarkConfig::Source(source_config)) => Some(
+                    SourceWatermarkHandle::new(
+                        config.read_timeout,
+                        js_context.clone(),
+                        &config.to_vertex_config,
+                        source_config,
+                        cln_token.clone(),
+                    )
+                    .await?,
+                ),
+                _ => None,
             };
 
             start_source_forwarder(
@@ -76,25 +96,19 @@ pub(crate) async fn start_forwarder(
 
             // create watermark handle, if watermark is enabled
             let edge_watermark_handle = match &config.watermark_config {
-                Some(wm_config) => {
-                    if let WatermarkConfig::Edge(edge_config) = wm_config {
-                        Some(
-                            ISBWatermarkHandle::new(
-                                config.vertex_name,
-                                config.replica,
-                                config.read_timeout,
-                                js_context.clone(),
-                                edge_config,
-                                &config.to_vertex_config,
-                                cln_token.clone(),
-                            )
-                            .await?,
-                        )
-                    } else {
-                        None
-                    }
-                }
-                None => None,
+                Some(WatermarkConfig::Edge(edge_config)) => Some(
+                    ISBWatermarkHandle::new(
+                        config.vertex_name,
+                        config.replica,
+                        config.read_timeout,
+                        js_context.clone(),
+                        edge_config,
+                        &config.to_vertex_config,
+                        cln_token.clone(),
+                    )
+                    .await?,
+                ),
+                _ => None,
             };
 
             start_sink_forwarder(
@@ -111,25 +125,19 @@ pub(crate) async fn start_forwarder(
 
             // create watermark handle, if watermark is enabled
             let edge_watermark_handle = match &config.watermark_config {
-                Some(wm_config) => {
-                    if let WatermarkConfig::Edge(edge_config) = wm_config {
-                        Some(
-                            ISBWatermarkHandle::new(
-                                config.vertex_name,
-                                config.replica,
-                                config.read_timeout,
-                                js_context.clone(),
-                                edge_config,
-                                &config.to_vertex_config,
-                                cln_token.clone(),
-                            )
-                            .await?,
-                        )
-                    } else {
-                        None
-                    }
-                }
-                None => None,
+                Some(WatermarkConfig::Edge(edge_config)) => Some(
+                    ISBWatermarkHandle::new(
+                        config.vertex_name,
+                        config.replica,
+                        config.read_timeout,
+                        js_context.clone(),
+                        edge_config,
+                        &config.to_vertex_config,
+                        cln_token.clone(),
+                    )
+                    .await?,
+                ),
+                _ => None,
             };
 
             start_map_forwarder(
@@ -152,9 +160,19 @@ async fn start_source_forwarder(
     source_config: SourceVtxConfig,
     source_watermark_handle: Option<SourceWatermarkHandle>,
 ) -> Result<()> {
-    let serving_callback_handler = config.callback_config.as_ref().map(|cb_cfg| {
-        CallbackHandler::new(config.vertex_name.to_string(), cb_cfg.callback_concurrency)
-    });
+    let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
+        Some(
+            CallbackHandler::new(
+                config.vertex_name.to_string(),
+                js_context.clone(),
+                cb_cfg.callback_store,
+                cb_cfg.callback_concurrency,
+            )
+            .await,
+        )
+    } else {
+        None
+    };
     let tracker_handle = TrackerHandle::new(None, serving_callback_handler);
 
     let buffer_writer = create_buffer_writer(
@@ -166,7 +184,7 @@ async fn start_source_forwarder(
     )
     .await;
 
-    let (transformer, transformer_grpc_client) = create_components::create_transformer(
+    let transformer = create_components::create_transformer(
         config.batch_size,
         source_config.transformer_config.clone(),
         tracker_handle.clone(),
@@ -174,7 +192,8 @@ async fn start_source_forwarder(
     )
     .await?;
 
-    let (source, source_grpc_client) = create_components::create_source(
+    let source = create_components::create_source(
+        Some(js_context.clone()),
         config.batch_size,
         config.read_timeout,
         &source_config.source_config,
@@ -194,10 +213,7 @@ async fn start_source_forwarder(
 
     start_metrics_server(
         config.metrics_config.clone(),
-        UserDefinedContainerState::Pipeline(PipelineContainerState::Source((
-            source_grpc_client,
-            transformer_grpc_client,
-        ))),
+        ComponentHealthChecks::Pipeline(PipelineComponents::Source(source.clone())),
     )
     .await;
 
@@ -224,12 +240,22 @@ async fn start_map_forwarder(
 
     // Create buffer writers and buffer readers
     let mut forwarder_components = vec![];
-    let mut mapper_grpc_client = None;
+    let mut mapper_handle = None;
     let mut isb_lag_readers = vec![];
 
-    let serving_callback_handler = config.callback_config.as_ref().map(|cb_cfg| {
-        CallbackHandler::new(config.vertex_name.to_string(), cb_cfg.callback_concurrency)
-    });
+    let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
+        Some(
+            CallbackHandler::new(
+                config.vertex_name.to_string(),
+                js_context.clone(),
+                cb_cfg.callback_store,
+                cb_cfg.callback_concurrency,
+            )
+            .await,
+        )
+    } else {
+        None
+    };
 
     // create tracker and buffer writer, they can be shared across all forwarders
     let tracker_handle =
@@ -258,7 +284,7 @@ async fn start_map_forwarder(
         .await?;
 
         isb_lag_readers.push(buffer_reader.clone());
-        let (mapper, mapper_rpc_client) = create_components::create_mapper(
+        let mapper = create_components::create_mapper(
             config.batch_size,
             config.read_timeout,
             map_vtx_config.clone(),
@@ -267,9 +293,10 @@ async fn start_map_forwarder(
         )
         .await?;
 
-        if let Some(mapper_rpc_client) = mapper_rpc_client {
-            mapper_grpc_client = Some(mapper_rpc_client);
+        if mapper_handle.is_none() {
+            mapper_handle = Some(mapper.clone());
         }
+
         forwarder_components.push((buffer_reader, buffer_writer.clone(), mapper));
     }
 
@@ -280,9 +307,9 @@ async fn start_map_forwarder(
     .await;
     let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
-    start_metrics_server(
+    let metrics_server_handle = start_metrics_server(
         config.metrics_config.clone(),
-        UserDefinedContainerState::Pipeline(PipelineContainerState::Map(mapper_grpc_client)),
+        ComponentHealthChecks::Pipeline(PipelineComponents::Map(mapper_handle.unwrap().clone())),
     )
     .await;
 
@@ -307,6 +334,9 @@ async fn start_map_forwarder(
         result?;
     }
 
+    // abort the metrics server
+    metrics_server_handle.abort();
+
     info!("All forwarders have stopped successfully");
     Ok(())
 }
@@ -326,9 +356,34 @@ async fn start_sink_forwarder(
         .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
         .reader_config;
 
-    let serving_callback_handler = config.callback_config.as_ref().map(|cb_cfg| {
-        CallbackHandler::new(config.vertex_name.to_string(), cb_cfg.callback_concurrency)
-    });
+    let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
+        Some(
+            CallbackHandler::new(
+                config.vertex_name.to_string(),
+                js_context.clone(),
+                cb_cfg.callback_store,
+                cb_cfg.callback_concurrency,
+            )
+            .await,
+        )
+    } else {
+        None
+    };
+
+    let serving_store = match &sink.serving_store_config {
+        Some(serving_store_config) => match serving_store_config {
+            ServingStoreType::UserDefined(config) => {
+                let serving_store = UserDefinedStore::new(config.clone()).await?;
+                Some(ServingStore::UserDefined(serving_store))
+            }
+            ServingStoreType::Nats(config) => {
+                let serving_store =
+                    NatsServingStore::new(js_context.clone(), config.clone()).await?;
+                Some(ServingStore::Nats(serving_store))
+            }
+        },
+        None => None,
+    };
 
     // Create sink writers and buffer readers for each stream
     let mut sink_writers = vec![];
@@ -349,16 +404,17 @@ async fn start_sink_forwarder(
         .await?;
         buffer_readers.push(buffer_reader);
 
-        let (sink_writer, sink_grpc_client, fb_sink_grpc_client) = create_sink_writer(
+        let sink_writer = create_components::create_sink_writer(
             config.batch_size,
             config.read_timeout,
             sink.sink_config.clone(),
             sink.fb_sink_config.clone(),
             tracker_handle,
+            serving_store.clone(),
             &cln_token,
         )
         .await?;
-        sink_writers.push((sink_writer, sink_grpc_client, fb_sink_grpc_client));
+        sink_writers.push(sink_writer);
     }
 
     let pending_reader = shared::metrics::create_pending_reader(
@@ -369,20 +425,17 @@ async fn start_sink_forwarder(
     let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
     // Start the metrics server with one of the clients
-    if let Some((_, sink, fb_sink)) = sink_writers.first() {
+    if let Some(sink_handle) = sink_writers.first() {
         start_metrics_server(
             config.metrics_config.clone(),
-            UserDefinedContainerState::Pipeline(PipelineContainerState::Sink((
-                sink.clone(),
-                fb_sink.clone(),
-            ))),
+            ComponentHealthChecks::Pipeline(PipelineComponents::Sink(sink_handle.clone())),
         )
         .await;
     }
 
     // Start a new forwarder for each buffer reader
     let mut forwarder_tasks = Vec::new();
-    for (buffer_reader, (sink_writer, _, _)) in buffer_readers.into_iter().zip(sink_writers) {
+    for (buffer_reader, sink_writer) in buffer_readers.into_iter().zip(sink_writers) {
         info!(%buffer_reader, "Starting forwarder for buffer reader");
         let forwarder =
             forwarder::sink_forwarder::SinkForwarder::new(buffer_reader, sink_writer).await;
@@ -449,9 +502,7 @@ async fn create_buffer_reader(
 async fn create_js_context(config: pipeline::isb::jetstream::ClientConfig) -> Result<Context> {
     // TODO: make these configurable. today this is hardcoded on Golang code too.
     let mut opts = ConnectOptions::new()
-        .max_reconnects(None) // -1 for unlimited reconnects
-        .ping_interval(Duration::from_secs(3))
-        .max_reconnects(None)
+        .max_reconnects(None) // unlimited reconnects
         .ping_interval(Duration::from_secs(3))
         .retry_on_initial_connect();
 
@@ -738,6 +789,7 @@ mod tests {
                     retry_config: None,
                 },
                 fb_sink_config: None,
+                serving_store_config: None,
             }),
             metrics_config: MetricsConfig {
                 metrics_server_listen_port: 2469,
@@ -794,8 +846,8 @@ mod tests {
     impl map::Mapper for SimpleCat {
         async fn map(&self, input: map::MapRequest) -> Vec<map::Message> {
             let message = map::Message::new(input.value)
-                .keys(input.keys)
-                .tags(vec!["test-forwarder".to_string()]);
+                .with_keys(input.keys)
+                .with_tags(vec!["test-forwarder".to_string()]);
             vec![message]
         }
     }

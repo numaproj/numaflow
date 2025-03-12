@@ -1,0 +1,62 @@
+.tooltip-bg {
+  background-color: #fff;
+  padding: 1rem;
+  border: 0.1rem solid #ccc;
+  border-radius: 1rem;
+  max-height: 30rem;
+}
+
+.tooltip-pin {
+  font-size: 1.2rem;
+  font-style: italic;
+}
+
+.tooltip-fixed {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tooltip-divider {
+  margin: 1rem 0;
+  background-color: black;
+}
+
+.tooltip-scrollable {
+  max-height: 20rem;
+  overflow-y: auto;
+}
+
+.tooltip-entry {
+  display: inline-block;
+  padding-right: 1rem;
+}
+
+.line-chart-wrapper {
+  display: flex;
+  justify-content: space-around;
+  margin-top: 1rem;
+  margin-bottom: 2rem;
+}
+
+.line-chart-modal-desc {
+  display: flex;
+  align-items: center;
+  font-size: 1.4rem;
+}
+
+.line-chart-filters {
+  align-items: center;
+  justify-content: space-around;
+  margin-top: 1rem;
+  margin-bottom: 2rem;
+  padding-left: 6rem;
+  padding-right: 6rem;
+}
+
+.line-chart-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+}
