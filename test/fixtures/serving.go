@@ -16,6 +16,10 @@ limitations under the License.
 
 package fixtures
 
-func SendServingMessage(host string, payload string, sync bool) string {
-	return InvokeE2EAPIPOST("/serving/send-message?host=%s&sync=%t", payload, host, sync)
+func SendServingMessage(host, reqId, payload string, sync bool) string {
+	return InvokeE2EAPIPOST("/serving/send-message?host=%s&reqId=%s&sync=%t", payload, host, reqId, sync)
+}
+
+func FetchServingResult(host, reqId string) string {
+	return InvokeE2EAPIPOST("/serving/fetch-results?host=%s&reqId=%s", "", host, reqId)
 }

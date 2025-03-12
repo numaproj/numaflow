@@ -41,6 +41,7 @@ func main() {
 
 	servingController := NewServingController()
 	http.HandleFunc("/serving/send-message", servingController.SendMessage)
+	http.HandleFunc("/serving/fetch-results", servingController.FetchResults)
 
 	// initialize NATS handler
 	natsController := NewNatsController("nats", "testingtoken")

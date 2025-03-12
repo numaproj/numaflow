@@ -17,7 +17,6 @@ package serving_e2e
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -47,12 +46,12 @@ type asyncAPIResponse struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-func (resp *asyncAPIResponse) isValid() error {
+func (resp *asyncAPIResponse) validate(expReqId string) error {
 	if resp.Message != "Successfully published message" {
 		return fmt.Errorf("message field = %q, expected='Successfully published message'", resp.Message)
 	}
-	if resp.Id == "" {
-		return errors.New("id field can not be empty")
+	if resp.Id != expReqId {
+		return fmt.Errorf("value of id field should be %q, current value: %q", expReqId, resp.Id)
 	}
 	var defaultTime time.Time
 	if resp.Timestamp == defaultTime {
@@ -78,14 +77,34 @@ func (ss *ServingSuite) TestServingSource() {
 	cmd := fmt.Sprintf("kubectl -n %s get svc -lnumaflow.numaproj.io/pipeline-name=%s,numaflow.numaproj.io/vertex-name=%s | grep -v CLUSTER-IP | grep -v headless", Namespace, pipelineName, "serving-in")
 	w.Exec("sh", []string{"-c", cmd}, fixtures.OutputRegexp(serviceName))
 
-	syncResp := fixtures.SendServingMessage(serviceName, "test data", true)
+	// Send a request using sync API
+	syncResp := fixtures.SendServingMessage(serviceName, "", "test data", true)
 	assert.Equal(ss.T(), "test data", syncResp)
 
-	asyncRespText := fixtures.SendServingMessage(serviceName, "test data", false)
+	// Send a request using async API
+	const reqId = "req-12345"
+	asyncRespText := fixtures.SendServingMessage(serviceName, reqId, "test data", false)
 	var asyncResp asyncAPIResponse
 	err := json.Unmarshal([]byte(asyncRespText), &asyncResp)
 	require.NoError(ss.T(), err)
-	require.NoError(ss.T(), asyncResp.isValid())
+	require.NoError(ss.T(), asyncResp.validate(reqId))
+
+	// Use fetch API to retrieve the results of the above async request
+	attempt := 0
+	var asyncResult string
+	for {
+		if attempt > 5 {
+			ss.T().Fatalf("Processing for async request is still in-progress")
+			break
+		}
+		asyncResult = fixtures.FetchServingResult(serviceName, reqId)
+		if asyncResult != `{"status":"in-progress"}` {
+			break
+		}
+		attempt++
+		time.Sleep(2 * time.Second)
+	}
+	assert.Equal(ss.T(), "test data", asyncResult)
 }
 
 func TestServingSuite(t *testing.T) {
