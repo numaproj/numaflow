@@ -206,7 +206,7 @@ func TestMonoVertexGetPodSpec(t *testing.T) {
 		podSpec, err := testMvtx.GetPodSpec(req)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(podSpec.Containers))
-		assert.Equal(t, 3, len(podSpec.InitContainers))
+		assert.Equal(t, 4, len(podSpec.InitContainers))
 		assert.Equal(t, 2, len(podSpec.Volumes))
 		assert.Equal(t, "my-image", podSpec.Containers[0].Image)
 		assert.Equal(t, corev1.PullIfNotPresent, podSpec.Containers[0].ImagePullPolicy)
@@ -214,16 +214,21 @@ func TestMonoVertexGetPodSpec(t *testing.T) {
 		assert.Equal(t, "200m", podSpec.Containers[0].Resources.Limits.Cpu().String())
 		assert.Equal(t, "100Mi", podSpec.Containers[0].Resources.Requests.Memory().String())
 		assert.Equal(t, "200Mi", podSpec.Containers[0].Resources.Limits.Memory().String())
-		assert.Equal(t, "test-image1", podSpec.InitContainers[0].Image)
-		assert.Equal(t, "test-image2", podSpec.InitContainers[1].Image)
-		assert.Equal(t, "test-image3", podSpec.InitContainers[2].Image)
+		assert.Equal(t, CtrMonitor, podSpec.InitContainers[0].Name)
+		assert.Equal(t, "test-image1", podSpec.InitContainers[1].Image)
+		assert.Equal(t, "test-image2", podSpec.InitContainers[2].Image)
+		assert.Equal(t, "test-image3", podSpec.InitContainers[3].Image)
 		for i, c := range podSpec.Containers {
 			if i != 0 {
 				assert.Equal(t, 1, len(c.VolumeMounts))
 			}
 		}
-		for _, c := range podSpec.InitContainers {
-			assert.Equal(t, 1, len(c.VolumeMounts))
+		for i, c := range podSpec.InitContainers {
+			if i == 0 {
+				assert.Equal(t, 2, len(c.VolumeMounts))
+			} else {
+				assert.Equal(t, 1, len(c.VolumeMounts))
+			}
 		}
 		envNames := []string{}
 		for _, env := range podSpec.Containers[0].Env {

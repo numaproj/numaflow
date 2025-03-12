@@ -26,7 +26,9 @@ pub(crate) mod server {
 }
 
 pub(crate) mod info {
-    // add platform errors/ other info path accordingly
+    /*
+        add platform errors/ other info path accordingly
+    */
     // const DEFAULT_RUNTIME_INFO_MOUNT_PATH: &str = "/var/numaflow/runtime";
     const DEFAULT_RUNTIME_APPLICATION_ERRORS_PATH: &str =
         "/var/numaflow/runtime/application-errors";

@@ -22,16 +22,16 @@ pub struct RuntimeErrorEntry {
 }
 
 impl Runtime {
-    /// Creates a new Runtime instance with the specified emptyDir path.
+    // Creates a new Runtime instance with the specified directory path.
     pub fn new(empty_dir_path: &str) -> Self {
         Runtime {
             empty_dir_path: empty_dir_path.to_string(),
         }
     }
 
-    /// Writes data to a file in the emptyDir.
+    // Persists the data in file storage
     pub fn persist_application_error(&self, grpc_status: Status) -> io::Result<()> {
-        // we can extract the type of udf based on the error message
+        // extract the type of udf based on the error message
         let container_name = match get_container_name(grpc_status.message()) {
             Ok(name) => name,
             Err(err) => {
@@ -71,18 +71,18 @@ fn extract_container_name(error_message: &str) -> Option<String> {
         .and_then(|caps| caps.get(1).map(|m| m.as_str().to_string()))
 }
 
-/// Converts gRPC status to a JSON object with code, message, and details.
+// Converts gRPC status to a JSON object.
 pub fn grpc_status_to_json(
     grpc_status: &Status,
     container_name: &str,
     timestamp: i64,
 ) -> Result<String, Box<dyn Error>> {
-    // Extract code, message, and details
+    // Extract code, message, and details from gRPC Status
     let code = grpc_status.code().to_string();
     let message = grpc_status.message().to_string();
     let details_bytes = grpc_status.details();
 
-    // Convert details from bytes to a string
+    // Convert status details from bytes to a string
     let details_str = String::from_utf8_lossy(details_bytes);
 
     // Convert timestamp to RFC 3339 string

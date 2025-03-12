@@ -76,6 +76,7 @@ const (
 	CtrInitSideInputs    = "init-side-inputs"
 	CtrSideInputsWatcher = "side-inputs-synchronizer"
 	CtrServing           = "serving"
+	CtrMonitor           = "monitor"
 
 	// user-defined container types
 	UDContainerFunction     = "udf"

@@ -2,9 +2,10 @@ use axum::{routing::get, Router};
 use axum_server::{tls_rustls::RustlsConfig, Handle};
 use std::{net::SocketAddr, time::Duration};
 use tokio::signal;
+use tower_http::trace::TraceLayer;
 use tracing::info;
 
-use crate::{error::Error, runtime::handle_runtime_app_errors, MonitorServerConfig};
+use crate::{error::Error, runtime_errors::handle_runtime_app_errors, MonitorServerConfig};
 
 /// Start the main application Router and the axum server.
 pub(crate) async fn start_main_server(
@@ -32,7 +33,8 @@ pub(crate) async fn start_main_server(
 fn monitor_router() -> Router {
     Router::new()
         .route("/runtime/errors", get(handle_runtime_app_errors))
-        .route("/runtime/platform-errors", get(|| async { "To Do" }))
+        .route("/runtime/platform-errors", get(|| async { "--TODO--" }))
+        .layer(TraceLayer::new_for_http())
 }
 
 async fn graceful_shutdown(handle: Handle, server_config: MonitorServerConfig) {

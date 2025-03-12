@@ -1,7 +1,7 @@
 mod app;
 mod config;
 mod error;
-mod runtime;
+mod runtime_errors;
 use crate::app::start_main_server;
 use crate::config::generate_certs;
 use crate::config::server::MonitorServerConfig;
@@ -19,12 +19,12 @@ pub async fn run() -> std::result::Result<(), Box<dyn std::error::Error + Send +
 
     let server_config = MonitorServerConfig::default();
 
-    info!(?server_config, "Starting server with config");
+    info!(?server_config, "Starting monitor server with config");
 
-    // Start the metrics server, which serves the prometheus metrics.
+    // Start the monitor server which serves daemon server calls
     let app_addr: SocketAddr = format!("0.0.0.0:{}", server_config.server_listen_port)
         .parse()
-        .map_err(|e| Error::InitError(format!("{e:?}")))?;
+        .map_err(|e| Error::Init(format!("{e:?}")))?;
     // Start the main server, which serves the application.
     start_main_server(app_addr, tls_config, server_config).await?;
 

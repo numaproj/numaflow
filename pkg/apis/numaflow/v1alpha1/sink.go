@@ -18,7 +18,6 @@ package v1alpha1
 
 import (
 	corev1 "k8s.io/api/core/v1"
-	resource "k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
@@ -54,17 +53,7 @@ func (s Sink) getContainers(req getContainerReq) ([]corev1.Container, []corev1.C
 		s.getMainContainer(req),
 	}
 	sidecarContainers := []corev1.Container{}
-	monitorContainer := containerBuilder{}.
-		name("monitor").
-		imagePullPolicy(req.imagePullPolicy).
-		appendVolumeMounts(req.volumeMounts...).
-		image(req.image).
-		resources(corev1.ResourceRequirements{
-			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:    resource.MustParse("10m"),
-				corev1.ResourceMemory: resource.MustParse("32Mi"),
-			},
-		}).asSidecar().command(NumaflowRustBinary).args("--monitor").build()
+	monitorContainer := createMonitorContainer(req)
 	sidecarContainers = append(sidecarContainers, monitorContainer)
 	if s.UDSink != nil {
 		sidecarContainers = append(sidecarContainers, s.getUDSinkContainer(req))

@@ -1,18 +1,24 @@
+use serde::Serialize;
 use thiserror::Error;
+
+#[derive(Serialize)]
+pub struct ErrorRes {
+    pub error: String,
+}
 
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Error, Debug, Clone)]
 pub enum Error {
-    #[error("app_err handler Error - {0}")]
-    AppErrHandler(String),
-
     #[error("file Error - {0}")]
-    FileError(String),
+    File(String),
 
     #[error("Init Error - {0}")]
-    InitError(String),
+    Init(String),
 
     #[error("Router Error - {0}")]
     Router(String),
+
+    #[error("Deserialization Error - {0}")]
+    Deserialize(String),
 }
