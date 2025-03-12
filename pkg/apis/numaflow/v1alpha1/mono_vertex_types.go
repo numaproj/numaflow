@@ -104,11 +104,19 @@ func (mv MonoVertex) GetHeadlessServiceName() string {
 }
 
 func (mv MonoVertex) GetServiceObjs() []*corev1.Service {
-	svcs := []*corev1.Service{mv.getServiceObj(mv.GetHeadlessServiceName(), true, MonoVertexMetricsPort, MonoVertexMetricsPortName)}
+	svcs := []*corev1.Service{mv.getServiceObj(mv.GetHeadlessServiceName(), true, []int32{MonoVertexMetricsPort, MonoVertexMonitorPort}, []string{MonoVertexMetricsPortName, MonoVertexMonitorPortName})}
 	return svcs
 }
 
-func (mv MonoVertex) getServiceObj(name string, headless bool, port int32, servicePortName string) *corev1.Service {
+func (mv MonoVertex) getServiceObj(name string, headless bool, ports []int32, servicePortNames []string) *corev1.Service {
+	var servicePorts []corev1.ServicePort
+	for i, port := range ports {
+		servicePorts = append(servicePorts, corev1.ServicePort{
+			Port:       port,
+			TargetPort: intstr.FromInt32(port),
+			Name:       servicePortNames[i],
+		})
+	}
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       mv.Namespace,
@@ -122,9 +130,7 @@ func (mv MonoVertex) getServiceObj(name string, headless bool, port int32, servi
 			},
 		},
 		Spec: corev1.ServiceSpec{
-			Ports: []corev1.ServicePort{
-				{Port: port, TargetPort: intstr.FromInt32(port), Name: servicePortName},
-			},
+			Ports: servicePorts,
 			Selector: map[string]string{
 				KeyPartOf:         Project,
 				KeyManagedBy:      ControllerMonoVertex,
@@ -134,6 +140,7 @@ func (mv MonoVertex) getServiceObj(name string, headless bool, port int32, servi
 		},
 	}
 	if headless {
+		svc.Spec.PublishNotReadyAddresses = true
 		svc.Spec.ClusterIP = "None"
 	}
 	return svc

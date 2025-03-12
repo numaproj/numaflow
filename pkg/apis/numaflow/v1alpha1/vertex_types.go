@@ -139,13 +139,13 @@ func (v Vertex) GetHeadlessServiceName() string {
 }
 
 func (v Vertex) GetServiceObjs() []*corev1.Service {
-	svcs := []*corev1.Service{v.getServiceObj(v.GetHeadlessServiceName(), true, VertexMetricsPort, VertexMetricsPortName)}
+	svcs := []*corev1.Service{v.getServiceObj(v.GetHeadlessServiceName(), true, []int32{VertexMetricsPort, VertexMonitorPort}, []string{VertexMetricsPortName, VertexMonitorPortName})}
 	if x := v.Spec.Source; x != nil && x.HTTP != nil && x.HTTP.Service {
-		svcs = append(svcs, v.getServiceObj(v.Name, false, VertexHTTPSPort, VertexHTTPSPortName))
+		svcs = append(svcs, v.getServiceObj(v.Name, false, []int32{VertexHTTPSPort}, []string{VertexHTTPSPortName}))
 	}
 	// serving source uses the same port as the http source, because both can't be configured at the same time
 	if x := v.Spec.Source; x != nil && x.Serving != nil && x.Serving.Service {
-		svcs = append(svcs, v.getServiceObj(v.Name, false, VertexHTTPSPort, VertexHTTPSPortName))
+		svcs = append(svcs, v.getServiceObj(v.Name, false, []int32{VertexHTTPSPort}, []string{VertexHTTPSPortName}))
 	}
 	return svcs
 }
@@ -154,7 +154,15 @@ func (v Vertex) GetServingSourceStreamName() string {
 	return fmt.Sprintf("%s-%s-serving-source", v.Spec.PipelineName, v.Spec.Name)
 }
 
-func (v Vertex) getServiceObj(name string, headless bool, port int32, servicePortName string) *corev1.Service {
+func (v Vertex) getServiceObj(name string, headless bool, ports []int32, servicePortNames []string) *corev1.Service {
+	var servicePorts []corev1.ServicePort
+	for i, port := range ports {
+		servicePorts = append(servicePorts, corev1.ServicePort{
+			Port:       port,
+			TargetPort: intstr.FromInt32(port),
+			Name:       servicePortNames[i],
+		})
+	}
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       v.Namespace,
@@ -169,9 +177,7 @@ func (v Vertex) getServiceObj(name string, headless bool, port int32, servicePor
 			},
 		},
 		Spec: corev1.ServiceSpec{
-			Ports: []corev1.ServicePort{
-				{Port: port, TargetPort: intstr.FromInt32(port), Name: servicePortName},
-			},
+			Ports: servicePorts,
 			Selector: map[string]string{
 				KeyPartOf:       Project,
 				KeyManagedBy:    ControllerVertex,
@@ -182,6 +188,7 @@ func (v Vertex) getServiceObj(name string, headless bool, port int32, servicePor
 		},
 	}
 	if headless {
+		svc.Spec.PublishNotReadyAddresses = true
 		svc.Spec.ClusterIP = "None"
 	}
 	return svc
