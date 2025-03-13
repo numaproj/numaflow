@@ -154,6 +154,11 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 		}
 	}()
 
+	// Start persisting runtime errors
+	go func() {
+		ds.metaDataQuery.PersistRuntimeErrors(ctx)
+	}()
+
 	go ds.exposeMetrics(ctx)
 
 	version := numaflow.GetVersion()

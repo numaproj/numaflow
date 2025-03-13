@@ -189,7 +189,7 @@ func (mvs *MonoVertexService) persistRuntimeErrors(ctx context.Context) {
 						continue
 					}
 
-					cacheKey := PodReplica(fmt.Sprintf("%s-mv-%v", mvs.monoVtx.Name, i))
+					cacheKey := PodReplica(fmt.Sprintf("%s-mv-%v", mvtxName, i))
 
 					// Lock the cache before updating
 					mvs.cacheMutex.Lock()
