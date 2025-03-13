@@ -19638,6 +19638,15 @@
       ],
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.AccumulatorWindow": {
+      "properties": {
+        "ttl": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
+          "description": "TTL is the duration of inactivity after which the state of the accumulator is removed."
+        }
+      },
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.Authorization": {
       "properties": {
         "token": {
@@ -22816,6 +22825,9 @@
     "io.numaproj.numaflow.v1alpha1.Window": {
       "description": "Window describes windowing strategy",
       "properties": {
+        "accumulator": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.AccumulatorWindow"
+        },
         "fixed": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.FixedWindow"
         },

@@ -21,6 +21,7 @@ import (
 	"errors"
 	"math"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -62,6 +63,7 @@ type ProcessAndForward struct {
 	log                 *zap.SugaredLogger
 	forwardDoneCh       chan struct{}
 	mu                  sync.RWMutex
+	lastSeenWindow      map[string]window.TimedWindow
 	sync.RWMutex
 }
 
@@ -111,6 +113,7 @@ func NewProcessAndForward(ctx context.Context,
 		pnfRoutines:         make(map[string]chan struct{}),
 		log:                 logging.FromContext(ctx),
 		forwardDoneCh:       make(chan struct{}),
+		lastSeenWindow:      make(map[string]window.TimedWindow),
 		opts:                dOpts,
 	}
 
@@ -190,11 +193,11 @@ forwardLoop:
 					return
 				}
 
-				if err := pf.handleEOFResponse(ctx, response); err != nil {
+				if err := pf.handleEOFWindow(ctx, response.Window); err != nil {
 					return
 				}
 
-				// we do not have to write anything as this is a EOF message
+				// we do not have to write anything as this is an EOF message
 				continue
 			}
 
@@ -204,6 +207,23 @@ forwardLoop:
 			// if the batch size is reached, let's flush
 			if len(writeMessages) >= pf.opts.batchSize {
 				flush = true
+			}
+
+			// in accumulator strategy we will never have a eof message, but the output is ordered by event time
+			// so if we see a window that is older than the last seen window, we can clear the state till the last
+			// seen window.
+			if pf.windower.Strategy() == window.Accumulator {
+				winKey := strings.Join(response.WriteMessage.Keys, dfv1.KeysDelimitter)
+				if win, ok := pf.lastSeenWindow[winKey]; ok {
+					if win.EndTime().Before(response.Window.EndTime()) {
+						if err := pf.handleEOFWindow(ctx, win); err != nil {
+							return
+						}
+						pf.lastSeenWindow[winKey] = response.Window
+					}
+				} else {
+					pf.lastSeenWindow[winKey] = response.Window
+				}
 			}
 
 		case <-flushTimer.C:
@@ -232,13 +252,13 @@ forwardLoop:
 	}
 }
 
-// handleEOFResponse handles the EOF response received from the response channel. It publishes the watermark and invokes GC on PBQ.
-func (pf *ProcessAndForward) handleEOFResponse(ctx context.Context, response *window.TimedWindowResponse) error {
+// handleEOFWindow handles the EOF response received from the response channel. It publishes the watermark and invokes GC on PBQ.
+func (pf *ProcessAndForward) handleEOFWindow(ctx context.Context, eofWindow window.TimedWindow) error {
 	// publish watermark
 	pf.publishWM(ctx)
 
 	// delete the closed windows which are tracked by the windower
-	pf.windower.DeleteClosedWindow(response.Window)
+	pf.windower.DeleteClosedWindow(eofWindow)
 
 	var infiniteBackoff = wait.Backoff{
 		Steps:    math.MaxInt,
@@ -251,10 +271,10 @@ func (pf *ProcessAndForward) handleEOFResponse(ctx context.Context, response *wi
 	if pf.windower.Type() == window.Unaligned {
 		err := wait.ExponentialBackoff(infiniteBackoff, func() (done bool, err error) {
 			var attempt int
-			err = pf.opts.gcEventsTracker.PersistGCEvent(response.Window)
+			err = pf.opts.gcEventsTracker.PersistGCEvent(eofWindow)
 			if err != nil {
 				attempt++
-				pf.log.Errorw("Got an error while tracking GC event", zap.Error(err), zap.String("windowID", response.Window.ID()), zap.Int("attempt", attempt))
+				pf.log.Errorw("Got an error while tracking GC event", zap.Error(err), zap.String("windowID", eofWindow.ID()), zap.Int("attempt", attempt))
 				// no point retrying if ctx.Done has been invoked
 				select {
 				case <-ctx.Done():
@@ -271,8 +291,8 @@ func (pf *ProcessAndForward) handleEOFResponse(ctx context.Context, response *wi
 			return err
 		}
 	} else {
-		pid := *response.Window.Partition()
-		pbqReader := pf.pbqManager.GetPBQ(*response.Window.Partition())
+		pid := *eofWindow.Partition()
+		pbqReader := pf.pbqManager.GetPBQ(*eofWindow.Partition())
 		err := wait.ExponentialBackoff(infiniteBackoff, func() (done bool, err error) {
 			var attempt int
 			err = pbqReader.GC()
@@ -487,7 +507,6 @@ func (pf *ProcessAndForward) publishWM(ctx context.Context) {
 				}
 			}
 		}
-
 	}
 
 	// if there's any buffers that haven't received any watermark during this

@@ -4,6 +4,8 @@ pub mod abstract_sink;
 pub use self::abstract_sink::AbstractSink;
 pub mod abstract_vertex;
 pub use self::abstract_vertex::AbstractVertex;
+pub mod accumulator_window;
+pub use self::accumulator_window::AccumulatorWindow;
 pub mod authorization;
 pub use self::authorization::Authorization;
 pub mod backoff;

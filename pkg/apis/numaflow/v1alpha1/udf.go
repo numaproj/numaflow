@@ -155,6 +155,8 @@ type Window struct {
 	Sliding *SlidingWindow `json:"sliding" protobuf:"bytes,2,opt,name=sliding"`
 	// +optional
 	Session *SessionWindow `json:"session" protobuf:"bytes,3,opt,name=session"`
+	// +optional
+	Accumulator *AccumulatorWindow `json:"accumulator" protobuf:"bytes,4,opt,name=accumulator"`
 }
 
 // FixedWindow describes a fixed window
@@ -181,6 +183,11 @@ type SlidingWindow struct {
 type SessionWindow struct {
 	// Timeout is the duration of inactivity after which a session window closes.
 	Timeout *metav1.Duration `json:"timeout,omitempty" protobuf:"bytes,1,opt,name=timeout"`
+}
+
+type AccumulatorWindow struct {
+	// TTL is the duration of inactivity after which the state of the accumulator is removed.
+	TTL *metav1.Duration `json:"ttl,omitempty" protobuf:"bytes,1,opt,name=ttl"`
 }
 
 // PBQStorage defines the persistence configuration for a vertex.

@@ -46,7 +46,32 @@ message Payload {
  * AccumulatorRequest represents a request element.
  */
 message AccumulatorRequest {
+  // WindowOperation represents a window operation.
+  // For Aligned windows, OPEN, APPEND and CLOSE events are sent.
+  message WindowOperation {
+    enum Event {
+      OPEN = 0;
+      CLOSE = 1;
+      APPEND = 4;
+    }
+
+    Event event = 1;
+    repeated Window windows = 2;
+  }
+
   Payload payload = 1;
+  WindowOperation operation = 2;
+  optional Handshake handshake = 3;
+}
+
+
+/**
+  * Window represents a window.
+ */
+message Window {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+  string slot = 3;
 }
 
 /**
@@ -54,6 +79,9 @@ message AccumulatorRequest {
  */
 message AccumulatorResponse {
   Payload payload = 1;
+  // window represents a window to which the result belongs.
+  Window window = 2;
+  optional Handshake handshake = 3;
 }
 
 
@@ -62,4 +90,12 @@ message AccumulatorResponse {
  */
 message ReadyResponse {
   bool ready = 1;
+}
+
+/*
+ * Handshake message between client and server to indicate the start of transmission.
+ */
+message Handshake {
+  // Required field indicating the start of transmission.
+  bool sot = 1;
 }

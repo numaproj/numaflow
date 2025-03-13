@@ -1,32 +1,27 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: even-odd-sum
+  name: simple-accumulator
 spec:
   vertices:
     - name: in
       source:
-        http: {}
-    - name: atoi
-      scale:
-        min: 3
-      udf:
-        container:
-          # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
-          image: quay.io/numaio/numaflow-go/map-even-odd:stable
-    - name: compute-sum
+        generator:
+          rpu: 1
+          keyCount: 1
+    - name: accum
       udf:
         container:
           # compute the sum
-          image: quay.io/numaio/numaflow-go/reduce-sum:stable
+          image: quay.io/numaio/numaflow-go/simple-accumulator:stable
+          imagePullPolicy: Never
         groupBy:
           window:
-            fixed:
-              length: 60s
+            accumulator:
+              ttl: 10s
           keyed: true
           storage:
             emptyDir: {}
-      partitions: 2
     - name: sink
       scale:
         min: 1
@@ -34,8 +29,6 @@ spec:
         log: {}
   edges:
     - from: in
-      to: atoi
-    - from: atoi
-      to: compute-sum
-    - from: compute-sum
+      to: accum
+    - from: accum
       to: sink
