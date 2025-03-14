@@ -1,10 +1,4 @@
-use serde::Serialize;
 use thiserror::Error;
-
-#[derive(Serialize)]
-pub struct ErrorRes {
-    pub error: String,
-}
 
 pub type Result<T> = std::result::Result<T, Error>;
 

@@ -34,7 +34,6 @@ fn monitor_router() -> Router {
     Router::new()
         .route("/runtime/errors", get(handle_runtime_app_errors))
         .route("/runtime/platform-errors", get(|| async { "--TODO--" }))
-        .layer(TraceLayer::new_for_http())
 }
 
 async fn graceful_shutdown(handle: Handle, server_config: MonitorServerConfig) {

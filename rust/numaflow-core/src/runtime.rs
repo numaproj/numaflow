@@ -54,6 +54,7 @@ impl Runtime {
 
         let file_path = dir_path.join(file_name);
         let mut file = File::create(&file_path)?;
+        //TODO: check if we already have 10 files for a container, if yes, remove the oldest and write new one
         file.write_all(json_str.as_bytes())?;
 
         Ok(())

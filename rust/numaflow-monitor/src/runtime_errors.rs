@@ -4,13 +4,11 @@ use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 use tracing::error;
 
-use crate::{
-    config::info::RuntimeInfoConfig,
-    error::{Error, ErrorRes},
-};
+use crate::{config::info::RuntimeInfoConfig, error::Error};
 
 #[derive(serde::Serialize)]
 struct ApiResponse {
+    err_mssg: Option<String>,
     errors: Vec<RuntimeErrorEntry>,
 }
 
@@ -43,19 +41,28 @@ pub async fn handle_runtime_app_errors() -> impl IntoResponse {
     // no app errors persisted yet
     if !app_err_path.exists() || !app_err_path.is_dir() {
         let err = Error::File("App Err path does not exist".to_string());
-        let error_response = ErrorRes {
-            error: err.to_string(),
-        };
-        return (StatusCode::NOT_FOUND, Json(error_response)).into_response();
+        error!("{}", err);
+        return (
+            StatusCode::NOT_FOUND,
+            Json(ApiResponse {
+                err_mssg: Some(err.to_string()),
+                errors,
+            }),
+        )
+            .into_response();
     }
     let paths = match fs::read_dir(app_err_path) {
         Ok(path) => path,
         Err(e) => {
             let err = Error::File(format!("Failed to read directory: {:?}", e));
-            let error_response = ErrorRes {
-                error: err.to_string(),
-            };
-            return (StatusCode::INTERNAL_SERVER_ERROR, Json(error_response)).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse {
+                    err_mssg: Some(err.to_string()),
+                    errors,
+                }),
+            )
+                .into_response();
         }
     };
 
@@ -91,8 +98,14 @@ pub async fn handle_runtime_app_errors() -> impl IntoResponse {
             }
         }
     }
-    let api_response = ApiResponse { errors };
-    (StatusCode::OK, Json(api_response)).into_response()
+    (
+        StatusCode::OK,
+        Json(ApiResponse {
+            err_mssg: None,
+            errors,
+        }),
+    )
+        .into_response()
 }
 
 fn process_file_entry(
