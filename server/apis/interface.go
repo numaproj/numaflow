@@ -51,4 +51,6 @@ type Handler interface {
 	GetMonoVertexMetrics(c *gin.Context)
 	GetMetricData(c *gin.Context)
 	DiscoverMetrics(c *gin.Context)
+	GetVertexErrors(c *gin.Context)
+	GetMonoVertexErrors(c *gin.Context)
 }

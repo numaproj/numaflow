@@ -101,5 +101,17 @@ func (rc *restfulClient) GetMonoVertexStatus(ctx context.Context) (*mvtxdaemon.M
 	} else {
 		return res.Status, nil
 	}
+}
 
+func (rc *restfulClient) GetMonoVertexErrors(ctx context.Context, monoVertex, replica string) ([]*mvtxdaemon.MonoVertexError, error) {
+	resp, err := rc.httpClient.Get(fmt.Sprintf("%s/api/v1/mono-vertices/%s/replicas/%s/errors", rc.hostURL, monoVertex, replica))
+	if err != nil {
+		return nil, fmt.Errorf("failed to call get mono vertex errors RESTful API, %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if res, err := unmarshalResponse[mvtxdaemon.GetMonoVertexErrorsResponse](resp); err != nil {
+		return nil, err
+	} else {
+		return res.Errors, nil
+	}
 }

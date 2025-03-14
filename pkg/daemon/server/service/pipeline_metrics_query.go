@@ -44,6 +44,16 @@ type metricsHttpClient interface {
 	Get(url string) (*http.Response, error)
 }
 
+type PodReplica string
+
+type ErrorDetails struct {
+	Container string
+	Timestamp string
+	Code      string
+	Message   string
+	Details   string
+}
+
 // PipelineMetadataQuery has the metadata required for the pipeline queries
 type PipelineMetadataQuery struct {
 	daemon.UnimplementedDaemonServiceServer
@@ -53,6 +63,7 @@ type PipelineMetadataQuery struct {
 	watermarkFetchers map[v1alpha1.Edge][]fetch.HeadFetcher
 	rater             rater.Ratable
 	healthChecker     *HealthChecker
+	localCache        map[PodReplica][]ErrorDetails
 }
 
 // NewPipelineMetadataQuery returns a new instance of pipelineMetadataQuery
@@ -73,6 +84,7 @@ func NewPipelineMetadataQuery(
 		watermarkFetchers: wmFetchers,
 		rater:             rater,
 		healthChecker:     NewHealthChecker(pipeline, isbSvcClient),
+		localCache:        make(map[PodReplica][]ErrorDetails),
 	}
 	return &ps, nil
 }
@@ -226,6 +238,30 @@ func (ps *PipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *dae
 		Message: status.Message,
 		Code:    status.Code,
 	}
+	return resp, nil
+}
+
+func (ps *PipelineMetadataQuery) GetVertexErrors(ctx context.Context, req *daemon.GetVertexErrorsRequest) (*daemon.GetVertexErrorsResponse, error) {
+	pipeline, vertex, replica := req.GetPipeline(), req.GetVertex(), req.GetReplica()
+	podReplica := fmt.Sprintf("%s-%s-%s", pipeline, vertex, replica)
+
+	resp := new(daemon.GetVertexErrorsResponse)
+
+	// If the errors are present in the local cache, return the errors.
+	if errors, ok := ps.localCache[PodReplica(podReplica)]; ok {
+		replicaError := make([]*daemon.VertexError, len(errors))
+		for i, err := range errors {
+			replicaError[i] = &daemon.VertexError{
+				Container: err.Container,
+				Timestamp: err.Timestamp,
+				Code:      err.Code,
+				Message:   err.Message,
+				Details:   err.Details,
+			}
+		}
+		resp.Errors = replicaError
+	}
+
 	return resp, nil
 }
 
