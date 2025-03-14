@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -48,8 +49,13 @@ type metricsHttpClient interface {
 
 type PodReplica string
 
+type RuntimeErrorApiResponse struct {
+	ErrMssg string         `json:"err_mssg"`
+	Errors  []ErrorDetails `json:"errors"`
+}
+
 type ErrorDetails struct {
-	Container string `json:"container"`
+	Container string `json:"container_name"`
 	Timestamp string `json:"timestamp"`
 	Code      string `json:"code"`
 	Message   string `json:"message"`
@@ -242,8 +248,7 @@ func (ps *PipelineMetadataQuery) PersistRuntimeErrors(ctx context.Context) {
 func (ps *PipelineMetadataQuery) persistRuntimeErrors(ctx context.Context) {
 	log := logging.FromContext(ctx)
 	vtxNamespace := ps.pipeline.Namespace
-	runtimePort := 1234
-	runtimePath := "runtime/errors"
+	runtimeErrorsPath := "runtime/errors"
 
 	runtimeErrorsTimeStep := 60 * time.Second
 	ticker := time.NewTicker(runtimeErrorsTimeStep)
@@ -261,29 +266,41 @@ func (ps *PipelineMetadataQuery) persistRuntimeErrors(ctx context.Context) {
 				}
 
 				headlessServiceName := vertex.GetHeadlessServiceName()
-				replicas := 1
 				abstractVertex := ps.pipeline.GetVertex(vtx.Name)
+				var replicas int
+				// TODO(fix): use active pods logic
 				if abstractVertex.IsReduceUDF() {
 					replicas = abstractVertex.GetPartitionCount()
 				} else {
-					// TODO(fix): this is not updating even if replicas > 1
 					replicas = vertex.CalculateReplicas()
 				}
 
-				for i := 0; i < replicas; i++ {
+				for i := 0; i <= replicas; i++ {
 					// Get the headless service name
 					// We can query the metrics endpoint of the (i)th pod to obtain this value.
 					// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc:1234/runtime/errors
-					url := fmt.Sprintf("https://%s-%v.%s.%s.svc:%v/%s", vertexName, i, headlessServiceName, vtxNamespace, runtimePort, runtimePath)
+					url := fmt.Sprintf("https://%s-%v.%s.%s.svc:%v/%s", vertexName, i, headlessServiceName, vtxNamespace, v1alpha1.VertexMonitorPort, runtimeErrorsPath)
 
 					if res, err := ps.httpClient.Get(url); err != nil {
-						log.Debugf("Error reading the runtime errors endpoint: %f", err.Error())
+						log.Errorw("Error reading the runtime errors endpoint: %f", err.Error())
 						continue
 					} else {
-						// Parse the response body into errorDetails
-						var errorDetails []ErrorDetails
-						if err := json.NewDecoder(res.Body).Decode(&errorDetails); err != nil {
+
+						// Read the response body
+						body, err := io.ReadAll(res.Body)
+						if err != nil {
+							log.Errorf("Error reading response body from %s: %v", url, err)
+							continue
+						}
+
+						// Parse the response body into runtime api response
+						var apiResponse RuntimeErrorApiResponse
+						if err := json.Unmarshal(body, &apiResponse); err != nil {
 							log.Errorf("Error decoding runtime error response from %s: %v", url, err)
+							continue
+						}
+
+						if apiResponse.ErrMssg != "" {
 							continue
 						}
 
@@ -296,9 +313,8 @@ func (ps *PipelineMetadataQuery) persistRuntimeErrors(ctx context.Context) {
 							ps.localCache[cacheKey] = make([]ErrorDetails, 0)
 						}
 						log.Infof("Persisting error in local cache for: %s", cacheKey)
-						for _, detail := range errorDetails {
-							ps.localCache[cacheKey] = append(ps.localCache[cacheKey], detail)
-						}
+						//overwrite the errors - max 10 files for a container to be checked by write flow
+						ps.localCache[cacheKey] = apiResponse.Errors
 						ps.cacheMutex.Unlock()
 					}
 				}

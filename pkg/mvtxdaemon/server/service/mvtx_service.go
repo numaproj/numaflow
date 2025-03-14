@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -44,8 +45,13 @@ const MonoVtxPendingMetric = "monovtx_pending"
 
 type PodReplica string
 
+type RuntimeErrorApiResponse struct {
+	ErrMssg string         `json:"err_mssg"`
+	Errors  []ErrorDetails `json:"errors"`
+}
+
 type ErrorDetails struct {
-	Container string `json:"container"`
+	Container string `json:"container_name"`
 	Timestamp string `json:"timestamp"`
 	Code      string `json:"code"`
 	Message   string `json:"message"`
@@ -160,11 +166,11 @@ func (mvs *MonoVertexService) PersistRuntimeErrors(ctx context.Context) {
 func (mvs *MonoVertexService) persistRuntimeErrors(ctx context.Context) {
 	log := logging.FromContext(ctx)
 	headlessServiceName := mvs.monoVtx.GetHeadlessServiceName()
+	// TODO(fix): use active pods logic
 	replicas := mvs.monoVtx.CalculateReplicas()
 	mvtxName := mvs.monoVtx.Name
 	mvtxNamespace := mvs.monoVtx.Namespace
-	runtimePort := 1234
-	runtimePath := "runtime/errors"
+	runtimeErrorsPath := "runtime/errors"
 
 	runtimeErrorsTimeStep := 60 * time.Second
 	ticker := time.NewTicker(runtimeErrorsTimeStep)
@@ -172,20 +178,32 @@ func (mvs *MonoVertexService) persistRuntimeErrors(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			for i := 0; i < replicas; i++ {
+			for i := 0; i <= replicas; i++ {
 				// Get the headless service name
 				// We can query the runtime errors endpoint of the (i)th pod to obtain this value.
 				// example for 0th pod : https://simple-mono-vertex-mv-0.simple-mono-vertex-mv-headless:1234/runtime/errors
-				url := fmt.Sprintf("https://%s-mv-%v.%s.%s.svc:%v/%s", mvtxName, i, headlessServiceName, mvtxNamespace, runtimePort, runtimePath)
+				url := fmt.Sprintf("https://%s-mv-%v.%s.%s.svc:%v/%s", mvtxName, i, headlessServiceName, mvtxNamespace, v1alpha1.MonoVertexMonitorPort, runtimeErrorsPath)
 
 				if res, err := mvs.httpClient.Get(url); err != nil {
-					log.Debugf("Error reading the runtime errors endpoint: %f", err.Error())
+					log.Errorw("Error reading the runtime errors endpoint: %f", err.Error())
 					continue
 				} else {
-					// Parse the response body into errorDetails
-					var errorDetails []ErrorDetails
-					if err := json.NewDecoder(res.Body).Decode(&errorDetails); err != nil {
+
+					// Read the response body
+					body, err := io.ReadAll(res.Body)
+					if err != nil {
+						log.Errorf("Error reading response body from %s: %v", url, err)
+						continue
+					}
+
+					// Parse the response body into runtime api response
+					var apiResponse RuntimeErrorApiResponse
+					if err := json.Unmarshal(body, &apiResponse); err != nil {
 						log.Errorf("Error decoding runtime error response from %s: %v", url, err)
+						continue
+					}
+
+					if apiResponse.ErrMssg != "" {
 						continue
 					}
 
@@ -198,9 +216,8 @@ func (mvs *MonoVertexService) persistRuntimeErrors(ctx context.Context) {
 						mvs.localCache[cacheKey] = make([]ErrorDetails, 0)
 					}
 					log.Infof("Persisting error in local cache for: %s", cacheKey)
-					for _, detail := range errorDetails {
-						mvs.localCache[cacheKey] = append(mvs.localCache[cacheKey], detail)
-					}
+					//overwrite the errors - max 10 files for a container to be checked by write flow
+					mvs.localCache[cacheKey] = apiResponse.Errors
 					mvs.cacheMutex.Unlock()
 				}
 			}
