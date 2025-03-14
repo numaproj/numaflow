@@ -28,6 +28,7 @@ const NUMAFLOW_REPLICA: &str = "NUMAFLOW_REPLICA";
 const NUMAFLOW_PIPELINE_NAME: &str = "NUMAFLOW_PIPELINE_NAME";
 const NUMAFLOW_NAMESPACE: &str = "NUMAFLOW_NAMESPACE";
 static VERTEX_NAME: OnceLock<String> = OnceLock::new();
+pub const RUNTIME_DIR_MOUNT_PATH: &str = "/var/numaflow/runtime";
 
 /// fetch the vertex name from the environment variable
 pub(crate) fn get_vertex_name() -> &'static str {

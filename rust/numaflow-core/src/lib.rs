@@ -3,7 +3,7 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-use crate::config::{config, CustomResourceType};
+use crate::config::{config, CustomResourceType, RUNTIME_DIR_MOUNT_PATH};
 
 /// Custom Error handling.
 mod error;
@@ -65,9 +65,16 @@ mod serving_store;
 /// [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 mod watermark;
 
+/// Runtime to persist the runtime information of the pod (e.g. application errors)
+mod runtime;
+use crate::runtime::Runtime;
+
 pub async fn run() -> Result<()> {
     let cln_token = CancellationToken::new();
     let shutdown_cln_token = cln_token.clone();
+
+    // Initialize Runtime
+    let runtime = Runtime::new(RUNTIME_DIR_MOUNT_PATH);
 
     // wait for SIG{INT,TERM} and invoke cancellation token.
     let shutdown_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
@@ -83,7 +90,10 @@ pub async fn run() -> Result<()> {
             // Run the forwarder with cancellation token.
             if let Err(e) = monovertex::start_forwarder(cln_token, &config).await {
                 if let Error::Grpc(e) = e {
-                    error!(error=?e, "Monovertex failed because of UDF failure")
+                    error!(error=?e, "Monovertex failed because of UDF failure");
+                    runtime
+                        .persist_application_error(e)
+                        .expect("Failed to persist the application error");
                 } else {
                     error!(?e, "Error running monovertex");
                 }
@@ -97,7 +107,10 @@ pub async fn run() -> Result<()> {
             info!("Starting pipeline forwarder with config: {:#?}", config);
             if let Err(e) = pipeline::start_forwarder(cln_token, config).await {
                 if let Error::Grpc(e) = e {
-                    error!(error=?e, "Pipeline failed because of UDF failure")
+                    error!(error=?e, "Pipeline failed because of UDF failure");
+                    runtime
+                        .persist_application_error(e)
+                        .expect("Failed to persist the application error");
                 } else {
                     error!(?e, "Error running pipeline");
                 }

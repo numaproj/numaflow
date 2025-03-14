@@ -23,6 +23,10 @@ import (
 
 type containerBuilder corev1.Container
 
+func createMonitorContainer(req getContainerReq) corev1.Container {
+	return containerBuilder{}.init(req).name(CtrMonitor).asSidecar().command(NumaflowRustBinary).args("--monitor").build()
+}
+
 func (b containerBuilder) init(req getContainerReq) containerBuilder {
 	b.Env = req.env
 	b.Image = req.image

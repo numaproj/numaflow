@@ -27,6 +27,7 @@ import (
 	"go.uber.org/zap"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -510,7 +511,6 @@ func (mr *monoVertexReconciler) createOrUpdateDaemonService(ctx context.Context,
 func (mr *monoVertexReconciler) createOrUpdateDaemonDeployment(ctx context.Context, monoVtx *dfv1.MonoVertex) error {
 	log := logging.FromContext(ctx)
 	envs := []corev1.EnvVar{{Name: dfv1.EnvMonoVertexName, Value: monoVtx.Name}}
-
 	req := dfv1.GetMonoVertexDaemonDeploymentReq{
 		Image:            mr.image,
 		PullPolicy:       corev1.PullPolicy(sharedutil.LookupEnvStringOr(dfv1.EnvImagePullPolicy, "")),

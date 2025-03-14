@@ -7,10 +7,10 @@ edition = "2021"
 workspace = true
 
 [dependencies]
-servesink.workspace = true
 serving.workspace = true
 numaflow-core.workspace = true
 numaflow-models.workspace = true
+numaflow-monitor.workspace = true
 backoff.workspace = true
 tokio.workspace = true
 tracing.workspace = true

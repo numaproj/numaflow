@@ -104,11 +104,19 @@ func (mv MonoVertex) GetHeadlessServiceName() string {
 }
 
 func (mv MonoVertex) GetServiceObjs() []*corev1.Service {
-	svcs := []*corev1.Service{mv.getServiceObj(mv.GetHeadlessServiceName(), true, MonoVertexMetricsPort, MonoVertexMetricsPortName)}
+	svcs := []*corev1.Service{mv.getServiceObj(mv.GetHeadlessServiceName(), true, []int32{MonoVertexMetricsPort, MonoVertexMonitorPort}, []string{MonoVertexMetricsPortName, MonoVertexMonitorPortName})}
 	return svcs
 }
 
-func (mv MonoVertex) getServiceObj(name string, headless bool, port int32, servicePortName string) *corev1.Service {
+func (mv MonoVertex) getServiceObj(name string, headless bool, ports []int32, servicePortNames []string) *corev1.Service {
+	var servicePorts []corev1.ServicePort
+	for i, port := range ports {
+		servicePorts = append(servicePorts, corev1.ServicePort{
+			Port:       port,
+			TargetPort: intstr.FromInt32(port),
+			Name:       servicePortNames[i],
+		})
+	}
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       mv.Namespace,
@@ -122,9 +130,7 @@ func (mv MonoVertex) getServiceObj(name string, headless bool, port int32, servi
 			},
 		},
 		Spec: corev1.ServiceSpec{
-			Ports: []corev1.ServicePort{
-				{Port: port, TargetPort: intstr.FromInt32(port), Name: servicePortName},
-			},
+			Ports: servicePorts,
 			Selector: map[string]string{
 				KeyPartOf:         Project,
 				KeyManagedBy:      ControllerMonoVertex,
@@ -134,6 +140,7 @@ func (mv MonoVertex) getServiceObj(name string, headless bool, port int32, servi
 		},
 	}
 	if headless {
+		svc.Spec.PublishNotReadyAddresses = true
 		svc.Spec.ClusterIP = "None"
 	}
 	return svc
@@ -404,6 +411,11 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 		MountPath: RuntimeDirMountPath,
 	})
 
+	sidecarContainers[0].VolumeMounts = append(sidecarContainers[0].VolumeMounts, corev1.VolumeMount{
+		Name:      RuntimeDirVolume,
+		MountPath: RuntimeDirMountPath,
+	})
+
 	for i := 0; i < len(sidecarContainers); i++ { // udsink, udsource, udtransformer ...
 		sidecarContainers[i].Env = append(sidecarContainers[i].Env, mv.commonEnvs()...)
 		sidecarContainers[i].Env = append(sidecarContainers[i].Env, mv.sidecarEnvs()...)
@@ -485,6 +497,10 @@ func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) ([]corev1.Cont
 	containers := []corev1.Container{mainContainer}
 
 	sidecarContainers := []corev1.Container{}
+
+	monitorContainer := createMonitorContainer(req)
+	sidecarContainers = append(sidecarContainers, monitorContainer)
+
 	if mvspec.Source.UDSource != nil { // Only support UDSource for now.
 		sidecarContainers = append(sidecarContainers, mvspec.Source.getUDSourceContainer(req))
 	}
