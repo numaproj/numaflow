@@ -41,6 +41,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service"
 	rateServer "github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service/rater"
+	runtimeServer "github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service/runtime"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 )
@@ -65,6 +66,8 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	// rater is used to calculate the processing rate of the mono vertex
 	rater := rateServer.NewRater(ctx, ds.monoVtx)
 
+	runtime := runtimeServer.NewRuntime(ctx, ds.monoVtx)
+
 	// Start listener
 	var conn net.Listener
 	var listerErr error
@@ -80,7 +83,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	}
 
 	tlsConfig := &tls.Config{Certificates: []tls.Certificate{*cer}, MinVersion: tls.VersionTLS12}
-	grpcServer, err := ds.newGRPCServer(rater)
+	grpcServer, err := ds.newGRPCServer(rater, runtime)
 	if err != nil {
 		return fmt.Errorf("failed to create grpc server: %w", err)
 	}
@@ -108,9 +111,11 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 		}
 	}()
 
-	// Start persisting runtime errors
+	// Start the runtime
 	go func() {
-		ds.mvtxService.PersistRuntimeErrors(ctx)
+		if err := runtime.Start(ctx); err != nil {
+			log.Panic(fmt.Errorf("failed to start the runtime: %w", err))
+		}
 	}()
 
 	version := numaflow.GetVersion()
@@ -123,7 +128,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	return nil
 }
 
-func (ds *daemonServer) newGRPCServer(rater rateServer.MonoVtxRatable) (*grpc.Server, error) {
+func (ds *daemonServer) newGRPCServer(rater rateServer.MonoVtxRatable, runtime runtimeServer.MonoVtxRuntime) (*grpc.Server, error) {
 	// "Prometheus histograms are a great way to measure latency distributions of your RPCs.
 	// However, since it is a bad practice to have metrics of high cardinality the latency monitoring metrics are disabled by default.
 	// To enable them please call the following in your server initialization code:"
@@ -137,7 +142,7 @@ func (ds *daemonServer) newGRPCServer(rater rateServer.MonoVtxRatable) (*grpc.Se
 	}
 	grpcServer := grpc.NewServer(sOpts...)
 	grpc_prometheus.Register(grpcServer)
-	mvtxService, err := service.NewMoveVertexService(ds.monoVtx, rater)
+	mvtxService, err := service.NewMoveVertexService(ds.monoVtx, rater, runtime)
 	if err != nil {
 		return nil, err
 	}
@@ -168,6 +173,7 @@ func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *
 	if err := mvtxdaemon.RegisterMonoVertexDaemonServiceHandlerFromEndpoint(ctx, gwmux, endpoint, dialOpts); err != nil {
 		log.Errorw("Failed to register daemon handler on HTTP Server", zap.Error(err))
 	}
+
 	mux := http.NewServeMux()
 	httpServer := http.Server{
 		Addr:      endpoint,

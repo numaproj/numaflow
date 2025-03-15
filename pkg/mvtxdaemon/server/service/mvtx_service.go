@@ -19,11 +19,8 @@ package service
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -36,6 +33,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/proto/mvtxdaemon"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	raterPkg "github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service/rater"
+	runtimePkg "github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service/runtime"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -43,29 +41,13 @@ import (
 // Note: Please keep consistent with the definitions in rust/monovertex/sc/metrics.rs
 const MonoVtxPendingMetric = "monovtx_pending"
 
-type PodReplica string
-
-type RuntimeErrorApiResponse struct {
-	ErrMssg string         `json:"err_mssg"`
-	Errors  []ErrorDetails `json:"errors"`
-}
-
-type ErrorDetails struct {
-	Container string `json:"container_name"`
-	Timestamp string `json:"timestamp"`
-	Code      string `json:"code"`
-	Message   string `json:"message"`
-	Details   string `json:"details"`
-}
-
 type MonoVertexService struct {
 	mvtxdaemon.UnimplementedMonoVertexDaemonServiceServer
 	monoVtx       *v1alpha1.MonoVertex
 	httpClient    *http.Client
 	rater         raterPkg.MonoVtxRatable
 	healthChecker *HealthChecker
-	localCache    map[PodReplica][]ErrorDetails
-	cacheMutex    sync.Mutex
+	runtime       runtimePkg.MonoVtxRuntime
 }
 
 var _ mvtxdaemon.MonoVertexDaemonServiceServer = (*MonoVertexService)(nil)
@@ -74,6 +56,7 @@ var _ mvtxdaemon.MonoVertexDaemonServiceServer = (*MonoVertexService)(nil)
 func NewMoveVertexService(
 	monoVtx *v1alpha1.MonoVertex,
 	rater raterPkg.MonoVtxRatable,
+	runtime runtimePkg.MonoVtxRuntime,
 ) (*MonoVertexService, error) {
 	mv := MonoVertexService{
 		monoVtx: monoVtx,
@@ -85,7 +68,7 @@ func NewMoveVertexService(
 		},
 		rater:         rater,
 		healthChecker: NewHealthChecker(monoVtx),
-		localCache:    make(map[PodReplica][]ErrorDetails),
+		runtime:       runtime,
 	}
 	return &mv, nil
 }
@@ -155,77 +138,6 @@ func (mvs *MonoVertexService) getPending(ctx context.Context) map[string]*wrappe
 		}
 	}
 	return pendingMap
-}
-
-// PersistRuntimeErrors persists the runtime errors MonoVertex using the persistRuntimeErrors function
-func (mvs *MonoVertexService) PersistRuntimeErrors(ctx context.Context) {
-	mvs.persistRuntimeErrors(ctx)
-}
-
-// persistRuntimeErrors updates the local cache with the runtime errors
-func (mvs *MonoVertexService) persistRuntimeErrors(ctx context.Context) {
-	log := logging.FromContext(ctx)
-	headlessServiceName := mvs.monoVtx.GetHeadlessServiceName()
-	// TODO(fix): use active pods logic
-	replicas := mvs.monoVtx.CalculateReplicas()
-	mvtxName := mvs.monoVtx.Name
-	mvtxNamespace := mvs.monoVtx.Namespace
-	runtimeErrorsPath := "runtime/errors"
-
-	runtimeErrorsTimeStep := 60 * time.Second
-	ticker := time.NewTicker(runtimeErrorsTimeStep)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			for i := 0; i <= replicas; i++ {
-				// Get the headless service name
-				// We can query the runtime errors endpoint of the (i)th pod to obtain this value.
-				// example for 0th pod : https://simple-mono-vertex-mv-0.simple-mono-vertex-mv-headless:1234/runtime/errors
-				url := fmt.Sprintf("https://%s-mv-%v.%s.%s.svc:%v/%s", mvtxName, i, headlessServiceName, mvtxNamespace, v1alpha1.MonoVertexMonitorPort, runtimeErrorsPath)
-
-				if res, err := mvs.httpClient.Get(url); err != nil {
-					log.Errorw("Error reading the runtime errors endpoint: %f", err.Error())
-					continue
-				} else {
-
-					// Read the response body
-					body, err := io.ReadAll(res.Body)
-					if err != nil {
-						log.Errorf("Error reading response body from %s: %v", url, err)
-						continue
-					}
-
-					// Parse the response body into runtime api response
-					var apiResponse RuntimeErrorApiResponse
-					if err := json.Unmarshal(body, &apiResponse); err != nil {
-						log.Errorf("Error decoding runtime error response from %s: %v", url, err)
-						continue
-					}
-
-					if apiResponse.ErrMssg != "" {
-						continue
-					}
-
-					cacheKey := PodReplica(fmt.Sprintf("%s-mv-%v", mvtxName, i))
-
-					// Lock the cache before updating
-					mvs.cacheMutex.Lock()
-					_, ok := mvs.localCache[cacheKey]
-					if !ok {
-						mvs.localCache[cacheKey] = make([]ErrorDetails, 0)
-					}
-					log.Infof("Persisting error in local cache for: %s", cacheKey)
-					//overwrite the errors - max 10 files for a container to be checked by write flow
-					mvs.localCache[cacheKey] = apiResponse.Errors
-					mvs.cacheMutex.Unlock()
-				}
-			}
-		// If the context is done, return.
-		case <-ctx.Done():
-			return
-		}
-	}
 }
 
 // StartHealthCheck starts the health check for the MonoVertex using the health checker
