@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,13 +19,13 @@ import (
 const runtimeErrorsPath = "runtime/errors"
 const runtimeErrorsTimeStep = 60 * time.Second
 
-type MonoVtxRuntime interface {
+type PipelineRuntime interface {
 	Start(ctx context.Context) error
 	PersistRuntimeErrors(ctx context.Context)
 	GetLocalCache() map[PodReplica][]ErrorDetails
 }
 
-var _ MonoVtxRuntime = (*Runtime)(nil)
+var _ PipelineRuntime = (*Runtime)(nil)
 
 type PodReplica string
 
@@ -46,7 +47,7 @@ type monitorHttpClient interface {
 }
 
 type Runtime struct {
-	monoVtx    *v1alpha1.MonoVertex
+	pipeline   *v1alpha1.Pipeline
 	localCache map[PodReplica][]ErrorDetails
 	cacheMutex sync.Mutex
 	podTracker *PodTracker
@@ -54,9 +55,9 @@ type Runtime struct {
 	httpClient monitorHttpClient
 }
 
-func NewRuntime(ctx context.Context, mv *v1alpha1.MonoVertex) *Runtime {
+func NewRuntime(ctx context.Context, pl *v1alpha1.Pipeline) *Runtime {
 	runtime := Runtime{
-		monoVtx:    mv,
+		pipeline:   pl,
 		localCache: make(map[PodReplica][]ErrorDetails),
 		cacheMutex: sync.Mutex{},
 		log:        logging.FromContext(ctx).Named("Runtime"),
@@ -67,7 +68,7 @@ func NewRuntime(ctx context.Context, mv *v1alpha1.MonoVertex) *Runtime {
 			Timeout: time.Second * 1,
 		},
 	}
-	runtime.podTracker = NewPodTracker(ctx, mv)
+	runtime.podTracker = NewPodTracker(ctx, pl)
 	return &runtime
 }
 
@@ -97,49 +98,48 @@ func (r *Runtime) PersistRuntimeErrors(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-
-			for i := range r.podTracker.GetActivePodIndexes() {
-				// Get the headless service name
-				// We can query the runtime errors endpoint of the (i)th pod to obtain this value.
-				// example for 0th pod : https://simple-mono-vertex-mv-0.simple-mono-vertex-mv-headless:2470/runtime/errors
-				url := fmt.Sprintf("https://%s-mv-%v.%s.%s.svc:%v/%s", r.monoVtx.Name, i, r.monoVtx.GetHeadlessServiceName(), r.monoVtx.GetNamespace(), v1alpha1.MonoVertexMonitorPort, runtimeErrorsPath)
-
-				if res, err := r.httpClient.Get(url); err != nil {
-					r.log.Errorw("Error reading the runtime errors endpoint: %f", err.Error())
-					continue
-				} else {
-					// Read the response body
-					body, err := io.ReadAll(res.Body)
-					res.Body.Close()
-					if err != nil {
-						r.log.Errorf("Error reading response body from %s: %v", url, err)
+			for _, vtx := range r.pipeline.Spec.Vertices {
+				for i := range r.podTracker.GetActivePodIndexes(vtx) {
+					podName := strings.Join([]string{r.pipeline.Name, vtx.Name, fmt.Sprintf("%d", i)}, "-")
+					// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc:2470/runtime/errors
+					url := fmt.Sprintf("https://%s.%s.%s.svc:%v/%s", podName, r.pipeline.Name+"-"+vtx.Name+"-headless", r.pipeline.Namespace, v1alpha1.VertexMonitorPort, runtimeErrorsPath)
+					if res, err := r.httpClient.Get(url); err != nil {
+						r.log.Errorw("Error reading the runtime errors endpoint: %f", err.Error())
 						continue
-					}
+					} else {
+						// Read the response body
+						body, err := io.ReadAll(res.Body)
+						res.Body.Close()
+						if err != nil {
+							r.log.Errorf("Error reading response body from %s: %v", url, err)
+							continue
+						}
 
-					// Parse the response body into runtime api response
-					var apiResponse RuntimeErrorApiResponse
-					if err := json.Unmarshal(body, &apiResponse); err != nil {
-						r.log.Errorf("Error decoding runtime error response from %s: %v", url, err)
-						continue
-					}
+						// Parse the response body into runtime api response
+						var apiResponse RuntimeErrorApiResponse
+						if err := json.Unmarshal(body, &apiResponse); err != nil {
+							r.log.Errorf("Error decoding runtime error response from %s: %v", url, err)
+							continue
+						}
 
-					if apiResponse.ErrMssg != "" {
-						continue
-					}
+						if apiResponse.ErrMssg != "" {
+							continue
+						}
 
-					cacheKey := PodReplica(fmt.Sprintf("%s-mv-%v", r.monoVtx.Name, i))
+						cacheKey := PodReplica(fmt.Sprintf("%s-%s-%v", r.pipeline.Name, vtx.Name, i))
 
-					// Lock the cache before updating
-					r.cacheMutex.Lock()
-					_, ok := r.localCache[cacheKey]
-					if !ok {
-						r.localCache[cacheKey] = make([]ErrorDetails, 0)
+						// Lock the cache before updating
+						r.cacheMutex.Lock()
+						_, ok := r.localCache[cacheKey]
+						if !ok {
+							r.localCache[cacheKey] = make([]ErrorDetails, 0)
+						}
+						r.log.Infof("Persisting error in local cache for: %s", cacheKey)
+						// overwrite the errors - if errors are gone, we should update the local cache to empty
+						// max 10 files for a container to be checked by write flow
+						r.localCache[cacheKey] = apiResponse.Errors
+						r.cacheMutex.Unlock()
 					}
-					r.log.Infof("Persisting error in local cache for: %s", cacheKey)
-					// overwrite the errors - if errors are gone, we should update the local cache to empty
-					// max 10 files for a container to be checked by write flow
-					r.localCache[cacheKey] = apiResponse.Errors
-					r.cacheMutex.Unlock()
 				}
 			}
 		// If the context is done, return.

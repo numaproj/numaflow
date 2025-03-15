@@ -20,11 +20,8 @@ package service
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/prometheus/common/expfmt"
@@ -35,6 +32,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	rater "github.com/numaproj/numaflow/pkg/daemon/server/service/rater"
+	runtimePkg "github.com/numaproj/numaflow/pkg/daemon/server/service/runtime"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -47,21 +45,6 @@ type metricsHttpClient interface {
 	Get(url string) (*http.Response, error)
 }
 
-type PodReplica string
-
-type RuntimeErrorApiResponse struct {
-	ErrMssg string         `json:"err_mssg"`
-	Errors  []ErrorDetails `json:"errors"`
-}
-
-type ErrorDetails struct {
-	Container string `json:"container_name"`
-	Timestamp string `json:"timestamp"`
-	Code      string `json:"code"`
-	Message   string `json:"message"`
-	Details   string `json:"details"`
-}
-
 // PipelineMetadataQuery has the metadata required for the pipeline queries
 type PipelineMetadataQuery struct {
 	daemon.UnimplementedDaemonServiceServer
@@ -70,9 +53,8 @@ type PipelineMetadataQuery struct {
 	httpClient        metricsHttpClient
 	watermarkFetchers map[v1alpha1.Edge][]fetch.HeadFetcher
 	rater             rater.Ratable
+	runtime           runtimePkg.PipelineRuntime
 	healthChecker     *HealthChecker
-	localCache        map[PodReplica][]ErrorDetails
-	cacheMutex        sync.Mutex
 }
 
 // NewPipelineMetadataQuery returns a new instance of pipelineMetadataQuery
@@ -80,7 +62,8 @@ func NewPipelineMetadataQuery(
 	isbSvcClient isbsvc.ISBService,
 	pipeline *v1alpha1.Pipeline,
 	wmFetchers map[v1alpha1.Edge][]fetch.HeadFetcher,
-	rater rater.Ratable) (*PipelineMetadataQuery, error) {
+	rater rater.Ratable,
+	runtime runtimePkg.PipelineRuntime) (*PipelineMetadataQuery, error) {
 	ps := PipelineMetadataQuery{
 		isbSvcClient: isbSvcClient,
 		pipeline:     pipeline,
@@ -93,7 +76,7 @@ func NewPipelineMetadataQuery(
 		watermarkFetchers: wmFetchers,
 		rater:             rater,
 		healthChecker:     NewHealthChecker(pipeline, isbSvcClient),
-		localCache:        make(map[PodReplica][]ErrorDetails),
+		runtime:           runtime,
 	}
 	return &ps, nil
 }
@@ -237,93 +220,6 @@ func (ps *PipelineMetadataQuery) getPending(ctx context.Context, req *daemon.Get
 		}
 	}
 	return totalPendingMap
-}
-
-// PersistRuntimeErrors persists the runtime errors MonoVertex using the persistRuntimeErrors function
-func (ps *PipelineMetadataQuery) PersistRuntimeErrors(ctx context.Context) {
-	ps.persistRuntimeErrors(ctx)
-}
-
-// persistRuntimeErrors updates the local cache with the runtime errors
-func (ps *PipelineMetadataQuery) persistRuntimeErrors(ctx context.Context) {
-	log := logging.FromContext(ctx)
-	vtxNamespace := ps.pipeline.Namespace
-	runtimeErrorsPath := "runtime/errors"
-
-	runtimeErrorsTimeStep := 60 * time.Second
-	ticker := time.NewTicker(runtimeErrorsTimeStep)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			for _, vtx := range ps.pipeline.Spec.Vertices {
-				vertexName := fmt.Sprintf("%s-%s", ps.pipeline.Name, vtx.Name)
-
-				vertex := &v1alpha1.Vertex{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: vertexName,
-					},
-				}
-
-				headlessServiceName := vertex.GetHeadlessServiceName()
-				abstractVertex := ps.pipeline.GetVertex(vtx.Name)
-				var replicas int
-				// TODO(fix): use active pods logic
-				if abstractVertex.IsReduceUDF() {
-					replicas = abstractVertex.GetPartitionCount()
-				} else {
-					replicas = vertex.CalculateReplicas()
-				}
-
-				for i := 0; i <= replicas; i++ {
-					// Get the headless service name
-					// We can query the metrics endpoint of the (i)th pod to obtain this value.
-					// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc:1234/runtime/errors
-					url := fmt.Sprintf("https://%s-%v.%s.%s.svc:%v/%s", vertexName, i, headlessServiceName, vtxNamespace, v1alpha1.VertexMonitorPort, runtimeErrorsPath)
-
-					if res, err := ps.httpClient.Get(url); err != nil {
-						log.Errorw("Error reading the runtime errors endpoint: %f", err.Error())
-						continue
-					} else {
-
-						// Read the response body
-						body, err := io.ReadAll(res.Body)
-						if err != nil {
-							log.Errorf("Error reading response body from %s: %v", url, err)
-							continue
-						}
-
-						// Parse the response body into runtime api response
-						var apiResponse RuntimeErrorApiResponse
-						if err := json.Unmarshal(body, &apiResponse); err != nil {
-							log.Errorf("Error decoding runtime error response from %s: %v", url, err)
-							continue
-						}
-
-						if apiResponse.ErrMssg != "" {
-							continue
-						}
-
-						cacheKey := PodReplica(fmt.Sprintf("%s-%v", vertexName, i))
-
-						// Lock the cache before updating
-						ps.cacheMutex.Lock()
-						_, ok := ps.localCache[cacheKey]
-						if !ok {
-							ps.localCache[cacheKey] = make([]ErrorDetails, 0)
-						}
-						log.Infof("Persisting error in local cache for: %s", cacheKey)
-						//overwrite the errors - max 10 files for a container to be checked by write flow
-						ps.localCache[cacheKey] = apiResponse.Errors
-						ps.cacheMutex.Unlock()
-					}
-				}
-			}
-		// If the context is done, return.
-		case <-ctx.Done():
-			return
-		}
-	}
 }
 
 func (ps *PipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *daemon.GetPipelineStatusRequest) (*daemon.GetPipelineStatusResponse, error) {
