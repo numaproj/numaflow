@@ -22084,15 +22084,11 @@
       "description": "ServingStore defines information of a Serving Store used in a pipeline",
       "type": "object",
       "required": [
-        "name",
         "container"
       ],
       "properties": {
         "container": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Container"
-        },
-        "name": {
-          "type": "string"
         }
       }
     },

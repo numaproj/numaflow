@@ -5121,20 +5121,13 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingStore(ref common.ReferenceCallback
 				Description: "ServingStore defines information of a Serving Store used in a pipeline",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"name": {
-						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
-						},
-					},
 					"container": {
 						SchemaProps: spec.SchemaProps{
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container"),
 						},
 					},
 				},
-				Required: []string{"name", "container"},
+				Required: []string{"container"},
 			},
 		},
 		Dependencies: []string{

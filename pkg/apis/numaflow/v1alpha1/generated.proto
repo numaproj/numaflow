@@ -1637,9 +1637,7 @@ message ServingSpec {
 
 // ServingStore defines information of a Serving Store used in a pipeline
 message ServingStore {
-  optional string name = 1;
-
-  optional Container container = 2;
+  optional Container container = 1;
 }
 
 // SessionWindow describes a session window

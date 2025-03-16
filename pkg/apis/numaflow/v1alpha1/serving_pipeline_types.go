@@ -84,6 +84,11 @@ type ServingSpec struct {
 	ServingStore *ServingStore `json:"store,omitempty" protobuf:"bytes,5,rep,name=store"`
 }
 
+// ServingStore defines information of a Serving Store used in a pipeline
+type ServingStore struct {
+	Container *Container `json:"container" protobuf:"bytes,1,opt,name=container"`
+}
+
 type ServingPipelineStatus struct {
 	Status `json:",inline" protobuf:"bytes,1,opt,name=status"`
 	// +optional
@@ -345,7 +350,21 @@ func (sp ServingPipeline) getStoreSidecarContainerSpec(req GetServingPipelineRes
 		if x.Container.ImagePullPolicy != nil {
 			cb = cb.imagePullPolicy(*x.Container.ImagePullPolicy)
 		}
-		return []corev1.Container{cb.build()}
+		container := cb.build()
+		container.LivenessProbe = &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Path:   "/sidecar-livez",
+					Port:   intstr.FromInt32(VertexMetricsPort),
+					Scheme: corev1.URISchemeHTTPS,
+				},
+			},
+			InitialDelaySeconds: GetProbeInitialDelaySecondsOr(x.Container.LivenessProbe, UDContainerLivezInitialDelaySeconds),
+			PeriodSeconds:       GetProbePeriodSecondsOr(x.Container.LivenessProbe, UDContainerLivezPeriodSeconds),
+			TimeoutSeconds:      GetProbeTimeoutSecondsOr(x.Container.LivenessProbe, UDContainerLivezTimeoutSeconds),
+			FailureThreshold:    GetProbeFailureThresholdOr(x.Container.LivenessProbe, UDContainerLivezFailureThreshold),
+		}
+		return []corev1.Container{container}
 	}
 	return nil
 }

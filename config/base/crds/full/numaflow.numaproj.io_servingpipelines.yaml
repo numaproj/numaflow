@@ -11975,11 +11975,8 @@ spec:
                               type: object
                             type: array
                         type: object
-                      name:
-                        type: string
                     required:
                     - container
-                    - name
                     type: object
                 required:
                 - msgIDHeaderKey

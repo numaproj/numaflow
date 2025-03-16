@@ -10596,19 +10596,6 @@ Description
 
 <td>
 
-<code>name</code></br> <em> string </em>
-</td>
-
-<td>
-
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
 <code>container</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Container"> Container </a> </em>
 </td>

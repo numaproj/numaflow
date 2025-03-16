@@ -22099,13 +22099,9 @@
       "properties": {
         "container": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Container"
-        },
-        "name": {
-          "type": "string"
         }
       },
       "required": [
-        "name",
         "container"
       ],
       "type": "object"
