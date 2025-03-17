@@ -65,9 +65,7 @@ mod serving_store;
 /// [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 mod watermark;
 
-/// Runtime to persist the runtime information of the pod (e.g. application errors)
-mod runtime;
-use crate::runtime::Runtime;
+use numaflow_monitor::runtime::Runtime;
 
 pub async fn run() -> Result<()> {
     let cln_token = CancellationToken::new();
@@ -91,9 +89,7 @@ pub async fn run() -> Result<()> {
             if let Err(e) = monovertex::start_forwarder(cln_token, &config).await {
                 if let Error::Grpc(e) = e {
                     error!(error=?e, "Monovertex failed because of UDF failure");
-                    runtime
-                        .persist_application_error(e)
-                        .expect("Failed to persist the application error");
+                    runtime.persist_application_error(e)
                 } else {
                     error!(?e, "Error running monovertex");
                 }
@@ -108,9 +104,7 @@ pub async fn run() -> Result<()> {
             if let Err(e) = pipeline::start_forwarder(cln_token, config).await {
                 if let Error::Grpc(e) = e {
                     error!(error=?e, "Pipeline failed because of UDF failure");
-                    runtime
-                        .persist_application_error(e)
-                        .expect("Failed to persist the application error");
+                    runtime.persist_application_error(e)
                 } else {
                     error!(?e, "Error running pipeline");
                 }

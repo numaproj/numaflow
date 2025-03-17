@@ -1,7 +1,12 @@
 mod app;
 mod config;
 mod error;
+/// Runtime to persist the runtime information of the pod (e.g. application errors)
+// FIXME: merge runtime and runtime errors, keep one orchestrator to put and get the errors from the filesystem
+// pass that orchestrator using axum state to the handler
+pub mod runtime;
 mod runtime_errors;
+
 use crate::app::start_main_server;
 use crate::config::generate_certs;
 use crate::config::server::MonitorServerConfig;

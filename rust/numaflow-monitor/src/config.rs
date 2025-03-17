@@ -26,22 +26,16 @@ pub(crate) mod server {
 }
 
 pub(crate) mod info {
-    /*
-        add platform errors/ other info path accordingly
-    */
-    // const DEFAULT_RUNTIME_INFO_MOUNT_PATH: &str = "/var/numaflow/runtime";
     const DEFAULT_RUNTIME_APPLICATION_ERRORS_PATH: &str =
         "/var/numaflow/runtime/application-errors";
 
     pub(crate) struct RuntimeInfoConfig {
         pub app_error_path: String,
-        //pub runtime_info_path: String,
     }
     impl Default for RuntimeInfoConfig {
         fn default() -> Self {
             Self {
                 app_error_path: DEFAULT_RUNTIME_APPLICATION_ERRORS_PATH.to_string(),
-                // runtime_info_path: DEFAULT_RUNTIME_INFO_MOUNT_PATH.to_string(),
             }
         }
     }

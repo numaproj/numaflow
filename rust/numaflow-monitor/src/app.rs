@@ -2,7 +2,6 @@ use axum::{routing::get, Router};
 use axum_server::{tls_rustls::RustlsConfig, Handle};
 use std::{net::SocketAddr, time::Duration};
 use tokio::signal;
-use tower_http::trace::TraceLayer;
 use tracing::info;
 
 use crate::{error::Error, runtime_errors::handle_runtime_app_errors, MonitorServerConfig};
@@ -31,9 +30,7 @@ pub(crate) async fn start_main_server(
 }
 
 fn monitor_router() -> Router {
-    Router::new()
-        .route("/runtime/errors", get(handle_runtime_app_errors))
-        .route("/runtime/platform-errors", get(|| async { "--TODO--" }))
+    Router::new().route("/runtime/errors", get(handle_runtime_app_errors))
 }
 
 async fn graceful_shutdown(handle: Handle, server_config: MonitorServerConfig) {
@@ -57,7 +54,7 @@ async fn graceful_shutdown(handle: Handle, server_config: MonitorServerConfig) {
 
     info!("sending graceful shutdown signal");
 
-    // Signal the server to shutdown using Handle.
+    // Signal the server to shut down using Handle.
     handle.graceful_shutdown(Some(Duration::from_secs(
         server_config.graceful_shutdown_duration,
     )));

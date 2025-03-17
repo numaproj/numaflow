@@ -1,6 +1,6 @@
+use crate::runtime::RuntimeErrorEntry;
 use axum::{response::IntoResponse, Json};
 use http::StatusCode;
-use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 use tracing::error;
 
@@ -8,20 +8,11 @@ use crate::{config::info::RuntimeInfoConfig, error::Error};
 
 #[derive(serde::Serialize)]
 struct ApiResponse {
-    err_mssg: Option<String>,
+    error_message: Option<String>,
     errors: Vec<RuntimeErrorEntry>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct RuntimeErrorEntry {
-    pub container_name: String,
-    pub timestamp: String,
-    pub code: String,
-    pub message: String,
-    pub details: String,
-}
-
-/*
+/**
 File Structure for application-errors
 
 Root: /var/numaflow/runtime/
@@ -45,7 +36,7 @@ pub async fn handle_runtime_app_errors() -> impl IntoResponse {
         return (
             StatusCode::NOT_FOUND,
             Json(ApiResponse {
-                err_mssg: Some(err.to_string()),
+                error_message: Some(err.to_string()),
                 errors,
             }),
         )
@@ -58,7 +49,7 @@ pub async fn handle_runtime_app_errors() -> impl IntoResponse {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ApiResponse {
-                    err_mssg: Some(err.to_string()),
+                    error_message: Some(err.to_string()),
                     errors,
                 }),
             )
@@ -101,7 +92,7 @@ pub async fn handle_runtime_app_errors() -> impl IntoResponse {
     (
         StatusCode::OK,
         Json(ApiResponse {
-            err_mssg: None,
+            error_message: None,
             errors,
         }),
     )
@@ -125,7 +116,7 @@ fn process_file_entry(
         Ok(content) => match serde_json::from_slice::<RuntimeErrorEntry>(&content) {
             Ok(payload) => {
                 errors.push(RuntimeErrorEntry {
-                    container_name: payload.container_name,
+                    container: payload.container.to_string(),
                     timestamp: payload.timestamp,
                     code: payload.code,
                     message: payload.message,
