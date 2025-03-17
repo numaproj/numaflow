@@ -1,7 +1,7 @@
 package v1alpha1
 
 // ServingSource is the HTTP endpoint for Numaflow.
-// TODO(spl): clean up
+// TODO(spr): clean up
 type ServingSource struct {
 	// +optional
 	Auth *Authorization `json:"auth" protobuf:"bytes,1,opt,name=auth"`

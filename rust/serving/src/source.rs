@@ -16,6 +16,7 @@ use crate::config::{StoreType, DEFAULT_ID_HEADER};
 use crate::{Error, Result};
 use crate::{Settings, DEFAULT_CALLBACK_URL_HEADER_KEY};
 
+// FIXME:(spr) we don't need this, we will be using jetstream source for serving pipeline
 /// [Message] with a oneshot for notifying when the message has been completed processed.
 pub(crate) struct MessageWrapper {
     // TODO: this might be more that saving to ISB.
@@ -84,6 +85,7 @@ impl ServingSourceActor {
         );
 
         // Create a redis store to store the callbacks and the custom responses
+        // FIXME:(spr) we still need the store implementation
         match &settings.store_type {
             StoreType::Nats => {
                 let nats_store = JetStreamDataStore::new(js_context, &settings.js_store).await?;

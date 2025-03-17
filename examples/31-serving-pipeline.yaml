@@ -10,8 +10,7 @@ spec:
     vertices:
       - name: in
         source:
-          serving:
-            msgIDHeaderKey: "X-Numaflow-Id"
+          serving: {}
       - name: cat
         udf:
           builtin:

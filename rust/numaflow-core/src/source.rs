@@ -93,7 +93,9 @@ pub(crate) enum SourceType {
     #[allow(clippy::upper_case_acronyms)]
     #[allow(dead_code)] // TODO(SQS): remove it when integrated with controller
     SQS(SQSSource),
+    // TODO:(spr) we won't be having serving source, serving will always be a deployment
     Serving(ServingSource),
+    //TODO:(spr) Add jetstream source, jetstream source will be used for serving
 }
 
 enum ActorMessage {
