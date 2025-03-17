@@ -4,6 +4,7 @@ import Tab from "@mui/material/Tab";
 import Tabs from "@mui/material/Tabs";
 import { Metrics } from "./partials/Metrics";
 import { PodLogs } from "./partials/PodLogs";
+import { Errors } from "./partials/Errors";
 import { PodDetailProps } from "../../../../../../../../../../../types/declarations/pods";
 import { AppContextProps } from "../../../../../../../../../../../types/declarations/app";
 import { AppContext } from "../../../../../../../../../../../App";
@@ -22,7 +23,8 @@ const headerSx = {
 };
 
 const LOGS_TAB_INDEX = 0;
-const METRICS_TAB_INDEX = 1;
+const ERRORS_TAB_INDEX = 1;
+const METRICS_TAB_INDEX = 2;
 
 export function PodDetail({
   namespaceId,
@@ -30,7 +32,7 @@ export function PodDetail({
   type,
   containerName,
   pod,
-  vertexId
+  vertexId,
 }: PodDetailProps) {
   if (!pod) return null;
 
@@ -65,6 +67,15 @@ export function PodDetail({
           label="Logs"
           data-testid="logs-tab"
         />
+        <Tab
+          className={
+            podsViewTab === ERRORS_TAB_INDEX
+              ? "vertex-details-tab-selected"
+              : "vertex-details-tab"
+          }
+          label="Errors"
+          data-testid="errors-tab"
+        />
         {!disableMetricsCharts && (
           <Tab
             className={
@@ -98,6 +109,22 @@ export function PodDetail({
                 type={type}
               />
             </Box>
+          </Box>
+        )}
+      </div>
+      <div
+        className="vertex-details-tab-panel"
+        role="tabpanel"
+        hidden={podsViewTab !== ERRORS_TAB_INDEX}
+      >
+        {podsViewTab === ERRORS_TAB_INDEX && (
+          <Box
+            sx={{
+              p: "1.6rem",
+              height: "calc(100% - 3rem)",
+            }}
+          >
+            <Errors containers={pod?.containers} />
           </Box>
         )}
       </div>
