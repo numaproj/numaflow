@@ -52,7 +52,7 @@ message AccumulatorRequest {
     enum Event {
       OPEN = 0;
       CLOSE = 1;
-      APPEND = 4;
+      APPEND = 2;
     }
 
     Event event = 1;
@@ -60,8 +60,10 @@ message AccumulatorRequest {
   }
 
   Payload payload = 1;
-  WindowOperation operation = 2;
-  optional Handshake handshake = 3;
+  // This ID is used to uniquely identify a map request
+  string id = 2;
+  WindowOperation operation = 3;
+  optional Handshake handshake = 4;
 }
 
 
@@ -79,9 +81,14 @@ message Window {
  */
 message AccumulatorResponse {
   Payload payload = 1;
+  // This ID is used to uniquely identify a map request
+  string id = 2;
   // window represents a window to which the result belongs.
-  Window window = 2;
-  optional Handshake handshake = 3;
+  Window window = 3;
+  repeated string tags = 4;
+  optional Handshake handshake = 5;
+  // EOF represents the end of the response for a window.
+  bool EOF = 6;
 }
 
 

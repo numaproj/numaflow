@@ -81,6 +81,19 @@ waitUntilReady:
 	return c, nil
 }
 
+// NewFromClient creates a new client object from a grpc client. This is used for testing.
+func NewFromClient(ctx context.Context, c accumulatorpb.AccumulatorClient) (Client, error) {
+	stream, err := c.AccumulateFn(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &client{
+		grpcClt: c,
+		stream:  stream,
+	}, nil
+}
+
 // CloseConn closes the grpc client connection.
 func (c *client) CloseConn(ctx context.Context) error {
 	return c.conn.Close()

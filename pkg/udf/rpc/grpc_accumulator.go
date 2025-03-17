@@ -33,28 +33,33 @@ import (
 	"github.com/numaproj/numaflow/pkg/window"
 )
 
-// GRPCBasedGlobalReduce is a reduce applier that uses gRPC client to invoke the reduce UDF. It implements the applier.ReduceApplier interface.
-type GRPCBasedGlobalReduce struct {
+// GRPCBasedAccumulator is a reduce applier that uses gRPC client to invoke the accumulator UDF. It implements the applier.ReduceApplier interface.
+type GRPCBasedAccumulator struct {
 	vertexName string
 	client     accumulator.Client
+	resultsMap map[string]int
 }
 
-func NewGRPCBasedGlobalReduce(vertexName string, client accumulator.Client) *GRPCBasedGlobalReduce {
-	return &GRPCBasedGlobalReduce{vertexName: vertexName, client: client}
+func NewGRPCBasedAccumulator(vertexName string, client accumulator.Client) *GRPCBasedAccumulator {
+	return &GRPCBasedAccumulator{
+		vertexName: vertexName,
+		client:     client,
+		resultsMap: make(map[string]int),
+	}
 }
 
 // IsHealthy checks if the map udf is healthy.
-func (u *GRPCBasedGlobalReduce) IsHealthy(ctx context.Context) error {
+func (u *GRPCBasedAccumulator) IsHealthy(ctx context.Context) error {
 	return u.WaitUntilReady(ctx)
 }
 
 // CloseConn closes the gRPC client connection.
-func (u *GRPCBasedGlobalReduce) CloseConn(ctx context.Context) error {
+func (u *GRPCBasedAccumulator) CloseConn(ctx context.Context) error {
 	return u.client.CloseConn(ctx)
 }
 
 // WaitUntilReady waits until the reduce udf is connected.
-func (u *GRPCBasedGlobalReduce) WaitUntilReady(ctx context.Context) error {
+func (u *GRPCBasedAccumulator) WaitUntilReady(ctx context.Context) error {
 	log := logging.FromContext(ctx)
 	for {
 		select {
@@ -72,7 +77,7 @@ func (u *GRPCBasedGlobalReduce) WaitUntilReady(ctx context.Context) error {
 }
 
 // ApplyReduce accepts a channel of timedWindowRequest and returns the result in a channel of timedWindowResponse
-func (u *GRPCBasedGlobalReduce) ApplyReduce(ctx context.Context, _ *partition.ID, requestsStream <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
+func (u *GRPCBasedAccumulator) ApplyReduce(ctx context.Context, _ *partition.ID, requestsStream <-chan *window.TimedWindowRequest) (<-chan *window.TimedWindowResponse, <-chan error) {
 	var (
 		errCh      = make(chan error)
 		responseCh = make(chan *window.TimedWindowResponse)
@@ -87,20 +92,22 @@ func (u *GRPCBasedGlobalReduce) ApplyReduce(ctx context.Context, _ *partition.ID
 			select {
 			case result, ok := <-resultCh:
 				if !ok || result == nil {
+					errCh = nil
 					// if the resultCh channel is closed, close the responseCh and errCh channels and return
 					close(responseCh)
 					return
 				}
-				msgId := isb.MessageID{
-					VertexName: u.vertexName,
-					Offset:     fmt.Sprintf("%d", time.Now().UnixNano()),
-					Index:      int32(0),
+
+				if result.GetEOF() {
+					continue
 				}
-				responseCh <- parseGlobalReduceResponse(result, msgId)
+				// generate the unique Id for the window to keep track of the response count for the window using the resultsMap
+				responseCh <- u.parseGlobalReduceResponse(result)
 			case err := <-reduceErrCh:
 				// ctx.Done() event will be handled by the AsyncReduceFn method
 				// so we don't need a separate case for ctx.Done() here
 				if errors.Is(err, ctx.Err()) {
+					errCh <- err
 					return
 				}
 				if err != nil {
@@ -182,16 +189,25 @@ func createGlobalReduceRequest(windowRequest *window.TimedWindowRequest) *accumu
 			Event:   windowOp,
 			Windows: windows,
 		},
+		Id: windowRequest.ReadMessage.ID.String(),
 	}
 	return d
 }
 
-func parseGlobalReduceResponse(response *accumulatorpb.AccumulatorResponse, msgId isb.MessageID) *window.TimedWindowResponse {
+func (u *GRPCBasedAccumulator) parseGlobalReduceResponse(response *accumulatorpb.AccumulatorResponse) *window.TimedWindowResponse {
+	start := response.GetWindow().GetStart().AsTime()
+	end := response.GetWindow().GetEnd().AsTime()
+	slot := response.GetWindow().GetSlot()
+
 	result := response.GetPayload()
 	taggedMessage := &isb.WriteMessage{
 		Message: isb.Message{
 			Header: isb.Header{
-				ID: msgId,
+				ID: isb.MessageID{
+					VertexName: u.vertexName,
+					Offset:     response.GetId(),
+					Index:      0,
+				},
 				MessageInfo: isb.MessageInfo{
 					EventTime: result.GetEventTime().AsTime(),
 					IsLate:    false,
@@ -206,6 +222,18 @@ func parseGlobalReduceResponse(response *accumulatorpb.AccumulatorResponse, msgI
 
 	return &window.TimedWindowResponse{
 		WriteMessage: taggedMessage,
-		Window:       window.NewUnalignedTimedWindow(response.GetWindow().GetStart().AsTime(), response.GetWindow().GetEnd().AsTime(), "slot-0", result.GetKeys()),
+		Window:       window.NewUnalignedTimedWindow(start, end, slot, result.GetKeys()),
+	}
+}
+
+// updateMessageIDCount updates the message count in resultsMap and returns the updated message ID
+func (u *GRPCBasedAccumulator) updateAndGetMsgId(baseMsgId string) isb.MessageID {
+	val := u.resultsMap[baseMsgId]
+	val++
+	u.resultsMap[baseMsgId] = val
+	return isb.MessageID{
+		VertexName: u.vertexName,
+		Offset:     baseMsgId,
+		Index:      int32(val),
 	}
 }

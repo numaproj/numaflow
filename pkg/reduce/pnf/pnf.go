@@ -81,8 +81,8 @@ func NewProcessAndForward(ctx context.Context,
 
 	// apply the options
 	dOpts := &options{
-		batchSize:     dfv1.DefaultPnfBatchSize,
-		flushDuration: dfv1.DefaultPnfFlushDuration,
+		batchSize:     dfv1.DefaultReadBatchSize,
+		flushDuration: dfv1.DefaultReadTimeout,
 	}
 	for _, opt := range opts {
 		if err := opt(dOpts); err != nil {
@@ -209,14 +209,11 @@ forwardLoop:
 				flush = true
 			}
 
-			// in accumulator strategy we will never have a eof message, but the output is ordered by event time
-			// so if we see a window that is older than the last seen window, we can clear the state till the last
-			// seen window.
 			if pf.windower.Strategy() == window.Accumulator {
 				winKey := strings.Join(response.WriteMessage.Keys, dfv1.KeysDelimitter)
 				if win, ok := pf.lastSeenWindow[winKey]; ok {
 					if win.EndTime().Before(response.Window.EndTime()) {
-						if err := pf.handleEOFWindow(ctx, win); err != nil {
+						if err := pf.handleEOFWindow(ctx, response.Window); err != nil {
 							return
 						}
 						pf.lastSeenWindow[winKey] = response.Window
@@ -499,7 +496,7 @@ func (pf *ProcessAndForward) publishWM(ctx context.Context) {
 		activeWatermarkBuffers[toVertexName] = make([]bool, len(bufferOffsets))
 		if publisher, ok := pf.watermarkPublishers[toVertexName]; ok {
 			for index, offsets := range bufferOffsets {
-				if len(offsets) > 0 {
+				if len(offsets) > 0 && offsets[len(offsets)-1] != nil {
 					publisher.PublishWatermark(wm, offsets[len(offsets)-1], int32(index))
 					activeWatermarkBuffers[toVertexName][index] = true
 					// reset because the toBuffer partition is not idling
