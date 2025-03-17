@@ -13,4 +13,3 @@ spec:
     # clusters, including Kind, Minikube, K3s, etc, it's needed to run production workloads.
     persistence:
       volumeSize: 3Gi
-    #tls: true

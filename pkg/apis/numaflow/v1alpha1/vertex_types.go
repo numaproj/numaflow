@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -231,7 +230,7 @@ func (v Vertex) simpleCopy() Vertex {
 
 func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	vertexCopy := v.simpleCopy()
-	v.Spec.Scale = Scale{LookbackSeconds: ptr.To[uint32](uint32(v.Spec.Scale.GetLookbackSeconds()))}
+	v.Spec.Scale = Scale{LookbackSeconds: ptr.To(uint32(v.Spec.Scale.GetLookbackSeconds()))}
 	vertexBytes, err := json.Marshal(vertexCopy)
 	if err != nil {
 		return nil, errors.New("failed to marshal vertex spec")
@@ -241,15 +240,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		{Name: EnvVertexObject, Value: encodedVertexSpec},
 	}
 
-	// TODO(spl): clean up
-	commonEnvVars := v.commonEnvs()
-	for _, vtx := range req.PipelineSpec.Vertices {
-		if vtx.IsASource() && vtx.Source.Serving != nil {
-			commonEnvVars = append(commonEnvVars, corev1.EnvVar{Name: EnvCallbackEnabled, Value: "true"})
-		}
-	}
-
-	envVars = append(envVars, commonEnvVars...)
+	envVars = append(envVars, v.commonEnvs()...)
 	envVars = append(envVars, req.Env...)
 
 	varVolumeName := "var-run-numaflow"
@@ -374,36 +365,6 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		initContainers = append(initContainers, sidecarContainers...)
 	} else {
 		containers = append(containers, sidecarContainers...)
-	}
-
-	// TODO(spl): clean up
-	if v.IsASource() && v.Spec.Source.Serving != nil {
-		// Create a SimplifiedPipelineSpec and populate it with the vertex names and edges
-		simplifiedPipelineSpec := PipelineSpec{
-			Vertices: req.PipelineSpec.Vertices,
-			Edges:    req.PipelineSpec.Edges,
-		}
-
-		pipelineSpecBytes, err := json.Marshal(simplifiedPipelineSpec)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal pipeline spec, error: %w", err)
-		}
-		encodedPipelineSpec := base64.StdEncoding.EncodeToString(pipelineSpecBytes)
-
-		containers[0].Env = append(
-			containers[0].Env,
-			// set the serving source stream name in the environment because the numa container will be reading from it
-			corev1.EnvVar{Name: EnvServingMinPipelineSpec, Value: encodedPipelineSpec},
-			corev1.EnvVar{Name: EnvServingPort, Value: strconv.Itoa(VertexHTTPSPort)},
-			corev1.EnvVar{
-				Name: EnvServingHostIP,
-				ValueFrom: &corev1.EnvVarSource{
-					FieldRef: &corev1.ObjectFieldSelector{
-						FieldPath: "status.podIP",
-					},
-				},
-			},
-		)
 	}
 
 	spec := &corev1.PodSpec{
