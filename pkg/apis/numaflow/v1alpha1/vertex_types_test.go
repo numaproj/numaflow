@@ -234,8 +234,8 @@ func TestGetPodSpec(t *testing.T) {
 			PriorityClassName:            "pname",
 			Priority:                     ptr.To[int32](111),
 			ServiceAccountName:           "sa",
-			RuntimeClassName:             ptr.To[string]("run"),
-			AutomountServiceAccountToken: ptr.To[bool](true),
+			RuntimeClassName:             ptr.To("run"),
+			AutomountServiceAccountToken: ptr.To(true),
 			DNSPolicy:                    corev1.DNSClusterFirstWithHostNet,
 			DNSConfig:                    &corev1.PodDNSConfig{Nameservers: []string{"aaa.aaa"}},
 		}
