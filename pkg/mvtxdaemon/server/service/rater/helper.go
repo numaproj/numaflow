@@ -30,7 +30,7 @@ const (
 	// available pod data, a negative min is returned to indicate this.
 	rateNotAvailable = float64(math.MinInt)
 	// pendingNotAvailable default value returned when Pending not available
-	pendingNotAvailable = -1
+	pendingNotAvailable = int64(-1)
 )
 
 // UpdateCount updates the count for a given timestamp in the queue.
@@ -85,18 +85,18 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 func CalculatePending(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64) int64 {
 	counts := q.Items()
 	if len(counts) <= 1 {
-		return pendingNotAvailable //TODO: Check what should be the behavior when pending isnt available
+		return pendingNotAvailable
 	}
 	startIndex := findStartIndex(lookbackSeconds, counts)
 	// we consider the last but one element as the end index because the last element might be incomplete
 	// we can be sure that the last but one element in the queue is complete.
-	endIndex := len(counts) - 2
+	endIndex := len(counts) - 1
 	if startIndex == indexNotFound {
 		return pendingNotAvailable
 	}
 	delta := int64(0)
 	num := int64(0)
-	for i := startIndex; i < endIndex; i++ {
+	for i := startIndex; i <= endIndex; i++ {
 		currentPending := counts[i].PodCountSnapshot()
 		for _, pendingCount := range currentPending {
 			delta += int64(pendingCount)

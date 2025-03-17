@@ -38,8 +38,8 @@ import (
 
 const CountWindow = time.Second * 10
 const monoVtxReadMetricName = "monovtx_read_total"
-const monoVtxPendingRawMetric = "monovtx_pending_total" // TODO: Internal metric
-const monoVtxPendingMetric = "monovtx_pending"          // TODO: Check what we expose today
+const monoVtxPendingRawMetric = "monovtx_pending_total" // TODO: Change this metric once mvtx changes are done
+const monoVtxPendingMetric = "monovtx_pending"
 
 // MaxLookback is the upper limit beyond which lookback value is not increased
 // by the dynamic algorithm. This is chosen as a conservative limit
@@ -156,6 +156,7 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 		return err
 	}
 	var podReadCount, podPendingCount *PodMetricsCount
+	now := time.Now().Add(CountWindow).Truncate(CountWindow).Unix()
 
 	if !r.podTracker.IsActive(key) {
 		log.Debugf("Pod %s does not exist, updating it with nil...", pInfo.podName)
@@ -168,18 +169,17 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 			if podReadCount == nil {
 				log.Debugf("Failed retrieving read counts for pod %s", pInfo.podName)
 			}
-			podPendingCount = r.getPodPendingCounts(pInfo.podName, podMetrics)
-			if podPendingCount == nil {
-				log.Debugf("Failed retrieving pending counts for pod %s", pInfo.podName)
+			// Pending is only fetched from replica 0. Only maintain that in the timeline
+			if pInfo.replica == 0 {
+				podPendingCount = r.getPodPendingCounts(pInfo.podName, podMetrics)
+				if podPendingCount == nil {
+					log.Debugf("Failed retrieving pending counts for pod %s", pInfo.podName)
+				}
+				UpdateCount(r.timestampedPendingCount, now, podPendingCount)
 			}
 		}
 	}
-	now := time.Now().Add(CountWindow).Truncate(CountWindow).Unix()
 	UpdateCount(r.timestampedPodCounts, now, podReadCount)
-	// Pending is only fetched from replica 0. Only maintain that in the timeline
-	if pInfo.replica == 0 {
-		UpdateCount(r.timestampedPendingCount, now, podPendingCount)
-	}
 	return nil
 }
 
@@ -224,14 +224,21 @@ func (r *Rater) getPodReadCounts(podName string, result map[string]*dto.MetricFa
 
 // getPodPendingCounts returns the total number of pending messages for a pod
 func (r *Rater) getPodPendingCounts(podName string, result map[string]*dto.MetricFamily) *PodMetricsCount {
-	if value, ok := result[monoVtxPendingRawMetric]; ok && value != nil && len(value.GetMetric()) > 0 {
+	// TODO: Change this to use raw count of pending monoVtxPendingRawMetric. Currently Using the 1m avg metric from mvtx.
+	if value, ok := result[monoVtxPendingMetric]; ok && value != nil && len(value.GetMetric()) > 0 {
 		metricsList := value.GetMetric()
-		podPendingCount := &PodMetricsCount{podName, metricsList[0].Untyped.GetValue()} //TODO: Check if this is untyped
-		return podPendingCount
+		for _, metric := range metricsList {
+			labels := metric.GetLabel()
+			for _, label := range labels {
+				if label.GetName() == metrics.LabelPeriod && label.GetValue() == "1m" {
+					return &PodMetricsCount{podName, metric.Gauge.GetValue()}
+				}
+			}
+		}
 	} else {
-		r.log.Infof("[Pod name %s]: Metric %q is unavailable, the pod might haven't started processing data", podName, monoVtxPendingRawMetric)
-		return nil
+		r.log.Infof("[Pod name %s]: Metric %q is unavailable, the pod might haven't started processing data", podName, monoVtxPendingMetric)
 	}
+	return nil
 }
 
 // GetPending returns the pending count for the mono vertex
@@ -245,7 +252,7 @@ func (r *Rater) GetPending() map[string]*wrapperspb.Int64Value {
 		// Expose the metric for pending
 		metrics.MonoVertexPendingMessages.WithLabelValues(r.monoVertex.Name, n).Set(float64(pending))
 	}
-	r.log.Debugf("Got Pending for MonoVertex %s: %v", r.monoVertex.Name, result)
+	r.log.Infof("Got Pending for MonoVertex %s: %v", r.monoVertex.Name, result)
 	return result
 }
 
@@ -259,7 +266,7 @@ func (r *Rater) GetRates() map[string]*wrapperspb.DoubleValue {
 		rate := CalculateRate(r.timestampedPodCounts, i)
 		result[n] = wrapperspb.Double(rate)
 	}
-	r.log.Debugf("Got rates for MonoVertex %s: %v", r.monoVertex.Name, result)
+	r.log.Infof("Got rates for MonoVertex %s: %v", r.monoVertex.Name, result)
 	return result
 }
 

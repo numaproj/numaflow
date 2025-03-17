@@ -106,6 +106,45 @@ func TestUpdateCount(t *testing.T) {
 	})
 }
 
+func TestCalculatePending(t *testing.T) {
+	t.Run("givenCollectedTimeLessThanTwo_whenCalculateRate_thenReturnPendingNotAvailable", func(t *testing.T) {
+		q := sharedqueue.New[*TimestampedCounts](1800)
+		// no data
+		assert.Equal(t, pendingNotAvailable, CalculatePending(q, 10))
+
+		// only one data
+		now := time.Now()
+		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20)
+		tc1.Update(&PodMetricsCount{"pod0", 5.0})
+		q.Append(tc1)
+		assert.Equal(t, pendingNotAvailable, CalculatePending(q, 10))
+	})
+
+	t.Run("singlePod_givenCountIncreases_whenCalculatePending_thenReturnPending", func(t *testing.T) {
+		q := sharedqueue.New[*TimestampedCounts](1800)
+		now := time.Now()
+
+		tc1 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 20) //80
+		tc1.Update(&PodMetricsCount{"pod0", 3.0})
+		q.Append(tc1)
+		tc2 := NewTimestampedCounts(now.Truncate(CountWindow).Unix() - 10) //90
+		tc2.Update(&PodMetricsCount{"pod0", 20.0})
+		q.Append(tc2)
+		tc3 := NewTimestampedCounts(now.Truncate(CountWindow).Unix()) // 100
+		tc3.Update(&PodMetricsCount{"pod0", 10.0})
+		q.Append(tc3)
+
+		// no enough data collected within lookback seconds, expect rate 0
+		assert.Equal(t, pendingNotAvailable, CalculatePending(q, 5))
+		// no enough data collected within lookback seconds, expect rate 0
+		assert.Equal(t, int64(15), CalculatePending(q, 15))
+		// tc1 and tc2 are used to calculate the pending
+		assert.Equal(t, int64(11), CalculatePending(q, 25))
+		// tc1 and tc2 are used to calculate the pending
+		assert.Equal(t, int64(11), CalculatePending(q, 100))
+	})
+}
+
 func TestCalculateRate(t *testing.T) {
 	t.Run("givenCollectedTimeLessThanTwo_whenCalculateRate_thenReturnRateNotAvailable", func(t *testing.T) {
 		q := sharedqueue.New[*TimestampedCounts](1800)
