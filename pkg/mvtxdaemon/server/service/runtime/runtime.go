@@ -29,11 +29,11 @@ var _ MonoVtxRuntime = (*Runtime)(nil)
 type PodReplica string
 
 type RuntimeErrorApiResponse struct {
-	ErrMssg string         `json:"err_mssg"`
-	Errors  []ErrorDetails `json:"errors"`
+	ErrMssg string         `json:"error_message"`
+	Data    []ErrorDetails `json:"data"`
 }
 type ErrorDetails struct {
-	Container string `json:"container_name"`
+	Container string `json:"container"`
 	Timestamp string `json:"timestamp"`
 	Code      string `json:"code"`
 	Message   string `json:"message"`
@@ -138,7 +138,7 @@ func (r *Runtime) PersistRuntimeErrors(ctx context.Context) {
 					r.log.Infof("Persisting error in local cache for: %s", cacheKey)
 					// overwrite the errors - if errors are gone, we should update the local cache to empty
 					// max 10 files for a container to be checked by write flow
-					r.localCache[cacheKey] = apiResponse.Errors
+					r.localCache[cacheKey] = apiResponse.Data
 					r.cacheMutex.Unlock()
 				}
 			}
