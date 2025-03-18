@@ -217,6 +217,7 @@ jobs:
             idle-source-e2e,
             monovertex-e2e,
             builtin-source-e2e,
+            serving-e2e,
           ]
         include:
           - driver: redis
