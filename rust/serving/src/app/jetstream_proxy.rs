@@ -11,14 +11,13 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use serde::Deserialize;
 use serde_json::json;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::{Stream, StreamExt};
 use tracing::error;
 
-use super::Tid;
 use super::{orchestrator, store::datastore::DataStore, AppState};
+use super::{FetchQueryParams, Tid};
 use crate::app::response::{ApiError, ServeResponse};
 use crate::app::store::cbstore::CallbackStore;
 use crate::app::store::datastore::Error as StoreError;
@@ -57,17 +56,12 @@ pub(crate) async fn jetstream_proxy<
     Ok(router)
 }
 
-#[derive(Deserialize)]
-struct ServeQueryParams {
-    id: String,
-}
-
 async fn fetch<
     T: Send + Sync + Clone + DataStore + 'static,
     U: Send + Sync + Clone + CallbackStore + 'static,
 >(
     State(proxy_state): State<Arc<ProxyState<T, U>>>,
-    Query(ServeQueryParams { id }): Query<ServeQueryParams>,
+    Query(FetchQueryParams { id }): Query<FetchQueryParams>,
 ) -> Response {
     let pipeline_result = match proxy_state.orchestrator.clone().retrieve_saved(&id).await {
         Ok(result) => result,

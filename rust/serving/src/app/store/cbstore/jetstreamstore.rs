@@ -182,18 +182,19 @@ impl super::CallbackStore for JetStreamCallbackStore {
         let span = tracing::Span::current();
 
         let callback_watcher = async move {
-            // FIXME(FMEA): Handle errors from the watcher.
-            let mut event_count = 0;
+            let mut received_events = false;
             let mut attempts = 0;
-            while event_count == 0 && attempts < 5 {
+            while !received_events && attempts < 5 {
                 attempts += 1;
                 while let Some(watch_event) = watcher.next().await {
-                    event_count += 1;
+                    received_events = true;
                     let entry = match watch_event {
                         Ok(event) => event,
                         Err(e) => {
                             tracing::error!(?e, "Received error from Jetstream KV watcher");
-                            continue;
+                            // Recreate the watcher and start processing the events again
+                            received_events = false;
+                            break;
                         }
                     };
 
@@ -231,7 +232,7 @@ impl super::CallbackStore for JetStreamCallbackStore {
                         })
                         .expect("Failed to send callback");
                 }
-                if event_count == 0 && attempts < 5 {
+                if !received_events && attempts < 5 {
                     tracing::warn!(
                         callbacks_key,
                         "Watcher for Jetstream key didn't return any events. Will recreate the watcher in 20ms"
@@ -251,7 +252,7 @@ impl super::CallbackStore for JetStreamCallbackStore {
                         .expect("Failed to recreate the watcher");
                 }
             }
-            if event_count == 0 {
+            if !received_events {
                 tracing::error!(
                     callbacks_key,
                     "Watcher for Jetstream key didn't return any events even after retries"
