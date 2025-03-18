@@ -9,8 +9,8 @@ pub fn generate_certs() -> std::result::Result<(Certificate, KeyPair), String> {
 pub(crate) mod server {
     const DEFAULT_METRICS_PORT: u16 = 2470;
     const DEFAULT_SHUTDOWN_DURATION: u64 = 30;
-    #[derive(Debug)]
-    pub(crate) struct MonitorServerConfig {
+    #[derive(Debug, Clone)]
+    pub struct MonitorServerConfig {
         pub server_listen_port: u16,
         pub graceful_shutdown_duration: u64,
     }
