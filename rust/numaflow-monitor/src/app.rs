@@ -1,10 +1,25 @@
-use axum::{routing::get, Router};
+use axum::{response::IntoResponse, routing::get, Extension, Json, Router};
 use axum_server::{tls_rustls::RustlsConfig, Handle};
-use std::{net::SocketAddr, time::Duration};
+use http::StatusCode;
+use std::{
+    net::SocketAddr,
+    sync::{Arc, RwLock},
+    time::Duration,
+};
 use tokio::signal;
-use tracing::info;
+use tracing::{error, info};
 
-use crate::{error::Error, runtime_errors::handle_runtime_app_errors, MonitorServerConfig};
+use crate::{
+    config::info::RuntimeInfoConfig,
+    error::Error,
+    runtime::{ApiResponse, Runtime},
+    MonitorServerConfig,
+};
+
+// Define a shared state
+pub(crate) struct AppState {
+    pub(crate) runtime: Arc<RwLock<Runtime>>,
+}
 
 /// Start the main application Router and the axum server.
 pub(crate) async fn start_main_server(
@@ -16,9 +31,17 @@ pub(crate) async fn start_main_server(
     // Spawn a task to gracefully shutdown server.
     tokio::spawn(graceful_shutdown(handle.clone(), server_config));
 
-    info!(?app_addr, "Starting monitor app server");
+    info!(?app_addr, "Starting monitor app server..");
 
-    let router = monitor_router();
+    let runtime_info_config = RuntimeInfoConfig::default();
+    let runtime = Runtime::new(runtime_info_config.app_error_path.as_str());
+
+    // Initialize shared state
+    let shared_state = Arc::new(AppState {
+        runtime: Arc::new(RwLock::new(runtime)),
+    });
+
+    let router = monitor_router(shared_state.clone());
 
     axum_server::bind_rustls(app_addr, tls_config)
         .handle(handle)
@@ -29,8 +52,52 @@ pub(crate) async fn start_main_server(
     Ok(())
 }
 
-fn monitor_router() -> Router {
-    Router::new().route("/runtime/errors", get(handle_runtime_app_errors))
+fn monitor_router(shared_state: Arc<AppState>) -> Router {
+    Router::new()
+        .route("/runtime/errors", get(handle_runtime_app_errors))
+        .layer(axum::extract::Extension(shared_state))
+}
+
+/**
+File Structure for application-errors
+
+Root: /var/numaflow/runtime/
+                    └── application-errors
+                        └── udsource/
+                                ├── ts1.json
+                                └── ts2.json
+                        └── udsink/
+                                ├── ts3.json
+                                └── ts4.json
+
+*/
+async fn handle_runtime_app_errors(
+    Extension(state): Extension<Arc<AppState>>,
+) -> impl IntoResponse {
+    let runtime = state.runtime.read().unwrap();
+
+    // Call the get_application_errors method on the Runtime instance
+    match runtime.get_application_errors() {
+        Ok(errors) => (
+            StatusCode::OK,
+            Json(ApiResponse {
+                error_message: None,
+                data: errors,
+            }),
+        )
+            .into_response(),
+        Err(err) => {
+            error!("{}", err);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse {
+                    error_message: Some(err.to_string()),
+                    data: Vec::new(),
+                }),
+            )
+                .into_response()
+        }
+    }
 }
 
 async fn graceful_shutdown(handle: Handle, server_config: MonitorServerConfig) {
