@@ -8,6 +8,7 @@ use axum::response::Response;
 use axum::{body::Body, http::Request, middleware, response::IntoResponse, routing::get, Router};
 use axum_server::tls_rustls::RustlsConfig;
 use axum_server::Handle;
+use http::{HeaderName, HeaderValue};
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
 use tokio::signal;
@@ -79,28 +80,47 @@ where
     U: Clone + Send + Sync + CallbackStore + 'static,
 {
     let layers = ServiceBuilder::new()
+        // Ensure all requests has the TID header set.
+        // This is used in the tracing layer to define the top-level span for a request.
+        .map_request({
+            let tid_header = HeaderName::from_bytes(app.settings.tid_header.as_bytes()).unwrap();
+            move |mut req: Request<Body>| {
+                if ["/metrics", "/readyz", "/livez", "/sidecar-livez"].contains(&req.uri().path()) {
+                    return req;
+                }
+                req.headers_mut().entry(&tid_header).or_insert_with(|| HeaderValue::from_str(Uuid::now_v7().to_string().as_str()).unwrap());
+                req
+            }
+        })
         // Add tracing to all requests
         .layer(
             TraceLayer::new_for_http()
-                .make_span_with(move |req: &Request<Body>| {
-                    let req_path = req.uri().path();
-                    if ["/metrics", "/readyz", "/livez", "/sidecar-livez"].contains(&req_path) {
-                        // We don't need request ID for these endpoints
-                        return info_span!("request", method=?req.method(), path=req_path);
+                .make_span_with({
+                    let tid_header = HeaderName::from_bytes(app.settings.tid_header.as_bytes()).unwrap();
+                    move |req: &Request<Body>| {
+                        let req_path = req.uri().path();
+                        if ["/metrics", "/readyz", "/livez", "/sidecar-livez"].contains(&req_path) {
+                            // We don't need request ID for these endpoints
+                            return info_span!("request", method=?req.method(), path=req_path);
+                        }
+
+                        let tid = req
+                            .headers()
+                            .get(&tid_header)
+                            .map(|v| String::from_utf8_lossy(v.as_bytes()).to_string())
+                            .expect("request tid must be set by now");
+
+                        let matched_path = req
+                            .extensions()
+                            .get::<MatchedPath>()
+                            .map(MatchedPath::as_str);
+
+                        let span = info_span!("request", tid);
+                        span.in_scope(|| {
+                            info!(method=?req.method(), path=req_path, matched_path, "Received request");
+                        });
+                        span
                     }
-
-                    // Generate a tid with good enough randomness and not too long
-                    // Example of a UUID v7: 01951b72-d0f4-711e-baba-4efe03d9cb76
-                    // We use the characters representing timestamp in milliseconds (without '-'), and last 5 characters for randomness.
-                    let uuid = Uuid::now_v7().to_string();
-                    let tid = format!("{}{}{}", &uuid[..8], &uuid[10..13], &uuid[uuid.len() - 5..]);
-
-                    let matched_path = req
-                        .extensions()
-                        .get::<MatchedPath>()
-                        .map(MatchedPath::as_str);
-
-                    info_span!("request", tid, method=?req.method(), path=req_path, matched_path)
                 })
                 .on_response(
                     |response: &Response<Body>, latency: Duration, _span: &Span| {

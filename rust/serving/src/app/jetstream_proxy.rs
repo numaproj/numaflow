@@ -181,7 +181,7 @@ async fn sync_publish<
     let id = headers
         .get(&proxy_state.tid_header)
         .map(|v| String::from_utf8_lossy(v.as_bytes()).to_string())
-        .unwrap_or_else(|| Uuid::now_v7().to_string());
+        .expect("tid header is not found in the request");
 
     let mut msg_headers: HashMap<String, String> = HashMap::new();
     for (key, value) in headers.iter() {
@@ -243,10 +243,23 @@ async fn sync_publish<
     }
 
     // TODO: add a timeout for waiting on rx. make sure deregister is called if timeout branch is invoked.
-    if let Err(e) = notify.await {
-        error!(error = ?e, "Waiting for the pipeline output");
+    let processing_result = match notify.await {
+        Ok(processing_result) => processing_result,
+        Err(e) => {
+            error!(error = ?e, "Waiting for the pipeline output");
+            return Err(ApiError::InternalServerError(
+                "Failed while waiting on pipeline output".to_string(),
+            ));
+        }
+    };
+
+    if let Err(err) = processing_result {
+        tracing::error!(
+            ?err,
+            "The request processing task failed. Returning error to the client"
+        );
         return Err(ApiError::InternalServerError(
-            "Failed while waiting on pipeline output".to_string(),
+            "Failed to collect results of processing from all vertices".to_string(),
         ));
     }
 
@@ -303,7 +316,7 @@ async fn async_publish<
     let id = headers
         .get(&proxy_state.tid_header)
         .map(|v| String::from_utf8_lossy(v.as_bytes()).to_string())
-        .unwrap_or_else(|| Uuid::now_v7().to_string());
+        .expect("tid header is not found in the request");
 
     let mut msg_headers: HashMap<String, String> = HashMap::new();
     for (key, value) in headers.iter() {
