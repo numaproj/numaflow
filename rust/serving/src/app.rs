@@ -8,7 +8,7 @@ use axum::response::Response;
 use axum::{body::Body, http::Request, middleware, response::IntoResponse, routing::get, Router};
 use axum_server::tls_rustls::RustlsConfig;
 use axum_server::Handle;
-use http::{HeaderName, HeaderValue};
+use http::HeaderName;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
 use tokio::signal;
@@ -74,6 +74,10 @@ where
     Ok(())
 }
 
+#[derive(Clone)]
+/// New type to store the TID of a request in Axum's request extensions
+struct Tid(String);
+
 pub(crate) async fn router_with_auth<T, U>(app: AppState<T, U>) -> crate::Result<Router>
 where
     T: Clone + Send + Sync + DataStore + 'static,
@@ -88,7 +92,12 @@ where
                 if ["/metrics", "/readyz", "/livez", "/sidecar-livez"].contains(&req.uri().path()) {
                     return req;
                 }
-                req.headers_mut().entry(&tid_header).or_insert_with(|| HeaderValue::from_str(Uuid::now_v7().to_string().as_str()).unwrap());
+
+                let tid = match req.headers().get(&tid_header) {
+                    Some(tid) => String::from_utf8_lossy(tid.as_bytes()).to_string(),
+                    None => Uuid::now_v7().to_string(),
+                };
+                req.extensions_mut().insert(Tid(tid));
                 req
             }
         })
@@ -96,7 +105,6 @@ where
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with({
-                    let tid_header = HeaderName::from_bytes(app.settings.tid_header.as_bytes()).unwrap();
                     move |req: &Request<Body>| {
                         let req_path = req.uri().path();
                         if ["/metrics", "/readyz", "/livez", "/sidecar-livez"].contains(&req_path) {
@@ -104,18 +112,15 @@ where
                             return info_span!("request", method=?req.method(), path=req_path);
                         }
 
-                        let tid = req
-                            .headers()
-                            .get(&tid_header)
-                            .map(|v| String::from_utf8_lossy(v.as_bytes()).to_string())
-                            .expect("request tid must be set by now");
+
+                        let tid = req.extensions().get::<Tid>().unwrap();
 
                         let matched_path = req
                             .extensions()
                             .get::<MatchedPath>()
                             .map(MatchedPath::as_str);
 
-                        let span = info_span!("request", tid);
+                        let span = info_span!("request", tid=tid.0);
                         span.in_scope(|| {
                             info!(method=?req.method(), path=req_path, matched_path, "Received request");
                         });

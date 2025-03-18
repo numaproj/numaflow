@@ -2,6 +2,7 @@ use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use axum::response::sse::Event;
 use axum::response::Sse;
+use axum::Extension;
 use axum::{
     body::{Body, Bytes},
     extract::{Query, State},
@@ -15,8 +16,8 @@ use serde_json::json;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::{Stream, StreamExt};
 use tracing::error;
-use uuid::Uuid;
 
+use super::Tid;
 use super::{orchestrator, store::datastore::DataStore, AppState};
 use crate::app::response::{ApiError, ServeResponse};
 use crate::app::store::cbstore::CallbackStore;
@@ -121,6 +122,7 @@ async fn fetch<
 
 async fn sse_handler<T, U>(
     State(proxy_state): State<Arc<ProxyState<T, U>>>,
+    Extension(Tid(id)): Extension<Tid>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>
@@ -128,11 +130,6 @@ where
     T: Send + Sync + Clone + DataStore + 'static,
     U: Send + Sync + Clone + CallbackStore + 'static,
 {
-    let id = headers
-        .get(&proxy_state.tid_header)
-        .map(|v| String::from_utf8_lossy(v.as_bytes()).to_string())
-        .unwrap_or_else(|| Uuid::now_v7().to_string());
-
     let mut msg_headers: HashMap<String, String> = HashMap::new();
     for (key, value) in headers.iter() {
         msg_headers.insert(
@@ -175,14 +172,10 @@ async fn sync_publish<
     U: Send + Sync + Clone + CallbackStore + 'static,
 >(
     State(proxy_state): State<Arc<ProxyState<T, U>>>,
+    Extension(Tid(id)): Extension<Tid>,
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
-    let id = headers
-        .get(&proxy_state.tid_header)
-        .map(|v| String::from_utf8_lossy(v.as_bytes()).to_string())
-        .expect("tid header is not found in the request");
-
     let mut msg_headers: HashMap<String, String> = HashMap::new();
     for (key, value) in headers.iter() {
         msg_headers.insert(
@@ -310,14 +303,10 @@ async fn async_publish<
     U: Send + Sync + Clone + CallbackStore + 'static,
 >(
     State(proxy_state): State<Arc<ProxyState<T, U>>>,
+    Extension(Tid(id)): Extension<Tid>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Json<ServeResponse>, ApiError> {
-    let id = headers
-        .get(&proxy_state.tid_header)
-        .map(|v| String::from_utf8_lossy(v.as_bytes()).to_string())
-        .expect("tid header is not found in the request");
-
     let mut msg_headers: HashMap<String, String> = HashMap::new();
     for (key, value) in headers.iter() {
         // Exclude request ID
