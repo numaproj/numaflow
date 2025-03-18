@@ -102,7 +102,7 @@ where
                     // Else, a new UUID v7 is assigned and the request will be rejected within the
                     // fetch handler since the query parameter is invalid.
                     if let Ok(query_params) = Query::<FetchQueryParams>::try_from_uri(req.uri())  {
-                        req.headers_mut().insert(tid_header.clone(),HeaderValue::from_str(query_params.id.as_str()).unwrap());
+                        req.extensions_mut().insert(Tid(query_params.0.id));
                         return req;
                     };
                 }
