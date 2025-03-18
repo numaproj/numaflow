@@ -384,6 +384,7 @@ async fn async_publish<
 mod tests {
     use super::*;
     use crate::app::orchestrator::OrchestratorState;
+    use crate::app::router_with_auth;
     use crate::app::store::cbstore::jetstreamstore::JetStreamCallbackStore;
     use crate::app::store::datastore::jetstream::JetStreamDataStore;
     use crate::app::tracker::MessageGraph;
@@ -458,7 +459,7 @@ mod tests {
         };
 
         let app = jetstream_proxy(app_state).await?;
-        let res = Request::builder()
+        let mut req = Request::builder()
             .method("POST")
             .uri("/async")
             .header(CONTENT_TYPE, "text/plain")
@@ -466,7 +467,9 @@ mod tests {
             .body(Body::from("Test Message"))
             .unwrap();
 
-        let response = app.oneshot(res).await.unwrap();
+        req.extensions_mut().insert(Tid(ID_VALUE.to_string()));
+
+        let response = app.oneshot(req).await.unwrap();
         let message = response_collector.await.unwrap();
         assert_eq!(message.id, ID_VALUE);
         assert_eq!(response.status(), StatusCode::OK);
@@ -598,7 +601,7 @@ mod tests {
             }
         });
 
-        let res = Request::builder()
+        let mut req = Request::builder()
             .method("POST")
             .uri("/sync")
             .header("Content-Type", "text/plain")
@@ -606,7 +609,9 @@ mod tests {
             .body(Body::from("Test Message"))
             .unwrap();
 
-        let response = app.clone().oneshot(res).await.unwrap();
+        req.extensions_mut().insert(Tid(ID_VALUE.to_string()));
+
+        let response = app.clone().oneshot(req).await.unwrap();
         let message = response_collector.await.unwrap();
         assert_eq!(message.id, ID_VALUE);
         assert_eq!(response.status(), StatusCode::OK);
@@ -692,13 +697,15 @@ mod tests {
             }
         });
 
-        let req = Request::builder()
+        let mut req = Request::builder()
             .method("POST")
             .uri("/sync")
             .header("Content-Type", "text/plain")
             .header(DEFAULT_ID_HEADER, ID_VALUE)
             .body(Body::from("Test Message"))
             .unwrap();
+
+        req.extensions_mut().insert(Tid(ID_VALUE.to_string()));
 
         let response = app.clone().oneshot(req).await.unwrap();
         let message = response_collector.await.unwrap();
@@ -788,7 +795,7 @@ mod tests {
             orchestrator_state,
         };
 
-        let app = jetstream_proxy(app_state).await?;
+        let app = router_with_auth(app_state).await?;
 
         let host = "127.0.0.1";
         // Bind to localhost at the port 0, which will let the OS assign an available port to us
@@ -824,7 +831,7 @@ mod tests {
         });
 
         let mut event_stream = reqwest::Client::new()
-            .get(format!("{}/sse", listening_url))
+            .get(format!("{}/v1/process/sse", listening_url))
             .header("Content-Type", "text/plain")
             .header(DEFAULT_ID_HEADER, ID_VALUE)
             .send()
