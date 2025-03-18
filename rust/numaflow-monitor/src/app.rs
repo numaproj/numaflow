@@ -5,22 +5,34 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::signal;
 use tracing::{error, info};
 
-use crate::{error::Error, runtime::ApiResponse, AppState, MonitorServerConfig};
+use crate::{
+    config::RuntimeInfoConfig,
+    error::Error,
+    runtime::{ApiResponse, Runtime},
+    MonitorServerConfig,
+};
 
+pub(crate) struct AppState {
+    pub(crate) runtime: Arc<Runtime>,
+}
 /// Start the main application Router and the axum server.
 pub(crate) async fn start_main_server(
     app_addr: SocketAddr,
     tls_config: RustlsConfig,
-    shared_state: Arc<AppState>,
+    server_config: MonitorServerConfig,
 ) -> crate::Result<()> {
     let handle = Handle::new();
     // Spawn a task to gracefully shutdown server.
-    tokio::spawn(graceful_shutdown(
-        handle.clone(),
-        shared_state.server_config.clone(),
-    ));
+    tokio::spawn(graceful_shutdown(handle.clone(), server_config.clone()));
 
     info!(?app_addr, "Starting monitor app server..");
+
+    let runtime = Runtime::new(Some(RuntimeInfoConfig::default()));
+
+    // Initialize shared state
+    let shared_state = Arc::new(AppState {
+        runtime: Arc::new(runtime),
+    });
 
     let router = monitor_router(shared_state.clone());
 
@@ -55,7 +67,7 @@ Root: /var/numaflow/runtime/
 async fn handle_runtime_app_errors(
     Extension(state): Extension<Arc<AppState>>,
 ) -> impl IntoResponse {
-    let runtime = state.runtime.read().unwrap();
+    let runtime = state.runtime.as_ref();
 
     // Call the get_application_errors method on the Runtime instance
     match runtime.get_application_errors() {

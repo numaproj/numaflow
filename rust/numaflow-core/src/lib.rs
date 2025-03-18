@@ -3,7 +3,7 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-use crate::config::{config, CustomResourceType, RUNTIME_DIR_MOUNT_PATH};
+use crate::config::{config, CustomResourceType};
 
 /// Custom Error handling.
 mod error;
@@ -65,6 +65,7 @@ mod serving_store;
 /// [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 mod watermark;
 
+use numaflow_monitor::config::RuntimeInfoConfig;
 use numaflow_monitor::runtime::Runtime;
 
 pub async fn run() -> Result<()> {
@@ -72,7 +73,7 @@ pub async fn run() -> Result<()> {
     let shutdown_cln_token = cln_token.clone();
 
     // Initialize Runtime
-    let runtime = Runtime::new(RUNTIME_DIR_MOUNT_PATH);
+    let runtime = Runtime::new(Some(RuntimeInfoConfig::default()));
 
     // wait for SIG{INT,TERM} and invoke cancellation token.
     let shutdown_handle: JoinHandle<Result<()>> = tokio::spawn(async move {

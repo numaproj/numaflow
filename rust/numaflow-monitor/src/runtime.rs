@@ -2,14 +2,18 @@
 use chrono::{DateTime, Utc};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::str;
+use std::{fs, io::Result as io_result};
 use tonic::Status;
 use tracing::error;
 
+use crate::config::{
+    RuntimeInfoConfig, DEFAULT_MAX_ERROR_FILES_PER_CONTAINER,
+    DEFAULT_RUNTIME_APPLICATION_ERRORS_PATH,
+};
 use crate::error::{Error, Result};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -30,14 +34,21 @@ pub struct ApiResponse {
 /// Runtime is used for persisting runtime information such as application errors.
 pub struct Runtime {
     application_error_path: String,
+    max_error_files_per_container: usize,
 }
 
 impl Runtime {
     // Creates a new Runtime instance with the specified directory path, where the runtime information
     // will be persisted.
-    pub fn new(empty_dir_path: &str) -> Self {
+    pub fn new(runtime_info_config: Option<RuntimeInfoConfig>) -> Self {
+        let config = runtime_info_config.unwrap_or_else(|| RuntimeInfoConfig {
+            app_error_path: (DEFAULT_RUNTIME_APPLICATION_ERRORS_PATH.to_string()),
+            max_error_files_per_container: (DEFAULT_MAX_ERROR_FILES_PER_CONTAINER),
+        });
+
         Runtime {
-            application_error_path: empty_dir_path.to_string(),
+            application_error_path: config.app_error_path,
+            max_error_files_per_container: config.max_error_files_per_container,
         }
     }
 
@@ -52,16 +63,42 @@ impl Runtime {
             fs::create_dir_all(&dir_path).expect("Failed to create application errors directory");
         }
 
+        // Check the number of files in the directory
+        let mut files: Vec<_> = fs::read_dir(&dir_path)
+            .expect("Failed to read application errors directory")
+            .filter_map(io_result::ok)
+            .filter(|e| e.path().is_file())
+            .collect();
+
+        // Sort files by their names (timestamps)
+        files.sort_by_key(|e| e.file_name());
+
+        // Remove the oldest file if the number of files exceeds the limit
+        if files.len() >= self.max_error_files_per_container {
+            if let Some(oldest_file) = files.first() {
+                fs::remove_file(oldest_file.path())
+                    .expect("Failed to remove the oldest application error file");
+            }
+        }
+
         let timestamp = Utc::now().timestamp();
         let file_name = format!("{}.json", timestamp);
 
         let json_str = grpc_status_to_json(&grpc_status, container_name.as_str(), timestamp);
 
-        let file_path = dir_path.join(file_name);
-        let mut file = File::create(&file_path).expect("Failed to create application errors file");
-        //TODO: check if we already have 'x' files for a container, if yes, remove the oldest and write new one
-        file.write_all(json_str.as_bytes())
-            .expect("Failed to write to application error file");
+        let temp_file_path = dir_path.join("current.json");
+        let final_file_path = dir_path.join(&file_name);
+
+        // Write to the temporary current.json file to avoid concurrent read/write on the same file
+        let mut temp_file = File::create(&temp_file_path)
+            .expect("Failed to create temporary application errors file");
+        temp_file
+            .write_all(json_str.as_bytes())
+            .expect("Failed to write to temporary application error file");
+
+        // Rename the temporary file to the final file name once write operation completes
+        fs::rename(&temp_file_path, &final_file_path)
+            .expect("Failed to rename temporary file to final file name");
     }
 
     // get the application errors persisted in app err directory
@@ -164,8 +201,9 @@ fn process_file_entry(
     errors: &mut Vec<RuntimeErrorEntry>,
 ) -> Result<()> {
     let file_path = file_entry.path();
-    // if file path isn't a file, continue
-    if !file_path.is_file() || !file_path.exists() {
+    let file_name_to_ignore = Some(std::ffi::OsStr::new("current.json"));
+    // if file path isn't a file or file name is current.json, continue
+    if !file_path.exists() || !file_path.is_file() || file_path.file_name() == file_name_to_ignore {
         return Ok(());
     }
     match fs::read(&file_path) {

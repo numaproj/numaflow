@@ -27,7 +27,6 @@ const NUMAFLOW_VERTEX_NAME: &str = "NUMAFLOW_VERTEX_NAME";
 const NUMAFLOW_REPLICA: &str = "NUMAFLOW_REPLICA";
 const NUMAFLOW_PIPELINE_NAME: &str = "NUMAFLOW_PIPELINE_NAME";
 const NUMAFLOW_NAMESPACE: &str = "NUMAFLOW_NAMESPACE";
-pub(crate) const RUNTIME_DIR_MOUNT_PATH: &str = "/var/numaflow/runtime";
 
 static VERTEX_NAME: OnceLock<String> = OnceLock::new();
 
