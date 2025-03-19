@@ -37,14 +37,12 @@ import (
 type GRPCBasedAccumulator struct {
 	vertexName string
 	client     accumulator.Client
-	resultsMap map[string]int
 }
 
 func NewGRPCBasedAccumulator(vertexName string, client accumulator.Client) *GRPCBasedAccumulator {
 	return &GRPCBasedAccumulator{
 		vertexName: vertexName,
 		client:     client,
-		resultsMap: make(map[string]int),
 	}
 }
 
@@ -223,17 +221,5 @@ func (u *GRPCBasedAccumulator) parseGlobalReduceResponse(response *accumulatorpb
 	return &window.TimedWindowResponse{
 		WriteMessage: taggedMessage,
 		Window:       window.NewUnalignedTimedWindow(start, end, slot, result.GetKeys()),
-	}
-}
-
-// updateMessageIDCount updates the message count in resultsMap and returns the updated message ID
-func (u *GRPCBasedAccumulator) updateAndGetMsgId(baseMsgId string) isb.MessageID {
-	val := u.resultsMap[baseMsgId]
-	val++
-	u.resultsMap[baseMsgId] = val
-	return isb.MessageID{
-		VertexName: u.vertexName,
-		Offset:     baseMsgId,
-		Index:      int32(val),
 	}
 }
