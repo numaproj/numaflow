@@ -49,7 +49,7 @@ type Runtime struct {
 	monoVtx    *v1alpha1.MonoVertex
 	localCache map[PodReplica][]ErrorDetails
 	cacheMutex sync.Mutex
-	podTracker PodTracker
+	podTracker *PodTracker
 	log        *zap.SugaredLogger
 	httpClient monitorHttpClient
 }
@@ -93,48 +93,60 @@ func (r *Runtime) Start(ctx context.Context) (err error) {
 // PersistRuntimeErrors updates the local cache with the runtime errors
 func (r *Runtime) PersistRuntimeErrors(ctx context.Context) {
 	fetchAndPersistErrors := func() {
-		for i := range r.podTracker.GetActivePodIndexes() {
-			// Get the headless service name
-			url := fmt.Sprintf("https://%s-mv-%v.%s.%s.svc:%v/%s", r.monoVtx.Name, i, r.monoVtx.GetHeadlessServiceName(), r.monoVtx.GetNamespace(), v1alpha1.MonoVertexMonitorPort, runtimeErrorsPath)
+		var wg sync.WaitGroup
 
-			if res, err := r.httpClient.Get(url); err != nil {
-				r.log.Errorw("Error reading the runtime errors endpoint: %f", err.Error())
-				continue
-			} else {
+		for i := range r.podTracker.GetActivePodsCount() {
+			wg.Add(1)
+
+			go func(podIndex int) {
+				defer wg.Done()
+
+				// Get the headless service name
+				url := fmt.Sprintf("https://%s-mv-%v.%s.%s.svc:%v/%s", r.monoVtx.Name, podIndex, r.monoVtx.GetHeadlessServiceName(), r.monoVtx.GetNamespace(), v1alpha1.MonoVertexMonitorPort, runtimeErrorsPath)
+
+				res, err := r.httpClient.Get(url)
+				if err != nil {
+					r.log.Errorw("Error reading the runtime errors endpoint", "error", err.Error())
+					return
+				}
+				defer res.Body.Close()
+
 				// Read the response body
 				body, err := io.ReadAll(res.Body)
-				res.Body.Close()
 				if err != nil {
 					r.log.Errorf("Error reading response body from %s: %v", url, err)
-					continue
+					return
 				}
 
 				// Parse the response body into runtime api response
 				var apiResponse RuntimeErrorApiResponse
 				if err := json.Unmarshal(body, &apiResponse); err != nil {
 					r.log.Errorf("Error decoding runtime error response from %s: %v", url, err)
-					continue
+					return
 				}
 
 				if apiResponse.ErrMssg != "" {
-					continue
+					return
 				}
 
-				cacheKey := PodReplica(fmt.Sprintf("%s-mv-%v", r.monoVtx.Name, i))
+				cacheKey := PodReplica(fmt.Sprintf("%s-mv-%v", r.monoVtx.Name, podIndex))
 
 				// Lock the cache before updating
 				r.cacheMutex.Lock()
+				defer r.cacheMutex.Unlock()
+
 				_, ok := r.localCache[cacheKey]
 				if !ok {
 					r.localCache[cacheKey] = make([]ErrorDetails, 0)
 				}
 				r.log.Infof("Persisting error in local cache for: %s", cacheKey)
-				// overwrite the errors - if errors are gone, we should update the local cache to empty
+				// overwrite the errors
 				r.localCache[cacheKey] = apiResponse.Data
-				r.cacheMutex.Unlock()
-			}
+			}(i)
 		}
 
+		// Wait for all goroutines to finish
+		wg.Wait()
 	}
 
 	fetchAndPersistErrors()
