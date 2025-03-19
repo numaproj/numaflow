@@ -2,6 +2,7 @@ use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use axum::response::sse::Event;
 use axum::response::Sse;
+use axum::Extension;
 use axum::{
     body::{Body, Bytes},
     extract::{Query, State},
@@ -10,14 +11,13 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use serde::Deserialize;
 use serde_json::json;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::{Stream, StreamExt};
 use tracing::error;
-use uuid::Uuid;
 
 use super::{orchestrator, store::datastore::DataStore, AppState};
+use super::{FetchQueryParams, Tid};
 use crate::app::response::{ApiError, ServeResponse};
 use crate::app::store::cbstore::CallbackStore;
 use crate::app::store::datastore::Error as StoreError;
@@ -56,17 +56,12 @@ pub(crate) async fn jetstream_proxy<
     Ok(router)
 }
 
-#[derive(Deserialize)]
-struct ServeQueryParams {
-    id: String,
-}
-
 async fn fetch<
     T: Send + Sync + Clone + DataStore + 'static,
     U: Send + Sync + Clone + CallbackStore + 'static,
 >(
     State(proxy_state): State<Arc<ProxyState<T, U>>>,
-    Query(ServeQueryParams { id }): Query<ServeQueryParams>,
+    Query(FetchQueryParams { id }): Query<FetchQueryParams>,
 ) -> Response {
     let pipeline_result = match proxy_state.orchestrator.clone().retrieve_saved(&id).await {
         Ok(result) => result,
@@ -121,6 +116,7 @@ async fn fetch<
 
 async fn sse_handler<T, U>(
     State(proxy_state): State<Arc<ProxyState<T, U>>>,
+    Extension(Tid(id)): Extension<Tid>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>
@@ -128,11 +124,6 @@ where
     T: Send + Sync + Clone + DataStore + 'static,
     U: Send + Sync + Clone + CallbackStore + 'static,
 {
-    let id = headers
-        .get(&proxy_state.tid_header)
-        .map(|v| String::from_utf8_lossy(v.as_bytes()).to_string())
-        .unwrap_or_else(|| Uuid::now_v7().to_string());
-
     let mut msg_headers: HashMap<String, String> = HashMap::new();
     for (key, value) in headers.iter() {
         msg_headers.insert(
@@ -175,14 +166,10 @@ async fn sync_publish<
     U: Send + Sync + Clone + CallbackStore + 'static,
 >(
     State(proxy_state): State<Arc<ProxyState<T, U>>>,
+    Extension(Tid(id)): Extension<Tid>,
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
-    let id = headers
-        .get(&proxy_state.tid_header)
-        .map(|v| String::from_utf8_lossy(v.as_bytes()).to_string())
-        .unwrap_or_else(|| Uuid::now_v7().to_string());
-
     let mut msg_headers: HashMap<String, String> = HashMap::new();
     for (key, value) in headers.iter() {
         msg_headers.insert(
@@ -242,11 +229,23 @@ async fn sync_publish<
         ));
     }
 
-    // TODO: add a timeout for waiting on rx. make sure deregister is called if timeout branch is invoked.
-    if let Err(e) = notify.await {
-        error!(error = ?e, "Waiting for the pipeline output");
+    let processing_result = match notify.await {
+        Ok(processing_result) => processing_result,
+        Err(e) => {
+            error!(error = ?e, "Waiting for the pipeline output");
+            return Err(ApiError::InternalServerError(
+                "Failed while waiting on pipeline output".to_string(),
+            ));
+        }
+    };
+
+    if let Err(err) = processing_result {
+        tracing::error!(
+            ?err,
+            "The request processing task failed. Returning error to the client"
+        );
         return Err(ApiError::InternalServerError(
-            "Failed while waiting on pipeline output".to_string(),
+            "Failed to collect results of processing from all vertices".to_string(),
         ));
     }
 
@@ -297,14 +296,10 @@ async fn async_publish<
     U: Send + Sync + Clone + CallbackStore + 'static,
 >(
     State(proxy_state): State<Arc<ProxyState<T, U>>>,
+    Extension(Tid(id)): Extension<Tid>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Json<ServeResponse>, ApiError> {
-    let id = headers
-        .get(&proxy_state.tid_header)
-        .map(|v| String::from_utf8_lossy(v.as_bytes()).to_string())
-        .unwrap_or_else(|| Uuid::now_v7().to_string());
-
     let mut msg_headers: HashMap<String, String> = HashMap::new();
     for (key, value) in headers.iter() {
         // Exclude request ID
@@ -382,6 +377,7 @@ async fn async_publish<
 mod tests {
     use super::*;
     use crate::app::orchestrator::OrchestratorState;
+    use crate::app::router_with_auth;
     use crate::app::store::cbstore::jetstreamstore::JetStreamCallbackStore;
     use crate::app::store::datastore::jetstream::JetStreamDataStore;
     use crate::app::tracker::MessageGraph;
@@ -456,7 +452,7 @@ mod tests {
         };
 
         let app = jetstream_proxy(app_state).await?;
-        let res = Request::builder()
+        let mut req = Request::builder()
             .method("POST")
             .uri("/async")
             .header(CONTENT_TYPE, "text/plain")
@@ -464,7 +460,9 @@ mod tests {
             .body(Body::from("Test Message"))
             .unwrap();
 
-        let response = app.oneshot(res).await.unwrap();
+        req.extensions_mut().insert(Tid(ID_VALUE.to_string()));
+
+        let response = app.oneshot(req).await.unwrap();
         let message = response_collector.await.unwrap();
         assert_eq!(message.id, ID_VALUE);
         assert_eq!(response.status(), StatusCode::OK);
@@ -596,7 +594,7 @@ mod tests {
             }
         });
 
-        let res = Request::builder()
+        let mut req = Request::builder()
             .method("POST")
             .uri("/sync")
             .header("Content-Type", "text/plain")
@@ -604,7 +602,9 @@ mod tests {
             .body(Body::from("Test Message"))
             .unwrap();
 
-        let response = app.clone().oneshot(res).await.unwrap();
+        req.extensions_mut().insert(Tid(ID_VALUE.to_string()));
+
+        let response = app.clone().oneshot(req).await.unwrap();
         let message = response_collector.await.unwrap();
         assert_eq!(message.id, ID_VALUE);
         assert_eq!(response.status(), StatusCode::OK);
@@ -690,13 +690,15 @@ mod tests {
             }
         });
 
-        let req = Request::builder()
+        let mut req = Request::builder()
             .method("POST")
             .uri("/sync")
             .header("Content-Type", "text/plain")
             .header(DEFAULT_ID_HEADER, ID_VALUE)
             .body(Body::from("Test Message"))
             .unwrap();
+
+        req.extensions_mut().insert(Tid(ID_VALUE.to_string()));
 
         let response = app.clone().oneshot(req).await.unwrap();
         let message = response_collector.await.unwrap();
@@ -786,7 +788,7 @@ mod tests {
             orchestrator_state,
         };
 
-        let app = jetstream_proxy(app_state).await?;
+        let app = router_with_auth(app_state).await?;
 
         let host = "127.0.0.1";
         // Bind to localhost at the port 0, which will let the OS assign an available port to us
@@ -822,7 +824,7 @@ mod tests {
         });
 
         let mut event_stream = reqwest::Client::new()
-            .get(format!("{}/sse", listening_url))
+            .get(format!("{}/v1/process/sse", listening_url))
             .header("Content-Type", "text/plain")
             .header(DEFAULT_ID_HEADER, ID_VALUE)
             .send()
