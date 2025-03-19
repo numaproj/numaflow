@@ -15,4 +15,7 @@ pub enum Error {
 
     #[error("Deserialization Error - {0}")]
     Deserialize(String),
+
+    #[error("Other Error - {0}")]
+    Other(String),
 }

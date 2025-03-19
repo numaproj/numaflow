@@ -2,11 +2,11 @@
 use chrono::{DateTime, Utc};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 use std::str;
-use std::{fs, io::Result as io_result};
 use tonic::Status;
 use tracing::error;
 
@@ -16,7 +16,7 @@ use crate::config::{
 };
 use crate::error::{Error, Result};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RuntimeErrorEntry {
     pub container: String,
     pub timestamp: String,
@@ -25,7 +25,7 @@ pub struct RuntimeErrorEntry {
     pub details: String,
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct ApiResponse {
     pub error_message: Option<String>,
     pub data: Vec<RuntimeErrorEntry>,
@@ -66,8 +66,7 @@ impl Runtime {
         // Check the number of files in the directory
         let mut files: Vec<_> = fs::read_dir(&dir_path)
             .expect("Failed to read application errors directory")
-            .filter_map(io_result::ok)
-            .filter(|e| e.path().is_file())
+            .filter_map(|entry| entry.ok().filter(|e| e.path().is_file()))
             .collect();
 
         // Sort files by their names (timestamps)
@@ -86,10 +85,12 @@ impl Runtime {
 
         let json_str = grpc_status_to_json(&grpc_status, container_name.as_str(), timestamp);
 
+        // create a temp file current.json, write into this file first
+        // rename it to timestamp.json once write operation is completed
+        // this is to ensure that while reading we skip this file (race condition)
         let temp_file_path = dir_path.join("current.json");
         let final_file_path = dir_path.join(&file_name);
 
-        // Write to the temporary current.json file to avoid concurrent read/write on the same file
         let mut temp_file = File::create(&temp_file_path)
             .expect("Failed to create temporary application errors file");
         temp_file
@@ -202,7 +203,7 @@ fn process_file_entry(
 ) -> Result<()> {
     let file_path = file_entry.path();
     let file_name_to_ignore = Some(std::ffi::OsStr::new("current.json"));
-    // if file path isn't a file or file name is current.json, continue
+    // if file path isn't a file or file name is current.json, continue processing other files
     if !file_path.exists() || !file_path.is_file() || file_path.file_name() == file_name_to_ignore {
         return Ok(());
     }
@@ -213,7 +214,7 @@ fn process_file_entry(
             error!("{}", err);
             Err(err)
         }
-        // save the file content in errors
+        // save the file content in errors vector
         Ok(content) => match serde_json::from_slice::<RuntimeErrorEntry>(&content) {
             Ok(payload) => {
                 errors.push(RuntimeErrorEntry {
@@ -234,4 +235,105 @@ fn process_file_entry(
     }
 }
 
-// TODO: add unit tests
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::error::Result;
+    use crate::runtime::process_file_entry;
+    use chrono::Utc;
+    use std::fs;
+    use std::io::Write;
+    use tempfile::tempdir;
+    use tonic::Code;
+
+    #[test]
+    fn test_extract_container_name_with_valid_pattern() {
+        let error_message = "Error occurred in container (my-container)";
+        let container_name = extract_container_name(error_message);
+        assert_eq!(container_name, "my-container");
+    }
+
+    #[test]
+    fn test_grpc_status_to_json_valid_inputs() {
+        let grpc_status = Status::new(Code::Internal, "fn panicked");
+        let container_name = "test_container";
+        let timestamp = Utc::now().timestamp();
+
+        let json_result = grpc_status_to_json(&grpc_status, container_name, timestamp);
+
+        assert!(json_result.contains("\"code\":\"Internal error\""));
+        assert!(json_result.contains("\"message\":\"fn panicked\""));
+        assert!(json_result.contains("\"container\":\"test_container\""));
+    }
+
+    #[test]
+    fn test_process_file_entry_valid_file() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("valid.json");
+        let mut file = fs::File::create(&file_path).unwrap();
+        let content = r#"{
+                "container": "test_container",
+                "timestamp": "1234567890",
+                "code": "Internal error",
+                "message": "An error occurred",
+                "details": "Error details"
+            }"#;
+        file.write_all(content.as_bytes()).unwrap();
+
+        let file_entry = fs::read_dir(dir.path()).unwrap().next().unwrap();
+        let mut errors = Vec::new();
+
+        if let Ok(entry) = file_entry {
+            let result: Result<()> = process_file_entry(&entry, &mut errors);
+            assert!(result.is_ok());
+        } else {
+            panic!("Failed to read directory entry");
+        }
+
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].container, "test_container");
+        assert_eq!(errors[0].timestamp, "1234567890");
+        assert_eq!(errors[0].code, "Internal error");
+        assert_eq!(errors[0].message, "An error occurred");
+        assert_eq!(errors[0].details, "Error details");
+    }
+
+    #[test]
+    fn skip_processing_for_current_json_file() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("current.json");
+        fs::File::create(&file_path).unwrap();
+
+        let file_entry = fs::read_dir(dir.path()).unwrap().next().unwrap().unwrap();
+        let mut errors = Vec::new();
+
+        let result: Result<()> = process_file_entry(&file_entry, &mut errors);
+
+        assert!(result.is_ok());
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn test_process_file_entry_deserialization_failure() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("invalid.json");
+        let mut file = fs::File::create(&file_path).unwrap();
+        let invalid_content = r#"{
+                "container": "test_container",
+                "timestamp": 1234,
+                "code": "Internal error",
+                "message": "An error occurred",
+                "details": "Error details"
+            }"#;
+        file.write_all(invalid_content.as_bytes()).unwrap();
+
+        let file_entry = fs::read_dir(dir.path()).unwrap().next().unwrap().unwrap();
+        let mut errors = Vec::new();
+
+        let result: Result<()> = process_file_entry(&file_entry, &mut errors);
+
+        // TODO: check ERROR::Deserialize string in error
+        assert!(result.is_err());
+        assert_eq!(errors.len(), 0);
+    }
+}

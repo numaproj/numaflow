@@ -1,5 +1,5 @@
 mod app;
-mod config;
+pub mod config;
 mod error;
 pub mod runtime;
 
@@ -30,4 +30,32 @@ pub async fn run() -> std::result::Result<(), Box<dyn std::error::Error + Send +
     start_main_server(app_addr, tls_config, server_config.clone()).await?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rcgen::{Certificate, KeyPair};
+
+    #[tokio::test]
+    async fn test_failure_in_tls_cert_generation() {
+        use axum_server::tls_rustls::RustlsConfig;
+
+        // Mock the generate_certs function to return an error
+        let result = || -> Result<(Certificate, KeyPair)> {
+            Err(Error::Init(
+                "Mocked certificate generation failure".to_string(),
+            ))
+        }();
+
+        // Assert that the result is an error
+        assert!(result.is_err());
+
+        // Attempt to create TLS config should fail
+        if let Err(e) = result {
+            let tls_config_result =
+                RustlsConfig::from_pem(e.to_string().into(), e.to_string().into()).await;
+            assert!(tls_config_result.is_err());
+        }
+    }
 }

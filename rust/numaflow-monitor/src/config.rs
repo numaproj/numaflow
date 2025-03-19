@@ -39,3 +39,14 @@ impl Default for RuntimeInfoConfig {
         }
     }
 }
+
+// Successfully generates a self-signed certificate and key pair
+#[test]
+fn test_generate_certs_success() {
+    use crate::config::generate_certs;
+    let result = generate_certs();
+    assert!(result.is_ok());
+    let (cert, key_pair) = result.unwrap();
+    assert!(!cert.pem().is_empty());
+    assert!(!key_pair.serialize_der().is_empty());
+}
