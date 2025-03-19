@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -36,7 +37,7 @@ func NewPodTracker(ctx context.Context, pl *v1alpha1.Pipeline) *PodTracker {
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 			},
-			Timeout: time.Second,
+			Timeout: 100 * time.Millisecond,
 		},
 		activePods:      util.NewUniqueStringList(),
 		refreshInterval: 30 * time.Second, // Default refresh interval for updating the active pod set
@@ -66,17 +67,28 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 
 // updateActivePods checks the status of all pods and updates the activePods set accordingly.
 func (pt *PodTracker) updateActivePods() {
+	var wg sync.WaitGroup
+	var mu sync.Mutex
 	for _, v := range pt.pipeline.Spec.Vertices {
-		for i := 0; i < int(v.Scale.GetMaxReplicas()); i++ {
-			podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, v.Name, i)
-			podKey := pt.getPodKey(i, v.Name)
-			if pt.isActive(v.Name, podName) {
-				pt.activePods.PushBack(podKey)
-			} else {
-				pt.activePods.Remove(podKey)
-			}
+		for i := range int(v.Scale.GetMaxReplicas()) {
+			wg.Add(1)
+			go func(vertexName string, index int) {
+				defer wg.Done()
+				podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, vertexName, index)
+				podKey := pt.getPodKey(index, vertexName)
+				if pt.isActive(vertexName, podName) {
+					mu.Lock()
+					pt.activePods.PushBack(podKey)
+					mu.Unlock()
+				} else {
+					mu.Lock()
+					pt.activePods.Remove(podKey)
+					mu.Unlock()
+				}
+			}(v.Name, i)
 		}
 	}
+	wg.Wait()
 	pt.log.Debugf("Finished updating the active pod set: %v", pt.activePods.ToString())
 }
 
