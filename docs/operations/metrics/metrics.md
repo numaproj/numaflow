@@ -151,7 +151,7 @@ metadata:
     app.kubernetes.io/part-of: numaflow
   name: numaflow-controller-metrics
 spec:
-  endpoints:
+  podMetricsEndpoints:
     - scheme: http
       port: metrics
       targetPort: 9090

@@ -1,15 +1,17 @@
 use std::net::SocketAddr;
 use std::time::Duration;
 
-use axum::extract::{MatchedPath, State};
+use axum::extract::{MatchedPath, Query, State};
 use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::Response;
 use axum::{body::Body, http::Request, middleware, response::IntoResponse, routing::get, Router};
 use axum_server::tls_rustls::RustlsConfig;
 use axum_server::Handle;
+use http::HeaderName;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
+use serde::Deserialize;
 use tokio::signal;
 use tower::ServiceBuilder;
 use tower_http::classify::ServerErrorsFailureClass;
@@ -73,34 +75,64 @@ where
     Ok(())
 }
 
+/// New type to store the TID of a request in Axum's request extensions
+/// Request extensions are like a hashmap with the key as the type of the value we store. https://docs.rs/http/1.2.0/http/struct.Extensions.html
+/// A new type is needed so that the value doesn't get accidentally overwritten by some other middleware.
+#[derive(Clone)]
+struct Tid(String);
+
+#[derive(Deserialize)]
+struct FetchQueryParams {
+    id: String,
+}
+
 pub(crate) async fn router_with_auth<T, U>(app: AppState<T, U>) -> crate::Result<Router>
 where
     T: Clone + Send + Sync + DataStore + 'static,
     U: Clone + Send + Sync + CallbackStore + 'static,
 {
     let layers = ServiceBuilder::new()
+        // Ensure all requests has the TID header set.
+        // This is used in the tracing layer to define the top-level span for a request.
+        .map_request({
+            let tid_header = HeaderName::from_bytes(app.settings.tid_header.as_bytes()).unwrap();
+            move |mut req: Request<Body>| {
+                if req.uri().path() == "/v1/process/fetch" {
+                    // If a valid query parameter `id` is defined, use the same as request id.
+                    // Else, a new UUID v7 is assigned and the request will be rejected within the
+                    // fetch handler since the query parameter is invalid.
+                    if let Ok(query_params) = Query::<FetchQueryParams>::try_from_uri(req.uri())  {
+                        req.extensions_mut().insert(Tid(query_params.0.id));
+                        return req;
+                    };
+                }
+
+                let tid = match req.headers().get(&tid_header) {
+                    Some(tid) => String::from_utf8_lossy(tid.as_bytes()).to_string(),
+                    None => Uuid::now_v7().to_string(),
+                };
+                req.extensions_mut().insert(Tid(tid));
+                req
+            }
+        })
         // Add tracing to all requests
         .layer(
             TraceLayer::new_for_http()
-                .make_span_with(move |req: &Request<Body>| {
-                    let req_path = req.uri().path();
-                    if ["/metrics", "/readyz", "/livez", "/sidecar-livez"].contains(&req_path) {
-                        // We don't need request ID for these endpoints
-                        return info_span!("request", method=?req.method(), path=req_path);
+                .make_span_with({
+                    move |req: &Request<Body>| {
+                        let tid = req.extensions().get::<Tid>().unwrap();
+
+                        let matched_path = req
+                            .extensions()
+                            .get::<MatchedPath>()
+                            .map(MatchedPath::as_str);
+
+                        let span = info_span!("request", tid=tid.0);
+                        span.in_scope(|| {
+                            info!(method=?req.method(), path=req.uri().path(), matched_path, "Received request");
+                        });
+                        span
                     }
-
-                    // Generate a tid with good enough randomness and not too long
-                    // Example of a UUID v7: 01951b72-d0f4-711e-baba-4efe03d9cb76
-                    // We use the characters representing timestamp in milliseconds (without '-'), and last 5 characters for randomness.
-                    let uuid = Uuid::now_v7().to_string();
-                    let tid = format!("{}{}{}", &uuid[..8], &uuid[10..13], &uuid[uuid.len() - 5..]);
-
-                    let matched_path = req
-                        .extensions()
-                        .get::<MatchedPath>()
-                        .map(MatchedPath::as_str);
-
-                    info_span!("request", tid, method=?req.method(), path=req_path, matched_path)
                 })
                 .on_response(
                     |response: &Response<Body>, latency: Duration, _span: &Span| {
