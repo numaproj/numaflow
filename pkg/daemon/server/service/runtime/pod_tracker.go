@@ -21,7 +21,12 @@ import (
 // "*" is chosen because it is not allowed in the above fields.
 const podInfoSeparator = "*"
 
-type PodTracker struct {
+type PodTracker interface {
+	Start(ctx context.Context) error
+	GetActivePodIndexes(vtx v1alpha1.AbstractVertex) []int
+}
+
+type podTracker struct {
 	pipeline        *v1alpha1.Pipeline
 	log             *zap.SugaredLogger
 	httpClient      monitorHttpClient
@@ -29,10 +34,10 @@ type PodTracker struct {
 	refreshInterval time.Duration
 }
 
-func NewPodTracker(ctx context.Context, pl *v1alpha1.Pipeline) *PodTracker {
-	pt := &PodTracker{
+func NewPodTracker(ctx context.Context, pl *v1alpha1.Pipeline) PodTracker {
+	pt := &podTracker{
 		pipeline: pl,
-		log:      logging.FromContext(ctx).Named("RuntimePodTracker"),
+		log:      logging.FromContext(ctx).Named("RuntimepodTracker"),
 		httpClient: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
@@ -45,13 +50,13 @@ func NewPodTracker(ctx context.Context, pl *v1alpha1.Pipeline) *PodTracker {
 	return pt
 }
 
-func (pt *PodTracker) Start(ctx context.Context) error {
+func (pt *podTracker) Start(ctx context.Context) error {
 	pt.log.Debugf("Starting tracking active pods for Pipeline %s...", pt.pipeline.Name)
 	go pt.trackActivePods(ctx)
 	return nil
 }
 
-func (pt *PodTracker) trackActivePods(ctx context.Context) {
+func (pt *podTracker) trackActivePods(ctx context.Context) {
 	ticker := time.NewTicker(pt.refreshInterval)
 	defer ticker.Stop()
 	for {
@@ -66,7 +71,7 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 }
 
 // updateActivePods checks the status of all pods and updates the activePods set accordingly.
-func (pt *PodTracker) updateActivePods() {
+func (pt *podTracker) updateActivePods() {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	for _, v := range pt.pipeline.Spec.Vertices {
@@ -92,12 +97,12 @@ func (pt *PodTracker) updateActivePods() {
 	pt.log.Debugf("Finished updating the active pod set: %v", pt.activePods.ToString())
 }
 
-func (pt *PodTracker) getPodKey(index int, vertexName string) string {
+func (pt *podTracker) getPodKey(index int, vertexName string) string {
 	// podKey is used as a unique identifier for the pod, which is a combination of pipeline name, vertex name and pod index.
 	return strings.Join([]string{pt.pipeline.Name, vertexName, fmt.Sprintf("%d", index)}, podInfoSeparator)
 }
 
-func (pt *PodTracker) isActive(vertexName, podName string) bool {
+func (pt *podTracker) isActive(vertexName, podName string) bool {
 	// using the vertex headless service to check if a pod exists or not.
 	// monitor sidecar container's endpoint is used to check if the pod is active or not.
 	// example for 0th pod: https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc:2470/runtime/errors
@@ -113,7 +118,7 @@ func (pt *PodTracker) isActive(vertexName, podName string) bool {
 }
 
 // get active pod indexes to query the runtime errors endpoint.
-func (pt *PodTracker) GetActivePodIndexes(vtx v1alpha1.AbstractVertex) []int {
+func (pt *podTracker) GetActivePodIndexes(vtx v1alpha1.AbstractVertex) []int {
 	var podIndexes []int
 	values := pt.activePods.ToString()
 	if values == "" {

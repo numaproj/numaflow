@@ -50,7 +50,7 @@ type Runtime struct {
 	pipeline   *v1alpha1.Pipeline
 	localCache map[PodReplica][]ErrorDetails
 	cacheMutex sync.Mutex
-	podTracker *PodTracker
+	podTracker PodTracker
 	log        *zap.SugaredLogger
 	httpClient monitorHttpClient
 }
@@ -93,55 +93,63 @@ func (r *Runtime) Start(ctx context.Context) (err error) {
 
 // PersistRuntimeErrors updates the local cache with the runtime errors
 func (r *Runtime) PersistRuntimeErrors(ctx context.Context) {
+	// Define a function to fetch and persist errors
+	fetchAndPersistErrors := func() {
+		for _, vtx := range r.pipeline.Spec.Vertices {
+			for i := range r.podTracker.GetActivePodIndexes(vtx) {
+				podName := strings.Join([]string{r.pipeline.Name, vtx.Name, fmt.Sprintf("%d", i)}, "-")
+				// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc:2470/runtime/errors
+				url := fmt.Sprintf("https://%s.%s.%s.svc:%v/%s", podName, r.pipeline.Name+"-"+vtx.Name+"-headless", r.pipeline.Namespace, v1alpha1.VertexMonitorPort, runtimeErrorsPath)
+				if res, err := r.httpClient.Get(url); err != nil {
+					r.log.Errorw("Error reading the runtime errors endpoint: %f", err.Error())
+					continue
+				} else {
+					// Read the response body
+					body, err := io.ReadAll(res.Body)
+					res.Body.Close()
+					if err != nil {
+						r.log.Errorf("Error reading response body from %s: %v", url, err)
+						continue
+					}
+
+					// Parse the response body into runtime api response
+					var apiResponse RuntimeErrorApiResponse
+					if err := json.Unmarshal(body, &apiResponse); err != nil {
+						r.log.Errorf("Error decoding runtime error response from %s: %v", url, err)
+						continue
+					}
+
+					if apiResponse.ErrMssg != "" {
+						continue
+					}
+
+					cacheKey := PodReplica(fmt.Sprintf("%s-%s-%v", r.pipeline.Name, vtx.Name, i))
+
+					// Lock the cache before updating
+					r.cacheMutex.Lock()
+					_, ok := r.localCache[cacheKey]
+					if !ok {
+						r.localCache[cacheKey] = make([]ErrorDetails, 0)
+					}
+					r.log.Infof("Persisting error in local cache for: %s", cacheKey)
+					// overwrite the errors - if errors are gone, we should update the local cache to empty
+					// max 10 files for a container to be checked by write flow
+					r.localCache[cacheKey] = apiResponse.Data
+					r.cacheMutex.Unlock()
+				}
+			}
+		}
+	}
+
+	fetchAndPersistErrors()
+
+	// Set up a ticker to run periodically
 	ticker := time.NewTicker(runtimeErrorsTimeStep)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			for _, vtx := range r.pipeline.Spec.Vertices {
-				for i := range r.podTracker.GetActivePodIndexes(vtx) {
-					podName := strings.Join([]string{r.pipeline.Name, vtx.Name, fmt.Sprintf("%d", i)}, "-")
-					// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc:2470/runtime/errors
-					url := fmt.Sprintf("https://%s.%s.%s.svc:%v/%s", podName, r.pipeline.Name+"-"+vtx.Name+"-headless", r.pipeline.Namespace, v1alpha1.VertexMonitorPort, runtimeErrorsPath)
-					if res, err := r.httpClient.Get(url); err != nil {
-						r.log.Errorw("Error reading the runtime errors endpoint: %f", err.Error())
-						continue
-					} else {
-						// Read the response body
-						body, err := io.ReadAll(res.Body)
-						res.Body.Close()
-						if err != nil {
-							r.log.Errorf("Error reading response body from %s: %v", url, err)
-							continue
-						}
-
-						// Parse the response body into runtime api response
-						var apiResponse RuntimeErrorApiResponse
-						if err := json.Unmarshal(body, &apiResponse); err != nil {
-							r.log.Errorf("Error decoding runtime error response from %s: %v", url, err)
-							continue
-						}
-
-						if apiResponse.ErrMssg != "" {
-							continue
-						}
-
-						cacheKey := PodReplica(fmt.Sprintf("%s-%s-%v", r.pipeline.Name, vtx.Name, i))
-
-						// Lock the cache before updating
-						r.cacheMutex.Lock()
-						_, ok := r.localCache[cacheKey]
-						if !ok {
-							r.localCache[cacheKey] = make([]ErrorDetails, 0)
-						}
-						r.log.Infof("Persisting error in local cache for: %s", cacheKey)
-						// overwrite the errors - if errors are gone, we should update the local cache to empty
-						// max 10 files for a container to be checked by write flow
-						r.localCache[cacheKey] = apiResponse.Data
-						r.cacheMutex.Unlock()
-					}
-				}
-			}
+			fetchAndPersistErrors()
 		// If the context is done, return.
 		case <-ctx.Done():
 			r.log.Info("Context canceled, stopping PersistRuntimeErrors")

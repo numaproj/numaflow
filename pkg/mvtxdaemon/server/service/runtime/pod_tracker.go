@@ -21,7 +21,11 @@ import (
 // "*" is chosen because it is not allowed in the above fields.
 const podInfoSeparator = "*"
 
-type PodTracker struct {
+type PodTracker interface {
+	Start(ctx context.Context) error
+	GetActivePodIndexes() []int
+}
+type podTracker struct {
 	monoVertex      *v1alpha1.MonoVertex
 	log             *zap.SugaredLogger
 	httpClient      monitorHttpClient
@@ -29,8 +33,8 @@ type PodTracker struct {
 	refreshInterval time.Duration
 }
 
-func NewPodTracker(ctx context.Context, mv *v1alpha1.MonoVertex) *PodTracker {
-	pt := &PodTracker{
+func NewPodTracker(ctx context.Context, mv *v1alpha1.MonoVertex) PodTracker {
+	pt := &podTracker{
 		monoVertex: mv,
 		log:        logging.FromContext(ctx).Named("RuntimePodTracker"),
 		httpClient: &http.Client{
@@ -45,13 +49,13 @@ func NewPodTracker(ctx context.Context, mv *v1alpha1.MonoVertex) *PodTracker {
 	return pt
 }
 
-func (pt *PodTracker) Start(ctx context.Context) error {
+func (pt *podTracker) Start(ctx context.Context) error {
 	pt.log.Debugf("Starting tracking active pods for MonoVertex %s...", pt.monoVertex.Name)
 	go pt.trackActivePods(ctx)
 	return nil
 }
 
-func (pt *PodTracker) trackActivePods(ctx context.Context) {
+func (pt *podTracker) trackActivePods(ctx context.Context) {
 	ticker := time.NewTicker(pt.refreshInterval)
 	defer ticker.Stop()
 	for {
@@ -66,7 +70,7 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 }
 
 // updateActivePods checks the status of all pods and updates the activePods set accordingly.
-func (pt *PodTracker) updateActivePods() {
+func (pt *podTracker) updateActivePods() {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
@@ -91,7 +95,7 @@ func (pt *PodTracker) updateActivePods() {
 	pt.log.Debugf("Finished updating the active pod set: %v", pt.activePods.ToString())
 }
 
-func (pt *PodTracker) getPodKey(index int) string {
+func (pt *podTracker) getPodKey(index int) string {
 	// podKey is used as a unique identifier for the pod, it is used by worker to determine the count of processed messages of the pod.
 	// we use the monoVertex name and the pod index to create a unique identifier.
 	// For example, if the monoVertex name is "simple-mono-vertex" and the pod index is 0, the podKey will be "simple-mono-vertex*0".
@@ -99,7 +103,7 @@ func (pt *PodTracker) getPodKey(index int) string {
 	return strings.Join([]string{pt.monoVertex.Name, fmt.Sprintf("%d", index)}, podInfoSeparator)
 }
 
-func (pt *PodTracker) isActive(podName string) bool {
+func (pt *podTracker) isActive(podName string) bool {
 	headlessSvc := pt.monoVertex.GetHeadlessServiceName()
 	// using the MonoVertex headless service to check if a pod exists or not.
 	// monitor sidecar container's endpoint is used to check if the pod is active or not.
@@ -116,7 +120,7 @@ func (pt *PodTracker) isActive(podName string) bool {
 }
 
 // get active pod indexes to query the runtime errors endpoint.
-func (pt *PodTracker) GetActivePodIndexes() []int {
+func (pt *podTracker) GetActivePodIndexes() []int {
 	var podIndexes []int
 	values := pt.activePods.ToString()
 	if values == "" {
