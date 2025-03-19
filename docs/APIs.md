@@ -897,6 +897,15 @@ AccumulatorWindow
 
 <p>
 
+<p>
+
+AccumulatorWindow describes a special kind of SessionWindow (similar to
+Global Window) where output should always have monotonically increasing
+WM but it can be manipulated through event-time by reordering the
+messages. NOTE: Quite powerful, should not be abused; it can cause
+stalling of pipelines and leaks.
+</p>
+
 </p>
 
 <table>

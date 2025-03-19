@@ -25,6 +25,9 @@ import "google/protobuf/timestamp.proto";
 
 package accumulator.v1;
 
+// AccumulatorWindow describes a special kind of SessionWindow (similar to Global Window) where output should
+// always have monotonically increasing WM but it can be manipulated through event-time by reordering the messages.
+// NOTE: Quite powerful, should not be abused; it can cause stalling of pipelines and leaks
 service Accumulator {
   // AccumulateFn applies a accumulate function to a request stream.
   rpc AccumulateFn(stream AccumulatorRequest) returns (stream AccumulatorResponse);
@@ -42,9 +45,8 @@ message Payload {
   map<string, string> headers = 5;
 }
 
-/**
- * AccumulatorRequest represents a request element.
- */
+
+// AccumulatorRequest represents a request element.
 message AccumulatorRequest {
   // WindowOperation represents a window operation.
   // For Aligned windows, OPEN, APPEND and CLOSE events are sent.
@@ -66,19 +68,14 @@ message AccumulatorRequest {
   optional Handshake handshake = 4;
 }
 
-
-/**
-  * Window represents a window.
- */
+// Window represents a window.
 message Window {
   google.protobuf.Timestamp start = 1;
   google.protobuf.Timestamp end = 2;
   string slot = 3;
 }
 
-/**
- * AccumulatorResponse represents a response element.
- */
+// AccumulatorResponse represents a response element.
 message AccumulatorResponse {
   Payload payload = 1;
   // This ID is used to uniquely identify a map request
@@ -91,18 +88,14 @@ message AccumulatorResponse {
   bool EOF = 6;
 }
 
-
-/**
- * ReadyResponse is the health check result.
- */
+// ReadyResponse is the health check result.
 message ReadyResponse {
   bool ready = 1;
 }
 
-/*
- * Handshake message between client and server to indicate the start of transmission.
- */
-message Handshake {
+
+// Handshake message between client and server to indicate the start of transmission.
+ message Handshake {
   // Required field indicating the start of transmission.
   bool sot = 1;
 }

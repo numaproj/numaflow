@@ -15,12 +15,14 @@ import (
 
 // accumulatorWindow TimedWindow implementation for Accumulator window.
 type accumulatorWindow struct {
+	// startTime will be 0 because this is kind of Global
 	startTime time.Time
+	// endTime will be MAX.Time since it could never end (because it is Global)
 	endTime   time.Time
 	slot      string
 	keys      []string
 	partition *partition.ID
-	id        string
+	windowID  string
 }
 
 // NewAccumulatorWindow creates a new Accumulator window.
@@ -32,7 +34,7 @@ func NewAccumulatorWindow(keys []string) window.TimedWindow {
 		slot:      slot,
 		keys:      keys,
 		partition: &window.SharedUnalignedPartition,
-		id:        fmt.Sprintf("%d-%d-%s-%s", 0, math.MaxInt64, slot, strings.Join(keys, dfv1.KeysDelimitter)),
+		windowID:  fmt.Sprintf("%d-%d-%s-%s", 0, math.MaxInt64, slot, strings.Join(keys, dfv1.KeysDelimitter)),
 	}
 }
 
@@ -59,7 +61,7 @@ func (w *accumulatorWindow) Partition() *partition.ID {
 }
 
 func (w *accumulatorWindow) ID() string {
-	return w.id
+	return w.windowID
 }
 
 func (w *accumulatorWindow) Merge(window.TimedWindow) {
@@ -72,21 +74,27 @@ func (w *accumulatorWindow) Expand(time.Time) {
 
 // windowState maintains the state of the window, consisting of the window and the message timestamps.
 type windowState struct {
-	window            window.TimedWindow
+	window window.TimedWindow
+	// messageTimestamps will track every inflight message's timestamp. It will be cleared
+	// during a GC event (once WM progresses).
 	messageTimestamps []time.Time
-	latestEventTime   time.Time
+	// FIXME: still not required?
+	// lastSeenEventTime is to see what was latest we have event time ever seen. This cannot be
+	// messageTimestamps[-1] because that list will be cleared due to timeout. Since WM is global (across keys)
+	// we need to trigger a close window to the UDF once the timeout has passed (WM > last-seen + timeout).
+	lastSeenEventTime time.Time
 }
 
 func newWindowState(window window.TimedWindow) *windowState {
 	return &windowState{
 		window:            window,
 		messageTimestamps: []time.Time{},
-		latestEventTime:   time.UnixMilli(-1),
+		lastSeenEventTime: time.UnixMilli(-1),
 	}
 }
 
-// addEventTime adds the event time to the inflight messages timestamp list in a sorted order.
-func (ws *windowState) addEventTime(eventTime time.Time) {
+// appendToTimestampList adds the event time to the inflight messages timestamp list in a sorted order.
+func (ws *windowState) appendToTimestampList(eventTime time.Time) {
 	// Find the insertion point using binary search
 	index := sort.Search(len(ws.messageTimestamps), func(i int) bool {
 		return ws.messageTimestamps[i].After(eventTime)
@@ -97,8 +105,8 @@ func (ws *windowState) addEventTime(eventTime time.Time) {
 	ws.messageTimestamps[index] = eventTime
 
 	// Update the latest event time
-	if eventTime.After(ws.latestEventTime) {
-		ws.latestEventTime = eventTime
+	if eventTime.After(ws.lastSeenEventTime) {
+		ws.lastSeenEventTime = eventTime
 	}
 }
 
@@ -113,9 +121,9 @@ func (ws *windowState) deleteEventTimesBefore(endTime time.Time) {
 
 	// Update the latest event time
 	if len(ws.messageTimestamps) > 0 {
-		ws.latestEventTime = ws.messageTimestamps[len(ws.messageTimestamps)-1]
+		ws.lastSeenEventTime = ws.messageTimestamps[len(ws.messageTimestamps)-1]
 	} else {
-		ws.latestEventTime = time.Unix(0, 0)
+		ws.lastSeenEventTime = time.Unix(0, 0)
 	}
 }
 
@@ -125,6 +133,7 @@ type Windower struct {
 	pipelineName  string
 	vertexReplica int32
 	timeout       time.Duration
+	// activeWindows captures the windowState for every key.
 	activeWindows map[string]*windowState
 }
 
@@ -155,6 +164,8 @@ func (w *Windower) Type() window.Type {
 // we will have only one window per key.
 func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindowRequest {
 	combinedKey := strings.Join(message.Keys, dfv1.KeysDelimitter)
+	var op = window.Append
+
 	ws, ok := w.activeWindows[combinedKey]
 	// if we are seeing the key for the first time or if we are seeing the key after the timeout has expired create a
 	// new window.
@@ -162,14 +173,17 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 		win := NewAccumulatorWindow(message.Keys)
 		ws = newWindowState(win)
 		w.activeWindows[combinedKey] = ws
+		// this is a new window
+		op = window.Open
 	}
 
 	// track the event times of the messages, will be used for publishing idle watermarks
-	ws.addEventTime(message.EventTime)
+	ws.appendToTimestampList(message.EventTime)
+
 	return []*window.TimedWindowRequest{
 		{
 			ReadMessage: message,
-			Operation:   window.Append,
+			Operation:   op,
 			Windows:     []window.TimedWindow{ws.window},
 			ID:          ws.window.Partition(),
 		},
@@ -178,19 +192,16 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 
 // InsertWindow inserts the window into the active windows. Since we have only one window for the key, it replaces
 // the existing window.
-func (w *Windower) InsertWindow(tw window.TimedWindow) {
-	combinedKey := strings.Join(tw.Keys(), dfv1.KeysDelimitter)
-	win := tw.(*accumulatorWindow)
-	ws := newWindowState(win)
-	w.activeWindows[combinedKey] = ws
+func (w *Windower) InsertWindow(_ window.TimedWindow) {
+	// Not Applicable for UnAligned
 }
 
-// CloseWindows closes the windows that have expired based on the timeout.
+// CloseWindows closes the windows that have expired based on the timeout and since the WM has progressed.
 func (w *Windower) CloseWindows(currentTime time.Time) []*window.TimedWindowRequest {
 	var requests []*window.TimedWindowRequest
 	for key, ws := range w.activeWindows {
 		// check the latest event time we have seen for the key, if it's older than the timeout, close the window.
-		if currentTime.After(ws.latestEventTime.Add(w.timeout)) {
+		if currentTime.After(ws.lastSeenEventTime.Add(w.timeout)) {
 			requests = append(requests, &window.TimedWindowRequest{
 				Operation: window.Close,
 				Windows:   []window.TimedWindow{ws.window},

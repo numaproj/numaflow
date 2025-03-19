@@ -316,7 +316,7 @@ func validateReduceUDF(udf dfv1.UDF) error {
 		return fmt.Errorf(`invalid "groupBy.window.session", "timeout" is missing`)
 	}
 	if accum != nil && accum.Timeout == nil {
-		return fmt.Errorf(`invalid "groupBy.window.accumulator", "ttl" is missing`)
+		return fmt.Errorf(`invalid "groupBy.window.accumulator", "timeout" is missing`)
 	}
 	if storage == nil {
 		return fmt.Errorf(`invalid "groupBy", "storage" is missing`)

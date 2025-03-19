@@ -99,8 +99,8 @@ func (u *GRPCBasedAccumulator) ApplyReduce(ctx context.Context, _ *partition.ID,
 				if result.GetEOF() {
 					continue
 				}
-				// generate the unique Id for the window to keep track of the response count for the window using the resultsMap
-				responseCh <- u.parseGlobalReduceResponse(result)
+				// generate the unique ID for the window to keep track of the response count for the window using the resultsMap
+				responseCh <- u.parseAccumulatorResponse(result)
 			case err := <-reduceErrCh:
 				// ctx.Done() event will be handled by the AsyncReduceFn method
 				// so we don't need a separate case for ctx.Done() here
@@ -115,7 +115,7 @@ func (u *GRPCBasedAccumulator) ApplyReduce(ctx context.Context, _ *partition.ID,
 		}
 	}()
 
-	// create GlobalReduceRequest from TimedWindowRequest and send it to requestCh channel for AsyncReduceFn
+	// create AccumulatorRequest from TimedWindowRequest and send it to requestCh channel for AsyncReduceFn
 	go func() {
 		// after reading all the requests from the requestsStream or if ctx was canceled close the requestCh channel
 		defer func() {
@@ -129,7 +129,7 @@ func (u *GRPCBasedAccumulator) ApplyReduce(ctx context.Context, _ *partition.ID,
 					return
 				}
 
-				d := createGlobalReduceRequest(req)
+				d := createAccumulatorRequest(req)
 
 				// send the request to requestCh channel, handle the case when the context is canceled
 				select {
@@ -147,7 +147,7 @@ func (u *GRPCBasedAccumulator) ApplyReduce(ctx context.Context, _ *partition.ID,
 	return responseCh, errCh
 }
 
-func createGlobalReduceRequest(windowRequest *window.TimedWindowRequest) *accumulatorpb.AccumulatorRequest {
+func createAccumulatorRequest(windowRequest *window.TimedWindowRequest) *accumulatorpb.AccumulatorRequest {
 	var payload = &accumulatorpb.Payload{}
 	if windowRequest.ReadMessage != nil {
 		payload = &accumulatorpb.Payload{
@@ -192,7 +192,7 @@ func createGlobalReduceRequest(windowRequest *window.TimedWindowRequest) *accumu
 	return d
 }
 
-func (u *GRPCBasedAccumulator) parseGlobalReduceResponse(response *accumulatorpb.AccumulatorResponse) *window.TimedWindowResponse {
+func (u *GRPCBasedAccumulator) parseAccumulatorResponse(response *accumulatorpb.AccumulatorResponse) *window.TimedWindowResponse {
 	start := response.GetWindow().GetStart().AsTime()
 	end := response.GetWindow().GetEnd().AsTime()
 	slot := response.GetWindow().GetSlot()

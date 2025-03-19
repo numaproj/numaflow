@@ -615,7 +615,8 @@ func schema_pkg_apis_numaflow_v1alpha1_AccumulatorWindow(ref common.ReferenceCal
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
+				Description: "AccumulatorWindow describes a special kind of SessionWindow (similar to Global Window) where output should always have monotonically increasing WM but it can be manipulated through event-time by reordering the messages. NOTE: Quite powerful, should not be abused; it can cause stalling of pipelines and leaks.",
+				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"ttl": {
 						SchemaProps: spec.SchemaProps{

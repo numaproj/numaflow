@@ -185,6 +185,9 @@ type SessionWindow struct {
 	Timeout *metav1.Duration `json:"timeout,omitempty" protobuf:"bytes,1,opt,name=timeout"`
 }
 
+// AccumulatorWindow describes a special kind of SessionWindow (similar to Global Window) where output should
+// always have monotonically increasing WM but it can be manipulated through event-time by reordering the messages.
+// NOTE: Quite powerful, should not be abused; it can cause stalling of pipelines and leaks.
 type AccumulatorWindow struct {
 	// Timeout is the duration of inactivity after which the state of the accumulator is removed.
 	Timeout *metav1.Duration `json:"ttl,omitempty" protobuf:"bytes,1,opt,name=timeout"`
