@@ -23,7 +23,7 @@ func TestJetstreamSvc_CreationDeletionValidation(t *testing.T) {
 	client := nats2.NewTestClient(t, s.ClientURL())
 	defer client.Close()
 
-	isbSvc, err := NewISBJetStreamSvc("testPipeline", client)
+	isbSvc, err := NewISBJetStreamSvc(client)
 	assert.NoError(t, err)
 
 	buffers := []string{"test-buffer-1", "test-buffer-2"}
@@ -68,7 +68,7 @@ func TestJetstreamSvc_GetBufferInfo(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	isbSvc, err := NewISBJetStreamSvc("testPipeline", client)
+	isbSvc, err := NewISBJetStreamSvc(client)
 	assert.NoError(t, err)
 
 	buffer := "test-buffer"
@@ -92,7 +92,7 @@ func TestJetstreamSvc_CreateWatermarkStores(t *testing.T) {
 	client := nats2.NewTestClient(t, s.ClientURL())
 	defer client.Close()
 
-	isbSvc, err := NewISBJetStreamSvc("testPipeline", client)
+	isbSvc, err := NewISBJetStreamSvc(client)
 	assert.NoError(t, err)
 
 	bucketName := "test-bucket"

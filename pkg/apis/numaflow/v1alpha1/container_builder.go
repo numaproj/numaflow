@@ -93,7 +93,7 @@ func (b containerBuilder) asSidecar() containerBuilder {
 	if !isSidecarSupported() {
 		return b
 	}
-	b.RestartPolicy = ptr.To[corev1.ContainerRestartPolicy](corev1.ContainerRestartPolicyAlways)
+	b.RestartPolicy = ptr.To(corev1.ContainerRestartPolicyAlways)
 	return b
 }
 

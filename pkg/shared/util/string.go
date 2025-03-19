@@ -18,6 +18,7 @@ package util
 
 import (
 	"crypto/rand"
+	"hash/crc32"
 	"math/big"
 	"regexp"
 	"strings"
@@ -91,4 +92,16 @@ func CompareSlice(operator v1alpha1.LogicOperator, a []string, b []string) bool 
 func DNS1035(str string) string {
 	re := regexp.MustCompile(`[^a-z0-9-]+`)
 	return re.ReplaceAllString(strings.ToLower(str), "-")
+}
+
+// Hashcode returns a unique hashcode of a string.
+func Hashcode(str string) int {
+	i := int(crc32.ChecksumIEEE([]byte(str)))
+	if i >= 0 {
+		return i
+	}
+	if -i >= 0 {
+		return -i
+	}
+	return 0
 }

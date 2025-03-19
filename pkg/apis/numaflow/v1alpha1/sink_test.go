@@ -90,7 +90,7 @@ func Test_Sink_getUDSinkContainer(t *testing.T) {
 	assert.Equal(t, int32(15), c.LivenessProbe.TimeoutSeconds)
 	assert.Equal(t, int32(14), c.LivenessProbe.PeriodSeconds)
 	assert.Equal(t, int32(5), c.LivenessProbe.FailureThreshold)
-	assert.Equal(t, ptr.To[corev1.ContainerRestartPolicy](corev1.ContainerRestartPolicyAlways), c.RestartPolicy)
+	assert.Equal(t, ptr.To(corev1.ContainerRestartPolicyAlways), c.RestartPolicy)
 }
 
 func Test_Sink_getFallbackUDSinkContainer(t *testing.T) {

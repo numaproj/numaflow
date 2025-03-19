@@ -210,3 +210,34 @@ func TestDNS1035(t *testing.T) {
 		})
 	}
 }
+
+func TestHashcode(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected int
+	}{
+		{
+			name:     "a",
+			input:    "1",
+			expected: 2212294583,
+		},
+		{
+			name:     "b",
+			input:    "hello world",
+			expected: 222957957,
+		},
+		{
+			name:     "c",
+			input:    "This is a test",
+			expected: 3229261618,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Hashcode(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

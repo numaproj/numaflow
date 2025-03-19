@@ -30,8 +30,6 @@ pub struct PipelineSpec {
     pub lifecycle: Option<Box<crate::models::Lifecycle>>,
     #[serde(rename = "limits", skip_serializing_if = "Option::is_none")]
     pub limits: Option<Box<crate::models::PipelineLimits>>,
-    #[serde(rename = "servingStore", skip_serializing_if = "Option::is_none")]
-    pub serving_store: Option<Box<crate::models::ServingStore>>,
     /// SideInputs defines the Side Inputs of a pipeline.
     #[serde(rename = "sideInputs", skip_serializing_if = "Option::is_none")]
     pub side_inputs: Option<Vec<crate::models::SideInput>>,
@@ -50,7 +48,6 @@ impl PipelineSpec {
             inter_step_buffer_service_name: None,
             lifecycle: None,
             limits: None,
-            serving_store: None,
             side_inputs: None,
             templates: None,
             vertices: None,
