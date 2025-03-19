@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import Accordion from "@mui/material/Accordion";
 import AccordionSummary from "@mui/material/AccordionSummary";
@@ -12,23 +12,50 @@ import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Paper from "@mui/material/Paper";
-import Typography from "@mui/material/Typography";
-import { ErrorDetails } from "../../index";
+import { getRelativeTime } from "../../../../../../../../../../../../../../../utils";
+import { ErrorDetails } from "../../../../../../../../../../../../../../../types/declarations/pods";
+
+import "./style.css";
 
 interface ContainerDropdownProps {
   container: string;
   details?: ErrorDetails[];
+  onRefresh: () => void;
 }
 
 export const ContainerDropdown = ({
   container,
   details,
+  onRefresh,
 }: ContainerDropdownProps) => {
   const [expanded, setExpanded] = useState(false);
+  const [errorsCount, setErrorsCount] = useState<number>(0);
+  const [sortedDetails, setSortedDetails] = useState<
+    ErrorDetails[] | undefined
+  >(undefined);
+  const [lastOccurred, setLastOccurred] = useState<string | undefined>(
+    undefined
+  );
+
+  useEffect(() => {
+    const count = details?.length || 0;
+    setErrorsCount(count);
+
+    const sorted = details
+      ? [...details].sort(
+          (a, b) =>
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        )
+      : undefined;
+    setSortedDetails(sorted);
+
+    setLastOccurred(sorted?.[0]?.timestamp);
+  }, [details]);
 
   const handleChange =
     (panel: boolean) => (_event: React.SyntheticEvent, isExpanded: boolean) => {
       setExpanded(isExpanded ? panel : false);
+      onRefresh();
     };
 
   return (
@@ -47,39 +74,84 @@ export const ContainerDropdown = ({
           "& .MuiAccordionSummary-content": {
             display: "flex",
             alignItems: "center",
+            gap: "0.5rem",
           },
         }}
       >
-        <Divider
-          sx={{ width: "5rem", marginRight: "1rem", backgroundColor: "black" }}
-        />
-        <Box sx={{ fontSize: "1.3rem", whiteSpace: "nowrap" }}>{container}</Box>
-        <Divider
-          sx={{ flexGrow: 1, marginLeft: "1rem", backgroundColor: "black" }}
-        />
+        <Divider className={"divider-left-error-container"} />
+        <Box className={"error-container-box"}>
+          <Box className={"error-container-name-text"}>{container}</Box>
+          {errorsCount > 0 && (
+            <Box className={"error-container-count-text"}>{errorsCount}</Box>
+          )}
+        </Box>
+        <Divider className={"divider-middle-error-container"} />
+        {lastOccurred && (
+          <Box className={"error-container-name-text"}>
+            {getRelativeTime(lastOccurred)}
+          </Box>
+        )}
+        {lastOccurred && (
+          <Divider className={"divider-right-error-container"} />
+        )}
       </AccordionSummary>
-      {details ? (
+      {sortedDetails?.length ? (
         <AccordionDetails>
-          <Box sx={{ padding: "0.5rem 1rem" }}>
+          <Box className={"error-container-acc-box"}>
             <TableContainer component={Paper}>
               <Table aria-label="error details table">
                 <TableHead>
-                  <TableRow>
-                    <TableCell>Timestamp</TableCell>
-                    <TableCell align="left">Code</TableCell>
-                    <TableCell align="left">Message</TableCell>
-                    <TableCell align="left">Details</TableCell>
+                  <TableRow sx={{ display: "flex" }}>
+                    <TableCell
+                      className={"error-container-table-header"}
+                      sx={{ width: "18rem" }}
+                    >
+                      Last Occurred
+                    </TableCell>
+                    <TableCell
+                      align="left"
+                      className={"error-container-table-header"}
+                      sx={{ flex: 1 }}
+                    >
+                      Message
+                    </TableCell>
+                    <TableCell
+                      align="left"
+                      className={"error-container-table-header"}
+                      sx={{ flex: 1 }}
+                    >
+                      Details
+                    </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {details.map((row, index) => (
-                    <TableRow key={index}>
-                      <TableCell component="th" scope="row">
-                        {row.timestamp}
+                  {sortedDetails?.map((row, index) => (
+                    <TableRow key={index} sx={{ display: "flex" }}>
+                      <TableCell
+                        component="th"
+                        scope="row"
+                        className={"error-container-table-values"}
+                        sx={{ width: "18rem" }}
+                      >
+                        <Box>
+                          <Box>{getRelativeTime(row.timestamp)}</Box>
+                          <Box sx={{ fontSize: "1.2rem" }}>{row.timestamp}</Box>
+                        </Box>
                       </TableCell>
-                      <TableCell align="left">{row.code}</TableCell>
-                      <TableCell align="left">{row.message}</TableCell>
-                      <TableCell align="left">{row.details}</TableCell>
+                      <TableCell
+                        align="left"
+                        className={"error-container-table-values"}
+                        sx={{ flex: 1, overflow: "scroll" }}
+                      >
+                        {row.message}
+                      </TableCell>
+                      <TableCell
+                        align="left"
+                        className={"error-container-table-values"}
+                        sx={{ flex: 1, overflow: "scroll" }}
+                      >
+                        {row.details}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -89,8 +161,8 @@ export const ContainerDropdown = ({
         </AccordionDetails>
       ) : (
         <AccordionDetails>
-          <Box sx={{ padding: "0.5rem 1rem" }}>
-            <Typography>Errors not found</Typography>
+          <Box className={"error-container-acc-box"}>
+            No errors for this container
           </Box>
         </AccordionDetails>
       )}

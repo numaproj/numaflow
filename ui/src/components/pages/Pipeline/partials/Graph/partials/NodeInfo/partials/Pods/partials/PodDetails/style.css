@@ -21,3 +21,14 @@
 .vertex-details-tabs > .MuiTabs-scroller > .MuiTabs-indicator {
     background-color: #037C8F !important;
 }
+
+.errors-tab-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.errors-tab-title-count {
+    color: red;
+    font-size: 1rem !important;
+}

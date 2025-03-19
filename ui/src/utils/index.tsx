@@ -194,55 +194,14 @@ export function quantityToScalar(quantity: string): number | bigint {
   }
 }
 
-
-export function calculateMemoryPercent(usageMemory: string, requestedMemory: string): string {
-  try {
-    // Extract numeric values from strings (removing "Mi" suffix)
-    const usage = parseInt(usageMemory.replace("Mi", ""), 10);
-    const request = parseInt(requestedMemory.replace("Mi", ""), 10);
-
-    // Handle invalid input or zero requested memory
-    if (isNaN(usage) || isNaN(request) || request === 0) {
-      return "unavailable"
-    }
-
-    // Calculate percentage
-    const percent = (usage / request) * 100;
-    return `${percent.toFixed(2)}%`;
-
-  } catch (error) {
-    return "unavailable";
-  }
-}
-
-export function calculateCPUPercent(usageCPU: string, requestedCPU: string): string{
-  try {
-    // Extract numeric values from strings (removing "m" suffix)
-    const usage = parseInt(usageCPU.replace("m", ""), 10);
-    const request = parseInt(requestedCPU.replace("m", ""), 10);
-
-    // Handle invalid input or zero requested CPU
-    if (isNaN(usage) || isNaN(request) || request === 0) {
-      return "unavailable"; 
-    }
-
-    // Calculate percentage
-    const percent = (usage / request) * 100;
-    return `${percent.toFixed(2)}%`; 
-  } catch (error) {
-    return "unavailable"; 
-  }
-}
-
-
 export function getPodContainerUsePercentages(
   pod: Pod,
   podDetails: PodDetail,
   containerName: string
 ): ResourceUsage {
   if (
-    podDetails?.containerMap instanceof Map === true &&
-    pod.containerSpecMap instanceof Map === true
+    podDetails?.containerMap instanceof Map &&
+    pod.containerSpecMap instanceof Map
   ) {
     const usedCPUParsed: number | undefined =
       podDetails?.containerMap?.get(containerName)?.cpuParsed;
@@ -467,6 +426,26 @@ export const timeAgo = (timestamp: string) => {
         return Math.floor(seconds / format[2]) + " " + format[1] + " " + token;
     }
   return time;
+};
+
+export const getRelativeTime = (timestamp: string): string => {
+  const now = new Date();
+  const past = new Date(timestamp);
+  const diffInSeconds = Math.floor((now.getTime() - past.getTime()) / 1000);
+
+  const minutes = Math.floor(diffInSeconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) {
+    return `${days}d ago`;
+  } else if (hours > 0) {
+    return `${hours}h ago`;
+  } else if (minutes > 0) {
+    return `${minutes}m ago`;
+  } else {
+    return `${diffInSeconds}s ago`;
+  }
 };
 
 export const PIPELINE_STATUS_TOOLTIP =

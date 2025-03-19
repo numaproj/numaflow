@@ -1,0 +1,45 @@
+.divider-left-error-container {
+  width: 5rem;
+  background-color: black;
+}
+
+.error-container-box {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.error-container-name-text {
+  font-size: 1.3rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.error-container-count-text {
+  color: red;
+  font-size: 1rem;
+  font-weight: bolder;
+}
+
+.divider-middle-error-container {
+  flex-grow: 1;
+  background-color: black;
+}
+
+.divider-right-error-container {
+  width: 5rem;
+  background-color: black;
+}
+
+.error-container-acc-box {
+  font-size: 1.1rem;
+  margin-left: 5.5rem;
+}
+
+.error-container-table-header {
+  font-weight: bold !important;
+}
+
+.error-container-table-values {
+  height: 8rem !important;
+}

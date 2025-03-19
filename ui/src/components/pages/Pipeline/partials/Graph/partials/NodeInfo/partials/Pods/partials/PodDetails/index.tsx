@@ -1,10 +1,11 @@
-import React, { useContext } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import Tab from "@mui/material/Tab";
 import Tabs from "@mui/material/Tabs";
 import { Metrics } from "./partials/Metrics";
 import { PodLogs } from "./partials/PodLogs";
 import { Errors } from "./partials/Errors";
+import { useErrorsFetch } from "../../../../../../../../../../../utils/fetchWrappers/errorsFetch";
 import { PodDetailProps } from "../../../../../../../../../../../types/declarations/pods";
 import { AppContextProps } from "../../../../../../../../../../../types/declarations/app";
 import { AppContext } from "../../../../../../../../../../../App";
@@ -35,14 +36,43 @@ export function PodDetail({
   vertexId,
 }: PodDetailProps) {
   if (!pod) return null;
+  const [replica, setReplica] = useState<number>(0);
+  const [errorsCount, setErrorsCount] = useState<number>(0);
 
-  const { disableMetricsCharts } = useContext<AppContextProps>(AppContext);
+  useEffect(() => {
+    try {
+      const podNameSplit = pod?.name?.split("-");
+      const replicaIndex = podNameSplit?.length - 2;
+      const replicaNumber =
+        replicaIndex >= 0 ? Number(podNameSplit[replicaIndex]) : NaN;
+      setReplica(isNaN(replicaNumber) ? 0 : replicaNumber);
+    } catch (error) {
+      setReplica(0);
+    }
+  }, [pod]);
+
+  const { addError, disableMetricsCharts } =
+    useContext<AppContextProps>(AppContext);
 
   const { podsViewTab, setPodsViewTab } =
     useContext<VertexDetailsContextProps>(VertexDetailsContext);
   const handleTabChange = (_: any, newValue: number) => {
     setPodsViewTab(newValue);
   };
+
+  const { data: errorsDetailsData } = useErrorsFetch({
+    namespaceId,
+    pipelineId,
+    vertexId,
+    replica,
+    type,
+    addError,
+  });
+
+  useEffect(() => {
+    const count = errorsDetailsData?.length || 0;
+    setErrorsCount(count);
+  }, [errorsDetailsData]);
 
   return (
     <Box
@@ -73,7 +103,14 @@ export function PodDetail({
               ? "vertex-details-tab-selected"
               : "vertex-details-tab"
           }
-          label="Errors"
+          label={
+            <Box className={"errors-tab-title"}>
+              <Box>Errors</Box>
+              {errorsCount > 0 && (
+                <Box className={"errors-tab-title-count"}>{errorsCount}</Box>
+              )}
+            </Box>
+          }
           data-testid="errors-tab"
         />
         {!disableMetricsCharts && (
@@ -121,10 +158,11 @@ export function PodDetail({
           <Box
             sx={{
               p: "1.6rem",
-              height: "calc(100% - 3rem)",
+              height: "calc(100% - 5rem)",
+              overflow: "scroll",
             }}
           >
-            <Errors containers={pod?.containers} />
+            <Errors containers={pod?.containers} details={errorsDetailsData} />
           </Box>
         )}
       </div>

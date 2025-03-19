@@ -1,5 +1,4 @@
 import { EventType } from "@visx/event/lib/types";
-import { Dispatch, SetStateAction } from "react";
 
 export interface Pod {
   name: string;
@@ -146,4 +145,19 @@ export interface PodLogsProps {
 export interface ResourceUsage {
   cpuPercent?: number;
   memoryPercent?: number;
+}
+
+export interface ErrorDetails {
+  container: string;
+  timestamp: string;
+  code: string;
+  message: string;
+  details: string;
+}
+
+export interface ErrorsDetailsFetchResult {
+  data?: ErrorDetails[];
+  loading: boolean;
+  error: any;
+  refresh: () => void;
 }
