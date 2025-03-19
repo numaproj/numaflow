@@ -171,21 +171,20 @@ func createAccumulatorRequest(windowRequest *window.TimedWindowRequest) *accumul
 		panic("unhandled default case")
 	}
 
-	var windows []*accumulatorpb.Window
-
-	for _, w := range windowRequest.Windows {
-		windows = append(windows, &accumulatorpb.Window{
-			Start: timestamppb.New(w.StartTime()),
-			End:   timestamppb.New(w.EndTime()),
-			Slot:  w.Slot(),
-		})
+	// for accumulator we will have only one window
+	w := windowRequest.Windows[0]
+	keyedWindow := &accumulatorpb.KeyedWindow{
+		Start: timestamppb.New(w.StartTime()),
+		End:   timestamppb.New(w.EndTime()),
+		Slot:  w.Slot(),
+		Keys:  w.Keys(),
 	}
 
 	var d = &accumulatorpb.AccumulatorRequest{
 		Payload: payload,
 		Operation: &accumulatorpb.AccumulatorRequest_WindowOperation{
-			Event:   windowOp,
-			Windows: windows,
+			Event:       windowOp,
+			KeyedWindow: keyedWindow,
 		},
 		Id: windowRequest.ReadMessage.ID.String(),
 	}

@@ -45,20 +45,18 @@ message Payload {
   map<string, string> headers = 5;
 }
 
-
 // AccumulatorRequest represents a request element.
 message AccumulatorRequest {
   // WindowOperation represents a window operation.
-  // For Aligned windows, OPEN, APPEND and CLOSE events are sent.
+  // For Unaligned windows, OPEN, APPEND and CLOSE events are sent.
   message WindowOperation {
     enum Event {
       OPEN = 0;
       CLOSE = 1;
       APPEND = 2;
     }
-
     Event event = 1;
-    repeated Window windows = 2;
+    KeyedWindow keyedWindow = 2;
   }
 
   Payload payload = 1;
@@ -68,11 +66,13 @@ message AccumulatorRequest {
   optional Handshake handshake = 4;
 }
 
+
 // Window represents a window.
-message Window {
+message KeyedWindow {
   google.protobuf.Timestamp start = 1;
   google.protobuf.Timestamp end = 2;
   string slot = 3;
+  repeated string keys = 4;
 }
 
 // AccumulatorResponse represents a response element.
@@ -81,21 +81,21 @@ message AccumulatorResponse {
   // This ID is used to uniquely identify a map request
   string id = 2;
   // window represents a window to which the result belongs.
-  Window window = 3;
+  KeyedWindow window = 3;
   repeated string tags = 4;
   optional Handshake handshake = 5;
   // EOF represents the end of the response for a window.
   bool EOF = 6;
 }
 
+
 // ReadyResponse is the health check result.
 message ReadyResponse {
   bool ready = 1;
 }
 
-
 // Handshake message between client and server to indicate the start of transmission.
- message Handshake {
+message Handshake {
   // Required field indicating the start of transmission.
   bool sot = 1;
 }

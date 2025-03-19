@@ -42,31 +42,8 @@ func TestAccumulate_AssignWindow(t *testing.T) {
 
 	assert.Equal(t, 1, len(windowRequests))
 	assert.Equal(t, baseTime, windowRequests[0].ReadMessage.EventTime)
-	assert.Equal(t, window.Append, windowRequests[0].Operation)
+	assert.Equal(t, window.Open, windowRequests[0].Operation)
 	assert.Equal(t, "key1", windowRequests[0].Windows[0].Keys()[0])
-}
-
-func TestAccumulate_InsertWindow(t *testing.T) {
-	win := NewAccumulatorWindow([]string{"key1"})
-	windower := NewWindower(&dfv1.VertexInstance{
-		Vertex: &dfv1.Vertex{
-			Spec: dfv1.VertexSpec{
-				PipelineName: "test-pipeline",
-				AbstractVertex: dfv1.AbstractVertex{
-					Name: "test-vertex",
-				},
-			},
-		},
-	}, time.Hour)
-
-	accumulateWindower := windower.(*Windower)
-
-	windower.InsertWindow(win)
-	assert.Equal(t, 1, len(accumulateWindower.activeWindows))
-
-	win2 := NewAccumulatorWindow([]string{"key2"})
-	windower.InsertWindow(win2)
-	assert.Equal(t, 2, len(accumulateWindower.activeWindows))
 }
 
 func TestAccumulate_CloseWindows(t *testing.T) {

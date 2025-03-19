@@ -95,7 +95,7 @@ func NewFromClient(ctx context.Context, c accumulatorpb.AccumulatorClient) (Clie
 }
 
 // CloseConn closes the grpc client connection.
-func (c *client) CloseConn(ctx context.Context) error {
+func (c *client) CloseConn(_ context.Context) error {
 	return c.conn.Close()
 }
 
