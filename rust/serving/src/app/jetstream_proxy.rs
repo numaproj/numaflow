@@ -229,7 +229,6 @@ async fn sync_publish<
         ));
     }
 
-    // TODO: add a timeout for waiting on rx. make sure deregister is called if timeout branch is invoked.
     let processing_result = match notify.await {
         Ok(processing_result) => processing_result,
         Err(e) => {

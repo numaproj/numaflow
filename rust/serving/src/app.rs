@@ -8,7 +8,7 @@ use axum::response::Response;
 use axum::{body::Body, http::Request, middleware, response::IntoResponse, routing::get, Router};
 use axum_server::tls_rustls::RustlsConfig;
 use axum_server::Handle;
-use http::{HeaderName, HeaderValue};
+use http::HeaderName;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
 use serde::Deserialize;
@@ -75,10 +75,10 @@ where
     Ok(())
 }
 
-#[derive(Clone)]
 /// New type to store the TID of a request in Axum's request extensions
 /// Request extensions are like a hashmap with the key as the type of the value we store. https://docs.rs/http/1.2.0/http/struct.Extensions.html
 /// A new type is needed so that the value doesn't get accidentally overwritten by some other middleware.
+#[derive(Clone)]
 struct Tid(String);
 
 #[derive(Deserialize)]

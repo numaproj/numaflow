@@ -200,7 +200,7 @@ impl super::CallbackStore for JetStreamCallbackStore {
 
                     // init key is used to signal the start of processing, the value will be the timestamp.
                     if entry.key == callbacks_init_key {
-                        tracing::info!(
+                        tracing::debug!(
                             callbacks_init_key,
                             "Received event for the init key. Ignoring it"
                         );
@@ -209,7 +209,7 @@ impl super::CallbackStore for JetStreamCallbackStore {
 
                     // done key is used to signal the end of processing, we can break the loop
                     if entry.key == callbacks_done_key {
-                        tracing::info!(
+                        tracing::debug!(
                             callbacks_done_key,
                             "Received event for the callback_done_key. Stopping the watcher task"
                         );
