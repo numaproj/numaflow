@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -56,7 +57,7 @@ func NewPodTracker(ctx context.Context, mv *v1alpha1.MonoVertex, opts ...PodTrac
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 			},
-			Timeout: time.Second,
+			Timeout: 100 * time.Millisecond,
 		},
 		activePods:      util.NewUniqueStringList(),
 		refreshInterval: 30 * time.Second, // Default refresh interval for updating the active pod set
@@ -99,15 +100,27 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 
 // updateActivePods checks the status of all pods and updates the activePods set accordingly.
 func (pt *PodTracker) updateActivePods() {
-	for i := 0; i < int(pt.monoVertex.Spec.Scale.GetMaxReplicas()); i++ {
-		podName := fmt.Sprintf("%s-mv-%d", pt.monoVertex.Name, i)
-		podKey := pt.getPodKey(i)
-		if pt.isActive(podName) {
-			pt.activePods.PushBack(podKey)
-		} else {
-			pt.activePods.Remove(podKey)
-		}
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	for i := range int(pt.monoVertex.Spec.Scale.GetMaxReplicas()) {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			podName := fmt.Sprintf("%s-mv-%d", pt.monoVertex.Name, index)
+			podKey := pt.getPodKey(index)
+			if pt.isActive(podName) {
+				mu.Lock()
+				pt.activePods.PushBack(podKey)
+				mu.Unlock()
+			} else {
+				mu.Lock()
+				pt.activePods.Remove(podKey)
+				mu.Unlock()
+			}
+		}(i)
 	}
+	wg.Wait()
 	pt.log.Debugf("Finished updating the active pod set: %v", pt.activePods.ToString())
 }
 
