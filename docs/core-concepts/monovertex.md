@@ -41,7 +41,7 @@ The rule of thumb is, if you are just reading from the source and writing to a s
 you might be able to get away with MonoVertex. For all other use cases, use the full Pipeline Semantics. Below are a 
 few examples where you cannot use MonoVertex.
 
- * [User-Defined Functions](../user-guide/user-defined-functions/user-defined-functions.md) are not supported, only
+ * [Map](../user-guide/user-defined-functions/user-defined-functions.md) is not supported, only
    [Transformer](../user-guide/sources/transformer/overview.md) can be used. If you need Map support, please let us know 
    by creating an issue,
  * If you are using the [Reduce](../user-guide/user-defined-functions/reduce/reduce.md) feature, then the full [Pipeline](./pipeline.md)
