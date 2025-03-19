@@ -186,8 +186,8 @@ type SessionWindow struct {
 }
 
 type AccumulatorWindow struct {
-	// TTL is the duration of inactivity after which the state of the accumulator is removed.
-	TTL *metav1.Duration `json:"ttl,omitempty" protobuf:"bytes,1,opt,name=ttl"`
+	// Timeout is the duration of inactivity after which the state of the accumulator is removed.
+	Timeout *metav1.Duration `json:"ttl,omitempty" protobuf:"bytes,1,opt,name=timeout"`
 }
 
 // PBQStorage defines the persistence configuration for a vertex.

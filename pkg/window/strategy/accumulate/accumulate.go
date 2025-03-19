@@ -3,6 +3,7 @@ package accumulate
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -84,21 +85,33 @@ func newWindowState(window window.TimedWindow) *windowState {
 	}
 }
 
+// addEventTime adds the event time to the inflight messages timestamp list in a sorted order.
 func (ws *windowState) addEventTime(eventTime time.Time) {
-	ws.messageTimestamps = append(ws.messageTimestamps, eventTime)
+	// Find the insertion point using binary search
+	index := sort.Search(len(ws.messageTimestamps), func(i int) bool {
+		return ws.messageTimestamps[i].After(eventTime)
+	})
+	// Insert the event time at the found index
+	ws.messageTimestamps = append(ws.messageTimestamps, time.Time{})
+	copy(ws.messageTimestamps[index+1:], ws.messageTimestamps[index:])
+	ws.messageTimestamps[index] = eventTime
+
+	// Update the latest event time
 	if eventTime.After(ws.latestEventTime) {
 		ws.latestEventTime = eventTime
 	}
 }
 
+// deleteEventTimesBefore deletes the event times from the window state before the given end time.
 func (ws *windowState) deleteEventTimesBefore(endTime time.Time) {
-	var newEventTimes []time.Time
-	for _, et := range ws.messageTimestamps {
-		if et.After(endTime) {
-			newEventTimes = append(newEventTimes, et)
-		}
-	}
-	ws.messageTimestamps = newEventTimes
+	// Find the first index where the event time is after the end time using binary search
+	index := sort.Search(len(ws.messageTimestamps), func(i int) bool {
+		return ws.messageTimestamps[i].After(endTime)
+	})
+	// Keep only the event times after the end time
+	ws.messageTimestamps = ws.messageTimestamps[index:]
+
+	// Update the latest event time
 	if len(ws.messageTimestamps) > 0 {
 		ws.latestEventTime = ws.messageTimestamps[len(ws.messageTimestamps)-1]
 	} else {
@@ -106,17 +119,19 @@ func (ws *windowState) deleteEventTimesBefore(endTime time.Time) {
 	}
 }
 
+// Windower is an implementation of window.TimedWindower for Accumulator window.
 type Windower struct {
 	vertexName    string
 	pipelineName  string
 	vertexReplica int32
-	ttl           time.Duration
+	timeout       time.Duration
 	activeWindows map[string]*windowState
 }
 
-func NewWindower(vertexInstance *dfv1.VertexInstance, ttl time.Duration) window.TimedWindower {
+// NewWindower creates a new Windower for Accumulator window.
+func NewWindower(vertexInstance *dfv1.VertexInstance, timeout time.Duration) window.TimedWindower {
 	return &Windower{
-		ttl:           ttl,
+		timeout:       timeout,
 		vertexName:    vertexInstance.Vertex.Name,
 		pipelineName:  vertexInstance.Vertex.Spec.PipelineName,
 		vertexReplica: vertexInstance.Replica,
@@ -130,18 +145,26 @@ func (w *Windower) Strategy() window.Strategy {
 	return window.Accumulator
 }
 
+// Type returns the window type. Accumulator window falls under the unaligned window type since it doesn't have
+// a fixed window size.
 func (w *Windower) Type() window.Type {
 	return window.Unaligned
 }
 
+// AssignWindows assigns the windows for the given message. Since accumulator is based on the global window concept,
+// we will have only one window per key.
 func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindowRequest {
 	combinedKey := strings.Join(message.Keys, dfv1.KeysDelimitter)
 	ws, ok := w.activeWindows[combinedKey]
+	// if we are seeing the key for the first time or if we are seeing the key after the timeout has expired create a
+	// new window.
 	if !ok {
 		win := NewAccumulatorWindow(message.Keys)
 		ws = newWindowState(win)
 		w.activeWindows[combinedKey] = ws
 	}
+
+	// track the event times of the messages, will be used for publishing idle watermarks
 	ws.addEventTime(message.EventTime)
 	return []*window.TimedWindowRequest{
 		{
@@ -153,6 +176,8 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 	}
 }
 
+// InsertWindow inserts the window into the active windows. Since we have only one window for the key, it replaces
+// the existing window.
 func (w *Windower) InsertWindow(tw window.TimedWindow) {
 	combinedKey := strings.Join(tw.Keys(), dfv1.KeysDelimitter)
 	win := tw.(*accumulatorWindow)
@@ -160,10 +185,12 @@ func (w *Windower) InsertWindow(tw window.TimedWindow) {
 	w.activeWindows[combinedKey] = ws
 }
 
+// CloseWindows closes the windows that have expired based on the timeout.
 func (w *Windower) CloseWindows(currentTime time.Time) []*window.TimedWindowRequest {
 	var requests []*window.TimedWindowRequest
 	for key, ws := range w.activeWindows {
-		if currentTime.After(ws.latestEventTime.Add(w.ttl)) {
+		// check the latest event time we have seen for the key, if it's older than the timeout, close the window.
+		if currentTime.After(ws.latestEventTime.Add(w.timeout)) {
 			requests = append(requests, &window.TimedWindowRequest{
 				Operation: window.Close,
 				Windows:   []window.TimedWindow{ws.window},
@@ -175,11 +202,15 @@ func (w *Windower) CloseWindows(currentTime time.Time) []*window.TimedWindowRequ
 	return requests
 }
 
+// NextWindowToBeClosed returns the next window to be closed. Since accumulator is based on the global window concept,
+// we don't have a window to be closed.
 func (w *Windower) NextWindowToBeClosed() window.TimedWindow {
 	// No windows get closed in accumulator
 	return nil
 }
 
+// DeleteClosedWindow deletes the event time entries from the window state till the window end time.
+// Actual deletion of the state happens when the timeout expires.
 func (w *Windower) DeleteClosedWindow(window window.TimedWindow) {
 	// delete event times less than window end time
 	if ws, ok := w.activeWindows[strings.Join(window.Keys(), dfv1.KeysDelimitter)]; ok {
@@ -187,6 +218,7 @@ func (w *Windower) DeleteClosedWindow(window window.TimedWindow) {
 	}
 }
 
+// OldestWindowEndTime returns the oldest event time among all the keyed windows.
 func (w *Windower) OldestWindowEndTime() time.Time {
 	var minEndTime = time.UnixMilli(-1)
 	for _, ws := range w.activeWindows {

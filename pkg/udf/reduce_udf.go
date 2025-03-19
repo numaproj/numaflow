@@ -189,7 +189,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	} else if windowType.Session != nil {
 		windower = session.NewWindower(windowType.Session.Timeout.Duration, u.VertexInstance)
 	} else if windowType.Accumulator != nil {
-		windower = accumulate.NewWindower(u.VertexInstance, windowType.Accumulator.TTL.Duration)
+		windower = accumulate.NewWindower(u.VertexInstance, windowType.Accumulator.Timeout.Duration)
 	} else {
 		return fmt.Errorf("invalid window spec")
 	}

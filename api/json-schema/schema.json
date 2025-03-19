@@ -19642,7 +19642,7 @@
       "properties": {
         "ttl": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
-          "description": "TTL is the duration of inactivity after which the state of the accumulator is removed."
+          "description": "Timeout is the duration of inactivity after which the state of the accumulator is removed."
         }
       },
       "type": "object"

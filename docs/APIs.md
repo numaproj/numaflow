@@ -934,7 +934,7 @@ Kubernetes meta/v1.Duration </a> </em>
 
 <p>
 
-TTL is the duration of inactivity after which the state of the
+Timeout is the duration of inactivity after which the state of the
 accumulator is removed.
 </p>
 

@@ -213,8 +213,8 @@ message AbstractVertex {
 }
 
 message AccumulatorWindow {
-  // TTL is the duration of inactivity after which the state of the accumulator is removed.
-  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration ttl = 1;
+  // Timeout is the duration of inactivity after which the state of the accumulator is removed.
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration timeout = 1;
 }
 
 message Authorization {

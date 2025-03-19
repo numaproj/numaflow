@@ -619,7 +619,7 @@ func schema_pkg_apis_numaflow_v1alpha1_AccumulatorWindow(ref common.ReferenceCal
 				Properties: map[string]spec.Schema{
 					"ttl": {
 						SchemaProps: spec.SchemaProps{
-							Description: "TTL is the duration of inactivity after which the state of the accumulator is removed.",
+							Description: "Timeout is the duration of inactivity after which the state of the accumulator is removed.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
