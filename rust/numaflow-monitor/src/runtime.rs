@@ -1,7 +1,11 @@
-//! Runtime module is used for persisting runtime information such as application errors.
+//! # Runtime Module
+//! The `runtime` module is responsible for persisting runtime information, such as application errors.
+use crate::config::RuntimeInfoConfig;
+use crate::error::{Error, Result as ErrorResult};
 use chrono::{DateTime, Utc};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::convert::TryFrom;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
@@ -10,12 +14,14 @@ use std::str;
 use tonic::Status;
 use tracing::error;
 
-use crate::config::{
-    RuntimeInfoConfig, DEFAULT_MAX_ERROR_FILES_PER_CONTAINER,
-    DEFAULT_RUNTIME_APPLICATION_ERRORS_PATH,
-};
-use crate::error::{Error, Result};
+type Result<T> = std::result::Result<T, std::string::String>;
 
+/// Represents a single runtime error entry with the following fields:
+/// - `container`: The name of the container where the error occurred.
+/// - `timestamp`: The timestamp of the error in RFC 3339 format.
+/// - `code`: The gRPC error code.
+/// - `message`: The gRPC error message.
+/// - `details`: Additional details, such as the error stack trace.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RuntimeErrorEntry {
     pub container: String,
@@ -25,54 +31,100 @@ pub struct RuntimeErrorEntry {
     pub details: String,
 }
 
+impl TryFrom<&[u8]> for RuntimeErrorEntry {
+    type Error = String;
+
+    fn try_from(value: &[u8]) -> Result<Self> {
+        serde_json::from_slice::<RuntimeErrorEntry>(value)
+            .map_err(|e| format!("Failed to deserialize content: {:?}", e))
+    }
+}
+
+impl TryFrom<(&Status, &str, i64)> for RuntimeErrorEntry {
+    type Error = String;
+
+    fn try_from(value: (&Status, &str, i64)) -> Result<Self> {
+        let (grpc_status, container_name, timestamp) = value;
+
+        // Extract code, message, and details from gRPC Status
+        let code = grpc_status.code().to_string();
+        let message = grpc_status.message().to_string();
+        let details_bytes = grpc_status.details();
+
+        // Convert status details from bytes to a string
+        let details_str = String::from_utf8_lossy(details_bytes);
+
+        // Convert timestamp to RFC 3339 string
+        let rfc3339_timestamp = DateTime::<Utc>::from_timestamp(timestamp, 0)
+            .unwrap()
+            .to_rfc3339();
+
+        Ok(RuntimeErrorEntry {
+            container: container_name.to_string(),
+            timestamp: rfc3339_timestamp,
+            code,
+            message,
+            details: details_str.to_string(),
+        })
+    }
+}
+
+impl Into<String> for RuntimeErrorEntry {
+    fn into(self) -> String {
+        serde_json::to_string(&self).expect("Failed to serialize runtime error message")
+    }
+}
+
+// A structure used to represent API responses containing runtime error entries.
+// - `error_message`: Optional error message for the API response.
+// - `data`: A list of `RuntimeErrorEntry` objects.
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ApiResponse {
     pub error_message: Option<String>,
     pub data: Vec<RuntimeErrorEntry>,
 }
 
-/// Runtime is used for persisting runtime information such as application errors.
+// The main struct responsible for managing runtime error persistence and retrieval.
+// - `application_error_path`: The root directory where error files are stored.
+// - `max_error_files_per_container`: The maximum number of error files allowed per container.
 pub struct Runtime {
     application_error_path: String,
     max_error_files_per_container: usize,
 }
 
 impl Runtime {
-    // Creates a new Runtime instance with the specified directory path, where the runtime information
-    // will be persisted.
+    // Creates a new Runtime instance
+    // - application_error_path: where the runtime application errors will be persisted
+    // - max_error_files_per_container: we will not store more than max error files per container
     pub fn new(runtime_info_config: Option<RuntimeInfoConfig>) -> Self {
-        let config = runtime_info_config.unwrap_or_else(|| RuntimeInfoConfig {
-            app_error_path: (DEFAULT_RUNTIME_APPLICATION_ERRORS_PATH.to_string()),
-            max_error_files_per_container: (DEFAULT_MAX_ERROR_FILES_PER_CONTAINER),
-        });
-
+        let config = runtime_info_config.unwrap_or_default();
         Runtime {
             application_error_path: config.app_error_path,
             max_error_files_per_container: config.max_error_files_per_container,
         }
     }
 
-    // Persists the application errors.
+    /// Persists a gRPC error as a JSON file in the appropriate container directory. Automatically manages
+    /// the number of files by removing the oldest file if the max file limit is exceeded.
     pub fn persist_application_error(&self, grpc_status: Status) {
-        // extract the type of udf based on the error message
+        // extract the type of udf container based on the error message
         let container_name = extract_container_name(grpc_status.message());
-
+        // create a directory for the container if it doesn't exist
         let dir_path = Path::new(&self.application_error_path).join(&container_name);
-
         if !dir_path.exists() {
             fs::create_dir_all(&dir_path).expect("Failed to create application errors directory");
         }
 
-        // Check the number of files in the directory
+        // to check the number of files in the directory
         let mut files: Vec<_> = fs::read_dir(&dir_path)
             .expect("Failed to read application errors directory")
-            .filter_map(|entry| entry.ok().filter(|e| e.path().is_file()))
+            .filter_map(|entry| entry.ok())
             .collect();
 
-        // Sort files by their names (timestamps)
+        // sort the files based on timestamp
         files.sort_by_key(|e| e.file_name());
 
-        // Remove the oldest file if the number of files exceeds the limit
+        // remove the oldest file if the number of files exceeds the limit
         if files.len() >= self.max_error_files_per_container {
             if let Some(oldest_file) = files.first() {
                 fs::remove_file(oldest_file.path())
@@ -81,35 +133,44 @@ impl Runtime {
         }
 
         let timestamp = Utc::now().timestamp();
+        let runtime_error_entry =
+            RuntimeErrorEntry::try_from((&grpc_status, container_name.as_str(), timestamp))
+                .expect("Failed to convert gRPC status to RuntimeErrorEntry");
+        let json_str: String = runtime_error_entry.into();
+
+        // we create a file current.json and write into this file first
+        // rename it back to <timestamp>.json once write operation is completed
+        // this is to ensure that while reading we skip this file to avoid race condition
+        let current_file_path = dir_path.join("current.json");
         let file_name = format!("{}.json", timestamp);
-
-        let json_str = grpc_status_to_json(&grpc_status, container_name.as_str(), timestamp);
-
-        // create a temp file current.json, write into this file first
-        // rename it to timestamp.json once write operation is completed
-        // this is to ensure that while reading we skip this file (race condition)
-        let temp_file_path = dir_path.join("current.json");
         let final_file_path = dir_path.join(&file_name);
 
-        let mut temp_file = File::create(&temp_file_path)
-            .expect("Failed to create temporary application errors file");
-        temp_file
+        let mut current_file = File::create(&current_file_path)
+            .expect("Failed to create current application errors file");
+        current_file
             .write_all(json_str.as_bytes())
-            .expect("Failed to write to temporary application error file");
+            .expect("Failed to write to current application error file");
 
-        // Rename the temporary file to the final file name once write operation completes
-        fs::rename(&temp_file_path, &final_file_path)
-            .expect("Failed to rename temporary file to final file name");
+        // rename the current file to the final file name once write operation completes
+        fs::rename(&current_file_path, &final_file_path)
+            .expect("Failed to rename current file to final file name");
     }
 
-    // get the application errors persisted in app err directory
-    pub fn get_application_errors(&self) -> Result<Vec<RuntimeErrorEntry>> {
+    // ## File Structure
+    // The runtime module organizes application error files in a directory structure as follows:
+    // Root: /var/numaflow/runtime/
+    // └── application-errors
+    //     └── <container-name>/
+    //         ├── <timestamp1>.json
+    //         ├── <timestamp2>.json
+
+    /// Retrieves all persisted application errors from the error directory.
+    pub fn get_application_errors(&self) -> ErrorResult<Vec<RuntimeErrorEntry>> {
         let app_err_path = Path::new(&self.application_error_path);
         let mut errors = Vec::new();
         // if no app errors are persisted, directory wouldn't be created yet
         if !app_err_path.exists() || !app_err_path.is_dir() {
-            let err = Error::File("App Err path does not exist".to_string());
-            error!("{}", err);
+            let err = Error::File("No application errors persisted yet".to_string());
             return Err(err);
         }
         let paths = match fs::read_dir(app_err_path) {
@@ -122,7 +183,7 @@ impl Runtime {
 
         // iterate over all subdirectories and its files
         for entry in paths.flatten() {
-            // UD container will have its own directory
+            // ud container will have its own directory
             let sub_dir_path = entry.path();
             if !sub_dir_path.is_dir() {
                 continue;
@@ -137,6 +198,10 @@ impl Runtime {
                 }
                 Ok(file_paths) => {
                     for file_entry in file_paths.flatten() {
+                        // skip processing if the file name is "current.json"
+                        if file_entry.file_name() == std::ffi::OsStr::new("current.json") {
+                            continue;
+                        }
                         // process content of each file into error entry
                         if let Err(e) = process_file_entry(&file_entry, &mut errors) {
                             error!(
@@ -157,7 +222,7 @@ impl Runtime {
     }
 }
 
-/// extracts the container information from the error message
+///  Extracts the container name from an error message using a regular expression.
 fn extract_container_name(error_message: &str) -> String {
     let re = Regex::new(r"\((.*?)\)").unwrap();
     re.captures(error_message)
@@ -171,63 +236,29 @@ fn extract_container_name(error_message: &str) -> String {
         )
 }
 
-/// Converts gRPC status to a JSON object.
-fn grpc_status_to_json(grpc_status: &Status, container_name: &str, timestamp: i64) -> String {
-    // Extract code, message, and details from gRPC Status
-    let code = grpc_status.code().to_string();
-    let message = grpc_status.message().to_string();
-    let details_bytes = grpc_status.details();
-
-    // Convert status details from bytes to a string
-    let details_str = String::from_utf8_lossy(details_bytes);
-
-    // Convert timestamp to RFC 3339 string
-    let datetime = DateTime::<Utc>::from_timestamp(timestamp, 0).unwrap();
-    let rfc3339_timestamp = datetime.to_rfc3339();
-    // Create a RuntimeErrorEntry instance
-    let runtime_error_entry = RuntimeErrorEntry {
-        container: container_name.to_string(),
-        timestamp: rfc3339_timestamp,
-        code,
-        message,
-        details: details_str.to_string(),
-    };
-
-    // Serialize the RuntimeErrorEntry instance to a JSON string
-    serde_json::to_string(&runtime_error_entry).expect("Failed to serialize runtime error message")
-}
-
+///  Processes a single file entry, deserializing its content into a `RuntimeErrorEntry` and adding it
+///  to the provided vector of errors.
 fn process_file_entry(
     file_entry: &fs::DirEntry,
     errors: &mut Vec<RuntimeErrorEntry>,
-) -> Result<()> {
-    let file_path = file_entry.path();
-    let file_name_to_ignore = Some(std::ffi::OsStr::new("current.json"));
-    // if file path isn't a file or file name is current.json, continue processing other files
-    if !file_path.exists() || !file_path.is_file() || file_path.file_name() == file_name_to_ignore {
+) -> ErrorResult<()> {
+    if !file_entry.path().exists() || !file_entry.path().is_file() {
         return Ok(());
     }
-    match fs::read(&file_path) {
+    match fs::read(&file_entry.path()) {
         // log the error and continue processing other files
         Err(e) => {
             let err = Error::File(format!("Failed to read file content: {:?}", e));
             error!("{}", err);
             Err(err)
         }
-        // save the file content in errors vector
-        Ok(content) => match serde_json::from_slice::<RuntimeErrorEntry>(&content) {
+        Ok(content) => match RuntimeErrorEntry::try_from(content.as_slice()) {
             Ok(payload) => {
-                errors.push(RuntimeErrorEntry {
-                    container: payload.container.to_string(),
-                    timestamp: payload.timestamp,
-                    code: payload.code,
-                    message: payload.message,
-                    details: payload.details,
-                });
+                errors.push(payload);
                 Ok(())
             }
             Err(e) => {
-                let err = Error::Deserialize(format!("Failed to deserialize content: {:?}", e));
+                let err = Error::Deserialize(e);
                 error!("{}", err);
                 Err(err)
             }
@@ -240,30 +271,15 @@ mod tests {
     use super::*;
     use crate::error::Result;
     use crate::runtime::process_file_entry;
-    use chrono::Utc;
     use std::fs;
     use std::io::Write;
     use tempfile::tempdir;
-    use tonic::Code;
 
     #[test]
     fn test_extract_container_name_with_valid_pattern() {
         let error_message = "Error occurred in container (my-container)";
         let container_name = extract_container_name(error_message);
         assert_eq!(container_name, "my-container");
-    }
-
-    #[test]
-    fn test_grpc_status_to_json_valid_inputs() {
-        let grpc_status = Status::new(Code::Internal, "fn panicked");
-        let container_name = "test_container";
-        let timestamp = Utc::now().timestamp();
-
-        let json_result = grpc_status_to_json(&grpc_status, container_name, timestamp);
-
-        assert!(json_result.contains("\"code\":\"Internal error\""));
-        assert!(json_result.contains("\"message\":\"fn panicked\""));
-        assert!(json_result.contains("\"container\":\"test_container\""));
     }
 
     #[test]
@@ -299,21 +315,6 @@ mod tests {
     }
 
     #[test]
-    fn skip_processing_for_current_json_file() {
-        let dir = tempdir().unwrap();
-        let file_path = dir.path().join("current.json");
-        fs::File::create(&file_path).unwrap();
-
-        let file_entry = fs::read_dir(dir.path()).unwrap().next().unwrap().unwrap();
-        let mut errors = Vec::new();
-
-        let result: Result<()> = process_file_entry(&file_entry, &mut errors);
-
-        assert!(result.is_ok());
-        assert!(errors.is_empty());
-    }
-
-    #[test]
     fn test_process_file_entry_deserialization_failure() {
         let dir = tempdir().unwrap();
         let file_path = dir.path().join("invalid.json");
@@ -331,8 +332,6 @@ mod tests {
         let mut errors = Vec::new();
 
         let result: Result<()> = process_file_entry(&file_entry, &mut errors);
-
-        // TODO: check ERROR::Deserialize string in error
         assert!(result.is_err());
         assert_eq!(errors.len(), 0);
     }

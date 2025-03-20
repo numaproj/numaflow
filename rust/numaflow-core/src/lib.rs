@@ -65,15 +65,14 @@ mod serving_store;
 /// [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 mod watermark;
 
-use numaflow_monitor::config::RuntimeInfoConfig;
 use numaflow_monitor::runtime::Runtime;
 
 pub async fn run() -> Result<()> {
     let cln_token = CancellationToken::new();
     let shutdown_cln_token = cln_token.clone();
 
-    // Initialize Runtime
-    let runtime = Runtime::new(Some(RuntimeInfoConfig::default()));
+    // Initialize runtime for persisting errors
+    let runtime = Runtime::new(None);
 
     // wait for SIG{INT,TERM} and invoke cancellation token.
     let shutdown_handle: JoinHandle<Result<()>> = tokio::spawn(async move {

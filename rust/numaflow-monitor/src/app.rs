@@ -1,4 +1,5 @@
-use axum::{response::IntoResponse, routing::get, Extension, Json, Router};
+//! This module contains the main application logic for the sidecar monitor server.
+use axum::{extract::State, response::IntoResponse, routing::get, Json, Router};
 use axum_server::{tls_rustls::RustlsConfig, Handle};
 use http::StatusCode;
 use std::{net::SocketAddr, sync::Arc, time::Duration};
@@ -12,9 +13,13 @@ use crate::{
     MonitorServerConfig,
 };
 
+/// AppState represents the shared application state that is accessible across all handlers.
+/// It contains the Runtime instance which manages the application's runtime information
+/// and error tracking.
 pub(crate) struct AppState {
     pub(crate) runtime: Arc<Runtime>,
 }
+
 /// Start the main application Router and the axum server.
 pub(crate) async fn start_main_server(
     app_addr: SocketAddr,
@@ -29,7 +34,7 @@ pub(crate) async fn start_main_server(
 
     let runtime = Runtime::new(Some(RuntimeInfoConfig::default()));
 
-    // Initialize shared state
+    // Initialize shared app state
     let shared_state = Arc::new(AppState {
         runtime: Arc::new(runtime),
     });
@@ -48,28 +53,14 @@ pub(crate) async fn start_main_server(
 fn monitor_router(shared_state: Arc<AppState>) -> Router {
     Router::new()
         .route("/runtime/errors", get(handle_runtime_app_errors))
-        .layer(axum::extract::Extension(shared_state))
+        .with_state(shared_state)
 }
 
-/**
-File Structure for application-errors
-
-Root: /var/numaflow/runtime/
-            └── application-errors
-                └── udsource/
-                        ├── ts1.json
-                        └── ts2.json
-                └── udsink/
-                        ├── ts3.json
-                        └── ts4.json
-
-*/
-async fn handle_runtime_app_errors(
-    Extension(state): Extension<Arc<AppState>>,
-) -> impl IntoResponse {
+/// Handler for the /runtime/errors route to get application errors.
+async fn handle_runtime_app_errors(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let runtime = state.runtime.as_ref();
 
-    // Call the get_application_errors method on the Runtime instance
+    // Get the application errors from the runtime.
     match runtime.get_application_errors() {
         Ok(errors) => (
             StatusCode::OK,
@@ -93,6 +84,7 @@ async fn handle_runtime_app_errors(
     }
 }
 
+/// Gracefully shutdown the server when a termination signal is received.
 async fn graceful_shutdown(handle: Handle, server_config: MonitorServerConfig) {
     let ctrl_c = async {
         signal::ctrl_c()
@@ -114,7 +106,7 @@ async fn graceful_shutdown(handle: Handle, server_config: MonitorServerConfig) {
 
     info!("sending graceful shutdown signal");
 
-    // Signal the server to shut down using Handle.
+    // Signal the server to shutdown gracefully.
     handle.graceful_shutdown(Some(Duration::from_secs(
         server_config.graceful_shutdown_duration,
     )));
