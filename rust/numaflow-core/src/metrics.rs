@@ -684,6 +684,10 @@ pub(crate) struct PendingReaderTasks {
     expose_handle: JoinHandle<()>,
 }
 
+pub(crate) struct PendingReaderTasks_ {
+    expose_handle: JoinHandle<()>,
+}
+
 /// PendingReaderBuilder is used to build a [LagReader] instance.
 pub(crate) struct PendingReaderBuilder {
     lag_reader: LagReader,
@@ -793,14 +797,14 @@ impl PendingReader {
     /// - Another to periodically expose the pending metrics.
     ///
     /// Dropping the PendingReaderTasks will abort the background tasks.
-    pub async fn start_(&self, is_mono_vertex: bool) -> JoinHandle<()> {
+    pub async fn start_(&self, is_mono_vertex: bool) -> PendingReaderTasks_ {
         let lag_checking_interval = self.lag_checking_interval;
 
         let lag_reader = self.lag_reader.clone();
         let expose_handle = tokio::spawn(async move {
             expose_pending_metrics_(lag_reader, lag_checking_interval, is_mono_vertex).await;
         });
-        expose_handle
+        PendingReaderTasks_ { expose_handle }
     }
 }
 
@@ -810,6 +814,17 @@ impl Drop for PendingReaderTasks {
         self.expose_handle.abort();
         self.buildup_handle.abort();
         info!("Stopped the Lag-Reader Expose and Builder tasks");
+    }
+}
+
+// TODO(lookback) - using new implementation for monovertex right now,
+// deprecate old implementation and use this for pipeline as well once
+// corresponding changes are completed.
+/// When the PendingReaderTasks_ is dropped, we need to clean up the pending exposer and the pending builder tasks.
+impl Drop for PendingReaderTasks_ {
+    fn drop(&mut self) {
+        self.expose_handle.abort();
+        info!("Stopped the Lag-Reader Expose tasks");
     }
 }
 
@@ -827,6 +842,7 @@ async fn expose_pending_metrics_(
 
     loop {
         ticker.tick().await;
+
         match &mut lag_reader {
             LagReader::Source(source) => match fetch_source_pending(source).await {
                 Ok(pending) => {
@@ -839,9 +855,12 @@ async fn expose_pending_metrics_(
                                 .get_or_create(&metric_labels)
                                 .set(pending);
                         } else {
-                            let mut metric_labels = pipeline_forward_metric_labels("source").clone();
-                            metric_labels
-                                .push((PIPELINE_PARTITION_NAME_LABEL.to_string(), "source".to_string()));
+                            let mut metric_labels =
+                                pipeline_forward_metric_labels("source").clone();
+                            metric_labels.push((
+                                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                                "source".to_string(),
+                            ));
                             pipeline_metrics()
                                 .pending
                                 .get_or_create(&metric_labels)
@@ -853,16 +872,18 @@ async fn expose_pending_metrics_(
                     error!("Failed to get pending messages: {:?}", err);
                 }
             },
-
             LagReader::ISB(readers) => {
                 for reader in readers {
                     match fetch_isb_pending(reader).await {
                         Ok(pending) => {
                             if pending != -1 {
                                 info!("Pending messages {:?}", pending);
-                                let mut metric_labels = pipeline_forward_metric_labels(reader.name()).clone();
-                                metric_labels
-                                    .push((PIPELINE_PARTITION_NAME_LABEL.to_string(), reader.name().to_string()));
+                                let mut metric_labels =
+                                    pipeline_forward_metric_labels(reader.name()).clone();
+                                metric_labels.push((
+                                    PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                                    reader.name().to_string(),
+                                ));
                                 pipeline_metrics()
                                     .pending
                                     .get_or_create(&metric_labels)

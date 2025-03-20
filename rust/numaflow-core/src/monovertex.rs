@@ -89,7 +89,7 @@ async fn start(
             &mvtx_config.metrics_config,
             LagReader::Source(source.clone()),
         )
-            .await;
+        .await;
         // TODO(lookback) - using new implementation for monovertex right now,
         // deprecate old implementation and use this for pipeline as well once
         // corresponding changes are completed.

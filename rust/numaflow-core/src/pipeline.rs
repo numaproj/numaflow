@@ -210,7 +210,7 @@ async fn start_source_forwarder(
             &config.metrics_config,
             LagReader::Source(source.clone()),
         )
-            .await;
+        .await;
         let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
     }
 
