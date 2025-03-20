@@ -19,10 +19,11 @@ package rater
 import (
 	"crypto/tls"
 	"fmt"
-	dto "github.com/prometheus/client_model/go"
 	"math"
 	"net/http"
 	"time"
+
+	dto "github.com/prometheus/client_model/go"
 
 	"github.com/prometheus/common/expfmt"
 	"go.uber.org/atomic"
@@ -38,7 +39,6 @@ import (
 
 const CountWindow = time.Second * 10
 const monoVtxReadMetricName = "monovtx_read_total"
-const monoVtxPendingRawMetric = "monovtx_pending_total" // TODO: Change this metric once mvtx changes are done
 const monoVtxPendingMetric = "monovtx_pending"
 
 // MaxLookback is the upper limit beyond which lookback value is not increased
