@@ -95,10 +95,6 @@ func (u *GRPCBasedAccumulator) ApplyReduce(ctx context.Context, _ *partition.ID,
 					close(responseCh)
 					return
 				}
-
-				if result.GetEOF() {
-					continue
-				}
 				// generate the unique ID for the window to keep track of the response count for the window using the resultsMap
 				responseCh <- u.parseAccumulatorResponse(result)
 			case err := <-reduceErrCh:
@@ -195,30 +191,33 @@ func (u *GRPCBasedAccumulator) parseAccumulatorResponse(response *accumulatorpb.
 	start := response.GetWindow().GetStart().AsTime()
 	end := response.GetWindow().GetEnd().AsTime()
 	slot := response.GetWindow().GetSlot()
+	keys := response.GetWindow().GetKeys()
 
-	result := response.GetPayload()
-	taggedMessage := &isb.WriteMessage{
-		Message: isb.Message{
-			Header: isb.Header{
-				ID: isb.MessageID{
-					VertexName: u.vertexName,
-					Offset:     result.GetId(),
-					Index:      0,
+	var taggedMessage *isb.WriteMessage
+	if result := response.GetPayload(); result != nil {
+		taggedMessage = &isb.WriteMessage{
+			Message: isb.Message{
+				Header: isb.Header{
+					ID: isb.MessageID{
+						VertexName: u.vertexName,
+						Offset:     result.GetId(),
+						Index:      0,
+					},
+					MessageInfo: isb.MessageInfo{
+						EventTime: result.GetEventTime().AsTime(),
+						IsLate:    false,
+					},
+					Keys: result.GetKeys(),
 				},
-				MessageInfo: isb.MessageInfo{
-					EventTime: result.GetEventTime().AsTime(),
-					IsLate:    false,
+				Body: isb.Body{
+					Payload: result.GetValue(),
 				},
-				Keys: result.GetKeys(),
 			},
-			Body: isb.Body{
-				Payload: result.GetValue(),
-			},
-		},
+		}
 	}
 
 	return &window.TimedWindowResponse{
 		WriteMessage: taggedMessage,
-		Window:       window.NewUnalignedTimedWindow(start, end, slot, result.GetKeys()),
+		Window:       window.NewUnalignedTimedWindow(start, end, slot, keys),
 	}
 }

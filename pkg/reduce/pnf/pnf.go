@@ -197,6 +197,9 @@ forwardLoop:
 					return
 				}
 
+				// delete the entry for the key from the lastSeenWindow map
+				delete(pf.lastSeenWindow, strings.Join(response.Window.Keys(), dfv1.KeysDelimitter))
+
 				// we do not have to write anything as this is an EOF message
 				continue
 			}
@@ -210,8 +213,10 @@ forwardLoop:
 			}
 
 			if pf.windower.Strategy() == window.Accumulator {
-				winKey := strings.Join(response.WriteMessage.Keys, dfv1.KeysDelimitter)
+				winKey := strings.Join(response.Window.Keys(), dfv1.KeysDelimitter)
 				if win, ok := pf.lastSeenWindow[winKey]; ok {
+					// to avoid writing a gc event for the same window end time multiple times, we only write when the
+					// window end time is before the last seen window end time.
 					if win.EndTime().Before(response.Window.EndTime()) {
 						if err := pf.handleEOFWindow(ctx, response.Window); err != nil {
 							return
