@@ -1,8 +1,3 @@
-mod app;
-pub mod config;
-mod error;
-pub mod runtime;
-
 use crate::app::start_main_server;
 use crate::config::generate_certs;
 use crate::config::MonitorServerConfig;
@@ -10,6 +5,11 @@ use crate::error::{Error, Result};
 use axum_server::tls_rustls::RustlsConfig;
 use std::net::SocketAddr;
 use tracing::info;
+
+mod app;
+pub mod config;
+mod error;
+pub mod runtime;
 
 pub async fn run() -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     let (cert, key) = generate_certs()?;

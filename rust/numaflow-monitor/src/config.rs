@@ -9,9 +9,9 @@ pub fn generate_certs() -> std::result::Result<(Certificate, KeyPair), String> {
 
 const DEFAULT_METRICS_PORT: u16 = 2470;
 const DEFAULT_SHUTDOWN_DURATION: u64 = 30;
-pub const DEFAULT_RUNTIME_APPLICATION_ERRORS_PATH: &str =
+pub(crate) const DEFAULT_RUNTIME_APPLICATION_ERRORS_PATH: &str =
     "/var/numaflow/runtime/application-errors";
-pub const DEFAULT_MAX_ERROR_FILES_PER_CONTAINER: usize = 10;
+pub(crate) const DEFAULT_MAX_ERROR_FILES_PER_CONTAINER: usize = 10;
 
 #[derive(Debug, Clone)]
 pub(crate) struct MonitorServerConfig {

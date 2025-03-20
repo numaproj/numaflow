@@ -18,15 +18,15 @@ const CURRENT_FILE: &str = "current.json";
 /// Represents a single runtime error entry persisted by the application.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub(crate) struct RuntimeErrorEntry {
-    // The name of the container where the error occurred.
+    /// The name of the container where the error occurred.
     pub(crate) container: String,
-    // The timestamp of the error in RFC 3339 format.
+    /// The timestamp of the error in RFC 3339 format.
     pub(crate) timestamp: String,
-    // The error code.
+    /// The error code.
     pub(crate) code: String,
-    // The error message.
+    /// The error message.
     pub(crate) message: String,
-    // Additional details, such as the error stack trace.
+    /// Additional details, such as the error stack trace.
     pub(crate) details: String,
 }
 
@@ -72,20 +72,20 @@ impl From<RuntimeErrorEntry> for String {
     }
 }
 
-// A structure used to represent API responses containing runtime error entries.
+/// A structure used to represent API responses containing runtime error entries.
 #[derive(serde::Serialize, serde::Deserialize)]
 pub(crate) struct ApiResponse {
-    // Optional error message for the API response.
-    pub error_message: Option<String>,
-    // A list of `RuntimeErrorEntry` objects
-    pub data: Vec<RuntimeErrorEntry>,
+    /// Optional error message for the API response.
+    pub(crate) error_message: Option<String>,
+    /// A list of `RuntimeErrorEntry` objects
+    pub(crate) data: Vec<RuntimeErrorEntry>,
 }
 
-// Response for managing runtime error persistence and retrieval.
+/// Response for managing runtime error persistence and retrieval.
 pub struct Runtime {
-    // The root directory where error files are stored.
+    /// The root directory where error files are stored.
     application_error_path: String,
-    // The maximum number of error files allowed per container.
+    /// The maximum number of error files allowed per container.
     max_error_files_per_container: usize,
 }
 
