@@ -290,12 +290,9 @@ func (ms *metricsServer) Start(ctx context.Context) (func(ctx context.Context) e
 	if err != nil {
 		return nil, fmt.Errorf("invalid replica %q", replicaStr)
 	}
-	startPending := true
-	if ms.vertex.IsASource() && replica != 0 {
-		startPending = false
-	}
-	if startPending {
-		// Buildup pending information
+	// Buildup pending information
+	// If the vertex is a source, then only trigger for pod replica id=0
+	if !(ms.vertex.IsASource() && replica != 0) {
 		go ms.buildupPendingInfo(ctx)
 		// Expose pending metrics
 		go ms.exposePendingMetrics(ctx)
