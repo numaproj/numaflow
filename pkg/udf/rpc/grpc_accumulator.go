@@ -156,6 +156,7 @@ func createAccumulatorRequest(windowRequest *window.TimedWindowRequest) *accumul
 			EventTime: timestamppb.New(windowRequest.ReadMessage.MessageInfo.EventTime),
 			Watermark: timestamppb.New(windowRequest.ReadMessage.Watermark),
 			Headers:   windowRequest.ReadMessage.Headers,
+			Id:        windowRequest.ReadMessage.ID.String(),
 		}
 	}
 
@@ -186,7 +187,6 @@ func createAccumulatorRequest(windowRequest *window.TimedWindowRequest) *accumul
 			Event:       windowOp,
 			KeyedWindow: keyedWindow,
 		},
-		Id: windowRequest.ReadMessage.ID.String(),
 	}
 	return d
 }
@@ -202,7 +202,7 @@ func (u *GRPCBasedAccumulator) parseAccumulatorResponse(response *accumulatorpb.
 			Header: isb.Header{
 				ID: isb.MessageID{
 					VertexName: u.vertexName,
-					Offset:     response.GetId(),
+					Offset:     result.GetId(),
 					Index:      0,
 				},
 				MessageInfo: isb.MessageInfo{
