@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package runtime
 
 import (
@@ -5,7 +21,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -13,20 +28,15 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/shared/util"
 )
-
-// podInfoSeparator is used as a separator to split the pod key
-// to get the pipeline, vertex and pod index.
-// "*" is chosen because it is not allowed in the above fields.
-const podInfoSeparator = "*"
 
 // PodTracker tracks the active pods for each vertex in a pipeline.
 type PodTracker struct {
 	pipeline        *v1alpha1.Pipeline
 	log             *zap.SugaredLogger
 	httpClient      monitorHttpClient
-	activePods      *util.UniqueStringList
+	activePods      map[string][]int
+	activePodsMutex sync.RWMutex
 	refreshInterval time.Duration
 }
 
@@ -41,7 +51,7 @@ func NewPodTracker(ctx context.Context, pl *v1alpha1.Pipeline) *PodTracker {
 			},
 			Timeout: time.Second,
 		},
-		activePods: util.NewUniqueStringList(),
+		activePods: make(map[string][]int),
 		// Default refresh interval for updating the active pod set
 		refreshInterval: 30 * time.Second,
 	}
@@ -80,22 +90,15 @@ func (pt *PodTracker) updateActivePods() {
 			go func(vertexName string, index int) {
 				defer wg.Done()
 				podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, vertexName, index)
-				podKey := pt.getPodKey(index, vertexName)
 				if pt.isActive(vertexName, podName) {
-					pt.activePods.PushBack(podKey)
+					pt.addActivePod(vertexName, index)
 				} else {
-					pt.activePods.Remove(podKey)
+					pt.removeActivePod(vertexName, index)
 				}
 			}(v.Name, i)
 		}
 	}
 	wg.Wait()
-	pt.log.Debugf("Finished updating the active pod set: %v", pt.activePods.ToString())
-}
-
-func (pt *PodTracker) getPodKey(index int, vertexName string) string {
-	// podKey is used as a unique identifier for the pod, which is a combination of vertex name and pod index.
-	return strings.Join([]string{vertexName, fmt.Sprintf("%d", index)}, podInfoSeparator)
 }
 
 func (pt *PodTracker) isActive(vertexName, podName string) bool {
@@ -111,20 +114,36 @@ func (pt *PodTracker) isActive(vertexName, podName string) bool {
 	return true
 }
 
+// addActivePod adds the active pod replica for the respective vertex
+func (pt *PodTracker) addActivePod(vertexName string, index int) {
+	pt.activePodsMutex.Lock()
+	defer pt.activePodsMutex.Unlock()
+
+	pt.activePods[vertexName] = append(pt.activePods[vertexName], index)
+}
+
+// removeActivePod removes the inactive pod replica for the respective vertex
+func (pt *PodTracker) removeActivePod(vertexName string, index int) {
+	pt.activePodsMutex.Lock()
+	defer pt.activePodsMutex.Unlock()
+
+	pt.activePods[vertexName] = removeValue(pt.activePods[vertexName], index)
+}
+
 // GetActivePodsCountForVertex returns the number of active pods for a vertex
 func (pt *PodTracker) GetActivePodsCountForVertex(vertexName string) int {
-	count := 0
-	values := pt.activePods.ToString()
-	if values == "" {
-		return count
-	}
-	// TODO: RETHINK
-	podList := strings.Split(values, ",")
-	for _, pod := range podList {
-		parts := strings.Split(pod, podInfoSeparator)
-		if len(parts) > 0 && parts[0] == vertexName {
-			count++
+	pt.activePodsMutex.RLock()
+	defer pt.activePodsMutex.RUnlock()
+
+	return len(pt.activePods[vertexName])
+}
+
+// removeValue removes the specified value from the slice.
+func removeValue(slice []int, value int) []int {
+	for i, v := range slice {
+		if v == value {
+			return append(slice[:i], slice[i+1:]...)
 		}
 	}
-	return count
+	return slice
 }

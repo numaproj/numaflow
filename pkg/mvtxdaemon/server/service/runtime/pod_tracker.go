@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package runtime
 
 import (
@@ -12,7 +28,6 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/shared/util"
 )
 
 // PodTracker tracks the active pods for a MonoVertex.
@@ -20,7 +35,8 @@ type PodTracker struct {
 	monoVertex      *v1alpha1.MonoVertex
 	log             *zap.SugaredLogger
 	httpClient      monitorHttpClient
-	activePods      *util.UniqueStringList
+	activePods      []int
+	activePodsMutex sync.RWMutex
 	refreshInterval time.Duration
 }
 
@@ -35,7 +51,7 @@ func NewPodTracker(ctx context.Context, mv *v1alpha1.MonoVertex) *PodTracker {
 			},
 			Timeout: time.Second,
 		},
-		activePods:      util.NewUniqueStringList(),
+		activePods:      make([]int, 0),
 		refreshInterval: 30 * time.Second,
 	}
 	return pt
@@ -72,16 +88,14 @@ func (pt *PodTracker) updateActivePods() {
 		go func(index int) {
 			defer wg.Done()
 			podName := fmt.Sprintf("%s-mv-%d", pt.monoVertex.Name, index)
-			podKey := fmt.Sprintf("%d", index)
 			if pt.isActive(podName) {
-				pt.activePods.PushBack(podKey)
+				pt.addActivePod(index)
 			} else {
-				pt.activePods.Remove(podKey)
+				pt.removeActivePod(index)
 			}
 		}(i)
 	}
 	wg.Wait()
-	pt.log.Debugf("Finished updating the active pod set: %v", pt.activePods.ToString())
 }
 
 func (pt *PodTracker) isActive(podName string) bool {
@@ -98,7 +112,36 @@ func (pt *PodTracker) isActive(podName string) bool {
 	return true
 }
 
+// addActivePod adds the active pod replica for the respective monoVertex
+func (pt *PodTracker) addActivePod(index int) {
+	pt.activePodsMutex.Lock()
+	defer pt.activePodsMutex.Unlock()
+
+	pt.activePods = append(pt.activePods, index)
+}
+
+// removeActivePod removes the inactive pod replica from the respective monoVertex
+func (pt *PodTracker) removeActivePod(index int) {
+	pt.activePodsMutex.Lock()
+	defer pt.activePodsMutex.Unlock()
+
+	pt.activePods = removeValue(pt.activePods, index)
+}
+
 // GetActivePodsCount returns the number of active pods.
 func (pt *PodTracker) GetActivePodsCount() int {
-	return pt.activePods.Length()
+	pt.activePodsMutex.RLock()
+	defer pt.activePodsMutex.RUnlock()
+
+	return len(pt.activePods)
+}
+
+// removeValue removes the specified value from the slice.
+func removeValue(slice []int, value int) []int {
+	for i, v := range slice {
+		if v == value {
+			return append(slice[:i], slice[i+1:]...)
+		}
+	}
+	return slice
 }

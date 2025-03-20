@@ -1,3 +1,19 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package runtime
 
 import (
@@ -17,8 +33,10 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
-const runtimeErrorsPath = "runtime/errors"
-const runtimeErrorsTimeStep = 60 * time.Second
+const (
+	runtimeErrorsPath     = "runtime/errors"
+	runtimeErrorsTimeStep = 60 * time.Second
+)
 
 // PipelineRuntimeCache is an interface for caching and retrieving the runtime information.
 type PipelineRuntimeCache interface {
@@ -31,6 +49,7 @@ type PipelineRuntimeCache interface {
 var _ PipelineRuntimeCache = (*pipelineRuntimeCache)(nil)
 
 // TODO: use a separate struct instead of concatenating strings
+
 type PodReplica string
 
 type ErrorApiResponse struct {
@@ -50,10 +69,12 @@ type monitorHttpClient interface {
 	Head(url string) (*http.Response, error)
 }
 
+// pipelineRuntimeCache is used to store the local cache of runtime errors for a vertex.
+// It implements the PipelineRuntimeCache interface.
 type pipelineRuntimeCache struct {
 	pipeline   *v1alpha1.Pipeline
 	localCache map[PodReplica][]ErrorDetails
-	cacheMutex sync.Mutex
+	cacheMutex sync.RWMutex
 	podTracker *PodTracker
 	log        *zap.SugaredLogger
 	httpClient monitorHttpClient
@@ -63,7 +84,7 @@ func NewRuntime(ctx context.Context, pl *v1alpha1.Pipeline) PipelineRuntimeCache
 	return &pipelineRuntimeCache{
 		pipeline:   pl,
 		localCache: make(map[PodReplica][]ErrorDetails),
-		cacheMutex: sync.Mutex{},
+		cacheMutex: sync.RWMutex{},
 		log:        logging.FromContext(ctx).Named("pipelineRuntimeCache"),
 		httpClient: &http.Client{
 			Transport: &http.Transport{
@@ -75,6 +96,7 @@ func NewRuntime(ctx context.Context, pl *v1alpha1.Pipeline) PipelineRuntimeCache
 	}
 }
 
+// StartCacheRefresher starts the cache refresher to update the local cache periodically with the runtime errors.
 func (r *pipelineRuntimeCache) StartCacheRefresher(ctx context.Context) (err error) {
 	r.log.Infof("Starting runtime server...")
 
@@ -102,47 +124,7 @@ func (r *pipelineRuntimeCache) persistRuntimeErrors(ctx context.Context) {
 		for _, vtx := range r.pipeline.Spec.Vertices {
 			for i := range r.podTracker.GetActivePodsCountForVertex(vtx.Name) {
 				wg.Add(1)
-				go func(vtxName string, podIndex int) {
-					defer wg.Done()
-					podName := strings.Join([]string{r.pipeline.Name, vtxName, fmt.Sprintf("%d", podIndex)}, "-")
-					url := fmt.Sprintf("https://%s.%s.%s.svc:%v/%s", podName, r.pipeline.Name+"-"+vtxName+"-headless", r.pipeline.Namespace, v1alpha1.VertexMonitorPort, runtimeErrorsPath)
-					if res, err := r.httpClient.Get(url); err != nil {
-						r.log.Errorw("Error reading the runtime errors endpoint: %f", err.Error())
-						return
-					} else {
-						// Read the response body
-						body, err := io.ReadAll(res.Body)
-						_ = res.Body.Close()
-						if err != nil {
-							r.log.Errorf("Error reading response body from %s: %v", url, err)
-							return
-						}
-
-						// Parse the response body into runtime api response
-						var apiResponse ErrorApiResponse
-						if err := json.Unmarshal(body, &apiResponse); err != nil {
-							r.log.Errorf("Error decoding runtime error response from %s: %v", url, err)
-							return
-						}
-
-						if apiResponse.ErrMessage != "" {
-							return
-						}
-
-						cacheKey := PodReplica(fmt.Sprintf("%s-%s-%v", r.pipeline.Name, vtxName, podIndex))
-
-						// Lock the cache before updating
-						r.cacheMutex.Lock()
-						_, ok := r.localCache[cacheKey]
-						if !ok {
-							r.localCache[cacheKey] = make([]ErrorDetails, 0)
-						}
-						r.log.Infof("Persisting error in local cache for: %s", cacheKey)
-						// overwrite the errors
-						r.localCache[cacheKey] = apiResponse.Data
-						r.cacheMutex.Unlock()
-					}
-				}(vtx.Name, i)
+				go r.fetchAndPersistErrorForPod(vtx.Name, i, &wg)
 			}
 		}
 		wg.Wait()
@@ -165,6 +147,53 @@ func (r *pipelineRuntimeCache) persistRuntimeErrors(ctx context.Context) {
 	}
 }
 
+// fetchAndPersistErrorForPod fetches the runtime errors for a pod and persists them in the local cache.
+func (r *pipelineRuntimeCache) fetchAndPersistErrorForPod(vtxName string, podIndex int, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	podName := strings.Join([]string{r.pipeline.Name, vtxName, fmt.Sprintf("%d", podIndex)}, "-")
+	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/%s", podName, r.pipeline.Name+"-"+vtxName+"-headless", r.pipeline.Namespace, v1alpha1.VertexMonitorPort, runtimeErrorsPath)
+
+	res, err := r.httpClient.Get(url)
+	if err != nil {
+		r.log.Errorw("Error reading the runtime errors endpoint: %f", err.Error())
+		return
+	}
+
+	// Read the response body
+	body, err := io.ReadAll(res.Body)
+	_ = res.Body.Close()
+	if err != nil {
+		r.log.Errorf("Error reading response body from %s: %v", url, err)
+		return
+	}
+
+	// Parse the response body into runtime api response
+	var apiResponse ErrorApiResponse
+	if err := json.Unmarshal(body, &apiResponse); err != nil {
+		r.log.Errorf("Error decoding runtime error response from %s: %v", url, err)
+		return
+	}
+
+	if apiResponse.ErrMessage != "" {
+		return
+	}
+
+	cacheKey := PodReplica(fmt.Sprintf("%s-%s-%v", r.pipeline.Name, vtxName, podIndex))
+
+	// Lock the cache before updating
+	r.cacheMutex.Lock()
+	defer r.cacheMutex.Unlock()
+
+	// overwrite the errors
+	r.localCache[cacheKey] = apiResponse.Data
+	r.log.Infof("Persisting error in local cache for: %s", cacheKey)
+}
+
+// GetLocalCache returns the local cache of runtime errors.
 func (r *pipelineRuntimeCache) GetLocalCache() map[PodReplica][]ErrorDetails {
+	r.cacheMutex.RLock()
+	defer r.cacheMutex.RUnlock()
+
 	return r.localCache
 }

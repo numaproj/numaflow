@@ -111,7 +111,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 
 	// rater is used to calculate the processing rate for each of the vertices
 	rater := server.NewRater(ctx, ds.pipeline)
-
+	// runtimeInfoExtractor is used to cache and retrieve the runtime information
 	runtimeInfoExtractor := runtimeinfo.NewRuntime(ctx, ds.pipeline)
 
 	// Start listener
@@ -180,7 +180,7 @@ func (ds *daemonServer) newGRPCServer(
 	isbSvcClient isbsvc.ISBService,
 	wmFetchers map[v1alpha1.Edge][]fetch.HeadFetcher,
 	rater server.Ratable,
-	runtime runtimeinfo.PipelineRuntimeCache) (*grpc.Server, error) {
+	runtimeInfoExtractor runtimeinfo.PipelineRuntimeCache) (*grpc.Server, error) {
 	// "Prometheus histograms are a great way to measure latency distributions of your RPCs.
 	// However, since it is a bad practice to have metrics of high cardinality the latency monitoring metrics are disabled by default.
 	// To enable them please call the following in your server initialization code:"
@@ -194,7 +194,7 @@ func (ds *daemonServer) newGRPCServer(
 	}
 	grpcServer := grpc.NewServer(sOpts...)
 	grpc_prometheus.Register(grpcServer)
-	pipelineMetadataQuery, err := service.NewPipelineMetadataQuery(isbSvcClient, ds.pipeline, wmFetchers, rater, runtime)
+	pipelineMetadataQuery, err := service.NewPipelineMetadataQuery(isbSvcClient, ds.pipeline, wmFetchers, rater, runtimeInfoExtractor)
 	if err != nil {
 		return nil, err
 	}

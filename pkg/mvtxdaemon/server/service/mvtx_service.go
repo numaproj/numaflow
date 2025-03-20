@@ -43,11 +43,11 @@ const MonoVtxPendingMetric = "monovtx_pending"
 
 type MonoVertexService struct {
 	mvtxdaemon.UnimplementedMonoVertexDaemonServiceServer
-	monoVtx       *v1alpha1.MonoVertex
-	httpClient    *http.Client
-	rater         raterPkg.MonoVtxRatable
-	healthChecker *HealthChecker
-	runtime       runtimePkg.MonoVertexRuntimeCache
+	monoVtx              *v1alpha1.MonoVertex
+	httpClient           *http.Client
+	rater                raterPkg.MonoVtxRatable
+	healthChecker        *HealthChecker
+	runtimeInfoExtractor runtimePkg.MonoVertexRuntimeCache
 }
 
 var _ mvtxdaemon.MonoVertexDaemonServiceServer = (*MonoVertexService)(nil)
@@ -56,7 +56,7 @@ var _ mvtxdaemon.MonoVertexDaemonServiceServer = (*MonoVertexService)(nil)
 func NewMoveVertexService(
 	monoVtx *v1alpha1.MonoVertex,
 	rater raterPkg.MonoVtxRatable,
-	runtime runtimePkg.MonoVertexRuntimeCache,
+	runtimeInfoExtractor runtimePkg.MonoVertexRuntimeCache,
 ) (*MonoVertexService, error) {
 	mv := MonoVertexService{
 		monoVtx: monoVtx,
@@ -66,9 +66,9 @@ func NewMoveVertexService(
 			},
 			Timeout: time.Second * 3,
 		},
-		rater:         rater,
-		healthChecker: NewHealthChecker(monoVtx),
-		runtime:       runtime,
+		rater:                rater,
+		healthChecker:        NewHealthChecker(monoVtx),
+		runtimeInfoExtractor: runtimeInfoExtractor,
 	}
 	return &mv, nil
 }
