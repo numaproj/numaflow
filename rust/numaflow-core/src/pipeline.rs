@@ -204,12 +204,15 @@ async fn start_source_forwarder(
     )
     .await?;
 
-    let pending_reader = shared::metrics::create_pending_reader(
-        &config.metrics_config,
-        LagReader::Source(source.clone()),
-    )
-    .await;
-    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
+    // only check the pending and lag for source for pod_id = 0
+    if config.replica == 0 {
+        let pending_reader = shared::metrics::create_pending_reader(
+            &config.metrics_config,
+            LagReader::Source(source.clone()),
+        )
+            .await;
+        let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
+    }
 
     start_metrics_server(
         config.metrics_config.clone(),

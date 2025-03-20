@@ -82,14 +82,19 @@ async fn start(
     sink: SinkWriter,
     cln_token: CancellationToken,
 ) -> error::Result<()> {
-    // start the pending reader to publish pending metrics
-    let pending_reader = shared::metrics::create_pending_reader(
-        &mvtx_config.metrics_config,
-        LagReader::Source(source.clone()),
-    )
-    .await;
-    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
-
+    // only check the pending and lag for source for pod_id = 0
+    if mvtx_config.replica == 0 {
+        // start the pending reader to publish pending metrics
+        let pending_reader = shared::metrics::create_pending_reader(
+            &mvtx_config.metrics_config,
+            LagReader::Source(source.clone()),
+        )
+            .await;
+        // TODO(lookback) - using new implementation for monovertex right now,
+        // deprecate old implementation and use this for pipeline as well once
+        // corresponding changes are completed.
+        let _pending_reader_handle = pending_reader.start_(is_mono_vertex()).await;
+    }
     let forwarder = forwarder::Forwarder::new(source, sink);
 
     info!("Forwarder is starting...");
