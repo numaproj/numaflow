@@ -32,6 +32,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	rater "github.com/numaproj/numaflow/pkg/daemon/server/service/rater"
+	//runtimeinfo "github.com/numaproj/numaflow/pkg/daemon/server/service/runtime"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -62,8 +63,9 @@ type PipelineMetadataQuery struct {
 	httpClient        metricsHttpClient
 	watermarkFetchers map[v1alpha1.Edge][]fetch.HeadFetcher
 	rater             rater.Ratable
-	healthChecker     *HealthChecker
-	localCache        map[PodReplica][]ErrorDetails
+	//runtimeInfoExtractor runtimeinfo.PipelineRuntimeCache
+	healthChecker *HealthChecker
+	localCache    map[PodReplica][]ErrorDetails
 }
 
 // NewPipelineMetadataQuery returns a new instance of pipelineMetadataQuery
@@ -71,7 +73,9 @@ func NewPipelineMetadataQuery(
 	isbSvcClient isbsvc.ISBService,
 	pipeline *v1alpha1.Pipeline,
 	wmFetchers map[v1alpha1.Edge][]fetch.HeadFetcher,
-	rater rater.Ratable) (*PipelineMetadataQuery, error) {
+	rater rater.Ratable,
+	// runtimeInfoExtractor runtimeinfo.PipelineRuntimeCache,
+) (*PipelineMetadataQuery, error) {
 	ps := PipelineMetadataQuery{
 		isbSvcClient: isbSvcClient,
 		pipeline:     pipeline,
@@ -85,6 +89,7 @@ func NewPipelineMetadataQuery(
 		rater:             rater,
 		healthChecker:     NewHealthChecker(pipeline, isbSvcClient),
 		localCache:        make(map[PodReplica][]ErrorDetails),
+		//runtimeInfoExtractor: runtimeInfoExtractor,
 	}
 	return &ps, nil
 }
@@ -246,6 +251,8 @@ func (ps *PipelineMetadataQuery) GetVertexErrors(ctx context.Context, req *daemo
 	podReplica := fmt.Sprintf("%s-%s-%s", pipeline, vertex, replica)
 
 	resp := new(daemon.GetVertexErrorsResponse)
+
+	//localCache = mvs.runtimeInfoExtractor.GetLocalCache()
 
 	// If the errors are present in the local cache, return the errors.
 	if errors, ok := ps.localCache[PodReplica(podReplica)]; ok {

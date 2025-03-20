@@ -33,6 +33,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/proto/mvtxdaemon"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	raterPkg "github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service/rater"
+	//runtimePkg "github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service/runtime"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -57,6 +58,7 @@ type MonoVertexService struct {
 	rater         raterPkg.MonoVtxRatable
 	healthChecker *HealthChecker
 	localCache    map[PodReplica][]ErrorDetails
+	//runtimeInfoExtractor runtimePkg.MonoVertexRuntimeCache
 }
 
 var _ mvtxdaemon.MonoVertexDaemonServiceServer = (*MonoVertexService)(nil)
@@ -65,6 +67,7 @@ var _ mvtxdaemon.MonoVertexDaemonServiceServer = (*MonoVertexService)(nil)
 func NewMoveVertexService(
 	monoVtx *v1alpha1.MonoVertex,
 	rater raterPkg.MonoVtxRatable,
+	// runtimeInfoExtractor runtimePkg.MonoVertexRuntimeCache,
 ) (*MonoVertexService, error) {
 	mv := MonoVertexService{
 		monoVtx: monoVtx,
@@ -77,6 +80,7 @@ func NewMoveVertexService(
 		rater:         rater,
 		healthChecker: NewHealthChecker(monoVtx),
 		localCache:    make(map[PodReplica][]ErrorDetails),
+		//runtimeInfoExtractor: runtimeInfoExtractor,
 	}
 	return &mv, nil
 }
@@ -196,6 +200,8 @@ func (mvs *MonoVertexService) GetMonoVertexErrors(ctx context.Context, request *
 	podReplica := fmt.Sprintf("%s-mv-%s", monoVertex, replica)
 
 	resp := new(mvtxdaemon.GetMonoVertexErrorsResponse)
+
+	//localCache = mvs.runtimeInfoExtractor.GetLocalCache()
 
 	// If the errors are present in the local cache, return the errors.
 	if errors, ok := mvs.localCache[PodReplica(podReplica)]; ok {
