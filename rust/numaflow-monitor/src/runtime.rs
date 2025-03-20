@@ -73,8 +73,6 @@ impl From<RuntimeErrorEntry> for String {
 }
 
 // A structure used to represent API responses containing runtime error entries.
-// - `error_message`:
-// - `data`:
 #[derive(serde::Serialize, serde::Deserialize)]
 pub(crate) struct ApiResponse {
     // Optional error message for the API response.
