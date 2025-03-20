@@ -9,6 +9,7 @@ members = [
     "numaflow-pb",
     "extns/numaflow-pulsar",
     "extns/numaflow-sqs",
+    "extns/numaflow-jetstream",
     "numaflow"
 ]
 
@@ -64,6 +65,8 @@ numaflow-sqs = { path = "extns/numaflow-sqs" }
 tokio = "1.43.0"
 bytes = "1.9.0"
 tracing = "0.1.41"
+async-nats = "0.39.0"
+thiserror = "2.0.3"
 axum = { version = "0.8.2", default-features = false, features = [
     "http1",
     "http2",

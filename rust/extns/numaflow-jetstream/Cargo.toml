@@ -1,0 +1,15 @@
+[package]
+name = "numaflow-jetstream"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-nats.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+bytes.workspace = true
+tokio-stream = "0.1.15"
+
+[lints]
+workspace = true
