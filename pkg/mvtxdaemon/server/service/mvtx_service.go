@@ -47,7 +47,7 @@ type MonoVertexService struct {
 	httpClient    *http.Client
 	rater         raterPkg.MonoVtxRatable
 	healthChecker *HealthChecker
-	runtime       runtimePkg.MonoVtxRuntime
+	runtime       runtimePkg.MonoVertexRuntimeCache
 }
 
 var _ mvtxdaemon.MonoVertexDaemonServiceServer = (*MonoVertexService)(nil)
@@ -56,7 +56,7 @@ var _ mvtxdaemon.MonoVertexDaemonServiceServer = (*MonoVertexService)(nil)
 func NewMoveVertexService(
 	monoVtx *v1alpha1.MonoVertex,
 	rater raterPkg.MonoVtxRatable,
-	runtime runtimePkg.MonoVtxRuntime,
+	runtime runtimePkg.MonoVertexRuntimeCache,
 ) (*MonoVertexService, error) {
 	mv := MonoVertexService{
 		monoVtx: monoVtx,

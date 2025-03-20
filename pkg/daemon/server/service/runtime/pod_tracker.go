@@ -9,10 +9,11 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/shared/util"
-	"go.uber.org/zap"
 )
 
 // podInfoSeparator is used as a separator to split the pod key
@@ -20,6 +21,7 @@ import (
 // "*" is chosen because it is not allowed in the above fields.
 const podInfoSeparator = "*"
 
+// PodTracker tracks the active pods for each vertex in a pipeline.
 type PodTracker struct {
 	pipeline        *v1alpha1.Pipeline
 	log             *zap.SugaredLogger
@@ -28,6 +30,7 @@ type PodTracker struct {
 	refreshInterval time.Duration
 }
 
+// NewPodTracker creates a new pod tracker instance.
 func NewPodTracker(ctx context.Context, pl *v1alpha1.Pipeline) *PodTracker {
 	pt := &PodTracker{
 		pipeline: pl,
@@ -45,6 +48,7 @@ func NewPodTracker(ctx context.Context, pl *v1alpha1.Pipeline) *PodTracker {
 	return pt
 }
 
+// Start starts the pod tracker to track the active pods for the pipeline.
 func (pt *PodTracker) Start(ctx context.Context) error {
 	pt.log.Debugf("Starting tracking active pods for Pipeline %s...", pt.pipeline.Name)
 	go pt.trackActivePods(ctx)
@@ -107,13 +111,14 @@ func (pt *PodTracker) isActive(vertexName, podName string) bool {
 	return true
 }
 
-// returns the number of active pods for a vertex
+// GetActivePodsCountForVertex returns the number of active pods for a vertex
 func (pt *PodTracker) GetActivePodsCountForVertex(vertexName string) int {
 	count := 0
 	values := pt.activePods.ToString()
 	if values == "" {
 		return count
 	}
+	// TODO: RETHINK
 	podList := strings.Split(values, ",")
 	for _, pod := range podList {
 		parts := strings.Split(pod, podInfoSeparator)

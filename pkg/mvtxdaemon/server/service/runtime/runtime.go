@@ -10,21 +10,24 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"go.uber.org/zap"
 )
 
 const runtimeErrorsPath = "runtime/errors"
 const runtimeErrorsTimeStep = 60 * time.Second
 
-type MonoVtxRuntime interface {
-	Start(ctx context.Context) error
-	PersistRuntimeErrors(ctx context.Context)
+// MonoVertexRuntimeCache is an interface for caching and retrieving the runtime information.
+type MonoVertexRuntimeCache interface {
+	// StartCacheRefresher starts the cache refresher to update the local cache with the runtime errors.
+	StartCacheRefresher(ctx context.Context) error
+	// GetLocalCache returns the local cache of runtime errors.
 	GetLocalCache() map[PodReplica][]ErrorDetails
 }
 
-var _ MonoVtxRuntime = (*Runtime)(nil)
+var _ MonoVertexRuntimeCache = (*Runtime)(nil)
 
 type PodReplica string
 
@@ -71,7 +74,7 @@ func NewRuntime(ctx context.Context, mv *v1alpha1.MonoVertex) *Runtime {
 	return &runtime
 }
 
-func (r *Runtime) Start(ctx context.Context) (err error) {
+func (r *Runtime) StartCacheRefresher(ctx context.Context) (err error) {
 	r.log.Infof("Starting runtime server...")
 
 	ctx, cancel := context.WithCancel(logging.WithLogger(ctx, r.log))
@@ -85,13 +88,13 @@ func (r *Runtime) Start(ctx context.Context) (err error) {
 	}()
 
 	// start persisting errors into the local cache
-	go r.PersistRuntimeErrors(ctx)
+	go r.persistRuntimeErrors(ctx)
 
 	return nil
 }
 
-// PersistRuntimeErrors updates the local cache with the runtime errors
-func (r *Runtime) PersistRuntimeErrors(ctx context.Context) {
+// persistRuntimeErrors updates the local cache with the runtime errors
+func (r *Runtime) persistRuntimeErrors(ctx context.Context) {
 	fetchAndPersistErrors := func() {
 		var wg sync.WaitGroup
 

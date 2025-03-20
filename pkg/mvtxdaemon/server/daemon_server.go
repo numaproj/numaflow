@@ -128,7 +128,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	return nil
 }
 
-func (ds *daemonServer) newGRPCServer(rater rateServer.MonoVtxRatable, runtime runtimeServer.MonoVtxRuntime) (*grpc.Server, error) {
+func (ds *daemonServer) newGRPCServer(rater rateServer.MonoVtxRatable, runtime runtimeServer.MonoVertexRuntimeCache) (*grpc.Server, error) {
 	// "Prometheus histograms are a great way to measure latency distributions of your RPCs.
 	// However, since it is a bad practice to have metrics of high cardinality the latency monitoring metrics are disabled by default.
 	// To enable them please call the following in your server initialization code:"

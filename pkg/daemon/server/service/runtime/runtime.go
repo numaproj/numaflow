@@ -11,27 +11,31 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"go.uber.org/zap"
 )
 
 const runtimeErrorsPath = "runtime/errors"
 const runtimeErrorsTimeStep = 60 * time.Second
 
-type PipelineRuntime interface {
-	Start(ctx context.Context) error
-	PersistRuntimeErrors(ctx context.Context)
+// PipelineRuntimeCache is an interface for caching and retrieving the runtime information.
+type PipelineRuntimeCache interface {
+	// StartCacheRefresher starts the cache refresher to update the local cache with the runtime errors.
+	StartCacheRefresher(ctx context.Context) error
+	// GetLocalCache returns the local cache of runtime errors.
 	GetLocalCache() map[PodReplica][]ErrorDetails
 }
 
-var _ PipelineRuntime = (*Runtime)(nil)
+var _ PipelineRuntimeCache = (*pipelineRuntimeCache)(nil)
 
+// TODO: use a separate struct instead of concatenating strings
 type PodReplica string
 
-type RuntimeErrorApiResponse struct {
-	ErrMssg string         `json:"error_message"`
-	Data    []ErrorDetails `json:"data"`
+type ErrorApiResponse struct {
+	ErrMessage string         `json:"error_message"`
+	Data       []ErrorDetails `json:"data"`
 }
 type ErrorDetails struct {
 	Container string `json:"container"`
@@ -46,7 +50,7 @@ type monitorHttpClient interface {
 	Head(url string) (*http.Response, error)
 }
 
-type Runtime struct {
+type pipelineRuntimeCache struct {
 	pipeline   *v1alpha1.Pipeline
 	localCache map[PodReplica][]ErrorDetails
 	cacheMutex sync.Mutex
@@ -55,24 +59,23 @@ type Runtime struct {
 	httpClient monitorHttpClient
 }
 
-func NewRuntime(ctx context.Context, pl *v1alpha1.Pipeline) *Runtime {
-	runtime := Runtime{
+func NewRuntime(ctx context.Context, pl *v1alpha1.Pipeline) PipelineRuntimeCache {
+	return &pipelineRuntimeCache{
 		pipeline:   pl,
 		localCache: make(map[PodReplica][]ErrorDetails),
 		cacheMutex: sync.Mutex{},
-		log:        logging.FromContext(ctx).Named("Runtime"),
+		log:        logging.FromContext(ctx).Named("pipelineRuntimeCache"),
 		httpClient: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 			},
 			Timeout: time.Second * 1,
 		},
+		podTracker: NewPodTracker(ctx, pl),
 	}
-	runtime.podTracker = NewPodTracker(ctx, pl)
-	return &runtime
 }
 
-func (r *Runtime) Start(ctx context.Context) (err error) {
+func (r *pipelineRuntimeCache) StartCacheRefresher(ctx context.Context) (err error) {
 	r.log.Infof("Starting runtime server...")
 
 	ctx, cancel := context.WithCancel(logging.WithLogger(ctx, r.log))
@@ -86,13 +89,13 @@ func (r *Runtime) Start(ctx context.Context) (err error) {
 	}()
 
 	// start persisting errors into the local cache
-	go r.PersistRuntimeErrors(ctx)
+	go r.persistRuntimeErrors(ctx)
 
 	return nil
 }
 
-// PersistRuntimeErrors updates the local cache with the runtime errors
-func (r *Runtime) PersistRuntimeErrors(ctx context.Context) {
+// persistRuntimeErrors updates the local cache with the runtime errors
+func (r *pipelineRuntimeCache) persistRuntimeErrors(ctx context.Context) {
 	// Define a function to fetch and persist errors
 	fetchAndPersistErrors := func() {
 		var wg sync.WaitGroup
@@ -109,20 +112,20 @@ func (r *Runtime) PersistRuntimeErrors(ctx context.Context) {
 					} else {
 						// Read the response body
 						body, err := io.ReadAll(res.Body)
-						res.Body.Close()
+						_ = res.Body.Close()
 						if err != nil {
 							r.log.Errorf("Error reading response body from %s: %v", url, err)
 							return
 						}
 
 						// Parse the response body into runtime api response
-						var apiResponse RuntimeErrorApiResponse
+						var apiResponse ErrorApiResponse
 						if err := json.Unmarshal(body, &apiResponse); err != nil {
 							r.log.Errorf("Error decoding runtime error response from %s: %v", url, err)
 							return
 						}
 
-						if apiResponse.ErrMssg != "" {
+						if apiResponse.ErrMessage != "" {
 							return
 						}
 
@@ -145,8 +148,8 @@ func (r *Runtime) PersistRuntimeErrors(ctx context.Context) {
 		wg.Wait()
 	}
 
+	// invoke once and then periodically update the cache
 	fetchAndPersistErrors()
-
 	// Set up a ticker to run periodically
 	ticker := time.NewTicker(runtimeErrorsTimeStep)
 	defer ticker.Stop()
@@ -162,6 +165,6 @@ func (r *Runtime) PersistRuntimeErrors(ctx context.Context) {
 	}
 }
 
-func (r *Runtime) GetLocalCache() map[PodReplica][]ErrorDetails {
+func (r *pipelineRuntimeCache) GetLocalCache() map[PodReplica][]ErrorDetails {
 	return r.localCache
 }

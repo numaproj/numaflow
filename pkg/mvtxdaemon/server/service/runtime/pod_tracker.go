@@ -8,12 +8,14 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"github.com/numaproj/numaflow/pkg/shared/util"
-	"go.uber.org/zap"
 )
 
+// PodTracker tracks the active pods for a MonoVertex.
 type PodTracker struct {
 	monoVertex      *v1alpha1.MonoVertex
 	log             *zap.SugaredLogger
@@ -22,6 +24,7 @@ type PodTracker struct {
 	refreshInterval time.Duration
 }
 
+// NewPodTracker creates a new pod tracker instance.
 func NewPodTracker(ctx context.Context, mv *v1alpha1.MonoVertex) *PodTracker {
 	pt := &PodTracker{
 		monoVertex: mv,
@@ -38,6 +41,7 @@ func NewPodTracker(ctx context.Context, mv *v1alpha1.MonoVertex) *PodTracker {
 	return pt
 }
 
+// Start starts the pod tracker to track the active pods for the MonoVertex.
 func (pt *PodTracker) Start(ctx context.Context) error {
 	pt.log.Debugf("Starting tracking active pods for MonoVertex %s...", pt.monoVertex.Name)
 	go pt.trackActivePods(ctx)
@@ -94,7 +98,7 @@ func (pt *PodTracker) isActive(podName string) bool {
 	return true
 }
 
-// returns the number of active pods.
+// GetActivePodsCount returns the number of active pods.
 func (pt *PodTracker) GetActivePodsCount() int {
 	return pt.activePods.Length()
 }
