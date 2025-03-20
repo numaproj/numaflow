@@ -1,7 +1,6 @@
-//! # Runtime Module
 //! The `runtime` module is responsible for persisting runtime information, such as application errors.
 use crate::config::RuntimeInfoConfig;
-use crate::error::{Error, Result as ErrorResult};
+use crate::error::{Error, Result};
 use chrono::{DateTime, Utc};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -14,36 +13,34 @@ use std::str;
 use tonic::Status;
 use tracing::error;
 
-type Result<T> = std::result::Result<T, std::string::String>;
+const CURRENT_FILE: &str = "current.json";
 
-/// Represents a single runtime error entry with the following fields:
-/// - `container`: The name of the container where the error occurred.
-/// - `timestamp`: The timestamp of the error in RFC 3339 format.
-/// - `code`: The gRPC error code.
-/// - `message`: The gRPC error message.
-/// - `details`: Additional details, such as the error stack trace.
+/// Represents a single runtime error entry persisted by the application.
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct RuntimeErrorEntry {
-    pub container: String,
-    pub timestamp: String,
-    pub code: String,
-    pub message: String,
-    pub details: String,
+pub(crate) struct RuntimeErrorEntry {
+    // The name of the container where the error occurred.
+    pub(crate) container: String,
+    // The timestamp of the error in RFC 3339 format.
+    pub(crate) timestamp: String,
+    // The error code.
+    pub(crate) code: String,
+    // The error message.
+    pub(crate) message: String,
+    // Additional details, such as the error stack trace.
+    pub(crate) details: String,
 }
 
 impl TryFrom<&[u8]> for RuntimeErrorEntry {
-    type Error = String;
+    type Error = Error;
 
-    fn try_from(value: &[u8]) -> Result<Self> {
+    fn try_from(value: &[u8]) -> std::result::Result<Self, Self::Error> {
         serde_json::from_slice::<RuntimeErrorEntry>(value)
-            .map_err(|e| format!("Failed to deserialize content: {:?}", e))
+            .map_err(|e| Error::Deserialize(format!("{:?}", e)))
     }
 }
 
-impl TryFrom<(&Status, &str, i64)> for RuntimeErrorEntry {
-    type Error = String;
-
-    fn try_from(value: (&Status, &str, i64)) -> Result<Self> {
+impl From<(&Status, &str, i64)> for RuntimeErrorEntry {
+    fn from(value: (&Status, &str, i64)) -> RuntimeErrorEntry {
         let (grpc_status, container_name, timestamp) = value;
 
         // Extract code, message, and details from gRPC Status
@@ -59,43 +56,43 @@ impl TryFrom<(&Status, &str, i64)> for RuntimeErrorEntry {
             .unwrap()
             .to_rfc3339();
 
-        Ok(RuntimeErrorEntry {
+        RuntimeErrorEntry {
             container: container_name.to_string(),
             timestamp: rfc3339_timestamp,
             code,
             message,
             details: details_str.to_string(),
-        })
+        }
     }
 }
 
-impl Into<String> for RuntimeErrorEntry {
-    fn into(self) -> String {
-        serde_json::to_string(&self).expect("Failed to serialize runtime error message")
+impl From<RuntimeErrorEntry> for String {
+    fn from(val: RuntimeErrorEntry) -> Self {
+        serde_json::to_string(&val).expect("Failed to serialize runtime error message")
     }
 }
 
 // A structure used to represent API responses containing runtime error entries.
-// - `error_message`: Optional error message for the API response.
-// - `data`: A list of `RuntimeErrorEntry` objects.
+// - `error_message`:
+// - `data`:
 #[derive(serde::Serialize, serde::Deserialize)]
-pub struct ApiResponse {
+pub(crate) struct ApiResponse {
+    // Optional error message for the API response.
     pub error_message: Option<String>,
+    // A list of `RuntimeErrorEntry` objects
     pub data: Vec<RuntimeErrorEntry>,
 }
 
-// The main struct responsible for managing runtime error persistence and retrieval.
-// - `application_error_path`: The root directory where error files are stored.
-// - `max_error_files_per_container`: The maximum number of error files allowed per container.
+// Response for managing runtime error persistence and retrieval.
 pub struct Runtime {
+    // The root directory where error files are stored.
     application_error_path: String,
+    // The maximum number of error files allowed per container.
     max_error_files_per_container: usize,
 }
 
 impl Runtime {
     // Creates a new Runtime instance
-    // - application_error_path: where the runtime application errors will be persisted
-    // - max_error_files_per_container: we will not store more than max error files per container
     pub fn new(runtime_info_config: Option<RuntimeInfoConfig>) -> Self {
         let config = runtime_info_config.unwrap_or_default();
         Runtime {
@@ -134,14 +131,13 @@ impl Runtime {
 
         let timestamp = Utc::now().timestamp();
         let runtime_error_entry =
-            RuntimeErrorEntry::try_from((&grpc_status, container_name.as_str(), timestamp))
-                .expect("Failed to convert gRPC status to RuntimeErrorEntry");
+            RuntimeErrorEntry::from((&grpc_status, container_name.as_str(), timestamp));
         let json_str: String = runtime_error_entry.into();
 
         // we create a file current.json and write into this file first
         // rename it back to <timestamp>.json once write operation is completed
         // this is to ensure that while reading we skip this file to avoid race condition
-        let current_file_path = dir_path.join("current.json");
+        let current_file_path = dir_path.join(CURRENT_FILE);
         let file_name = format!("{}.json", timestamp);
         let final_file_path = dir_path.join(&file_name);
 
@@ -165,7 +161,7 @@ impl Runtime {
     //         ├── <timestamp2>.json
 
     /// Retrieves all persisted application errors from the error directory.
-    pub fn get_application_errors(&self) -> ErrorResult<Vec<RuntimeErrorEntry>> {
+    pub(crate) fn get_application_errors(&self) -> Result<Vec<RuntimeErrorEntry>> {
         let app_err_path = Path::new(&self.application_error_path);
         let mut errors = Vec::new();
         // if no app errors are persisted, directory wouldn't be created yet
@@ -173,13 +169,9 @@ impl Runtime {
             let err = Error::File("No application errors persisted yet".to_string());
             return Err(err);
         }
-        let paths = match fs::read_dir(app_err_path) {
-            Ok(path) => path,
-            Err(e) => {
-                let err = Error::File(format!("Failed to read directory: {:?}", e));
-                return Err(err);
-            }
-        };
+
+        let paths = fs::read_dir(app_err_path)
+            .map_err(|e| Error::File(format!("Failed to read directory: {:?}", e)))?;
 
         // iterate over all subdirectories and its files
         for entry in paths.flatten() {
@@ -188,7 +180,9 @@ impl Runtime {
             if !sub_dir_path.is_dir() {
                 continue;
             }
-            match fs::read_dir(&sub_dir_path) {
+
+            let file_paths = match fs::read_dir(&sub_dir_path) {
+                Ok(paths) => paths,
                 Err(e) => {
                     error!(
                         "{}",
@@ -196,28 +190,33 @@ impl Runtime {
                     );
                     continue;
                 }
-                Ok(file_paths) => {
-                    for file_entry in file_paths.flatten() {
-                        // skip processing if the file name is "current.json"
-                        if file_entry.file_name() == std::ffi::OsStr::new("current.json") {
-                            continue;
-                        }
-                        // process content of each file into error entry
-                        if let Err(e) = process_file_entry(&file_entry, &mut errors) {
-                            error!(
-                                "{}",
-                                Error::File(format!(
-                                    "error: {} in processing file entry: {:?}",
-                                    e,
-                                    file_entry.file_name()
-                                ))
-                            );
-                            continue;
-                        }
-                    }
+            };
+
+            for file_entry in file_paths.flatten() {
+                // skip processing if the file name is "current.json"
+                if file_entry
+                    .file_name()
+                    .to_str()
+                    .expect("file name should be valid")
+                    == CURRENT_FILE
+                {
+                    continue;
+                }
+
+                // process content of each file into error entry
+                if let Err(e) = process_file_entry(&file_entry, &mut errors) {
+                    error!(
+                        "{}",
+                        Error::File(format!(
+                            "error: {} in processing file entry: {:?}",
+                            e,
+                            file_entry.file_name()
+                        ))
+                    );
                 }
             }
         }
+
         Ok(errors)
     }
 }
@@ -227,13 +226,12 @@ fn extract_container_name(error_message: &str) -> String {
     let re = Regex::new(r"\((.*?)\)").unwrap();
     re.captures(error_message)
         .and_then(|caps| caps.get(1).map(|m| m.as_str().to_string()))
-        .expect(
-            format!(
+        .unwrap_or_else(|| {
+            panic!(
                 "Failed to extract container name from the error message: {}",
                 error_message
             )
-            .as_str(),
-        )
+        })
 }
 
 ///  Processes a single file entry, deserializing its content into a `RuntimeErrorEntry` and adding it
@@ -241,29 +239,24 @@ fn extract_container_name(error_message: &str) -> String {
 fn process_file_entry(
     file_entry: &fs::DirEntry,
     errors: &mut Vec<RuntimeErrorEntry>,
-) -> ErrorResult<()> {
+) -> Result<()> {
     if !file_entry.path().exists() || !file_entry.path().is_file() {
         return Ok(());
     }
-    match fs::read(&file_entry.path()) {
-        // log the error and continue processing other files
-        Err(e) => {
+
+    fs::read(file_entry.path())
+        .map_err(|e| {
             let err = Error::File(format!("Failed to read file content: {:?}", e));
             error!("{}", err);
-            Err(err)
-        }
-        Ok(content) => match RuntimeErrorEntry::try_from(content.as_slice()) {
-            Ok(payload) => {
-                errors.push(payload);
-                Ok(())
-            }
-            Err(e) => {
-                let err = Error::Deserialize(e);
-                error!("{}", err);
-                Err(err)
-            }
-        },
-    }
+            err
+        })
+        .and_then(|content| {
+            RuntimeErrorEntry::try_from(content.as_slice()).map_err(|e| {
+                error!("{}", e);
+                e
+            })
+        })
+        .map(|payload| errors.push(payload))
 }
 
 #[cfg(test)]

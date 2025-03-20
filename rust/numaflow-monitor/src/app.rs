@@ -39,7 +39,7 @@ pub(crate) async fn start_main_server(
         runtime: Arc::new(runtime),
     });
 
-    let router = monitor_router(shared_state.clone());
+    let router = monitor_router(Arc::clone(&shared_state));
 
     axum_server::bind_rustls(app_addr, tls_config)
         .handle(handle)

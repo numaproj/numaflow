@@ -42,11 +42,11 @@ mod tests {
         use axum_server::tls_rustls::RustlsConfig;
 
         // Mock the generate_certs function to return an error
-        let result = || -> Result<(Certificate, KeyPair)> {
+        let result: Result<(Certificate, KeyPair)> = {
             Err(Error::Init(
                 "Mocked certificate generation failure".to_string(),
             ))
-        }();
+        };
 
         // Assert that the result is an error
         assert!(result.is_err());
