@@ -50,9 +50,6 @@ func (m *raterMockHttpClient) Get(url string) (*http.Response, error) {
 # HELP monovtx_read A Counter to keep track of the total number of messages read from the source.
 # TYPE monovtx_read counter
 monovtx_read_total{mvtx_name="simple-mono-vertex",mvtx_replica="0"} %d
-# HELP monovtx_pending A Gauge to keep track of the total number of pending messages for the monovtx.
-# TYPE monovtx_pending gauge
-monovtx_pending{mvtx_name="ceres-mono-latest",mvtx_replica="0",period="1m"} %d
 `, m.podOneCount, m.podOneCount))))}
 		return resp, nil
 	} else if url == "https://p-mv-1.p-mv-headless.default.svc:2469/metrics" {
@@ -63,9 +60,6 @@ monovtx_pending{mvtx_name="ceres-mono-latest",mvtx_replica="0",period="1m"} %d
 # HELP monovtx_read A Counter to keep track of the total number of messages read from the source.
 # TYPE monovtx_read counter
 monovtx_read_total{mvtx_name="simple-mono-vertex",mvtx_replica="1"} %d
-# HELP monovtx_pending A Gauge to keep track of the total number of pending messages for the monovtx.
-# TYPE monovtx_pending gauge
-monovtx_pending{mvtx_name="simple-mono-vertex",mvtx_replica="1",period="1m"} %d
 `, m.podTwoCount, m.podTwoCount))))}
 		return resp, nil
 	} else {
@@ -121,12 +115,9 @@ func TestRater_Start(t *testing.T) {
 	}()
 	go func() {
 		for {
-			//rate := r.GetRates()["default"].GetValue()
-			pen := r.GetPending()["default"].GetValue()
-			if pen <= 0 {
+			if r.GetRates()["default"].GetValue() <= 0 {
 				time.Sleep(time.Second)
 			} else {
-				log.Printf("Pen is %d\n", pen)
 				succeedChan <- struct{}{}
 				break
 			}
