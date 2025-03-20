@@ -16,7 +16,7 @@ use tracing::error;
 const CURRENT_FILE: &str = "current.json";
 
 /// Represents a single runtime error entry persisted by the application.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct RuntimeErrorEntry {
     /// The name of the container where the error occurred.
     pub(crate) container: String,
