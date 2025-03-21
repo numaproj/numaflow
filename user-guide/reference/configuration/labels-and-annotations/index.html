@@ -1590,6 +1590,20 @@
   
   
     <li class="md-nav__item">
+      <a href="../dra/" class="md-nav__link">
+        Dynamic Resource Allocation
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../istio/" class="md-nav__link">
         Running on Istio
       </a>
@@ -2295,7 +2309,8 @@
 
 
 <h1 id="labels-and-annotations">Labels And Annotations<a class="headerlink" href="#labels-and-annotations" title="Permanent link">&para;</a></h1>
-<p>Sometimes customized <em>Labels</em> or <em>Annotations</em> are needed for the vertices, for example, adding an annotation to enable or disable <a href="https://istio.io/">Istio</a> sidecar injection. To do that, a <code>metadata</code> with labels or annotations can be added to the vertex.</p>
+<p>Sometimes customized <em>Labels</em> or <em>Annotations</em> are needed for the vertices, for example, adding an annotation to enable or disable <a href="https://istio.io/">Istio</a> sidecar injection. To do that, a <code>metadata</code> with labels or annotations can be added to the Pipeline Vertex or MonoVertex.</p>
+<p>A <code>Pipeline</code> example.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
 <span class="nt">metadata</span><span class="p">:</span>
@@ -2310,6 +2325,20 @@
 <span class="w">        </span><span class="nt">annotations</span><span class="p">:</span>
 <span class="w">          </span><span class="nt">key3</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">val3</span>
 <span class="w">          </span><span class="nt">key4</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">val4</span>
+</code></pre></div>
+<p>A <code>MonoVertex</code> example.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MonoVertex</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-mvtx</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">metadata</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">labels</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">key1</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">val1</span>
+<span class="w">      </span><span class="nt">key2</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">val2</span>
+<span class="w">    </span><span class="nt">annotations</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">key3</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">val3</span>
+<span class="w">      </span><span class="nt">key4</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">val4</span>
 </code></pre></div>
 
               
