@@ -1,8 +1,8 @@
 # Dynamic Resource Allocation
 
-[Dynamic Resource Allocation](https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/) can be used in either `Pipeline` or `MonoVertex`.
+[Dynamic Resource Allocation](https://kubernetes.io/docs/concepts/scheduling-eviction/dynamic-resource-allocation/) is supported in both `Pipeline` and `MonoVertex`.
 
-Look at the examples below.
+Check the examples below.
 
 ```yaml
 apiVersion: resource.k8s.io/v1alpha3
