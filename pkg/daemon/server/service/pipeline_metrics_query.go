@@ -32,6 +32,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	rater "github.com/numaproj/numaflow/pkg/daemon/server/service/rater"
+	runtimeinfo "github.com/numaproj/numaflow/pkg/daemon/server/service/runtime"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -47,12 +48,13 @@ type metricsHttpClient interface {
 // PipelineMetadataQuery has the metadata required for the pipeline queries
 type PipelineMetadataQuery struct {
 	daemon.UnimplementedDaemonServiceServer
-	isbSvcClient      isbsvc.ISBService
-	pipeline          *v1alpha1.Pipeline
-	httpClient        metricsHttpClient
-	watermarkFetchers map[v1alpha1.Edge][]fetch.HeadFetcher
-	rater             rater.Ratable
-	healthChecker     *HealthChecker
+	isbSvcClient         isbsvc.ISBService
+	pipeline             *v1alpha1.Pipeline
+	httpClient           metricsHttpClient
+	watermarkFetchers    map[v1alpha1.Edge][]fetch.HeadFetcher
+	rater                rater.Ratable
+	pipelineRuntimeCache runtimeinfo.PipelineRuntimeCache
+	healthChecker        *HealthChecker
 }
 
 // NewPipelineMetadataQuery returns a new instance of pipelineMetadataQuery
@@ -60,7 +62,8 @@ func NewPipelineMetadataQuery(
 	isbSvcClient isbsvc.ISBService,
 	pipeline *v1alpha1.Pipeline,
 	wmFetchers map[v1alpha1.Edge][]fetch.HeadFetcher,
-	rater rater.Ratable) (*PipelineMetadataQuery, error) {
+	rater rater.Ratable,
+	pipelineRuntimeCache runtimeinfo.PipelineRuntimeCache) (*PipelineMetadataQuery, error) {
 	ps := PipelineMetadataQuery{
 		isbSvcClient: isbSvcClient,
 		pipeline:     pipeline,
@@ -70,9 +73,10 @@ func NewPipelineMetadataQuery(
 			},
 			Timeout: time.Second * 3,
 		},
-		watermarkFetchers: wmFetchers,
-		rater:             rater,
-		healthChecker:     NewHealthChecker(pipeline, isbSvcClient),
+		watermarkFetchers:    wmFetchers,
+		rater:                rater,
+		healthChecker:        NewHealthChecker(pipeline, isbSvcClient),
+		pipelineRuntimeCache: pipelineRuntimeCache,
 	}
 	return &ps, nil
 }

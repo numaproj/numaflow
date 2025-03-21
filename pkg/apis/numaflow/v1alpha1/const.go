@@ -157,11 +157,13 @@ const (
 	PathVarRun                  = "/var/run/numaflow"
 	VertexMetricsPort           = 2469
 	VertexMetricsPortName       = "metrics"
+	VertexMonitorPort           = 2470
 	VertexHTTPSPort             = 8443
 	VertexHTTPSPortName         = "https"
 	DaemonServicePort           = 4327
 	MonoVertexMetricsPort       = 2469
 	MonoVertexMetricsPortName   = "metrics"
+	MonoVertexMonitorPort       = 2470
 	MonoVertexDaemonServicePort = 4327
 
 	DefaultRequeueAfter = 10 * time.Second
