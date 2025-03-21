@@ -162,7 +162,7 @@ func (rc *restfulDaemonClient) GetPipelineStatus(ctx context.Context, pipeline s
 }
 
 func (rc *restfulDaemonClient) GetVertexErrors(ctx context.Context, pipeline, vertex, replica string) ([]*daemon.VertexError, error) {
-	resp, err := rc.httpClient.Get(fmt.Sprintf("%s/api/v1/pipelines/%s/vertex/%s/replicas/%s/errors", rc.hostURL, pipeline, vertex, replica))
+	resp, err := rc.httpClient.Get(fmt.Sprintf("%s/api/v1/pipelines/%s/vertices/%s/replicas/%s/errors", rc.hostURL, pipeline, vertex, replica))
 	if err != nil {
 		return nil, fmt.Errorf("failed to call get vertex errors RESTful API, %w", err)
 	}
