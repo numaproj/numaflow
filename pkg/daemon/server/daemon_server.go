@@ -111,8 +111,8 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 
 	// rater is used to calculate the processing rate for each of the vertices
 	rater := server.NewRater(ctx, ds.pipeline)
-	// runtimeInfoExtractor is used to cache and retrieve the runtime information
-	runtimeInfoExtractor := runtimeinfo.NewRuntime(ctx, ds.pipeline)
+	// pipelineRuntimeCache is used to cache and retrieve the runtime errors
+	pipelineRuntimeCache := runtimeinfo.NewRuntime(ctx, ds.pipeline)
 
 	// Start listener
 	var conn net.Listener
@@ -129,7 +129,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	}
 
 	tlsConfig := &tls.Config{Certificates: []tls.Certificate{*cer}, MinVersion: tls.VersionTLS12}
-	grpcServer, err := ds.newGRPCServer(isbSvcClient, wmFetchers, rater, runtimeInfoExtractor)
+	grpcServer, err := ds.newGRPCServer(isbSvcClient, wmFetchers, rater, pipelineRuntimeCache)
 	if err != nil {
 		return fmt.Errorf("failed to create grpc server: %w", err)
 	}
@@ -157,10 +157,10 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 		}
 	}()
 
-	// Start the runtimeInfoExtractor
+	// Start the pipelineRuntimeCache
 	go func() {
-		if err := runtimeInfoExtractor.StartCacheRefresher(ctx); err != nil {
-			log.Panic(fmt.Errorf("failed to start the runtimeInfoExtractor: %w", err))
+		if err := pipelineRuntimeCache.StartCacheRefresher(ctx); err != nil {
+			log.Panic(fmt.Errorf("failed to start the pipelineRuntimeCache: %w", err))
 		}
 	}()
 
@@ -180,7 +180,7 @@ func (ds *daemonServer) newGRPCServer(
 	isbSvcClient isbsvc.ISBService,
 	wmFetchers map[v1alpha1.Edge][]fetch.HeadFetcher,
 	rater server.Ratable,
-	runtimeInfoExtractor runtimeinfo.PipelineRuntimeCache) (*grpc.Server, error) {
+	pipelineRuntimeCache runtimeinfo.PipelineRuntimeCache) (*grpc.Server, error) {
 	// "Prometheus histograms are a great way to measure latency distributions of your RPCs.
 	// However, since it is a bad practice to have metrics of high cardinality the latency monitoring metrics are disabled by default.
 	// To enable them please call the following in your server initialization code:"
@@ -194,7 +194,7 @@ func (ds *daemonServer) newGRPCServer(
 	}
 	grpcServer := grpc.NewServer(sOpts...)
 	grpc_prometheus.Register(grpcServer)
-	pipelineMetadataQuery, err := service.NewPipelineMetadataQuery(isbSvcClient, ds.pipeline, wmFetchers, rater, runtimeInfoExtractor)
+	pipelineMetadataQuery, err := service.NewPipelineMetadataQuery(isbSvcClient, ds.pipeline, wmFetchers, rater, pipelineRuntimeCache)
 	if err != nil {
 		return nil, err
 	}

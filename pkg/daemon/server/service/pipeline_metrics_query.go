@@ -53,7 +53,7 @@ type PipelineMetadataQuery struct {
 	httpClient           metricsHttpClient
 	watermarkFetchers    map[v1alpha1.Edge][]fetch.HeadFetcher
 	rater                rater.Ratable
-	runtimeInfoExtractor runtimeinfo.PipelineRuntimeCache
+	pipelineRuntimeCache runtimeinfo.PipelineRuntimeCache
 	healthChecker        *HealthChecker
 }
 
@@ -63,7 +63,7 @@ func NewPipelineMetadataQuery(
 	pipeline *v1alpha1.Pipeline,
 	wmFetchers map[v1alpha1.Edge][]fetch.HeadFetcher,
 	rater rater.Ratable,
-	runtimeInfoExtractor runtimeinfo.PipelineRuntimeCache) (*PipelineMetadataQuery, error) {
+	pipelineRuntimeCache runtimeinfo.PipelineRuntimeCache) (*PipelineMetadataQuery, error) {
 	ps := PipelineMetadataQuery{
 		isbSvcClient: isbSvcClient,
 		pipeline:     pipeline,
@@ -76,7 +76,7 @@ func NewPipelineMetadataQuery(
 		watermarkFetchers:    wmFetchers,
 		rater:                rater,
 		healthChecker:        NewHealthChecker(pipeline, isbSvcClient),
-		runtimeInfoExtractor: runtimeInfoExtractor,
+		pipelineRuntimeCache: pipelineRuntimeCache,
 	}
 	return &ps, nil
 }
