@@ -2355,6 +2355,7 @@ dependencies = [
  "chrono",
  "http 1.2.0",
  "numaflow-models",
+ "once_cell",
  "rcgen",
  "regex",
  "serde",

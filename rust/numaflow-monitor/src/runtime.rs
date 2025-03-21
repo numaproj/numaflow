@@ -2,6 +2,7 @@
 use crate::config::RuntimeInfoConfig;
 use crate::error::{Error, Result};
 use chrono::{DateTime, Utc};
+use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
@@ -14,6 +15,8 @@ use tonic::Status;
 use tracing::error;
 
 const CURRENT_FILE: &str = "current.json";
+/// A static regex pattern used to extract the container name from an error message.
+static CONTAINER_NAME_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"\((.+?)\)").unwrap());
 
 /// Represents a single runtime error entry persisted by the application.
 #[derive(Serialize, Deserialize, Debug)]
@@ -90,7 +93,7 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    // Creates a new Runtime instance
+    /// Creates a new Runtime instance
     pub fn new(runtime_info_config: Option<RuntimeInfoConfig>) -> Self {
         let config = runtime_info_config.unwrap_or_default();
         Runtime {
@@ -221,8 +224,8 @@ impl Runtime {
 
 ///  Extracts the container name from an error message using a regular expression.
 fn extract_container_name(error_message: &str) -> String {
-    let re = Regex::new(r"\((.*?)\)").unwrap();
-    re.captures(error_message)
+    CONTAINER_NAME_REGEX
+        .captures(error_message)
         .and_then(|caps| caps.get(1).map(|m| m.as_str().to_string()))
         .unwrap_or_else(|| {
             panic!(
