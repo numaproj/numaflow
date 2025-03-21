@@ -41,6 +41,7 @@ const (
 	ContainerTypeSessionreducer    ContainerType = "sessionreducer"
 	ContainerTypeSideinput         ContainerType = "sideinput"
 	ContainerTypeFbsinker          ContainerType = "fb-sinker"
+	ContainerTypeAccumulator       ContainerType = "accumulator"
 	ContainerTypeUnknown           ContainerType = "unknown"
 )
 
@@ -97,6 +98,7 @@ var minimumSupportedSDKVersions = sdkConstraints{
 		ContainerTypeSessionreducer:    "0.9.0rc100",
 		ContainerTypeSideinput:         "0.9.0rc100",
 		ContainerTypeFbsinker:          "0.9.0rc100",
+		ContainerTypeAccumulator:       "0.9.0-z",
 	},
 	Go: map[ContainerType]string{
 		// meaning the minimum supported go SDK version is 0.9.0
@@ -109,6 +111,7 @@ var minimumSupportedSDKVersions = sdkConstraints{
 		ContainerTypeSessionreducer:    "0.9.0-z",
 		ContainerTypeSideinput:         "0.9.0-z",
 		ContainerTypeFbsinker:          "0.9.0-z",
+		ContainerTypeAccumulator:       "0.9.0-z",
 	},
 	Java: map[ContainerType]string{
 		// meaning the minimum supported go SDK version is 0.9.0
@@ -121,6 +124,7 @@ var minimumSupportedSDKVersions = sdkConstraints{
 		ContainerTypeSessionreducer:    "0.9.0-z",
 		ContainerTypeSideinput:         "0.9.0-z",
 		ContainerTypeFbsinker:          "0.9.0-z",
+		ContainerTypeAccumulator:       "0.9.0-z",
 	},
 	Rust: map[ContainerType]string{
 		// meaning the minimum supported go SDK version is 0.1.0
@@ -133,6 +137,7 @@ var minimumSupportedSDKVersions = sdkConstraints{
 		ContainerTypeSessionreducer:    "0.1.0-z",
 		ContainerTypeSideinput:         "0.1.0-z",
 		ContainerTypeFbsinker:          "0.1.0-z",
+		ContainerTypeAccumulator:       "0.9.0-z",
 	},
 }
 
