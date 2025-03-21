@@ -23,10 +23,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	sideinputpb "github.com/numaproj/numaflow-go/pkg/apis/proto/sideinput/v1"
 	"github.com/numaproj/numaflow-go/pkg/apis/proto/sideinput/v1/sideinputmock"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 )

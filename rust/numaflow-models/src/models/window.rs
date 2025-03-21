@@ -20,6 +20,8 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Window {
+    #[serde(rename = "accumulator", skip_serializing_if = "Option::is_none")]
+    pub accumulator: Option<Box<crate::models::AccumulatorWindow>>,
     #[serde(rename = "fixed", skip_serializing_if = "Option::is_none")]
     pub fixed: Option<Box<crate::models::FixedWindow>>,
     #[serde(rename = "session", skip_serializing_if = "Option::is_none")]
@@ -32,6 +34,7 @@ impl Window {
     /// Window describes windowing strategy
     pub fn new() -> Window {
         Window {
+            accumulator: None,
             fixed: None,
             session: None,
             sliding: None,
