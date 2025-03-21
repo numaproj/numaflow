@@ -9,6 +9,8 @@ use async_nats::{
     ConnectOptions,
 };
 use bytes::Bytes;
+use tokio::sync::oneshot;
+use tokio::task::JoinHandle;
 use tokio::time::{self, Instant};
 use tokio_stream::StreamExt;
 
@@ -42,7 +44,7 @@ pub struct Jetstream {
     consumer: Consumer<Config>,
     messages: Stream,
     read_timeout: Duration,
-    in_progress_messages: HashMap<u64, JetstreamMessage>,
+    in_progress_messages: HashMap<u64, MessageProcessingTracker>,
 }
 
 #[derive(Debug)]
@@ -110,27 +112,16 @@ impl Jetstream {
         })
     }
 
-    async fn start_work_in_progress(msg: JetstreamMessage, tick: Duration) {
-        let start = Instant::now();
-        let mut interval = time::interval_at(start + tick, tick);
-        loop {
-            interval.tick().await;
-            let ack_result = msg.ack_with(AckKind::Progress).await;
-            // FIXME: if an error happens, we should probably break out of this loop.
-            if let Err(e) = ack_result {
-                tracing::error!(?e, "Failed to send InProgress Ack to Jetstream for message");
-            }
-        }
-    }
-
     async fn process_message(&mut self, js_message: JetstreamMessage) -> Result<Message> {
         let message: Message = js_message.clone().try_into().map_err(|e| {
             Error::Jetstream(format!(
                 "converting raw Jetstream message as Numaflow source message: {e:?}"
             ))
         })?;
+        let tick_interval = self.consumer.cached_info().config.ack_wait / 2;
+        let message_tracker = MessageProcessingTracker::start(js_message, tick_interval).await;
         self.in_progress_messages
-            .insert(message.stream_sequence, js_message);
+            .insert(message.stream_sequence, message_tracker);
 
         Ok(message)
     }
@@ -159,5 +150,72 @@ impl Jetstream {
             }
         }
         Ok(messages)
+    }
+}
+
+struct MessageProcessingTracker {
+    in_progress_task: JoinHandle<()>,
+    ack_signal_tx: oneshot::Sender<()>,
+}
+
+impl MessageProcessingTracker {
+    async fn start(msg: JetstreamMessage, tick: Duration) -> Self {
+        let (ack_signal_tx, ack_signal_rx) = oneshot::channel();
+        let task = tokio::spawn(Self::start_work_in_progress(msg, tick, ack_signal_rx));
+        Self {
+            in_progress_task: task,
+            ack_signal_tx,
+        }
+    }
+
+    async fn start_work_in_progress(
+        msg: JetstreamMessage,
+        tick: Duration,
+        ack_signal_rx: oneshot::Receiver<()>,
+    ) {
+        let start = Instant::now();
+        let mut interval = time::interval_at(start + tick, tick);
+        let ack_msg = || async {
+            if let Err(err) = msg.ack().await {
+                tracing::error!(?err, "Failed to Ack message");
+            }
+        };
+
+        let ack_in_progress = || async {
+            let ack_result = msg.ack_with(AckKind::Progress).await;
+            // FIXME: if an error happens, we should probably stop the task
+            if let Err(e) = ack_result {
+                tracing::error!(?e, "Failed to send InProgress Ack to Jetstream for message");
+            }
+        };
+
+        tokio::pin!(ack_signal_rx);
+
+        loop {
+            tokio::select! {
+                biased;
+
+                _ = &mut ack_signal_rx => {
+                    ack_msg().await;
+                    return;
+                },
+                _ = interval.tick() => ack_in_progress().await,
+            }
+        }
+    }
+
+    async fn ack(self) {
+        let Self {
+            in_progress_task,
+            ack_signal_tx,
+        } = self;
+        if let Err(err) = ack_signal_tx.send(()) {
+            tracing::error!(
+                ?err,
+                "Background task to mark the message status as in-progress is already terminated"
+            );
+            return;
+        }
+        let _ = in_progress_task.await;
     }
 }
