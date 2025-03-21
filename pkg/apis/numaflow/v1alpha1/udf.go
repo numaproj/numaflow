@@ -190,7 +190,7 @@ type SessionWindow struct {
 // NOTE: Quite powerful, should not be abused; it can cause stalling of pipelines and leaks.
 type AccumulatorWindow struct {
 	// Timeout is the duration of inactivity after which the state of the accumulator is removed.
-	Timeout *metav1.Duration `json:"ttl,omitempty" protobuf:"bytes,1,opt,name=ttl"`
+	Timeout *metav1.Duration `json:"ttl,omitempty" protobuf:"bytes,1,opt,name=timeout"`
 }
 
 // PBQStorage defines the persistence configuration for a vertex.
