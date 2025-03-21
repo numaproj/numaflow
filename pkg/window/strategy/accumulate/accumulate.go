@@ -34,7 +34,7 @@ func NewAccumulatorWindow(keys []string) window.TimedWindow {
 		slot:      slot,
 		keys:      keys,
 		partition: &window.SharedUnalignedPartition,
-		windowID:  fmt.Sprintf("%d-%v-%s-%s", 0, math.MaxInt64, slot, strings.Join(keys, dfv1.KeysDelimitter)),
+		windowID:  fmt.Sprintf("%d-%d-%s-%s", 0, uint64(math.MaxInt64), slot, strings.Join(keys, dfv1.KeysDelimitter)),
 	}
 }
 
