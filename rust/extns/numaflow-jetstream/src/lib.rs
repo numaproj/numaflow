@@ -151,6 +151,27 @@ impl Jetstream {
         }
         Ok(messages)
     }
+
+    async fn ack_messages(&mut self, offsets: Vec<u64>) -> Result<()> {
+        for offset in offsets {
+            let msg_task = self.in_progress_messages.remove(&offset);
+            let Some(msg_task) = msg_task else {
+                tracing::warn!(offset, "Received ACK request for unknown offset");
+                continue;
+            };
+            msg_task.ack().await;
+        }
+        Ok(())
+    }
+
+    pub(crate) async fn pending_messages(&mut self) -> Result<Option<usize>> {
+        let x = self
+            .consumer
+            .info()
+            .await
+            .map_err(|e| Error::Jetstream(format!("Failed to get consumer info: {e:?}")))?;
+        Ok(Some(x.num_pending as usize + x.num_ack_pending))
+    }
 }
 
 struct MessageProcessingTracker {
@@ -181,6 +202,7 @@ impl MessageProcessingTracker {
             }
         };
 
+        // FIXME: Add retries. Refer rust/numaflow-core/src/pipeline/isb/jestream/reader.rs
         let ack_in_progress = || async {
             let ack_result = msg.ack_with(AckKind::Progress).await;
             // FIXME: if an error happens, we should probably stop the task
