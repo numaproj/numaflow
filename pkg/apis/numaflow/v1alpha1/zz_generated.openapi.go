@@ -618,7 +618,7 @@ func schema_pkg_apis_numaflow_v1alpha1_AccumulatorWindow(ref common.ReferenceCal
 				Description: "AccumulatorWindow describes a special kind of SessionWindow (similar to Global Window) where output should always have monotonically increasing WM but it can be manipulated through event-time by reordering the messages. NOTE: Quite powerful, should not be abused; it can cause stalling of pipelines and leaks.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
-					"ttl": {
+					"timeout": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Timeout is the duration of inactivity after which the state of the accumulator is removed.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),

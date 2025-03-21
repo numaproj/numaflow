@@ -21000,7 +21000,7 @@ spec:
                               properties:
                                 accumulator:
                                   properties:
-                                    ttl:
+                                    timeout:
                                       type: string
                                   type: object
                                 fixed:
@@ -27640,7 +27640,7 @@ spec:
                         properties:
                           accumulator:
                             properties:
-                              ttl:
+                              timeout:
                                 type: string
                             type: object
                           fixed:
