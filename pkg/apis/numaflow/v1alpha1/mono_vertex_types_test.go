@@ -424,7 +424,7 @@ func TestMonoVertex_GetServiceObj(t *testing.T) {
 	}
 
 	t.Run("non-headless service", func(t *testing.T) {
-		svc := mv.getServiceObj("test-service", false, []int32{8080}, []string{"http"})
+		svc := mv.getServiceObj("test-service", false, map[string]int32{"http": 8080})
 		assert.Equal(t, "test-service", svc.Name)
 		assert.Equal(t, "test-namespace", svc.Namespace)
 		assert.Equal(t, 1, len(svc.Spec.Ports))
@@ -434,7 +434,7 @@ func TestMonoVertex_GetServiceObj(t *testing.T) {
 	})
 
 	t.Run("headless service", func(t *testing.T) {
-		svc := mv.getServiceObj("test-headless-service", true, []int32{9090}, []string{"grpc"})
+		svc := mv.getServiceObj("test-headless-service", true, map[string]int32{"grpc": 9090})
 		assert.Equal(t, "test-headless-service", svc.Name)
 		assert.Equal(t, "test-namespace", svc.Namespace)
 		assert.Equal(t, 1, len(svc.Spec.Ports))
@@ -444,7 +444,7 @@ func TestMonoVertex_GetServiceObj(t *testing.T) {
 	})
 
 	t.Run("verify labels", func(t *testing.T) {
-		svc := mv.getServiceObj("test-label-service", false, []int32{7070}, []string{"metrics"})
+		svc := mv.getServiceObj("test-label-service", false, map[string]int32{"metrics": 7070})
 		expectedLabels := map[string]string{
 			KeyPartOf:         Project,
 			KeyManagedBy:      ControllerMonoVertex,
@@ -455,7 +455,7 @@ func TestMonoVertex_GetServiceObj(t *testing.T) {
 	})
 
 	t.Run("verify selector", func(t *testing.T) {
-		svc := mv.getServiceObj("test-selector-service", false, []int32{6060}, []string{"admin"})
+		svc := mv.getServiceObj("test-selector-service", false, map[string]int32{"admin": 6060})
 		expectedSelector := map[string]string{
 			KeyPartOf:         Project,
 			KeyManagedBy:      ControllerMonoVertex,
@@ -483,10 +483,19 @@ func TestMonoVertex_GetServiceObjs(t *testing.T) {
 		assert.Equal(t, "test-namespace", headlessService.Namespace)
 		assert.Equal(t, "None", headlessService.Spec.ClusterIP)
 		assert.Equal(t, 2, len(headlessService.Spec.Ports))
-		assert.Equal(t, int32(MonoVertexMetricsPort), headlessService.Spec.Ports[0].Port)
-		assert.Equal(t, MonoVertexMetricsPortName, headlessService.Spec.Ports[0].Name)
-		assert.Equal(t, int32(MonoVertexMonitorPort), headlessService.Spec.Ports[1].Port)
-		assert.Equal(t, MonoVertexMonitorPortName, headlessService.Spec.Ports[1].Name)
+
+		// Verify that the ports contain the expected values
+		expectedPorts := map[int32]string{
+			MonoVertexMetricsPort: MonoVertexMetricsPortName,
+			MonoVertexMonitorPort: MonoVertexMonitorPortName,
+		}
+		foundPorts := map[int32]string{}
+		for _, port := range headlessService.Spec.Ports {
+			foundPorts[port.Port] = port.Name
+		}
+		for port, name := range expectedPorts {
+			assert.Equal(t, name, foundPorts[port], "Port name mismatch for port %d", port)
+		}
 	})
 }
 

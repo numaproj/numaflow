@@ -168,12 +168,10 @@ func TestGetVertexReplicas(t *testing.T) {
 }
 
 func TestGetHeadlessSvcSpec(t *testing.T) {
-	s := testVertex.getServiceObj(testVertex.GetHeadlessServiceName(), true, []int32{VertexMetricsPort, VertexMonitorPort}, []string{VertexMetricsPortName, VertexMonitorPortName})
+	s := testVertex.getServiceObj(testVertex.GetHeadlessServiceName(), true, map[string]int32{VertexMetricsPortName: VertexMetricsPort})
 	assert.Equal(t, s.Name, testVertex.GetHeadlessServiceName())
 	assert.Equal(t, s.Namespace, testVertex.Namespace)
-	assert.Equal(t, 2, len(s.Spec.Ports))
-	assert.Equal(t, VertexMetricsPort, int(s.Spec.Ports[0].Port))
-	assert.Equal(t, VertexMonitorPort, int(s.Spec.Ports[1].Port))
+	assert.Equal(t, 1, len(s.Spec.Ports))
 	assert.Equal(t, "None", s.Spec.ClusterIP)
 }
 
@@ -190,8 +188,15 @@ func TestGetServiceObjs(t *testing.T) {
 	assert.Equal(t, 1, len(s))
 	assert.Equal(t, s[0].Name, v.GetHeadlessServiceName())
 	assert.Equal(t, 2, len(s[0].Spec.Ports))
-	assert.Equal(t, VertexMetricsPort, int(s[0].Spec.Ports[0].Port))
-	assert.Equal(t, VertexMonitorPort, int(s[0].Spec.Ports[1].Port))
+	ports := map[int32]bool{
+		VertexMetricsPort: false,
+		VertexMonitorPort: false,
+	}
+	for _, port := range s[0].Spec.Ports {
+		ports[port.Port] = true
+	}
+	assert.True(t, ports[VertexMetricsPort], "Metrics port is missing")
+	assert.True(t, ports[VertexMonitorPort], "Monitor port is missing")
 	assert.Equal(t, "None", s[0].Spec.ClusterIP)
 
 	v.Spec.Source.HTTP.Service = true

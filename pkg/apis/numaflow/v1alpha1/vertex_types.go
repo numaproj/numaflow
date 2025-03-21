@@ -139,13 +139,17 @@ func (v Vertex) GetHeadlessServiceName() string {
 }
 
 func (v Vertex) GetServiceObjs() []*corev1.Service {
-	svcs := []*corev1.Service{v.getServiceObj(v.GetHeadlessServiceName(), true, []int32{VertexMetricsPort, VertexMonitorPort}, []string{VertexMetricsPortName, VertexMonitorPortName})}
+	ports := map[string]int32{
+		VertexMetricsPortName: VertexMetricsPort,
+		VertexMonitorPortName: VertexMonitorPort,
+	}
+	svcs := []*corev1.Service{v.getServiceObj(v.GetHeadlessServiceName(), true, ports)}
 	if x := v.Spec.Source; x != nil && x.HTTP != nil && x.HTTP.Service {
-		svcs = append(svcs, v.getServiceObj(v.Name, false, []int32{VertexHTTPSPort}, []string{VertexHTTPSPortName}))
+		svcs = append(svcs, v.getServiceObj(v.Name, false, map[string]int32{VertexHTTPSPortName: VertexHTTPSPort}))
 	}
 	// serving source uses the same port as the http source, because both can't be configured at the same time
 	if x := v.Spec.Source; x != nil && x.Serving != nil && x.Serving.Service {
-		svcs = append(svcs, v.getServiceObj(v.Name, false, []int32{VertexHTTPSPort}, []string{VertexHTTPSPortName}))
+		svcs = append(svcs, v.getServiceObj(v.Name, false, map[string]int32{VertexHTTPSPortName: VertexHTTPSPort}))
 	}
 	return svcs
 }
@@ -165,13 +169,13 @@ func (v Vertex) HasServingStore() bool {
 	return v.Spec.ServingStoreName != nil
 }
 
-func (v Vertex) getServiceObj(name string, headless bool, ports []int32, servicePortNames []string) *corev1.Service {
+func (v Vertex) getServiceObj(name string, headless bool, ports map[string]int32) *corev1.Service {
 	var servicePorts []corev1.ServicePort
-	for i, port := range ports {
+	for name, port := range ports {
 		servicePorts = append(servicePorts, corev1.ServicePort{
 			Port:       port,
 			TargetPort: intstr.FromInt32(port),
-			Name:       servicePortNames[i],
+			Name:       name,
 		})
 	}
 	svc := &corev1.Service{
@@ -298,7 +302,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	servingStore := req.PipelineSpec.GetStoreSpec(v.GetServingStoreName())
 	volumeMounts := []corev1.VolumeMount{{Name: varVolumeName, MountPath: PathVarRun}}
 	executeRustBinary, _ := env.GetBool(EnvExecuteRustBinary, false)
-	sidecarContainers, containers, err := v.Spec.getType().getContainers(getContainerReq{
+	containerRequest := getContainerReq{
 		isbSvcType:        req.ISBSvcType,
 		env:               envVars,
 		image:             req.Image,
@@ -307,10 +311,13 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		volumeMounts:      volumeMounts,
 		executeRustBinary: executeRustBinary,
 		servingStore:      servingStore,
-	})
+	}
+	sidecarContainers, containers, err := v.Spec.getType().getContainers(containerRequest)
 	if err != nil {
 		return nil, err
 	}
+	monitorContainer := createMonitorContainer(containerRequest)
+	sidecarContainers = append([]corev1.Container{monitorContainer}, sidecarContainers...)
 
 	var readyzInitDeploy, readyzPeriodSeconds, readyzTimeoutSeconds, readyzFailureThreshold int32 = NumaContainerReadyzInitialDelaySeconds, NumaContainerReadyzPeriodSeconds, NumaContainerReadyzTimeoutSeconds, NumaContainerReadyzFailureThreshold
 	var liveZInitDeploy, liveZPeriodSeconds, liveZTimeoutSeconds, liveZFailureThreshold int32 = NumaContainerLivezInitialDelaySeconds, NumaContainerLivezPeriodSeconds, NumaContainerLivezTimeoutSeconds, NumaContainerLivezFailureThreshold

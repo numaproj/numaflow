@@ -53,8 +53,6 @@ func (s Sink) getContainers(req getContainerReq) ([]corev1.Container, []corev1.C
 		s.getMainContainer(req),
 	}
 	sidecarContainers := []corev1.Container{}
-	monitorContainer := createMonitorContainer(req)
-	sidecarContainers = append(sidecarContainers, monitorContainer)
 	if s.UDSink != nil {
 		sidecarContainers = append(sidecarContainers, s.getUDSinkContainer(req))
 	}

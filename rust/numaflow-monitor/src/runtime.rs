@@ -2,8 +2,6 @@
 use crate::config::RuntimeInfoConfig;
 use crate::error::{Error, Result};
 use chrono::{DateTime, Utc};
-use once_cell::sync::Lazy;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::fs;
@@ -15,8 +13,6 @@ use tonic::Status;
 use tracing::error;
 
 const CURRENT_FILE: &str = "current.json";
-/// A static regex pattern used to extract the container name from an error message.
-static CONTAINER_NAME_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"\((.+?)\)").unwrap());
 
 /// Represents a single runtime error entry persisted by the application.
 #[derive(Serialize, Deserialize, Debug)]
@@ -106,7 +102,8 @@ impl Runtime {
     /// the number of files by removing the oldest file if the max file limit is exceeded.
     pub fn persist_application_error(&self, grpc_status: Status) {
         // extract the type of udf container based on the error message
-        let container_name = extract_container_name(grpc_status.message());
+        let container_name = extract_container_name(grpc_status.message())
+            .expect("Failed to extract container name from gRPC status message");
         // create a directory for the container if it doesn't exist
         let dir_path = Path::new(&self.application_error_path).join(&container_name);
         if !dir_path.exists() {
@@ -223,16 +220,11 @@ impl Runtime {
 }
 
 ///  Extracts the container name from an error message using a regular expression.
-fn extract_container_name(error_message: &str) -> String {
-    CONTAINER_NAME_REGEX
-        .captures(error_message)
-        .and_then(|caps| caps.get(1).map(|m| m.as_str().to_string()))
-        .unwrap_or_else(|| {
-            panic!(
-                "Failed to extract container name from the error message: {}",
-                error_message
-            )
-        })
+fn extract_container_name(error_message: &str) -> Option<String> {
+    let start = error_message.find('(')?;
+    let end = error_message[start + 1..].find(')')?;
+    let word = &error_message[start + 1..start + 1 + end];
+    Some(word.to_string())
 }
 
 ///  Processes a single file entry, deserializing its content into a `RuntimeErrorEntry` and adding it
@@ -272,7 +264,8 @@ mod tests {
     #[test]
     fn test_extract_container_name_with_valid_pattern() {
         let error_message = "Error occurred in container (my-container)";
-        let container_name = extract_container_name(error_message);
+        let container_name =
+            extract_container_name(error_message).expect("Failed to extract container name");
         assert_eq!(container_name, "my-container");
     }
 

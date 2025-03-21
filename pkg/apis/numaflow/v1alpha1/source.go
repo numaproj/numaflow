@@ -52,8 +52,6 @@ func (s Source) getContainers(req getContainerReq) ([]corev1.Container, []corev1
 		s.getMainContainer(req),
 	}
 	sidecarContainers := []corev1.Container{}
-	monitorContainer := createMonitorContainer(req)
-	sidecarContainers = append(sidecarContainers, monitorContainer)
 	if s.UDTransformer != nil {
 		sidecarContainers = append(sidecarContainers, s.getUDTransformerContainer(req))
 	}

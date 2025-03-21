@@ -104,17 +104,22 @@ func (mv MonoVertex) GetHeadlessServiceName() string {
 }
 
 func (mv MonoVertex) GetServiceObjs() []*corev1.Service {
-	svcs := []*corev1.Service{mv.getServiceObj(mv.GetHeadlessServiceName(), true, []int32{MonoVertexMetricsPort, MonoVertexMonitorPort}, []string{MonoVertexMetricsPortName, MonoVertexMonitorPortName})}
+	svcs := []*corev1.Service{}
+	ports := map[string]int32{
+		MonoVertexMetricsPortName: MonoVertexMetricsPort,
+		MonoVertexMonitorPortName: MonoVertexMonitorPort,
+	}
+	svcs = append(svcs, mv.getServiceObj(mv.GetHeadlessServiceName(), true, ports))
 	return svcs
 }
 
-func (mv MonoVertex) getServiceObj(name string, headless bool, ports []int32, servicePortNames []string) *corev1.Service {
+func (mv MonoVertex) getServiceObj(name string, headless bool, ports map[string]int32) *corev1.Service {
 	var servicePorts []corev1.ServicePort
-	for i, port := range ports {
+	for name, port := range ports {
 		servicePorts = append(servicePorts, corev1.ServicePort{
 			Port:       port,
 			TargetPort: intstr.FromInt32(port),
-			Name:       servicePortNames[i],
+			Name:       name,
 		})
 	}
 	svc := &corev1.Service{
@@ -354,14 +359,17 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 		},
 	}
 	volumeMounts := []corev1.VolumeMount{{Name: varVolumeName, MountPath: PathVarRun}}
-
-	sidecarContainers, containers := mv.Spec.buildContainers(getContainerReq{
+	containerRequest := getContainerReq{
 		env:             envVars,
 		image:           req.Image,
 		imagePullPolicy: req.PullPolicy,
 		resources:       req.DefaultResources,
 		volumeMounts:    volumeMounts,
-	})
+	}
+
+	sidecarContainers, containers := mv.Spec.buildContainers(containerRequest)
+	monitorContainer := createMonitorContainer(containerRequest)
+	sidecarContainers = append([]corev1.Container{monitorContainer}, sidecarContainers...)
 
 	var readyzInitDeploy, readyzPeriodSeconds, readyzTimeoutSeconds, readyzFailureThreshold int32 = NumaContainerReadyzInitialDelaySeconds, NumaContainerReadyzPeriodSeconds, NumaContainerReadyzTimeoutSeconds, NumaContainerReadyzFailureThreshold
 	var liveZInitDeploy, liveZPeriodSeconds, liveZTimeoutSeconds, liveZFailureThreshold int32 = NumaContainerLivezInitialDelaySeconds, NumaContainerLivezPeriodSeconds, NumaContainerLivezTimeoutSeconds, NumaContainerLivezFailureThreshold
@@ -497,10 +505,6 @@ func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) ([]corev1.Cont
 	containers := []corev1.Container{mainContainer}
 
 	sidecarContainers := []corev1.Container{}
-
-	monitorContainer := createMonitorContainer(req)
-	sidecarContainers = append(sidecarContainers, monitorContainer)
-
 	if mvspec.Source.UDSource != nil { // Only support UDSource for now.
 		sidecarContainers = append(sidecarContainers, mvspec.Source.getUDSourceContainer(req))
 	}

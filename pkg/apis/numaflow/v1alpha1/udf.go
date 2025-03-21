@@ -49,7 +49,7 @@ func (in UDF) getContainers(req getContainerReq) ([]corev1.Container, []corev1.C
 	containers := []corev1.Container{
 		in.getMainContainer(req),
 	}
-	sidecarContainers := []corev1.Container{createMonitorContainer(req), in.getUDFContainer(req)}
+	sidecarContainers := []corev1.Container{in.getUDFContainer(req)}
 
 	if req.servingStore != nil && req.servingStore.Container != nil {
 		sidecarContainers = append(sidecarContainers, req.servingStore.getUDStoreContainer(req))
