@@ -18,11 +18,6 @@ spec:
         max: 1
       source:
         http: {}
-#    - name: in
-#      source:
-#        generator:
-#          rpu: 5
-#          keyCount: 1
     - name: accum
       udf:
         container:
@@ -32,7 +27,7 @@ spec:
         groupBy:
           window:
             accumulator:
-              ttl: 10s
+              timeout: 10s
           keyed: true
           storage:
             persistentVolumeClaim:
