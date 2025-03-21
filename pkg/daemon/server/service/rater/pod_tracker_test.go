@@ -119,7 +119,6 @@ func TestPodTracker_Start(t *testing.T) {
 	wg.Wait()
 
 	assert.NotEmpty(t, tracker.LeastRecentlyUsed())
-	assert.NotEmpty(t, tracker.LeastRecentlyUsed())
 	assert.Equal(t, true, tracker.IsActive("p*v*4"))
 	assert.Equal(t, false, tracker.IsActive("p*v*5"))
 }
