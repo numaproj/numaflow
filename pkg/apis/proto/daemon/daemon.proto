@@ -109,6 +109,24 @@ message GetPipelineWatermarksRequest {
   string pipeline = 1;
 }
 
+message GetVertexErrorsRequest {
+  string pipeline = 1;
+  string vertex = 2;
+  string replica = 3;
+}
+
+message VertexError {
+  string container = 1;
+  string timestamp = 2;
+  string code = 3;
+  string message = 4;
+  string details = 5;
+}
+
+message GetVertexErrorsResponse {
+  repeated VertexError errors = 1;
+}
+
 // DaemonService is a grpc service that is used to provide APIs for giving any pipeline information.
 service DaemonService {
 
@@ -131,5 +149,9 @@ service DaemonService {
 
   rpc GetPipelineStatus (GetPipelineStatusRequest) returns (GetPipelineStatusResponse) {
     option (google.api.http).get = "/api/v1/pipelines/{pipeline}/status";
+  };
+
+  rpc GetVertexErrors (GetVertexErrorsRequest) returns (GetVertexErrorsResponse) {
+    option (google.api.http).get = "/api/v1/pipelines/{pipeline}/vertices/{vertex}/replicas/{replica}/errors";
   };
 }

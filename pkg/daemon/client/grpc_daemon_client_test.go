@@ -58,6 +58,11 @@ func (m *mockDaemonServiceClient) GetPipelineStatus(ctx context.Context, in *dae
 	return args.Get(0).(*daemon.GetPipelineStatusResponse), args.Error(1)
 }
 
+func (m *mockDaemonServiceClient) GetVertexErrors(ctx context.Context, in *daemon.GetVertexErrorsRequest, opts ...grpc.CallOption) (*daemon.GetVertexErrorsResponse, error) {
+	args := m.Called(ctx, in, opts)
+	return args.Get(0).(*daemon.GetVertexErrorsResponse), args.Error(1)
+}
+
 func TestGrpcDaemonClient_ListPipelineBuffers(t *testing.T) {
 	t.Run("successful listing", func(t *testing.T) {
 		mockClient := new(mockDaemonServiceClient)
@@ -366,6 +371,72 @@ func TestGrpcDaemonClient_GetPipelineStatus(t *testing.T) {
 		assert.Nil(t, status)
 	})
 }
+
+func TestGrpcDaemonClient_GetVertexErrors(t *testing.T) {
+	t.Run("successful retrieval", func(t *testing.T) {
+		mockClient := new(mockDaemonServiceClient)
+		dc := &grpcDaemonClient{client: mockClient}
+
+		expectedErrors := make([]*daemon.VertexError, 0)
+		expectedErrors = append(expectedErrors, &daemon.VertexError{
+			Container: "container1",
+			Timestamp: "2023-10-01T12:00:00Z",
+			Code:      "Internal",
+			Message:   "message1",
+			Details:   "details1",
+		})
+
+		mockClient.On("GetVertexErrors", mock.Anything, &daemon.GetVertexErrorsRequest{Pipeline: "test-pipeline", Vertex: "test-vertex", Replica: "0"}, mock.Anything).
+			Return(&daemon.GetVertexErrorsResponse{Errors: expectedErrors}, nil)
+
+		vertexErrors, err := dc.GetVertexErrors(context.Background(), "test-pipeline", "test-vertex", "0")
+		assert.NoError(t, err)
+		assert.Equal(t, expectedErrors, vertexErrors)
+	})
+
+	t.Run("empty errors", func(t *testing.T) {
+		mockClient := new(mockDaemonServiceClient)
+		dc := &grpcDaemonClient{client: mockClient}
+
+		mockClient.On("GetVertexErrors", mock.Anything, &daemon.GetVertexErrorsRequest{Pipeline: "test-pipeline", Vertex: "vertex1", Replica: "0"}, mock.Anything).
+			Return(&daemon.GetVertexErrorsResponse{Errors: []*daemon.VertexError{}}, nil)
+
+		vertexErrors, err := dc.GetVertexErrors(context.Background(), "test-pipeline", "vertex1", "0")
+		assert.NoError(t, err)
+		assert.Empty(t, vertexErrors)
+	})
+
+	t.Run("client error", func(t *testing.T) {
+		mockClient := new(mockDaemonServiceClient)
+		dc := &grpcDaemonClient{client: mockClient}
+
+		expectedError := errors.New("client error")
+		mockClient.On("GetVertexErrors", mock.Anything, &daemon.GetVertexErrorsRequest{Pipeline: "test-pipeline", Vertex: "test-vertex", Replica: "0"}, mock.Anything).
+			Return((*daemon.GetVertexErrorsResponse)(nil), expectedError)
+
+		vertexErrors, err := dc.GetVertexErrors(context.Background(), "test-pipeline", "test-vertex", "0")
+		assert.Error(t, err)
+		assert.Equal(t, expectedError, err)
+		assert.Nil(t, vertexErrors)
+	})
+
+	t.Run("context cancellation", func(t *testing.T) {
+		mockClient := new(mockDaemonServiceClient)
+		dc := &grpcDaemonClient{client: mockClient}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		mockClient.On("GetVertexErrors", mock.Anything, &daemon.GetVertexErrorsRequest{Pipeline: "test-pipeline", Vertex: "test-vertex", Replica: "0"}, mock.Anything).
+			Return((*daemon.GetVertexErrorsResponse)(nil), context.Canceled)
+
+		vertexErrors, err := dc.GetVertexErrors(ctx, "test-pipeline", "test-vertex", "0")
+		assert.Error(t, err)
+		assert.Equal(t, context.Canceled, err)
+		assert.Nil(t, vertexErrors)
+	})
+}
+
 func TestGrpcDaemonClient_IsDrained(t *testing.T) {
 	t.Run("all buffers empty", func(t *testing.T) {
 		mockClient := new(mockDaemonServiceClient)
