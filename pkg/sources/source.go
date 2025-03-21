@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"time"
 
@@ -400,7 +401,7 @@ func (sp *SourceProcessor) getTransformerGoWhereDecider(shuffleFuncMap map[strin
 		var result []forwarder.VertexBuffer
 
 		// Drop message if it contains the special tag
-		if sharedutil.StringSliceContains(tags, dfv1.MessageTagDrop) {
+		if slices.Contains(tags, dfv1.MessageTagDrop) {
 			metrics.UserDroppedMessages.With(map[string]string{
 				metrics.LabelVertex:             sp.VertexInstance.Vertex.Spec.Name,
 				metrics.LabelPipeline:           sp.VertexInstance.Vertex.Spec.PipelineName,
