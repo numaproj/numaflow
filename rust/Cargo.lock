@@ -2275,6 +2275,7 @@ dependencies = [
  "hyper-util",
  "kube",
  "numaflow 0.2.1",
+ "numaflow-jetstream",
  "numaflow-models",
  "numaflow-pb",
  "numaflow-pulsar",

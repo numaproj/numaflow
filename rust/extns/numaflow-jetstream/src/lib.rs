@@ -81,7 +81,7 @@ impl TryFrom<JetstreamMessage> for Message {
 }
 
 impl Jetstream {
-    async fn connect(config: JetstreamSourceConfig) -> Result<Self> {
+    pub async fn connect(config: JetstreamSourceConfig) -> Result<Self> {
         let mut conn_opts = ConnectOptions::new();
         if let Some(auth) = config.auth {
             conn_opts = conn_opts.user_and_password(auth.username, auth.password);
@@ -126,7 +126,7 @@ impl Jetstream {
         Ok(message)
     }
 
-    async fn read_messages(&mut self) -> Result<Vec<Message>> {
+    pub async fn read_messages(&mut self) -> Result<Vec<Message>> {
         let mut messages: Vec<Message> = vec![];
         let timeout = tokio::time::timeout(self.read_timeout, std::future::pending::<()>());
         tokio::pin!(timeout);
@@ -152,7 +152,7 @@ impl Jetstream {
         Ok(messages)
     }
 
-    async fn ack_messages(&mut self, offsets: Vec<u64>) -> Result<()> {
+    pub async fn ack_messages(&mut self, offsets: Vec<u64>) -> Result<()> {
         for offset in offsets {
             let msg_task = self.in_progress_messages.remove(&offset);
             let Some(msg_task) = msg_task else {
@@ -164,7 +164,7 @@ impl Jetstream {
         Ok(())
     }
 
-    pub(crate) async fn pending_messages(&mut self) -> Result<Option<usize>> {
+    pub async fn pending_messages(&mut self) -> Result<Option<usize>> {
         let x = self
             .consumer
             .info()

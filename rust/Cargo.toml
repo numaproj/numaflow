@@ -61,6 +61,7 @@ numaflow-models = { path = "numaflow-models" }
 backoff = { path = "backoff" }
 numaflow-pb = { path = "numaflow-pb" }
 numaflow-pulsar = { path = "extns/numaflow-pulsar" }
+numaflow-jetstream = { path = "extns/numaflow-jetstream" }
 numaflow-sqs = { path = "extns/numaflow-sqs" }
 tokio = "1.43.0"
 bytes = "1.9.0"
