@@ -121,7 +121,10 @@ func (r *monoVertexRuntimeCache) persistRuntimeErrors(ctx context.Context) {
 
 		for i := range r.podTracker.GetActivePodsCount() {
 			wg.Add(1)
-			go r.fetchAndPersistErrorForPod(i, &wg)
+			go func(podIndex int) {
+				defer wg.Done()
+				r.fetchAndPersistErrorForPod(podIndex)
+			}(i)
 		}
 
 		// Wait for all goroutines to finish
@@ -147,9 +150,7 @@ func (r *monoVertexRuntimeCache) persistRuntimeErrors(ctx context.Context) {
 }
 
 // fetchAndPersistErrorForPod fetches the runtime errors for a pod and persists them in the local cache.
-func (r *monoVertexRuntimeCache) fetchAndPersistErrorForPod(podIndex int, wg *sync.WaitGroup) {
-	defer wg.Done()
-
+func (r *monoVertexRuntimeCache) fetchAndPersistErrorForPod(podIndex int) {
 	// Get the headless service name
 	url := fmt.Sprintf("https://%s-mv-%v.%s.%s.svc:%v/%s", r.monoVtx.Name, podIndex, r.monoVtx.GetHeadlessServiceName(), r.monoVtx.GetNamespace(), v1alpha1.MonoVertexMonitorPort, runtimeErrorsPath)
 

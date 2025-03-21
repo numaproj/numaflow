@@ -124,7 +124,10 @@ func (r *pipelineRuntimeCache) persistRuntimeErrors(ctx context.Context) {
 		for _, vtx := range r.pipeline.Spec.Vertices {
 			for i := range r.podTracker.GetActivePodsCountForVertex(vtx.Name) {
 				wg.Add(1)
-				go r.fetchAndPersistErrorForPod(vtx.Name, i, &wg)
+				go func(vtxName string, podIndex int) {
+					defer wg.Done()
+					r.fetchAndPersistErrorForPod(vtxName, podIndex)
+				}(vtx.Name, i)
 			}
 		}
 		wg.Wait()
@@ -148,10 +151,9 @@ func (r *pipelineRuntimeCache) persistRuntimeErrors(ctx context.Context) {
 }
 
 // fetchAndPersistErrorForPod fetches the runtime errors for a pod and persists them in the local cache.
-func (r *pipelineRuntimeCache) fetchAndPersistErrorForPod(vtxName string, podIndex int, wg *sync.WaitGroup) {
-	defer wg.Done()
-
+func (r *pipelineRuntimeCache) fetchAndPersistErrorForPod(vtxName string, podIndex int) {
 	podName := strings.Join([]string{r.pipeline.Name, vtxName, fmt.Sprintf("%d", podIndex)}, "-")
+	// Get the headless service name
 	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/%s", podName, r.pipeline.Name+"-"+vtxName+"-headless", r.pipeline.Namespace, v1alpha1.VertexMonitorPort, runtimeErrorsPath)
 
 	res, err := r.httpClient.Get(url)
