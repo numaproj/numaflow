@@ -1,6 +1,6 @@
 use std::{collections::HashMap, time::Duration};
 
-use async_nats::jetstream::Message as JetstreamMessage;
+use async_nats::jetstream::{AckKind, Message as JetstreamMessage};
 use async_nats::{
     jetstream::consumer::{
         pull::{Config, Stream},
@@ -9,6 +9,7 @@ use async_nats::{
     ConnectOptions,
 };
 use bytes::Bytes;
+use tokio::time::{self, Instant};
 use tokio_stream::StreamExt;
 
 pub type Result<T> = core::result::Result<T, Error>;
@@ -41,6 +42,7 @@ pub struct Jetstream {
     consumer: Consumer<Config>,
     messages: Stream,
     read_timeout: Duration,
+    in_progress_messages: HashMap<u64, JetstreamMessage>,
 }
 
 #[derive(Debug)]
@@ -99,12 +101,38 @@ impl Jetstream {
                     config.consumer, config.stream
                 ))
             })?;
-        let mut message_stream = consumer.messages().await.unwrap();
+        let message_stream = consumer.messages().await.unwrap();
         Ok(Self {
             consumer,
             messages: message_stream,
             read_timeout: config.read_timeout,
+            in_progress_messages: HashMap::new(),
         })
+    }
+
+    async fn start_work_in_progress(msg: JetstreamMessage, tick: Duration) {
+        let start = Instant::now();
+        let mut interval = time::interval_at(start + tick, tick);
+        loop {
+            interval.tick().await;
+            let ack_result = msg.ack_with(AckKind::Progress).await;
+            // FIXME: if an error happens, we should probably break out of this loop.
+            if let Err(e) = ack_result {
+                tracing::error!(?e, "Failed to send InProgress Ack to Jetstream for message");
+            }
+        }
+    }
+
+    async fn process_message(&mut self, js_message: JetstreamMessage) -> Result<Message> {
+        let message: Message = js_message.clone().try_into().map_err(|e| {
+            Error::Jetstream(format!(
+                "converting raw Jetstream message as Numaflow source message: {e:?}"
+            ))
+        })?;
+        self.in_progress_messages
+            .insert(message.stream_sequence, js_message);
+
+        Ok(message)
     }
 
     async fn read_messages(&mut self) -> Result<Vec<Message>> {
@@ -124,9 +152,8 @@ impl Jetstream {
                         break;
                     };
                     let message = message
-                        .map_err(|e| Error::Jetstream(format!("Getting next message from the stream: {e:?}")))?
-                        .try_into()
-                        .map_err(|e| Error::Jetstream(format!("converting raw Jestreams message as Jetstream source message: {e:?}")))?;
+                        .map_err(|e| Error::Jetstream(format!("Getting next message from the stream: {e:?}")))?;
+                    let message = self.process_message(message).await?;
                     messages.push(message);
                 }
             }
