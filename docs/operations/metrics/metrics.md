@@ -91,7 +91,7 @@ These metrics can be used to determine if there are any errors in the pipeline.
 
 ## Prometheus Operator for Scraping Metrics:
 
-You can follow the [prometheus operator](https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/user-guides/getting-started.md) setup guide if you would like to use prometheus operator configured in your cluster.
+You can follow the [prometheus operator](https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/getting-started/installation.md) setup guide if you would like to use prometheus operator configured in your cluster.
 
 You can also set up prometheus operator via [helm](https://bitnami.com/stack/prometheus-operator/helm).
 
