@@ -934,7 +934,7 @@ Description
 
 <td>
 
-<code>ttl</code></br> <em>
+<code>timeout</code></br> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>

@@ -20,13 +20,13 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AccumulatorWindow {
-    #[serde(rename = "ttl", skip_serializing_if = "Option::is_none")]
-    pub ttl: Option<kube::core::Duration>,
+    #[serde(rename = "timeout", skip_serializing_if = "Option::is_none")]
+    pub timeout: Option<kube::core::Duration>,
 }
 
 impl AccumulatorWindow {
     /// AccumulatorWindow describes a special kind of SessionWindow (similar to Global Window) where output should always have monotonically increasing WM but it can be manipulated through event-time by reordering the messages. NOTE: Quite powerful, should not be abused; it can cause stalling of pipelines and leaks.
     pub fn new() -> AccumulatorWindow {
-        AccumulatorWindow { ttl: None }
+        AccumulatorWindow { timeout: None }
     }
 }
