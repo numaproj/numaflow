@@ -97,7 +97,7 @@ func newWindowState(window window.TimedWindow) *windowState {
 func (ws *windowState) appendToTimestampList(eventTime time.Time) {
 	// Check if the event time is already present
 	index := sort.Search(len(ws.messageTimestamps), func(i int) bool {
-		return ws.messageTimestamps[i].After(eventTime) || ws.messageTimestamps[i].Equal(eventTime)
+		return !ws.messageTimestamps[i].Before(eventTime)
 	})
 
 	// If the event time is not present, insert it
