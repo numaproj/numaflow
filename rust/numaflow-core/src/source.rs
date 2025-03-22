@@ -47,6 +47,8 @@ pub(crate) mod generator;
 /// [Pulsar]: https://numaflow.numaproj.io/user-guide/sources/pulsar/
 pub(crate) mod pulsar;
 
+pub(crate) mod jetstream;
+
 pub(crate) mod serving;
 pub(crate) mod sqs;
 

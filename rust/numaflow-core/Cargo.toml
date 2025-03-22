@@ -16,6 +16,7 @@ workspace = true
 tokio.workspace = true
 tracing.workspace = true
 numaflow-pulsar.workspace = true
+numaflow-jetstream.workspace = true
 numaflow-sqs.workspace = true
 numaflow-models.workspace = true
 numaflow-pb.workspace = true
@@ -27,6 +28,7 @@ bytes.workspace = true
 serde.workspace = true
 rustls.workspace = true
 tower.workspace = true
+async-nats.workspace = true
 tonic = "0.12.3"
 thiserror = "2.0.3"
 tokio-util = "0.7.11"
@@ -47,7 +49,6 @@ kube = "0.95.0"
 futures = "0.3.30"
 pin-project = "1.1.5"
 rand = "0.8.5"
-async-nats = "0.39.0"
 
 [dev-dependencies]
 tempfile = "3.11.0"
