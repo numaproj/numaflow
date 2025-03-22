@@ -219,5 +219,6 @@ func (u *GRPCBasedAccumulator) parseAccumulatorResponse(response *accumulatorpb.
 	return &window.TimedWindowResponse{
 		WriteMessage: taggedMessage,
 		Window:       window.NewUnalignedTimedWindow(start, end, slot, keys),
+		EOF:          response.GetEOF(),
 	}
 }

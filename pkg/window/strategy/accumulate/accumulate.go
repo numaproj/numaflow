@@ -95,14 +95,17 @@ func newWindowState(window window.TimedWindow) *windowState {
 
 // appendToTimestampList adds the event time to the inflight messages timestamp list in a sorted order.
 func (ws *windowState) appendToTimestampList(eventTime time.Time) {
-	// Find the insertion point using binary search
+	// Check if the event time is already present
 	index := sort.Search(len(ws.messageTimestamps), func(i int) bool {
-		return ws.messageTimestamps[i].After(eventTime)
+		return ws.messageTimestamps[i].After(eventTime) || ws.messageTimestamps[i].Equal(eventTime)
 	})
-	// Insert the event time at the found index
-	ws.messageTimestamps = append(ws.messageTimestamps, time.Time{})
-	copy(ws.messageTimestamps[index+1:], ws.messageTimestamps[index:])
-	ws.messageTimestamps[index] = eventTime
+
+	// If the event time is not present, insert it
+	if index == len(ws.messageTimestamps) || !ws.messageTimestamps[index].Equal(eventTime) {
+		ws.messageTimestamps = append(ws.messageTimestamps, time.Time{})
+		copy(ws.messageTimestamps[index+1:], ws.messageTimestamps[index:])
+		ws.messageTimestamps[index] = eventTime
+	}
 
 	// Update the latest event time
 	if eventTime.After(ws.lastSeenEventTime) {
