@@ -102,8 +102,7 @@ impl Runtime {
     /// the number of files by removing the oldest file if the max file limit is exceeded.
     pub fn persist_application_error(&self, grpc_status: Status) {
         // extract the type of udf container based on the error message
-        let container_name = extract_container_name(grpc_status.message())
-            .expect("Failed to extract container name from gRPC status message");
+        let container_name = extract_container_name(grpc_status.message());
         // create a directory for the container if it doesn't exist
         let dir_path = Path::new(&self.application_error_path).join(&container_name);
         if !dir_path.exists() {
@@ -219,12 +218,14 @@ impl Runtime {
     }
 }
 
-///  Extracts the container name from an error message using a regular expression.
-fn extract_container_name(error_message: &str) -> Option<String> {
-    let start = error_message.find('(')?;
-    let end = error_message[start + 1..].find(')')?;
-    let word = &error_message[start + 1..start + 1 + end];
-    Some(word.to_string())
+///  Extracts the container name from error message.
+fn extract_container_name(error_message: &str) -> String {
+    if let Some(start) = error_message.find('(') {
+        if let Some(end) = error_message[start + 1..].find(')') {
+            return error_message[start + 1..start + 1 + end].to_string();
+        }
+    }
+    String::new()
 }
 
 ///  Processes a single file entry, deserializing its content into a `RuntimeErrorEntry` and adding it
@@ -264,8 +265,7 @@ mod tests {
     #[test]
     fn test_extract_container_name_with_valid_pattern() {
         let error_message = "Error occurred in container (my-container)";
-        let container_name =
-            extract_container_name(error_message).expect("Failed to extract container name");
+        let container_name = extract_container_name(error_message);
         assert_eq!(container_name, "my-container");
     }
 
