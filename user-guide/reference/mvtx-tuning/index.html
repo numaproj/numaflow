@@ -13,7 +13,7 @@
     
     
       
-        <title>Edge Tuning - Numaflow - Data/streaming processing platform on Kubernetes</title>
+        <title>MonoVertex Tuning - Numaflow - Data/streaming processing platform on Kubernetes</title>
       
     
     
@@ -74,7 +74,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#edge-tuning" class="md-skip">
+        <a href="#monovertex-tuning" class="md-skip">
           Skip to content
         </a>
       
@@ -108,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Edge Tuning
+              MonoVertex Tuning
             
           </span>
         </div>
@@ -1337,60 +1337,9 @@
         
       
       
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          Edge Tuning
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
       <a href="./" class="md-nav__link md-nav__link--active">
-        Edge Tuning
+        MonoVertex Tuning
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#drop-message-onfull" class="md-nav__link">
-    Drop message onFull
-  </a>
-  
-    <nav class="md-nav" aria-label="Drop message onFull">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#discardlatest" class="md-nav__link">
-    discardLatest
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#retryuntilsuccess" class="md-nav__link">
-    retryUntilSuccess
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
-</nav>
       
     </li>
   
@@ -2341,41 +2290,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#drop-message-onfull" class="md-nav__link">
-    Drop message onFull
-  </a>
-  
-    <nav class="md-nav" aria-label="Drop message onFull">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#discardlatest" class="md-nav__link">
-    discardLatest
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#retryuntilsuccess" class="md-nav__link">
-    retryUntilSuccess
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -2386,35 +2300,29 @@
             <article class="md-content__inner md-typeset">
               
                 
-  <a href="https://github.com/numaproj/numaflow/edit/main/docs/user-guide/reference/edge-tuning.md" title="Edit this page" class="md-content__button md-icon">
+  <a href="https://github.com/numaproj/numaflow/edit/main/docs/user-guide/reference/mvtx-tuning.md" title="Edit this page" class="md-content__button md-icon">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
   </a>
 
 
 
-<h1 id="edge-tuning">Edge Tuning<a class="headerlink" href="#edge-tuning" title="Permanent link">&para;</a></h1>
-<h2 id="drop-message-onfull">Drop message onFull<a class="headerlink" href="#drop-message-onfull" title="Permanent link">&para;</a></h2>
-<p>We need to have an edge level setting to drop the messages if the <code>buffer.isFull == true</code>. Even if the UDF or UDSink drops
-a message due to some internal error in the user-defined code, the processing latency will spike up causing a natural 
-back pressure. A kill switch to drop messages can help alleviate/avoid any repercussions on the rest of the DAG.</p>
-<p>This setting is an edge-level setting and can be enabled by <code>onFull</code> and the default is <code>retryUntilSuccess</code> (other option
-is <code>discardLatest</code>).</p>
-<p>This is a <strong>data loss scenario</strong> but can be useful in cases where we are doing user-introduced experimentations, 
-like A/B testing, on the pipeline. It is totally okay for the experimentation side of the DAG to have data loss while 
-the production is unaffected.</p>
-<h3 id="discardlatest">discardLatest<a class="headerlink" href="#discardlatest" title="Permanent link">&para;</a></h3>
-<p>Setting <code>onFull</code> to <code>discardLatest</code> will drop the message on the floor if the edge is full.</p>
-<div class="highlight"><pre><span></span><code><span class="w">  </span><span class="nt">edges</span><span class="p">:</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">a</span>
-<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">b</span>
-<span class="w">      </span><span class="nt">onFull</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">discardLatest</span>
-</code></pre></div>
-<h3 id="retryuntilsuccess">retryUntilSuccess<a class="headerlink" href="#retryuntilsuccess" title="Permanent link">&para;</a></h3>
-<p>The default setting for <code>onFull</code> in <code>retryUntilSuccess</code> which will make sure the message is retried until successful. </p>
-<div class="highlight"><pre><span></span><code><span class="w">  </span><span class="nt">edges</span><span class="p">:</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">a</span>
-<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">b</span>
-<span class="w">      </span><span class="nt">onFull</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">retryUntilSuccess</span>
+<h1 id="monovertex-tuning">MonoVertex Tuning<a class="headerlink" href="#monovertex-tuning" title="Permanent link">&para;</a></h1>
+<p>Similar to <a href="../pipeline-tuning/">pipeline tuning</a>, certain parameters can be fine-tuned for the data processing using <a href="../../../core-concepts/monovertex/">MonoVertex</a>.</p>
+<p>Each <a href="../../../core-concepts/monovertex/">MonoVertex</a> keeps running the cycle of reading data from a data source,
+processing the data, and writing to a sink. There are some parameters can be adjusted for this cycle.</p>
+<ul>
+<li><code>readBatchSize</code> - How many messages to read for each cycle, defaults to <code>500</code>. It works together with <code>readTimeout</code> during a read operation, concluding when either limit is reached first.</li>
+<li><code>readTimeout</code> - Read timeout from the source, defaults to <code>1s</code>.</li>
+</ul>
+<p>These parameters can be customized under <code>spec.limits</code> as below.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MonoVertex</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-mvtx</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">limits</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">readBatchSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100</span>
+<span class="w">    </span><span class="nt">readTimeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">500ms</span>
 </code></pre></div>
 
               

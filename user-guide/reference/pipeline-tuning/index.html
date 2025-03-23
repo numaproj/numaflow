@@ -1323,9 +1323,67 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          Pipeline Tuning
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         Pipeline Tuning
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#vertex-tuning" class="md-nav__link">
+    Vertex Tuning
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#edge-tuning" class="md-nav__link">
+    Edge Tuning
+  </a>
+  
+    <nav class="md-nav" aria-label="Edge Tuning">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#discardlatest" class="md-nav__link">
+    discardLatest
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retryuntilsuccess" class="md-nav__link">
+    retryUntilSuccess
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -1338,8 +1396,8 @@
   
   
     <li class="md-nav__item">
-      <a href="../edge-tuning/" class="md-nav__link">
-        Edge Tuning
+      <a href="../mvtx-tuning/" class="md-nav__link">
+        MonoVertex Tuning
       </a>
     </li>
   
@@ -2290,6 +2348,48 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#vertex-tuning" class="md-nav__link">
+    Vertex Tuning
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#edge-tuning" class="md-nav__link">
+    Edge Tuning
+  </a>
+  
+    <nav class="md-nav" aria-label="Edge Tuning">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#discardlatest" class="md-nav__link">
+    discardLatest
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#retryuntilsuccess" class="md-nav__link">
+    retryUntilSuccess
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2307,11 +2407,14 @@
 
 
 <h1 id="pipeline-tuning">Pipeline Tuning<a class="headerlink" href="#pipeline-tuning" title="Permanent link">&para;</a></h1>
-<p>For a data processing pipeline, each vertex keeps running the cycle of reading data from an Inter-Step Buffer (or data source), 
-processing the data, and writing to next Inter-Step Buffers (or sinks). It is possible to make some tuning for this data 
+<p>In a data processing <a href="../../../core-concepts/pipeline/">pipeline</a>, certain parameters can be fine-tuned according to the specific use case of the data processing.</p>
+<h2 id="vertex-tuning">Vertex Tuning<a class="headerlink" href="#vertex-tuning" title="Permanent link">&para;</a></h2>
+<p>Each <a href="../../../core-concepts/vertex/">vertex</a> keeps running the cycle of reading data from an Inter-Step Buffer (or data source),
+processing the data, and writing to the next Inter-Step Buffers (or sinks). There are some parameters can be adjusted for this data
 processing cycle.</p>
 <ul>
-<li><code>readBatchSize</code> - How many messages to read for each cycle, defaults to <code>500</code>.</li>
+<li><code>readBatchSize</code> - The number of messages to read in each cycle, with a default value of <code>500</code>. It works together with <code>readTimeout</code> during a read operation, concluding when either limit is reached first.</li>
+<li><code>readTimeout</code> - Read timeout from the source or Inter-Step Buffer, defaults to <code>1s</code>. It works in conjunction with <code>readBatchSize</code>.</li>
 <li><code>bufferMaxLength</code> - How many unprocessed messages can be existing in the Inter-Step Buffer, defaults to <code>30000</code>.</li>
 <li><code>bufferUsageLimit</code> - The percentage of the buffer usage limit, a valid number should be less than 100. Default value is <code>80</code>, which means <code>80%</code>.</li>
 </ul>
@@ -2323,6 +2426,7 @@ processing cycle.</p>
 <span class="nt">spec</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">limits</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">readBatchSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100</span>
+<span class="w">    </span><span class="nt">readTimeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">200ms</span>
 <span class="w">    </span><span class="nt">bufferMaxLength</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30000</span>
 <span class="w">    </span><span class="nt">bufferUsageLimit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">85</span>
 </code></pre></div>
@@ -2334,6 +2438,7 @@ processing cycle.</p>
 <span class="nt">spec</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">limits</span><span class="p">:</span><span class="w"> </span><span class="c1"># Default limits for all the vertices and edges (buffers) of this pipeline</span>
 <span class="w">    </span><span class="nt">readBatchSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100</span>
+<span class="w">    </span><span class="nt">readTimeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">200ms</span>
 <span class="w">    </span><span class="nt">bufferMaxLength</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30000</span>
 <span class="w">    </span><span class="nt">bufferUsageLimit</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">85</span>
 <span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
@@ -2358,6 +2463,29 @@ processing cycle.</p>
 <span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span>
 <span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
+</code></pre></div>
+<h2 id="edge-tuning">Edge Tuning<a class="headerlink" href="#edge-tuning" title="Permanent link">&para;</a></h2>
+<p>There is an edge level setting to drop the messages if the <code>buffer.isFull == true</code>. Even if the UDF or UDSink drops
+a message due to some internal error in the user-defined code, the processing latency will spike up causing a natural
+back pressure. A kill switch to drop messages can help alleviate/avoid any repercussions on the rest of the DAG.</p>
+<p>This setting is an edge-level setting and can be enabled by <code>onFull</code> and the default is <code>retryUntilSuccess</code> (other option
+is <code>discardLatest</code>).</p>
+<p>This is a <strong>data loss scenario</strong> but can be useful in cases where we are doing user-introduced experimentations,
+like A/B testing, on the pipeline. It is totally okay for the experimentation side of the DAG to have data loss while
+the production is unaffected.</p>
+<h3 id="discardlatest">discardLatest<a class="headerlink" href="#discardlatest" title="Permanent link">&para;</a></h3>
+<p>Setting <code>onFull</code> to <code>discardLatest</code> will drop the incoming message on the floor if the edge is full.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">edges</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">a</span>
+<span class="w">    </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">b</span>
+<span class="w">    </span><span class="nt">onFull</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">discardLatest</span>
+</code></pre></div>
+<h3 id="retryuntilsuccess">retryUntilSuccess<a class="headerlink" href="#retryuntilsuccess" title="Permanent link">&para;</a></h3>
+<p>The default setting for <code>onFull</code> in <code>retryUntilSuccess</code> which will make sure the incoming message is retried until successful.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">edges</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">a</span>
+<span class="w">    </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">b</span>
+<span class="w">    </span><span class="nt">onFull</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">retryUntilSuccess</span>
 </code></pre></div>
 
               
@@ -2395,13 +2523,13 @@ processing cycle.</p>
       
       
         
-        <a href="../edge-tuning/" class="md-footer__link md-footer__link--next" aria-label="Next: Edge Tuning" rel="next">
+        <a href="../mvtx-tuning/" class="md-footer__link md-footer__link--next" aria-label="Next: MonoVertex Tuning" rel="next">
           <div class="md-footer__title">
             <div class="md-ellipsis">
               <span class="md-footer__direction">
                 Next
               </span>
-              Edge Tuning
+              MonoVertex Tuning
             </div>
           </div>
           <div class="md-footer__button md-icon">

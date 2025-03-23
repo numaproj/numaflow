@@ -1328,8 +1328,8 @@
   
   
     <li class="md-nav__item">
-      <a href="../edge-tuning/" class="md-nav__link">
-        Edge Tuning
+      <a href="../mvtx-tuning/" class="md-nav__link">
+        MonoVertex Tuning
       </a>
     </li>
   
@@ -2581,7 +2581,7 @@
 
 
 <h1 id="joins-and-cycles">Joins and Cycles<a class="headerlink" href="#joins-and-cycles" title="Permanent link">&para;</a></h1>
-<p>Numaflow Pipeline Edges can be defined such that multiple Vertices can forward messages to a single vertex.</p>
+<p>Numaflow <a href="../../../core-concepts/pipeline/">Pipeline</a> Edges can be defined such that multiple Vertices can forward messages to a single vertex.</p>
 <h3 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h3>
 <p>Please see the following examples:</p>
 <ul>
@@ -2593,21 +2593,21 @@
 </ul>
 <h2 id="why-do-we-need-join">Why do we need JOIN<a class="headerlink" href="#why-do-we-need-join" title="Permanent link">&para;</a></h2>
 <h3 id="without-join">Without JOIN<a class="headerlink" href="#without-join" title="Permanent link">&para;</a></h3>
-<p>Without JOIN, Numaflow could only allow users to build <a href="https://numaflow.numaproj.io/core-concepts/pipeline/">pipelines</a> where <a href="https://numaflow.numaproj.io/core-concepts/vertex/">vertices</a>
-could only read from previous <em>one</em> vertex. This meant that Numaflow could only support simple pipelines or tree-like pipelines. 
+<p>Without JOIN, Numaflow could only allow users to build <a href="../../../core-concepts/pipeline/">pipelines</a> where <a href="../../../core-concepts/vertex/">vertices</a>
+could only read from previous <em>one</em> vertex. This meant that Numaflow could only support simple pipelines or tree-like pipelines.
 Supporting pipelines where you had to read from multiple sources or UDFs were cumbersome and required creating redundant
 vertices.</p>
 <p><img alt="Simple pipeline" src="https://miro.medium.com/v2/resize:fit:1400/1*MAwBZ3-eOQs29fvc36XLDw.png" /></p>
 <p><img alt="Tree-like pipeline" src="https://miro.medium.com/v2/resize:fit:1400/1*XXycfwWNvsTZV-cr3lomOA.png" /></p>
 <h3 id="with-join">With JOIN<a class="headerlink" href="#with-join" title="Permanent link">&para;</a></h3>
 <p>Join vertices allow users the flexibility to read from multiple sources, process data from multiple UDFs, and even write
-to a single sink. The Pipeline Spec doesn't change at all with JOIN, now you can create multiple Edges that have the 
+to a single sink. The Pipeline Spec doesn't change at all with JOIN, now you can create multiple Edges that have the
 same “To” Vertex, which would have otherwise been prohibited.</p>
 <p><img alt="Join Vertex" src="https://miro.medium.com/v2/resize:fit:1400/1*5Ct-5otqpXTAVCNW_SJnNw.png" /></p>
 <p>There is no limitation on which vertices can be joined. For instance, one can join Map or Reduce vertices as shown below:</p>
 <p><img alt="Directed Graph" src="https://miro.medium.com/v2/resize:fit:1400/1*ldVi_wtuMH4rWFd0UG91cg.png" /></p>
 <h2 id="benefits">Benefits<a class="headerlink" href="#benefits" title="Permanent link">&para;</a></h2>
-<p>The introduction of Join Vertex allows users to eliminate redundancy in their pipelines. It supports many-to-one data 
+<p>The introduction of Join Vertex allows users to eliminate redundancy in their pipelines. It supports many-to-one data
 flow without needing multiple vertices performing the same job.</p>
 <h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h2>
 <h3 id="join-on-sink-vertex">Join on Sink Vertex<a class="headerlink" href="#join-on-sink-vertex" title="Permanent link">&para;</a></h3>
@@ -2629,8 +2629,8 @@ flow without needing multiple vertices performing the same job.</p>
 <p>A special case of a "Join" is a <strong>Cycle</strong> (a Vertex which can send either to itself or to a previous Vertex.) An example
 use of this is a Map UDF which does some sort of reprocessing of data under certain conditions such as a transient error.</p>
 <p><img alt="Cycle" src="https://miro.medium.com/v2/resize:fit:1400/1*wYokY1wa9LhI1hKYimWiKA.png" /></p>
-<p>Cycles are permitted, except in the case that there's a Reduce Vertex at or downstream of the cycle. (This is because a 
-cycle inevitably produces late data, which would get dropped by the Reduce Vertex. For this reason, cycles should be 
+<p>Cycles are permitted, except in the case that there's a Reduce Vertex at or downstream of the cycle. (This is because a
+cycle inevitably produces late data, which would get dropped by the Reduce Vertex. For this reason, cycles should be
 used sparingly.)</p>
 <p>The following examples are of Cycles:</p>
 <ul>

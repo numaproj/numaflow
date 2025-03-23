@@ -1328,8 +1328,8 @@
   
   
     <li class="md-nav__item">
-      <a href="../edge-tuning/" class="md-nav__link">
-        Edge Tuning
+      <a href="../mvtx-tuning/" class="md-nav__link">
+        MonoVertex Tuning
       </a>
     </li>
   
@@ -2307,11 +2307,13 @@
 
 
 <h1 id="conditional-forwarding">Conditional Forwarding<a class="headerlink" href="#conditional-forwarding" title="Permanent link">&para;</a></h1>
-<p>After processing the data, conditional forwarding is doable based on the <code>Tags</code> returned in the result. 
-Below is a list of different logic operations that can be done on tags.
-- <strong>and</strong> - forwards the message if all the tags specified are present in Message's tags.
-- <strong>or</strong> - forwards the message if one of the tags specified is present in Message's tags.
-- <strong>not</strong> - forwards the message if all the tags specified are not present in Message's tags.</p>
+<p>In a <a href="../../../core-concepts/pipeline/">pipeline</a>, after processing the data, conditional forwarding is doable based on the <code>tags</code> returned in the result.
+Below is a list of different logic operations that can be done on tags.</p>
+<ul>
+<li><strong>and</strong> - forwards the message if all the tags specified are present in Message's tags.</li>
+<li><strong>or</strong> - forwards the message if one of the tags specified is present in Message's tags.</li>
+<li><strong>not</strong> - forwards the message if all the tags specified are not present in Message's tags.</li>
+</ul>
 <p>For example, there's a UDF used to process numbers, and forward the result to different vertices based on the number is even or odd. In this case, you can set the <code>tag</code> to <code>even-tag</code> or <code>odd-tag</code> in each of the returned messages,
 and define the edges as below:</p>
 <div class="highlight"><pre><span></span><code><span class="nt">edges</span><span class="p">:</span>

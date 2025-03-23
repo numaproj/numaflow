@@ -1328,8 +1328,8 @@
   
   
     <li class="md-nav__item">
-      <a href="../edge-tuning/" class="md-nav__link">
-        Edge Tuning
+      <a href="../mvtx-tuning/" class="md-nav__link">
+        MonoVertex Tuning
       </a>
     </li>
   
@@ -2307,13 +2307,16 @@
 
 
 <h1 id="multi-partitioned-edges">Multi-partitioned Edges<a class="headerlink" href="#multi-partitioned-edges" title="Permanent link">&para;</a></h1>
-<p>To achieve higher throughput(&gt; 10K but &lt; 30K tps), users can create multi-partitioned edges.
-Multi-partitioned edges are only supported for pipelines with JetStream as ISB. Please ensure
-that the JetStream is provisioned with more nodes to support higher throughput.</p>
-<p>Since partitions are owned by the vertex reading the data, to create a multi-partitioned edge
-we need to configure the vertex reading the data (to-vertex) to have multiple partitions.</p>
+<p>To achieve higher throughput(&gt; 10K but &lt; 30K tps), users can create <a href="../../../core-concepts/pipeline/">pipelines</a> with multi-partitioned edges. Multi-partitioned edges are only supported for <a href="../../../core-concepts/pipeline/">pipelines</a> with JetStream as <a href="../../../core-concepts/inter-step-buffer/">Inter-Step Buffer</a>. Please ensure that the JetStream is provisioned with more nodes to support higher throughput.</p>
+<p>Since partitions are owned by the vertex reading the data, to create a multi-partitioned edge we need to configure the vertex reading the data (to-vertex) to have multiple partitions.</p>
 <p>The following code snippet provides an example of how to configure a vertex (in this case, the <code>cat</code> vertex) to have multiple partitions, which enables it (<code>cat</code> vertex) to read at a higher throughput.</p>
-<div class="highlight"><pre><span></span><code><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span>
 <span class="w">      </span><span class="nt">partitions</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
 <span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">builtin</span><span class="p">:</span>
