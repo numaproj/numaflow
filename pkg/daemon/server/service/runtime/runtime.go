@@ -197,5 +197,11 @@ func (r *pipelineRuntimeCache) GetLocalCache() map[PodReplica][]ErrorDetails {
 	r.cacheMutex.RLock()
 	defer r.cacheMutex.RUnlock()
 
-	return r.localCache
+	localCacheCopy := make(map[PodReplica][]ErrorDetails, len(r.localCache))
+	for key, value := range r.localCache {
+		localCacheValue := make([]ErrorDetails, len(value))
+		copy(localCacheValue, value)
+		localCacheCopy[key] = localCacheValue
+	}
+	return localCacheCopy
 }
