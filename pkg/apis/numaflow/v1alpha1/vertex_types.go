@@ -388,12 +388,13 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		}
 		sideInputsWatcher.VolumeMounts = append(sideInputsWatcher.VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
 		containers = append(containers, sideInputsWatcher)
-		// do not add for monitor container
-		if len(sidecarContainers) > 1 {
-			for i := 1; i < len(sidecarContainers); i++ {
-				// Readonly mount for user-defined containers
-				sidecarContainers[i].VolumeMounts = append(sidecarContainers[i].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount, ReadOnly: true})
+		for i := 0; i < len(sidecarContainers); i++ {
+			// skip for monitor sidecar container
+			if sidecarContainers[i].Name == CtrMonitor {
+				continue
 			}
+			// Readonly mount for user-defined containers
+			sidecarContainers[i].VolumeMounts = append(sidecarContainers[i].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount, ReadOnly: true})
 		}
 		// Side Inputs init container
 		initContainers[1].VolumeMounts = append(initContainers[1].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})

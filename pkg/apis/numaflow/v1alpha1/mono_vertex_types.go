@@ -485,10 +485,21 @@ func (mvspec MonoVertexSpec) DeepCopyWithoutReplicas() MonoVertexSpec {
 	return x
 }
 
+func (mvspec MonoVertexSpec) getMainContainer(req getContainerReq) corev1.Container {
+	// volume mount to the runtime path
+	volumeMounts := []corev1.VolumeMount{
+		{
+			Name:      RuntimeDirVolume,
+			MountPath: RuntimeDirMountPath,
+		},
+	}
+	return containerBuilder{}.
+		init(req).appendVolumeMounts(volumeMounts...).command(NumaflowRustBinary).args("--rust").build()
+}
+
 // buildContainers builds the sidecar containers and main containers for the mono vertex.
 func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) ([]corev1.Container, []corev1.Container) {
-	mainContainer := containerBuilder{}.
-		init(req).command(NumaflowRustBinary).args("--rust").build()
+	mainContainer := mvspec.getMainContainer(req)
 	containers := []corev1.Container{mainContainer}
 
 	monitorContainer := buildMonitorContainer(req)
@@ -505,12 +516,6 @@ func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) ([]corev1.Cont
 	if mvspec.Sink.Fallback != nil && mvspec.Sink.Fallback.UDSink != nil {
 		sidecarContainers = append(sidecarContainers, mvspec.Sink.getFallbackUDSinkContainer(req))
 	}
-
-	// volume mount to the runtime path
-	containers[0].VolumeMounts = append(containers[0].VolumeMounts, corev1.VolumeMount{
-		Name:      RuntimeDirVolume,
-		MountPath: RuntimeDirMountPath,
-	})
 
 	sidecarContainers = append(sidecarContainers, mvspec.Sidecars...)
 	return sidecarContainers, containers
