@@ -136,8 +136,7 @@ func (pt *PodTracker) GetActivePodsCountForVertex(vertexName string) int {
 	defer pt.activePodsMutex.RUnlock()
 
 	activePods := pt.activePods[vertexName]
-	activePodsCount := len(activePods)
-	return activePodsCount
+	return len(activePods)
 }
 
 // removeValue removes the specified value from the slice.
