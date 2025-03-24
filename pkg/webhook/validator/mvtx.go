@@ -49,7 +49,7 @@ func (v *mvtxValidator) ValidateUpdate(_ context.Context) *admissionv1.Admission
 	if v.oldMvtx == nil {
 		return DeniedResponse("old MonoVertex spec is nil")
 	}
-	// check that the new pipeline spec is valid
+	// check that the new MonoVertex spec is valid
 	if err := validator.ValidateMonoVertex(v.newMvtx); err != nil {
 		return DeniedResponse(fmt.Sprintf("new MonoVertex spec is invalid: %s", err.Error()))
 	}
