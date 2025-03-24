@@ -263,7 +263,7 @@ func (w *Windower) DeleteClosedWindow(window window.TimedWindow) {
 func (w *Windower) OldestWindowEndTime() time.Time {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	
+
 	var minEndTime = time.UnixMilli(-1)
 	for _, ws := range w.activeWindows {
 		if len(ws.messageTimestamps) > 0 && (minEndTime.UnixMilli() == -1 || ws.messageTimestamps[0].Before(minEndTime)) {
