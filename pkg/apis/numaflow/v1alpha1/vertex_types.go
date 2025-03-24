@@ -316,8 +316,6 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	if err != nil {
 		return nil, err
 	}
-	monitorContainer := createMonitorContainer(containerRequest)
-	sidecarContainers = append([]corev1.Container{monitorContainer}, sidecarContainers...)
 
 	var readyzInitDeploy, readyzPeriodSeconds, readyzTimeoutSeconds, readyzFailureThreshold int32 = NumaContainerReadyzInitialDelaySeconds, NumaContainerReadyzPeriodSeconds, NumaContainerReadyzTimeoutSeconds, NumaContainerReadyzFailureThreshold
 	var liveZInitDeploy, liveZPeriodSeconds, liveZTimeoutSeconds, liveZFailureThreshold int32 = NumaContainerLivezInitialDelaySeconds, NumaContainerLivezPeriodSeconds, NumaContainerLivezTimeoutSeconds, NumaContainerLivezFailureThreshold
@@ -362,17 +360,6 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		{Name: VertexMetricsPortName, ContainerPort: VertexMetricsPort},
 	}
 
-	// Attach an EmptyDir for runtime info
-	containers[0].VolumeMounts = append(containers[0].VolumeMounts, corev1.VolumeMount{
-		Name:      RuntimeDirVolume,
-		MountPath: RuntimeDirMountPath,
-	})
-
-	sidecarContainers[0].VolumeMounts = append(sidecarContainers[0].VolumeMounts, corev1.VolumeMount{
-		Name:      RuntimeDirVolume,
-		MountPath: RuntimeDirMountPath,
-	})
-
 	for i := 0; i < len(sidecarContainers); i++ { // udf, udsink, udsource, or source vertex specifies a udtransformer
 		sidecarContainers[i].Env = append(sidecarContainers[i].Env, v.commonEnvs()...)
 		sidecarContainers[i].Env = append(sidecarContainers[i].Env, v.sidecarEnvs()...)
@@ -401,9 +388,12 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		}
 		sideInputsWatcher.VolumeMounts = append(sideInputsWatcher.VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
 		containers = append(containers, sideInputsWatcher)
-		for i := 0; i < len(sidecarContainers); i++ {
-			// Readonly mount for user-defined containers
-			sidecarContainers[i].VolumeMounts = append(sidecarContainers[i].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount, ReadOnly: true})
+		// do not add for monitor container
+		if len(sidecarContainers) > 1 {
+			for i := 1; i < len(sidecarContainers); i++ {
+				// Readonly mount for user-defined containers
+				sidecarContainers[i].VolumeMounts = append(sidecarContainers[i].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount, ReadOnly: true})
+			}
 		}
 		// Side Inputs init container
 		initContainers[1].VolumeMounts = append(initContainers[1].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})

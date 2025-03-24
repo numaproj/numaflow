@@ -368,8 +368,6 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 	}
 
 	sidecarContainers, containers := mv.Spec.buildContainers(containerRequest)
-	monitorContainer := createMonitorContainer(containerRequest)
-	sidecarContainers = append([]corev1.Container{monitorContainer}, sidecarContainers...)
 
 	var readyzInitDeploy, readyzPeriodSeconds, readyzTimeoutSeconds, readyzFailureThreshold int32 = NumaContainerReadyzInitialDelaySeconds, NumaContainerReadyzPeriodSeconds, NumaContainerReadyzTimeoutSeconds, NumaContainerReadyzFailureThreshold
 	var liveZInitDeploy, liveZPeriodSeconds, liveZTimeoutSeconds, liveZFailureThreshold int32 = NumaContainerLivezInitialDelaySeconds, NumaContainerLivezPeriodSeconds, NumaContainerLivezTimeoutSeconds, NumaContainerLivezFailureThreshold
@@ -412,17 +410,6 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 	containers[0].Ports = []corev1.ContainerPort{
 		{Name: MonoVertexMetricsPortName, ContainerPort: MonoVertexMetricsPort},
 	}
-
-	// Attach an EmptyDir for runtime info
-	containers[0].VolumeMounts = append(containers[0].VolumeMounts, corev1.VolumeMount{
-		Name:      RuntimeDirVolume,
-		MountPath: RuntimeDirMountPath,
-	})
-
-	sidecarContainers[0].VolumeMounts = append(sidecarContainers[0].VolumeMounts, corev1.VolumeMount{
-		Name:      RuntimeDirVolume,
-		MountPath: RuntimeDirMountPath,
-	})
 
 	for i := 0; i < len(sidecarContainers); i++ { // udsink, udsource, udtransformer ...
 		sidecarContainers[i].Env = append(sidecarContainers[i].Env, mv.commonEnvs()...)
@@ -504,7 +491,8 @@ func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) ([]corev1.Cont
 		init(req).command(NumaflowRustBinary).args("--rust").build()
 	containers := []corev1.Container{mainContainer}
 
-	sidecarContainers := []corev1.Container{}
+	monitorContainer := buildMonitorContainer(req)
+	sidecarContainers := []corev1.Container{monitorContainer}
 	if mvspec.Source.UDSource != nil { // Only support UDSource for now.
 		sidecarContainers = append(sidecarContainers, mvspec.Source.getUDSourceContainer(req))
 	}
@@ -517,6 +505,13 @@ func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) ([]corev1.Cont
 	if mvspec.Sink.Fallback != nil && mvspec.Sink.Fallback.UDSink != nil {
 		sidecarContainers = append(sidecarContainers, mvspec.Sink.getFallbackUDSinkContainer(req))
 	}
+
+	// volume mount to the runtime path
+	containers[0].VolumeMounts = append(containers[0].VolumeMounts, corev1.VolumeMount{
+		Name:      RuntimeDirVolume,
+		MountPath: RuntimeDirMountPath,
+	})
+
 	sidecarContainers = append(sidecarContainers, mvspec.Sidecars...)
 	return sidecarContainers, containers
 }

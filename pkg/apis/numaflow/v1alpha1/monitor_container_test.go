@@ -23,7 +23,7 @@ import (
 	resource "k8s.io/apimachinery/pkg/api/resource"
 )
 
-func TestCreateMonitorContainer(t *testing.T) {
+func TestBuildMonitorContainer(t *testing.T) {
 	req := getContainerReq{
 		env: []corev1.EnvVar{
 			{Name: "TEST_ENV", Value: "test-value"},
@@ -45,7 +45,7 @@ func TestCreateMonitorContainer(t *testing.T) {
 		},
 	}
 
-	container := createMonitorContainer(req)
+	container := buildMonitorContainer(req)
 
 	// Verify container properties
 	assert.Equal(t, CtrMonitor, container.Name, "Container name mismatch")
@@ -63,10 +63,10 @@ func TestCreateMonitorContainer(t *testing.T) {
 	assert.Equal(t, req.resources.Limits, container.Resources.Limits, "Resource limits mismatch")
 	assert.Equal(t, req.resources.Requests, container.Resources.Requests, "Resource requests mismatch")
 
-	// Verify volume mounts
+	// Verify volume mounts --> should overwrite req's volume mounts
 	assert.Equal(t, 1, len(container.VolumeMounts), "Volume mount count mismatch")
-	assert.Equal(t, "test-volume", container.VolumeMounts[0].Name, "Volume mount name mismatch")
-	assert.Equal(t, "/test-path", container.VolumeMounts[0].MountPath, "Volume mount path mismatch")
+	assert.Equal(t, "runtime-vol", container.VolumeMounts[0].Name, "Volume mount name mismatch")
+	assert.Equal(t, "/var/numaflow/runtime", container.VolumeMounts[0].MountPath, "Volume mount path mismatch")
 
 	// Verify restart policy (sidecar-specific behavior)
 	if isSidecarSupported() {

@@ -17,6 +17,15 @@ package v1alpha1
 
 import corev1 "k8s.io/api/core/v1"
 
-func createMonitorContainer(req getContainerReq) corev1.Container {
-	return containerBuilder{}.init(req).name(CtrMonitor).asSidecar().command(NumaflowRustBinary).args("--monitor").build()
+func buildMonitorContainer(req getContainerReq) corev1.Container {
+	// volume mount to the runtime path
+	volumeMounts := []corev1.VolumeMount{
+		{
+			Name:      RuntimeDirVolume,
+			MountPath: RuntimeDirMountPath,
+		},
+	}
+	builder := containerBuilder{}.init(req)
+	builder.VolumeMounts = volumeMounts
+	return builder.name(CtrMonitor).asSidecar().command(NumaflowRustBinary).args("--monitor").build()
 }

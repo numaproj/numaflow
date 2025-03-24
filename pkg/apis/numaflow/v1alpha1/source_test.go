@@ -81,27 +81,31 @@ func TestSource_getContainers(t *testing.T) {
 		image: "main-image",
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, 2, len(sc))
+	assert.Equal(t, 3, len(sc))
 	assert.Equal(t, 1, len(c))
 	assert.Equal(t, "main-image", c[0].Image)
 
-	assert.Equal(t, x.UDSource.Container.Image, sc[1].Image)
-	assert.Contains(t, sc[0].VolumeMounts, sc[0].VolumeMounts[0])
-	assert.Equal(t, x.UDSource.Container.Command, sc[1].Command)
-	assert.Equal(t, x.UDSource.Container.Args, sc[1].Args)
+	// monitor container
+	assert.Equal(t, CtrMonitor, sc[0].Name)
+	assert.Equal(t, 1, len(sc[0].VolumeMounts))
+	assert.Equal(t, "runtime-vol", sc[0].VolumeMounts[0].Name)
+
+	assert.Equal(t, x.UDSource.Container.Image, sc[2].Image)
+	assert.Equal(t, x.UDSource.Container.Command, sc[2].Command)
+	assert.Equal(t, x.UDSource.Container.Args, sc[2].Args)
 	envsUDSource := map[string]string{}
-	for _, e := range sc[1].Env {
+	for _, e := range sc[2].Env {
 		envsUDSource[e.Name] = e.Value
 	}
 	assert.Equal(t, envsUDSource[EnvUDContainerType], UDContainerSource)
-	assert.Equal(t, x.UDSource.Container.EnvFrom, sc[0].EnvFrom)
-	assert.Equal(t, corev1.ResourceRequirements{Requests: map[corev1.ResourceName]resource.Quantity{"cpu": resource.MustParse("2")}}, sc[0].Resources)
-	assert.Equal(t, c[0].ImagePullPolicy, sc[0].ImagePullPolicy)
-	assert.NotNil(t, sc[1].LivenessProbe)
-	assert.Equal(t, int32(10), sc[1].LivenessProbe.InitialDelaySeconds)
-	assert.Equal(t, int32(15), sc[1].LivenessProbe.TimeoutSeconds)
-	assert.Equal(t, int32(14), sc[1].LivenessProbe.PeriodSeconds)
-	assert.Equal(t, int32(5), sc[1].LivenessProbe.FailureThreshold)
+	assert.Equal(t, x.UDSource.Container.EnvFrom, sc[1].EnvFrom)
+	assert.Equal(t, corev1.ResourceRequirements{Requests: map[corev1.ResourceName]resource.Quantity{"cpu": resource.MustParse("2")}}, sc[1].Resources)
+	assert.Equal(t, c[0].ImagePullPolicy, sc[1].ImagePullPolicy)
+	assert.NotNil(t, sc[2].LivenessProbe)
+	assert.Equal(t, int32(10), sc[2].LivenessProbe.InitialDelaySeconds)
+	assert.Equal(t, int32(15), sc[2].LivenessProbe.TimeoutSeconds)
+	assert.Equal(t, int32(14), sc[2].LivenessProbe.PeriodSeconds)
+	assert.Equal(t, int32(5), sc[2].LivenessProbe.FailureThreshold)
 	x.UDSource.Container.ImagePullPolicy = &testImagePullPolicy
 	assert.Equal(t, ptr.To[corev1.ContainerRestartPolicy](corev1.ContainerRestartPolicyAlways), sc[0].RestartPolicy)
 	assert.Equal(t, ptr.To[corev1.ContainerRestartPolicy](corev1.ContainerRestartPolicyAlways), sc[1].RestartPolicy)
@@ -109,32 +113,32 @@ func TestSource_getContainers(t *testing.T) {
 		image:           "main-image",
 		imagePullPolicy: corev1.PullAlways,
 	})
-	assert.Equal(t, testImagePullPolicy, sc[1].ImagePullPolicy)
+	assert.Equal(t, testImagePullPolicy, sc[2].ImagePullPolicy)
 
-	assert.Equal(t, x.UDTransformer.Container.Image, sc[0].Image)
-	assert.Contains(t, sc[0].VolumeMounts, sc[0].VolumeMounts[0])
-	assert.Equal(t, x.UDTransformer.Container.Command, sc[0].Command)
-	assert.Equal(t, x.UDTransformer.Container.Args, sc[0].Args)
+	assert.Equal(t, x.UDTransformer.Container.Image, sc[1].Image)
+	assert.Contains(t, sc[1].VolumeMounts, sc[1].VolumeMounts[0])
+	assert.Equal(t, x.UDTransformer.Container.Command, sc[1].Command)
+	assert.Equal(t, x.UDTransformer.Container.Args, sc[1].Args)
 	envs := map[string]string{}
-	for _, e := range sc[0].Env {
+	for _, e := range sc[1].Env {
 		envs[e.Name] = e.Value
 	}
 	assert.Equal(t, envs[EnvUDContainerType], UDContainerTransformer)
-	assert.Equal(t, x.UDTransformer.Container.EnvFrom, sc[0].EnvFrom)
-	assert.Equal(t, corev1.ResourceRequirements{Requests: map[corev1.ResourceName]resource.Quantity{"cpu": resource.MustParse("2")}}, sc[0].Resources)
-	assert.Equal(t, c[0].ImagePullPolicy, sc[0].ImagePullPolicy)
-	assert.NotNil(t, sc[0].LivenessProbe)
-	assert.Equal(t, int32(20), sc[0].LivenessProbe.InitialDelaySeconds)
-	assert.Equal(t, int32(25), sc[0].LivenessProbe.TimeoutSeconds)
-	assert.Equal(t, int32(24), sc[0].LivenessProbe.PeriodSeconds)
-	assert.Equal(t, int32(5), sc[0].LivenessProbe.FailureThreshold)
+	assert.Equal(t, x.UDTransformer.Container.EnvFrom, sc[1].EnvFrom)
+	assert.Equal(t, corev1.ResourceRequirements{Requests: map[corev1.ResourceName]resource.Quantity{"cpu": resource.MustParse("2")}}, sc[1].Resources)
+	assert.Equal(t, c[0].ImagePullPolicy, sc[1].ImagePullPolicy)
+	assert.NotNil(t, sc[1].LivenessProbe)
+	assert.Equal(t, int32(20), sc[1].LivenessProbe.InitialDelaySeconds)
+	assert.Equal(t, int32(25), sc[1].LivenessProbe.TimeoutSeconds)
+	assert.Equal(t, int32(24), sc[1].LivenessProbe.PeriodSeconds)
+	assert.Equal(t, int32(5), sc[1].LivenessProbe.FailureThreshold)
 	x.UDTransformer.Container.ImagePullPolicy = &testImagePullPolicy
 	sc, c, _ = x.getContainers(getContainerReq{
 		image:           "main-image",
 		imagePullPolicy: corev1.PullAlways,
 	})
 	assert.Equal(t, corev1.PullAlways, c[0].ImagePullPolicy)
-	assert.Equal(t, testImagePullPolicy, sc[0].ImagePullPolicy)
+	assert.Equal(t, testImagePullPolicy, sc[1].ImagePullPolicy)
 }
 
 func Test_getTransformerContainer(t *testing.T) {
