@@ -49,11 +49,18 @@ func (in UDF) getContainers(req getContainerReq) ([]corev1.Container, []corev1.C
 	containers := []corev1.Container{
 		in.getMainContainer(req),
 	}
-	sidecarContainers := []corev1.Container{in.getUDFContainer(req)}
+	monitorContainer := buildMonitorContainer(req)
+	sidecarContainers := []corev1.Container{monitorContainer, in.getUDFContainer(req)}
 
 	if req.servingStore != nil && req.servingStore.Container != nil {
 		sidecarContainers = append(sidecarContainers, req.servingStore.getUDStoreContainer(req))
 	}
+
+	// volume mount to the runtime path
+	containers[0].VolumeMounts = append(containers[0].VolumeMounts, corev1.VolumeMount{
+		Name:      RuntimeDirVolume,
+		MountPath: RuntimeDirMountPath,
+	})
 	return sidecarContainers, containers, nil
 }
 
