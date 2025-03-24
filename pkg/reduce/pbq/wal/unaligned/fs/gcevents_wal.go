@@ -154,7 +154,6 @@ func (g *gcEventsWAL) openEventsFile() error {
 
 // PersistGCEvent persists the GC event of the window
 func (g *gcEventsWAL) PersistGCEvent(window window.TimedWindow) error {
-
 	if g.currEventsFile == nil {
 		gcWALErrors.WithLabelValues(g.pipelineName, g.vertexName, strconv.Itoa(int(g.replicaIndex)), "fileNotOpen").Inc()
 		return fmt.Errorf("events file is not open")

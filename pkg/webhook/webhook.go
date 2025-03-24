@@ -119,7 +119,7 @@ func (ac *AdmissionController) register(ctx context.Context, client clientadmiss
 
 	var rules []admissionregistrationv1.RuleWithOperations
 	for gvk := range ac.Handlers {
-		plural := strings.ToLower(inflect.Pluralize(gvk.Kind))
+		plural := strings.ToLower(inflect.Pluralize(strings.ToLower(gvk.Kind)))
 
 		rules = append(rules, admissionregistrationv1.RuleWithOperations{
 			Operations: []admissionregistrationv1.OperationType{

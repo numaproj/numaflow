@@ -78,8 +78,9 @@ func Start() {
 		NumaClient: numaClient,
 		Options:    options,
 		Handlers: map[schema.GroupVersionKind]runtime.Object{
-			{Group: "numaflow.numaproj.io", Version: "v1alpha1", Kind: "InterStepBufferService"}: &dfv1.InterStepBufferService{},
-			{Group: "numaflow.numaproj.io", Version: "v1alpha1", Kind: "Pipeline"}:               &dfv1.Pipeline{},
+			dfv1.ISBGroupVersionKind:        &dfv1.InterStepBufferService{},
+			dfv1.PipelineGroupVersionKind:   &dfv1.Pipeline{},
+			dfv1.MonoVertexGroupVersionKind: &dfv1.MonoVertex{},
 		},
 		Logger: logger,
 	}

@@ -13,7 +13,7 @@ use bytes::Bytes;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
-use tracing::{error, info};
+use tracing::{error, info, Instrument};
 
 #[derive(Clone)]
 pub(crate) struct OrchestratorState<T, U> {
@@ -61,7 +61,10 @@ where
         let (mut callbacks_stream, watch_handle) = self.callback_store.watch_callbacks(id).await?;
 
         let mut cb_store = self.callback_store.clone();
-        tokio::spawn(async move {
+
+        let span = tracing::Span::current();
+
+        let callback_watcher = async move {
             let _handle = watch_handle;
             let mut callbacks = Vec::new();
 
@@ -94,14 +97,29 @@ where
                 tx.send(Err(Error::SubGraphNotFound(
                     "Subgraph could not be generated for the given ID",
                 )))
+                .inspect_err(|err| {
+                    tracing::error!(
+                        ?err,
+                        "Failed to send subgraph generation error to main task over channel"
+                    )
+                })
                 .expect("Failed to send subgraph");
 
                 cb_store
                     .mark_as_failed(&msg_id, "Subgraph could not be generated")
                     .await
+                    .inspect_err(|err| {
+                        tracing::error!(
+                            ?err,
+                            "Failed to mark subgraph generation failure in callback store"
+                        )
+                    })
                     .expect("Failed to mark as failed");
             }
-        });
+        };
+
+        // https://github.com/tokio-rs/tracing/blob/b4868674ba73f3963b125ec38b57efaadc714d90/examples/examples/tokio-spawny-thing.rs#L25
+        tokio::spawn(callback_watcher.instrument(span));
 
         Ok(rx)
     }
