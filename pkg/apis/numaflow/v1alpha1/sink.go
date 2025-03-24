@@ -52,7 +52,8 @@ func (s Sink) getContainers(req getContainerReq) ([]corev1.Container, []corev1.C
 	containers := []corev1.Container{
 		s.getMainContainer(req),
 	}
-	sidecarContainers := []corev1.Container{}
+	monitorContainer := buildMonitorContainer(req)
+	sidecarContainers := []corev1.Container{monitorContainer}
 	if s.UDSink != nil {
 		sidecarContainers = append(sidecarContainers, s.getUDSinkContainer(req))
 	}
@@ -62,6 +63,11 @@ func (s Sink) getContainers(req getContainerReq) ([]corev1.Container, []corev1.C
 	if req.servingStore != nil && req.servingStore.Container != nil {
 		sidecarContainers = append(sidecarContainers, req.servingStore.getUDStoreContainer(req))
 	}
+	// volume mount to the runtime path
+	containers[0].VolumeMounts = append(containers[0].VolumeMounts, corev1.VolumeMount{
+		Name:      RuntimeDirVolume,
+		MountPath: RuntimeDirMountPath,
+	})
 	return sidecarContainers, containers, nil
 }
 

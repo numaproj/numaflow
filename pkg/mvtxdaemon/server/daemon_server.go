@@ -163,6 +163,7 @@ func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *
 	if err := mvtxdaemon.RegisterMonoVertexDaemonServiceHandlerFromEndpoint(ctx, gwmux, endpoint, dialOpts); err != nil {
 		log.Errorw("Failed to register daemon handler on HTTP Server", zap.Error(err))
 	}
+
 	mux := http.NewServeMux()
 	httpServer := http.Server{
 		Addr:      endpoint,
