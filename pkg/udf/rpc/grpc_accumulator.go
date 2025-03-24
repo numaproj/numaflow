@@ -168,7 +168,7 @@ func createAccumulatorRequest(windowRequest *window.TimedWindowRequest) *accumul
 		panic("unhandled default case")
 	}
 
-	// for accumulator we will have only one window
+	// for accumulator, we will have only one window
 	w := windowRequest.Windows[0]
 	keyedWindow := &accumulatorpb.KeyedWindow{
 		Start: timestamppb.New(w.StartTime()),
@@ -219,5 +219,6 @@ func (u *GRPCBasedAccumulator) parseAccumulatorResponse(response *accumulatorpb.
 	return &window.TimedWindowResponse{
 		WriteMessage: taggedMessage,
 		Window:       window.NewUnalignedTimedWindow(start, end, slot, keys),
+		EOF:          response.GetEOF(),
 	}
 }

@@ -111,3 +111,40 @@ func TestAccumulate_OldestWindowEndTime(t *testing.T) {
 
 	assert.Equal(t, baseTime, windower.OldestWindowEndTime())
 }
+
+func TestWindowState_AllCases(t *testing.T) {
+	ws := newWindowState(NewAccumulatorWindow([]string{"key1"}))
+
+	// Insert out-of-order event times including duplicates
+	eventTimes := []time.Time{
+		time.Unix(100, 0),
+		time.Unix(50, 0),
+		time.Unix(150, 0),
+		time.Unix(100, 0), // duplicate
+		time.Unix(200, 0),
+	}
+
+	for _, et := range eventTimes {
+		ws.appendToTimestampList(et)
+	}
+
+	// Check that event times are ordered and duplicates are not inserted
+	expectedTimes := []time.Time{
+		time.Unix(50, 0),
+		time.Unix(100, 0),
+		time.Unix(150, 0),
+		time.Unix(200, 0),
+	}
+
+	assert.Equal(t, expectedTimes, ws.messageTimestamps)
+
+	// Delete event times before a certain time
+	ws.deleteEventTimesBefore(time.Unix(150, 0))
+
+	// Check that the correct event times are deleted
+	expectedTimesAfterDelete := []time.Time{
+		time.Unix(200, 0),
+	}
+
+	assert.Equal(t, expectedTimesAfterDelete, ws.messageTimestamps)
+}
