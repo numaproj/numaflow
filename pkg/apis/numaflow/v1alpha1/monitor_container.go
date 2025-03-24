@@ -25,7 +25,11 @@ func buildMonitorContainer(req getContainerReq) corev1.Container {
 			MountPath: RuntimeDirMountPath,
 		},
 	}
-	builder := containerBuilder{}.init(req)
-	builder.VolumeMounts = volumeMounts
-	return builder.name(CtrMonitor).asSidecar().command(NumaflowRustBinary).args("--monitor").build()
+	return containerBuilder{}.init(req).
+		setVolumeMounts(volumeMounts...).
+		name(CtrMonitor).
+		asSidecar().
+		command(NumaflowRustBinary).
+		args("--monitor").
+		build()
 }
