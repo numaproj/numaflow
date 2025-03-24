@@ -110,7 +110,7 @@ func TestGetVertexMetrics(t *testing.T) {
 		Spec:       v1alpha1.PipelineSpec{Vertices: []v1alpha1.AbstractVertex{{Name: vertexName, Partitions: &vertexPartition}}},
 	}
 	client, _ := isbsvc.NewISBJetStreamSvc(pipelineName, jsc)
-	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(client, pipeline, nil, &mockRater_TestGetVertexMetrics{})
+	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(client, pipeline, nil, &mockRater_TestGetVertexMetrics{}, nil)
 	assert.NoError(t, err)
 
 	metricsResponse := `# HELP vertex_pending_messages Average pending messages in the last period of seconds. It is the pending messages of a vertex, not a pod.
@@ -178,7 +178,7 @@ func TestGetBuffer(t *testing.T) {
 	}
 
 	ms := &mockIsbSvcClient{}
-	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(ms, pipeline, nil, nil)
+	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(ms, pipeline, nil, nil, nil)
 	assert.NoError(t, err)
 
 	bufferName := "numaflow-system-simple-pipeline-cat-0"
@@ -219,7 +219,7 @@ func TestListBuffers(t *testing.T) {
 	}
 
 	ms := &mockIsbSvcClient{}
-	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(ms, pipeline, nil, nil)
+	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(ms, pipeline, nil, nil, nil)
 	assert.NoError(t, err)
 
 	req := &daemon.ListBuffersRequest{Pipeline: pipelineName}
