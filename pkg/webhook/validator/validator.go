@@ -76,6 +76,24 @@ func GetValidator(ctx context.Context, NumaClient v1alpha1.NumaflowV1alpha1Inter
 		}
 		isbSvcClient := NumaClient.InterStepBufferServices(newSpec.Namespace)
 		return NewPipelineValidator(isbSvcClient, oldSpec, newSpec), nil
+	case dfv1.MonoVertexGroupVersionKind.Kind:
+		var newSpec *dfv1.MonoVertex
+		if len(newBytes) > 0 {
+			newSpec = &dfv1.MonoVertex{}
+			if err := json.Unmarshal(newBytes, newSpec); err != nil {
+				log.Errorf("Could not unmarshal new raw object: %v", err)
+				return nil, err
+			}
+		}
+		var oldSpec *dfv1.MonoVertex
+		if len(oldBytes) > 0 {
+			oldSpec = &dfv1.MonoVertex{}
+			if err := json.Unmarshal(oldBytes, oldSpec); err != nil {
+				log.Errorf("Could not unmarshal old raw object: %v", err)
+				return nil, err
+			}
+		}
+		return NewMonoVertexValidator(oldSpec, newSpec), nil
 	default:
 		return nil, fmt.Errorf("unrecognized kind: %v", kind)
 	}
