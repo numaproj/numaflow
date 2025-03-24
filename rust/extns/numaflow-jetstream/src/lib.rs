@@ -9,7 +9,7 @@ use async_nats::{
     ConnectOptions,
 };
 use bytes::Bytes;
-use tokio::sync::oneshot;
+use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::{self, Instant};
 use tokio_stream::StreamExt;
@@ -40,14 +40,6 @@ pub struct JetstreamSourceConfig {
     pub stream: String,
     pub consumer: String,
     pub auth: Option<NatsAuth>,
-    pub read_timeout: Duration,
-}
-
-pub struct Jetstream {
-    consumer: Consumer<Config>,
-    messages: Stream,
-    read_timeout: Duration,
-    in_progress_messages: HashMap<u64, MessageProcessingTracker>,
 }
 
 #[derive(Debug)]
@@ -83,8 +75,35 @@ impl TryFrom<JetstreamMessage> for Message {
     }
 }
 
-impl Jetstream {
-    pub async fn connect(config: JetstreamSourceConfig) -> Result<Self> {
+enum JetstreamActorMessage {
+    Read {
+        respond_to: oneshot::Sender<Result<Vec<Message>>>,
+    },
+    Ack {
+        offsets: Vec<u64>,
+        respond_to: oneshot::Sender<Result<()>>,
+    },
+    Pending {
+        respond_to: oneshot::Sender<Result<Option<usize>>>,
+    },
+}
+
+struct JetstreamActor {
+    consumer: Consumer<Config>,
+    messages: Stream,
+    read_timeout: Duration,
+    batch_size: usize,
+    in_progress_messages: HashMap<u64, MessageProcessingTracker>,
+    handler_rx: mpsc::Receiver<JetstreamActorMessage>,
+}
+
+impl JetstreamActor {
+    async fn start(
+        config: JetstreamSourceConfig,
+        batch_size: usize,
+        read_timeout: Duration,
+        handler_rx: mpsc::Receiver<JetstreamActorMessage>,
+    ) -> Result<()> {
         let mut conn_opts = ConnectOptions::new();
         if let Some(auth) = config.auth {
             conn_opts = conn_opts.user_and_password(auth.username, auth.password);
@@ -107,33 +126,56 @@ impl Jetstream {
                 ))
             })?;
         let message_stream = consumer.messages().await.unwrap();
-        Ok(Self {
-            consumer,
-            messages: message_stream,
-            read_timeout: config.read_timeout,
-            in_progress_messages: HashMap::new(),
-        })
+
+        tokio::spawn(async move {
+            let mut actor = JetstreamActor {
+                consumer,
+                messages: message_stream,
+                read_timeout,
+                batch_size,
+                in_progress_messages: HashMap::new(),
+                handler_rx,
+            };
+            actor.run().await;
+        });
+
+        Ok(())
     }
 
-    async fn process_message(&mut self, js_message: JetstreamMessage) -> Result<Message> {
-        let message: Message = js_message.clone().try_into().map_err(|e| {
-            Error::Jetstream(format!(
-                "converting raw Jetstream message as Numaflow source message: {e:?}"
-            ))
-        })?;
-        let tick_interval = self.consumer.cached_info().config.ack_wait / 2;
-        let message_tracker = MessageProcessingTracker::start(js_message, tick_interval).await;
-        self.in_progress_messages
-            .insert(message.stream_sequence, message_tracker);
-
-        Ok(message)
+    async fn run(&mut self) {
+        while let Some(msg) = self.handler_rx.recv().await {
+            self.handle_message(msg).await;
+        }
     }
 
-    pub async fn read_messages(&mut self) -> Result<Vec<Message>> {
+    async fn handle_message(&mut self, msg: JetstreamActorMessage) {
+        match msg {
+            JetstreamActorMessage::Read { respond_to } => {
+                let messages = self.read_messages().await;
+                let _ = respond_to.send(messages);
+            }
+            JetstreamActorMessage::Ack {
+                offsets,
+                respond_to,
+            } => {
+                let status = self.ack_messages(offsets).await;
+                let _ = respond_to.send(status);
+            }
+            JetstreamActorMessage::Pending { respond_to } => {
+                let pending = self.pending_messages().await;
+                let _ = respond_to.send(pending);
+            }
+        }
+    }
+
+    async fn read_messages(&mut self) -> Result<Vec<Message>> {
         let mut messages: Vec<Message> = vec![];
         let timeout = tokio::time::timeout(self.read_timeout, std::future::pending::<()>());
         tokio::pin!(timeout);
         loop {
+            if messages.len() >= self.batch_size {
+                break;
+            }
             tokio::select! {
                 biased;
 
@@ -155,7 +197,7 @@ impl Jetstream {
         Ok(messages)
     }
 
-    pub async fn ack_messages(&mut self, offsets: Vec<u64>) -> Result<()> {
+    async fn ack_messages(&mut self, offsets: Vec<u64>) -> Result<()> {
         for offset in offsets {
             let msg_task = self.in_progress_messages.remove(&offset);
             let Some(msg_task) = msg_task else {
@@ -167,6 +209,20 @@ impl Jetstream {
         Ok(())
     }
 
+    async fn process_message(&mut self, js_message: JetstreamMessage) -> Result<Message> {
+        let message: Message = js_message.clone().try_into().map_err(|e| {
+            Error::Jetstream(format!(
+                "converting raw Jetstream message as Numaflow source message: {e:?}"
+            ))
+        })?;
+        let tick_interval = self.consumer.cached_info().config.ack_wait / 2;
+        let message_tracker = MessageProcessingTracker::start(js_message, tick_interval).await;
+        self.in_progress_messages
+            .insert(message.stream_sequence, message_tracker);
+
+        Ok(message)
+    }
+
     pub async fn pending_messages(&mut self) -> Result<Option<usize>> {
         let x = self
             .consumer
@@ -174,6 +230,50 @@ impl Jetstream {
             .await
             .map_err(|e| Error::Jetstream(format!("Failed to get consumer info: {e:?}")))?;
         Ok(Some(x.num_pending as usize + x.num_ack_pending))
+    }
+}
+
+#[derive(Clone)]
+pub struct JetstreamSource {
+    actor_tx: mpsc::Sender<JetstreamActorMessage>,
+}
+
+impl JetstreamSource {
+    pub async fn connect(
+        config: JetstreamSourceConfig,
+        batch_size: usize,
+        read_timeout: Duration,
+    ) -> Result<Self> {
+        let (tx, rx) = mpsc::channel(10);
+        JetstreamActor::start(config, batch_size, read_timeout, rx).await?;
+        Ok(Self { actor_tx: tx })
+    }
+
+    pub async fn read_messages(&self) -> Result<Vec<Message>> {
+        let (tx, rx) = oneshot::channel();
+        let msg = JetstreamActorMessage::Read { respond_to: tx };
+        let _ = self.actor_tx.send(msg).await;
+        rx.await
+            .map_err(|_| Error::Other("Actor task terminated".into()))?
+    }
+
+    pub async fn ack_messages(&self, offsets: Vec<u64>) -> Result<()> {
+        let (tx, rx) = oneshot::channel();
+        let msg = JetstreamActorMessage::Ack {
+            offsets,
+            respond_to: tx,
+        };
+        let _ = self.actor_tx.send(msg).await;
+        rx.await
+            .map_err(|_| Error::Other("Actor task terminated".into()))?
+    }
+
+    pub async fn pending_messages(&self) -> Result<Option<usize>> {
+        let (tx, rx) = oneshot::channel();
+        let msg = JetstreamActorMessage::Pending { respond_to: tx };
+        let _ = self.actor_tx.send(msg).await;
+        rx.await
+            .map_err(|_| Error::Other("Actor task terminated".into()))?
     }
 }
 

@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use numaflow_jetstream::Jetstream;
+use numaflow_jetstream::JetstreamSource;
 use numaflow_pulsar::source::PulsarSource;
 use numaflow_sqs::source::SQSSource;
 use tokio::sync::OwnedSemaphorePermit;
@@ -97,7 +97,7 @@ pub(crate) enum SourceType {
     #[allow(dead_code)] // TODO(SQS): remove it when integrated with controller
     SQS(SQSSource),
     Serving(ServingSource),
-    Jetstream(Jetstream),
+    Jetstream(JetstreamSource),
 }
 
 enum ActorMessage {

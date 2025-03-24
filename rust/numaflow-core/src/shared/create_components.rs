@@ -323,13 +323,8 @@ pub async fn create_source(
             ))
         }
         SourceType::Jetstream(jetstream_config) => {
-            let jetstream = new_jetstream_source(
-                jetstream_config.clone(),
-                batch_size,
-                read_timeout,
-                *get_vertex_replica(),
-            )
-            .await?;
+            let jetstream =
+                new_jetstream_source(jetstream_config.clone(), batch_size, read_timeout).await?;
             Ok(Source::new(
                 batch_size,
                 source::SourceType::Jetstream(jetstream),

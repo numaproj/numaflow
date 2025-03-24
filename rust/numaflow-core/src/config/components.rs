@@ -148,7 +148,6 @@ pub(crate) mod source {
                 addr: value.url,
                 consumer: value.stream.clone(),
                 stream: value.stream,
-                read_timeout: Duration::from_secs(1),
                 auth,
             };
             Ok(SourceType::Jetstream(js_config))

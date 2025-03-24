@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use numaflow_jetstream::{Jetstream, JetstreamSourceConfig};
+use numaflow_jetstream::{JetstreamSource, JetstreamSourceConfig};
 
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::message::{IntOffset, MessageID, Metadata, Offset};
@@ -49,12 +49,11 @@ pub(crate) async fn new_jetstream_source(
     cfg: JetstreamSourceConfig,
     batch_size: usize,
     timeout: Duration,
-    vertex_replica: u16,
-) -> crate::Result<Jetstream> {
-    Ok(Jetstream::connect(cfg).await?)
+) -> crate::Result<JetstreamSource> {
+    Ok(JetstreamSource::connect(cfg, batch_size, timeout).await?)
 }
 
-impl SourceReader for Jetstream {
+impl SourceReader for JetstreamSource {
     fn name(&self) -> &'static str {
         "Jetstream"
     }
@@ -76,7 +75,7 @@ impl SourceReader for Jetstream {
     }
 }
 
-impl SourceAcker for Jetstream {
+impl SourceAcker for JetstreamSource {
     async fn ack(&mut self, offsets: Vec<Offset>) -> Result<()> {
         let mut jetstream_offsets = Vec::with_capacity(offsets.len());
         for offset in offsets {
@@ -92,7 +91,7 @@ impl SourceAcker for Jetstream {
     }
 }
 
-impl super::LagReader for Jetstream {
+impl super::LagReader for JetstreamSource {
     async fn pending(&mut self) -> crate::error::Result<Option<usize>> {
         Ok(self.pending_messages().await?)
     }
