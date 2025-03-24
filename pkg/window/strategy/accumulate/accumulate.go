@@ -5,6 +5,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -83,6 +84,7 @@ type windowState struct {
 	// messageTimestamps[-1] because that list will be cleared due to timeout. Since WM is global (across keys)
 	// we need to trigger a close window to the UDF once the timeout has passed (WM > last-seen + timeout).
 	lastSeenEventTime time.Time
+	mu                sync.Mutex
 }
 
 func newWindowState(window window.TimedWindow) *windowState {
@@ -95,14 +97,20 @@ func newWindowState(window window.TimedWindow) *windowState {
 
 // appendToTimestampList adds the event time to the inflight messages timestamp list in a sorted order.
 func (ws *windowState) appendToTimestampList(eventTime time.Time) {
-	// Find the insertion point using binary search
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
+
+	// find the index where the event time should be inserted using binary search
 	index := sort.Search(len(ws.messageTimestamps), func(i int) bool {
-		return ws.messageTimestamps[i].After(eventTime)
+		return !ws.messageTimestamps[i].Before(eventTime)
 	})
-	// Insert the event time at the found index
-	ws.messageTimestamps = append(ws.messageTimestamps, time.Time{})
-	copy(ws.messageTimestamps[index+1:], ws.messageTimestamps[index:])
-	ws.messageTimestamps[index] = eventTime
+
+	// If the event time is not present, insert it right before the time after-or-equal to the given eventTime
+	if index == len(ws.messageTimestamps) || !ws.messageTimestamps[index].Equal(eventTime) {
+		ws.messageTimestamps = append(ws.messageTimestamps, time.Time{})
+		copy(ws.messageTimestamps[index+1:], ws.messageTimestamps[index:])
+		ws.messageTimestamps[index] = eventTime
+	}
 
 	// Update the latest event time
 	if eventTime.After(ws.lastSeenEventTime) {
@@ -112,6 +120,9 @@ func (ws *windowState) appendToTimestampList(eventTime time.Time) {
 
 // deleteEventTimesBefore deletes the event times from the window state before the given end time.
 func (ws *windowState) deleteEventTimesBefore(endTime time.Time) {
+	ws.mu.Lock()
+	defer ws.mu.Unlock()
+
 	// Find the first index where the event time is after the end time using binary search
 	index := sort.Search(len(ws.messageTimestamps), func(i int) bool {
 		return ws.messageTimestamps[i].After(endTime)
@@ -135,6 +146,7 @@ type Windower struct {
 	timeout       time.Duration
 	// activeWindows captures the windowState for every key.
 	activeWindows map[string]*windowState
+	mu            sync.RWMutex
 }
 
 // NewWindower creates a new Windower for Accumulator window.
@@ -172,7 +184,9 @@ func (w *Windower) AssignWindows(message *isb.ReadMessage) []*window.TimedWindow
 	if !ok {
 		win := NewAccumulatorWindow(message.Keys)
 		ws = newWindowState(win)
+		w.mu.Lock()
 		w.activeWindows[combinedKey] = ws
+		w.mu.Unlock()
 		// this is a new window
 		op = window.Open
 	}
@@ -199,17 +213,32 @@ func (w *Windower) InsertWindow(_ window.TimedWindow) {
 // CloseWindows closes the windows that have expired based on the timeout and since the WM has progressed.
 func (w *Windower) CloseWindows(currentTime time.Time) []*window.TimedWindowRequest {
 	var requests []*window.TimedWindowRequest
+	var keysToDelete []string
+
+	// Acquire read lock to iterate over the map
+	w.mu.RLock()
 	for key, ws := range w.activeWindows {
-		// check the latest event time we have seen for the key, if it's older than the timeout, close the window.
+		// Check the latest event time we have seen for the key, if it's older than the timeout, close the window.
 		if currentTime.After(ws.lastSeenEventTime.Add(w.timeout)) {
 			requests = append(requests, &window.TimedWindowRequest{
 				Operation: window.Close,
 				Windows:   []window.TimedWindow{ws.window},
 				ID:        ws.window.Partition(),
 			})
-			delete(w.activeWindows, key)
+			keysToDelete = append(keysToDelete, key)
 		}
 	}
+	w.mu.RUnlock()
+
+	// Acquire write lock to delete keys from the map
+	if len(keysToDelete) > 0 {
+		w.mu.Lock()
+		for _, key := range keysToDelete {
+			delete(w.activeWindows, key)
+		}
+		w.mu.Unlock()
+	}
+
 	return requests
 }
 
@@ -223,6 +252,9 @@ func (w *Windower) NextWindowToBeClosed() window.TimedWindow {
 // DeleteClosedWindow deletes the event time entries from the window state till the window end time.
 // Actual deletion of the state happens when the timeout expires.
 func (w *Windower) DeleteClosedWindow(window window.TimedWindow) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
 	// delete event times less than window end time
 	if ws, ok := w.activeWindows[strings.Join(window.Keys(), dfv1.KeysDelimitter)]; ok {
 		ws.deleteEventTimesBefore(window.EndTime())
@@ -231,6 +263,9 @@ func (w *Windower) DeleteClosedWindow(window window.TimedWindow) {
 
 // OldestWindowEndTime returns the oldest event time among all the keyed windows.
 func (w *Windower) OldestWindowEndTime() time.Time {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
 	var minEndTime = time.UnixMilli(-1)
 	for _, ws := range w.activeWindows {
 		if len(ws.messageTimestamps) > 0 && (minEndTime.UnixMilli() == -1 || ws.messageTimestamps[0].Before(minEndTime)) {
