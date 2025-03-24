@@ -22,6 +22,7 @@ use crate::shared::grpc;
 use crate::shared::server_info::{sdk_server_info, ContainerType};
 use crate::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
 use crate::source::generator::new_generator;
+use crate::source::jetstream::new_jetstream_source;
 use crate::source::pulsar::new_pulsar_source;
 use crate::source::user_defined::new_source;
 use crate::source::Source;
@@ -315,6 +316,23 @@ pub async fn create_source(
             Ok(Source::new(
                 batch_size,
                 source::SourceType::Pulsar(pulsar),
+                tracker_handle,
+                source_config.read_ahead,
+                transformer,
+                watermark_handle,
+            ))
+        }
+        SourceType::Jetstream(jetstream_config) => {
+            let jetstream = new_jetstream_source(
+                jetstream_config.clone(),
+                batch_size,
+                read_timeout,
+                *get_vertex_replica(),
+            )
+            .await?;
+            Ok(Source::new(
+                batch_size,
+                source::SourceType::Jetstream(jetstream),
                 tracker_handle,
                 source_config.read_ahead,
                 transformer,

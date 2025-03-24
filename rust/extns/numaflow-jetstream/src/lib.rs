@@ -28,16 +28,19 @@ pub enum Error {
     Other(String),
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct NatsAuth {
     pub username: String,
     pub password: String,
 }
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct JetstreamSourceConfig {
     pub addr: String,
     pub stream: String,
     pub consumer: String,
     pub auth: Option<NatsAuth>,
-    read_timeout: Duration,
+    pub read_timeout: Duration,
 }
 
 pub struct Jetstream {

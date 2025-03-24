@@ -9,6 +9,7 @@ pub(crate) mod source {
     use std::{fmt::Debug, time::Duration};
 
     use bytes::Bytes;
+    use numaflow_jetstream::{JetstreamSourceConfig, NatsAuth};
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source};
     use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
     use tracing::warn;
@@ -42,6 +43,7 @@ pub(crate) mod source {
         // Serving source starts an Axum HTTP server in the background.
         // The settings will be used as application state which gets cloned in each handler on each request.
         Serving(Arc<serving::Settings>),
+        Jetstream(JetstreamSourceConfig),
     }
 
     impl From<Box<GeneratorSource>> for SourceType {
@@ -107,6 +109,52 @@ pub(crate) mod source {
         }
     }
 
+    impl TryFrom<Box<numaflow_models::models::JetStreamSource>> for SourceType {
+        type Error = Error;
+        fn try_from(
+            value: Box<numaflow_models::models::JetStreamSource>,
+        ) -> std::result::Result<Self, Self::Error> {
+            let auth: Option<NatsAuth> = match value.auth {
+                Some(auth) => 'out: {
+                    // FIXME: handle other auth mechanisms
+                    let Some(basic_auth) = auth.basic else {
+                        tracing::warn!(
+                            "Basic authentication is specified, but auth setting is empty"
+                        );
+                        break 'out None;
+                    };
+                    let user_secret_selector = &basic_auth
+                        .user
+                        .expect("Username can not be empty for basic auth");
+                    let username = crate::shared::create_components::get_secret_from_volume(
+                        &user_secret_selector.name,
+                        &user_secret_selector.key,
+                    )
+                    .unwrap();
+
+                    let password_secret_selector = &basic_auth
+                        .password
+                        .expect("Username can not be empty for basic auth");
+                    let password = crate::shared::create_components::get_secret_from_volume(
+                        &password_secret_selector.name,
+                        &password_secret_selector.key,
+                    )
+                    .unwrap();
+                    Some(NatsAuth { username, password })
+                }
+                None => None,
+            };
+            let js_config = JetstreamSourceConfig {
+                addr: value.url,
+                consumer: value.stream.clone(),
+                stream: value.stream,
+                read_timeout: Duration::from_secs(1),
+                auth,
+            };
+            Ok(SourceType::Jetstream(js_config))
+        }
+    }
+
     impl TryFrom<Box<numaflow_models::models::ServingSource>> for SourceType {
         type Error = Error;
         // FIXME: Currently, the same settings comes from user-defined settings and env variables.
@@ -161,6 +209,10 @@ pub(crate) mod source {
 
             if let Some(serving) = source.serving.take() {
                 return serving.try_into();
+            }
+
+            if let Some(jetstream) = source.jetstream.take() {
+                return jetstream.try_into();
             }
 
             Err(Error::Config(format!("Invalid source type: {source:?}")))
