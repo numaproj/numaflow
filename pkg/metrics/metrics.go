@@ -32,6 +32,7 @@ const (
 	LabelVertexType         = "vertex_type"
 	LabelPartitionName      = "partition_name"
 	LabelMonoVertexName     = "mvtx_name"
+	LabelPendingPeriod      = "period"
 	LabelComponent          = "component"
 	LabelComponentName      = "component_name"
 	LabelSDKLanguage        = "language"
@@ -383,4 +384,11 @@ var (
 		Help: "A metric to show what is the lookback window value being used by a given monovertex. " +
 			"Look back Seconds is critical in autoscaling calculations",
 	}, []string{LabelMonoVertexName})
+
+	// MonoVertexPendingMessages is a gauge used to represent pending messages for a given monovertex
+	MonoVertexPendingMessages = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "monovtx",
+		Name:      "monovtx_pending",
+		Help:      "A Gauge to keep track of the total number of pending messages for the monovtx",
+	}, []string{LabelMonoVertexName, LabelPendingPeriod})
 )
