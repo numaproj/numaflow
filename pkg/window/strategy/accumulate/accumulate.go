@@ -105,7 +105,7 @@ func (ws *windowState) appendToTimestampList(eventTime time.Time) {
 		return !ws.messageTimestamps[i].Before(eventTime)
 	})
 
-	// If the event time is not present, insert it
+	// If the event time is not present, insert it right before the time after-or-equal to the given eventTime
 	if index == len(ws.messageTimestamps) || !ws.messageTimestamps[index].Equal(eventTime) {
 		ws.messageTimestamps = append(ws.messageTimestamps, time.Time{})
 		copy(ws.messageTimestamps[index+1:], ws.messageTimestamps[index:])
@@ -231,11 +231,13 @@ func (w *Windower) CloseWindows(currentTime time.Time) []*window.TimedWindowRequ
 	w.mu.RUnlock()
 
 	// Acquire write lock to delete keys from the map
-	w.mu.Lock()
-	for _, key := range keysToDelete {
-		delete(w.activeWindows, key)
+	if len(keysToDelete) > 0 {
+		w.mu.Lock()
+		for _, key := range keysToDelete {
+			delete(w.activeWindows, key)
+		}
+		w.mu.Unlock()
 	}
-	w.mu.Unlock()
 
 	return requests
 }
