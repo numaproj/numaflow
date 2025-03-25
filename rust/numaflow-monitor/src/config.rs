@@ -43,14 +43,36 @@ impl Default for RuntimeInfoConfig {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     // Successfully generates a self-signed certificate and key pair
     #[test]
     fn test_generate_certs_success() {
-        use crate::config::generate_certs;
         let result = generate_certs();
         assert!(result.is_ok());
         let (cert, key_pair) = result.unwrap();
         assert!(!cert.pem().is_empty());
         assert!(!key_pair.serialize_der().is_empty());
+    }
+
+    // Test default values for MonitorServerConfig
+    #[test]
+    fn test_monitor_server_config_default() {
+        let config = MonitorServerConfig::default();
+        assert_eq!(config.server_listen_port, DEFAULT_METRICS_PORT);
+        assert_eq!(config.graceful_shutdown_duration, DEFAULT_SHUTDOWN_DURATION);
+    }
+
+    // Test default values for RuntimeInfoConfig
+    #[test]
+    fn test_runtime_info_config_default() {
+        let config = RuntimeInfoConfig::default();
+        assert_eq!(
+            config.app_error_path,
+            DEFAULT_RUNTIME_APPLICATION_ERRORS_PATH.to_string()
+        );
+        assert_eq!(
+            config.max_error_files_per_container,
+            DEFAULT_MAX_ERROR_FILES_PER_CONTAINER
+        );
     }
 }

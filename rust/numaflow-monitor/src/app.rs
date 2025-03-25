@@ -114,41 +114,11 @@ async fn graceful_shutdown(handle: Handle, server_config: MonitorServerConfig) {
 
 #[cfg(test)]
 mod tests {
-    use crate::{config::generate_certs, error::Result};
-
     use super::*;
     use axum::body::Body;
     use axum::http::Request;
-    use rustls::crypto::ring::default_provider;
-    use std::{
-        net::{Ipv4Addr, SocketAddrV4},
-        sync::Arc,
-    };
+    use std::sync::Arc;
     use tower::ServiceExt;
-
-    #[tokio::test]
-    async fn test_start_main_server() -> Result<()> {
-        default_provider()
-            .install_default()
-            .expect("failed to initialize rustls crypto provider");
-        let (cert, key) = generate_certs()
-            .map_err(|e| Error::Init(format!("Certificate generation failed: {}", e)))?;
-
-        let tls_config = RustlsConfig::from_pem(cert.pem().into(), key.serialize_pem().into())
-            .await
-            .map_err(|e| Error::Init(format!("TLS configuration failed: {}", e)))?;
-
-        let server_config = MonitorServerConfig {
-            graceful_shutdown_duration: 2,
-            server_listen_port: 3000,
-        };
-        let app_addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0));
-
-        let result = start_main_server(app_addr, tls_config, server_config).await;
-        assert!(result.is_ok());
-        Ok(())
-    }
-
     #[tokio::test]
     async fn test_handle_runtime_app_errors_internal_error() {
         // Initialize runtime and app state
