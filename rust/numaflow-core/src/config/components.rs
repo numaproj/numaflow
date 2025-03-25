@@ -9,7 +9,7 @@ pub(crate) mod source {
     use std::{fmt::Debug, time::Duration};
 
     use bytes::Bytes;
-    use numaflow_jetstream::{JetstreamSourceConfig, NatsAuth};
+    use numaflow_jetstream::{JetstreamSourceConfig, NatsAuth, TlsClientAuthCerts, TlsConfig};
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source};
     use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
     use tracing::warn;
@@ -161,11 +161,62 @@ pub(crate) mod source {
                 }
                 None => None,
             };
+
+            let tls = if let Some(tls_config) = value.tls {
+                let ca_cert_secret = tls_config.ca_cert_secret.unwrap();
+                let ca_cert = crate::shared::create_components::get_secret_from_volume(
+                    &ca_cert_secret.name,
+                    &ca_cert_secret.key,
+                )
+                .map_err(|e| Error::Config(format!("Failed to get CA cert secret: {e:?}")))?;
+
+                let tls_client_auth_certs = match tls_config.cert_secret {
+                    Some(client_cert_secret) => {
+                        let client_cert = crate::shared::create_components::get_secret_from_volume(
+                            &client_cert_secret.name,
+                            &client_cert_secret.key,
+                        )
+                        .map_err(|e| {
+                            Error::Config(format!("Failed to get client cert secret: {e:?}"))
+                        })?;
+
+                        let Some(private_key_secret) = tls_config.key_secret else {
+                            return Err(Error::Config("Client cert is specified for TLS authentication, but private key is not specified".into()));
+                        };
+
+                        let client_cert_private_key =
+                            crate::shared::create_components::get_secret_from_volume(
+                                &private_key_secret.name,
+                                &private_key_secret.key,
+                            )
+                            .map_err(|e| {
+                                Error::Config(format!(
+                                    "Failed to get client cert private key secret: {e:?}"
+                                ))
+                            })?;
+                        Some(TlsClientAuthCerts {
+                            client_cert,
+                            client_cert_private_key,
+                        })
+                    }
+                    None => None,
+                };
+
+                Some(TlsConfig {
+                    insecure_skip_verify: tls_config.insecure_skip_verify.unwrap_or(false),
+                    ca_cert,
+                    client_auth: tls_client_auth_certs,
+                })
+            } else {
+                None
+            };
+
             let js_config = JetstreamSourceConfig {
                 addr: value.url,
                 consumer: value.stream.clone(),
                 stream: value.stream,
                 auth,
+                tls,
             };
             Ok(SourceType::Jetstream(js_config))
         }

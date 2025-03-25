@@ -9,6 +9,8 @@ use async_nats::{
     ConnectOptions,
 };
 use bytes::Bytes;
+use rustls_pki_types::pem::PemObject;
+use rustls_pki_types::CertificateDer;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::{self, Instant};
@@ -36,11 +38,25 @@ pub enum NatsAuth {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct TlsConfig {
+    pub insecure_skip_verify: bool,
+    pub ca_cert: String,
+    pub client_auth: Option<TlsClientAuthCerts>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TlsClientAuthCerts {
+    pub client_cert: String,
+    pub client_cert_private_key: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct JetstreamSourceConfig {
     pub addr: String,
     pub stream: String,
     pub consumer: String,
     pub auth: Option<NatsAuth>,
+    pub tls: Option<TlsConfig>,
 }
 
 #[derive(Debug)]
@@ -114,6 +130,18 @@ impl JetstreamActor {
                 NatsAuth::NKey(nkey) => conn_opts.nkey(nkey),
                 NatsAuth::Token(token) => conn_opts.token(token),
             };
+        }
+        if let Some(tls_config) = config.tls {
+            let mut root_store = async_nats::rustls::RootCertStore::empty();
+            let cert = CertificateDer::from_pem_slice(tls_config.ca_cert.as_bytes())
+                .map_err(|err| Error::Other(format!("Parsing CA cert: {err:?}")))?;
+            root_store.add(cert).map_err(|err| {
+                Error::Other(format!("Adding CA cert to in-memory cert store: {err:?}"))
+            })?;
+            let tls_client = async_nats::rustls::ClientConfig::builder()
+                .with_root_certificates(root_store)
+                .with_no_client_auth();
+            conn_opts = conn_opts.require_tls(true).tls_client_config(tls_client);
         }
         let client = async_nats::connect_with_options(&config.addr, conn_opts)
             .await

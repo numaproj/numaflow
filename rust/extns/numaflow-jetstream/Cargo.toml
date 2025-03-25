@@ -10,6 +10,7 @@ tracing.workspace = true
 thiserror.workspace = true
 bytes.workspace = true
 tokio-stream = "0.1.15"
+rustls-pki-types = "1.11.0"
 
 [lints]
 workspace = true
