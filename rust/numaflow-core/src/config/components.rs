@@ -115,32 +115,49 @@ pub(crate) mod source {
             value: Box<numaflow_models::models::JetStreamSource>,
         ) -> std::result::Result<Self, Self::Error> {
             let auth: Option<NatsAuth> = match value.auth {
-                Some(auth) => 'out: {
-                    // FIXME: handle other auth mechanisms
-                    let Some(basic_auth) = auth.basic else {
-                        tracing::warn!(
-                            "Basic authentication is specified, but auth setting is empty"
-                        );
-                        break 'out None;
-                    };
-                    let user_secret_selector = &basic_auth
-                        .user
-                        .expect("Username can not be empty for basic auth");
-                    let username = crate::shared::create_components::get_secret_from_volume(
-                        &user_secret_selector.name,
-                        &user_secret_selector.key,
-                    )
-                    .unwrap();
+                Some(auth) => {
+                    if let Some(basic_auth) = auth.basic {
+                        let user_secret_selector = &basic_auth.user.ok_or_else(|| {
+                            Error::Config("Username can not be empty for basic auth".into())
+                        })?;
+                        let username = crate::shared::create_components::get_secret_from_volume(
+                            &user_secret_selector.name,
+                            &user_secret_selector.key,
+                        )
+                        .map_err(|e| {
+                            Error::Config(format!("Failed to get username secret: {e:?}"))
+                        })?;
 
-                    let password_secret_selector = &basic_auth
-                        .password
-                        .expect("Username can not be empty for basic auth");
-                    let password = crate::shared::create_components::get_secret_from_volume(
-                        &password_secret_selector.name,
-                        &password_secret_selector.key,
-                    )
-                    .unwrap();
-                    Some(NatsAuth { username, password })
+                        let password_secret_selector = &basic_auth.password.ok_or_else(|| {
+                            Error::Config("Password can not be empty for basic auth".into())
+                        })?;
+                        let password = crate::shared::create_components::get_secret_from_volume(
+                            &password_secret_selector.name,
+                            &password_secret_selector.key,
+                        )
+                        .map_err(|e| {
+                            Error::Config(format!("Failed to get password secret: {e:?}"))
+                        })?;
+                        Some(NatsAuth::Basic { username, password })
+                    } else if let Some(nkey_auth) = auth.nkey {
+                        let nkey = crate::shared::create_components::get_secret_from_volume(
+                            &nkey_auth.name,
+                            &nkey_auth.key,
+                        )
+                        .map_err(|e| Error::Config(format!("Failed to get nkey secret: {e:?}")))?;
+                        Some(NatsAuth::NKey(nkey))
+                    } else if let Some(token_auth) = auth.token {
+                        let token = crate::shared::create_components::get_secret_from_volume(
+                            &token_auth.name,
+                            &token_auth.key,
+                        )
+                        .map_err(|e| Error::Config(format!("Failed to get token secret: {e:?}")))?;
+                        Some(NatsAuth::Token(token))
+                    } else {
+                        return Err(Error::Config(
+                            "Authentication is specified, but auth setting is empty".into(),
+                        ));
+                    }
                 }
                 None => None,
             };

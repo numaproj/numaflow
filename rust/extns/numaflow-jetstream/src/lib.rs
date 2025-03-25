@@ -29,9 +29,10 @@ pub enum Error {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct NatsAuth {
-    pub username: String,
-    pub password: String,
+pub enum NatsAuth {
+    Basic { username: String, password: String },
+    NKey(String),
+    Token(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -106,7 +107,13 @@ impl JetstreamActor {
     ) -> Result<()> {
         let mut conn_opts = ConnectOptions::new();
         if let Some(auth) = config.auth {
-            conn_opts = conn_opts.user_and_password(auth.username, auth.password);
+            conn_opts = match auth {
+                NatsAuth::Basic { username, password } => {
+                    conn_opts.user_and_password(username, password)
+                }
+                NatsAuth::NKey(nkey) => conn_opts.nkey(nkey),
+                NatsAuth::Token(token) => conn_opts.token(token),
+            };
         }
         let client = async_nats::connect_with_options(&config.addr, conn_opts)
             .await
