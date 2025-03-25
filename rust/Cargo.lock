@@ -2356,12 +2356,14 @@ dependencies = [
  "http 1.2.0",
  "numaflow-models",
  "rcgen",
+ "rustls 0.23.23",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror 2.0.12",
  "tokio",
  "tonic",
+ "tower 0.5.2",
  "tracing",
 ]
 
