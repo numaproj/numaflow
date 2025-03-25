@@ -263,6 +263,110 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
+    fn test_runtime_new() {
+        // Test with configuration
+        let config = RuntimeInfoConfig {
+            app_error_path: String::from("/path/to/errors"),
+            max_error_files_per_container: 5,
+        };
+        let runtime_with_config = Runtime::new(Some(config));
+        assert_eq!(
+            runtime_with_config.application_error_path,
+            "/path/to/errors"
+        );
+        assert_eq!(runtime_with_config.max_error_files_per_container, 5);
+
+        // Test without configuration
+        let runtime_without_config = Runtime::new(None);
+        assert_eq!(
+            runtime_without_config.application_error_path,
+            "/var/numaflow/runtime/application-errors"
+        );
+        assert_eq!(runtime_without_config.max_error_files_per_container, 10);
+    }
+
+    #[test]
+    fn test_persist_application_error() {
+        // Create a temporary directory for testing
+        let temp_dir = tempdir().unwrap();
+        let application_error_path = temp_dir.path().to_str().unwrap().to_string();
+
+        // Create a Runtime instance with the temporary directory path
+        let runtime = Runtime {
+            application_error_path,
+            max_error_files_per_container: 5,
+        };
+
+        // Create a mock gRPC status
+        let grpc_status = Status::internal("UDF_EXECUTION_ERROR(udsource): Test error message");
+
+        // Call the function to test
+        runtime.persist_application_error(grpc_status.clone());
+
+        // Verify that the directory for the container was created
+        let container_name = extract_container_name(grpc_status.message());
+        let dir_path = Path::new(&runtime.application_error_path).join(&container_name);
+        assert!(dir_path.exists());
+
+        // Verify that a new error file was created
+        let files: Vec<_> = fs::read_dir(&dir_path)
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .collect();
+        assert_eq!(files.len(), 1);
+
+        // Verify the file name format
+        let file_name = files[0].file_name().into_string().unwrap();
+        assert!(file_name.ends_with(".json"));
+    }
+
+    #[test]
+    fn test_get_application_errors() {
+        // Create a temporary directory
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let app_err_path = temp_dir.path().join("application-errors");
+        fs::create_dir(&app_err_path).expect("Failed to create application-errors dir");
+
+        // Create a subdirectory for a container
+        let container_name = "test-container";
+        let container_dir = app_err_path.join(container_name);
+        fs::create_dir(&container_dir).expect("Failed to create container dir");
+
+        // Create a mock gRPC status and json string
+        let grpc_status =
+            Status::internal("UDF_EXECUTION_ERROR(test-container): Test error message");
+        let timestamp = Utc::now().timestamp();
+        let runtime_error_entry =
+            RuntimeErrorEntry::from((&grpc_status, container_name, timestamp));
+        let json_str: String = runtime_error_entry.into();
+
+        // Create a file with error content
+        let file_name = format!("{}.json", timestamp);
+        let error_file_path = container_dir.join(&file_name);
+        let mut error_file = File::create(&error_file_path).expect("Failed to create error file");
+
+        error_file
+            .write_all(json_str.as_bytes())
+            .expect("Failed to write to application error file");
+
+        // Create an instance of the struct containing get_application_errors
+        let runtime_info = Runtime {
+            application_error_path: app_err_path.to_str().unwrap().to_string(),
+            max_error_files_per_container: 10, // other fields as necessary
+        };
+
+        // Call the function and assert the results
+        let errors = runtime_info
+            .get_application_errors()
+            .expect("Failed to get application errors");
+        assert_eq!(errors.len(), 1);
+        assert_eq!(
+            errors[0].message,
+            "UDF_EXECUTION_ERROR(test-container): Test error message"
+        );
+    }
+
+    #[test]
     fn test_extract_container_name_with_valid_pattern() {
         let error_message = "Error occurred in container (my-container)";
         let container_name = extract_container_name(error_message);

@@ -189,7 +189,7 @@ func (r *pipelineRuntimeCache) fetchAndPersistErrorForPod(vtxName string, podInd
 
 	// overwrite the errors
 	r.localCache[cacheKey] = apiResponse.Data
-	r.log.Infof("Persisting error in local cache for: %s", cacheKey)
+	r.log.Debugf("Persisting error in local cache for: %s", cacheKey)
 }
 
 // GetLocalCache returns the local cache of runtime errors.
