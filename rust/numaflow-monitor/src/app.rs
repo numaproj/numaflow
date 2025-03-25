@@ -111,3 +111,79 @@ async fn graceful_shutdown(handle: Handle, server_config: MonitorServerConfig) {
         server_config.graceful_shutdown_duration,
     )));
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{config::generate_certs, error::Result};
+
+    use super::*;
+    use axum::body::Body;
+    use axum::http::Request;
+    use rustls::crypto::ring::default_provider;
+    use std::{
+        net::{Ipv4Addr, SocketAddrV4},
+        sync::Arc,
+    };
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn test_start_main_server() -> Result<()> {
+        default_provider()
+            .install_default()
+            .expect("failed to initialize rustls crypto provider");
+        let (cert, key) = generate_certs()
+            .map_err(|e| Error::Init(format!("Certificate generation failed: {}", e)))?;
+
+        let tls_config = RustlsConfig::from_pem(cert.pem().into(), key.serialize_pem().into())
+            .await
+            .map_err(|e| Error::Init(format!("TLS configuration failed: {}", e)))?;
+
+        let server_config = MonitorServerConfig {
+            graceful_shutdown_duration: 2,
+            server_listen_port: 3000,
+        };
+        let app_addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 0));
+
+        let result = start_main_server(app_addr, tls_config, server_config).await;
+        assert!(result.is_ok());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_handle_runtime_app_errors_internal_error() {
+        // Initialize runtime and app state
+        let runtime = Arc::new(Runtime::new(Some(RuntimeInfoConfig::default())));
+        let state = Arc::new(AppState { runtime });
+
+        // Create a request to the /runtime/errors route
+        let request = Request::builder()
+            .uri("/runtime/errors")
+            .body(Body::empty())
+            .unwrap();
+
+        // Create a router with the handler
+        let router = Router::new()
+            .route(
+                "/runtime/errors",
+                axum::routing::get(handle_runtime_app_errors),
+            )
+            .with_state(state);
+
+        // Call the handler
+        let response = router.oneshot(request).await.unwrap();
+
+        // It should throw error since app-error directory doesn't exist
+        // and we are trying to read from it
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let api_response: ApiResponse = serde_json::from_slice(&body).unwrap();
+        assert!(api_response.data.is_empty());
+        assert_eq!(
+            api_response.error_message,
+            Some("file Error - No application errors persisted yet".to_string())
+        );
+    }
+}
