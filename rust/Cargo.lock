@@ -2312,6 +2312,7 @@ version = "0.1.0"
 dependencies = [
  "async-nats",
  "bytes",
+ "rustls-native-certs 0.8.1",
  "rustls-pki-types",
  "thiserror 2.0.12",
  "tokio",
