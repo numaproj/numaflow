@@ -451,9 +451,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_configure_tls_insecure_skip_verify() {
-        rustls::crypto::aws_lc_rs::default_provider()
-            .install_default()
-            .expect("Installing default CryptoProvider");
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
         let tls_config = TlsConfig {
             insecure_skip_verify: true,
             ca_cert: None,
@@ -468,9 +466,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_configure_tls_invalid_ca_cert() {
-        rustls::crypto::aws_lc_rs::default_provider()
-            .install_default()
-            .expect("Installing default CryptoProvider");
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
         let tls_config = TlsConfig {
             insecure_skip_verify: false,
             ca_cert: Some("-----BEGIN CERTIFICATE-----\n...".to_string()),
@@ -490,9 +486,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_configure_tls_with_client_auth() {
-        rustls::crypto::aws_lc_rs::default_provider()
-            .install_default()
-            .expect("Installing default CryptoProvider");
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
         let tls_config = TlsConfig {
             insecure_skip_verify: false,
             ca_cert: Some(
@@ -625,9 +619,7 @@ XdvExDsAdjbkBG7ynn9pmMgIJg==
 
     #[tokio::test]
     async fn test_jetstream_source() {
-        rustls::crypto::aws_lc_rs::default_provider()
-            .install_default()
-            .expect("Installing default CryptoProvider");
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
         let (js, stream_name) = setup_jetstream().await;
 
         for i in 0..100 {
