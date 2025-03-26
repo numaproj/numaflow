@@ -114,15 +114,109 @@ async fn graceful_shutdown(handle: Handle, server_config: MonitorServerConfig) {
 
 #[cfg(test)]
 mod tests {
+    use crate::config::generate_certs;
+    use crate::error::Result;
+
     use super::*;
     use axum::body::Body;
     use axum::http::Request;
+    use rustls::crypto::ring::default_provider;
     use std::sync::Arc;
+    use tempfile::tempdir;
+    use tokio::time::sleep;
+    use tonic::Status;
     use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn test_start_main_server() -> Result<()> {
+        // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
+        default_provider()
+            .install_default()
+            .expect("failed to initialize rustls crypto provider");
+
+        let (cert, key) = generate_certs()
+            .map_err(|e| Error::Init(format!("Certificate generation failed: {}", e)))?;
+        let tls_config = RustlsConfig::from_pem(cert.pem().into(), key.serialize_pem().into())
+            .await
+            .unwrap();
+
+        let addr = SocketAddr::from(([127, 0, 0, 1], 0));
+        let server_config = MonitorServerConfig {
+            server_listen_port: 0,
+            graceful_shutdown_duration: 2,
+        };
+        let server = tokio::spawn(async move {
+            let result = start_main_server(addr, tls_config, server_config).await;
+            assert!(result.is_ok())
+        });
+
+        // Give the server a little bit of time to start
+        sleep(Duration::from_millis(100)).await;
+
+        // Stop the server
+        server.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_handle_runtime_app_errors_ok() {
+        // Create a temporary directory for testing
+        let temp_dir = tempdir().unwrap();
+        let application_error_path = temp_dir.path().to_str().unwrap().to_string();
+
+        // Create a Runtime instance with the temporary directory path
+        let runtime = Runtime::new(Some(RuntimeInfoConfig {
+            app_error_path: application_error_path,
+            max_error_files_per_container: 2,
+        }));
+
+        // Create a mock gRPC status
+        let grpc_status = Status::internal("UDF_EXECUTION_ERROR(udsource): Test error message");
+
+        // Call the function to persist error in temp app directory
+        runtime.persist_application_error(grpc_status.clone());
+
+        let state = Arc::new(AppState {
+            runtime: Arc::new(runtime),
+        });
+
+        // Create a request to the /runtime/errors route
+        let request = Request::builder()
+            .uri("/runtime/errors")
+            .body(Body::empty())
+            .unwrap();
+
+        // Create a router with the handler
+        let router = Router::new()
+            .route(
+                "/runtime/errors",
+                axum::routing::get(handle_runtime_app_errors),
+            )
+            .with_state(state);
+
+        // Call the handler
+        let response = router.oneshot(request).await.unwrap();
+
+        // It should respond with Status Ok
+        assert_eq!(response.status(), StatusCode::OK);
+        // Extract and check the response body
+        let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let api_response: ApiResponse = serde_json::from_slice(&body).unwrap();
+
+        // Assert that the response does not have error message
+        assert!(api_response.error_message.is_none());
+        // Assert that length of data array is 1
+        assert_eq!(api_response.data.len(), 1);
+    }
     #[tokio::test]
     async fn test_handle_runtime_app_errors_internal_error() {
         // Initialize runtime and app state
-        let runtime = Arc::new(Runtime::new(Some(RuntimeInfoConfig::default())));
+        let runtime = Arc::new(Runtime::new(Some(RuntimeInfoConfig {
+            app_error_path: "test-path-error".to_string(),
+            max_error_files_per_container: 2,
+        })));
         let state = Arc::new(AppState { runtime });
 
         // Create a request to the /runtime/errors route
