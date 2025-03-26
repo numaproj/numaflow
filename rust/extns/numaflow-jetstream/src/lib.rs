@@ -136,59 +136,7 @@ impl JetstreamActor {
             };
         }
         if let Some(tls_config) = config.tls {
-            if tls_config.insecure_skip_verify {
-                tracing::info!("'insecureSkipVerify' is set to true, certificate validation will not be performed when connecting to NATS server");
-                let tls_client_config = async_nats::rustls::ClientConfig::builder()
-                    .dangerous()
-                    .with_custom_certificate_verifier(Arc::new(NoVerifier))
-                    .with_no_client_auth();
-                conn_opts = conn_opts
-                    .require_tls(true)
-                    .tls_client_config(tls_client_config)
-            } else {
-                let mut root_store = async_nats::rustls::RootCertStore::empty();
-                let native_certs = rustls_native_certs::load_native_certs();
-                if !native_certs.errors.is_empty() {
-                    return Err(Error::Other(format!(
-                        "Loading native certs from certificate store: {:?}",
-                        native_certs.errors
-                    )));
-                }
-                root_store.add_parsable_certificates(native_certs.unwrap());
-                if let Some(ca_cert) = tls_config.ca_cert {
-                    let cert = CertificateDer::from_pem_slice(ca_cert.as_bytes())
-                        .map_err(|err| Error::Other(format!("Parsing CA cert: {err:?}")))?;
-                    root_store.add(cert).map_err(|err| {
-                        Error::Other(format!("Adding CA cert to in-memory cert store: {err:?}"))
-                    })?;
-                }
-
-                let tls_client = match tls_config.client_auth {
-                    Some(client_auth) => {
-                        let client_cert =
-                            CertificateDer::from_pem_slice(client_auth.client_cert.as_bytes())
-                                .map_err(|err| {
-                                    Error::Other(format!("Parsing client tls certificate: {err:?}"))
-                                })?;
-                        let client_key = PrivateKeyDer::from_pem_slice(
-                            client_auth.client_cert_private_key.as_bytes(),
-                        )
-                        .map_err(|err| {
-                            Error::Other(format!("Parsing client tls private key: {err:?}"))
-                        })?;
-                        async_nats::rustls::ClientConfig::builder()
-                            .with_root_certificates(root_store)
-                            .with_client_auth_cert(vec![client_cert], client_key)
-                            .map_err(|err| {
-                                Error::Other(format!("Client TLS private key is invalid: {err:?}"))
-                            })?
-                    }
-                    None => async_nats::rustls::ClientConfig::builder()
-                        .with_root_certificates(root_store)
-                        .with_no_client_auth(),
-                };
-                conn_opts = conn_opts.require_tls(true).tls_client_config(tls_client);
-            }
+            conn_opts = Self::configure_tls(conn_opts, tls_config)?;
         }
         let client = async_nats::connect_with_options(&config.addr, conn_opts)
             .await
@@ -222,6 +170,75 @@ impl JetstreamActor {
         });
 
         Ok(())
+    }
+
+    fn configure_tls(
+        mut conn_opts: ConnectOptions,
+        tls_config: TlsConfig,
+    ) -> Result<ConnectOptions> {
+        if tls_config.insecure_skip_verify {
+            tracing::info!("'insecureSkipVerify' is set to true, certificate validation will not be performed when connecting to NATS server");
+            let tls_client_config = async_nats::rustls::ClientConfig::builder()
+                .dangerous()
+                .with_custom_certificate_verifier(Arc::new(NoVerifier))
+                .with_no_client_auth();
+            conn_opts = conn_opts
+                .require_tls(true)
+                .tls_client_config(tls_client_config);
+        } else {
+            let root_store = Self::load_root_store(tls_config.ca_cert)?;
+            let tls_client = Self::configure_client_auth(tls_config.client_auth, root_store)?;
+            conn_opts = conn_opts.require_tls(true).tls_client_config(tls_client);
+        }
+        Ok(conn_opts)
+    }
+
+    fn load_root_store(ca_cert: Option<String>) -> Result<async_nats::rustls::RootCertStore> {
+        let mut root_store = async_nats::rustls::RootCertStore::empty();
+        let native_certs = rustls_native_certs::load_native_certs();
+        if !native_certs.errors.is_empty() {
+            return Err(Error::Other(format!(
+                "Loading native certs from certificate store: {:?}",
+                native_certs.errors
+            )));
+        }
+        root_store.add_parsable_certificates(native_certs.unwrap());
+        if let Some(ca_cert) = ca_cert {
+            let cert = CertificateDer::from_pem_slice(ca_cert.as_bytes())
+                .map_err(|err| Error::Other(format!("Parsing CA cert: {err:?}")))?;
+            root_store.add(cert).map_err(|err| {
+                Error::Other(format!("Adding CA cert to in-memory cert store: {err:?}"))
+            })?;
+        }
+        Ok(root_store)
+    }
+
+    fn configure_client_auth(
+        client_auth: Option<TlsClientAuthCerts>,
+        root_store: async_nats::rustls::RootCertStore,
+    ) -> Result<async_nats::rustls::ClientConfig> {
+        match client_auth {
+            Some(client_auth) => {
+                let client_cert = CertificateDer::from_pem_slice(
+                    client_auth.client_cert.as_bytes(),
+                )
+                .map_err(|err| Error::Other(format!("Parsing client tls certificate: {err:?}")))?;
+                let client_key =
+                    PrivateKeyDer::from_pem_slice(client_auth.client_cert_private_key.as_bytes())
+                        .map_err(|err| {
+                        Error::Other(format!("Parsing client tls private key: {err:?}"))
+                    })?;
+                async_nats::rustls::ClientConfig::builder()
+                    .with_root_certificates(root_store)
+                    .with_client_auth_cert(vec![client_cert], client_key)
+                    .map_err(|err| {
+                        Error::Other(format!("Client TLS private key is invalid: {err:?}"))
+                    })
+            }
+            None => Ok(async_nats::rustls::ClientConfig::builder()
+                .with_root_certificates(root_store)
+                .with_no_client_auth()),
+        }
     }
 
     async fn run(&mut self) {
