@@ -163,50 +163,70 @@ pub(crate) mod source {
             };
 
             let tls = if let Some(tls_config) = value.tls {
-                let ca_cert_secret = tls_config.ca_cert_secret.unwrap();
-                let ca_cert = crate::shared::create_components::get_secret_from_volume(
-                    &ca_cert_secret.name,
-                    &ca_cert_secret.key,
-                )
-                .map_err(|e| Error::Config(format!("Failed to get CA cert secret: {e:?}")))?;
-
-                let tls_client_auth_certs = match tls_config.cert_secret {
-                    Some(client_cert_secret) => {
-                        let client_cert = crate::shared::create_components::get_secret_from_volume(
-                            &client_cert_secret.name,
-                            &client_cert_secret.key,
-                        )
-                        .map_err(|e| {
-                            Error::Config(format!("Failed to get client cert secret: {e:?}"))
-                        })?;
-
-                        let Some(private_key_secret) = tls_config.key_secret else {
-                            return Err(Error::Config("Client cert is specified for TLS authentication, but private key is not specified".into()));
-                        };
-
-                        let client_cert_private_key =
-                            crate::shared::create_components::get_secret_from_volume(
-                                &private_key_secret.name,
-                                &private_key_secret.key,
-                            )
-                            .map_err(|e| {
-                                Error::Config(format!(
-                                    "Failed to get client cert private key secret: {e:?}"
-                                ))
-                            })?;
-                        Some(TlsClientAuthCerts {
-                            client_cert,
-                            client_cert_private_key,
+                let tls_skip_verify = tls_config.insecure_skip_verify.unwrap_or(false);
+                if tls_skip_verify {
+                    Some(TlsConfig {
+                        insecure_skip_verify: true,
+                        ca_cert: None,
+                        client_auth: None,
+                    })
+                } else {
+                    let ca_cert = tls_config
+                        .ca_cert_secret
+                        .map(|ca_cert_secret| {
+                            match crate::shared::create_components::get_secret_from_volume(
+                                &ca_cert_secret.name,
+                                &ca_cert_secret.key,
+                            ) {
+                                Ok(secret) => Ok(secret),
+                                Err(e) => Err(Error::Config(format!(
+                                    "Failed to get CA cert secret: {e:?}"
+                                ))),
+                            }
                         })
-                    }
-                    None => None,
-                };
+                        .transpose()?;
 
-                Some(TlsConfig {
-                    insecure_skip_verify: tls_config.insecure_skip_verify.unwrap_or(false),
-                    ca_cert,
-                    client_auth: tls_client_auth_certs,
-                })
+                    let tls_client_auth_certs = match tls_config.cert_secret {
+                        Some(client_cert_secret) => {
+                            let client_cert =
+                                crate::shared::create_components::get_secret_from_volume(
+                                    &client_cert_secret.name,
+                                    &client_cert_secret.key,
+                                )
+                                .map_err(|e| {
+                                    Error::Config(format!(
+                                        "Failed to get client cert secret: {e:?}"
+                                    ))
+                                })?;
+
+                            let Some(private_key_secret) = tls_config.key_secret else {
+                                return Err(Error::Config("Client cert is specified for TLS authentication, but private key is not specified".into()));
+                            };
+
+                            let client_cert_private_key =
+                                crate::shared::create_components::get_secret_from_volume(
+                                    &private_key_secret.name,
+                                    &private_key_secret.key,
+                                )
+                                .map_err(|e| {
+                                    Error::Config(format!(
+                                        "Failed to get client cert private key secret: {e:?}"
+                                    ))
+                                })?;
+                            Some(TlsClientAuthCerts {
+                                client_cert,
+                                client_cert_private_key,
+                            })
+                        }
+                        None => None,
+                    };
+
+                    Some(TlsConfig {
+                        insecure_skip_verify: tls_config.insecure_skip_verify.unwrap_or(false),
+                        ca_cert,
+                        client_auth: tls_client_auth_certs,
+                    })
+                }
             } else {
                 None
             };
