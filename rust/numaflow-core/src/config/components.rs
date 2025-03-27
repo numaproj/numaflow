@@ -829,3 +829,153 @@ mod transformer_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod jetstream_tests {
+    use super::source::SourceType;
+    use k8s_openapi::api::core::v1::SecretKeySelector;
+    use numaflow_jetstream::NatsAuth;
+    use numaflow_models::models::BasicAuth;
+    use numaflow_models::models::{JetStreamSource, Tls};
+    use std::fs;
+    use std::path::Path;
+
+    const SECRET_BASE_PATH: &str = "/tmp/numaflow";
+
+    fn setup_secret(name: &str, key: &str, value: &str) {
+        let path = format!("{SECRET_BASE_PATH}/{name}");
+        fs::create_dir_all(&path).unwrap();
+        fs::write(format!("{path}/{key}"), value).unwrap();
+    }
+
+    fn cleanup_secret(name: &str) {
+        let path = format!("{SECRET_BASE_PATH}/{name}");
+        if Path::new(&path).exists() {
+            fs::remove_dir_all(&path).unwrap();
+        }
+    }
+
+    #[test]
+    fn test_try_from_jetstream_source_with_basic_auth() {
+        let secret_name = "basic-auth-secret";
+        let user_key = "username";
+        let pass_key = "password";
+        setup_secret(secret_name, user_key, "test-user");
+        setup_secret(secret_name, pass_key, "test-pass");
+
+        let jetstream_source = JetStreamSource {
+            auth: Some(Box::new(numaflow_models::models::NatsAuth {
+                basic: Some(Box::new(BasicAuth {
+                    user: Some(SecretKeySelector {
+                        name: secret_name.to_string(),
+                        key: user_key.to_string(),
+                        ..Default::default()
+                    }),
+                    password: Some(SecretKeySelector {
+                        name: secret_name.to_string(),
+                        key: pass_key.to_string(),
+                        ..Default::default()
+                    }),
+                })),
+                nkey: None,
+                token: None,
+            })),
+            stream: "test-stream".to_string(),
+            tls: None,
+            url: "nats://localhost:4222".to_string(),
+        };
+
+        let source_type = SourceType::try_from(Box::new(jetstream_source)).unwrap();
+        if let SourceType::Jetstream(config) = source_type {
+            let NatsAuth::Basic { username, password } = config.auth.unwrap() else {
+                panic!("Basic auth creds must be set");
+            };
+            assert_eq!(username, "test-user");
+            assert_eq!(password, "test-pass");
+            assert_eq!(config.consumer, "test-stream");
+            assert_eq!(config.addr, "nats://localhost:4222");
+        } else {
+            panic!("Expected SourceType::Jetstream");
+        }
+
+        cleanup_secret(secret_name);
+    }
+
+    #[test]
+    fn test_try_from_jetstream_source_with_tls() {
+        let ca_cert_name = "tls-ca-cert";
+        let cert_name = "tls-cert";
+        let key_name = "tls-key";
+        setup_secret(ca_cert_name, "ca", "test-ca-cert");
+        setup_secret(cert_name, "cert", "test-cert");
+        setup_secret(key_name, "key", "test-key");
+
+        let jetstream_source = JetStreamSource {
+            auth: None,
+            stream: "test-stream".to_string(),
+            tls: Some(Box::new(Tls {
+                ca_cert_secret: Some(SecretKeySelector {
+                    name: ca_cert_name.to_string(),
+                    key: "ca".to_string(),
+                    ..Default::default()
+                }),
+                cert_secret: Some(SecretKeySelector {
+                    name: cert_name.to_string(),
+                    key: "cert".to_string(),
+                    ..Default::default()
+                }),
+                key_secret: Some(SecretKeySelector {
+                    name: key_name.to_string(),
+                    key: "key".to_string(),
+                    ..Default::default()
+                }),
+                insecure_skip_verify: Some(false),
+            })),
+            url: "nats://localhost:4222".to_string(),
+        };
+
+        let source_type = SourceType::try_from(Box::new(jetstream_source)).unwrap();
+        if let SourceType::Jetstream(config) = source_type {
+            let tls_config = config.tls.unwrap();
+            assert_eq!(tls_config.ca_cert.unwrap(), "test-ca-cert");
+            assert_eq!(
+                tls_config.client_auth.as_ref().unwrap().client_cert,
+                "test-cert"
+            );
+            assert_eq!(
+                tls_config.client_auth.unwrap().client_cert_private_key,
+                "test-key"
+            );
+            assert_eq!(config.consumer, "test-stream");
+            assert_eq!(config.addr, "nats://localhost:4222");
+        } else {
+            panic!("Expected SourceType::Jetstream");
+        }
+
+        cleanup_secret(ca_cert_name);
+        cleanup_secret(cert_name);
+        cleanup_secret(key_name);
+    }
+
+    #[test]
+    fn test_try_from_jetstream_source_with_invalid_auth() {
+        let jetstream_source = JetStreamSource {
+            auth: Some(Box::new(numaflow_models::models::NatsAuth {
+                basic: None,
+                nkey: None,
+                token: None,
+            })),
+            stream: "test-stream".to_string(),
+            tls: None,
+            url: "nats://localhost:4222".to_string(),
+        };
+
+        let result = SourceType::try_from(Box::new(jetstream_source));
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Config Error - Authentication is specified, but auth setting is empty"
+        );
+    }
+}
