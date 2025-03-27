@@ -287,8 +287,10 @@ func validateReduceUDF(udf dfv1.UDF) error {
 	f := udf.GroupBy.Window.Fixed
 	s := udf.GroupBy.Window.Sliding
 	ss := udf.GroupBy.Window.Session
+	accum := udf.GroupBy.Window.Accumulator
+
 	storage := udf.GroupBy.Storage
-	if f == nil && s == nil && ss == nil {
+	if f == nil && s == nil && ss == nil && accum == nil {
 		return fmt.Errorf(`invalid "groupBy.window", no windowing strategy specified`)
 	}
 	if f != nil && s != nil {
@@ -300,6 +302,7 @@ func validateReduceUDF(udf dfv1.UDF) error {
 	if s != nil && ss != nil {
 		return fmt.Errorf(`invalid "groupBy.window", either sliding or session is allowed, not both`)
 	}
+
 	if f != nil && f.Length == nil {
 		return fmt.Errorf(`invalid "groupBy.window.fixed", "length" is missing`)
 	}
@@ -311,6 +314,9 @@ func validateReduceUDF(udf dfv1.UDF) error {
 	}
 	if ss != nil && ss.Timeout == nil {
 		return fmt.Errorf(`invalid "groupBy.window.session", "timeout" is missing`)
+	}
+	if accum != nil && accum.Timeout == nil {
+		return fmt.Errorf(`invalid "groupBy.window.accumulator", "timeout" is missing`)
 	}
 	if storage == nil {
 		return fmt.Errorf(`invalid "groupBy", "storage" is missing`)

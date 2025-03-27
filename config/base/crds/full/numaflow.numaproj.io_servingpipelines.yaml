@@ -10805,6 +10805,11 @@ spec:
                                   type: object
                                 window:
                                   properties:
+                                    accumulator:
+                                      properties:
+                                        timeout:
+                                          type: string
+                                      type: object
                                     fixed:
                                       properties:
                                         length:

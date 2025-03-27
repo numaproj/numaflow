@@ -16,6 +16,7 @@ workspace = true
 tokio.workspace = true
 tracing.workspace = true
 numaflow-pulsar.workspace = true
+numaflow-monitor.workspace = true
 numaflow-sqs.workspace = true
 numaflow-models.workspace = true
 numaflow-pb.workspace = true
@@ -27,7 +28,10 @@ bytes.workspace = true
 serde.workspace = true
 rustls.workspace = true
 tower.workspace = true
-tonic = "0.12.3"
+reqwest.workspace = true
+hyper = "1.2.0"
+hyper-rustls = { version = "0.27.3", default-features = false, features = ["http2"] }
+tonic = { version = "0.12.3", features = ["tls"] }
 thiserror = "2.0.3"
 tokio-util = "0.7.11"
 tokio-stream = "0.1.15"

@@ -18,6 +18,7 @@
 //! Status Value - JSON serialized [ProcessingStatus] enum
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_nats::jetstream::kv::{CreateErrorKind, Store};
 use async_nats::jetstream::Context;
@@ -26,7 +27,7 @@ use chrono::Utc;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
-use tracing::info;
+use tracing::{info, Instrument};
 
 use crate::app::store::cbstore::ProcessingStatus;
 use crate::app::store::datastore::{Error as StoreError, Result as StoreResult};
@@ -171,42 +172,95 @@ impl super::CallbackStore for JetStreamCallbackStore {
                 StoreError::StoreRead(format!("Failed to watch request id in kv store: {e:?}"))
             })?;
 
+        let kv_store = self.kv_store.clone();
+
         let (tx, rx) = tokio::sync::mpsc::channel(10);
 
         let callbacks_init_key = format!("cb.{id}.start.processing");
         let callbacks_done_key = format!("cb.{id}.done.processing");
 
-        let handle = tokio::spawn(async move {
-            // FIXME(FMEA): Handle errors from the watcher.
-            while let Some(watch_event) = watcher.next().await {
-                let entry = match watch_event {
-                    Ok(event) => event,
-                    Err(e) => {
-                        tracing::error!(?e, "Received error from Jetstream KV watcher");
+        let span = tracing::Span::current();
+
+        let callback_watcher = async move {
+            let mut received_events = false;
+            let mut attempts = 0;
+            while !received_events && attempts < 5 {
+                attempts += 1;
+                while let Some(watch_event) = watcher.next().await {
+                    received_events = true;
+                    let entry = match watch_event {
+                        Ok(event) => event,
+                        Err(e) => {
+                            tracing::error!(?e, "Received error from Jetstream KV watcher");
+                            // Recreate the watcher and start processing the events again
+                            received_events = false;
+                            break;
+                        }
+                    };
+
+                    // init key is used to signal the start of processing, the value will be the timestamp.
+                    if entry.key == callbacks_init_key {
+                        tracing::debug!(
+                            callbacks_init_key,
+                            "Received event for the init key. Ignoring it"
+                        );
                         continue;
                     }
-                };
 
-                // init key is used to signal the start of processing, the value will be the timestamp.
-                if entry.key == callbacks_init_key {
-                    continue;
+                    // done key is used to signal the end of processing, we can break the loop
+                    if entry.key == callbacks_done_key {
+                        tracing::debug!(
+                            callbacks_done_key,
+                            "Received event for the callback_done_key. Stopping the watcher task"
+                        );
+                        break;
+                    }
+
+                    let cbr: Callback = entry
+                        .value
+                        .try_into()
+                        .inspect_err(|err| tracing::error!(?err, "Failed to deserialize callback"))
+                        .expect("Failed to deserialize callback");
+
+                    tx.send(Arc::new(cbr))
+                        .await
+                        .inspect_err(|err| {
+                            tracing::error!(
+                                ?err,
+                                "Failed to send callback details from watcher task to main task"
+                            )
+                        })
+                        .expect("Failed to send callback");
                 }
-
-                // done key is used to signal the end of processing, we can break the loop
-                if entry.key == callbacks_done_key {
-                    break;
+                if !received_events && attempts < 5 {
+                    tracing::warn!(
+                        callbacks_key,
+                        "Watcher for Jetstream key didn't return any events. Will recreate the watcher in 20ms"
+                    );
+                    tokio::time::sleep(Duration::from_millis(20)).await;
+                    watcher = kv_store
+                        .watch_from_revision(&callbacks_key, 1)
+                        .await
+                        .map_err(|e| {
+                            StoreError::StoreRead(format!(
+                                "Failed to watch request id in kv store: {e:?}"
+                            ))
+                        })
+                        .inspect_err(|err| {
+                            tracing::error!(?err, callbacks_key, "Failed to recreate the watcher")
+                        })
+                        .expect("Failed to recreate the watcher");
                 }
-
-                let cbr: Callback = entry
-                    .value
-                    .try_into()
-                    .expect("Failed to deserialize callback");
-
-                tx.send(Arc::new(cbr))
-                    .await
-                    .expect("Failed to send callback");
             }
-        });
+            if !received_events {
+                tracing::error!(
+                    callbacks_key,
+                    "Watcher for Jetstream key didn't return any events even after retries"
+                );
+            }
+        };
+
+        let handle = tokio::spawn(callback_watcher.instrument(span));
 
         Ok((ReceiverStream::new(rx), handle))
     }

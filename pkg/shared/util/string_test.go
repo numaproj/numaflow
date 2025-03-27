@@ -35,14 +35,6 @@ func TestRandomLowercaseString(t *testing.T) {
 	assert.Equal(t, str, strings.ToLower(str))
 }
 
-func TestStringSliceContains(t *testing.T) {
-	assert.False(t, StringSliceContains(nil, "b"))
-	assert.False(t, StringSliceContains([]string{}, "b"))
-	list := []string{"a", "b", "c"}
-	assert.True(t, StringSliceContains(list, "b"))
-	assert.False(t, StringSliceContains(list, "e"))
-}
-
 func TestCompareSlice(t *testing.T) {
 	tests := []struct {
 		name     string

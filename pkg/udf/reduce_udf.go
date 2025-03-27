@@ -19,6 +19,7 @@ package udf
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -38,6 +39,7 @@ import (
 	unalignedfs "github.com/numaproj/numaflow/pkg/reduce/pbq/wal/unaligned/fs"
 	"github.com/numaproj/numaflow/pkg/reduce/pnf"
 	"github.com/numaproj/numaflow/pkg/sdkclient"
+	"github.com/numaproj/numaflow/pkg/sdkclient/accumulator"
 	"github.com/numaproj/numaflow/pkg/sdkclient/reducer"
 	"github.com/numaproj/numaflow/pkg/sdkclient/serverinfo"
 	"github.com/numaproj/numaflow/pkg/sdkclient/sessionreducer"
@@ -52,6 +54,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/watermark/store"
 	"github.com/numaproj/numaflow/pkg/watermark/wmb"
 	"github.com/numaproj/numaflow/pkg/window"
+	"github.com/numaproj/numaflow/pkg/window/strategy/accumulate"
 	"github.com/numaproj/numaflow/pkg/window/strategy/fixed"
 	"github.com/numaproj/numaflow/pkg/window/strategy/session"
 	"github.com/numaproj/numaflow/pkg/window/strategy/sliding"
@@ -74,6 +77,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		toVertexWmStores   map[string]store.WatermarkStore
 		idleManager        wmb.IdleManager
 		opts               []reduce.Option
+		pnfOpts            []pnf.Option
 		udfApplier         applier.ReduceApplier
 		healthChecker      metrics.HealthChecker
 		pipelineName       = u.VertexInstance.Vertex.Spec.PipelineName
@@ -157,6 +161,23 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 
 		udfApplier = reduceHandler
 		healthChecker = reduceHandler
+	} else if windowType.Accumulator != nil {
+		// Wait for server info to be ready
+		serverInfo, err := serverinfo.SDKServerInfo(serverinfo.WithServerInfoFilePath(sdkclient.AccumulatorServerInfoFile))
+		if err != nil {
+			return err
+		}
+		metrics.SDKInfo.WithLabelValues(dfv1.ComponentVertex, fmt.Sprintf("%s-%s", pipelineName, vertexName), string(serverinfo.ContainerTypeAccumulator), serverInfo.Version, string(serverInfo.Language)).Set(1)
+
+		client, err := accumulator.New(ctx, serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
+		if err != nil {
+			return fmt.Errorf("failed to create a new accumulator gRPC client: %w", err)
+		}
+
+		reduceHandler := rpc.NewGRPCBasedAccumulator(vertexName, client)
+
+		udfApplier = reduceHandler
+		healthChecker = reduceHandler
 	} else {
 		return fmt.Errorf("invalid window spec")
 	}
@@ -168,6 +189,8 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		windower = sliding.NewWindower(windowType.Sliding.Length.Duration, windowType.Sliding.Slide.Duration, u.VertexInstance)
 	} else if windowType.Session != nil {
 		windower = session.NewWindower(windowType.Session.Timeout.Duration, u.VertexInstance)
+	} else if windowType.Accumulator != nil {
+		windower = accumulate.NewWindower(u.VertexInstance, windowType.Accumulator.Timeout.Duration)
 	} else {
 		return fmt.Errorf("invalid window spec")
 	}
@@ -248,7 +271,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		var result []forwarder.VertexBuffer
 
 		// Drop message if it contains the special tag
-		if sharedutil.StringSliceContains(tags, dfv1.MessageTagDrop) {
+		if slices.Contains(tags, dfv1.MessageTagDrop) {
 			metrics.UserDroppedMessages.With(map[string]string{
 				metrics.LabelVertex:             vertexName,
 				metrics.LabelPipeline:           pipelineName,
@@ -325,6 +348,10 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	if x := u.VertexInstance.Vertex.Spec.Limits; x != nil {
 		if x.ReadBatchSize != nil {
 			opts = append(opts, reduce.WithReadBatchSize(int64(*x.ReadBatchSize)))
+			pnfOpts = append(pnfOpts, pnf.WithBatchSize(int(*x.ReadBatchSize)))
+		}
+		if x.ReadTimeout != nil {
+			pnfOpts = append(pnfOpts, pnf.WithFlushDuration(x.ReadTimeout.Duration))
 		}
 	}
 
@@ -332,12 +359,11 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		opts = append(opts, reduce.WithAllowedLateness(allowedLateness.Duration))
 	}
 
-	var pnfOption []pnf.Option
 	// create and start the compactor if the window type is unaligned
 	// the compactor will delete the persisted messages which belongs to the materialized window
 	// create a gc events tracker which tracks the gc events, will be used by the pnf
 	// to track the gc events and the compactor will delete the persisted messages based on the gc events
-	if windowType.Session != nil {
+	if windowType.Session != nil || windowType.Accumulator != nil {
 		gcEventsTracker, err := unalignedfs.NewGCEventsWAL(ctx, pipelineName, vertexName, vertexReplica)
 		if err != nil {
 			return fmt.Errorf("failed to create gc events tracker, %w", err)
@@ -352,7 +378,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 			log.Info("GC Events WAL Closed")
 		}()
 
-		pnfOption = append(pnfOption, pnf.WithGCEventsTracker(gcEventsTracker), pnf.WithWindowType(window.Unaligned))
+		pnfOpts = append(pnfOpts, pnf.WithGCEventsTracker(gcEventsTracker), pnf.WithWindowType(window.Unaligned))
 
 		compactor, err := unalignedfs.NewCompactor(ctx, pipelineName, vertexName, vertexReplica, &window.SharedUnalignedPartition, dfv1.DefaultGCEventsWALEventsPath, dfv1.DefaultSegmentWALPath, dfv1.DefaultCompactWALPath)
 		if err != nil {
@@ -372,7 +398,7 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 	}
 
 	// create the pnf
-	processAndForward := pnf.NewProcessAndForward(ctx, u.VertexInstance, udfApplier, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager, windower, pnfOption...)
+	processAndForward := pnf.NewProcessAndForward(ctx, u.VertexInstance, udfApplier, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager, windower, pnfOpts...)
 
 	// for reduce, we read only from one partition
 	dataForwarder, err := reduce.NewDataForward(ctx, u.VertexInstance, readers[0], writers, pbqManager, walManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, idleManager, processAndForward, opts...)

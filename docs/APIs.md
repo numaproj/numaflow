@@ -884,6 +884,77 @@ TODO(spl): clean up Names of the serving store used in this vertex.
 
 </table>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.AccumulatorWindow">
+
+AccumulatorWindow
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Window">Window</a>)
+</p>
+
+<p>
+
+<p>
+
+AccumulatorWindow describes a special kind of SessionWindow (similar to
+Global Window) where output should always have monotonically increasing
+WM but it can be manipulated through event-time by reordering the
+messages. NOTE: Quite powerful, should not be abused; it can cause
+stalling of pipelines and leaks.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>timeout</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+
+<td>
+
+<p>
+
+Timeout is the duration of inactivity after which the state of the
+accumulator is removed.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.Authorization">
 
 Authorization
@@ -13516,6 +13587,22 @@ Description
 <code>session</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.SessionWindow"> SessionWindow
 </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>accumulator</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.AccumulatorWindow">
+AccumulatorWindow </a> </em>
 </td>
 
 <td>

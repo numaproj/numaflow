@@ -1,7 +1,8 @@
 # Conditional Forwarding
 
-After processing the data, conditional forwarding is doable based on the `Tags` returned in the result. 
+In a [pipeline](../../core-concepts/pipeline.md), after processing the data, conditional forwarding is doable based on the `tags` returned in the result.
 Below is a list of different logic operations that can be done on tags.
+
 - **and** - forwards the message if all the tags specified are present in Message's tags.
 - **or** - forwards the message if one of the tags specified is present in Message's tags.
 - **not** - forwards the message if all the tags specified are not present in Message's tags.
@@ -34,4 +35,3 @@ edges:
           - odd-tag
           - even-tag
 ```
-

@@ -136,14 +136,26 @@ func (v Vertex) GetHeadlessServiceName() string {
 }
 
 func (v Vertex) GetServiceObjs() []*corev1.Service {
-	svcs := []*corev1.Service{v.getServiceObj(v.GetHeadlessServiceName(), true, VertexMetricsPort, VertexMetricsPortName)}
+	ports := map[string]int32{
+		VertexMetricsPortName: VertexMetricsPort,
+		VertexMonitorPortName: VertexMonitorPort,
+	}
+	svcs := []*corev1.Service{v.getServiceObj(v.GetHeadlessServiceName(), true, ports)}
 	if x := v.Spec.Source; x != nil && x.HTTP != nil && x.HTTP.Service {
-		svcs = append(svcs, v.getServiceObj(v.Name, false, VertexHTTPSPort, VertexHTTPSPortName))
+		svcs = append(svcs, v.getServiceObj(v.Name, false, map[string]int32{VertexHTTPSPortName: VertexHTTPSPort}))
 	}
 	return svcs
 }
 
-func (v Vertex) getServiceObj(name string, headless bool, port int32, servicePortName string) *corev1.Service {
+func (v Vertex) getServiceObj(name string, headless bool, ports map[string]int32) *corev1.Service {
+	var servicePorts []corev1.ServicePort
+	for name, port := range ports {
+		servicePorts = append(servicePorts, corev1.ServicePort{
+			Port:       port,
+			TargetPort: intstr.FromInt32(port),
+			Name:       name,
+		})
+	}
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       v.Namespace,
@@ -158,9 +170,7 @@ func (v Vertex) getServiceObj(name string, headless bool, port int32, servicePor
 			},
 		},
 		Spec: corev1.ServiceSpec{
-			Ports: []corev1.ServicePort{
-				{Port: port, TargetPort: intstr.FromInt32(port), Name: servicePortName},
-			},
+			Ports: servicePorts,
 			Selector: map[string]string{
 				KeyPartOf:       Project,
 				KeyManagedBy:    ControllerVertex,
@@ -171,6 +181,7 @@ func (v Vertex) getServiceObj(name string, headless bool, port int32, servicePor
 		},
 	}
 	if headless {
+		svc.Spec.PublishNotReadyAddresses = true
 		svc.Spec.ClusterIP = "None"
 	}
 	return svc
@@ -261,7 +272,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 
 	volumeMounts := []corev1.VolumeMount{{Name: varVolumeName, MountPath: PathVarRun}}
 	executeRustBinary, _ := env.GetBool(EnvExecuteRustBinary, false)
-	sidecarContainers, containers, err := v.Spec.getType().getContainers(getContainerReq{
+	containerRequest := getContainerReq{
 		isbSvcType:        req.ISBSvcType,
 		env:               envVars,
 		image:             req.Image,
@@ -269,7 +280,8 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		resources:         req.DefaultResources,
 		volumeMounts:      volumeMounts,
 		executeRustBinary: executeRustBinary,
-	})
+	}
+	sidecarContainers, containers, err := v.Spec.getType().getContainers(containerRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -317,12 +329,6 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		{Name: VertexMetricsPortName, ContainerPort: VertexMetricsPort},
 	}
 
-	// Attach an EmptyDir for runtime info
-	containers[0].VolumeMounts = append(containers[0].VolumeMounts, corev1.VolumeMount{
-		Name:      RuntimeDirVolume,
-		MountPath: RuntimeDirMountPath,
-	})
-
 	for i := 0; i < len(sidecarContainers); i++ { // udf, udsink, udsource, or source vertex specifies a udtransformer
 		sidecarContainers[i].Env = append(sidecarContainers[i].Env, v.commonEnvs()...)
 		sidecarContainers[i].Env = append(sidecarContainers[i].Env, v.sidecarEnvs()...)
@@ -352,6 +358,10 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		sideInputsWatcher.VolumeMounts = append(sideInputsWatcher.VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount})
 		containers = append(containers, sideInputsWatcher)
 		for i := 0; i < len(sidecarContainers); i++ {
+			// skip for monitor sidecar container
+			if sidecarContainers[i].Name == CtrMonitor {
+				continue
+			}
 			// Readonly mount for user-defined containers
 			sidecarContainers[i].VolumeMounts = append(sidecarContainers[i].VolumeMounts, corev1.VolumeMount{Name: sideInputsVolName, MountPath: PathSideInputsMount, ReadOnly: true})
 		}

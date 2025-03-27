@@ -88,7 +88,7 @@ nav:
               - Examples: "user-guide/user-defined-functions/reduce/examples.md"
       - Reference:
           - user-guide/reference/pipeline-tuning.md
-          - user-guide/reference/edge-tuning.md
+          - user-guide/reference/mvtx-tuning.md
           - user-guide/reference/autoscaling.md
           - user-guide/reference/conditional-forwarding.md
           - user-guide/reference/pipeline-operations.md
@@ -105,6 +105,7 @@ nav:
               - user-guide/reference/configuration/sidecar-containers.md
               - user-guide/reference/configuration/liveness-and-readiness.md
               - user-guide/reference/configuration/pipeline-customization.md
+              - user-guide/reference/configuration/dra.md
               - user-guide/reference/configuration/istio.md
               - user-guide/reference/configuration/max-message-size.md
               - user-guide/reference/configuration/update-strategy.md
