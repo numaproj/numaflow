@@ -9,6 +9,8 @@ use async_nats::{
     },
     ConnectOptions,
 };
+use backoff::retry::Retry;
+use backoff::strategy::fixed;
 use bytes::Bytes;
 use rustls_pki_types::pem::PemObject;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
@@ -381,6 +383,10 @@ struct MessageProcessingTracker {
     ack_signal_tx: oneshot::Sender<()>,
 }
 
+// same as rust/numaflow-core/src/pipeline/isb/jestream/reader.rs
+const ACK_RETRY_INTERVAL: u64 = 100;
+const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
+
 impl MessageProcessingTracker {
     async fn start(msg: JetstreamMessage, tick: Duration) -> Self {
         let (ack_signal_tx, ack_signal_rx) = oneshot::channel();
@@ -398,34 +404,67 @@ impl MessageProcessingTracker {
     ) {
         let start = Instant::now();
         let mut interval = time::interval_at(start + tick, tick);
+
+        let ack_retry_interval =
+            fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
+        let nack_retry_interval =
+            fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
+
         let ack_msg = || async {
             if let Err(err) = msg.ack().await {
                 tracing::error!(?err, "Failed to Ack message");
+                return Err(format!("Acknowledging Jetstream message: {:?}", err));
             }
+            Ok(())
         };
 
-        // FIXME: Add retries. Refer rust/numaflow-core/src/pipeline/isb/jestream/reader.rs
+        let ack_with_retry = Retry::retry(ack_retry_interval, ack_msg, |_: &String| true);
+
         let ack_in_progress = || async {
             let ack_result = msg.ack_with(AckKind::Progress).await;
-            // FIXME: if an error happens, we should probably stop the task
             if let Err(e) = ack_result {
                 tracing::error!(?e, "Failed to send InProgress Ack to Jetstream for message");
             }
         };
 
+        let nack_msg = || async {
+            let ack_result = msg.ack_with(AckKind::Nak(None)).await;
+            if let Err(e) = ack_result {
+                tracing::error!(?e, "Failed to send InProgress Ack to Jetstream for message");
+                return Err(format!(
+                    "Sending Negative Ack to Jetstream for the message: {e:?}"
+                ));
+            }
+            Ok(())
+        };
+
+        let nack_with_retry = Retry::retry(nack_retry_interval, nack_msg, |_: &String| true);
+
         tokio::pin!(ack_signal_rx);
 
         loop {
-            tokio::select! {
+            let ack = tokio::select! {
                 biased;
 
-                _ = &mut ack_signal_rx => {
-                    ack_msg().await;
-                    return;
+                ack = &mut ack_signal_rx => ack,
+                _ = interval.tick() => {
+                    ack_in_progress().await;
+                    continue;
                 },
-                _ = interval.tick() => ack_in_progress().await,
+            };
+
+            if let Err(e) = ack {
+                tracing::error!(error=?e, "Received error while waiting for Ack on oneshot channel");
+                if let Err(e) = nack_with_retry.await {
+                    tracing::error!(error=?e, "Failed to send Negative Ack for the jetstream message even after retries");
+                }
             }
+            break;
         }
+        if let Err(e) = ack_with_retry.await {
+            tracing::error!(error=?e, "Failed to ACK jetstream message even after retries");
+        }
+        return;
     }
 
     async fn ack(self) {

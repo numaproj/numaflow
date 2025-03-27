@@ -2312,6 +2312,7 @@ name = "numaflow-jetstream"
 version = "0.1.0"
 dependencies = [
  "async-nats",
+ "backoff",
  "bytes",
  "rustls 0.23.21",
  "rustls-native-certs 0.8.1",
