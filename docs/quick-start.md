@@ -13,7 +13,7 @@ To try Numaflow, you will first need to setup using one of the following options
 - [Docker Desktop](https://docs.docker.com/get-docker/)
 - [podman](https://podman.io/)
 
-Then use one of the following options to create a local Kubernete Cluster:
+Then use one of the following options to create a local Kubernetes cluster:
 
 - [Docker Desktop Kubernetes](https://docs.docker.com/desktop/kubernetes/)
 - [k3d](https://k3d.io/)

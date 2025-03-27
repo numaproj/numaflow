@@ -3,14 +3,14 @@ resolver = "2"
 members = [
     "backoff",
     "numaflow-models",
-    "servesink",
     "serving",
     "numaflow-core",
     "numaflow-pb",
     "extns/numaflow-pulsar",
     "extns/numaflow-sqs",
     "extns/numaflow-jetstream",
-    "numaflow"
+    "numaflow",
+    "numaflow-monitor",
 ]
 
 [workspace.lints.rust]
@@ -54,16 +54,16 @@ lto = false
 incremental = true
 
 [workspace.dependencies]
-servesink = { path = "servesink" }
 serving = { path = "serving" }
 numaflow-core = { path = "numaflow-core" }
 numaflow-models = { path = "numaflow-models" }
+numaflow-monitor = { path = "numaflow-monitor" }
 backoff = { path = "backoff" }
 numaflow-pb = { path = "numaflow-pb" }
 numaflow-pulsar = { path = "extns/numaflow-pulsar" }
 numaflow-jetstream = { path = "extns/numaflow-jetstream" }
 numaflow-sqs = { path = "extns/numaflow-sqs" }
-tokio = "1.43.0"
+tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
 bytes = "1.9.0"
 tracing = "0.1.41"
 async-nats = "0.39.0"

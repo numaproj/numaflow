@@ -1,0 +1,26 @@
+[package]
+name = "numaflow-monitor"
+version = "0.1.0"
+edition = "2021"
+
+
+[lints]
+workspace = true
+
+[dependencies]
+tonic = { version = "0.12.3", features = ["tls"] }
+tokio.workspace = true
+tracing.workspace = true
+numaflow-models.workspace = true
+axum.workspace = true
+axum-server.workspace = true
+serde.workspace = true
+thiserror = "2.0.3"
+serde_json = "1.0.120"
+chrono = { version = "0.4", features = ["serde"] }
+rcgen = "0.13.1"
+http = "1.2.0"
+tower.workspace = true
+rustls.workspace = true
+[dev-dependencies]
+tempfile = "3.5"
