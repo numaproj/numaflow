@@ -6,6 +6,7 @@
 
 use std::sync::Arc;
 
+use numaflow_jetstream::JetstreamSource;
 use numaflow_pulsar::source::PulsarSource;
 use numaflow_sqs::source::SQSSource;
 use tokio::sync::OwnedSemaphorePermit;
@@ -46,6 +47,8 @@ pub(crate) mod generator;
 ///
 /// [Pulsar]: https://numaflow.numaproj.io/user-guide/sources/pulsar/
 pub(crate) mod pulsar;
+
+pub(crate) mod jetstream;
 
 pub(crate) mod serving;
 pub(crate) mod sqs;
@@ -94,6 +97,7 @@ pub(crate) enum SourceType {
     #[allow(dead_code)] // TODO(SQS): remove it when integrated with controller
     SQS(SQSSource),
     Serving(ServingSource),
+    Jetstream(JetstreamSource),
 }
 
 enum ActorMessage {
@@ -249,6 +253,13 @@ impl Source {
                 tokio::spawn(async move {
                     let actor =
                         SourceActor::new(receiver, serving.clone(), serving.clone(), serving);
+                    actor.run().await;
+                });
+            }
+            SourceType::Jetstream(jetstream) => {
+                tokio::spawn(async move {
+                    let actor =
+                        SourceActor::new(receiver, jetstream.clone(), jetstream.clone(), jetstream);
                     actor.run().await;
                 });
             }
