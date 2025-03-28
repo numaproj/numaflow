@@ -33,6 +33,9 @@ rules:
       - monovertices/finalizers
       - monovertices/status
       - monovertices/scale
+      - servingpipelines
+      - servingpipelines/finalizers
+      - servingpipelines/status
   - apiGroups:
       - ""
     resources:

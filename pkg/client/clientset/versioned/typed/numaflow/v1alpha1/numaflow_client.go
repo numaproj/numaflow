@@ -31,6 +31,7 @@ type NumaflowV1alpha1Interface interface {
 	InterStepBufferServicesGetter
 	MonoVerticesGetter
 	PipelinesGetter
+	ServingPipelinesGetter
 	VerticesGetter
 }
 
@@ -49,6 +50,10 @@ func (c *NumaflowV1alpha1Client) MonoVertices(namespace string) MonoVertexInterf
 
 func (c *NumaflowV1alpha1Client) Pipelines(namespace string) PipelineInterface {
 	return newPipelines(c, namespace)
+}
+
+func (c *NumaflowV1alpha1Client) ServingPipelines(namespace string) ServingPipelineInterface {
+	return newServingPipelines(c, namespace)
 }
 
 func (c *NumaflowV1alpha1Client) Vertices(namespace string) VertexInterface {

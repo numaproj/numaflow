@@ -313,13 +313,12 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 		}
 		args := []string{fmt.Sprintf("--buffers=%s", strings.Join(bfs, ",")), fmt.Sprintf("--buckets=%s", strings.Join(bks, ","))}
 		args = append(args, fmt.Sprintf("--side-inputs-store=%s", pl.GetSideInputsStoreName()))
-		args = append(args, fmt.Sprintf("--serving-source-store=%s", pl.GetServingSourceStoreName()))
 		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-create", args, "cre")
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
-			r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateJobForISBCeationFailed", "Failed to create a Job: %w", err.Error())
+			r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateJobForISBCreationFailed", "Failed to create a Job: %w", err.Error())
 			return fmt.Errorf("failed to create ISB creating job, err: %w", err)
 		}
-		log.Infow("Created a job successfully for ISB creating", zap.Any("buffers", bfs), zap.Any("buckets", bks), zap.Any("servingStreams", pl.GetServingSourceStoreName()))
+		log.Infow("Created a job successfully for ISB creating", zap.Any("buffers", bfs), zap.Any("buckets", bks))
 		r.recorder.Eventf(pl, corev1.EventTypeNormal, "CreateJobForISBCeationSuccessful", "Create ISB creation job successfully")
 	}
 
@@ -614,7 +613,6 @@ func (r *pipelineReconciler) cleanUpBuffers(ctx context.Context, pl *dfv1.Pipeli
 		args = append(args, fmt.Sprintf("--buffers=%s", strings.Join(allBuffers, ",")))
 		args = append(args, fmt.Sprintf("--buckets=%s", strings.Join(allBuckets, ",")))
 		args = append(args, fmt.Sprintf("--side-inputs-store=%s", pl.GetSideInputsStoreName()))
-		args = append(args, fmt.Sprintf("--serving-source-store=%s", pl.GetServingSourceStoreName()))
 
 		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-delete", args, "cln")
 		batchJob.OwnerReferences = []metav1.OwnerReference{}

@@ -30,6 +30,8 @@ type Interface interface {
 	MonoVertices() MonoVertexInformer
 	// Pipelines returns a PipelineInformer.
 	Pipelines() PipelineInformer
+	// ServingPipelines returns a ServingPipelineInformer.
+	ServingPipelines() ServingPipelineInformer
 	// Vertices returns a VertexInformer.
 	Vertices() VertexInformer
 }
@@ -58,6 +60,11 @@ func (v *version) MonoVertices() MonoVertexInformer {
 // Pipelines returns a PipelineInformer.
 func (v *version) Pipelines() PipelineInformer {
 	return &pipelineInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// ServingPipelines returns a ServingPipelineInformer.
+func (v *version) ServingPipelines() ServingPipelineInformer {
+	return &servingPipelineInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // Vertices returns a VertexInformer.

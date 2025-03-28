@@ -26,7 +26,6 @@ type getContainerReq struct {
 	volumeMounts      []corev1.VolumeMount
 	resources         corev1.ResourceRequirements
 	executeRustBinary bool
-	servingStore      *ServingStore
 }
 
 type containerSupplier interface {
