@@ -307,14 +307,28 @@ impl JetstreamActor {
     }
 
     async fn ack_messages(&mut self, offsets: Vec<u64>) -> Result<()> {
+        let mut tasks = Vec::with_capacity(offsets.len());
+
         for offset in offsets {
             let msg_task = self.in_progress_messages.remove(&offset);
             let Some(msg_task) = msg_task else {
                 tracing::warn!(offset, "Received ACK request for unknown offset");
                 continue;
             };
-            // TODO: why not tokio::spawn and await the task? the current approach could be slow
-            msg_task.ack().await;
+
+            // msg_task.ack() involves sending on a oneshot channel to an already running tokio task
+            // This results in sending Ack to Nats server (within the tokio task) and awaiting for
+            // the task to finish. We spawn tasks here so that acks happens concurrently.
+            let task = tokio::spawn(async move {
+                msg_task.ack().await;
+            });
+            tasks.push(task);
+        }
+
+        for task in tasks {
+            if let Err(err) = task.await {
+                return Err(Error::Other(format!("Error in ack task: {:?}", err)));
+            }
         }
         Ok(())
     }
@@ -392,6 +406,13 @@ impl JetstreamSource {
     }
 }
 
+/// The MessageProcessingTracker object is a handle to the work-in-progress background task for a
+/// message. The background task periodically sends `AckKind::Progress` to the Nats server while the
+/// message is being processed. This handle will be tracked as value in a hashmap in the Jetstream
+/// source handle where the key will be the corresponding message sequence id (offset).
+/// When the `Sourcer` trait's ack is called, the `MessageProcessingTracker::ack` gets called, which
+/// results in marking the message processing completion in Nats server and termination of the
+/// work-in-progress task.
 struct MessageProcessingTracker {
     in_progress_task: JoinHandle<()>,
     ack_signal_tx: oneshot::Sender<()>,
@@ -480,7 +501,6 @@ impl MessageProcessingTracker {
         if let Err(e) = ack_with_retry.await {
             tracing::error!(error=?e, "Failed to ACK jetstream message even after retries");
         }
-        return;
     }
 
     async fn ack(self) {
