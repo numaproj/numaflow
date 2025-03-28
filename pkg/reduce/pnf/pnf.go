@@ -64,6 +64,8 @@ type ProcessAndForward struct {
 	forwardDoneCh       chan struct{}
 	mu                  sync.RWMutex
 	lastSeenWindow      map[string]window.TimedWindow
+	shutdownCh          chan struct{}
+	shutdownOnce        sync.Once
 	sync.RWMutex
 }
 
@@ -77,6 +79,7 @@ func NewProcessAndForward(ctx context.Context,
 	watermarkPublishers map[string]publish.Publisher,
 	idleManager wmb.IdleManager,
 	windower window.TimedWindower,
+	shutdownCh chan struct{},
 	opts ...Option) *ProcessAndForward {
 
 	// apply the options
@@ -114,6 +117,8 @@ func NewProcessAndForward(ctx context.Context,
 		log:                 logging.FromContext(ctx),
 		forwardDoneCh:       make(chan struct{}),
 		lastSeenWindow:      make(map[string]window.TimedWindow),
+		shutdownCh:          shutdownCh,
+		shutdownOnce:        sync.Once{},
 		opts:                dOpts,
 	}
 
@@ -155,7 +160,11 @@ outerLoop:
 				return
 			}
 			if err != nil {
-				pf.log.Panic("Got an error while invoking ApplyReduce", zap.Error(err))
+				pf.log.Errorw("Got an error while invoking ApplyReduce", zap.Error(err))
+				pf.shutdownOnce.Do(func() {
+					close(pf.shutdownCh)
+				})
+				return
 			}
 		case response, ok := <-udfResponseCh:
 			if !ok {
