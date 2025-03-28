@@ -1,0 +1,19 @@
+[package]
+name = "numaflow-jetstream"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+backoff.workspace = true
+async-nats.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+bytes.workspace = true
+rustls.workspace = true
+tokio-stream = "0.1.15"
+rustls-pki-types = "1.11.0"
+rustls-native-certs = "0.8.1"
+
+[lints]
+workspace = true

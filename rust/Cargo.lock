@@ -2253,8 +2253,10 @@ dependencies = [
  "hyper 1.6.0",
  "hyper-rustls 0.27.3",
  "hyper-util",
+ "k8s-openapi",
  "kube",
  "numaflow 0.2.1",
+ "numaflow-jetstream",
  "numaflow-models",
  "numaflow-monitor",
  "numaflow-pb",
@@ -2284,6 +2286,22 @@ dependencies = [
  "tower 0.5.2",
  "tracing",
  "trait-variant",
+]
+
+[[package]]
+name = "numaflow-jetstream"
+version = "0.1.0"
+dependencies = [
+ "async-nats",
+ "backoff",
+ "bytes",
+ "rustls 0.23.23",
+ "rustls-native-certs 0.8.1",
+ "rustls-pki-types",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-stream",
+ "tracing",
 ]
 
 [[package]]
@@ -3226,9 +3244,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-pki-types"
-version = "1.10.0"
+version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16f1201b3c9a7ee8039bcadc17b7e605e2945b27eee7631788c1bd2b0643674b"
+checksum = "917ce264624a4b4db1c364dcc35bfca9ded014d0a958cd47ad3e960e988ea51c"
 dependencies = [
  "web-time",
 ]
