@@ -397,8 +397,10 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		}(compactor)
 	}
 
+	pnfShutdownCh := make(chan struct{})
+
 	// create the pnf
-	processAndForward := pnf.NewProcessAndForward(ctx, u.VertexInstance, udfApplier, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager, windower, pnfOpts...)
+	processAndForward := pnf.NewProcessAndForward(ctx, u.VertexInstance, udfApplier, writers, pbqManager, conditionalForwarder, publishWatermark, idleManager, windower, pnfShutdownCh, pnfOpts...)
 
 	// for reduce, we read only from one partition
 	dataForwarder, err := reduce.NewDataForward(ctx, u.VertexInstance, readers[0], writers, pbqManager, walManager, conditionalForwarder, fetchWatermark, publishWatermark, windower, idleManager, processAndForward, opts...)
@@ -425,8 +427,13 @@ func (u *ReduceUDFProcessor) Start(ctx context.Context) error {
 		processAndForward.Shutdown()
 	}()
 
-	<-ctx.Done()
-	log.Info("SIGTERM, exiting...")
+	select {
+	case <-ctx.Done():
+		log.Info("SIGTERM, exiting...")
+	case <-pnfShutdownCh:
+		log.Errorw("Error in PNF, exiting...")
+		cancel()
+	}
 	wg.Wait()
 
 	// closing the publisher will only delete the keys from the store, but not the store itself

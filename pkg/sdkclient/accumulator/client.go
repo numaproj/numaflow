@@ -18,6 +18,7 @@ package accumulator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -136,15 +137,20 @@ func (c *client) AccumulatorFn(ctx context.Context, datumStreamCh <-chan *accumu
 				if !ok {
 					break outerLoop
 				}
-				if sendErr = stream.Send(datum); sendErr != nil {
+				if sendErr = stream.Send(datum); sendErr != nil && !errors.Is(sendErr, io.EOF) {
 					errCh <- sdkerror.ToUDFErr("AccumulatorFn stream.Send()", sendErr)
 				}
 			}
 		}
 		// close the stream after sending all the messages
-		sendErr = stream.CloseSend()
-		if sendErr != nil {
-			errCh <- sdkerror.ToUDFErr("AccumulatorFn stream.Send()", sendErr)
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			sendErr = stream.CloseSend()
+			if sendErr != nil && !errors.Is(sendErr, io.EOF) {
+				errCh <- sdkerror.ToUDFErr("AccumulatorFn stream.Send()", sendErr)
+			}
 		}
 	}()
 
@@ -161,7 +167,9 @@ func (c *client) AccumulatorFn(ctx context.Context, datumStreamCh <-chan *accumu
 			default:
 				resp, recvErr = stream.Recv()
 				// if the stream is closed, close the responseCh and errCh channels and return
-				if recvErr == io.EOF {
+				if errors.Is(recvErr, io.EOF) {
+					// skip selection on nil channel
+					errCh = nil
 					close(responseCh)
 					return
 				}
