@@ -485,16 +485,19 @@ func (mvspec MonoVertexSpec) DeepCopyWithoutReplicas() MonoVertexSpec {
 	return x
 }
 
-func (mvspec MonoVertexSpec) getMainContainer(req getContainerReq) corev1.Container {
-	// volume mount to the runtime path
-	volumeMounts := []corev1.VolumeMount{
+// volume mount to the runtime path
+func (mvspec MonoVertexSpec) getRuntimeVolumeMount() []corev1.VolumeMount {
+	return []corev1.VolumeMount{
 		{
 			Name:      RuntimeDirVolume,
 			MountPath: RuntimeDirMountPath,
 		},
 	}
+}
+
+func (mvspec MonoVertexSpec) getMainContainer(req getContainerReq) corev1.Container {
 	return containerBuilder{}.
-		init(req).appendVolumeMounts(volumeMounts...).command(NumaflowRustBinary).args("--rust").build()
+		init(req).appendVolumeMounts(mvspec.getRuntimeVolumeMount()...).command(NumaflowRustBinary).args("--rust").build()
 }
 
 // buildContainers builds the sidecar containers and main containers for the mono vertex.

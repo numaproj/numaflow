@@ -66,24 +66,28 @@ func (s Sink) getContainers(req getContainerReq) ([]corev1.Container, []corev1.C
 	return sidecarContainers, containers, nil
 }
 
-func (s Sink) getMainContainer(req getContainerReq) corev1.Container {
-	// volume mount to the runtime path
-	volumeMounts := []corev1.VolumeMount{
+// volume mount to the runtime path
+func (s Sink) getRuntimeVolumeMount() []corev1.VolumeMount {
+	return []corev1.VolumeMount{
 		{
 			Name:      RuntimeDirVolume,
 			MountPath: RuntimeDirMountPath,
 		},
 	}
+}
+
+func (s Sink) getMainContainer(req getContainerReq) corev1.Container {
 	if req.executeRustBinary {
-		return containerBuilder{}.init(req).appendVolumeMounts(volumeMounts...).command(NumaflowRustBinary).args("processor", "--type="+string(VertexTypeSink), "--isbsvc-type="+string(req.isbSvcType), "--rust").build()
+		return containerBuilder{}.init(req).appendVolumeMounts(s.getRuntimeVolumeMount()...).command(NumaflowRustBinary).args("processor", "--type="+string(VertexTypeSink), "--isbsvc-type="+string(req.isbSvcType), "--rust").build()
 	}
-	return containerBuilder{}.init(req).appendVolumeMounts(volumeMounts...).args("processor", "--type="+string(VertexTypeSink), "--isbsvc-type="+string(req.isbSvcType)).build()
+	return containerBuilder{}.init(req).appendVolumeMounts(s.getRuntimeVolumeMount()...).args("processor", "--type="+string(VertexTypeSink), "--isbsvc-type="+string(req.isbSvcType)).build()
 }
 
 func (s Sink) getUDSinkContainer(mainContainerReq getContainerReq) corev1.Container {
 	c := containerBuilder{}.
 		name(CtrUdsink).
 		imagePullPolicy(mainContainerReq.imagePullPolicy). // Use the same image pull policy as the main container
+		appendVolumeMounts(s.getRuntimeVolumeMount()...).
 		appendVolumeMounts(mainContainerReq.volumeMounts...).asSidecar()
 	x := s.UDSink.Container
 	c = c.image(x.Image)
@@ -119,6 +123,7 @@ func (s Sink) getFallbackUDSinkContainer(mainContainerReq getContainerReq) corev
 	c := containerBuilder{}.
 		name(CtrFallbackUdsink).
 		imagePullPolicy(mainContainerReq.imagePullPolicy). // Use the same image pull policy as the main container
+		appendVolumeMounts(s.getRuntimeVolumeMount()...).
 		appendVolumeMounts(mainContainerReq.volumeMounts...).asSidecar()
 	x := s.Fallback.UDSink.Container
 	c = c.image(x.Image)
