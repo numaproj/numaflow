@@ -22,6 +22,7 @@ use crate::shared::grpc;
 use crate::shared::server_info::{sdk_server_info, ContainerType};
 use crate::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
 use crate::source::generator::new_generator;
+use crate::source::jetstream::new_jetstream_source;
 use crate::source::pulsar::new_pulsar_source;
 use crate::source::user_defined::new_source;
 use crate::source::Source;
@@ -321,6 +322,18 @@ pub async fn create_source(
                 watermark_handle,
             ))
         }
+        SourceType::Jetstream(jetstream_config) => {
+            let jetstream =
+                new_jetstream_source(jetstream_config.clone(), batch_size, read_timeout).await?;
+            Ok(Source::new(
+                batch_size,
+                source::SourceType::Jetstream(jetstream),
+                tracker_handle,
+                source_config.read_ahead,
+                transformer,
+                watermark_handle,
+            ))
+        }
         // for serving we use batch size as 1 as we are not batching the messages
         // and read ahead is enabled as it supports it.
         SourceType::Serving(config) => {
@@ -344,10 +357,16 @@ pub async fn create_source(
     }
 }
 
+#[cfg(test)]
+const SECRET_BASE_PATH: &str = "/tmp/numaflow";
+
+#[cfg(not(test))]
+const SECRET_BASE_PATH: &str = "/var/numaflow/secrets";
+
 // Retrieve value from mounted secret volume
 // "/var/numaflow/secrets/${secretRef.name}/${secretRef.key}" is expected to be the file path
 pub(crate) fn get_secret_from_volume(name: &str, key: &str) -> Result<String, String> {
-    let path = format!("/var/numaflow/secrets/{name}/{key}");
+    let path = format!("{SECRET_BASE_PATH}/{name}/{key}");
     let val = std::fs::read_to_string(path.clone())
         .map_err(|e| format!("Reading secret from file {path}: {e:?}"))?;
     Ok(val.trim().into())
