@@ -65,24 +65,28 @@ func (s Source) getContainers(req getContainerReq) ([]corev1.Container, []corev1
 	return sidecarContainers, containers, nil
 }
 
-func (s Source) getMainContainer(req getContainerReq) corev1.Container {
-	// volume mount to the runtime path
-	volumeMounts := []corev1.VolumeMount{
+// volume mount to the runtime path
+func (s Source) getRuntimeVolumeMount() []corev1.VolumeMount {
+	return []corev1.VolumeMount{
 		{
 			Name:      RuntimeDirVolume,
 			MountPath: RuntimeDirMountPath,
 		},
 	}
+}
+
+func (s Source) getMainContainer(req getContainerReq) corev1.Container {
 	if req.executeRustBinary {
-		return containerBuilder{}.init(req).appendVolumeMounts(volumeMounts...).command(NumaflowRustBinary).args("processor", "--type="+string(VertexTypeSink), "--isbsvc-type="+string(req.isbSvcType), "--rust").build()
+		return containerBuilder{}.init(req).appendVolumeMounts(s.getRuntimeVolumeMount()...).command(NumaflowRustBinary).args("processor", "--type="+string(VertexTypeSink), "--isbsvc-type="+string(req.isbSvcType), "--rust").build()
 	}
-	return containerBuilder{}.init(req).appendVolumeMounts(volumeMounts...).args("processor", "--type="+string(VertexTypeSource), "--isbsvc-type="+string(req.isbSvcType)).build()
+	return containerBuilder{}.init(req).appendVolumeMounts(s.getRuntimeVolumeMount()...).args("processor", "--type="+string(VertexTypeSource), "--isbsvc-type="+string(req.isbSvcType)).build()
 }
 
 func (s Source) getUDTransformerContainer(mainContainerReq getContainerReq) corev1.Container {
 	c := containerBuilder{}.
 		name(CtrUdtransformer).
 		imagePullPolicy(mainContainerReq.imagePullPolicy). // Use the same image pull policy as the main container
+		appendVolumeMounts(s.getRuntimeVolumeMount()...).
 		appendVolumeMounts(mainContainerReq.volumeMounts...).asSidecar()
 	c = c.appendEnv(corev1.EnvVar{Name: EnvUDContainerType, Value: UDContainerTransformer})
 	if x := s.UDTransformer.Container; x != nil && x.Image != "" { // customized image
@@ -147,6 +151,7 @@ func (s Source) getUDSourceContainer(mainContainerReq getContainerReq) corev1.Co
 	c := containerBuilder{}.
 		name(CtrUdsource).
 		imagePullPolicy(mainContainerReq.imagePullPolicy). // Use the same image pull policy as the main container
+		appendVolumeMounts(s.getRuntimeVolumeMount()...).
 		appendVolumeMounts(mainContainerReq.volumeMounts...).asSidecar()
 	c = c.appendEnv(corev1.EnvVar{Name: EnvUDContainerType, Value: UDContainerSource})
 	if x := s.UDSource.Container; x != nil && x.Image != "" { // customized image
