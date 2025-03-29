@@ -11,7 +11,7 @@ tokio.workspace = true
 tracing.workspace = true
 thiserror.workspace = true
 prost = "0.11.9"
-tonic = "0.12.3"
+tonic = "0.13.0"
 serde = { version = "1.0.204", features = ["derive"] }
 chrono = "0.4.38"
 # Rustls doesn't allow accepting self-signed certs: https://github.com/streamnative/pulsar-rs/blob/715411cb365932c379d4b5d0a8fde2ac46c54055/src/connection.rs#L912

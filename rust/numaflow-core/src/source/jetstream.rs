@@ -126,6 +126,7 @@ mod tests {
         assert_eq!(message.metadata.unwrap().previous_vertex, get_vertex_name());
     }
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_jetstream_source_reader_acker_lagreader() {
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();

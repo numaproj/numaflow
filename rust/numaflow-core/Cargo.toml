@@ -31,9 +31,8 @@ rustls.workspace = true
 tower.workspace = true
 reqwest.workspace = true
 hyper = "1.2.0"
-hyper-rustls = { version = "0.27.3", default-features = false, features = ["http2"] }
 async-nats.workspace = true
-tonic = { version = "0.12.3", features = ["tls"] }
+tonic = { version = "0.13.0"}
 thiserror = "2.0.3"
 tokio-util = "0.7.11"
 tokio-stream = "0.1.15"
@@ -56,7 +55,7 @@ rand = "0.8.5"
 
 [dev-dependencies]
 tempfile = "3.11.0"
-numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "4b37e79cc9c235fbffdc74e36a0f9d9363fc0dda" }
+numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", branch = "upgrade-crate" }
 pulsar = { version = "6.3.0", default-features = false, features = [
     "tokio-rustls-runtime",
 ] }
