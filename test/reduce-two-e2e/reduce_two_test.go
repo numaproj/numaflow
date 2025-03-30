@@ -1,5 +1,3 @@
-//go:build test
-
 /*
 Copyright 2022 The Numaproj Authors.
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -205,6 +203,47 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 		RedisSinkNotContains("simple-session-counter-go-sink", "3", SinkCheckWithTimeout(20*time.Second)).
 		RedisSinkNotContains("simple-session-counter-go-sink", "2", SinkCheckWithTimeout(20*time.Second)).
 		RedisSinkNotContains("simple-session-counter-go-sink", "1", SinkCheckWithTimeout(20*time.Second))
+	done <- struct{}{}
+}
+
+func (r *ReduceSuite) TestStreamSorterGo() {
+	// the reduce feature is not supported with redis ISBSVC
+	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
+		r.T().SkipNow()
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	w := r.Given().Pipeline("@testdata/accumulator/stream-sorter-go.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := "stream-sorter-go"
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	done := make(chan struct{})
+	go func() {
+		// publish out-of-order messages to source vertices
+		eventTimes := []int{60000, 59000, 61000, 58000, 62000}
+		for i := 0; true; i++ {
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+				return
+			default:
+				eventTime := strconv.Itoa(eventTimes[i%len(eventTimes)] + i*1000)
+				w.SendMessageTo(pipelineName, "input-one", NewHttpPostRequest().WithBody([]byte("message")).WithHeader("X-Numaflow-Event-Time", eventTime))
+				w.SendMessageTo(pipelineName, "input-two", NewHttpPostRequest().WithBody([]byte("message")).WithHeader("X-Numaflow-Event-Time", eventTime))
+			}
+		}
+	}()
+
+	// Check if the sink contains the ordered string
+	w.Expect().RedisSinkContains(pipelineName+"-sink", "ordered")
+	w.Expect().RedisSinkNotContains(pipelineName+"-sink", "not ordered")
 	done <- struct{}{}
 }
 
