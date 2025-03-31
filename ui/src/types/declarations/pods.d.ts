@@ -148,6 +148,7 @@ export interface ResourceUsage {
 }
 
 export interface ErrorDetails {
+  pod: string;
   container: string;
   timestamp: string;
   code: string;

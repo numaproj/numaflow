@@ -1,0 +1,50 @@
+.vertex-no-errors {
+  font-size: 1.4rem;
+}
+
+.vertex-errors-paper-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.vertex-dropdown-title {
+  font-weight: 600;
+}
+
+.vertex-errors-paper {
+  display: flex;
+  flex-direction: column;
+  padding: 4rem;
+  margin-top: 0;
+  height: 100%;
+  overflow: scroll;
+}
+
+.vertex-errors-selector-dropdown {
+  display: flex;
+  gap: 5rem;
+  margin-bottom: 2rem;
+}
+
+.vertex-errors-table-title {
+  display: flex;
+  gap: 1rem;
+  margin: 1rem 0;
+  width: 100%;
+  padding: 0 1.6rem;
+}
+
+.vertex-error-common-title-text {
+  width: 25rem;
+  font-weight: 600;
+  color: #878789;
+  font-size: 1.6rem;
+}
+
+.vertex-error-message-title-text {
+  flex-grow: 1;
+  font-weight: 600;
+  color: #878789;
+  font-size: 1.6rem;
+}

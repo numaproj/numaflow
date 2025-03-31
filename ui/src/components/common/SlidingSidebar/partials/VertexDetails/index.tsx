@@ -3,6 +3,7 @@ import React, {
   Dispatch,
   SetStateAction,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useState,
@@ -12,11 +13,16 @@ import Tab from "@mui/material/Tab";
 import Box from "@mui/material/Box";
 import { VertexUpdate } from "./partials/VertexUpdate";
 import { ProcessingRates } from "./partials/ProcessingRates";
+import { Errors } from "./partials/Errors";
 import { K8sEvents } from "../K8sEvents";
 import { Buffers } from "./partials/Buffers";
 import { Pods } from "../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods";
 import { SpecEditorModalProps } from "../..";
 import { CloseModal } from "../CloseModal";
+import { AppContext } from "../../../../../App";
+import { useErrorsFetch } from "../../../../../utils/fetchWrappers/errorsFetch";
+import { AppContextProps } from "../../../../../types/declarations/app";
+import { ErrorDetails } from "../../../../../types/declarations/pods";
 import sourceIcon from "../../../../../images/source.png";
 import sinkIcon from "../../../../../images/sink.png";
 import mapIcon from "../../../../../images/map.png";
@@ -29,7 +35,8 @@ const PODS_VIEW_TAB_INDEX = 0;
 const SPEC_TAB_INDEX = 1;
 const PROCESSING_RATES_TAB_INDEX = 2;
 const K8S_EVENTS_TAB_INDEX = 3;
-const BUFFERS_TAB_INDEX = 4;
+const ERRORS_TAB_INDEX = 4;
+const BUFFERS_TAB_INDEX = 5;
 
 export enum VertexType {
   SOURCE,
@@ -86,6 +93,8 @@ export function VertexDetails({
   setModalOnClose,
   refresh,
 }: VertexDetailsProps) {
+  const { addError } = useContext<AppContextProps>(AppContext);
+  const [errorsCount, setErrorsCount] = useState<number>(0);
   const [vertexSpec, setVertexSpec] = useState<any>();
   const [vertexType, setVertexType] = useState<VertexType | undefined>();
   const [tabValue, setTabValue] = useState<number>(PODS_VIEW_TAB_INDEX);
@@ -224,6 +233,35 @@ export function VertexDetails({
     [setModalOnClose]
   );
 
+  const { data: errorsDetailsData } = useErrorsFetch({
+    namespaceId,
+    pipelineId,
+    vertexId,
+    type,
+    addError,
+  });
+
+  const filterErrorsWithinLast24Hours = useCallback(
+    (errorsDetailsData: ErrorDetails[]) => {
+      const currentTime = new Date().getTime();
+      const twentyFourHoursAgo = currentTime - 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+      return errorsDetailsData.filter((errorData: ErrorDetails) => {
+        return (
+          errorData.timestamp &&
+          new Date(errorData.timestamp).getTime() >= twentyFourHoursAgo
+        );
+      });
+    },
+    []
+  );
+
+  useEffect(() => {
+    const filteredDetailsData = errorsDetailsData
+      ? filterErrorsWithinLast24Hours(errorsDetailsData)
+      : [];
+    setErrorsCount(filteredDetailsData.length);
+  }, [errorsDetailsData, filterErrorsWithinLast24Hours]);
+
   return (
     <VertexDetailsContext.Provider
       value={{
@@ -287,6 +325,22 @@ export function VertexDetails({
               }
               label="K8s Events"
               data-testid="events-tab"
+            />
+            <Tab
+              className={
+                tabValue === ERRORS_TAB_INDEX
+                  ? "vertex-details-tab-selected"
+                  : "vertex-details-tab"
+              }
+              label={
+                <Box className={"vertex-details-errors-tab-title"}>
+                  <Box>Errors</Box>
+                  <Box sx={{ color: errorsCount ? "red" : "#6B6C72" }}>
+                    {errorsCount}
+                  </Box>
+                </Box>
+              }
+              data-testid="errors-tab"
             />
             {buffers && (
               <Tab
@@ -366,6 +420,15 @@ export function VertexDetails({
               excludeHeader
               square
             />
+          )}
+        </div>
+        <div
+          className="vertex-details-tab-panel"
+          role="tabpanel"
+          hidden={tabValue !== ERRORS_TAB_INDEX}
+        >
+          {tabValue === ERRORS_TAB_INDEX && (
+            <Errors details={errorsDetailsData} square />
           )}
         </div>
         {buffers && (

@@ -12,7 +12,6 @@ export const useErrorsFetch = ({
   namespaceId,
   pipelineId,
   vertexId,
-  replica,
   type,
   addError,
 }: any) => {
@@ -46,7 +45,7 @@ export const useErrorsFetch = ({
       type === "monoVertex"
         ? "mono-vertices"
         : `pipelines/${pipelineId}/vertices`
-    }/${vertexId}/replicas/${replica}/errors`,
+    }/${vertexId}/errors`,
     undefined,
     options
   );

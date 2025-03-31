@@ -428,24 +428,39 @@ export const timeAgo = (timestamp: string) => {
   return time;
 };
 
-export const getRelativeTime = (timestamp: string): string => {
-  const now = new Date();
-  const past = new Date(timestamp);
-  const diffInSeconds = Math.floor((now.getTime() - past.getTime()) / 1000);
+export function formatDuration(seconds: number, precision = 1) {
+  const timeUnits = [
+    { unit: "d", seconds: 86400 },
+    { unit: "h", seconds: 3600 },
+    { unit: "m", seconds: 60 },
+    { unit: "s", seconds: 1 },
+  ];
 
-  const minutes = Math.floor(diffInSeconds / 60);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
+  let remainingSeconds = Math.abs(Math.round(seconds));
+  const figs = [];
 
-  if (days > 0) {
-    return `${days}d ago`;
-  } else if (hours > 0) {
-    return `${hours}h ago`;
-  } else if (minutes > 0) {
-    return `${minutes}m ago`;
-  } else {
-    return `${diffInSeconds}s ago`;
+  for (const { unit, seconds: unitSeconds } of timeUnits) {
+    if (
+      remainingSeconds >= unitSeconds ||
+      (unit === "s" && Math.round(seconds) === 0)
+    ) {
+      const value = Math.floor(remainingSeconds / unitSeconds);
+      figs.push(`${value}${unit}`);
+      remainingSeconds %= unitSeconds;
+    }
   }
+
+  return figs.slice(0, precision).join(" ");
+}
+
+export const ago = (date: Date) => {
+  if (isNaN(date.getTime())) return "Invalid Date";
+
+  const secondsAgo = (new Date().getTime() - date.getTime()) / 1000;
+  const duration = formatDuration(secondsAgo);
+
+  if (secondsAgo < 0) return "in " + duration;
+  else return duration + " ago";
 };
 
 export const PIPELINE_STATUS_TOOLTIP =
