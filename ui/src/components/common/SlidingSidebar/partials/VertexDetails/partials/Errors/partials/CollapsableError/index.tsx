@@ -39,6 +39,7 @@ export const CollapsableError = ({ detail }: CollapsableErrorProps) => {
             display: "flex",
             alignItems: "center",
             gap: "0.5rem",
+            overflow: "scroll",
           },
           "& .MuiAccordionSummary-expandIconWrapper": {
             order: -1,
@@ -55,7 +56,10 @@ export const CollapsableError = ({ detail }: CollapsableErrorProps) => {
           <Box className={"collapsable-error-common-title-text"}>
             {detail.container}
           </Box>
-          <Box className={"collapsable-error-message-title-text"}>
+          <Box
+            className={"collapsable-error-common-title-text"}
+            sx={{ flexGrow: 1 }}
+          >
             {detail.message}
           </Box>
           <Box className={"collapsable-error-common-title-text"}>

@@ -179,13 +179,18 @@ export const Errors = ({ details, square }: ErrorsProps) => {
         {filteredDetails.length === 0 && (
           <Box>No errors for the selected filters</Box>
         )}
-        {filterDetails.length > 0 && (
+        {filteredDetails.length > 0 && (
           <>
             <Box className={"vertex-errors-table-title"}>
               <Box sx={{ width: "5rem" }} />
               <Box className={"vertex-error-common-title-text"}>Pod Name</Box>
               <Box className={"vertex-error-common-title-text"}>Container</Box>
-              <Box className={"vertex-error-message-title-text"}>Message</Box>
+              <Box
+                className={"vertex-error-common-title-text"}
+                sx={{ flexGrow: 1 }}
+              >
+                Message
+              </Box>
               <Box className={"vertex-error-common-title-text"}>
                 Last Occurred
               </Box>
