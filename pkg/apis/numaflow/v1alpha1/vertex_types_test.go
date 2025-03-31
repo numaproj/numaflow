@@ -604,9 +604,9 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, "runtime-vol", s.InitContainers[2].VolumeMounts[0].Name)
 		// udf container
 		assert.Equal(t, CtrUdf, s.InitContainers[3].Name)
-		assert.Equal(t, 2, len(s.InitContainers[3].VolumeMounts))
-		assert.Equal(t, "var-run-side-inputs", s.InitContainers[3].VolumeMounts[1].Name)
-		assert.True(t, s.InitContainers[3].VolumeMounts[1].ReadOnly)
+		assert.Equal(t, 3, len(s.InitContainers[3].VolumeMounts))
+		assert.Equal(t, "var-run-side-inputs", s.InitContainers[3].VolumeMounts[2].Name)
+		assert.True(t, s.InitContainers[3].VolumeMounts[2].ReadOnly)
 
 		assert.Equal(t, 1, len(s.Containers[1].VolumeMounts))
 		assert.Equal(t, "var-run-side-inputs", s.Containers[1].VolumeMounts[0].Name)
