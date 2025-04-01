@@ -124,15 +124,11 @@ func (pt *PodTracker) updateActivePodsCount(vertexName string, index int, called
 
 	if calledForActiveIndex {
 		if index >= pt.activePodsCount[vertexName] {
-			pt.log.Debugf("adding index %d to vertex %s", index, vertexName)
 			pt.activePodsCount[vertexName] = index + 1
-			pt.log.Debugf("updated active pods count to %d for vertex %s", pt.activePodsCount[vertexName], vertexName)
 		}
 	} else {
 		if index < pt.activePodsCount[vertexName] {
-			pt.log.Debugf("removing index %d to vertex %s", index, vertexName)
 			pt.activePodsCount[vertexName] = index
-			pt.log.Debugf("updated active pods count to %d for vertex %s", pt.activePodsCount[vertexName], vertexName)
 		}
 	}
 }

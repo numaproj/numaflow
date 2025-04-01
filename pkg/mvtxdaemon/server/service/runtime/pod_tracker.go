@@ -121,15 +121,11 @@ func (pt *PodTracker) updateActivePodsCount(index int, calledForActiveIndex bool
 
 	if calledForActiveIndex {
 		if index >= pt.activePodsCount {
-			pt.log.Debugf("adding index %d", index)
 			pt.activePodsCount = index + 1
-			pt.log.Debugf("updated active pods count to %d for monoVertex", pt.activePodsCount)
 		}
 	} else {
 		if index < pt.activePodsCount {
-			pt.log.Debugf("removing index %d", index)
 			pt.activePodsCount = index
-			pt.log.Debugf("updated active pods count to %d for monoVertex", pt.activePodsCount)
 		}
 	}
 }
