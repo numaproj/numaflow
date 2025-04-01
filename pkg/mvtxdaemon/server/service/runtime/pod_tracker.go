@@ -79,22 +79,24 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 	}
 }
 
-// updateActivePods checks the status of all pods and updates the activePods set accordingly.
+// updateActivePods checks the status of all pods and updates the count of activePods accordingly.
 func (pt *PodTracker) updateActivePods() {
 	var wg sync.WaitGroup
+	// Initialize maxActiveIndex for MonoVertex
+	maxActiveIndex := -1
 	for i := range int(pt.monoVertex.Spec.Scale.GetMaxReplicas()) {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
 			podName := fmt.Sprintf("%s-mv-%d", pt.monoVertex.Name, index)
 			if pt.isActive(podName) {
-				pt.updateActivePodsCount(index, true)
-			} else {
-				pt.updateActivePodsCount(index, false)
+				pt.updateMaxActiveIndex(index, &maxActiveIndex)
 			}
 		}(i)
 	}
 	wg.Wait()
+	// Update activePodsCount to maxActiveIndex + 1.
+	pt.setActivePodsCount(maxActiveIndex + 1)
 }
 
 func (pt *PodTracker) isActive(podName string) bool {
@@ -111,23 +113,21 @@ func (pt *PodTracker) isActive(podName string) bool {
 	return true
 }
 
-// updateActivePodsCount compares the pod index with number of replicas for a MonoVertex
-// If calledForActiveIndex and index >= number of replicas, then it updates the number of replicas
-// If not calledForActiveIndex and index < number of replicas, then it updates the number of replicas
-// Note: if max active replica index is 7, then count would be 8 (starting from 0)
-func (pt *PodTracker) updateActivePodsCount(index int, calledForActiveIndex bool) {
+// updateMaxActiveIndex updates the maximum active pod index.
+func (pt *PodTracker) updateMaxActiveIndex(index int, maxActiveIndex *int) {
 	pt.activePodsMutex.Lock()
 	defer pt.activePodsMutex.Unlock()
 
-	if calledForActiveIndex {
-		if index >= pt.activePodsCount {
-			pt.activePodsCount = index + 1
-		}
-	} else {
-		if index < pt.activePodsCount {
-			pt.activePodsCount = index
-		}
+	if index > *maxActiveIndex {
+		*maxActiveIndex = index
 	}
+}
+
+// setActivePodsCount sets the activePodsCount.
+func (pt *PodTracker) setActivePodsCount(count int) {
+	pt.activePodsMutex.Lock()
+	defer pt.activePodsMutex.Unlock()
+	pt.activePodsCount = count
 }
 
 // GetActivePodsCount returns the number of active pods.

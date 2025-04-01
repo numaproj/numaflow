@@ -119,7 +119,7 @@ func TestPodTracker_isActive(t *testing.T) {
 	assert.False(t, active)
 }
 
-func TestPodTracker_updateActivePodsCount(t *testing.T) {
+func TestPodTracker_setActivePodsCount(t *testing.T) {
 	ctx := context.Background()
 	mv := &v1alpha1.MonoVertex{
 		ObjectMeta: metav1.ObjectMeta{
@@ -134,9 +134,7 @@ func TestPodTracker_updateActivePodsCount(t *testing.T) {
 		podsCount: 3,
 		lock:      &sync.RWMutex{},
 	}
-	// add one more active pod with index 3
-	pt.updateActivePodsCount(3, true)
+	// set active pods to 4
+	pt.setActivePodsCount(4)
 	assert.Equal(t, pt.GetActivePodsCount(), 4)
-	pt.updateActivePodsCount(2, false)
-	assert.Equal(t, pt.GetActivePodsCount(), 2)
 }
