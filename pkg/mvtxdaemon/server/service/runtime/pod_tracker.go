@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
-	"slices"
 	"sync"
 	"time"
 
@@ -36,7 +35,7 @@ type PodTracker struct {
 	monoVertex      *v1alpha1.MonoVertex
 	log             *zap.SugaredLogger
 	httpClient      monitorHttpClient
-	activePods      []int
+	activePodsCount int
 	activePodsMutex sync.RWMutex
 	refreshInterval time.Duration
 }
@@ -52,7 +51,6 @@ func NewPodTracker(ctx context.Context, mv *v1alpha1.MonoVertex) *PodTracker {
 			},
 			Timeout: time.Second,
 		},
-		activePods:      make([]int, 0),
 		refreshInterval: 30 * time.Second,
 	}
 	return pt
@@ -90,9 +88,7 @@ func (pt *PodTracker) updateActivePods() {
 			defer wg.Done()
 			podName := fmt.Sprintf("%s-mv-%d", pt.monoVertex.Name, index)
 			if pt.isActive(podName) {
-				pt.addActivePod(index)
-			} else {
-				pt.removeActivePod(index)
+				pt.updateActivePodsCount(index)
 			}
 		}(i)
 	}
@@ -113,39 +109,21 @@ func (pt *PodTracker) isActive(podName string) bool {
 	return true
 }
 
-// addActivePod adds the active pod replica for the respective monoVertex
-func (pt *PodTracker) addActivePod(index int) {
+// updateActivePodsCount compares the pod index with number of replicas for a MonoVertex
+// If index >= number of replicas, then it updates the number of replicas
+// Note: if max active replica index is 7, then count would be 8 (starting from 0)
+func (pt *PodTracker) updateActivePodsCount(index int) {
 	pt.activePodsMutex.Lock()
 	defer pt.activePodsMutex.Unlock()
 
-	if !slices.Contains(pt.activePods, index) {
-		pt.activePods = append(pt.activePods, index)
+	if index >= pt.activePodsCount {
+		pt.activePodsCount = index + 1
 	}
-}
-
-// removeActivePod removes the inactive pod replica from the respective monoVertex
-func (pt *PodTracker) removeActivePod(index int) {
-	pt.activePodsMutex.Lock()
-	defer pt.activePodsMutex.Unlock()
-
-	pt.activePods = removeValue(pt.activePods, index)
 }
 
 // GetActivePodsCount returns the number of active pods.
 func (pt *PodTracker) GetActivePodsCount() int {
 	pt.activePodsMutex.RLock()
 	defer pt.activePodsMutex.RUnlock()
-
-	activePods := pt.activePods
-	return len(activePods)
-}
-
-// removeValue removes the specified value from the slice.
-func removeValue(slice []int, value int) []int {
-	for i, v := range slice {
-		if v == value {
-			return append(slice[:i], slice[i+1:]...)
-		}
-	}
-	return slice
+	return pt.activePodsCount
 }

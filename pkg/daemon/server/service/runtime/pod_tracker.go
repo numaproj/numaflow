@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
-	"slices"
 	"sync"
 	"time"
 
@@ -36,7 +35,7 @@ type PodTracker struct {
 	pipeline        *v1alpha1.Pipeline
 	log             *zap.SugaredLogger
 	httpClient      monitorHttpClient
-	activePods      map[string][]int
+	activePodsCount map[string]int
 	activePodsMutex sync.RWMutex
 	refreshInterval time.Duration
 }
@@ -52,7 +51,7 @@ func NewPodTracker(ctx context.Context, pl *v1alpha1.Pipeline) *PodTracker {
 			},
 			Timeout: time.Second,
 		},
-		activePods: make(map[string][]int),
+		activePodsCount: make(map[string]int),
 		// Default refresh interval for updating the active pod set
 		refreshInterval: 30 * time.Second,
 	}
@@ -92,9 +91,7 @@ func (pt *PodTracker) updateActivePods() {
 				defer wg.Done()
 				podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, vertexName, index)
 				if pt.isActive(vertexName, podName) {
-					pt.addActivePod(vertexName, index)
-				} else {
-					pt.removeActivePod(vertexName, index)
+					pt.updateActivePodsCount(vertexName, index)
 				}
 			}(v.Name, i)
 		}
@@ -115,38 +112,21 @@ func (pt *PodTracker) isActive(vertexName, podName string) bool {
 	return true
 }
 
-// addActivePod adds the active pod replica for the respective vertex
-func (pt *PodTracker) addActivePod(vertexName string, index int) {
+// updateActivePodsCount compares the pod index with number of active replicas for a vertex
+// If index >= number of active replicas, then it updates the number of replicas
+// Note: if max active replica index is 7, then count would be 8 (starting from 0)
+func (pt *PodTracker) updateActivePodsCount(vertexName string, index int) {
 	pt.activePodsMutex.Lock()
 	defer pt.activePodsMutex.Unlock()
 
-	if !slices.Contains(pt.activePods[vertexName], index) {
-		pt.activePods[vertexName] = append(pt.activePods[vertexName], index)
+	if index >= pt.activePodsCount[vertexName] {
+		pt.activePodsCount[vertexName] = index + 1
 	}
-}
-
-// removeActivePod removes the inactive pod replica for the respective vertex
-func (pt *PodTracker) removeActivePod(vertexName string, index int) {
-	pt.activePodsMutex.Lock()
-	defer pt.activePodsMutex.Unlock()
-	pt.activePods[vertexName] = removeValue(pt.activePods[vertexName], index)
 }
 
 // GetActivePodsCountForVertex returns the number of active pods for a vertex
 func (pt *PodTracker) GetActivePodsCountForVertex(vertexName string) int {
 	pt.activePodsMutex.RLock()
 	defer pt.activePodsMutex.RUnlock()
-
-	activePods := pt.activePods[vertexName]
-	return len(activePods)
-}
-
-// removeValue removes the specified value from the slice.
-func removeValue(slice []int, value int) []int {
-	for i, v := range slice {
-		if v == value {
-			return append(slice[:i], slice[i+1:]...)
-		}
-	}
-	return slice
+	return pt.activePodsCount[vertexName]
 }
