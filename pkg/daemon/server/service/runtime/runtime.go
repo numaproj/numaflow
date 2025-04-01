@@ -158,7 +158,7 @@ func (r *pipelineRuntimeCache) fetchAndPersistErrorForPod(vtxName string, podInd
 
 	res, err := r.httpClient.Get(url)
 	if err != nil {
-		r.log.Errorf("Error reading the runtime errors endpoint: %s", err.Error())
+		r.log.Warnf("[vertex name %s, pod name %s]: failed reading the runtime endpoint, the pod might have been scaled down: %v", vtxName, podName, err.Error())
 		return
 	}
 

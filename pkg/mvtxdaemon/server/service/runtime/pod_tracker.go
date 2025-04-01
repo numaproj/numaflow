@@ -88,7 +88,9 @@ func (pt *PodTracker) updateActivePods() {
 			defer wg.Done()
 			podName := fmt.Sprintf("%s-mv-%d", pt.monoVertex.Name, index)
 			if pt.isActive(podName) {
-				pt.updateActivePodsCount(index)
+				pt.updateActivePodsCount(index, true)
+			} else {
+				pt.updateActivePodsCount(index, false)
 			}
 		}(i)
 	}
@@ -110,14 +112,25 @@ func (pt *PodTracker) isActive(podName string) bool {
 }
 
 // updateActivePodsCount compares the pod index with number of replicas for a MonoVertex
-// If index >= number of replicas, then it updates the number of replicas
+// If calledForActiveIndex and index >= number of replicas, then it updates the number of replicas
+// If not calledForActiveIndex and index < number of replicas, then it updates the number of replicas
 // Note: if max active replica index is 7, then count would be 8 (starting from 0)
-func (pt *PodTracker) updateActivePodsCount(index int) {
+func (pt *PodTracker) updateActivePodsCount(index int, calledForActiveIndex bool) {
 	pt.activePodsMutex.Lock()
 	defer pt.activePodsMutex.Unlock()
 
-	if index >= pt.activePodsCount {
-		pt.activePodsCount = index + 1
+	if calledForActiveIndex {
+		if index >= pt.activePodsCount {
+			pt.log.Debugf("adding index %d", index)
+			pt.activePodsCount = index + 1
+			pt.log.Debugf("updated active pods count to %d for monoVertex", pt.activePodsCount)
+		}
+	} else {
+		if index < pt.activePodsCount {
+			pt.log.Debugf("removing index %d", index)
+			pt.activePodsCount = index
+			pt.log.Debugf("updated active pods count to %d for monoVertex", pt.activePodsCount)
+		}
 	}
 }
 

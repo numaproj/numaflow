@@ -91,7 +91,9 @@ func (pt *PodTracker) updateActivePods() {
 				defer wg.Done()
 				podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, vertexName, index)
 				if pt.isActive(vertexName, podName) {
-					pt.updateActivePodsCount(vertexName, index)
+					pt.updateActivePodsCount(vertexName, index, true)
+				} else {
+					pt.updateActivePodsCount(vertexName, index, false)
 				}
 			}(v.Name, i)
 		}
@@ -113,14 +115,25 @@ func (pt *PodTracker) isActive(vertexName, podName string) bool {
 }
 
 // updateActivePodsCount compares the pod index with number of active replicas for a vertex
-// If index >= number of active replicas, then it updates the number of replicas
+// If calledForActiveIndex and index >= number of active replicas, then it updates the number of replicas
+// If not calledForActiveIndex and index < number of replicas, then it updates the number of replicas
 // Note: if max active replica index is 7, then count would be 8 (starting from 0)
-func (pt *PodTracker) updateActivePodsCount(vertexName string, index int) {
+func (pt *PodTracker) updateActivePodsCount(vertexName string, index int, calledForActiveIndex bool) {
 	pt.activePodsMutex.Lock()
 	defer pt.activePodsMutex.Unlock()
 
-	if index >= pt.activePodsCount[vertexName] {
-		pt.activePodsCount[vertexName] = index + 1
+	if calledForActiveIndex {
+		if index >= pt.activePodsCount[vertexName] {
+			pt.log.Debugf("adding index %d to vertex %s", index, vertexName)
+			pt.activePodsCount[vertexName] = index + 1
+			pt.log.Debugf("updated active pods count to %d for vertex %s", pt.activePodsCount[vertexName], vertexName)
+		}
+	} else {
+		if index < pt.activePodsCount[vertexName] {
+			pt.log.Debugf("removing index %d to vertex %s", index, vertexName)
+			pt.activePodsCount[vertexName] = index
+			pt.log.Debugf("updated active pods count to %d for vertex %s", pt.activePodsCount[vertexName], vertexName)
+		}
 	}
 }
 
