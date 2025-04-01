@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
+	"slices"
 	"sync"
 	"time"
 
@@ -119,14 +120,15 @@ func (pt *PodTracker) addActivePod(vertexName string, index int) {
 	pt.activePodsMutex.Lock()
 	defer pt.activePodsMutex.Unlock()
 
-	pt.activePods[vertexName] = append(pt.activePods[vertexName], index)
+	if !slices.Contains(pt.activePods[vertexName], index) {
+		pt.activePods[vertexName] = append(pt.activePods[vertexName], index)
+	}
 }
 
 // removeActivePod removes the inactive pod replica for the respective vertex
 func (pt *PodTracker) removeActivePod(vertexName string, index int) {
 	pt.activePodsMutex.Lock()
 	defer pt.activePodsMutex.Unlock()
-
 	pt.activePods[vertexName] = removeValue(pt.activePods[vertexName], index)
 }
 

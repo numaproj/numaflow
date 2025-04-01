@@ -158,7 +158,7 @@ func (r *pipelineRuntimeCache) fetchAndPersistErrorForPod(vtxName string, podInd
 
 	res, err := r.httpClient.Get(url)
 	if err != nil {
-		r.log.Errorw("Error reading the runtime errors endpoint: %f", err.Error())
+		r.log.Errorf("Error reading the runtime errors endpoint: %s", err.Error())
 		return
 	}
 
@@ -177,7 +177,8 @@ func (r *pipelineRuntimeCache) fetchAndPersistErrorForPod(vtxName string, podInd
 		return
 	}
 
-	if apiResponse.ErrMessage != "" {
+	// return if data array length is 0 or if there is any error in the API call
+	if apiResponse.ErrMessage != "" || len(apiResponse.Data) == 0 {
 		return
 	}
 

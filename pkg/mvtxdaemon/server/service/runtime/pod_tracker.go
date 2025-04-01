@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
+	"slices"
 	"sync"
 	"time"
 
@@ -117,7 +118,9 @@ func (pt *PodTracker) addActivePod(index int) {
 	pt.activePodsMutex.Lock()
 	defer pt.activePodsMutex.Unlock()
 
-	pt.activePods = append(pt.activePods, index)
+	if !slices.Contains(pt.activePods, index) {
+		pt.activePods = append(pt.activePods, index)
+	}
 }
 
 // removeActivePod removes the inactive pod replica from the respective monoVertex
