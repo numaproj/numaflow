@@ -37,22 +37,6 @@ const (
 	runtimeErrorsTimeStep = 60 * time.Second
 )
 
-// MonoVertexRuntimeCache is an interface for caching and retrieving the runtime information.
-type MonoVertexRuntimeCache interface {
-	// StartCacheRefresher starts the cache refresher to update the local cache with the runtime errors.
-	StartCacheRefresher(ctx context.Context) error
-	// GetLocalCache returns the local cache of runtime errors.
-	GetLocalCache() map[PodReplica][]ErrorDetails
-}
-
-var _ MonoVertexRuntimeCache = (*monoVertexRuntimeCache)(nil)
-
-type PodReplica string
-
-type ErrorApiResponse struct {
-	ErrMessage string         `json:"error_message"`
-	Data       []ErrorDetails `json:"data"`
-}
 type ErrorDetails struct {
 	Container string `json:"container"`
 	Timestamp string `json:"timestamp"`
@@ -60,6 +44,26 @@ type ErrorDetails struct {
 	Message   string `json:"message"`
 	Details   string `json:"details"`
 }
+
+type ErrorApiResponse struct {
+	ErrMessage string         `json:"error_message"`
+	Data       []ErrorDetails `json:"data"`
+}
+
+type ReplicaErrors struct {
+	Replica         string         `json:"replica"`
+	ContainerErrors []ErrorDetails `json:"container_errors"`
+}
+
+// MonoVertexRuntimeCache is an interface for caching and retrieving the runtime information.
+type MonoVertexRuntimeCache interface {
+	// StartCacheRefresher starts the cache refresher to update the local cache with the runtime errors.
+	StartCacheRefresher(ctx context.Context) error
+	// GetLocalCache returns the local cache of runtime errors for each monoVertex.
+	GetLocalCache() map[string][]ReplicaErrors
+}
+
+var _ MonoVertexRuntimeCache = (*monoVertexRuntimeCache)(nil)
 
 type monitorHttpClient interface {
 	Get(url string) (*http.Response, error)
@@ -70,7 +74,7 @@ type monitorHttpClient interface {
 // It implements the MonoVertexRuntimeCache interface.
 type monoVertexRuntimeCache struct {
 	monoVtx    *v1alpha1.MonoVertex
-	localCache map[PodReplica][]ErrorDetails
+	localCache map[string][]ReplicaErrors
 	cacheMutex sync.RWMutex
 	podTracker *PodTracker
 	log        *zap.SugaredLogger
@@ -81,7 +85,7 @@ type monoVertexRuntimeCache struct {
 func NewRuntime(ctx context.Context, mv *v1alpha1.MonoVertex) MonoVertexRuntimeCache {
 	return &monoVertexRuntimeCache{
 		monoVtx:    mv,
-		localCache: make(map[PodReplica][]ErrorDetails),
+		localCache: make(map[string][]ReplicaErrors),
 		cacheMutex: sync.RWMutex{},
 		log:        logging.FromContext(ctx).Named("monoVertexRuntimeCache"),
 		httpClient: &http.Client{
@@ -175,29 +179,45 @@ func (r *monoVertexRuntimeCache) fetchAndPersistErrorForPod(podIndex int) {
 		return
 	}
 
-	if apiResponse.ErrMessage != "" {
+	if apiResponse.ErrMessage != "" || len(apiResponse.Data) == 0 {
 		return
 	}
 
-	cacheKey := PodReplica(fmt.Sprintf("%s-mv-%v", r.monoVtx.Name, podIndex))
+	cacheKey := r.monoVtx.Name
+	replica := fmt.Sprintf("%s-mv-%v", cacheKey, podIndex)
+	newMvtxErrors := ReplicaErrors{Replica: replica, ContainerErrors: apiResponse.Data}
 
+	r.log.Debugf("Persisting error in local cache for: %s", cacheKey)
 	// Lock the cache before updating
 	r.cacheMutex.Lock()
 	defer r.cacheMutex.Unlock()
 
 	// overwrite the errors
-	r.localCache[cacheKey] = apiResponse.Data
-	r.log.Debugf("Persisting error in local cache for: %s", cacheKey)
+	if mvtxErrors, ok := r.localCache[cacheKey]; !ok {
+		// Update existing replica errors if found
+		for i, mvtxError := range mvtxErrors {
+			if mvtxError.Replica == replica {
+				mvtxErrors[i] = newMvtxErrors
+				r.localCache[cacheKey] = mvtxErrors
+				return
+			}
+		}
+		// Append new replica errors if not found
+		r.localCache[cacheKey] = append(mvtxErrors, newMvtxErrors)
+	} else {
+		// Initialize the cache entry with the new replica errors
+		r.localCache[cacheKey] = []ReplicaErrors{newMvtxErrors}
+	}
 }
 
 // GetLocalCache returns the local cache of runtime errors.
-func (r *monoVertexRuntimeCache) GetLocalCache() map[PodReplica][]ErrorDetails {
+func (r *monoVertexRuntimeCache) GetLocalCache() map[string][]ReplicaErrors {
 	r.cacheMutex.RLock()
 	defer r.cacheMutex.RUnlock()
 
-	localCacheCopy := make(map[PodReplica][]ErrorDetails, len(r.localCache))
+	localCacheCopy := make(map[string][]ReplicaErrors, len(r.localCache))
 	for key, value := range r.localCache {
-		localCacheValue := make([]ErrorDetails, len(value))
+		localCacheValue := make([]ReplicaErrors, len(value))
 		copy(localCacheValue, value)
 		localCacheCopy[key] = localCacheValue
 	}

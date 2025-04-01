@@ -38,24 +38,6 @@ const (
 	runtimeErrorsTimeStep = 60 * time.Second
 )
 
-// PipelineRuntimeCache is an interface for caching and retrieving the runtime information.
-type PipelineRuntimeCache interface {
-	// StartCacheRefresher starts the cache refresher to update the local cache with the runtime errors.
-	StartCacheRefresher(ctx context.Context) error
-	// GetLocalCache returns the local cache of runtime errors.
-	GetLocalCache() map[PodReplica][]ErrorDetails
-}
-
-var _ PipelineRuntimeCache = (*pipelineRuntimeCache)(nil)
-
-// TODO: use a separate struct instead of concatenating strings
-
-type PodReplica string
-
-type ErrorApiResponse struct {
-	ErrMessage string         `json:"error_message"`
-	Data       []ErrorDetails `json:"data"`
-}
 type ErrorDetails struct {
 	Container string `json:"container"`
 	Timestamp string `json:"timestamp"`
@@ -63,6 +45,26 @@ type ErrorDetails struct {
 	Message   string `json:"message"`
 	Details   string `json:"details"`
 }
+
+type ErrorApiResponse struct {
+	ErrMessage string         `json:"error_message"`
+	Data       []ErrorDetails `json:"data"`
+}
+
+type ReplicaErrors struct {
+	Replica         string         `json:"replica"`
+	ContainerErrors []ErrorDetails `json:"container_errors"`
+}
+
+// PipelineRuntimeCache is an interface for caching and retrieving the runtime information.
+type PipelineRuntimeCache interface {
+	// StartCacheRefresher starts the cache refresher to update the local cache with the runtime errors.
+	StartCacheRefresher(ctx context.Context) error
+	// GetLocalCache returns the local cache of runtime errors for each vertex.
+	GetLocalCache() map[string][]ReplicaErrors
+}
+
+var _ PipelineRuntimeCache = (*pipelineRuntimeCache)(nil)
 
 type monitorHttpClient interface {
 	Get(url string) (*http.Response, error)
@@ -73,7 +75,7 @@ type monitorHttpClient interface {
 // It implements the PipelineRuntimeCache interface.
 type pipelineRuntimeCache struct {
 	pipeline   *v1alpha1.Pipeline
-	localCache map[PodReplica][]ErrorDetails
+	localCache map[string][]ReplicaErrors
 	cacheMutex sync.RWMutex
 	podTracker *PodTracker
 	log        *zap.SugaredLogger
@@ -83,7 +85,7 @@ type pipelineRuntimeCache struct {
 func NewRuntime(ctx context.Context, pl *v1alpha1.Pipeline) PipelineRuntimeCache {
 	return &pipelineRuntimeCache{
 		pipeline:   pl,
-		localCache: make(map[PodReplica][]ErrorDetails),
+		localCache: make(map[string][]ReplicaErrors),
 		cacheMutex: sync.RWMutex{},
 		log:        logging.FromContext(ctx).Named("pipelineRuntimeCache"),
 		httpClient: &http.Client{
@@ -177,29 +179,45 @@ func (r *pipelineRuntimeCache) fetchAndPersistErrorForPod(vtxName string, podInd
 		return
 	}
 
-	if apiResponse.ErrMessage != "" {
+	if apiResponse.ErrMessage != "" || len(apiResponse.Data) == 0 {
 		return
 	}
 
-	cacheKey := PodReplica(fmt.Sprintf("%s-%s-%v", r.pipeline.Name, vtxName, podIndex))
+	cacheKey := vtxName
+	replica := fmt.Sprintf("%s-%s-%v", r.pipeline.Name, vtxName, podIndex)
+	newVtxErrors := ReplicaErrors{Replica: replica, ContainerErrors: apiResponse.Data}
 
+	r.log.Debugf("Persisting error in local cache for: %s", cacheKey)
 	// Lock the cache before updating
 	r.cacheMutex.Lock()
 	defer r.cacheMutex.Unlock()
 
 	// overwrite the errors
-	r.localCache[cacheKey] = apiResponse.Data
-	r.log.Debugf("Persisting error in local cache for: %s", cacheKey)
+	if vtxErrors, ok := r.localCache[cacheKey]; !ok {
+		// Update existing replica errors if found
+		for i, vtxError := range vtxErrors {
+			if vtxError.Replica == replica {
+				vtxErrors[i] = newVtxErrors
+				r.localCache[cacheKey] = vtxErrors
+				return
+			}
+		}
+		// Append new replica errors if not found
+		r.localCache[cacheKey] = append(vtxErrors, newVtxErrors)
+	} else {
+		// Initialize the cache entry with the new replica errors
+		r.localCache[cacheKey] = []ReplicaErrors{newVtxErrors}
+	}
 }
 
 // GetLocalCache returns the local cache of runtime errors.
-func (r *pipelineRuntimeCache) GetLocalCache() map[PodReplica][]ErrorDetails {
+func (r *pipelineRuntimeCache) GetLocalCache() map[string][]ReplicaErrors {
 	r.cacheMutex.RLock()
 	defer r.cacheMutex.RUnlock()
 
-	localCacheCopy := make(map[PodReplica][]ErrorDetails, len(r.localCache))
+	localCacheCopy := make(map[string][]ReplicaErrors, len(r.localCache))
 	for key, value := range r.localCache {
-		localCacheValue := make([]ErrorDetails, len(value))
+		localCacheValue := make([]ReplicaErrors, len(value))
 		copy(localCacheValue, value)
 		localCacheCopy[key] = localCacheValue
 	}

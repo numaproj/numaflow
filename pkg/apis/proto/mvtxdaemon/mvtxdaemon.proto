@@ -48,6 +48,27 @@ message GetMonoVertexStatusResponse {
   MonoVertexStatus status = 1;
 }
 
+message GetMonoVertexErrorsRequest {
+  string monoVertex = 1;
+}
+
+message ContainerError {
+  string container = 1;
+  string timestamp = 2;
+  string code = 3;
+  string message = 4;
+  string details = 5;
+}
+
+message ReplicaErrors {
+  string replica = 1;
+  repeated ContainerError containerErrors = 2;
+}
+
+message GetMonoVertexErrorsResponse {
+  repeated ReplicaErrors errors = 1;
+}
+
 // MonoVertexDaemonService is a grpc service that is used to provide APIs for giving any MonoVertex information.
 service MonoVertexDaemonService {
 
@@ -59,4 +80,7 @@ service MonoVertexDaemonService {
     option (google.api.http).get = "/api/v1/status";
   };
 
+  rpc GetMonoVertexErrors (GetMonoVertexErrorsRequest) returns (GetMonoVertexErrorsResponse) {
+    option (google.api.http).get = "/api/v1/mono-vertices/{monoVertex}/errors";
+  };
 }

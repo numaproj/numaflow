@@ -99,6 +99,36 @@ func (mvs *MonoVertexService) GetMonoVertexStatus(ctx context.Context, empty *em
 	return resp, nil
 }
 
+func (mvs *MonoVertexService) GetMonoVertexErrors(ctx context.Context, request *mvtxdaemon.GetMonoVertexErrorsRequest) (*mvtxdaemon.GetMonoVertexErrorsResponse, error) {
+	monoVertex := request.GetMonoVertex()
+	resp := new(mvtxdaemon.GetMonoVertexErrorsResponse)
+	localCache := mvs.monoVertexRuntimeCache.GetLocalCache()
+
+	// If the errors are present in the local cache, return the errors.
+	if errors, ok := localCache[monoVertex]; ok {
+		replicaErrors := make([]*mvtxdaemon.ReplicaErrors, len(errors))
+		for i, err := range errors {
+			containerErrors := make([]*mvtxdaemon.ContainerError, len(err.ContainerErrors))
+			for j, containerError := range err.ContainerErrors {
+				containerErrors[j] = &mvtxdaemon.ContainerError{
+					Container: containerError.Container,
+					Timestamp: containerError.Timestamp,
+					Code:      containerError.Code,
+					Message:   containerError.Message,
+					Details:   containerError.Details,
+				}
+			}
+			replicaErrors[i] = &mvtxdaemon.ReplicaErrors{
+				Replica:         err.Replica,
+				ContainerErrors: containerErrors,
+			}
+		}
+		resp.Errors = replicaErrors
+	}
+
+	return resp, nil
+}
+
 // getPending returns the pending count for the mono vertex
 func (mvs *MonoVertexService) getPending(ctx context.Context) map[string]*wrapperspb.Int64Value {
 	log := logging.FromContext(ctx)

@@ -233,6 +233,36 @@ func (ps *PipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *dae
 	return resp, nil
 }
 
+func (ps *PipelineMetadataQuery) GetVertexErrors(ctx context.Context, req *daemon.GetVertexErrorsRequest) (*daemon.GetVertexErrorsResponse, error) {
+	vertex := req.GetVertex()
+	resp := new(daemon.GetVertexErrorsResponse)
+	localCache := ps.pipelineRuntimeCache.GetLocalCache()
+
+	// If the errors are present in the local cache, return the errors.
+	if errors, ok := localCache[vertex]; ok {
+		replicaErrors := make([]*daemon.ReplicaErrors, len(errors))
+		for i, err := range errors {
+			containerErrors := make([]*daemon.ContainerError, len(err.ContainerErrors))
+			for j, containerError := range err.ContainerErrors {
+				containerErrors[j] = &daemon.ContainerError{
+					Container: containerError.Container,
+					Timestamp: containerError.Timestamp,
+					Code:      containerError.Code,
+					Message:   containerError.Message,
+					Details:   containerError.Details,
+				}
+			}
+			replicaErrors[i] = &daemon.ReplicaErrors{
+				Replica:         err.Replica,
+				ContainerErrors: containerErrors,
+			}
+		}
+		resp.Errors = replicaErrors
+	}
+
+	return resp, nil
+}
+
 func getBufferLimits(pl *v1alpha1.Pipeline, v v1alpha1.AbstractVertex) (bufferLength int64, bufferUsageLimit float64) {
 	plLimits := pl.GetPipelineLimits()
 	bufferLength = int64(*plLimits.BufferMaxLength)
