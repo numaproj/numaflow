@@ -10,10 +10,12 @@ spec:
           rpu: 5
           duration: 1s
     - name: p1
+      partitions: 2
       udf:
         builtin:
           name: cat
     - name: output
+      partitions: 3
       sink:
         log: {}
   edges:
