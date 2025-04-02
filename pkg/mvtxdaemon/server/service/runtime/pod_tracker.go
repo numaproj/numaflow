@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
@@ -82,21 +83,36 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 // updateActivePods checks the status of all pods and updates the count of activePods accordingly.
 func (pt *PodTracker) updateActivePods() {
 	var wg sync.WaitGroup
-	// Initialize maxActiveIndex for MonoVertex
-	maxActiveIndex := -1
+	// Use atomic operations to safely update the maxActiveIndex across multiple goroutines.
+	var maxActiveIndex atomic.Int32
+	// Initialize maxActiveIndex to -1 to indicate no active pods.
+	maxActiveIndex.Store(int32(-1))
 	for i := range int(pt.monoVertex.Spec.Scale.GetMaxReplicas()) {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
 			podName := fmt.Sprintf("%s-mv-%d", pt.monoVertex.Name, index)
 			if pt.isActive(podName) {
-				pt.updateMaxActiveIndex(index, &maxActiveIndex)
+				for {
+					// Load the current value of maxActiveIndex atomically.
+					currentMax := maxActiveIndex.Load()
+					// checks if the currentMax is less than index.
+					if int32(index) > currentMax {
+						// checks if maxActiveIndex still holds the value currentMax.
+						// atomically updates maxActiveIndex to the new, higher index and returns true.
+						if maxActiveIndex.CompareAndSwap(currentMax, int32(index)) {
+							break
+						}
+					} else {
+						break
+					}
+				}
 			}
 		}(i)
 	}
 	wg.Wait()
-	// Update activePodsCount to maxActiveIndex + 1.
-	pt.setActivePodsCount(maxActiveIndex + 1)
+	// Update the active pods count based on the maxActiveIndex.
+	pt.setActivePodsCount(int(maxActiveIndex.Load() + 1))
 }
 
 func (pt *PodTracker) isActive(podName string) bool {
@@ -113,20 +129,11 @@ func (pt *PodTracker) isActive(podName string) bool {
 	return true
 }
 
-// updateMaxActiveIndex updates the maximum active pod index.
-func (pt *PodTracker) updateMaxActiveIndex(index int, maxActiveIndex *int) {
-	pt.activePodsMutex.Lock()
-	defer pt.activePodsMutex.Unlock()
-
-	if index > *maxActiveIndex {
-		*maxActiveIndex = index
-	}
-}
-
 // setActivePodsCount sets the activePodsCount.
 func (pt *PodTracker) setActivePodsCount(count int) {
 	pt.activePodsMutex.Lock()
 	defer pt.activePodsMutex.Unlock()
+	pt.log.Debugf("Setting active pods count to %d", count)
 	pt.activePodsCount = count
 }
 
