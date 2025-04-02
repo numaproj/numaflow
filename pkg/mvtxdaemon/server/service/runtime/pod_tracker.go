@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
@@ -35,7 +36,7 @@ type PodTracker struct {
 	monoVertex      *v1alpha1.MonoVertex
 	log             *zap.SugaredLogger
 	httpClient      monitorHttpClient
-	activePods      []int
+	activePodsCount int
 	activePodsMutex sync.RWMutex
 	refreshInterval time.Duration
 }
@@ -51,7 +52,6 @@ func NewPodTracker(ctx context.Context, mv *v1alpha1.MonoVertex) *PodTracker {
 			},
 			Timeout: time.Second,
 		},
-		activePods:      make([]int, 0),
 		refreshInterval: 30 * time.Second,
 	}
 	return pt
@@ -80,22 +80,39 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 	}
 }
 
-// updateActivePods checks the status of all pods and updates the activePods set accordingly.
+// updateActivePods checks the status of all pods and updates the count of activePods accordingly.
 func (pt *PodTracker) updateActivePods() {
 	var wg sync.WaitGroup
+	// Use atomic operations to safely update the maxActiveIndex across multiple goroutines.
+	var maxActiveIndex atomic.Int32
+	// Initialize maxActiveIndex to -1 to indicate no active pods.
+	maxActiveIndex.Store(int32(-1))
 	for i := range int(pt.monoVertex.Spec.Scale.GetMaxReplicas()) {
 		wg.Add(1)
 		go func(index int) {
 			defer wg.Done()
 			podName := fmt.Sprintf("%s-mv-%d", pt.monoVertex.Name, index)
 			if pt.isActive(podName) {
-				pt.addActivePod(index)
-			} else {
-				pt.removeActivePod(index)
+				for {
+					// Load the current value of maxActiveIndex atomically.
+					currentMax := maxActiveIndex.Load()
+					// checks if the currentMax is less than index.
+					if int32(index) > currentMax {
+						// checks if maxActiveIndex still holds the value currentMax.
+						// atomically updates maxActiveIndex to the new, higher index and returns true.
+						if maxActiveIndex.CompareAndSwap(currentMax, int32(index)) {
+							break
+						}
+					} else {
+						break
+					}
+				}
 			}
 		}(i)
 	}
 	wg.Wait()
+	// Update the active pods count based on the maxActiveIndex.
+	pt.setActivePodsCount(int(maxActiveIndex.Load() + 1))
 }
 
 func (pt *PodTracker) isActive(podName string) bool {
@@ -112,37 +129,17 @@ func (pt *PodTracker) isActive(podName string) bool {
 	return true
 }
 
-// addActivePod adds the active pod replica for the respective monoVertex
-func (pt *PodTracker) addActivePod(index int) {
+// setActivePodsCount sets the activePodsCount.
+func (pt *PodTracker) setActivePodsCount(count int) {
 	pt.activePodsMutex.Lock()
 	defer pt.activePodsMutex.Unlock()
-
-	pt.activePods = append(pt.activePods, index)
-}
-
-// removeActivePod removes the inactive pod replica from the respective monoVertex
-func (pt *PodTracker) removeActivePod(index int) {
-	pt.activePodsMutex.Lock()
-	defer pt.activePodsMutex.Unlock()
-
-	pt.activePods = removeValue(pt.activePods, index)
+	pt.log.Debugf("Setting active pods count to %d", count)
+	pt.activePodsCount = count
 }
 
 // GetActivePodsCount returns the number of active pods.
 func (pt *PodTracker) GetActivePodsCount() int {
 	pt.activePodsMutex.RLock()
 	defer pt.activePodsMutex.RUnlock()
-
-	activePods := pt.activePods
-	return len(activePods)
-}
-
-// removeValue removes the specified value from the slice.
-func removeValue(slice []int, value int) []int {
-	for i, v := range slice {
-		if v == value {
-			return append(slice[:i], slice[i+1:]...)
-		}
-	}
-	return slice
+	return pt.activePodsCount
 }
