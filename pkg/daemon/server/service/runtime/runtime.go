@@ -183,7 +183,7 @@ func (r *pipelineRuntimeCache) fetchAndPersistErrorForPod(vtxName string, podInd
 		return
 	}
 
-	cacheKey := vtxName
+	cacheKey := fmt.Sprintf("%s-%s", r.pipeline.Name, vtxName)
 	replica := fmt.Sprintf("%s-%s-%v", r.pipeline.Name, vtxName, podIndex)
 	newVtxErrors := ReplicaErrors{Replica: replica, ContainerErrors: apiResponse.Data}
 

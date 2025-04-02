@@ -234,12 +234,13 @@ func (ps *PipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *dae
 }
 
 func (ps *PipelineMetadataQuery) GetVertexErrors(ctx context.Context, req *daemon.GetVertexErrorsRequest) (*daemon.GetVertexErrorsResponse, error) {
-	vertex := req.GetVertex()
+	pipeline, vertex := req.GetPipeline(), req.GetVertex()
+	cacheKey := fmt.Sprintf("%s-%s", pipeline, vertex)
 	resp := new(daemon.GetVertexErrorsResponse)
 	localCache := ps.pipelineRuntimeCache.GetLocalCache()
 
 	// If the errors are present in the local cache, return the errors.
-	if errors, ok := localCache[vertex]; ok {
+	if errors, ok := localCache[cacheKey]; ok {
 		replicaErrors := make([]*daemon.ReplicaErrors, len(errors))
 		for i, err := range errors {
 			containerErrors := make([]*daemon.ContainerError, len(err.ContainerErrors))
