@@ -171,7 +171,7 @@ func createUnalignedReduceRequest(windowRequest *window.TimedWindowRequest) *ses
 	}
 
 	// we have to handle different scenarios unlike the Aligned window because
-	// unAligned window width can dynamimcally change.
+	// unAligned window width can dynamically change.
 	switch windowRequest.Operation {
 	case window.Open:
 		windowOp = sessionreducepb.SessionReduceRequest_WindowOperation_OPEN

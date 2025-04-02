@@ -31,6 +31,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractPodTemplate":              schema_pkg_apis_numaflow_v1alpha1_AbstractPodTemplate(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractSink":                     schema_pkg_apis_numaflow_v1alpha1_AbstractSink(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractVertex":                   schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AccumulatorWindow":                schema_pkg_apis_numaflow_v1alpha1_AccumulatorWindow(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Authorization":                    schema_pkg_apis_numaflow_v1alpha1_Authorization(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Backoff":                          schema_pkg_apis_numaflow_v1alpha1_Backoff(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.BasicAuth":                        schema_pkg_apis_numaflow_v1alpha1_BasicAuth(ref),
@@ -607,6 +608,27 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref common.ReferenceCallba
 		},
 		Dependencies: []string{
 			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodResourceClaim", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_AccumulatorWindow(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "AccumulatorWindow describes a special kind of SessionWindow (similar to Global Window) where output should always have monotonically increasing WM but it can be manipulated through event-time by reordering the messages. NOTE: Quite powerful, should not be abused; it can cause stalling of pipelines and leaks.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"timeout": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Timeout is the duration of inactivity after which the state of the accumulator is removed.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
 	}
 }
 
@@ -6459,11 +6481,16 @@ func schema_pkg_apis_numaflow_v1alpha1_Window(ref common.ReferenceCallback) comm
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SessionWindow"),
 						},
 					},
+					"accumulator": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AccumulatorWindow"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.FixedWindow", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SessionWindow", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SlidingWindow"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AccumulatorWindow", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.FixedWindow", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SessionWindow", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SlidingWindow"},
 	}
 }
 

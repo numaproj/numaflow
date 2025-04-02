@@ -99,7 +99,7 @@ func (w *sessionWindow) Merge(tw window.TimedWindow) {
 		w.endTime = tw.EndTime()
 	}
 
-	// udpate the id with the new start and end time
+	// update the id with the new start and end time
 	w.id = fmt.Sprintf("%d-%d-%s-%s", w.startTime.UnixMilli(), w.endTime.UnixMilli(), w.slot, strings.Join(w.keys, dfv1.KeysDelimitter))
 }
 
@@ -110,7 +110,7 @@ func (w *sessionWindow) Expand(endTime time.Time) {
 	}
 
 	w.endTime = endTime
-	// udpate the id with the new end time
+	// update the id with the new end time
 	w.id = fmt.Sprintf("%d-%d-%s-%s", w.startTime.UnixMilli(), w.endTime.UnixMilli(), w.slot, strings.Join(w.keys, dfv1.KeysDelimitter))
 
 }
