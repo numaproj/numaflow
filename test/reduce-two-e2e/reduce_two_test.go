@@ -209,6 +209,14 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 }
 
 func (r *ReduceSuite) TestStreamSorterGo() {
+	r.testStreamSorter("go")
+}
+
+func (r *ReduceSuite) TestStreamSorterJava() {
+	r.testStreamSorter("java")
+}
+
+func (r *ReduceSuite) testStreamSorter(lang string) {
 	// the reduce feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
 		r.T().SkipNow()
@@ -216,11 +224,11 @@ func (r *ReduceSuite) TestStreamSorterGo() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	w := r.Given().Pipeline("@testdata/accumulator/stream-sorter-go.yaml").
+	w := r.Given().Pipeline(fmt.Sprintf("@testdata/accumulator/stream-sorter-%s.yaml", lang)).
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
-	pipelineName := "stream-sorter-go"
+	pipelineName := fmt.Sprintf("stream-sorter-%s", lang)
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()

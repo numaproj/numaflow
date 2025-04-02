@@ -1,7 +1,7 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: stream-sorter-go
+  name: stream-sorter-java
 spec:
   limits:
     readBatchSize: 1
@@ -20,7 +20,7 @@ spec:
       udf:
         container:
           # sort the incoming stream 
-          image: quay.io/numaio/numaflow-go/stream-sorter:stable
+          image: quay.io/numaio/numaflow-java/stream-sorter:stable
           imagePullPolicy: Always
         groupBy:
           window:
