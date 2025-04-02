@@ -204,6 +204,7 @@ mod tests {
     use crate::config::pipeline::isb::Stream;
     use crate::config::pipeline::ToVertexConfig;
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_mark_active() {
         let client = async_nats::connect("localhost:4222").await.unwrap();
@@ -234,6 +235,7 @@ mod tests {
         assert!(idle_state.wmb_msg_offset.is_none());
     }
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_fetch_idle_offset() {
         let client = async_nats::connect("localhost:4222").await.unwrap();
@@ -271,6 +273,7 @@ mod tests {
         assert!(offset > 0);
     }
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_mark_idle() {
         let client = async_nats::connect("localhost:4222").await.unwrap();
@@ -315,6 +318,7 @@ mod tests {
         assert_eq!(idle_state.wmb_msg_offset, Some(offset));
     }
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_fetch_idle_streams() {
         let client = async_nats::connect("localhost:4222").await.unwrap();
