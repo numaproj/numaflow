@@ -206,6 +206,18 @@ message AbstractVertex {
   // +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
   // +optional
   optional UpdateStrategy updateStrategy = 16;
+
+  // Names of the serving store used in this vertex.
+  // +optional
+  optional string servingStoreName = 17;
+}
+
+// AccumulatorWindow describes a special kind of SessionWindow (similar to Global Window) where output should
+// always have monotonically increasing WM but it can be manipulated through event-time by reordering the messages.
+// NOTE: Quite powerful, should not be abused; it can cause stalling of pipelines and leaks.
+message AccumulatorWindow {
+  // Timeout is the duration of inactivity after which the state of the accumulator is removed.
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration timeout = 1;
 }
 
 message Authorization {
@@ -1245,6 +1257,10 @@ message PipelineSpec {
   // SideInputs defines the Side Inputs of a pipeline.
   // +optional
   repeated SideInput sideInputs = 8;
+
+  // ServingStore defines the Serving Store for this pipeline.
+  // +optional
+  optional ServingStore servingStore = 9;
 }
 
 message PipelineStatus {
@@ -1544,18 +1560,16 @@ message ServingSource {
   // The header key from which the message id will be extracted
   optional string msgIDHeaderKey = 3;
 
-  // Persistent store for the callbacks for serving and tracking
-  optional ServingStore store = 4;
+  // Request timeout in seconds. Default value is 120 seconds.
+  // +optional
+  optional uint32 requestTimeoutSeconds = 4;
 }
 
-// ServingStore to track and store data and metadata for tracking and serving.
+// ServingStore defines information of a Serving Store used in a pipeline
 message ServingStore {
-  // URL of the persistent store to write the callbacks
-  optional string url = 1;
+  optional string name = 1;
 
-  // TTL for the data in the store and tracker
-  // +optional
-  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration ttl = 2;
+  optional Container container = 2;
 }
 
 // SessionWindow describes a session window
@@ -1854,7 +1868,7 @@ message VertexSpec {
   // +optional
   optional Watermark watermark = 7;
 
-  // Lifecycle defines the Lifecycle properties of a ertex
+  // Lifecycle defines the Lifecycle properties of a vertex
   // +kubebuilder:default={"desiredPhase": Running}
   // +optional
   optional VertexLifecycle lifecycle = 8;
@@ -1947,5 +1961,8 @@ message Window {
 
   // +optional
   optional SessionWindow session = 3;
+
+  // +optional
+  optional AccumulatorWindow accumulator = 4;
 }
 

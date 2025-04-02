@@ -107,3 +107,42 @@ func fakePipeline() *dfv1.Pipeline {
 		},
 	}
 }
+
+func fakeMonoVertex() *dfv1.MonoVertex {
+	return &dfv1.MonoVertex{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "test-mvtx",
+			Namespace:   testNamespace,
+			Annotations: map[string]string{},
+		},
+		Spec: dfv1.MonoVertexSpec{
+			Source: &dfv1.Source{
+				UDTransformer: &dfv1.UDTransformer{
+					Builtin: &dfv1.Transformer{Name: "filter"},
+				},
+				UDSource: &dfv1.UDSource{
+					Container: &dfv1.Container{
+						Image: "my-src-image",
+					},
+				},
+			},
+
+			Sink: &dfv1.Sink{
+				AbstractSink: dfv1.AbstractSink{
+					UDSink: &dfv1.UDSink{
+						Container: &dfv1.Container{
+							Image: "my-sink-image",
+						},
+					},
+				},
+				Fallback: &dfv1.AbstractSink{
+					UDSink: &dfv1.UDSink{
+						Container: &dfv1.Container{
+							Image: "my-fb-image",
+						},
+					},
+				},
+			},
+		},
+	}
+}

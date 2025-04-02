@@ -18,6 +18,7 @@ package reconciler
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	appv1 "k8s.io/api/apps/v1"
@@ -66,6 +67,53 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 		assert.Equal(t, "No Pods found", message)
 		assert.Equal(t, "NoPodsFound", reason)
 		assert.True(t, done)
+	})
+
+	t.Run("Test Vertex status as true with non-recent restart", func(t *testing.T) {
+		pods := corev1.PodList{Items: []corev1.Pod{
+			{ObjectMeta: metav1.ObjectMeta{Name: "test-pod"}, Status: corev1.PodStatus{
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "Running"}},
+						LastTerminationState: corev1.ContainerState{
+							Terminated: &corev1.ContainerStateTerminated{
+								FinishedAt: metav1.Time{
+									Time: time.Now().Add(-3 * time.Minute),
+								},
+							},
+						},
+					},
+				}},
+			}},
+		}
+		done, reason, message := CheckPodsStatus(&pods)
+		assert.Equal(t, "All pods are healthy", message)
+		assert.Equal(t, "Running", reason)
+		assert.True(t, done)
+	})
+
+	t.Run("Test Vertex status as false with recent restart", func(t *testing.T) {
+		pods := corev1.PodList{Items: []corev1.Pod{
+			{ObjectMeta: metav1.ObjectMeta{Name: "test-pod"}, Status: corev1.PodStatus{
+				ContainerStatuses: []corev1.ContainerStatus{
+					{
+						State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "Running"}},
+						LastTerminationState: corev1.ContainerState{
+							Terminated: &corev1.ContainerStateTerminated{
+								FinishedAt: metav1.Time{
+									Time: time.Now().Add(-1 * time.Minute),
+								},
+								ExitCode: 137,
+							},
+						},
+					},
+				}},
+			}},
+		}
+		done, reason, message := CheckPodsStatus(&pods)
+		assert.Equal(t, "Pod test-pod is unhealthy", message)
+		assert.Equal(t, "PodRecentRestart", reason)
+		assert.False(t, done)
 	})
 }
 

@@ -58,15 +58,15 @@ func (ms *mockIsbSvcClient) GetBufferInfo(ctx context.Context, buffer string) (*
 	}, nil
 }
 
-func (ms *mockIsbSvcClient) CreateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string, servingSourceStreams []string, opts ...isbsvc.CreateOption) error {
+func (ms *mockIsbSvcClient) CreateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string, servingSourceStore string, opts ...isbsvc.CreateOption) error {
 	return nil
 }
 
-func (ms *mockIsbSvcClient) DeleteBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string, servingSourceStreams []string) error {
+func (ms *mockIsbSvcClient) DeleteBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string, servingSourceStore string) error {
 	return nil
 }
 
-func (ms *mockIsbSvcClient) ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string, servingSourceStreams []string) error {
+func (ms *mockIsbSvcClient) ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string, servingSourceStore string) error {
 	return nil
 }
 
@@ -110,7 +110,7 @@ func TestGetVertexMetrics(t *testing.T) {
 		Spec:       v1alpha1.PipelineSpec{Vertices: []v1alpha1.AbstractVertex{{Name: vertexName, Partitions: &vertexPartition}}},
 	}
 	client, _ := isbsvc.NewISBJetStreamSvc(pipelineName, jsc)
-	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(client, pipeline, nil, &mockRater_TestGetVertexMetrics{})
+	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(client, pipeline, nil, &mockRater_TestGetVertexMetrics{}, nil)
 	assert.NoError(t, err)
 
 	metricsResponse := `# HELP vertex_pending_messages Average pending messages in the last period of seconds. It is the pending messages of a vertex, not a pod.
@@ -178,7 +178,7 @@ func TestGetBuffer(t *testing.T) {
 	}
 
 	ms := &mockIsbSvcClient{}
-	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(ms, pipeline, nil, nil)
+	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(ms, pipeline, nil, nil, nil)
 	assert.NoError(t, err)
 
 	bufferName := "numaflow-system-simple-pipeline-cat-0"
@@ -219,7 +219,7 @@ func TestListBuffers(t *testing.T) {
 	}
 
 	ms := &mockIsbSvcClient{}
-	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(ms, pipeline, nil, nil)
+	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(ms, pipeline, nil, nil, nil)
 	assert.NoError(t, err)
 
 	req := &daemon.ListBuffersRequest{Pipeline: pipelineName}

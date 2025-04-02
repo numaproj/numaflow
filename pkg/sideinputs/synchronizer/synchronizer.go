@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"slices"
 
 	"go.uber.org/zap"
 
@@ -29,7 +30,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/shared/kvs/jetstream"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 	"github.com/numaproj/numaflow/pkg/sideinputs/utils"
 )
 
@@ -107,7 +107,7 @@ func startSideInputSynchronizer(ctx context.Context, watch kvs.KVStorer, sideInp
 				log.Warnw("nil value received from Side Input watcher")
 				continue
 			}
-			if !sharedutil.StringSliceContains(sideInputs, value.Key()) {
+			if !slices.Contains(sideInputs, value.Key()) {
 				continue
 			}
 			log.Infow("Side Input value received ",

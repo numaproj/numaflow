@@ -6,7 +6,6 @@ use base64::Engine;
 use numaflow_models::models::{MonoVertex, Vertex};
 use rcgen::{generate_simple_self_signed, Certificate, CertifiedKey, KeyPair};
 use serde::{Deserialize, Serialize};
-use std::time::Duration;
 
 use crate::{
     pipeline::PipelineDCG,
@@ -21,32 +20,29 @@ const ENV_MONOVERTEX_OBJ: &str = "NUMAFLOW_MONO_VERTEX_OBJECT";
 
 pub const DEFAULT_ID_HEADER: &str = "X-Numaflow-Id";
 pub const DEFAULT_CALLBACK_URL_HEADER_KEY: &str = "X-Numaflow-Callback-Url";
-pub const DEFAULT_REDIS_TTL_IN_SECS: u32 = 86400;
+const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
+const DEFAULT_SERVING_STORE_SOCKET: &str = "/var/run/numaflow/serving.sock";
+const DEFAULT_SERVING_STORE_SERVER_INFO_FILE: &str = "/var/run/numaflow/serving-server-info";
 
-pub fn generate_certs() -> std::result::Result<(Certificate, KeyPair), String> {
+pub fn generate_certs() -> Result<(Certificate, KeyPair), String> {
     let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
         .map_err(|e| format!("Failed to generate cert {:?}", e))?;
     Ok((cert, key_pair))
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
-pub struct RedisConfig {
-    pub addr: String,
-    pub max_tasks: usize,
-    pub retries: usize,
-    pub retries_duration_millis: u16,
-    pub ttl_secs: Option<u32>,
+pub struct UserDefinedStoreConfig {
+    pub grpc_max_message_size: usize,
+    pub socket_path: String,
+    pub server_info_path: String,
 }
 
-impl Default for RedisConfig {
+impl Default for UserDefinedStoreConfig {
     fn default() -> Self {
         Self {
-            addr: "redis://127.0.0.1:6379".to_owned(),
-            max_tasks: 50,
-            retries: 5,
-            retries_duration_millis: 100,
-            // TODO: we might need an option type here. Zero value of u32 can be used instead of None
-            ttl_secs: Some(DEFAULT_REDIS_TTL_IN_SECS),
+            grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+            socket_path: DEFAULT_SERVING_STORE_SOCKET.to_string(),
+            server_info_path: DEFAULT_SERVING_STORE_SERVER_INFO_FILE.to_string(),
         }
     }
 }
@@ -60,11 +56,19 @@ pub struct Settings {
     pub metrics_server_listen_port: u16,
     pub upstream_addr: String,
     pub drain_timeout_secs: u64,
-    pub redis: RedisConfig,
+    pub store_type: StoreType,
+    pub js_store: String,
     /// The IP address of the numaserve pod. This will be used to construct the value for X-Numaflow-Callback-Url header
     pub host_ip: String,
     pub api_auth_token: Option<String>,
     pub pipeline_spec: PipelineDCG,
+}
+
+#[derive(Default, Debug, Deserialize, Clone, PartialEq)]
+pub enum StoreType {
+    UserDefined(UserDefinedStoreConfig),
+    #[default]
+    Nats,
 }
 
 impl Default for Settings {
@@ -74,8 +78,9 @@ impl Default for Settings {
             app_listen_port: 3000,
             metrics_server_listen_port: 3001,
             upstream_addr: "localhost:8888".to_owned(),
-            drain_timeout_secs: 10,
-            redis: RedisConfig::default(),
+            drain_timeout_secs: 600,
+            store_type: StoreType::default(),
+            js_store: "kv".to_owned(),
             host_ip: "127.0.0.1".to_owned(),
             api_auth_token: None,
             pipeline_spec: Default::default(),
@@ -113,7 +118,7 @@ pub struct CallbackStorageConfig {
 /// This implementation is to load settings from env variables
 impl TryFrom<HashMap<String, String>> for Settings {
     type Error = Error;
-    fn try_from(env_vars: HashMap<String, String>) -> std::result::Result<Self, Self::Error> {
+    fn try_from(env_vars: HashMap<String, String>) -> Result<Self, Self::Error> {
         let is_monovertex = env_vars.contains_key(ENV_MONOVERTEX_OBJ);
         let mut settings = Settings {
             host_ip: "localhost".to_string(),
@@ -171,6 +176,7 @@ impl TryFrom<HashMap<String, String>> for Settings {
             .decode(source_spec_encoded.as_bytes())
             .map_err(|e| ParseConfig(format!("decoding {ENV_VERTEX_OBJ}: {e:?}")))?;
 
+        let mut ud_store_enabled = false;
         let serving_spec = match is_monovertex {
             true => {
                 let vertex_obj = serde_json::from_slice::<MonoVertex>(&source_spec_decoded)
@@ -192,6 +198,12 @@ impl TryFrom<HashMap<String, String>> for Settings {
                 let vertex_obj = serde_json::from_slice::<Vertex>(&source_spec_decoded)
                     .map_err(|e| ParseConfig(format!("parsing {ENV_VERTEX_OBJ}: {e:?}")))?;
 
+                if vertex_obj.spec.serving_store_name.is_some()
+                    && vertex_obj.spec.serving_store_name.as_ref().unwrap() != "default"
+                {
+                    ud_store_enabled = true;
+                }
+
                 vertex_obj
                     .spec
                     .source
@@ -206,15 +218,19 @@ impl TryFrom<HashMap<String, String>> for Settings {
                     })?
             }
         };
+
         // Update tid_header from source_spec
         settings.tid_header = serving_spec.msg_id_header_key;
 
-        // Update redis.addr from source_spec, currently we only support redis as callback storage
-        settings.redis.addr = serving_spec.store.url;
-        settings.redis.ttl_secs = match serving_spec.store.ttl {
-            Some(ttl) => Some(Duration::from(ttl).as_secs() as u32),
-            None => Some(DEFAULT_REDIS_TTL_IN_SECS),
+        settings.store_type = if ud_store_enabled {
+            StoreType::UserDefined(UserDefinedStoreConfig::default())
+        } else {
+            StoreType::Nats
         };
+
+        // FIXME(serving)
+        settings.drain_timeout_secs =
+            serving_spec.request_timeout_seconds.unwrap_or(120).max(1) as u64; // Ensure timeout is atleast 1 second
 
         if let Some(auth) = serving_spec.auth {
             let token = auth.token.unwrap();
@@ -249,11 +265,8 @@ mod tests {
         assert_eq!(settings.app_listen_port, 3000);
         assert_eq!(settings.metrics_server_listen_port, 3001);
         assert_eq!(settings.upstream_addr, "localhost:8888");
-        assert_eq!(settings.drain_timeout_secs, 10);
-        assert_eq!(settings.redis.addr, "redis://127.0.0.1:6379");
-        assert_eq!(settings.redis.max_tasks, 50);
-        assert_eq!(settings.redis.retries, 5);
-        assert_eq!(settings.redis.retries_duration_millis, 100);
+        assert_eq!(settings.drain_timeout_secs, 600);
+        assert_eq!(settings.store_type, StoreType::Nats,);
     }
 
     #[test]
@@ -279,14 +292,8 @@ mod tests {
             app_listen_port: 8443,
             metrics_server_listen_port: 3001,
             upstream_addr: "localhost:8888".into(),
-            drain_timeout_secs: 10,
-            redis: RedisConfig {
-                addr: "redis://redis:6379".into(),
-                max_tasks: 50,
-                retries: 5,
-                retries_duration_millis: 100,
-                ttl_secs: Some(DEFAULT_REDIS_TTL_IN_SECS),
-            },
+            drain_timeout_secs: 120,
+            store_type: StoreType::Nats,
             host_ip: "10.2.3.5".into(),
             api_auth_token: None,
             pipeline_spec: PipelineDCG {
@@ -331,14 +338,8 @@ mod tests {
             app_listen_port: 8443,
             metrics_server_listen_port: 3001,
             upstream_addr: "localhost:8888".into(),
-            drain_timeout_secs: 10,
-            redis: RedisConfig {
-                addr: "redis://redis:6379".into(),
-                max_tasks: 50,
-                retries: 5,
-                retries_duration_millis: 100,
-                ttl_secs: Some(DEFAULT_REDIS_TTL_IN_SECS),
-            },
+            drain_timeout_secs: 120,
+            store_type: StoreType::Nats,
             host_ip: "localhost".into(),
             api_auth_token: None,
             pipeline_spec: PipelineDCG {

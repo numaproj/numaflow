@@ -1,7 +1,6 @@
 import { useCallback, useContext, useEffect, useState } from "react";
 import {
   CartesianGrid,
-  Legend,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -12,11 +11,14 @@ import {
 } from "recharts";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
+import CloseIcon from "@mui/icons-material/Close";
+import IconButton from "@mui/material/IconButton";
+import Divider from "@mui/material/Divider";
 import Dropdown from "../common/Dropdown";
-import FiltersDropdown from "../common/FiltersDropdown";
 import EmptyChart from "../EmptyChart";
-import { useMetricsFetch } from "../../../../../../../../../../../../../../../utils/fetchWrappers/metricsFetch";
+import FiltersDropdown from "../common/FiltersDropdown";
 import TimeSelector from "../common/TimeRange";
+import { useMetricsFetch } from "../../../../../../../../../../../../../../../utils/fetchWrappers/metricsFetch";
 import {
   CONTAINER_CPU_UTILIZATION,
   CONTAINER_MEMORY_UTILIZATION,
@@ -30,6 +32,8 @@ import {
 import { AppContext } from "../../../../../../../../../../../../../../../App";
 import { AppContextProps } from "../../../../../../../../../../../../../../../types/declarations/app";
 import { Pod } from "../../../../../../../../../../../../../../../types/declarations/pods";
+
+import "./style.css";
 
 interface TooltipProps {
   payload?: any[];
@@ -79,47 +83,84 @@ const CustomTooltip = ({
   payload,
   active,
   displayName,
-}: TooltipProps & { displayName: string }) => {
-  if (!active || !payload || !payload.length) return null;
+  pinnedTooltip,
+  setPinnedTooltip,
+  setTooltipX,
+  setTooltipY,
+}: TooltipProps & {
+  displayName: string;
+  pinnedTooltip: any;
+  setPinnedTooltip: any;
+  setTooltipX: any;
+  setTooltipY: any;
+}) => {
+  const [showMessage, setShowMessage] = useState<boolean>(false);
+
+  useEffect(() => {
+    setShowMessage(false);
+    const timer = setTimeout(() => {
+      setShowMessage(true);
+    }, 700);
+
+    return () => clearTimeout(timer);
+  }, [payload]);
+
+  const tooltipVal = pinnedTooltip ?? payload;
+  if (!active || !tooltipVal || !tooltipVal.length) return null;
 
   // sorting tooltip based on values in descending order
-  payload?.sort((a, b) => {
+  tooltipVal?.sort((a: { value: any }, b: { value: any }) => {
     const period1 = a?.value;
     const period2 = b?.value;
     return period2 - period1;
   });
 
-  const maxWidth = Math.max(...payload.map((entry) => entry?.name?.length));
-  const timestamp = payload[0]?.payload?.timestamp;
+  const maxWidth = Math.max(
+    ...tooltipVal.map((entry: any) => entry?.name?.length)
+  );
+  const timestamp = tooltipVal[0]?.payload?.timestamp;
 
   return (
-    <Box
-      sx={{
-        backgroundColor: "#fff",
-        padding: "1rem",
-        border: "0.1rem solid #ccc",
-        borderRadius: "1rem",
-      }}
-    >
-      <Box>{formattedDate(timestamp)}</Box>
-      {payload.map((entry: any, index: any) => {
-        const formattedValue = getDefaultFormatter(entry?.value, displayName);
-        return (
-          <Box key={`item-${index}`} sx={{ display: "flex" }}>
-            <Box
-              sx={{
-                width: `${maxWidth + 1}rem`,
-                display: "inline-block",
-                paddingRight: "1rem",
-                color: entry?.color,
+    <Box className={"tooltip-bg"}>
+      {showMessage && !pinnedTooltip && (
+        <Box className={"tooltip-pin"}>Click on the chart to pin</Box>
+      )}
+      <Box className={"tooltip-fixed"}>
+        <Box>{formattedDate(timestamp)}</Box>
+        {pinnedTooltip && (
+          <Box>
+            <IconButton
+              onClick={() => {
+                setPinnedTooltip(null);
+                setTooltipX(undefined);
+                setTooltipY(undefined);
               }}
             >
-              {entry?.name}:
-            </Box>
-            <Box sx={{ color: entry?.color }}>{formattedValue}</Box>
+              <CloseIcon height={20} width={20} />
+            </IconButton>
           </Box>
-        );
-      })}
+        )}
+      </Box>
+      <Divider className={"tooltip-divider"} />
+      <Box className={"tooltip-scrollable"}>
+        {tooltipVal.map((entry: any, index: any) => {
+          const formattedValue = getDefaultFormatter(entry?.value, displayName);
+          return (
+            <Box key={`item-${index}`} sx={{ display: "flex" }}>
+              <Box
+                className={"tooltip-entry"}
+                sx={{
+                  width: `${maxWidth + 1}rem`,
+                  color: entry?.color,
+                }}
+              >
+                {entry?.name}:
+              </Box>
+              <Box sx={{ color: entry?.color }}>{formattedValue}</Box>
+            </Box>
+          );
+        })}
+      </Box>
     </Box>
   );
 };
@@ -232,11 +273,20 @@ const LineChartComponent = ({
   const [previousDimension, setPreviousDimension] = useState<string>(
     metricsReq?.dimension
   );
+  const [pinnedTooltip, setPinnedTooltip] = useState<any>(null);
+  const [tooltipX, setTooltipX] = useState<number | undefined>(undefined);
+  const [tooltipY, setTooltipY] = useState<number | undefined>(undefined);
 
   const getRandomColor = useCallback((index: number) => {
     const hue = (index * 137.508) % 360;
     return `hsl(${hue}, 50%, 50%)`;
   }, []);
+
+  useEffect(() => {
+    setPinnedTooltip(null);
+    setTooltipX(undefined);
+    setTooltipY(undefined);
+  }, [metricsReq, filters]);
 
   // required filters
   const getFilterValue = useCallback(
@@ -472,14 +522,7 @@ const LineChartComponent = ({
 
   return (
     <Box>
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "space-around",
-          mt: "1rem",
-          mb: "2rem",
-        }}
-      >
+      <Box className={"line-chart-wrapper"}>
         {paramsList
           ?.filter(
             (param) => !["start_time", "end_time"]?.includes(param?.name)
@@ -502,11 +545,7 @@ const LineChartComponent = ({
             );
           })}
         {fromModal && (
-          <Box
-            sx={{ display: "flex", alignItems: "center", fontSize: "1.4rem" }}
-          >
-            {getMetricsModalDesc()}
-          </Box>
+          <Box className={"line-chart-modal-desc"}>{getMetricsModalDesc()}</Box>
         )}
         {hasTimeParams && (
           <Box key="line-chart-preset">
@@ -518,13 +557,9 @@ const LineChartComponent = ({
       {filtersList?.filter((filterEle: any) => !filterEle?.required)?.length >
         0 && (
         <Box
+          className={"line-chart-filters"}
           sx={{
             display: fromModal ? "none" : "flex",
-            alignItems: "center",
-            justifyContent: "space-around",
-            mt: "1rem",
-            mb: "2rem",
-            px: "6rem",
           }}
         >
           <Box sx={{ mr: "1rem" }}>Filters</Box>
@@ -544,14 +579,7 @@ const LineChartComponent = ({
       )}
 
       {isLoading && (
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            height: "100%",
-          }}
-        >
+        <Box className={"line-chart-loading"}>
           <CircularProgress />
         </Box>
       )}
@@ -567,6 +595,18 @@ const LineChartComponent = ({
               right: 30,
               left: 30,
               bottom: 5,
+            }}
+            style={{ cursor: "pointer" }}
+            onClick={(state) => {
+              if (!pinnedTooltip) {
+                setPinnedTooltip(state?.activePayload);
+                setTooltipX(100);
+                setTooltipY(90);
+              } else {
+                setPinnedTooltip(null);
+                setTooltipX(undefined);
+                setTooltipY(undefined);
+              }
             }}
           >
             <CartesianGrid strokeDasharray="3 3" />
@@ -602,9 +642,18 @@ const LineChartComponent = ({
             ))}
 
             <Tooltip
-              content={<CustomTooltip displayName={metric?.display_name} />}
+              wrapperStyle={{ pointerEvents: "auto" }}
+              content={
+                <CustomTooltip
+                  displayName={metric?.display_name}
+                  pinnedTooltip={pinnedTooltip}
+                  setPinnedTooltip={setPinnedTooltip}
+                  setTooltipX={setTooltipX}
+                  setTooltipY={setTooltipY}
+                />
+              }
+              position={{ x: tooltipX, y: tooltipY }}
             />
-            <Legend />
           </LineChart>
         </ResponsiveContainer>
       )}

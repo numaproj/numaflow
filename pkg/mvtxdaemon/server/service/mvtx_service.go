@@ -25,6 +25,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/mvtxdaemon"
 	raterPkg "github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service/rater"
+	runtimePkg "github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service/runtime"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -36,10 +37,11 @@ const MonoVtxPendingMetric = "monovtx_pending"
 
 type MonoVertexService struct {
 	mvtxdaemon.UnimplementedMonoVertexDaemonServiceServer
-	monoVtx       *v1alpha1.MonoVertex
-	httpClient    *http.Client
-	rater         raterPkg.MonoVtxRatable
-	healthChecker *HealthChecker
+	monoVtx                *v1alpha1.MonoVertex
+	httpClient             *http.Client
+	rater                  raterPkg.MonoVtxRatable
+	healthChecker          *HealthChecker
+	monoVertexRuntimeCache runtimePkg.MonoVertexRuntimeCache
 }
 
 var _ mvtxdaemon.MonoVertexDaemonServiceServer = (*MonoVertexService)(nil)
@@ -48,6 +50,7 @@ var _ mvtxdaemon.MonoVertexDaemonServiceServer = (*MonoVertexService)(nil)
 func NewMoveVertexService(
 	monoVtx *v1alpha1.MonoVertex,
 	rater raterPkg.MonoVtxRatable,
+	monoVertexRuntimeCache runtimePkg.MonoVertexRuntimeCache,
 ) (*MonoVertexService, error) {
 	mv := MonoVertexService{
 		monoVtx: monoVtx,
@@ -57,8 +60,9 @@ func NewMoveVertexService(
 			},
 			Timeout: time.Second * 3,
 		},
-		rater:         rater,
-		healthChecker: NewHealthChecker(monoVtx),
+		rater:                  rater,
+		healthChecker:          NewHealthChecker(monoVtx),
+		monoVertexRuntimeCache: monoVertexRuntimeCache,
 	}
 	return &mv, nil
 }

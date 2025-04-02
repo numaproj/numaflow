@@ -19590,6 +19590,10 @@
           "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
+        "servingStoreName": {
+          "description": "Names of the serving store used in this vertex.",
+          "type": "string"
+        },
         "sideInputs": {
           "description": "Names of the side inputs used in this vertex.",
           "type": "array",
@@ -19635,6 +19639,16 @@
           },
           "x-kubernetes-patch-merge-key": "name",
           "x-kubernetes-patch-strategy": "merge"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.AccumulatorWindow": {
+      "description": "AccumulatorWindow describes a special kind of SessionWindow (similar to Global Window) where output should always have monotonically increasing WM but it can be manipulated through event-time by reordering the messages. NOTE: Quite powerful, should not be abused; it can cause stalling of pipelines and leaks.",
+      "type": "object",
+      "properties": {
+        "timeout": {
+          "description": "Timeout is the duration of inactivity after which the state of the accumulator is removed.",
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
         }
       }
     },
@@ -21525,6 +21539,10 @@
           "description": "Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, they could be overridden by each vertex's settings",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PipelineLimits"
         },
+        "servingStore": {
+          "description": "ServingStore defines the Serving Store for this pipeline.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingStore"
+        },
         "sideInputs": {
           "description": "SideInputs defines the Side Inputs of a pipeline.",
           "type": "array",
@@ -21909,8 +21927,7 @@
       "description": "ServingSource is the HTTP endpoint for Numaflow.",
       "type": "object",
       "required": [
-        "msgIDHeaderKey",
-        "store"
+        "msgIDHeaderKey"
       ],
       "properties": {
         "auth": {
@@ -21920,29 +21937,29 @@
           "description": "The header key from which the message id will be extracted",
           "type": "string"
         },
+        "requestTimeoutSeconds": {
+          "description": "Request timeout in seconds. Default value is 120 seconds.",
+          "type": "integer",
+          "format": "int64"
+        },
         "service": {
           "description": "Whether to create a ClusterIP Service",
           "type": "boolean"
-        },
-        "store": {
-          "description": "Persistent store for the callbacks for serving and tracking",
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingStore"
         }
       }
     },
     "io.numaproj.numaflow.v1alpha1.ServingStore": {
-      "description": "ServingStore to track and store data and metadata for tracking and serving.",
+      "description": "ServingStore defines information of a Serving Store used in a pipeline",
       "type": "object",
       "required": [
-        "url"
+        "name",
+        "container"
       ],
       "properties": {
-        "ttl": {
-          "description": "TTL for the data in the store and tracker",
-          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+        "container": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Container"
         },
-        "url": {
-          "description": "URL of the persistent store to write the callbacks",
+        "name": {
           "type": "string"
         }
       }
@@ -22483,7 +22500,7 @@
           "type": "string"
         },
         "lifecycle": {
-          "description": "Lifecycle defines the Lifecycle properties of a ertex",
+          "description": "Lifecycle defines the Lifecycle properties of a vertex",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.VertexLifecycle"
         },
         "limits": {
@@ -22548,6 +22565,10 @@
         },
         "serviceAccountName": {
           "description": "ServiceAccountName applied to the pod",
+          "type": "string"
+        },
+        "servingStoreName": {
+          "description": "Names of the serving store used in this vertex.",
           "type": "string"
         },
         "sideInputs": {
@@ -22783,6 +22804,9 @@
       "description": "Window describes windowing strategy",
       "type": "object",
       "properties": {
+        "accumulator": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.AccumulatorWindow"
+        },
         "fixed": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.FixedWindow"
         },
@@ -22960,7 +22984,8 @@
         "image",
         "volumeMounts",
         "resources",
-        "executeRustBinary"
+        "executeRustBinary",
+        "servingStore"
       ],
       "properties": {
         "env": {
@@ -22983,6 +23008,9 @@
         },
         "resources": {
           "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
+        "servingStore": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingStore"
         },
         "volumeMounts": {
           "type": "array",

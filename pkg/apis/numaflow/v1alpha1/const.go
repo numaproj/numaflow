@@ -76,6 +76,8 @@ const (
 	CtrInitSideInputs    = "init-side-inputs"
 	CtrSideInputsWatcher = "side-inputs-synchronizer"
 	CtrServing           = "serving"
+	CtrMonitor           = "monitor"
+	CtrUdStore           = "udstore"
 
 	// user-defined container types
 	UDContainerFunction     = "udf"
@@ -84,7 +86,7 @@ const (
 	UDContainerTransformer  = "transformer"
 	UDContainerSource       = "udsource"
 	UDContainerSideInputs   = "udsi"
-	ServingSourceContainer  = "serving"
+	UDContainerStore        = "udstore"
 
 	// components
 	ComponentISBSvc            = "isbsvc"
@@ -145,24 +147,26 @@ const (
 	EnvMemoryLimit                      = "NUMAFLOW_MEMORY_LIMIT"
 	EnvGoDebug                          = "GODEBUG"
 	EnvServingJetstreamStream           = "NUMAFLOW_SERVING_JETSTREAM_STREAM"
-	EnvServingObject                    = "NUMAFLOW_SERVING_SOURCE_OBJECT"
 	EnvServingPort                      = "NUMAFLOW_SERVING_APP_LISTEN_PORT"
-	EnvServingAuthToken                 = "NUMAFLOW_SERVING_AUTH_TOKEN"
 	EnvServingMinPipelineSpec           = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC"
 	EnvServingHostIP                    = "NUMAFLOW_SERVING_HOST_IP"
-	EnvServingStoreTTL                  = "NUMAFLOW_SERVING_STORE_TTL"
-	EnvExecuteRustBinary                = "NUMAFLOW_EXECUTE_RUST_BINARY"
+
+	EnvExecuteRustBinary = "NUMAFLOW_EXECUTE_RUST_BINARY"
 
 	EnvK8sServerVersion = "K8S_SERVER_VERSION"
 
 	PathVarRun                  = "/var/run/numaflow"
 	VertexMetricsPort           = 2469
 	VertexMetricsPortName       = "metrics"
+	VertexMonitorPort           = 2470
+	VertexMonitorPortName       = "monitor"
 	VertexHTTPSPort             = 8443
 	VertexHTTPSPortName         = "https"
 	DaemonServicePort           = 4327
 	MonoVertexMetricsPort       = 2469
 	MonoVertexMetricsPortName   = "metrics"
+	MonoVertexMonitorPort       = 2470
+	MonoVertexMonitorPortName   = "monitor"
 	MonoVertexDaemonServicePort = 4327
 
 	DefaultRequeueAfter = 10 * time.Second
@@ -211,10 +215,6 @@ const (
 	DefaultWALCompactorMaxFileSize  = 30 * 1024 * 1024               // Default max file size for the compactor
 	DefaultWALCompactionDuration    = 60 * time.Second               // Default compaction duration
 	DefaultCompactWALPath           = PathPBQMount + "/compact-wals" // Default compaction wal path
-
-	// Default Pnf options
-	DefaultPnfBatchSize     = 100         // Default flush batch size for pnf
-	DefaultPnfFlushDuration = time.Second // Default flush duration for pnf
 
 	// DefaultKafkaHandlerChannelSize is the default channel size for kafka handler
 	DefaultKafkaHandlerChannelSize = 100
@@ -285,6 +285,11 @@ const (
 	UDContainerLivezPeriodSeconds          = 60
 	UDContainerLivezTimeoutSeconds         = 30
 	UDContainerLivezFailureThreshold       = 5
+
+	//Runtime Info
+	RuntimeDirVolume    = "runtime-vol"
+	RuntimeDirMountPath = "/var/numaflow/runtime"
+	RuntimeDirSizeLimit = 20 * 1024 * 1024
 )
 
 var (

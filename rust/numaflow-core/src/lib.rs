@@ -56,15 +56,23 @@ mod tracker;
 /// [Map]: https://numaflow.numaproj.io/user-guide/user-defined-functions/map/map/
 mod mapper;
 
+/// Serving store to store the result of the serving pipeline.
+mod serving_store;
+
 /// [Watermark] _is a monotonically increasing timestamp of the oldest work/event not yet completed_
 ///
 ///
 /// [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 mod watermark;
 
+use numaflow_monitor::runtime::Runtime;
+
 pub async fn run() -> Result<()> {
     let cln_token = CancellationToken::new();
     let shutdown_cln_token = cln_token.clone();
+
+    // Initialize runtime for persisting errors
+    let runtime = Runtime::new(None);
 
     // wait for SIG{INT,TERM} and invoke cancellation token.
     let shutdown_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
@@ -80,7 +88,8 @@ pub async fn run() -> Result<()> {
             // Run the forwarder with cancellation token.
             if let Err(e) = monovertex::start_forwarder(cln_token, &config).await {
                 if let Error::Grpc(e) = e {
-                    error!(error=?e, "Monovertex failed because of UDF failure")
+                    error!(error=?e, "Monovertex failed because of UDF failure");
+                    runtime.persist_application_error(e)
                 } else {
                     error!(?e, "Error running monovertex");
                 }
@@ -94,7 +103,8 @@ pub async fn run() -> Result<()> {
             info!("Starting pipeline forwarder with config: {:#?}", config);
             if let Err(e) = pipeline::start_forwarder(cln_token, config).await {
                 if let Error::Grpc(e) = e {
-                    error!(error=?e, "Pipeline failed because of UDF failure")
+                    error!(error=?e, "Pipeline failed because of UDF failure");
+                    runtime.persist_application_error(e)
                 } else {
                     error!(?e, "Error running pipeline");
                 }
