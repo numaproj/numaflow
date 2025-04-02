@@ -39,7 +39,7 @@ import (
 
 const CountWindow = time.Second * 10
 const monoVtxReadMetricName = "monovtx_read_total"
-const monoVtxPendingMetric = "monovtx_pending"
+const monoVtxPendingRawMetric = "monovtx_pending_raw"
 
 // MaxLookback is the upper limit beyond which lookback value is not increased
 // by the dynamic algorithm. This is chosen as a conservative limit
@@ -224,19 +224,12 @@ func (r *Rater) getPodReadCounts(podName string, result map[string]*dto.MetricFa
 
 // getPodPendingCounts returns the total number of pending messages for a pod
 func (r *Rater) getPodPendingCounts(podName string, result map[string]*dto.MetricFamily) *PodMetricsCount {
-	// TODO: Change this to use raw count of pending monoVtxPendingRawMetric. Currently Using the 1m avg metric from mvtx.
-	if value, ok := result[monoVtxPendingMetric]; ok && value != nil && len(value.GetMetric()) > 0 {
+	if value, ok := result[monoVtxPendingRawMetric]; ok && value != nil && len(value.GetMetric()) > 0 {
 		metricsList := value.GetMetric()
-		for _, metric := range metricsList {
-			labels := metric.GetLabel()
-			for _, label := range labels {
-				if label.GetName() == metrics.LabelPeriod && label.GetValue() == "1m" {
-					return &PodMetricsCount{podName, metric.Gauge.GetValue()}
-				}
-			}
-		}
+		podPendingCount := &PodMetricsCount{podName, metricsList[0].Gauge.GetValue()}
+		return podPendingCount
 	} else {
-		r.log.Infof("[Pod name %s]: Metric %q is unavailable, the pod might haven't started processing data", podName, monoVtxPendingMetric)
+		r.log.Infof("[Pod name %s]: Metric %q is unavailable, the pod might haven't started processing data", podName, monoVtxPendingRawMetric)
 	}
 	return nil
 }
