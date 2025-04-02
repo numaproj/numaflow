@@ -12,7 +12,7 @@ use std::str;
 use tonic::Status;
 use tracing::error;
 
-const CURRENT_FILE: &str = "current.json";
+const CURRENT_FILE: &str = "current-numa.json";
 
 /// Represents a single runtime error entry persisted by the application.
 #[derive(Serialize, Deserialize, Debug)]
@@ -169,6 +169,7 @@ impl Runtime {
         let mut errors = Vec::new();
         // if no app errors are persisted, directory wouldn't be created yet
         if !app_err_path.exists() || !app_err_path.is_dir() {
+            //application-erro
             let err = Error::File("No application errors persisted yet".to_string());
             return Err(err);
         }
