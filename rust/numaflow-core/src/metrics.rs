@@ -72,8 +72,10 @@ const FALLBACK_SINK_WRITE_TOTAL: &str = "write";
 
 // pending as gauge for mvtx (these metric names are hardcoded in the auto-scaler)
 const PENDING: &str = "pending";
+const PENDING_RAW: &str = "pending_raw";
 // pending as gauge for pipeline
 const VERTEX_PENDING: &str = "pending_messages";
+const VERTEX_PENDING_RAW: &str = "pending_messages_raw";
 
 // processing times as timers
 const E2E_TIME: &str = "processing_time";
@@ -178,6 +180,10 @@ pub(crate) struct MonoVtxMetrics {
 
     // gauge
     pub(crate) pending: Family<Vec<(String, String)>, Gauge>,
+    // TODO(lookback) - using new implementation for monovertex right now,
+    // deprecate old metric and use only this as well once
+    // corresponding changes are completed.
+    pub(crate) pending_raw: Family<Vec<(String, String)>, Gauge>,
 
     // timers
     pub(crate) e2e_time: Family<Vec<(String, String)>, Histogram>,
@@ -195,6 +201,10 @@ pub(crate) struct PipelineMetrics {
     pub(crate) forwarder: PipelineForwarderMetrics,
     pub(crate) isb: PipelineISBMetrics,
     pub(crate) pending: Family<Vec<(String, String)>, Gauge>,
+    // TODO(lookback) - using new implementation only for monovertex right now,
+    // deprecate old metric and use only this as well once
+    // corresponding changes are completed.
+    pub(crate) pending_raw: Family<Vec<(String, String)>, Gauge>,
 }
 
 /// Family of metrics for the sink
@@ -261,6 +271,10 @@ impl MonoVtxMetrics {
             dropped_total: Family::<Vec<(String, String)>, Counter>::default(),
             // gauge
             pending: Family::<Vec<(String, String)>, Gauge>::default(),
+            // TODO(lookback) - using new implementation only for monovertex right now,
+            // deprecate old metric and use only this as well once
+            // corresponding changes are completed.
+            pending_raw: Family::<Vec<(String, String)>, Gauge>::default(),
             // timers
             // exponential buckets in the range 100 microseconds to 15 minutes
             e2e_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
@@ -321,6 +335,13 @@ impl MonoVtxMetrics {
             PENDING,
             "A Gauge to keep track of the total number of pending messages for the monovtx",
             metrics.pending.clone(),
+        );
+
+        // gauges
+        registry.register(
+            PENDING_RAW,
+            "A Gauge to keep track of the total number of source pending messages for the monovtx",
+            metrics.pending_raw.clone(),
         );
         // timers
         registry.register(
@@ -401,6 +422,10 @@ impl PipelineMetrics {
                     }),
             },
             pending: Family::<Vec<(String, String)>, Gauge>::default(),
+            // TODO(lookback) - using new implementation only for monovertex right now,
+            // deprecate old metric and use only this as well once
+            // corresponding changes are completed.
+            pending_raw: Family::<Vec<(String, String)>, Gauge>::default(),
         };
         let mut registry = global_registry().registry.lock();
 
@@ -457,6 +482,11 @@ impl PipelineMetrics {
             VERTEX_PENDING,
             "Total number of pending messages",
             metrics.pending.clone(),
+        );
+        vertex_registry.register(
+            VERTEX_PENDING_RAW,
+            "Total number of pending messages",
+            metrics.pending_raw.clone(),
         );
         metrics
     }
@@ -851,7 +881,7 @@ async fn expose_pending_metrics_(
                         if is_mono_vertex {
                             let metric_labels = mvtx_forward_metric_labels().clone();
                             monovertex_metrics()
-                                .pending
+                                .pending_raw
                                 .get_or_create(&metric_labels)
                                 .set(pending);
                         } else {
@@ -862,7 +892,7 @@ async fn expose_pending_metrics_(
                                 "source".to_string(),
                             ));
                             pipeline_metrics()
-                                .pending
+                                .pending_raw
                                 .get_or_create(&metric_labels)
                                 .set(pending);
                         }
