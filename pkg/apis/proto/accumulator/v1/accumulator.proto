@@ -1,0 +1,98 @@
+/*
+Copyright 2022 The Numaproj Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+syntax = "proto3";
+
+option go_package = "github.com/numaproj/numaflow-go/pkg/apis/proto/accumulator/v1";
+option java_package = "io.numaproj.numaflow.accumulator.v1";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+
+package accumulator.v1;
+
+// AccumulatorWindow describes a special kind of SessionWindow (similar to Global Window) where output should
+// always have monotonically increasing WM but it can be manipulated through event-time by reordering the messages.
+// NOTE: Quite powerful, should not be abused; it can cause stalling of pipelines and leaks
+service Accumulator {
+  // AccumulateFn applies a accumulate function to a request stream.
+  rpc AccumulateFn(stream AccumulatorRequest) returns (stream AccumulatorResponse);
+
+  // IsReady is the heartbeat endpoint for gRPC.
+  rpc IsReady(google.protobuf.Empty) returns (ReadyResponse);
+}
+
+// Payload represents a payload element.
+message Payload {
+  repeated string keys = 1;
+  bytes value = 2;
+  google.protobuf.Timestamp event_time = 3;
+  google.protobuf.Timestamp watermark = 4;
+  string id = 5;
+  map<string, string> headers = 6;
+}
+
+// AccumulatorRequest represents a request element.
+message AccumulatorRequest {
+  // WindowOperation represents a window operation.
+  // For Unaligned windows, OPEN, APPEND and CLOSE events are sent.
+  message WindowOperation {
+    enum Event {
+      OPEN = 0;
+      CLOSE = 1;
+      APPEND = 2;
+    }
+    Event event = 1;
+    KeyedWindow keyedWindow = 2;
+  }
+
+  Payload payload = 1;
+  WindowOperation operation = 2;
+  optional Handshake handshake = 3;
+}
+
+
+// Window represents a window.
+message KeyedWindow {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+  string slot = 3;
+  repeated string keys = 4;
+}
+
+// AccumulatorResponse represents a response element.
+message AccumulatorResponse {
+  Payload payload = 1;
+  // window represents a window to which the result belongs.
+  KeyedWindow window = 2;
+  repeated string tags = 3;
+  optional Handshake handshake = 4;
+  // EOF represents the end of the response for a window.
+  bool EOF = 5;
+}
+
+
+// ReadyResponse is the health check result.
+message ReadyResponse {
+  bool ready = 1;
+}
+
+// Handshake message between client and server to indicate the start of transmission.
+message Handshake {
+  // Required field indicating the start of transmission.
+  bool sot = 1;
+}

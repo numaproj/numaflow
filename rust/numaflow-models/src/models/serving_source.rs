@@ -25,21 +25,25 @@ pub struct ServingSource {
     /// The header key from which the message id will be extracted
     #[serde(rename = "msgIDHeaderKey")]
     pub msg_id_header_key: String,
+    /// Request timeout in seconds. Default value is 120 seconds.
+    #[serde(
+        rename = "requestTimeoutSeconds",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub request_timeout_seconds: Option<i64>,
     /// Whether to create a ClusterIP Service
     #[serde(rename = "service", skip_serializing_if = "Option::is_none")]
     pub service: Option<bool>,
-    #[serde(rename = "store")]
-    pub store: Box<crate::models::ServingStore>,
 }
 
 impl ServingSource {
     /// ServingSource is the HTTP endpoint for Numaflow.
-    pub fn new(msg_id_header_key: String, store: crate::models::ServingStore) -> ServingSource {
+    pub fn new(msg_id_header_key: String) -> ServingSource {
         ServingSource {
             auth: None,
             msg_id_header_key,
+            request_timeout_seconds: None,
             service: None,
-            store: Box::new(store),
         }
     }
 }

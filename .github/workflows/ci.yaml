@@ -9,7 +9,7 @@ on:
 jobs:
   ui:
     name: UI
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 6
     steps:
       - name: Checkout code
@@ -30,7 +30,7 @@ jobs:
         run: git diff --exit-code
   codegen:
     name: Codegen
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Checkout code
@@ -43,7 +43,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.24"
       - name: Add bins to PATH
         run: |
           echo /home/runner/go/bin >> $GITHUB_PATH
@@ -59,7 +59,7 @@ jobs:
 
   unit-tests:
     name: Unit Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     services:
       redis:
@@ -82,7 +82,7 @@ jobs:
       - name: Set up Go 1.x
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.24"
         id: go
 
       - name: Check out code
@@ -126,7 +126,7 @@ jobs:
       - name: Check Rust formatting
         working-directory: ./rust
         run: |
-            cargo fmt -- --check
+          cargo fmt -- --check
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4
@@ -137,7 +137,7 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
       GOPATH: /home/runner/go
@@ -146,7 +146,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.24"
       - name: Restore Go build cache
         uses: actions/cache@v4
         with:
@@ -172,9 +172,9 @@ jobs:
           echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
           echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
       - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.5
+        uses: mozilla-actions/sccache-action@v0.0.9
       - name: Install dependencies
-        run: sudo apt-get install -y protobuf-compiler
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - name: Print Protoc version
         run: protoc --version
       - name: Build binary
@@ -195,7 +195,7 @@ jobs:
 
   e2e-tests:
     name: E2E Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [build-rust-amd64]
     timeout-minutes: 20
     strategy:
@@ -217,6 +217,7 @@ jobs:
             idle-source-e2e,
             monovertex-e2e,
             builtin-source-e2e,
+            serving-e2e,
           ]
         include:
           - driver: redis
@@ -237,7 +238,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.24"
       - name: Add bins to PATH
         run: |
           echo /home/runner/go/bin >> $GITHUB_PATH

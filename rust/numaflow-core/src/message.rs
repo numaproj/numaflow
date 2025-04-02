@@ -13,10 +13,12 @@ use crate::Error;
 
 const DROP: &str = "U+005C__DROP__";
 
-/// A message that is sent from the source to the sink.
-/// It is cheap to clone.
+/// The message that is passed from the source to the sink.
+/// NOTE: It is cheap to clone.
 #[derive(Debug, Clone)]
 pub(crate) struct Message {
+    /// Type of the message that flows through the ISB.
+    pub(crate) typ: MessageType,
     /// keys of the message
     pub(crate) keys: Arc<[String]>,
     /// tags of the message
@@ -39,6 +41,45 @@ pub(crate) struct Message {
     pub(crate) metadata: Option<Metadata>,
 }
 
+/// Type of the [Message].
+#[derive(Debug, Clone, Default)]
+pub(crate) enum MessageType {
+    /// the payload is Data
+    #[default]
+    Data,
+    /// the payload is a control message.
+    #[allow(clippy::upper_case_acronyms)]
+    WMB,
+}
+
+impl fmt::Display for MessageType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MessageType::Data => write!(f, "Data"),
+            MessageType::WMB => write!(f, "WMB"),
+        }
+    }
+}
+
+// proto enum is an i32 type and WMB is defined as enum in the proto.
+impl From<i32> for MessageType {
+    fn from(kind: i32) -> Self {
+        match kind {
+            0 => MessageType::Data,
+            _ => MessageType::WMB,
+        }
+    }
+}
+
+impl From<MessageType> for i32 {
+    fn from(kind: MessageType) -> Self {
+        match kind {
+            MessageType::Data => 0,
+            MessageType::WMB => 1,
+        }
+    }
+}
+
 impl Default for Message {
     fn default() -> Self {
         Self {
@@ -51,6 +92,7 @@ impl Default for Message {
             id: Default::default(),
             headers: HashMap::new(),
             metadata: None,
+            typ: Default::default(),
         }
     }
 }
@@ -210,7 +252,7 @@ impl TryFrom<Message> for BytesMut {
                     event_time: Some(prost_timestamp_from_utc(message.event_time)),
                     is_late: false, // Set this according to your logic
                 }),
-                kind: numaflow_pb::objects::isb::MessageKind::Data as i32,
+                kind: message.typ.into(),
                 id: Some(message.id.into()),
                 keys: message.keys.to_vec(),
                 headers: message.headers,
@@ -262,6 +304,7 @@ mod tests {
     #[test]
     fn test_message_to_vec_u8() {
         let message = Message {
+            typ: Default::default(),
             keys: Arc::from(vec!["key1".to_string()]),
             tags: None,
             value: vec![1, 2, 3].into(),

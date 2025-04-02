@@ -24,9 +24,14 @@ impl Sink for LogSink {
             result.push(ResponseFromSink {
                 id: msg.id.to_string(),
                 status: ResponseStatusFromSink::Success,
+                serve_response: None,
             })
         }
         Ok(result)
+    }
+
+    async fn is_ready(&mut self) -> bool {
+        true
     }
 }
 
@@ -46,6 +51,7 @@ mod tests {
         let mut sink = LogSink;
         let messages = vec![
             Message {
+                typ: Default::default(),
                 keys: Arc::from(vec![]),
                 tags: None,
                 value: b"Hello, World!".to_vec().into(),
@@ -61,6 +67,7 @@ mod tests {
                 metadata: None,
             },
             Message {
+                typ: Default::default(),
                 keys: Arc::from(vec![]),
                 tags: None,
                 value: b"Hello, World!".to_vec().into(),
@@ -82,6 +89,7 @@ mod tests {
             .map(|msg| ResponseFromSink {
                 status: ResponseStatusFromSink::Success,
                 id: msg.id.to_string(),
+                serve_response: None,
             })
             .collect::<Vec<ResponseFromSink>>();
 

@@ -23,7 +23,7 @@ type Graph = HashMap<String, Vec<Edge>>;
 #[derive(Serialize, Deserialize, Debug)]
 struct Subgraph {
     id: String,
-    blocks: Vec<Block>,
+    edge_callbacks: Vec<EdgeCallback>,
 }
 
 /// MessageGraph is a struct that generates the graph from the source vertex to the downstream vertices
@@ -32,9 +32,10 @@ pub(crate) struct MessageGraph {
     dag: Graph,
 }
 
-/// Block is a struct that contains the information about the block in the subgraph.
+/// Block is a struct that contains the information about the edge-information and callback info in
+/// the subgraph.
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub(crate) struct Block {
+pub(crate) struct EdgeCallback {
     from: String,
     to: String,
     cb_time: u64,
@@ -60,6 +61,28 @@ impl MessageGraph {
         id: String,
         callbacks: Vec<Arc<Callback>>,
     ) -> Result<Option<String>, Error> {
+        // For a monovertex, there will only be 1 callback.
+        // Transformer will only do a callback if the message is dropped.
+        if self.is_monovertex() && callbacks.len() == 1 {
+            // We return a json object similar to that returned by pipeline.
+            let cb = callbacks.first();
+            let mut subgraph: Subgraph = Subgraph {
+                id,
+                edge_callbacks: Vec::new(),
+            };
+            if let Some(cb) = cb {
+                subgraph.edge_callbacks.push(EdgeCallback {
+                    from: cb.from_vertex.clone(),
+                    to: cb.vertex.clone(),
+                    cb_time: cb.cb_time,
+                });
+            }
+            return match serde_json::to_string(&subgraph) {
+                Ok(json) => Ok(Some(json)),
+                Err(e) => Err(Error::SubGraphGenerator(e.to_string())),
+            };
+        }
+
         // Create a HashMap to map each vertex to its corresponding callbacks
         let mut callback_map: HashMap<String, Vec<CallbackRequestWrapper>> = HashMap::new();
         let mut source_vertex = None;
@@ -95,7 +118,7 @@ impl MessageGraph {
         // Create a new subgraph.
         let mut subgraph: Subgraph = Subgraph {
             id,
-            blocks: Vec::new(),
+            edge_callbacks: Vec::new(),
         };
         // Call the `generate_subgraph` function to generate the subgraph from the source vertex
         let result = self.generate_subgraph(
@@ -159,7 +182,7 @@ impl MessageGraph {
         };
 
         // add the current block to the subgraph
-        subgraph.blocks.push(Block {
+        subgraph.edge_callbacks.push(EdgeCallback {
             from: current_callback.from_vertex.clone(),
             to: current_callback.vertex.clone(),
             cb_time: current_callback.cb_time,
@@ -202,7 +225,7 @@ impl MessageGraph {
                                 .map_or(
                                     tags.operator.as_ref() == Some(&OperatorType::Not),
                                     |callback_tags| {
-                                        tags.operator.as_ref().map_or(false, |operator| {
+                                        tags.operator.as_ref().is_some_and(|operator| {
                                             // If there is no operator, default to false (i.e., do not proceed with the edge)
                                             // If there is an operator, compare the current callback's tags with the edge's tags
                                             compare_slice(operator, callback_tags, &tags.values)
@@ -242,8 +265,12 @@ impl MessageGraph {
         for edge in &pipeline_spec.edges {
             dag.entry(edge.from.clone()).or_default().push(edge.clone());
         }
-
         Ok(MessageGraph { dag })
+    }
+
+    pub(crate) fn is_monovertex(&self) -> bool {
+        // The DAG is created from the edges. For a monovertex, edges will be empty.
+        self.dag.is_empty()
     }
 }
 
@@ -290,7 +317,7 @@ mod tests {
 
         let mut subgraph: Subgraph = Subgraph {
             id: "uuid1".to_string(),
-            blocks: Vec::new(),
+            edge_callbacks: Vec::new(),
         };
         let result = message_graph.generate_subgraph(
             "a".to_string(),
@@ -367,7 +394,7 @@ mod tests {
 
         let mut subgraph: Subgraph = Subgraph {
             id: "uuid1".to_string(),
-            blocks: Vec::new(),
+            edge_callbacks: Vec::new(),
         };
         let result = message_graph.generate_subgraph(
             "a".to_string(),
@@ -568,7 +595,7 @@ mod tests {
 
         let mut subgraph: Subgraph = Subgraph {
             id: "xxxx".to_string(),
-            blocks: Vec::new(),
+            edge_callbacks: Vec::new(),
         };
         let result = message_graph.generate_subgraph(
             source_vertex.clone(),
@@ -644,7 +671,7 @@ mod tests {
 
         let mut subgraph: Subgraph = Subgraph {
             id: "xxxx".to_string(),
-            blocks: Vec::new(),
+            edge_callbacks: Vec::new(),
         };
         let result = message_graph.generate_subgraph(
             source_vertex.clone(),
@@ -818,7 +845,7 @@ mod tests {
 
         let mut subgraph: Subgraph = Subgraph {
             id: "xxxx".to_string(),
-            blocks: Vec::new(),
+            edge_callbacks: Vec::new(),
         };
         let result = message_graph.generate_subgraph(
             source_vertex.clone(),
@@ -923,7 +950,7 @@ mod tests {
 
         let mut subgraph: Subgraph = Subgraph {
             id: "xxxx".to_string(),
-            blocks: Vec::new(),
+            edge_callbacks: Vec::new(),
         };
         let result = message_graph.generate_subgraph(
             source_vertex.clone(),
@@ -1073,7 +1100,7 @@ mod tests {
 
         let mut subgraph: Subgraph = Subgraph {
             id: "xxxx".to_string(),
-            blocks: Vec::new(),
+            edge_callbacks: Vec::new(),
         };
         let result = message_graph.generate_subgraph(
             source_vertex.clone(),
@@ -1365,7 +1392,7 @@ mod tests {
 
         let mut subgraph: Subgraph = Subgraph {
             id: "xxxx".to_string(),
-            blocks: Vec::new(),
+            edge_callbacks: Vec::new(),
         };
         let result = message_graph.generate_subgraph(
             source_vertex.clone(),

@@ -105,7 +105,7 @@ func (iw *SourceIdleHandler) PublishSourceIdleWatermark(partitions []int32) {
 		// in this case, we can publish the idle watermark as the last published idle watermark + the increment by value.
 		nextIdleWM = iw.lastPublishedIdleWm.Add(iw.config.IdleSource.GetIncrementBy())
 	} else {
-		// if its not -1, then we can publish the idle watermark as the computed watermark + the increment by value.
+		// if it's not -1, then we can publish the idle watermark as the computed watermark + the increment by value.
 		nextIdleWM = computedWm.Add(iw.config.IdleSource.GetIncrementBy())
 	}
 

@@ -227,7 +227,7 @@ func getContainerType(serverInfoFilePath string) ContainerType {
 	switch containerType {
 	case ContainerTypeSourcer, ContainerTypeSourcetransformer, ContainerTypeSinker, ContainerTypeMapper,
 		ContainerTypeReducer, ContainerTypeReducestreamer, ContainerTypeSessionreducer,
-		ContainerTypeSideinput, ContainerTypeFbsinker:
+		ContainerTypeSideinput, ContainerTypeFbsinker, ContainerTypeAccumulator:
 		return containerType
 	default:
 		return ContainerTypeUnknown

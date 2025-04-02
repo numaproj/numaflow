@@ -26,6 +26,7 @@ import (
 
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	resource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
@@ -103,11 +104,24 @@ func (mv MonoVertex) GetHeadlessServiceName() string {
 }
 
 func (mv MonoVertex) GetServiceObjs() []*corev1.Service {
-	svcs := []*corev1.Service{mv.getServiceObj(mv.GetHeadlessServiceName(), true, MonoVertexMetricsPort, MonoVertexMetricsPortName)}
+	svcs := []*corev1.Service{}
+	ports := map[string]int32{
+		MonoVertexMetricsPortName: MonoVertexMetricsPort,
+		MonoVertexMonitorPortName: MonoVertexMonitorPort,
+	}
+	svcs = append(svcs, mv.getServiceObj(mv.GetHeadlessServiceName(), true, ports))
 	return svcs
 }
 
-func (mv MonoVertex) getServiceObj(name string, headless bool, port int32, servicePortName string) *corev1.Service {
+func (mv MonoVertex) getServiceObj(name string, headless bool, ports map[string]int32) *corev1.Service {
+	var servicePorts []corev1.ServicePort
+	for name, port := range ports {
+		servicePorts = append(servicePorts, corev1.ServicePort{
+			Port:       port,
+			TargetPort: intstr.FromInt32(port),
+			Name:       name,
+		})
+	}
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       mv.Namespace,
@@ -121,9 +135,7 @@ func (mv MonoVertex) getServiceObj(name string, headless bool, port int32, servi
 			},
 		},
 		Spec: corev1.ServiceSpec{
-			Ports: []corev1.ServicePort{
-				{Port: port, TargetPort: intstr.FromInt32(port), Name: servicePortName},
-			},
+			Ports: servicePorts,
 			Selector: map[string]string{
 				KeyPartOf:         Project,
 				KeyManagedBy:      ControllerMonoVertex,
@@ -133,6 +145,7 @@ func (mv MonoVertex) getServiceObj(name string, headless bool, port int32, servi
 		},
 	}
 	if headless {
+		svc.Spec.PublishNotReadyAddresses = true
 		svc.Spec.ClusterIP = "None"
 	}
 	return svc
@@ -318,7 +331,7 @@ func (mv MonoVertex) simpleCopy() MonoVertex {
 
 func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, error) {
 	copiedSpec := mv.simpleCopy()
-	copiedSpec.Spec.Scale = Scale{LookbackSeconds: mv.Spec.Scale.LookbackSeconds}
+	copiedSpec.Spec.Scale = Scale{LookbackSeconds: ptr.To[uint32](uint32(mv.Spec.Scale.GetLookbackSeconds()))}
 	monoVtxBytes, err := json.Marshal(copiedSpec)
 	if err != nil {
 		return nil, errors.New("failed to marshal mono vertex spec")
@@ -338,16 +351,23 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 				Medium: corev1.StorageMediumMemory,
 			}},
 		},
+		{
+			Name: RuntimeDirVolume,
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{
+				SizeLimit: resource.NewQuantity(RuntimeDirSizeLimit, resource.BinarySI),
+			}},
+		},
 	}
 	volumeMounts := []corev1.VolumeMount{{Name: varVolumeName, MountPath: PathVarRun}}
-
-	sidecarContainers, containers := mv.Spec.buildContainers(getContainerReq{
+	containerRequest := getContainerReq{
 		env:             envVars,
 		image:           req.Image,
 		imagePullPolicy: req.PullPolicy,
 		resources:       req.DefaultResources,
 		volumeMounts:    volumeMounts,
-	})
+	}
+
+	sidecarContainers, containers := mv.Spec.buildContainers(containerRequest)
 
 	var readyzInitDeploy, readyzPeriodSeconds, readyzTimeoutSeconds, readyzFailureThreshold int32 = NumaContainerReadyzInitialDelaySeconds, NumaContainerReadyzPeriodSeconds, NumaContainerReadyzTimeoutSeconds, NumaContainerReadyzFailureThreshold
 	var liveZInitDeploy, liveZPeriodSeconds, liveZTimeoutSeconds, liveZFailureThreshold int32 = NumaContainerLivezInitialDelaySeconds, NumaContainerLivezPeriodSeconds, NumaContainerLivezTimeoutSeconds, NumaContainerLivezFailureThreshold
@@ -465,13 +485,25 @@ func (mvspec MonoVertexSpec) DeepCopyWithoutReplicas() MonoVertexSpec {
 	return x
 }
 
+func (mvspec MonoVertexSpec) getMainContainer(req getContainerReq) corev1.Container {
+	// volume mount to the runtime path
+	volumeMounts := []corev1.VolumeMount{
+		{
+			Name:      RuntimeDirVolume,
+			MountPath: RuntimeDirMountPath,
+		},
+	}
+	return containerBuilder{}.
+		init(req).appendVolumeMounts(volumeMounts...).command(NumaflowRustBinary).args("--rust").build()
+}
+
 // buildContainers builds the sidecar containers and main containers for the mono vertex.
 func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) ([]corev1.Container, []corev1.Container) {
-	mainContainer := containerBuilder{}.
-		init(req).command(NumaflowRustBinary).args("--rust").build()
+	mainContainer := mvspec.getMainContainer(req)
 	containers := []corev1.Container{mainContainer}
 
-	sidecarContainers := []corev1.Container{}
+	monitorContainer := buildMonitorContainer(req)
+	sidecarContainers := []corev1.Container{monitorContainer}
 	if mvspec.Source.UDSource != nil { // Only support UDSource for now.
 		sidecarContainers = append(sidecarContainers, mvspec.Source.getUDSourceContainer(req))
 	}
@@ -484,6 +516,7 @@ func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) ([]corev1.Cont
 	if mvspec.Sink.Fallback != nil && mvspec.Sink.Fallback.UDSink != nil {
 		sidecarContainers = append(sidecarContainers, mvspec.Sink.getFallbackUDSinkContainer(req))
 	}
+
 	sidecarContainers = append(sidecarContainers, mvspec.Sidecars...)
 	return sidecarContainers, containers
 }
@@ -611,7 +644,7 @@ func (mvs *MonoVertexStatus) MarkPhaseRunning() {
 	mvs.MarkPhase(MonoVertexPhaseRunning, "", "")
 }
 
-// MarkPhasePaused set the Pipeline has been paused.
+// MarkPhasePaused set the MonoVertex has been paused.
 func (mvs *MonoVertexStatus) MarkPhasePaused() {
 	mvs.MarkPhase(MonoVertexPhasePaused, "", "MonoVertex paused")
 }
@@ -643,7 +676,7 @@ type MonoVertexList struct {
 }
 
 type MonoVertexLifecycle struct {
-	// DesiredPhase used to bring the pipeline from current phase to desired phase
+	// DesiredPhase used to bring the MonoVertex from current phase to desired phase
 	// +kubebuilder:default=Running
 	// +optional
 	DesiredPhase MonoVertexPhase `json:"desiredPhase,omitempty" protobuf:"bytes,1,opt,name=desiredPhase"`

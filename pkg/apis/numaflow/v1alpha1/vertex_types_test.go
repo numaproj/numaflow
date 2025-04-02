@@ -121,8 +121,13 @@ func TestGetToBuffersSink(t *testing.T) {
 func TestWithoutReplicas(t *testing.T) {
 	s := &VertexSpec{
 		Replicas: ptr.To[int32](3),
+		Lifecycle: VertexLifecycle{
+			DesiredPhase: VertexPhasePaused,
+		},
 	}
-	assert.Equal(t, int32(0), *s.DeepCopyWithoutReplicas().Replicas)
+	dc := s.DeepCopyWithoutReplicasAndLifecycle()
+	assert.Equal(t, int32(0), *dc.Replicas)
+	assert.Equal(t, VertexLifecycle{}, dc.Lifecycle)
 }
 
 func TestGetVertexReplicas(t *testing.T) {
@@ -133,11 +138,16 @@ func TestGetVertexReplicas(t *testing.T) {
 			},
 		},
 	}
-	assert.Equal(t, 1, v.GetReplicas())
+	v.Spec.Lifecycle.DesiredPhase = VertexPhasePaused
+	assert.Equal(t, 0, v.CalculateReplicas())
+	v.Spec.Lifecycle.DesiredPhase = VertexPhaseRunning
+	assert.Equal(t, 1, v.CalculateReplicas())
+	v.Spec.Lifecycle = VertexLifecycle{}
+	assert.Equal(t, 1, v.CalculateReplicas())
 	v.Spec.Replicas = ptr.To[int32](3)
-	assert.Equal(t, 3, v.GetReplicas())
+	assert.Equal(t, 3, v.CalculateReplicas())
 	v.Spec.Replicas = ptr.To[int32](0)
-	assert.Equal(t, 0, v.GetReplicas())
+	assert.Equal(t, 0, v.CalculateReplicas())
 	v.Spec.UDF = &UDF{
 		GroupBy: &GroupBy{},
 	}
@@ -145,19 +155,23 @@ func TestGetVertexReplicas(t *testing.T) {
 		{Edge: Edge{From: "a", To: "b"}},
 	}
 	v.Spec.Replicas = ptr.To[int32](5)
-	assert.Equal(t, 1, v.GetReplicas())
+	assert.Equal(t, 1, v.CalculateReplicas())
 	v.Spec.Replicas = ptr.To[int32](1000)
-	assert.Equal(t, 1, v.GetReplicas())
+	assert.Equal(t, 1, v.CalculateReplicas())
 	v.Spec.UDF.GroupBy = nil
-	assert.Equal(t, 1000, v.GetReplicas())
+	v.Spec.Scale.Max = ptr.To[int32](40)
+	v.Spec.Scale.Min = ptr.To[int32](20)
+	v.Spec.Replicas = ptr.To[int32](300)
+	assert.Equal(t, 40, v.CalculateReplicas())
+	v.Spec.Replicas = ptr.To[int32](10)
+	assert.Equal(t, 20, v.CalculateReplicas())
 }
 
 func TestGetHeadlessSvcSpec(t *testing.T) {
-	s := testVertex.getServiceObj(testVertex.GetHeadlessServiceName(), true, VertexMetricsPort, VertexMetricsPortName)
+	s := testVertex.getServiceObj(testVertex.GetHeadlessServiceName(), true, map[string]int32{VertexMetricsPortName: VertexMetricsPort})
 	assert.Equal(t, s.Name, testVertex.GetHeadlessServiceName())
 	assert.Equal(t, s.Namespace, testVertex.Namespace)
 	assert.Equal(t, 1, len(s.Spec.Ports))
-	assert.Equal(t, VertexMetricsPort, int(s.Spec.Ports[0].Port))
 	assert.Equal(t, "None", s.Spec.ClusterIP)
 }
 
@@ -173,8 +187,16 @@ func TestGetServiceObjs(t *testing.T) {
 	s = v.GetServiceObjs()
 	assert.Equal(t, 1, len(s))
 	assert.Equal(t, s[0].Name, v.GetHeadlessServiceName())
-	assert.Equal(t, 1, len(s[0].Spec.Ports))
-	assert.Equal(t, VertexMetricsPort, int(s[0].Spec.Ports[0].Port))
+	assert.Equal(t, 2, len(s[0].Spec.Ports))
+	ports := map[int32]bool{
+		VertexMetricsPort: false,
+		VertexMonitorPort: false,
+	}
+	for _, port := range s[0].Spec.Ports {
+		ports[port.Port] = true
+	}
+	assert.True(t, ports[VertexMetricsPort], "Metrics port is missing")
+	assert.True(t, ports[VertexMonitorPort], "Monitor port is missing")
 	assert.Equal(t, "None", s[0].Spec.ClusterIP)
 
 	v.Spec.Source.HTTP.Service = true
@@ -272,8 +294,11 @@ func TestGetPodSpec(t *testing.T) {
 		assert.NotContains(t, envNames, EnvCallbackEnabled)
 		assert.Contains(t, s.Containers[0].Args, "processor")
 		assert.Contains(t, s.Containers[0].Args, "--type="+string(VertexTypeSource))
-		assert.Equal(t, 1, len(s.InitContainers))
+		assert.Equal(t, 2, len(s.InitContainers))
+		assert.Equal(t, 2, len(s.Volumes))
+		assert.Equal(t, 2, len(s.Containers[0].VolumeMounts))
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
+		assert.Equal(t, CtrMonitor, s.InitContainers[1].Name)
 		assert.Equal(t, "200m", s.Containers[0].Resources.Requests.Cpu().String())
 		assert.Equal(t, "200m", s.Containers[0].Resources.Limits.Cpu().String())
 		assert.Equal(t, "200Mi", s.Containers[0].Resources.Requests.Memory().String())
@@ -292,9 +317,6 @@ func TestGetPodSpec(t *testing.T) {
 			Serving: &ServingSource{
 				Auth: &Authorization{
 					Token: &corev1.SecretKeySelector{},
-				},
-				Store: &ServingStore{
-					URL: ptr.To[string]("redis://localhost:6379"),
 				},
 			},
 		}
@@ -326,11 +348,7 @@ func TestGetPodSpec(t *testing.T) {
 
 		req := req.DeepCopy()
 		req.PipelineSpec.Vertices = append(req.PipelineSpec.Vertices, AbstractVertex{Name: "serving-src", Source: &Source{
-			Serving: &ServingSource{
-				Store: &ServingStore{
-					URL: ptr.To[string]("redis://localhost:6379"),
-				},
-			},
+			Serving: &ServingSource{},
 		}})
 
 		s, err := testObj.GetPodSpec(*req)
@@ -367,8 +385,11 @@ func TestGetPodSpec(t *testing.T) {
 
 		assert.Contains(t, s.Containers[0].Args, "processor")
 		assert.Contains(t, s.Containers[0].Args, "--type="+string(VertexTypeSource))
-		assert.Equal(t, 1, len(s.InitContainers))
+		assert.Equal(t, 2, len(s.InitContainers))
+		assert.Equal(t, 2, len(s.Volumes))
+		assert.Equal(t, 2, len(s.Containers[0].VolumeMounts))
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
+		assert.Equal(t, CtrMonitor, s.InitContainers[1].Name)
 		assert.Equal(t, "200m", s.Containers[0].Resources.Requests.Cpu().String())
 		assert.Equal(t, "200m", s.Containers[0].Resources.Limits.Cpu().String())
 		assert.Equal(t, "200Mi", s.Containers[0].Resources.Requests.Memory().String())
@@ -400,6 +421,8 @@ func TestGetPodSpec(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(s.Containers))
 		assert.Equal(t, CtrMain, s.Containers[0].Name)
+		assert.Equal(t, 2, len(s.Volumes))
+		assert.Equal(t, 2, len(s.Containers[0].VolumeMounts))
 		assert.Equal(t, testFlowImage, s.Containers[0].Image)
 		assert.Equal(t, corev1.PullIfNotPresent, s.Containers[0].ImagePullPolicy)
 		assert.NotNil(t, s.Containers[0].ReadinessProbe)
@@ -435,8 +458,9 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, EnvReplica)
 		assert.Contains(t, s.Containers[0].Args, "processor")
 		assert.Contains(t, s.Containers[0].Args, "--type="+string(VertexTypeSink))
-		assert.Equal(t, 1, len(s.InitContainers))
+		assert.Equal(t, 2, len(s.InitContainers))
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
+		assert.Equal(t, CtrMonitor, s.InitContainers[1].Name)
 	})
 
 	t.Run("test user-defined sink", func(t *testing.T) {
@@ -455,20 +479,22 @@ func TestGetPodSpec(t *testing.T) {
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(s.Containers))
-		assert.Equal(t, 2, len(s.InitContainers))
-		assert.Equal(t, "image", s.InitContainers[1].Image)
-		assert.Equal(t, 1, len(s.InitContainers[1].Command))
-		assert.Equal(t, "cmd", s.InitContainers[1].Command[0])
-		assert.Equal(t, 1, len(s.InitContainers[1].Args))
-		assert.Equal(t, "arg0", s.InitContainers[1].Args[0])
+		assert.Equal(t, 3, len(s.InitContainers))
+		assert.Equal(t, "image", s.InitContainers[2].Image)
+		assert.Equal(t, 1, len(s.InitContainers[2].Command))
+		assert.Equal(t, "cmd", s.InitContainers[2].Command[0])
+		assert.Equal(t, 1, len(s.InitContainers[2].Args))
+		assert.Equal(t, "arg0", s.InitContainers[2].Args[0])
 		var sidecarEnvNames []string
-		for _, env := range s.InitContainers[1].Env {
+		for _, env := range s.InitContainers[2].Env {
 			sidecarEnvNames = append(sidecarEnvNames, env.Name)
 		}
 		assert.Contains(t, sidecarEnvNames, EnvCPULimit)
 		assert.Contains(t, sidecarEnvNames, EnvMemoryLimit)
 		assert.Contains(t, sidecarEnvNames, EnvCPURequest)
 		assert.Contains(t, sidecarEnvNames, EnvMemoryRequest)
+		assert.Equal(t, 2, len(s.Volumes))
+		assert.Equal(t, 2, len(s.Containers[0].VolumeMounts))
 	})
 
 	t.Run("test user-defined source, with a source transformer", func(t *testing.T) {
@@ -492,9 +518,8 @@ func TestGetPodSpec(t *testing.T) {
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(s.Containers))
-		assert.Equal(t, 3, len(s.InitContainers))
-
-		for i := 1; i < len(s.InitContainers); i++ {
+		assert.Equal(t, 4, len(s.InitContainers))
+		for i := 2; i < len(s.InitContainers); i++ {
 			assert.Equal(t, "image", s.InitContainers[i].Image)
 			assert.Equal(t, 1, len(s.InitContainers[i].Command))
 			assert.Equal(t, "cmd", s.InitContainers[i].Command[0])
@@ -521,9 +546,7 @@ func TestGetPodSpec(t *testing.T) {
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(s.Containers))
-		assert.Equal(t, 2, len(s.InitContainers))
 		assert.Equal(t, CtrMain, s.Containers[0].Name)
-		assert.Equal(t, CtrUdf, s.InitContainers[1].Name)
 		assert.Equal(t, testFlowImage, s.Containers[0].Image)
 		assert.Equal(t, corev1.PullIfNotPresent, s.Containers[0].ImagePullPolicy)
 		var envNames []string
@@ -539,9 +562,10 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, EnvReplica)
 		assert.Contains(t, s.Containers[0].Args, "processor")
 		assert.Contains(t, s.Containers[0].Args, "--type="+string(VertexTypeMapUDF))
-		assert.Equal(t, 2, len(s.InitContainers))
+		assert.Equal(t, 3, len(s.InitContainers))
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
-		assert.Equal(t, CtrUdf, s.InitContainers[1].Name)
+		assert.Equal(t, CtrMonitor, s.InitContainers[1].Name)
+		assert.Equal(t, CtrUdf, s.InitContainers[2].Name)
 		var sidecarEnvNames []string
 		for _, env := range s.InitContainers[1].Env {
 			sidecarEnvNames = append(sidecarEnvNames, env.Name)
@@ -550,6 +574,7 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Contains(t, sidecarEnvNames, EnvMemoryLimit)
 		assert.Contains(t, sidecarEnvNames, EnvCPURequest)
 		assert.Contains(t, sidecarEnvNames, EnvMemoryRequest)
+
 	})
 
 	t.Run("test udf with side inputs", func(t *testing.T) {
@@ -565,16 +590,24 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Equal(t, 2, len(s.Containers))
 		assert.Equal(t, CtrMain, s.Containers[0].Name)
 		assert.Equal(t, CtrSideInputsWatcher, s.Containers[1].Name)
-		assert.Equal(t, 3, len(s.InitContainers))
+		assert.Equal(t, 4, len(s.InitContainers))
+		// init container
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
+		// init side inputs container
 		assert.Equal(t, CtrInitSideInputs, s.InitContainers[1].Name)
 		assert.Equal(t, 1, len(s.InitContainers[1].VolumeMounts))
 		assert.Equal(t, "var-run-side-inputs", s.InitContainers[1].VolumeMounts[0].Name)
 		assert.False(t, s.InitContainers[1].VolumeMounts[0].ReadOnly)
-		assert.Equal(t, CtrUdf, s.InitContainers[2].Name)
-		assert.Equal(t, 2, len(s.InitContainers[2].VolumeMounts))
-		assert.Equal(t, "var-run-side-inputs", s.InitContainers[2].VolumeMounts[1].Name)
-		assert.True(t, s.InitContainers[2].VolumeMounts[1].ReadOnly)
+		// monitor container
+		assert.Equal(t, CtrMonitor, s.InitContainers[2].Name)
+		assert.Equal(t, 1, len(s.InitContainers[2].VolumeMounts))
+		assert.Equal(t, "runtime-vol", s.InitContainers[2].VolumeMounts[0].Name)
+		// udf container
+		assert.Equal(t, CtrUdf, s.InitContainers[3].Name)
+		assert.Equal(t, 2, len(s.InitContainers[3].VolumeMounts))
+		assert.Equal(t, "var-run-side-inputs", s.InitContainers[3].VolumeMounts[1].Name)
+		assert.True(t, s.InitContainers[3].VolumeMounts[1].ReadOnly)
+
 		assert.Equal(t, 1, len(s.Containers[1].VolumeMounts))
 		assert.Equal(t, "var-run-side-inputs", s.Containers[1].VolumeMounts[0].Name)
 		assert.False(t, s.Containers[1].VolumeMounts[0].ReadOnly)
@@ -583,9 +616,7 @@ func TestGetPodSpec(t *testing.T) {
 	t.Run("test serving source", func(t *testing.T) {
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.Source = &Source{
-			Serving: &ServingSource{
-				Store: &ServingStore{},
-			},
+			Serving: &ServingSource{},
 		}
 		s, err := testObj.GetPodSpec(req)
 		assert.NoError(t, err)
@@ -606,8 +637,9 @@ func TestGetPodSpec(t *testing.T) {
 		assert.Contains(t, envNames, EnvReplica)
 		assert.Contains(t, s.Containers[0].Args, "processor")
 		assert.Contains(t, s.Containers[0].Args, "--type="+string(VertexTypeSource))
-		assert.Equal(t, 1, len(s.InitContainers))
+		assert.Equal(t, 2, len(s.InitContainers))
 		assert.Equal(t, CtrInit, s.InitContainers[0].Name)
+		assert.Equal(t, CtrMonitor, s.InitContainers[1].Name)
 
 		envNames = []string{}
 		for _, e := range s.Containers[0].Env {

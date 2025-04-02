@@ -6,8 +6,8 @@ edition = "2021"
 [features]
 nats-tests = []
 pulsar-tests = []
-redis-tests = []
-all-tests = ["nats-tests", "pulsar-tests", "redis-tests"]
+sqs-tests = []
+all-tests = ["nats-tests", "pulsar-tests", "sqs-tests"]
 
 [lints]
 workspace = true
@@ -16,6 +16,9 @@ workspace = true
 tokio.workspace = true
 tracing.workspace = true
 numaflow-pulsar.workspace = true
+numaflow-monitor.workspace = true
+numaflow-jetstream.workspace = true
+numaflow-sqs.workspace = true
 numaflow-models.workspace = true
 numaflow-pb.workspace = true
 serving.workspace = true
@@ -26,7 +29,10 @@ bytes.workspace = true
 serde.workspace = true
 rustls.workspace = true
 tower.workspace = true
-tonic = "0.12.3"
+reqwest.workspace = true
+hyper = "1.2.0"
+async-nats.workspace = true
+tonic = { version = "0.13.0"}
 thiserror = "2.0.3"
 tokio-util = "0.7.11"
 tokio-stream = "0.1.15"
@@ -46,14 +52,20 @@ kube = "0.95.0"
 futures = "0.3.30"
 pin-project = "1.1.5"
 rand = "0.8.5"
-async-nats = "0.38.0"
 
 [dev-dependencies]
 tempfile = "3.11.0"
-numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "9ca9362ad511084501520e5a37d40cdcd0cdc9d9" }
+numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "c6aa3a8d64a189357260f78131ef4692d387ba6c" }
 pulsar = { version = "6.3.0", default-features = false, features = [
     "tokio-rustls-runtime",
 ] }
+aws-smithy-runtime = { version = "1.7.6", features = ["test-util"] }
+aws-smithy-types = "1.2.11"
+http = "1.2.0"
+aws-config = "1.5.11"
+aws-sdk-sqs = "1.51.0"
 reqwest = { workspace = true, features = ["json"] }
+aws-smithy-mocks-experimental = "0.2.1"
+k8s-openapi = { version = "0.23.0", features = ["v1_31"] }
 
 [build-dependencies]

@@ -104,8 +104,6 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 	vertex.Status.InitConditions()
 	vertex.Status.SetObservedGeneration(vertex.Generation)
 
-	desiredReplicas := vertex.GetReplicas()
-
 	isbSvc := &dfv1.InterStepBufferService{}
 	isbSvcName := dfv1.DefaultISBSvcName
 	if len(vertex.Spec.InterStepBufferServiceName) > 0 {
@@ -168,8 +166,8 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 
 	vertex.Status.MarkDeployed()
 
-	// Mark it running before checking the status of the pods
-	vertex.Status.MarkPhaseRunning()
+	// Mark desired phase before checking the status of the pods
+	vertex.Status.MarkPhase(vertex.Spec.Lifecycle.GetDesiredPhase(), "", "")
 
 	// Check status of the pods
 	var podList corev1.PodList
@@ -179,6 +177,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		return ctrl.Result{}, fmt.Errorf("failed to get pods of a vertex: %w", err)
 	}
 	readyPods := reconciler.NumOfReadyPods(podList)
+	desiredReplicas := vertex.CalculateReplicas()
 	if readyPods > desiredReplicas { // It might happen in some corner cases, such as during rollout
 		readyPods = desiredReplicas
 	}
@@ -195,7 +194,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 
 func (r *vertexReconciler) orchestratePods(ctx context.Context, vertex *dfv1.Vertex, pipeline *dfv1.Pipeline, isbSvc *dfv1.InterStepBufferService) error {
 	log := logging.FromContext(ctx)
-	desiredReplicas := vertex.GetReplicas()
+	desiredReplicas := vertex.CalculateReplicas()
 	vertex.Status.DesiredReplicas = uint32(desiredReplicas)
 
 	// Set metrics

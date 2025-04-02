@@ -8339,20 +8339,13 @@ spec:
                         type: object
                       msgIDHeaderKey:
                         type: string
+                      requestTimeoutSeconds:
+                        format: int32
+                        type: integer
                       service:
                         type: boolean
-                      store:
-                        properties:
-                          ttl:
-                            type: string
-                          url:
-                            type: string
-                        required:
-                        - url
-                        type: object
                     required:
                     - msgIDHeaderKey
-                    - store
                     type: object
                   transformer:
                     properties:
@@ -10028,6 +10021,307 @@ spec:
                   readTimeout:
                     default: 1s
                     type: string
+                type: object
+              servingStore:
+                properties:
+                  container:
+                    properties:
+                      args:
+                        items:
+                          type: string
+                        type: array
+                      command:
+                        items:
+                          type: string
+                        type: array
+                      env:
+                        items:
+                          properties:
+                            name:
+                              type: string
+                            value:
+                              type: string
+                            valueFrom:
+                              properties:
+                                configMapKeyRef:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      default: ""
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  required:
+                                  - key
+                                  type: object
+                                  x-kubernetes-map-type: atomic
+                                fieldRef:
+                                  properties:
+                                    apiVersion:
+                                      type: string
+                                    fieldPath:
+                                      type: string
+                                  required:
+                                  - fieldPath
+                                  type: object
+                                  x-kubernetes-map-type: atomic
+                                resourceFieldRef:
+                                  properties:
+                                    containerName:
+                                      type: string
+                                    divisor:
+                                      anyOf:
+                                      - type: integer
+                                      - type: string
+                                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                      x-kubernetes-int-or-string: true
+                                    resource:
+                                      type: string
+                                  required:
+                                  - resource
+                                  type: object
+                                  x-kubernetes-map-type: atomic
+                                secretKeyRef:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      default: ""
+                                      type: string
+                                    optional:
+                                      type: boolean
+                                  required:
+                                  - key
+                                  type: object
+                                  x-kubernetes-map-type: atomic
+                              type: object
+                          required:
+                          - name
+                          type: object
+                        type: array
+                      envFrom:
+                        items:
+                          properties:
+                            configMapRef:
+                              properties:
+                                name:
+                                  default: ""
+                                  type: string
+                                optional:
+                                  type: boolean
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            prefix:
+                              type: string
+                            secretRef:
+                              properties:
+                                name:
+                                  default: ""
+                                  type: string
+                                optional:
+                                  type: boolean
+                              type: object
+                              x-kubernetes-map-type: atomic
+                          type: object
+                        type: array
+                      image:
+                        type: string
+                      imagePullPolicy:
+                        type: string
+                      livenessProbe:
+                        properties:
+                          failureThreshold:
+                            format: int32
+                            type: integer
+                          initialDelaySeconds:
+                            format: int32
+                            type: integer
+                          periodSeconds:
+                            format: int32
+                            type: integer
+                          successThreshold:
+                            format: int32
+                            type: integer
+                          timeoutSeconds:
+                            format: int32
+                            type: integer
+                        type: object
+                      ports:
+                        items:
+                          properties:
+                            containerPort:
+                              format: int32
+                              type: integer
+                            hostIP:
+                              type: string
+                            hostPort:
+                              format: int32
+                              type: integer
+                            name:
+                              type: string
+                            protocol:
+                              default: TCP
+                              type: string
+                          required:
+                          - containerPort
+                          type: object
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - containerPort
+                        - protocol
+                        x-kubernetes-list-type: map
+                      readinessProbe:
+                        properties:
+                          failureThreshold:
+                            format: int32
+                            type: integer
+                          initialDelaySeconds:
+                            format: int32
+                            type: integer
+                          periodSeconds:
+                            format: int32
+                            type: integer
+                          successThreshold:
+                            format: int32
+                            type: integer
+                          timeoutSeconds:
+                            format: int32
+                            type: integer
+                        type: object
+                      resources:
+                        properties:
+                          claims:
+                            items:
+                              properties:
+                                name:
+                                  type: string
+                                request:
+                                  type: string
+                              required:
+                              - name
+                              type: object
+                            type: array
+                            x-kubernetes-list-map-keys:
+                            - name
+                            x-kubernetes-list-type: map
+                          limits:
+                            additionalProperties:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            type: object
+                          requests:
+                            additionalProperties:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            type: object
+                        type: object
+                      securityContext:
+                        properties:
+                          allowPrivilegeEscalation:
+                            type: boolean
+                          appArmorProfile:
+                            properties:
+                              localhostProfile:
+                                type: string
+                              type:
+                                type: string
+                            required:
+                            - type
+                            type: object
+                          capabilities:
+                            properties:
+                              add:
+                                items:
+                                  type: string
+                                type: array
+                                x-kubernetes-list-type: atomic
+                              drop:
+                                items:
+                                  type: string
+                                type: array
+                                x-kubernetes-list-type: atomic
+                            type: object
+                          privileged:
+                            type: boolean
+                          procMount:
+                            type: string
+                          readOnlyRootFilesystem:
+                            type: boolean
+                          runAsGroup:
+                            format: int64
+                            type: integer
+                          runAsNonRoot:
+                            type: boolean
+                          runAsUser:
+                            format: int64
+                            type: integer
+                          seLinuxOptions:
+                            properties:
+                              level:
+                                type: string
+                              role:
+                                type: string
+                              type:
+                                type: string
+                              user:
+                                type: string
+                            type: object
+                          seccompProfile:
+                            properties:
+                              localhostProfile:
+                                type: string
+                              type:
+                                type: string
+                            required:
+                            - type
+                            type: object
+                          windowsOptions:
+                            properties:
+                              gmsaCredentialSpec:
+                                type: string
+                              gmsaCredentialSpecName:
+                                type: string
+                              hostProcess:
+                                type: boolean
+                              runAsUserName:
+                                type: string
+                            type: object
+                        type: object
+                      volumeMounts:
+                        items:
+                          properties:
+                            mountPath:
+                              type: string
+                            mountPropagation:
+                              type: string
+                            name:
+                              type: string
+                            readOnly:
+                              type: boolean
+                            recursiveReadOnly:
+                              type: string
+                            subPath:
+                              type: string
+                            subPathExpr:
+                              type: string
+                          required:
+                          - mountPath
+                          - name
+                          type: object
+                        type: array
+                    type: object
+                  name:
+                    type: string
+                required:
+                - container
+                - name
                 type: object
               sideInputs:
                 items:
@@ -17029,6 +17323,8 @@ spec:
                       type: object
                     serviceAccountName:
                       type: string
+                    servingStoreName:
+                      type: string
                     sideInputs:
                       items:
                         type: string
@@ -19714,20 +20010,13 @@ spec:
                               type: object
                             msgIDHeaderKey:
                               type: string
+                            requestTimeoutSeconds:
+                              format: int32
+                              type: integer
                             service:
                               type: boolean
-                            store:
-                              properties:
-                                ttl:
-                                  type: string
-                                url:
-                                  type: string
-                              required:
-                              - url
-                              type: object
                           required:
                           - msgIDHeaderKey
-                          - store
                           type: object
                         transformer:
                           properties:
@@ -20709,6 +20998,11 @@ spec:
                               type: object
                             window:
                               properties:
+                                accumulator:
+                                  properties:
+                                    timeout:
+                                      type: string
+                                  type: object
                                 fixed:
                                   properties:
                                     length:
@@ -23402,6 +23696,19 @@ spec:
                 type: array
               interStepBufferServiceName:
                 type: string
+              lifecycle:
+                default:
+                  desiredPhase: Running
+                properties:
+                  desiredPhase:
+                    default: Running
+                    enum:
+                    - ""
+                    - Running
+                    - Paused
+                    - Failed
+                    type: string
+                type: object
               limits:
                 properties:
                   bufferMaxLength:
@@ -23578,6 +23885,8 @@ spec:
                     type: object
                 type: object
               serviceAccountName:
+                type: string
+              servingStoreName:
                 type: string
               sideInputs:
                 items:
@@ -26264,20 +26573,13 @@ spec:
                         type: object
                       msgIDHeaderKey:
                         type: string
+                      requestTimeoutSeconds:
+                        format: int32
+                        type: integer
                       service:
                         type: boolean
-                      store:
-                        properties:
-                          ttl:
-                            type: string
-                          url:
-                            type: string
-                        required:
-                        - url
-                        type: object
                     required:
                     - msgIDHeaderKey
-                    - store
                     type: object
                   transformer:
                     properties:
@@ -27336,6 +27638,11 @@ spec:
                         type: object
                       window:
                         properties:
+                          accumulator:
+                            properties:
+                              timeout:
+                                type: string
+                            type: object
                           fixed:
                             properties:
                               length:
@@ -28240,6 +28547,7 @@ spec:
                 enum:
                 - ""
                 - Running
+                - Paused
                 - Failed
                 type: string
               readyReplicas:
@@ -28876,15 +29184,15 @@ data:
     which the metrics proxy will connect\n# url: service_name + \".\" + service_namespace
     + \".svc.cluster.local\" + \":\" + port\n# example for local prometheus service\n#
     url: http://prometheus-operated.monitoring.svc.cluster.local:9090\npatterns:\n-
-    name: vertex_gauge\n  objects: \n    - vertex\n  title: Vertex Pending Messages\n
-    \ description: This query is the total number of pending messages for the vertex\n
-    \ expr: |\n    sum($metric_name{$filters}) by ($dimension, period)\n  params:\n
-    \   - name: start_time\n      required: false\n    - name: end_time\n      required:
-    false\n  metrics:\n    - metric_name: vertex_pending_messages\n      display_name:
-    Vertex Pending Messages\n      metric_description: This gauge metric keeps track
-    of the total number of messages that are waiting to be processed over varying
-    time frames of 1min, 5min, 15min and default period of 2min. \n      # set \"Units\"
-    or unset for default behaviour\n      # unit: Units\n      required_filters:\n
+    name: vertex_gauge\n  objects: \n    - vertex\n  title: Vertex Gauge Metrics\n
+    \ description: This pattern represents the gauge metrics for a vertex across different
+    dimensions\n  expr: |\n    sum($metric_name{$filters}) by ($dimension, period)\n
+    \ params:\n    - name: start_time\n      required: false\n    - name: end_time\n
+    \     required: false\n  metrics:\n    - metric_name: vertex_pending_messages\n
+    \     display_name: Vertex Pending Messages\n      metric_description: This gauge
+    metric keeps track of the total number of messages that are waiting to be processed
+    over varying time frames of 1min, 5min, 15min and default period of 2min. \n      #
+    set \"Units\" or unset for default behaviour\n      # unit: Units\n      required_filters:\n
     \       - namespace\n        - pipeline\n        - vertex\n      dimensions:\n
     \       - name: pod\n          # expr: optional expression for prometheus query\n
     \         # overrides the default expression\n          filters:\n            -
@@ -28892,23 +29200,24 @@ data:
     false\n        - name: vertex\n          # expr: optional expression for prometheus
     query\n          # overrides the default expression\n          filters:\n            -
     name: period\n              required: false\n\n- name: mono_vertex_gauge\n  objects:
-    \n    - mono-vertex\n  title: Pending Messages Lag\n  description: This query
-    is the total number of pending messages for the mono vertex\n  expr: |\n    sum($metric_name{$filters})
-    by ($dimension, period)\n  params:\n    - name: start_time\n      required: false\n
-    \   - name: end_time\n      required: false\n  metrics:\n    - metric_name: monovtx_pending\n
-    \     display_name: MonoVertex Pending Messages\n      metric_description: This
-    gauge metric keeps track of the total number of messages that are waiting to be
-    processed over varying time frames of 1min, 5min, 15min and default period of
-    2min. \n      # set \"Units\" or unset for default behaviour\n      # unit: Units\n
-    \     required_filters:\n        - namespace\n        - mvtx_name\n      dimensions:\n
-    \       - name: pod\n          # expr: optional expression for prometheus query\n
-    \         # overrides the default expression\n          filters:\n            -
-    name: pod\n              required: false\n            - name: period\n              required:
-    false\n        - name: mono-vertex\n          # expr: optional expression for
-    prometheus query\n          # overrides the default expression\n          filters:\n
-    \           - name: period\n              required: false\n\n- name: mono_vertex_histogram\n
-    \ objects: \n    - mono-vertex\n  title: Processing Time Latency\n  description:
-    This query pattern is for P99,P90 and P50 quantiles for a mono-vertex across different
+    \n    - mono-vertex\n  title: MonoVertex Gauge Metrics\n  description: This pattern
+    represents the gauge metrics for a mono-vertex across different dimensions\n  expr:
+    |\n    sum($metric_name{$filters}) by ($dimension, period)\n  params:\n    - name:
+    start_time\n      required: false\n    - name: end_time\n      required: false\n
+    \ metrics:\n    - metric_name: monovtx_pending\n      display_name: MonoVertex
+    Pending Messages\n      metric_description: This gauge metric keeps track of the
+    total number of messages that are waiting to be processed over varying time frames
+    of 1min, 5min, 15min and default period of 2min. \n      # set \"Units\" or unset
+    for default behaviour\n      # unit: Units\n      required_filters:\n        -
+    namespace\n        - mvtx_name\n      dimensions:\n        - name: pod\n          #
+    expr: optional expression for prometheus query\n          # overrides the default
+    expression\n          filters:\n            - name: pod\n              required:
+    false\n            - name: period\n              required: false\n        - name:
+    mono-vertex\n          # expr: optional expression for prometheus query\n          #
+    overrides the default expression\n          filters:\n            - name: period\n
+    \             required: false\n\n- name: mono_vertex_histogram\n  objects: \n
+    \   - mono-vertex\n  title: MonoVertex Histogram Metrics\n  description: This
+    pattern is for P99, P95, P90 and P50 quantiles for a mono-vertex across different
     dimensions\n  expr: |\n    histogram_quantile($quantile, sum by($dimension,le)
     (rate($metric_name{$filters}[$duration])))\n  params:\n    - name: quantile\n
     \     required: true\n    - name: duration\n      required: true\n    - name:
@@ -28951,57 +29260,56 @@ data:
     behaviour\n      # unit: Units\n      required_filters:\n        - namespace\n
     \       - mvtx_name\n      dimensions:\n        - name: mono-vertex\n        -
     name: pod\n          filters:\n            - name: pod\n              required:
-    false\n- name: pod_cpu_memory_utilization\n  objects: \n    - mono-vertex\n    -
-    vertex\n  title: cpu-memory utilization by pod\n  description: cpu and memory
-    utilization by pod for mono-vertex\n  expr: avg_over_time($metric_name{$filters}[$duration])\n
-    \ params:\n    - name: duration\n      required: true\n    - name: start_time\n
-    \     required: false\n    - name: end_time\n      required: false\n  metrics:
-    \n    # set your cpu metric name here\n    - metric_name: namespace_pod_cpu_utilization\n
-    \     # set display name as per metric name\n      display_name: CPU Utilization
-    per Pod\n      metric_description: This metric represents the percentage utilization
-    of cpu usage over cpu resource limits for a pod.\n      required_filters:\n        -
-    namespace\n        - pod  \n      dimensions:\n        - name: mono-vertex\n          filters:
-    \n            - name: pod\n              # expr: optional expression for prometheus
-    query\n              # overrides the default expression\n              required:
+    false\n\n- name: pod_cpu_memory_utilization\n  objects: \n    - mono-vertex\n
+    \   - vertex\n  title: CPU and Memory Utilisation by Pod\n  description: This
+    pattern represents the CPU and Memory utilisation by pod for mono-vertex and vertex\n
+    \ expr: avg_over_time($metric_name{$filters}[$duration])\n  params:\n    - name:
+    duration\n      required: true\n    - name: start_time\n      required: false\n
+    \   - name: end_time\n      required: false\n  metrics: \n    # set your cpu metric
+    name here\n    - metric_name: namespace_pod_cpu_utilization\n      display_name:
+    Pod CPU Utilization\n      metric_description: This metric represents the percentage
+    utilization of cpu usage over cpu resource limits for a pod.\n      required_filters:\n
+    \       - namespace\n        - pod  \n      dimensions:\n        - name: mono-vertex\n
+    \         filters: \n            - name: pod\n              # expr: optional expression
+    for prometheus query\n              # overrides the default expression\n              required:
     false\n        - name: vertex\n          filters: \n            - name: pod\n
     \             # expr: optional expression for prometheus query\n              #
     overrides the default expression \n              required: false\n    # set your
     memory metric name here\n    - metric_name: namespace_pod_memory_utilization\n
-    \     # set display name as per metric name\n      display_name: Memory Utilization
-    per Pod\n      metric_description: This metric represents the percentage utilization
-    of memory usage in bytes over memory resource limits for a pod.\n      required_filters:\n
-    \       - namespace\n        - pod  \n      dimensions:\n        - name: mono-vertex\n
-    \         filters: \n            - name: pod\n              # expr: optional expression
-    for prometheus query\n              # overrides the default expression \n              required:
-    false\n        - name: vertex\n          filters: \n            - name: pod\n
+    \     display_name: Pod Memory Utilization\n      metric_description: This metric
+    represents the percentage utilization of memory usage in bytes over memory resource
+    limits for a pod.\n      required_filters:\n        - namespace\n        - pod
+    \ \n      dimensions:\n        - name: mono-vertex\n          filters: \n            -
+    name: pod\n              # expr: optional expression for prometheus query\n              #
+    overrides the default expression \n              required: false\n        - name:
+    vertex\n          filters: \n            - name: pod\n              # expr: optional
+    expression for prometheus query\n              # overrides the default expression
+    \n              required: false\n\n- name: container_cpu_memory_utilization\n
+    \ objects: \n    - mono-vertex\n    - vertex\n  title: CPU and Memory Utilisation
+    by Container\n  description: This pattern represents the CPU and Memory utilisation
+    by container for mono-vertex and vertex\n  expr: avg_over_time($metric_name{$filters}[$duration])\n
+    \ params:\n    - name: duration\n      required: true\n    - name: start_time\n
+    \     required: false\n    - name: end_time\n      required: false\n  metrics:\n
+    \   # set your cpu metric name here\n    - metric_name: namespace_app_container_cpu_utilization\n
+    \     display_name: Container CPU Utilization\n      metric_description: This
+    metric represents the percentage utilization of cpu usage over cpu resource limits
+    for a container.\n      required_filters:\n        - namespace\n      dimensions:\n
+    \       - name: mono-vertex\n          filters: \n            - name: container\n
     \             # expr: optional expression for prometheus query\n              #
-    overrides the default expression \n              required: false\n- name: container_cpu_memory_utilization\n
-    \ objects: \n    - mono-vertex\n    - vertex\n  title: cpu-memory utilization
-    by container for mono-vertex\n  description: cpu and memory utilization by container
-    for mono-vertex\n  expr: avg_over_time($metric_name{$filters}[$duration])\n  params:\n
-    \   - name: duration\n      required: true\n    - name: start_time\n      required:
-    false\n    - name: end_time\n      required: false\n  metrics:\n    # set your
-    cpu metric name here\n    - metric_name: namespace_app_container_cpu_utilization\n
-    \     # set display name as per metric name\n      display_name: CPU Utilization
-    per Container\n      metric_description: This metric represents the percentage
-    utilization of cpu usage over cpu resource limits for a container.\n      required_filters:\n
-    \       - namespace\n      dimensions:\n        - name: mono-vertex\n          filters:
-    \n            - name: container\n              # expr: optional expression for
-    prometheus query\n              # overrides the default expression \n              required:
-    false\n        - name: vertex\n          filters:\n            - name: container\n
+    overrides the default expression \n              required: false\n        - name:
+    vertex\n          filters:\n            - name: container\n              # expr:
+    optional expression for prometheus query\n              # overrides the default
+    expression \n              required: false\n    # set your memory metric name
+    here\n    - metric_name: namespace_app_container_memory_utilization\n      display_name:
+    Container Memory Utilization\n      metric_description: This metric represents
+    the percentage utilization of memory usage in bytes over memory resource limits
+    for a container.\n      required_filters:\n        - namespace\n      dimensions:\n
+    \       - name: mono-vertex\n          filters: \n            - name: container\n
     \             # expr: optional expression for prometheus query\n              #
-    overrides the default expression \n              required: false\n    # set your
-    memory metric name here\n    - metric_name: namespace_app_container_memory_utilization\n
-    \     # set display name as per metric name\n      display_name: Memory Utilization
-    per Container\n      metric_description: This metric represents the percentage
-    utilization of memory usage in bytes over memory resource limits for a container.\n
-    \     required_filters:\n        - namespace\n      dimensions:\n        - name:
-    mono-vertex\n          filters: \n            - name: container\n              #
-    expr: optional expression for prometheus query\n              # overrides the
-    default expression \n              required: false\n        - name: vertex\n          filters:
-    \n            - name: container\n              # expr: optional expression for
-    prometheus query\n              # overrides the default expression \n              required:
-    false\n"
+    overrides the default expression \n              required: false\n        - name:
+    vertex\n          filters: \n            - name: container\n              # expr:
+    optional expression for prometheus query\n              # overrides the default
+    expression \n              required: false\n"
 kind: ConfigMap
 metadata:
   name: numaflow-server-metrics-proxy-config

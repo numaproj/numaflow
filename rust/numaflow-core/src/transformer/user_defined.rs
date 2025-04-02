@@ -26,6 +26,7 @@ struct ParentMessageInfo {
 
 /// UserDefinedTransformer exposes methods to do user-defined transformations.
 pub(super) struct UserDefinedTransformer {
+    rpc_client: SourceTransformClient<Channel>,
     read_tx: mpsc::Sender<SourceTransformRequest>,
     senders: ResponseSenderMap,
     task_handle: tokio::task::JoinHandle<()>,
@@ -76,12 +77,18 @@ impl UserDefinedTransformer {
 
         let mut resp_stream = client
             .source_transform_fn(Request::new(read_stream))
-            .await?
+            .await
+            .map_err(Error::Grpc)?
             .into_inner();
 
-        let handshake_response = resp_stream.message().await?.ok_or(Error::Transformer(
-            "failed to receive handshake response".to_string(),
-        ))?;
+        let handshake_response =
+            resp_stream
+                .message()
+                .await
+                .map_err(Error::Grpc)?
+                .ok_or(Error::Transformer(
+                    "failed to receive handshake response".to_string(),
+                ))?;
 
         if handshake_response.handshake.map_or(true, |h| !h.sot) {
             return Err(Error::Transformer("invalid handshake response".to_string()));
@@ -98,6 +105,7 @@ impl UserDefinedTransformer {
         ));
 
         let transformer = Self {
+            rpc_client: client,
             read_tx,
             senders: sender_map,
             task_handle,
@@ -115,11 +123,9 @@ impl UserDefinedTransformer {
         while let Some(resp) = match resp_stream.message().await {
             Ok(message) => message,
             Err(e) => {
-                let error =
-                    Error::Transformer(format!("failed to receive transformer response: {}", e));
                 let mut senders = sender_map.lock().await;
                 for (_, (_, sender)) in senders.drain() {
-                    let _ = sender.send(Err(error.clone()));
+                    let _ = sender.send(Err(Error::Grpc(e.clone())));
                 }
                 None
             }
@@ -129,6 +135,7 @@ impl UserDefinedTransformer {
                 let mut response_messages = vec![];
                 for (i, result) in resp.results.into_iter().enumerate() {
                     let message = Message {
+                        typ: Default::default(),
                         id: MessageID {
                             vertex_name: get_vertex_name().to_string().into(),
                             index: i as i32,
@@ -170,10 +177,14 @@ impl UserDefinedTransformer {
             .await
             .insert(key, (msg_info, respond_to));
 
-        self.read_tx
-            .send(message.into())
-            .await
-            .expect("failed to send message");
+        let _ = self.read_tx.send(message.into()).await;
+    }
+
+    pub(super) async fn ready(&mut self) -> bool {
+        match self.rpc_client.is_ready(Request::new(())).await {
+            Ok(response) => response.into_inner().ready,
+            Err(_) => false,
+        }
     }
 }
 
@@ -200,8 +211,8 @@ mod tests {
             input: sourcetransform::SourceTransformRequest,
         ) -> Vec<sourcetransform::Message> {
             let message = sourcetransform::Message::new(input.value, Utc::now())
-                .keys(input.keys)
-                .tags(vec![]);
+                .with_keys(input.keys)
+                .with_tags(vec![]);
             vec![message]
         }
     }
@@ -234,6 +245,7 @@ mod tests {
         .await?;
 
         let message = Message {
+            typ: Default::default(),
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
@@ -277,6 +289,7 @@ mod tests {
     #[test]
     fn test_message_to_source_transform_request() {
         let message = Message {
+            typ: Default::default(),
             keys: Arc::from(vec!["key1".to_string()]),
             tags: None,
             value: vec![1, 2, 3].into(),

@@ -2,16 +2,19 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use async_nats::jetstream::Context;
 use bytes::Bytes;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
 
-use crate::app::callback::state::State as CallbackState;
-use crate::app::callback::store::redisstore::RedisConnection;
+use crate::app::orchestrator::OrchestratorState as CallbackState;
+use crate::app::store::cbstore::jetstreamstore::JetStreamCallbackStore;
+use crate::app::store::datastore::jetstream::JetStreamDataStore;
+use crate::app::store::datastore::user_defined::UserDefinedStore;
 use crate::app::tracker::MessageGraph;
-use crate::config::{DEFAULT_CALLBACK_URL_HEADER_KEY, DEFAULT_ID_HEADER};
-use crate::Settings;
+use crate::config::{StoreType, DEFAULT_ID_HEADER};
 use crate::{Error, Result};
+use crate::{Settings, DEFAULT_CALLBACK_URL_HEADER_KEY};
 
 /// [Message] with a oneshot for notifying when the message has been completed processed.
 pub(crate) struct MessageWrapper {
@@ -47,7 +50,7 @@ struct ServingSourceActor {
     /// Channel for the actor handle to communicate with this actor
     handler_rx: mpsc::Receiver<ActorMessage>,
     /// Mapping from request's ID header (usually `X-Numaflow-Id` header) to a channel.
-    /// This sending a message on this channel notifies the HTTP handler function that the message
+    /// Sending a message on this channel notifies the HTTP handler function that the message
     /// has been successfully processed.
     tracker: HashMap<String, oneshot::Sender<()>>,
     vertex_replica_id: u16,
@@ -56,6 +59,7 @@ struct ServingSourceActor {
 
 impl ServingSourceActor {
     async fn start(
+        js_context: Context,
         settings: Arc<Settings>,
         handler_rx: mpsc::Receiver<ActorMessage>,
         request_channel_buffer_size: usize,
@@ -63,8 +67,9 @@ impl ServingSourceActor {
     ) -> Result<()> {
         // Channel to which HTTP handlers will send request payload
         let (messages_tx, messages_rx) = mpsc::channel(request_channel_buffer_size);
-        // Create a redis store to store the callbacks and the custom responses
-        let redis_store = RedisConnection::new(settings.redis.clone()).await?;
+        // create a callback store for tracking
+        let callback_store =
+            JetStreamCallbackStore::new(js_context.clone(), &settings.js_store).await?;
         // Create the message graph from the pipeline spec and the redis store
         let msg_graph = MessageGraph::from_pipeline(&settings.pipeline_spec).map_err(|e| {
             Error::InitError(format!(
@@ -72,12 +77,42 @@ impl ServingSourceActor {
                 e
             ))
         })?;
-        let callback_state = CallbackState::new(msg_graph, redis_store).await?;
 
         let callback_url = format!(
             "https://{}:{}/v1/process/callback",
             &settings.host_ip, &settings.app_listen_port
         );
+
+        // Create a redis store to store the callbacks and the custom responses
+        match &settings.store_type {
+            StoreType::Nats => {
+                let nats_store = JetStreamDataStore::new(js_context, &settings.js_store).await?;
+                let callback_state =
+                    CallbackState::new(msg_graph, nats_store, callback_store).await?;
+                let app = crate::AppState {
+                    message: messages_tx,
+                    settings,
+                    orchestrator_state: callback_state,
+                };
+                tokio::spawn(async move {
+                    crate::serve(app).await.unwrap();
+                });
+            }
+            StoreType::UserDefined(ud_config) => {
+                let ud_store = UserDefinedStore::new(ud_config.clone()).await?;
+                let callback_state =
+                    CallbackState::new(msg_graph, ud_store, callback_store).await?;
+                let app = crate::AppState {
+                    message: messages_tx,
+                    settings,
+                    orchestrator_state: callback_state,
+                };
+                tokio::spawn(async move {
+                    crate::serve(app).await.unwrap();
+                });
+            }
+        }
+
         tokio::spawn(async move {
             let mut serving_actor = ServingSourceActor {
                 messages: messages_rx,
@@ -88,14 +123,7 @@ impl ServingSourceActor {
             };
             serving_actor.run().await;
         });
-        let app = crate::AppState {
-            message: messages_tx,
-            settings,
-            callback_state,
-        };
-        tokio::spawn(async move {
-            crate::serve(app).await.unwrap();
-        });
+
         Ok(())
     }
 
@@ -122,6 +150,7 @@ impl ServingSourceActor {
         }
     }
 
+    // for monovertex after reading register the oneshot in the callback handler
     async fn read(&mut self, count: usize, timeout_at: Instant) -> Result<Vec<Message>> {
         let mut messages = vec![];
         loop {
@@ -191,13 +220,21 @@ pub struct ServingSource {
 
 impl ServingSource {
     pub async fn new(
+        context: Context,
         settings: Arc<Settings>,
         batch_size: usize,
         timeout: Duration,
         vertex_replica_id: u16,
     ) -> Result<Self> {
         let (actor_tx, actor_rx) = mpsc::channel(2 * batch_size);
-        ServingSourceActor::start(settings, actor_rx, 2 * batch_size, vertex_replica_id).await?;
+        ServingSourceActor::start(
+            context,
+            settings,
+            actor_rx,
+            2 * batch_size,
+            vertex_replica_id,
+        )
+        .await?;
         Ok(Self {
             batch_size,
             timeout,
@@ -236,23 +273,52 @@ impl ServingSource {
     }
 }
 
-#[cfg(feature = "redis-tests")]
 #[cfg(test)]
 mod tests {
     use std::{sync::Arc, time::Duration};
+
+    use async_nats::jetstream;
 
     use super::ServingSource;
     use crate::Settings;
 
     type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_serving_source() -> Result<()> {
-        // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let store_name = "test_serving_source";
+
+        let _ = context.delete_key_value(store_name).await;
+        context
+            .create_key_value(jetstream::kv::Config {
+                bucket: store_name.to_string(),
+                history: 5,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        // Set up the CryptoProvider (controls core cryptography used by rustls) for the process
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
-        let settings = Arc::new(Settings::default());
-        let serving_source =
-            ServingSource::new(Arc::clone(&settings), 10, Duration::from_millis(1), 0).await?;
+        let settings = Arc::new(Settings {
+            js_store: store_name.to_string(),
+            app_listen_port: 2444,
+            ..Default::default()
+        });
+
+        let serving_source = ServingSource::new(
+            context,
+            Arc::clone(&settings),
+            10,
+            Duration::from_millis(1),
+            0,
+        )
+        .await?;
 
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(2))

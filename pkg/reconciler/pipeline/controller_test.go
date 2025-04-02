@@ -509,14 +509,14 @@ func Test_pauseAndResumePipeline(t *testing.T) {
 		assert.NoError(t, err)
 		v, err := r.findExistingVertices(ctx, testObj)
 		assert.NoError(t, err)
-		assert.Equal(t, int32(0), *v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Replicas)
+		assert.Equal(t, dfv1.VertexPhasePaused, v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Lifecycle.GetDesiredPhase())
 		_, err = r.resumePipeline(ctx, testObj)
 		assert.NoError(t, err)
 		v, err = r.findExistingVertices(ctx, testObj)
 		assert.NoError(t, err)
 		// when auto-scaling is enabled, while resuming the pipeline, instead of setting the replicas to Scale.Min,
 		// we set it to one and let auto-scaling to scale up
-		assert.Equal(t, int32(1), *v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Replicas)
+		assert.Equal(t, v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Scale.GetMinReplicas(), *v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Replicas)
 		assert.NoError(t, err)
 	})
 

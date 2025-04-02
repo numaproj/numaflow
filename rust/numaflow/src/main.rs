@@ -1,7 +1,6 @@
 use std::env;
 use std::error::Error;
 use std::time::Duration;
-
 use tracing::{error, info};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -33,26 +32,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
         tokio::time::sleep(Duration::from_secs(300)).await;
         return Err(e);
     }
+    info!("Exiting...");
     Ok(())
 }
 
 async fn run() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
     // Based on the argument, run the appropriate component.
-    if args.contains(&"--servesink".to_string()) {
-        servesink::servesink()
-            .await
-            .map_err(|e| format!("Error running servesink: {e:?}"))?;
-    } else if args.contains(&"--rust".to_string()) {
+    if args.contains(&"--rust".to_string()) {
         numaflow_core::run()
             .await
             .map_err(|e| format!("Error running rust binary: {e:?}"))?;
+    } else if args.contains(&"--monitor".to_string()) {
+        numaflow_monitor::run()
+            .await
+            .map_err(|e| format!("Error running monitor binary: {e:?}"))?;
     } else {
-        return Err(format!(
-            "Invalid argument. Use --servesink, or --rust. Current args = {:?}",
-            args
-        )
-        .into());
+        return Err(format!("Invalid argument. Use --rust. Current args = {:?}", args).into());
     }
     Ok(())
 }

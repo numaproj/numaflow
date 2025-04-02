@@ -46,20 +46,36 @@ type UDF struct {
 }
 
 func (in UDF) getContainers(req getContainerReq) ([]corev1.Container, []corev1.Container, error) {
-	return []corev1.Container{in.getUDFContainer(req)}, []corev1.Container{in.getMainContainer(req)}, nil
+	containers := []corev1.Container{
+		in.getMainContainer(req),
+	}
+	monitorContainer := buildMonitorContainer(req)
+	sidecarContainers := []corev1.Container{monitorContainer, in.getUDFContainer(req)}
+
+	if req.servingStore != nil && req.servingStore.Container != nil {
+		sidecarContainers = append(sidecarContainers, req.servingStore.getUDStoreContainer(req))
+	}
+	return sidecarContainers, containers, nil
 }
 
 func (in UDF) getMainContainer(req getContainerReq) corev1.Container {
+	// volume mount to the runtime path
+	volumeMounts := []corev1.VolumeMount{
+		{
+			Name:      RuntimeDirVolume,
+			MountPath: RuntimeDirMountPath,
+		},
+	}
 	if in.GroupBy == nil {
 		if req.executeRustBinary {
-			return containerBuilder{}.init(req).command(NumaflowRustBinary).args("processor", "--type="+string(VertexTypeMapUDF), "--isbsvc-type="+string(req.isbSvcType), "--rust").build()
+			return containerBuilder{}.init(req).appendVolumeMounts(volumeMounts...).command(NumaflowRustBinary).args("processor", "--type="+string(VertexTypeMapUDF), "--isbsvc-type="+string(req.isbSvcType), "--rust").build()
 		}
 		args := []string{"processor", "--type=" + string(VertexTypeMapUDF), "--isbsvc-type=" + string(req.isbSvcType)}
 		return containerBuilder{}.
-			init(req).args(args...).build()
+			init(req).appendVolumeMounts(volumeMounts...).args(args...).build()
 	}
 	return containerBuilder{}.
-		init(req).args("processor", "--type="+string(VertexTypeReduceUDF), "--isbsvc-type="+string(req.isbSvcType)).build()
+		init(req).appendVolumeMounts(volumeMounts...).args("processor", "--type="+string(VertexTypeReduceUDF), "--isbsvc-type="+string(req.isbSvcType)).build()
 }
 
 func (in UDF) getUDFContainer(mainContainerReq getContainerReq) corev1.Container {
@@ -147,6 +163,8 @@ type Window struct {
 	Sliding *SlidingWindow `json:"sliding" protobuf:"bytes,2,opt,name=sliding"`
 	// +optional
 	Session *SessionWindow `json:"session" protobuf:"bytes,3,opt,name=session"`
+	// +optional
+	Accumulator *AccumulatorWindow `json:"accumulator" protobuf:"bytes,4,opt,name=accumulator"`
 }
 
 // FixedWindow describes a fixed window
@@ -172,6 +190,14 @@ type SlidingWindow struct {
 // SessionWindow describes a session window
 type SessionWindow struct {
 	// Timeout is the duration of inactivity after which a session window closes.
+	Timeout *metav1.Duration `json:"timeout,omitempty" protobuf:"bytes,1,opt,name=timeout"`
+}
+
+// AccumulatorWindow describes a special kind of SessionWindow (similar to Global Window) where output should
+// always have monotonically increasing WM but it can be manipulated through event-time by reordering the messages.
+// NOTE: Quite powerful, should not be abused; it can cause stalling of pipelines and leaks.
+type AccumulatorWindow struct {
+	// Timeout is the duration of inactivity after which the state of the accumulator is removed.
 	Timeout *metav1.Duration `json:"timeout,omitempty" protobuf:"bytes,1,opt,name=timeout"`
 }
 

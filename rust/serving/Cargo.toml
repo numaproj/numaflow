@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-redis-tests = []
-all-tests = ["redis-tests"]
+nats-tests = []
+all-tests = ["nats-tests"]
 
 [lints]
 workspace = true
@@ -14,6 +14,7 @@ workspace = true
 tokio.workspace = true
 tracing.workspace = true
 numaflow-models.workspace = true
+numaflow-pb.workspace = true
 backoff.workspace = true
 axum.workspace = true
 axum-server.workspace = true
@@ -21,25 +22,26 @@ bytes.workspace = true
 rustls.workspace = true
 tower.workspace = true
 serde.workspace = true
-axum-macros = "0.4.1"
+axum-macros = "0.5.0"
 hyper-util = { version = "0.1.6", features = ["client-legacy"] }
 serde_json = "1.0.120"
-tower-http = { version = "0.5.2", features = ["trace", "timeout"] }
-uuid = { version = "1.10.0", features = ["v4"] }
-redis = { version = "0.26.0", features = [
-    "tokio-comp",
-    "aio",
-    "connection-manager",
-] }
+tower-http = { version = "0.6.2", features = ["trace", "timeout"] }
+uuid = { version = "1.10.0", features = ["std", "v7"] }
 trait-variant = "0.1.2"
 chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.22.1"
 rcgen = "0.13.1"
 parking_lot = "0.12.3"
-prometheus-client = "0.22.3"
-thiserror = "1.0.63"
-reqwest = { workspace = true, features = ["rustls-tls", "json"] }
+prometheus-client = "0.23.1"
+thiserror = "2.0.12"
+reqwest = { workspace = true, features = ["rustls-tls", "json", "stream"] }
+http = "1.2.0"
+async-nats = "0.39.0"
+tokio-stream = "0.1.17"
+tonic = "0.13.0"
 
 [dev-dependencies]
 reqwest = { workspace = true, features = ["json"] }
 rustls.workspace = true
+numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "c6aa3a8d64a189357260f78131ef4692d387ba6c" }
+tempfile = "3.14.0"

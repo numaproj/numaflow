@@ -19582,6 +19582,10 @@
           "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
+        "servingStoreName": {
+          "description": "Names of the serving store used in this vertex.",
+          "type": "string"
+        },
         "sideInputs": {
           "description": "Names of the side inputs used in this vertex.",
           "items": {
@@ -19632,6 +19636,16 @@
       "required": [
         "name"
       ],
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.AccumulatorWindow": {
+      "description": "AccumulatorWindow describes a special kind of SessionWindow (similar to Global Window) where output should always have monotonically increasing WM but it can be manipulated through event-time by reordering the messages. NOTE: Quite powerful, should not be abused; it can cause stalling of pipelines and leaks.",
+      "properties": {
+        "timeout": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
+          "description": "Timeout is the duration of inactivity after which the state of the accumulator is removed."
+        }
+      },
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.Authorization": {
@@ -20991,7 +21005,7 @@
     "io.numaproj.numaflow.v1alpha1.MonoVertexLifecycle": {
       "properties": {
         "desiredPhase": {
-          "description": "DesiredPhase used to bring the pipeline from current phase to desired phase",
+          "description": "DesiredPhase used to bring the MonoVertex from current phase to desired phase",
           "type": "string"
         }
       },
@@ -21538,6 +21552,10 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PipelineLimits",
           "description": "Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, they could be overridden by each vertex's settings"
         },
+        "servingStore": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingStore",
+          "description": "ServingStore defines the Serving Store for this pipeline."
+        },
         "sideInputs": {
           "description": "SideInputs defines the Side Inputs of a pipeline.",
           "items": {
@@ -21929,35 +21947,34 @@
           "description": "The header key from which the message id will be extracted",
           "type": "string"
         },
+        "requestTimeoutSeconds": {
+          "description": "Request timeout in seconds. Default value is 120 seconds.",
+          "format": "int64",
+          "type": "integer"
+        },
         "service": {
           "description": "Whether to create a ClusterIP Service",
           "type": "boolean"
-        },
-        "store": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingStore",
-          "description": "Persistent store for the callbacks for serving and tracking"
         }
       },
       "required": [
-        "msgIDHeaderKey",
-        "store"
+        "msgIDHeaderKey"
       ],
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.ServingStore": {
-      "description": "ServingStore to track and store data and metadata for tracking and serving.",
+      "description": "ServingStore defines information of a Serving Store used in a pipeline",
       "properties": {
-        "ttl": {
-          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
-          "description": "TTL for the data in the store and tracker"
+        "container": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Container"
         },
-        "url": {
-          "description": "URL of the persistent store to write the callbacks",
+        "name": {
           "type": "string"
         }
       },
       "required": [
-        "url"
+        "name",
+        "container"
       ],
       "type": "object"
     },
@@ -22391,6 +22408,15 @@
       },
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.VertexLifecycle": {
+      "properties": {
+        "desiredPhase": {
+          "description": "DesiredPhase used to bring the vertex from current phase to desired phase",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.VertexLimits": {
       "properties": {
         "bufferMaxLength": {
@@ -22491,6 +22517,10 @@
         "interStepBufferServiceName": {
           "type": "string"
         },
+        "lifecycle": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.VertexLifecycle",
+          "description": "Lifecycle defines the Lifecycle properties of a vertex"
+        },
         "limits": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.VertexLimits",
           "description": "Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, will override pipeline level settings"
@@ -22553,6 +22583,10 @@
         },
         "serviceAccountName": {
           "description": "ServiceAccountName applied to the pod",
+          "type": "string"
+        },
+        "servingStoreName": {
+          "description": "Names of the serving store used in this vertex.",
           "type": "string"
         },
         "sideInputs": {
@@ -22792,6 +22826,9 @@
     "io.numaproj.numaflow.v1alpha1.Window": {
       "description": "Window describes windowing strategy",
       "properties": {
+        "accumulator": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.AccumulatorWindow"
+        },
         "fixed": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.FixedWindow"
         },
@@ -22984,6 +23021,9 @@
         "resources": {
           "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
         },
+        "servingStore": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingStore"
+        },
         "volumeMounts": {
           "items": {
             "$ref": "#/definitions/io.k8s.api.core.v1.VolumeMount"
@@ -22998,7 +23038,8 @@
         "image",
         "volumeMounts",
         "resources",
-        "executeRustBinary"
+        "executeRustBinary",
+        "servingStore"
       ],
       "type": "object"
     }

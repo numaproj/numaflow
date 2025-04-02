@@ -37,6 +37,16 @@ pub(crate) struct Stream {
     pub(crate) partition: u16,
 }
 
+impl Default for Stream {
+    fn default() -> Self {
+        Stream {
+            name: "",
+            vertex: "",
+            partition: DEFAULT_PARTITION_IDX,
+        }
+    }
+}
+
 impl Stream {
     pub(crate) fn new(name: &'static str, vertex: &'static str, partition: u16) -> Self {
         Stream {

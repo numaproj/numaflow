@@ -2,7 +2,7 @@ name: nightly-build
 
 on:
   schedule:
-    - cron: '55 23 * * *'
+    - cron: "55 23 * * *"
   push:
     branches:
       - dev-nightly*
@@ -16,7 +16,7 @@ defaults:
 
 jobs:
   build-go-binaries:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     if: github.repository == 'numaproj/numaflow'
     name: Build binaries
     steps:
@@ -26,7 +26,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: "1.24"
 
       - name: Build binaries
         run: |
@@ -51,7 +51,7 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v1.9.0
         with:
           cache-workspaces: rust -> target
-          rustflags: ''
+          rustflags: ""
       - name: Configure sccache
         run: |
           echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
@@ -59,7 +59,7 @@ jobs:
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.5
       - name: Install dependencies
-        run: sudo apt-get install -y protobuf-compiler
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - name: Build binary
         run: RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target x86_64-unknown-linux-gnu
       - name: Rename binary
@@ -84,7 +84,7 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v1.9.0
         with:
           cache-workspaces: rust -> target
-          rustflags: ''
+          rustflags: ""
       - name: Configure sccache
         run: |
           echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
@@ -92,7 +92,7 @@ jobs:
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.5
       - name: Install dependenices
-        run: sudo apt-get install -y gcc-aarch64-linux-gnu protobuf-compiler
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu protobuf-compiler
       - name: Build binary
         run: RUSTFLAGS='-C target-feature=+crt-static -C linker=aarch64-linux-gnu-gcc' cargo build --release --target aarch64-unknown-linux-gnu
       - name: Rename binary
@@ -105,12 +105,12 @@ jobs:
 
   build-push-linux-multi:
     name: Build & push linux/amd64 and linux/arm64
-    needs: [ build-go-binaries, build-rust-amd64, build-rust-arm64]
-    runs-on: ubuntu-20.04
+    needs: [build-go-binaries, build-rust-amd64, build-rust-arm64]
+    runs-on: ubuntu-24.04
     if: github.repository == 'numaproj/numaflow'
     strategy:
       matrix:
-        target: [ numaflow ]
+        target: [numaflow]
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node

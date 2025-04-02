@@ -11,9 +11,14 @@ impl Sink for BlackholeSink {
             .map(|msg| ResponseFromSink {
                 status: ResponseStatusFromSink::Success,
                 id: msg.id.to_string(),
+                serve_response: None,
             })
             .collect();
         Ok(output)
+    }
+
+    async fn is_ready(&mut self) -> bool {
+        true
     }
 }
 
@@ -33,6 +38,7 @@ mod tests {
         let mut sink = BlackholeSink;
         let messages = vec![
             Message {
+                typ: Default::default(),
                 keys: Arc::from(vec![]),
                 tags: None,
                 value: b"Hello, World!".to_vec().into(),
@@ -48,6 +54,7 @@ mod tests {
                 metadata: None,
             },
             Message {
+                typ: Default::default(),
                 keys: Arc::from(vec![]),
                 tags: None,
                 value: b"Hello, World!".to_vec().into(),
@@ -69,6 +76,7 @@ mod tests {
             .map(|msg| ResponseFromSink {
                 status: ResponseStatusFromSink::Success,
                 id: msg.id.to_string(),
+                serve_response: None,
             })
             .collect::<Vec<ResponseFromSink>>();
 

@@ -26,7 +26,7 @@ pub enum Error {
     Connection(String),
 
     #[error("gRPC Error - {0}")]
-    Grpc(String),
+    Grpc(tonic::Status),
 
     #[error("Config Error - {0}")]
     Config(String),
@@ -58,10 +58,4 @@ pub enum Error {
 
     #[error("Watermark Error - {0}")]
     Watermark(String),
-}
-
-impl From<tonic::Status> for Error {
-    fn from(status: tonic::Status) -> Self {
-        Error::Grpc(status.to_string())
-    }
 }
