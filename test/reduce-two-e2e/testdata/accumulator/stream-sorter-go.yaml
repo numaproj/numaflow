@@ -19,7 +19,7 @@ spec:
     - name: accum
       udf:
         container:
-          # compute the sum
+          # sort the incoming stream 
           image: quay.io/numaio/numaflow-go/stream-sorter:stable
           imagePullPolicy: IfNotPresent
         groupBy:
