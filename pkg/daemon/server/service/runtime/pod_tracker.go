@@ -35,7 +35,7 @@ type PodTracker struct {
 	pipeline        *v1alpha1.Pipeline
 	log             *zap.SugaredLogger
 	httpClient      monitorHttpClient
-	activePods      map[string][]int
+	activePodsCount map[string]int
 	activePodsMutex sync.RWMutex
 	refreshInterval time.Duration
 }
@@ -51,7 +51,7 @@ func NewPodTracker(ctx context.Context, pl *v1alpha1.Pipeline) *PodTracker {
 			},
 			Timeout: time.Second,
 		},
-		activePods: make(map[string][]int),
+		activePodsCount: make(map[string]int),
 		// Default refresh interval for updating the active pod set
 		refreshInterval: 30 * time.Second,
 	}
@@ -81,24 +81,43 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 	}
 }
 
-// updateActivePods checks the status of all pods and updates the activePods set accordingly.
+// updateActivePods checks the status of all pods and updates the count of activePods accordingly.
 func (pt *PodTracker) updateActivePods() {
 	var wg sync.WaitGroup
+	// Map to store max active index for each vertex.
+	maxActiveIndex := make(map[string]int)
+	// A local mutex to synchronize access to the maxActiveIndex map.
+	mu := sync.Mutex{}
+
 	for _, v := range pt.pipeline.Spec.Vertices {
+		vertexName := v.Name
+		// Initialize maxActiveIndex for this vertex.
+		mu.Lock()
+		maxActiveIndex[vertexName] = -1
+		mu.Unlock()
+
 		for i := range int(v.Scale.GetMaxReplicas()) {
 			wg.Add(1)
 			go func(vertexName string, index int) {
 				defer wg.Done()
 				podName := fmt.Sprintf("%s-%s-%d", pt.pipeline.Name, vertexName, index)
 				if pt.isActive(vertexName, podName) {
-					pt.addActivePod(vertexName, index)
-				} else {
-					pt.removeActivePod(vertexName, index)
+					// If the pod is active, update the maxActiveIndex for this vertex.
+					mu.Lock()
+					if index > maxActiveIndex[vertexName] {
+						maxActiveIndex[vertexName] = index
+					}
+					mu.Unlock()
 				}
-			}(v.Name, i)
+			}(vertexName, i)
 		}
 	}
 	wg.Wait()
+
+	// Update the activePodsCount for all vertices.
+	for vertexName, maxIndex := range maxActiveIndex {
+		pt.setActivePodsCount(vertexName, maxIndex+1)
+	}
 }
 
 func (pt *PodTracker) isActive(vertexName, podName string) bool {
@@ -114,37 +133,17 @@ func (pt *PodTracker) isActive(vertexName, podName string) bool {
 	return true
 }
 
-// addActivePod adds the active pod replica for the respective vertex
-func (pt *PodTracker) addActivePod(vertexName string, index int) {
+// setActivePodsCount sets the activePodsCount for a vertex.
+func (pt *PodTracker) setActivePodsCount(vertexName string, count int) {
 	pt.activePodsMutex.Lock()
 	defer pt.activePodsMutex.Unlock()
-
-	pt.activePods[vertexName] = append(pt.activePods[vertexName], index)
-}
-
-// removeActivePod removes the inactive pod replica for the respective vertex
-func (pt *PodTracker) removeActivePod(vertexName string, index int) {
-	pt.activePodsMutex.Lock()
-	defer pt.activePodsMutex.Unlock()
-
-	pt.activePods[vertexName] = removeValue(pt.activePods[vertexName], index)
+	pt.log.Debugf("Setting active pods count for vertex %s to %d", vertexName, count)
+	pt.activePodsCount[vertexName] = count
 }
 
 // GetActivePodsCountForVertex returns the number of active pods for a vertex
 func (pt *PodTracker) GetActivePodsCountForVertex(vertexName string) int {
 	pt.activePodsMutex.RLock()
 	defer pt.activePodsMutex.RUnlock()
-
-	activePods := pt.activePods[vertexName]
-	return len(activePods)
-}
-
-// removeValue removes the specified value from the slice.
-func removeValue(slice []int, value int) []int {
-	for i, v := range slice {
-		if v == value {
-			return append(slice[:i], slice[i+1:]...)
-		}
-	}
-	return slice
+	return pt.activePodsCount[vertexName]
 }
