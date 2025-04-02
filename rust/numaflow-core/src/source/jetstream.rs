@@ -126,6 +126,7 @@ mod tests {
         assert_eq!(message.metadata.unwrap().previous_vertex, get_vertex_name());
     }
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_jetstream_source_reader_acker_lagreader() {
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
@@ -188,6 +189,9 @@ mod tests {
         // Test SourceAcker::ack
         let offsets: Vec<Offset> = messages.iter().map(|msg| msg.offset.clone()).collect();
         source.ack(offsets).await.unwrap();
+        // When we query pending message count from Nats server immediately after acking a batch of
+        // messages, Nats intermittently returns wrong value.
+        tokio::time::sleep(Duration::from_millis(50)).await;
 
         // Test LagReader::pending
         let pending = source.pending().await.unwrap();
@@ -203,6 +207,7 @@ mod tests {
         let offsets: Vec<Offset> = messages.iter().map(|msg| msg.offset.clone()).collect();
         source.ack(offsets).await.unwrap();
 
+        tokio::time::sleep(Duration::from_millis(50)).await;
         let pending = source.pending().await.unwrap();
         assert_eq!(
             pending,
@@ -215,6 +220,7 @@ mod tests {
         let offsets: Vec<Offset> = messages.iter().map(|msg| msg.offset.clone()).collect();
         source.ack(offsets).await.unwrap();
 
+        tokio::time::sleep(Duration::from_millis(50)).await;
         let pending = source.pending().await.unwrap();
         assert_eq!(
             pending,
