@@ -160,7 +160,7 @@ func (r *monoVertexRuntimeCache) fetchAndPersistErrorForPod(podIndex int) {
 
 	res, err := r.httpClient.Get(url)
 	if err != nil {
-		r.log.Errorw("Error reading the runtime errors endpoint", "error", err.Error())
+		r.log.Warnf("[MonoVertex %s Index %v]: failed reading the runtime endpoint, the pod might have been scaled down: %v", r.monoVtx.Name, podIndex, err.Error())
 		return
 	}
 
@@ -179,6 +179,7 @@ func (r *monoVertexRuntimeCache) fetchAndPersistErrorForPod(podIndex int) {
 		return
 	}
 
+	// return if data array length is 0 or if there is any error in the API call
 	if apiResponse.ErrMessage != "" || len(apiResponse.Data) == 0 {
 		return
 	}

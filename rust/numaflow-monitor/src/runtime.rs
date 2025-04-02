@@ -163,8 +163,7 @@ impl Runtime {
         let mut errors = Vec::new();
         // if no app errors are persisted, directory wouldn't be created yet
         if !app_err_path.exists() || !app_err_path.is_dir() {
-            let err = Error::File("No application errors persisted yet".to_string());
-            return Err(err);
+            return Ok(errors);
         }
 
         let paths = fs::read_dir(app_err_path)
