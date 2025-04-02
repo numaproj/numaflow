@@ -68,7 +68,7 @@ bytes = "1.9.0"
 tracing = "0.1.41"
 async-nats = "0.39.0"
 thiserror = "2.0.3"
-axum = { version = "0.8.2", default-features = false, features = [
+axum = { version = "0.8.3", default-features = false, features = [
     "http1",
     "http2",
     "json",
@@ -77,7 +77,7 @@ axum = { version = "0.8.2", default-features = false, features = [
     "tracing",
     "tokio",
 ] }
-axum-server = { version = "0.7.1", features = ["tls-rustls"] }
+axum-server = { version = "0.7.2", features = ["tls-rustls"] }
 tower = "0.5.2"
 serde = { version = "1.0.217", features = ["derive"] }
 rustls = { version = "0.23.21", features = ["aws_lc_rs"] }
