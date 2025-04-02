@@ -1,3 +1,6 @@
+use std::{sync::Arc, time::Duration};
+
+use async_nats::{jetstream, ConnectOptions};
 use tokio::signal;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -83,6 +86,24 @@ pub async fn run() -> Result<()> {
 
     let crd_type = config().custom_resource_type.clone();
     match crd_type {
+        CustomResourceType::Serving(config) => {
+            let mut opts = ConnectOptions::new()
+                .max_reconnects(None) // unlimited reconnects
+                .ping_interval(Duration::from_secs(3))
+                .retry_on_initial_connect();
+
+            if let Some((user, password)) = config.nats_basic_auth.as_ref().cloned() {
+                opts = opts.user_and_password(user, password);
+            }
+
+            let js_client = async_nats::connect_with_options(&config.jetstream_url, opts)
+                .await
+                .map_err(|e| error::Error::Connection(e.to_string()))?;
+
+            let js_context = jetstream::new(js_client);
+            serving::start(js_context, Arc::new(config)).await.unwrap();
+            todo!("Serving is not implemented");
+        }
         CustomResourceType::MonoVertex(config) => {
             info!("Starting monovertex forwarder with config: {:#?}", config);
             // Run the forwarder with cancellation token.

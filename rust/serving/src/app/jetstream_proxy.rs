@@ -1,5 +1,6 @@
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 
+use async_nats::jetstream::{message, Context};
 use axum::response::sse::Event;
 use axum::response::Sse;
 use axum::Extension;
@@ -21,13 +22,14 @@ use super::{FetchQueryParams, Tid};
 use crate::app::response::{ApiError, ServeResponse};
 use crate::app::store::cbstore::CallbackStore;
 use crate::app::store::datastore::Error as StoreError;
-use crate::{Error, Message, MessageWrapper};
+use crate::{Error, Message, MessageWrapper, DEFAULT_ID_HEADER};
 
 const NUMAFLOW_RESP_ARRAY_LEN: &str = "Numaflow-Array-Len";
 const NUMAFLOW_RESP_ARRAY_IDX_LEN: &str = "Numaflow-Array-Index-Len";
 
 struct ProxyState<T, U> {
-    message: mpsc::Sender<MessageWrapper>,
+    js_context: Context,
+    stream: String,
     tid_header: String,
     /// Lets the HTTP handlers know whether they are in a Monovertex or a Pipeline
     monovertex: bool,
@@ -41,7 +43,8 @@ pub(crate) async fn jetstream_proxy<
     state: AppState<T, U>,
 ) -> crate::Result<Router> {
     let proxy_state = Arc::new(ProxyState {
-        message: state.message.clone(),
+        js_context: state.js_context.clone(),
+        stream: state.settings.jetstream_stream.clone(),
         tid_header: state.settings.tid_header.clone(),
         monovertex: state.settings.pipeline_spec.edges.is_empty(),
         orchestrator: state.orchestrator_state.clone(),
@@ -124,37 +127,26 @@ where
     T: Send + Sync + Clone + DataStore + 'static,
     U: Send + Sync + Clone + CallbackStore + 'static,
 {
-    let mut msg_headers: HashMap<String, String> = HashMap::new();
+    let mut msg_headers = async_nats::HeaderMap::new();
     for (key, value) in headers.iter() {
         msg_headers.insert(
             key.to_string(),
             String::from_utf8_lossy(value.as_bytes()).to_string(),
         );
     }
+    msg_headers.insert(proxy_state.tid_header.clone(), id.clone());
 
     let mut orchestrator_state = proxy_state.orchestrator.clone();
     let response_stream = orchestrator_state.stream_response(&id).await.unwrap();
 
-    let (confirm_save_tx, confirm_save_rx) = oneshot::channel();
-    let message = MessageWrapper {
-        confirm_save: confirm_save_tx,
-        message: Message {
-            value: body,
-            id: id.clone(),
-            headers: msg_headers,
-        },
-    };
-
     proxy_state
-        .message
-        .send(message)
+        .js_context
+        .publish_with_headers(proxy_state.stream.clone(), msg_headers, body)
         .await
-        .expect("failed to send message");
+        .unwrap()
+        .await
+        .unwrap();
 
-    // we are certain that the message has been written to ISB for processing
-    confirm_save_rx.await.unwrap();
-
-    // create a watcher stream
     let stream = response_stream
         .map(|response| Ok(Event::default().data(String::from_utf8_lossy(&response))));
 
@@ -170,13 +162,14 @@ async fn sync_publish<
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
-    let mut msg_headers: HashMap<String, String> = HashMap::new();
+    let mut msg_headers = async_nats::HeaderMap::new();
     for (key, value) in headers.iter() {
         msg_headers.insert(
             key.to_string(),
             String::from_utf8_lossy(value.as_bytes()).to_string(),
         );
     }
+    msg_headers.insert(proxy_state.tid_header.clone(), id.clone());
 
     // Register the ID in the callback proxy state
     let notify = match proxy_state
@@ -199,35 +192,14 @@ async fn sync_publish<
         }
     };
 
-    let (confirm_save_tx, confirm_save_rx) = oneshot::channel();
-    let message = MessageWrapper {
-        confirm_save: confirm_save_tx,
-        message: Message {
-            value: body,
-            id: id.clone(),
-            headers: msg_headers,
-        },
-    };
-
+    tracing::info!(?msg_headers, "Publishing message with headers");
     proxy_state
-        .message
-        .send(message)
+        .js_context
+        .publish_with_headers(proxy_state.stream.clone(), msg_headers, body)
         .await
-        .expect("failed to send message");
-
-    if let Err(e) = confirm_save_rx.await {
-        // Deregister the ID in the callback proxy state if waiting for ack fails
-        let _ = proxy_state
-            .orchestrator
-            .clone()
-            .mark_as_failed(&id, e.to_string().as_str())
-            .await;
-
-        error!(error = ?e, "Publishing message to Jetstream for sync request");
-        return Err(ApiError::BadGateway(
-            "Failed to write message to Jetstream".to_string(),
-        ));
-    }
+        .unwrap()
+        .await
+        .unwrap();
 
     let processing_result = match notify.await {
         Ok(processing_result) => processing_result,
@@ -300,17 +272,14 @@ async fn async_publish<
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Json<ServeResponse>, ApiError> {
-    let mut msg_headers: HashMap<String, String> = HashMap::new();
+    let mut msg_headers = async_nats::HeaderMap::new();
     for (key, value) in headers.iter() {
-        // Exclude request ID
-        if key.as_str() == proxy_state.tid_header {
-            continue;
-        }
         msg_headers.insert(
             key.to_string(),
             String::from_utf8_lossy(value.as_bytes()).to_string(),
         );
     }
+    msg_headers.insert(proxy_state.tid_header.clone(), id.clone());
 
     // Register request in Redis
     let notify = match proxy_state
@@ -336,41 +305,19 @@ async fn async_publish<
     // We keep the receiver alive to avoid send failure.
     tokio::spawn(notify);
 
-    let (confirm_save_tx, confirm_save_rx) = oneshot::channel();
-    let message = MessageWrapper {
-        confirm_save: confirm_save_tx,
-        message: Message {
-            value: body,
-            id: id.clone(),
-            headers: msg_headers,
-        },
-    };
+    proxy_state
+        .js_context
+        .publish_with_headers(proxy_state.stream.clone(), msg_headers, body)
+        .await
+        .unwrap()
+        .await
+        .unwrap();
 
-    proxy_state.message.send(message).await.unwrap(); // FIXME:
-    if proxy_state.monovertex {
-        // A send operation happens at the sender end of the confirm_save channel when writing to Sink is successful and ACK is received for the message.
-        // We keep the receiver alive to avoid send failure.
-        tokio::spawn(confirm_save_rx);
-        return Ok(Json(ServeResponse::new(
-            "Successfully published message".to_string(),
-            id,
-            StatusCode::OK,
-        )));
-    }
-
-    match confirm_save_rx.await {
-        Ok(_) => Ok(Json(ServeResponse::new(
-            "Successfully published message".to_string(),
-            id,
-            StatusCode::OK,
-        ))),
-        Err(e) => {
-            error!(error = ?e, "Waiting for message save confirmation");
-            Err(ApiError::InternalServerError(
-                "Failed to save message".to_string(),
-            ))
-        }
-    }
+    Ok(Json(ServeResponse::new(
+        "Successfully published message".to_string(),
+        id,
+        StatusCode::OK,
+    )))
 }
 
 #[cfg(test)]

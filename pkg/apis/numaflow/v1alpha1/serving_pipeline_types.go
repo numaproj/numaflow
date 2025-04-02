@@ -27,6 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	intstr "k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 )
 
 // +kubebuilder:validation:Enum="";Running;Failed;Deleting
@@ -164,10 +165,17 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 	}
 	encodedPipelineSpec := base64.StdEncoding.EncodeToString(pipelineSpecBytes)
 
+	servingSourceSettings, err := json.Marshal(sp.Spec.Serving)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal serving source settings: %w", err)
+	}
+	encodedServingSourceSettings := base64.StdEncoding.EncodeToString(servingSourceSettings)
+
 	envVars := []corev1.EnvVar{
 		{Name: EnvNamespace, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},
 		{Name: EnvPod, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
 		{Name: EnvServingMinPipelineSpec, Value: encodedPipelineSpec},
+		{Name: "NUMAFLOW_SERVING_SOURCE_SETTINGS", Value: encodedServingSourceSettings},
 		{Name: EnvServingPort, Value: strconv.Itoa(ServingServicePort)},
 		{ // TODO: do we still need it?
 			Name: EnvServingHostIP,
@@ -175,6 +183,12 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 				FieldRef: &corev1.ObjectFieldSelector{
 					FieldPath: "status.podIP",
 				},
+			},
+		},
+		{
+			Name: "SERVING_JETSTREAM_USER",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "isbsvc-default-js-client-auth"}, Key: "client-auth-user"},
 			},
 		},
 	}
@@ -246,8 +260,10 @@ func (sp ServingPipeline) GetPipelineObj(req GetServingPipelineResourceReq) Pipe
 		if plSpec.Vertices[i].IsASink() {
 			// TODO: (k8s 1.29)  clean this up once we deprecate the support for k8s < 1.29
 			if isSidecarSupported() {
+				plSpec.Vertices[i].ServingStoreName = ptr.To("default") // FIXME:
 				plSpec.Vertices[i].InitContainers = append(plSpec.Vertices[i].InitContainers, sp.getStoreSidecarContainerSpec(req)...)
 			} else {
+				plSpec.Vertices[i].ServingStoreName = ptr.To("default") // FIXME:
 				plSpec.Vertices[i].Sidecars = append(plSpec.Vertices[i].Sidecars, sp.getStoreSidecarContainerSpec(req)...)
 			}
 		}

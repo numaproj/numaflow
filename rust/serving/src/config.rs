@@ -1,9 +1,9 @@
-use std::collections::HashMap;
 use std::fmt::Debug;
+use std::{collections::HashMap, fmt::format};
 
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
-use numaflow_models::models::{MonoVertex, Vertex};
+use numaflow_models::models::{MonoVertex, Vertex, VertexSpec};
 use rcgen::{generate_simple_self_signed, Certificate, CertifiedKey, KeyPair};
 use serde::{Deserialize, Serialize};
 
@@ -14,7 +14,7 @@ use crate::{
 
 const ENV_NUMAFLOW_SERVING_HOST_IP: &str = "NUMAFLOW_SERVING_HOST_IP";
 const ENV_NUMAFLOW_SERVING_APP_PORT: &str = "NUMAFLOW_SERVING_APP_LISTEN_PORT";
-const ENV_MIN_PIPELINE_SPEC: &str = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC";
+pub const ENV_MIN_PIPELINE_SPEC: &str = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC";
 const ENV_VERTEX_OBJ: &str = "NUMAFLOW_VERTEX_OBJECT";
 const ENV_MONOVERTEX_OBJ: &str = "NUMAFLOW_MONO_VERTEX_OBJECT";
 
@@ -62,6 +62,9 @@ pub struct Settings {
     pub host_ip: String,
     pub api_auth_token: Option<String>,
     pub pipeline_spec: PipelineDCG,
+    pub nats_basic_auth: Option<(String, String)>,
+    pub jetstream_stream: String,
+    pub jetstream_url: String,
 }
 
 #[derive(Default, Debug, Deserialize, Clone, PartialEq)]
@@ -84,6 +87,9 @@ impl Default for Settings {
             host_ip: "127.0.0.1".to_owned(),
             api_auth_token: None,
             pipeline_spec: Default::default(),
+            nats_basic_auth: None,
+            jetstream_stream: "test-stream".into(),
+            jetstream_url: "localhost:4222".into(),
         }
     }
 }
@@ -119,37 +125,74 @@ pub struct CallbackStorageConfig {
 impl TryFrom<HashMap<String, String>> for Settings {
     type Error = Error;
     fn try_from(env_vars: HashMap<String, String>) -> Result<Self, Self::Error> {
-        let is_monovertex = env_vars.contains_key(ENV_MONOVERTEX_OBJ);
+        let pipeline_spec_encoded = env_vars.get(ENV_MIN_PIPELINE_SPEC).ok_or_else(|| {
+            Error::ParseConfig(format!(
+                "Pipeline spec is not set using environment variable {ENV_MIN_PIPELINE_SPEC}"
+            ))
+        })?;
+
+        let pipeline_spec: PipelineDCG = pipeline_spec_encoded.parse().map_err(|e| {
+            Error::ParseConfig(format!(
+                "Parsing pipeline spec: {}: error={e:?}",
+                env_vars.get(ENV_MIN_PIPELINE_SPEC).unwrap()
+            ))
+        })?;
+        let pipeline_spec_decoded = BASE64_STANDARD
+            .decode(pipeline_spec_encoded.as_bytes())
+            .map_err(|e| ParseConfig(format!("decoding {ENV_MIN_PIPELINE_SPEC}: {e:?}")))?;
+
+        #[derive(Deserialize)]
+        struct Vertex {
+            source: Option<numaflow_models::models::Source>,
+        }
+
+        #[derive(Deserialize)]
+        struct PipelineVertices {
+            vertices: Vec<Vertex>,
+        }
+
+        let pvs: PipelineVertices = serde_json::from_slice(pipeline_spec_decoded.as_slice())
+            .map_err(|e| {
+                ParseConfig(format!(
+                    "Parsing vertex spec from {ENV_MIN_PIPELINE_SPEC}: {e:?}"
+                ))
+            })?;
+
+        let mut js_source_spec = None;
+        for vtx in pvs.vertices {
+            let Some(src) = vtx.source else {
+                continue;
+            };
+            let Some(jetstream) = src.jetstream else {
+                return Err(ParseConfig(format!(
+                    "Expected the source to be Jetstream in {ENV_MIN_PIPELINE_SPEC}"
+                )));
+            };
+            js_source_spec = Some(jetstream);
+        }
+        let js_source_spec = js_source_spec.ok_or_else(|| {
+            ParseConfig(format!(
+                "Jetstream source settings was not found in {ENV_MIN_PIPELINE_SPEC}"
+            ))
+        })?;
+
+        let js_basic_auth = js_source_spec.auth.unwrap().basic.unwrap();
+        let auth_user = js_basic_auth.user.unwrap();
+        // let nats_username = get_secret_from_volume(&auth_user.name, &auth_user.key).unwrap(); // FIXME:
+        let nats_username = env_vars.get("NUMAFLOW_ISBSVC_JETSTREAM_USER").unwrap();
+
+        let auth_pass = js_basic_auth.password.unwrap();
+        // let nats_password = get_secret_from_volume(&auth_pass.name, &auth_pass.key).unwrap(); // FIXME:
+        let nats_password = env_vars.get("NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD").unwrap();
+
         let mut settings = Settings {
-            host_ip: "localhost".to_string(),
-            pipeline_spec: PipelineDCG::monovertex(),
+            pipeline_spec,
+            js_store: "default-s-simple-pipeline_SERVING_KV_STORE".into(), // FIXME:
+            nats_basic_auth: Some((nats_username.into(), nats_password.into())),
+            jetstream_stream: js_source_spec.stream,
+            jetstream_url: js_source_spec.url,
             ..Default::default()
         };
-
-        if !is_monovertex {
-            let host_ip = env_vars
-                .get(ENV_NUMAFLOW_SERVING_HOST_IP)
-                .ok_or_else(|| {
-                    ParseConfig(format!(
-                        "Environment variable {ENV_NUMAFLOW_SERVING_HOST_IP} is not set"
-                    ))
-                })?
-                .to_owned();
-            let pipeline_spec: PipelineDCG = env_vars
-                    .get(ENV_MIN_PIPELINE_SPEC)
-                    .ok_or_else(|| {
-                        Error::ParseConfig(format!("Pipeline spec is not set using environment variable {ENV_MIN_PIPELINE_SPEC}"))})?.parse().map_err(|e| {
-                            Error::ParseConfig(format!(
-                                "Parsing pipeline spec: {}: error={e:?}",
-                                env_vars.get(ENV_MIN_PIPELINE_SPEC).unwrap()
-                            ))
-                        })?;
-            settings = Settings {
-                host_ip,
-                pipeline_spec,
-                ..Default::default()
-            };
-        }
 
         if let Some(app_port) = env_vars.get(ENV_NUMAFLOW_SERVING_APP_PORT) {
             settings.app_listen_port = app_port.parse().map_err(|e| {
@@ -159,68 +202,11 @@ impl TryFrom<HashMap<String, String>> for Settings {
             })?;
         }
 
-        // TODO: When we add support for Serving with monovertex, we should check for NUMAFLOW_MONO_VERTEX_OBJECT variable too.
-        let source_spec_encoded = match env_vars.get(ENV_VERTEX_OBJ) {
-            Some(source_spec_encoded) => source_spec_encoded,
-            None => {
-                let Some(source_spec_encoded) = env_vars.get(ENV_MONOVERTEX_OBJ) else {
-                    return Err(ParseConfig(format!(
-                "Either of the environment variables {ENV_VERTEX_OBJ} or {ENV_MONOVERTEX_OBJ} is not set"
-            )));
-                };
-                source_spec_encoded
-            }
-        };
-
-        let source_spec_decoded = BASE64_STANDARD
-            .decode(source_spec_encoded.as_bytes())
-            .map_err(|e| ParseConfig(format!("decoding {ENV_VERTEX_OBJ}: {e:?}")))?;
-
+        // check if vertex_obj.spec.serving_store_name == "default"
         let mut ud_store_enabled = false;
-        let serving_spec = match is_monovertex {
-            true => {
-                let vertex_obj = serde_json::from_slice::<MonoVertex>(&source_spec_decoded)
-                    .map_err(|e| ParseConfig(format!("parsing {ENV_VERTEX_OBJ}: {e:?}")))?;
-                vertex_obj
-                    .spec
-                    .source
-                    .ok_or_else(|| {
-                        ParseConfig(format!("parsing {ENV_VERTEX_OBJ}: source can not be empty"))
-                    })?
-                    .serving
-                    .ok_or_else(|| {
-                        ParseConfig(format!(
-                            "parsing {ENV_VERTEX_OBJ}: Serving source spec is not found"
-                        ))
-                    })?
-            }
-            false => {
-                let vertex_obj = serde_json::from_slice::<Vertex>(&source_spec_decoded)
-                    .map_err(|e| ParseConfig(format!("parsing {ENV_VERTEX_OBJ}: {e:?}")))?;
-
-                if vertex_obj.spec.serving_store_name.is_some()
-                    && vertex_obj.spec.serving_store_name.as_ref().unwrap() != "default"
-                {
-                    ud_store_enabled = true;
-                }
-
-                vertex_obj
-                    .spec
-                    .source
-                    .ok_or_else(|| {
-                        ParseConfig(format!("parsing {ENV_VERTEX_OBJ}: source can not be empty"))
-                    })?
-                    .serving
-                    .ok_or_else(|| {
-                        ParseConfig(format!(
-                            "parsing {ENV_VERTEX_OBJ}: Serving source spec is not found"
-                        ))
-                    })?
-            }
-        };
 
         // Update tid_header from source_spec
-        settings.tid_header = serving_spec.msg_id_header_key;
+        // settings.tid_header = serving_spec.msg_id_header_key;
 
         settings.store_type = if ud_store_enabled {
             StoreType::UserDefined(UserDefinedStoreConfig::default())
@@ -228,16 +214,18 @@ impl TryFrom<HashMap<String, String>> for Settings {
             StoreType::Nats
         };
 
-        // FIXME(serving)
-        settings.drain_timeout_secs =
-            serving_spec.request_timeout_seconds.unwrap_or(120).max(1) as u64; // Ensure timeout is atleast 1 second
+        // TODO: parse env var NUMAFLOW_SERVING_SOURCE_SETTINGS
 
-        if let Some(auth) = serving_spec.auth {
-            let token = auth.token.unwrap();
-            let auth_token = get_secret_from_volume(&token.name, &token.key)
-                .map_err(|e| ParseConfig(e.to_string()))?;
-            settings.api_auth_token = Some(auth_token);
-        }
+        // FIXME(serving)
+        // settings.drain_timeout_secs =
+        // serving_spec.request_timeout_seconds.unwrap_or(120).max(1) as u64; // Ensure timeout is atleast 1 second
+
+        // if let Some(auth) = serving_spec.auth {
+        //     let token = auth.token.unwrap();
+        //     let auth_token = get_secret_from_volume(&token.name, &token.key)
+        //         .map_err(|e| ParseConfig(e.to_string()))?;
+        //     settings.api_auth_token = Some(auth_token);
+        // }
 
         Ok(settings)
     }

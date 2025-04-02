@@ -1,8 +1,8 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use async_nats::jetstream::Context;
 use axum_server::tls_rustls::RustlsConfig;
-use tokio::sync::mpsc;
 use tracing::info;
 
 pub use self::error::{Error, Result};
@@ -14,15 +14,19 @@ use app::orchestrator::OrchestratorState;
 mod app;
 
 mod config;
-pub use {config::Settings, config::DEFAULT_CALLBACK_URL_HEADER_KEY, config::DEFAULT_ID_HEADER};
+pub use {
+    config::Settings, config::DEFAULT_CALLBACK_URL_HEADER_KEY, config::DEFAULT_ID_HEADER,
+    config::ENV_MIN_PIPELINE_SPEC,
+};
 
 mod error;
 mod metrics;
 mod pipeline;
 
 pub mod source;
+pub use source::start;
+pub use source::Message;
 use source::MessageWrapper;
-pub use source::{Message, ServingSource};
 
 use crate::app::store::cbstore::CallbackStore;
 use crate::app::store::datastore::DataStore;
@@ -32,7 +36,7 @@ pub mod callback;
 
 #[derive(Clone)]
 pub(crate) struct AppState<T, U> {
-    pub(crate) message: mpsc::Sender<MessageWrapper>,
+    pub(crate) js_context: Context,
     pub(crate) settings: Arc<Settings>,
     pub(crate) orchestrator_state: OrchestratorState<T, U>,
 }
