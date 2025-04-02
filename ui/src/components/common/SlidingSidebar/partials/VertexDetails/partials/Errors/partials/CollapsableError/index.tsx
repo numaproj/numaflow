@@ -7,12 +7,12 @@ import AccordionDetails from "@mui/material/AccordionDetails";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import Divider from "@mui/material/Divider";
 import { ago } from "../../../../../../../../../utils";
-import { ErrorDetails } from "../../../../../../../../../types/declarations/pods";
+import { ContainerError } from "../../../../../../../../../types/declarations/pods";
 
 import "./style.css";
 
 interface CollapsableErrorProps {
-  detail: ErrorDetails;
+  detail: ContainerError & { pod: string };
 }
 
 export const CollapsableError = ({ detail }: CollapsableErrorProps) => {

@@ -147,8 +147,7 @@ export interface ResourceUsage {
   memoryPercent?: number;
 }
 
-export interface ErrorDetails {
-  pod: string;
+export interface ContainerError {
   container: string;
   timestamp: string;
   code: string;
@@ -156,8 +155,13 @@ export interface ErrorDetails {
   details: string;
 }
 
-export interface ErrorsDetailsFetchResult {
-  data?: ErrorDetails[];
+export interface  ReplicaErrors {
+  replica: string;
+  containerErrors: ContainerError[];
+}
+
+export interface ErrorsFetchResult {
+  data?: ReplicaErrors[];
   loading: boolean;
   error: any;
   refresh: () => void;

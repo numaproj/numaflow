@@ -22,7 +22,10 @@ import { CloseModal } from "../CloseModal";
 import { AppContext } from "../../../../../App";
 import { useErrorsFetch } from "../../../../../utils/fetchWrappers/errorsFetch";
 import { AppContextProps } from "../../../../../types/declarations/app";
-import { ErrorDetails } from "../../../../../types/declarations/pods";
+import {
+  ContainerError,
+  ReplicaErrors,
+} from "../../../../../types/declarations/pods";
 import sourceIcon from "../../../../../images/source.png";
 import sinkIcon from "../../../../../images/sink.png";
 import mapIcon from "../../../../../images/map.png";
@@ -106,6 +109,9 @@ export function VertexDetails({
   const [presets, setPresets] = useState<any>(undefined);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
   const [targetTab, setTargetTab] = useState<number | undefined>();
+  const [constructedDetails, setConstructedDetails] = useState<
+    (ContainerError & { pod: string })[]
+  >([]);
 
   // Find the vertex spec by id
   useEffect(() => {
@@ -241,11 +247,35 @@ export function VertexDetails({
     addError,
   });
 
+  // flattens the error data into a single array of container errors
+  const constructDetails = useCallback((details?: ReplicaErrors[]) => {
+    const newDetails: (ContainerError & { pod: string })[] = [];
+    if (details) {
+      details?.forEach((d) => {
+        d.containerErrors.forEach((c) => {
+          newDetails.push({
+            pod: d.replica,
+            container: c.container,
+            timestamp: c.timestamp,
+            code: c.code,
+            message: c.message,
+            details: c.details,
+          });
+        });
+      });
+    }
+    setConstructedDetails(newDetails);
+  }, []);
+
+  useEffect(() => {
+    constructDetails(errorsDetailsData);
+  }, [errorsDetailsData, constructDetails]);
+
   const filterErrorsWithinLast24Hours = useCallback(
-    (errorsDetailsData: ErrorDetails[]) => {
+    (containerErrorsData: (ContainerError & { pod: string })[]) => {
       const currentTime = new Date().getTime();
       const twentyFourHoursAgo = currentTime - 24 * 60 * 60 * 1000; // 24 hours in milliseconds
-      return errorsDetailsData.filter((errorData: ErrorDetails) => {
+      return containerErrorsData.filter((errorData) => {
         return (
           errorData.timestamp &&
           new Date(errorData.timestamp).getTime() >= twentyFourHoursAgo
@@ -256,11 +286,10 @@ export function VertexDetails({
   );
 
   useEffect(() => {
-    const filteredDetailsData = errorsDetailsData
-      ? filterErrorsWithinLast24Hours(errorsDetailsData)
-      : [];
+    const filteredDetailsData =
+      filterErrorsWithinLast24Hours(constructedDetails);
     setErrorsCount(filteredDetailsData.length);
-  }, [errorsDetailsData, filterErrorsWithinLast24Hours]);
+  }, [constructedDetails, filterErrorsWithinLast24Hours]);
 
   return (
     <VertexDetailsContext.Provider
@@ -428,7 +457,7 @@ export function VertexDetails({
           hidden={tabValue !== ERRORS_TAB_INDEX}
         >
           {tabValue === ERRORS_TAB_INDEX && (
-            <Errors details={errorsDetailsData} square />
+            <Errors details={constructedDetails} square />
           )}
         </div>
         {buffers && (

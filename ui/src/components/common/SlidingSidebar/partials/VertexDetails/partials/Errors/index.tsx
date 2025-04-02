@@ -5,17 +5,19 @@ import Autocomplete from "@mui/material/Autocomplete";
 import TextField from "@mui/material/TextField";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import { CollapsableError } from "./partials/CollapsableError";
-import { ErrorDetails } from "../../../../../../../types/declarations/pods";
+import { ContainerError } from "../../../../../../../types/declarations/pods";
 
 import "./style.css";
 
 interface ErrorsProps {
-  details?: ErrorDetails[];
+  details: (ContainerError & { pod: string })[];
   square?: boolean;
 }
 
 export const Errors = ({ details, square }: ErrorsProps) => {
-  const [filteredDetails, setFilteredDetails] = useState<ErrorDetails[]>([]);
+  const [filteredDetails, setFilteredDetails] = useState<
+    (ContainerError & { pod: string })[]
+  >([]);
   const [podList, setPodList] = useState<string[]>(["All"]);
   const [containerList, setContainerList] = useState<string[]>(["All"]);
   const [selectedPod, setSelectedPod] = useState<string>("All");
@@ -23,18 +25,20 @@ export const Errors = ({ details, square }: ErrorsProps) => {
 
   const extractUniqueItems = (items: string[]) => Array.from(new Set(items));
 
-  // TODO: fix extraction logic
-  const updateLists = useCallback((details?: ErrorDetails[]) => {
-    if (details) {
-      const pods = extractUniqueItems(details.map((d) => d.pod));
-      const containers = extractUniqueItems(details.map((d) => d.container));
-      setPodList(["All", ...pods]);
-      setContainerList(["All", ...containers]);
-    } else {
-      setPodList(["All"]);
-      setContainerList(["All"]);
-    }
-  }, []);
+  const updateLists = useCallback(
+    (details: (ContainerError & { pod: string })[]) => {
+      if (details.length > 0) {
+        const pods = extractUniqueItems(details.map((d) => d.pod));
+        const containers = extractUniqueItems(details.map((d) => d.container));
+        setPodList(["All", ...pods]);
+        setContainerList(["All", ...containers]);
+      } else {
+        setPodList(["All"]);
+        setContainerList(["All"]);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     updateLists(details);
@@ -44,9 +48,9 @@ export const Errors = ({ details, square }: ErrorsProps) => {
     (
       selectedPod: string,
       selectedContainer: string,
-      details?: ErrorDetails[]
+      details: (ContainerError & { pod: string })[]
     ) => {
-      if (!details) return [];
+      if (details.length === 0) return [];
       else if (selectedPod === "All" && selectedContainer === "All")
         return details;
       else if (selectedContainer === "All") {

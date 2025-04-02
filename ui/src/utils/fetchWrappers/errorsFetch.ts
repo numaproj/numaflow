@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useContext } from "react";
 import { Options, useFetch } from "./fetch";
 import { getBaseHref } from "../index";
-import { ErrorsDetailsFetchResult } from "../../types/declarations/pods";
+import { ErrorsFetchResult } from "../../types/declarations/pods";
 import { AppContextProps } from "../../types/declarations/app";
 import { AppContext } from "../../App";
 
@@ -27,7 +27,7 @@ export const useErrorsFetch = ({
     });
   }, []);
 
-  const [results, setResults] = useState<ErrorsDetailsFetchResult>({
+  const [results, setResults] = useState<ErrorsFetchResult>({
     data: undefined,
     loading: true,
     error: undefined,
