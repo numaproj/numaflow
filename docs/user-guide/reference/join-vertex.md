@@ -1,8 +1,8 @@
 # Joins and Cycles
 
-Numaflow Pipeline Edges can be defined such that multiple Vertices can forward messages to a single vertex.
+Numaflow [Pipeline](../../core-concepts/pipeline.md) Edges can be defined such that multiple Vertices can forward messages to a single vertex.
 
-### Quick Start 
+### Quick Start
 
 Please see the following examples:
 
@@ -15,8 +15,9 @@ Please see the following examples:
 ## Why do we need JOIN
 
 ### Without JOIN
-Without JOIN, Numaflow could only allow users to build [pipelines](https://numaflow.numaproj.io/core-concepts/pipeline/) where [vertices](https://numaflow.numaproj.io/core-concepts/vertex/)
-could only read from previous *one* vertex. This meant that Numaflow could only support simple pipelines or tree-like pipelines. 
+
+Without JOIN, Numaflow could only allow users to build [pipelines](../../core-concepts/pipeline.md) where [vertices](../../core-concepts/vertex.md)
+could only read from previous _one_ vertex. This meant that Numaflow could only support simple pipelines or tree-like pipelines.
 Supporting pipelines where you had to read from multiple sources or UDFs were cumbersome and required creating redundant
 vertices.
 
@@ -27,7 +28,7 @@ vertices.
 ### With JOIN
 
 Join vertices allow users the flexibility to read from multiple sources, process data from multiple UDFs, and even write
-to a single sink. The Pipeline Spec doesn't change at all with JOIN, now you can create multiple Edges that have the 
+to a single sink. The Pipeline Spec doesn't change at all with JOIN, now you can create multiple Edges that have the
 same “To” Vertex, which would have otherwise been prohibited.
 
 ![Join Vertex](https://miro.medium.com/v2/resize:fit:1400/1*5Ct-5otqpXTAVCNW_SJnNw.png)
@@ -38,7 +39,7 @@ There is no limitation on which vertices can be joined. For instance, one can jo
 
 ## Benefits
 
-The introduction of Join Vertex allows users to eliminate redundancy in their pipelines. It supports many-to-one data 
+The introduction of Join Vertex allows users to eliminate redundancy in their pipelines. It supports many-to-one data
 flow without needing multiple vertices performing the same job.
 
 ## Examples
@@ -50,6 +51,7 @@ By joining the sink vertices, we now only need a single vertex responsible for s
 ![Join on Sink Vertex](https://miro.medium.com/v2/resize:fit:1400/1*5Ct-5otqpXTAVCNW_SJnNw.png)
 
 #### Example
+
 [Join on Sink Vertex](https://github.com/numaproj/numaflow/blob/main/examples/11-join-on-sink.yaml)
 
 ### Join on Map Vertex
@@ -79,8 +81,8 @@ use of this is a Map UDF which does some sort of reprocessing of data under cert
 
 ![Cycle](https://miro.medium.com/v2/resize:fit:1400/1*wYokY1wa9LhI1hKYimWiKA.png)
 
-Cycles are permitted, except in the case that there's a Reduce Vertex at or downstream of the cycle. (This is because a 
-cycle inevitably produces late data, which would get dropped by the Reduce Vertex. For this reason, cycles should be 
+Cycles are permitted, except in the case that there's a Reduce Vertex at or downstream of the cycle. (This is because a
+cycle inevitably produces late data, which would get dropped by the Reduce Vertex. For this reason, cycles should be
 used sparingly.)
 
 The following examples are of Cycles:

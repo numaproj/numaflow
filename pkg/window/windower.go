@@ -322,7 +322,7 @@ const (
 	Fixed Strategy = iota
 	Sliding
 	Session
-	Global
+	Accumulator
 )
 
 func (s Strategy) String() string {
@@ -333,8 +333,8 @@ func (s Strategy) String() string {
 		return "Sliding"
 	case Session:
 		return "Session"
-	case Global:
-		return "Global"
+	case Accumulator:
+		return "Accumulator"
 	default:
 		return "Unknown"
 	}

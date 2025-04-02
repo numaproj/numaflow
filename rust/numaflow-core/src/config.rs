@@ -22,11 +22,12 @@ pub(crate) mod monovertex;
 /// Pipeline specific configs.
 pub(crate) mod pipeline;
 
-pub const NUMAFLOW_MONO_VERTEX_NAME: &str = "NUMAFLOW_MONO_VERTEX_NAME";
+pub(crate) const NUMAFLOW_MONO_VERTEX_NAME: &str = "NUMAFLOW_MONO_VERTEX_NAME";
 const NUMAFLOW_VERTEX_NAME: &str = "NUMAFLOW_VERTEX_NAME";
 const NUMAFLOW_REPLICA: &str = "NUMAFLOW_REPLICA";
 const NUMAFLOW_PIPELINE_NAME: &str = "NUMAFLOW_PIPELINE_NAME";
 const NUMAFLOW_NAMESPACE: &str = "NUMAFLOW_NAMESPACE";
+
 static VERTEX_NAME: OnceLock<String> = OnceLock::new();
 
 /// fetch the vertex name from the environment variable

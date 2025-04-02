@@ -104,11 +104,24 @@ func (mv MonoVertex) GetHeadlessServiceName() string {
 }
 
 func (mv MonoVertex) GetServiceObjs() []*corev1.Service {
-	svcs := []*corev1.Service{mv.getServiceObj(mv.GetHeadlessServiceName(), true, MonoVertexMetricsPort, MonoVertexMetricsPortName)}
+	svcs := []*corev1.Service{}
+	ports := map[string]int32{
+		MonoVertexMetricsPortName: MonoVertexMetricsPort,
+		MonoVertexMonitorPortName: MonoVertexMonitorPort,
+	}
+	svcs = append(svcs, mv.getServiceObj(mv.GetHeadlessServiceName(), true, ports))
 	return svcs
 }
 
-func (mv MonoVertex) getServiceObj(name string, headless bool, port int32, servicePortName string) *corev1.Service {
+func (mv MonoVertex) getServiceObj(name string, headless bool, ports map[string]int32) *corev1.Service {
+	var servicePorts []corev1.ServicePort
+	for name, port := range ports {
+		servicePorts = append(servicePorts, corev1.ServicePort{
+			Port:       port,
+			TargetPort: intstr.FromInt32(port),
+			Name:       name,
+		})
+	}
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       mv.Namespace,
@@ -122,9 +135,7 @@ func (mv MonoVertex) getServiceObj(name string, headless bool, port int32, servi
 			},
 		},
 		Spec: corev1.ServiceSpec{
-			Ports: []corev1.ServicePort{
-				{Port: port, TargetPort: intstr.FromInt32(port), Name: servicePortName},
-			},
+			Ports: servicePorts,
 			Selector: map[string]string{
 				KeyPartOf:         Project,
 				KeyManagedBy:      ControllerMonoVertex,
@@ -134,6 +145,7 @@ func (mv MonoVertex) getServiceObj(name string, headless bool, port int32, servi
 		},
 	}
 	if headless {
+		svc.Spec.PublishNotReadyAddresses = true
 		svc.Spec.ClusterIP = "None"
 	}
 	return svc
@@ -347,14 +359,15 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 		},
 	}
 	volumeMounts := []corev1.VolumeMount{{Name: varVolumeName, MountPath: PathVarRun}}
-
-	sidecarContainers, containers := mv.Spec.buildContainers(getContainerReq{
+	containerRequest := getContainerReq{
 		env:             envVars,
 		image:           req.Image,
 		imagePullPolicy: req.PullPolicy,
 		resources:       req.DefaultResources,
 		volumeMounts:    volumeMounts,
-	})
+	}
+
+	sidecarContainers, containers := mv.Spec.buildContainers(containerRequest)
 
 	var readyzInitDeploy, readyzPeriodSeconds, readyzTimeoutSeconds, readyzFailureThreshold int32 = NumaContainerReadyzInitialDelaySeconds, NumaContainerReadyzPeriodSeconds, NumaContainerReadyzTimeoutSeconds, NumaContainerReadyzFailureThreshold
 	var liveZInitDeploy, liveZPeriodSeconds, liveZTimeoutSeconds, liveZFailureThreshold int32 = NumaContainerLivezInitialDelaySeconds, NumaContainerLivezPeriodSeconds, NumaContainerLivezTimeoutSeconds, NumaContainerLivezFailureThreshold
@@ -397,12 +410,6 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 	containers[0].Ports = []corev1.ContainerPort{
 		{Name: MonoVertexMetricsPortName, ContainerPort: MonoVertexMetricsPort},
 	}
-
-	// Attach an EmptyDir for runtime info
-	containers[0].VolumeMounts = append(containers[0].VolumeMounts, corev1.VolumeMount{
-		Name:      RuntimeDirVolume,
-		MountPath: RuntimeDirMountPath,
-	})
 
 	for i := 0; i < len(sidecarContainers); i++ { // udsink, udsource, udtransformer ...
 		sidecarContainers[i].Env = append(sidecarContainers[i].Env, mv.commonEnvs()...)
@@ -478,13 +485,25 @@ func (mvspec MonoVertexSpec) DeepCopyWithoutReplicas() MonoVertexSpec {
 	return x
 }
 
+func (mvspec MonoVertexSpec) getMainContainer(req getContainerReq) corev1.Container {
+	// volume mount to the runtime path
+	volumeMounts := []corev1.VolumeMount{
+		{
+			Name:      RuntimeDirVolume,
+			MountPath: RuntimeDirMountPath,
+		},
+	}
+	return containerBuilder{}.
+		init(req).appendVolumeMounts(volumeMounts...).command(NumaflowRustBinary).args("--rust").build()
+}
+
 // buildContainers builds the sidecar containers and main containers for the mono vertex.
 func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) ([]corev1.Container, []corev1.Container) {
-	mainContainer := containerBuilder{}.
-		init(req).command(NumaflowRustBinary).args("--rust").build()
+	mainContainer := mvspec.getMainContainer(req)
 	containers := []corev1.Container{mainContainer}
 
-	sidecarContainers := []corev1.Container{}
+	monitorContainer := buildMonitorContainer(req)
+	sidecarContainers := []corev1.Container{monitorContainer}
 	if mvspec.Source.UDSource != nil { // Only support UDSource for now.
 		sidecarContainers = append(sidecarContainers, mvspec.Source.getUDSourceContainer(req))
 	}
@@ -497,6 +516,7 @@ func (mvspec MonoVertexSpec) buildContainers(req getContainerReq) ([]corev1.Cont
 	if mvspec.Sink.Fallback != nil && mvspec.Sink.Fallback.UDSink != nil {
 		sidecarContainers = append(sidecarContainers, mvspec.Sink.getFallbackUDSinkContainer(req))
 	}
+
 	sidecarContainers = append(sidecarContainers, mvspec.Sidecars...)
 	return sidecarContainers, containers
 }

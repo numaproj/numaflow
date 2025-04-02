@@ -76,6 +76,7 @@ const (
 	CtrInitSideInputs    = "init-side-inputs"
 	CtrSideInputsWatcher = "side-inputs-synchronizer"
 	CtrServing           = "serving"
+	CtrMonitor           = "monitor"
 	CtrUdStore           = "udstore"
 
 	// user-defined container types
@@ -157,11 +158,15 @@ const (
 	PathVarRun                  = "/var/run/numaflow"
 	VertexMetricsPort           = 2469
 	VertexMetricsPortName       = "metrics"
+	VertexMonitorPort           = 2470
+	VertexMonitorPortName       = "monitor"
 	VertexHTTPSPort             = 8443
 	VertexHTTPSPortName         = "https"
 	DaemonServicePort           = 4327
 	MonoVertexMetricsPort       = 2469
 	MonoVertexMetricsPortName   = "metrics"
+	MonoVertexMonitorPort       = 2470
+	MonoVertexMonitorPortName   = "monitor"
 	MonoVertexDaemonServicePort = 4327
 
 	DefaultRequeueAfter = 10 * time.Second
@@ -210,10 +215,6 @@ const (
 	DefaultWALCompactorMaxFileSize  = 30 * 1024 * 1024               // Default max file size for the compactor
 	DefaultWALCompactionDuration    = 60 * time.Second               // Default compaction duration
 	DefaultCompactWALPath           = PathPBQMount + "/compact-wals" // Default compaction wal path
-
-	// Default Pnf options
-	DefaultPnfBatchSize     = 100         // Default flush batch size for pnf
-	DefaultPnfFlushDuration = time.Second // Default flush duration for pnf
 
 	// DefaultKafkaHandlerChannelSize is the default channel size for kafka handler
 	DefaultKafkaHandlerChannelSize = 100
