@@ -194,7 +194,7 @@ func (r *pipelineRuntimeCache) fetchAndPersistErrorForPod(vtxName string, podInd
 	defer r.cacheMutex.Unlock()
 
 	// overwrite the errors
-	if vtxErrors, ok := r.localCache[cacheKey]; !ok {
+	if vtxErrors, ok := r.localCache[cacheKey]; ok {
 		// Update existing replica errors if found
 		for i, vtxError := range vtxErrors {
 			if vtxError.Replica == replica {

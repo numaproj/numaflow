@@ -194,7 +194,7 @@ func (r *monoVertexRuntimeCache) fetchAndPersistErrorForPod(podIndex int) {
 	defer r.cacheMutex.Unlock()
 
 	// overwrite the errors
-	if mvtxErrors, ok := r.localCache[cacheKey]; !ok {
+	if mvtxErrors, ok := r.localCache[cacheKey]; ok {
 		// Update existing replica errors if found
 		for i, mvtxError := range mvtxErrors {
 			if mvtxError.Replica == replica {
