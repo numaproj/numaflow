@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use std::time::Duration;
 
 use async_nats::jetstream::Context;

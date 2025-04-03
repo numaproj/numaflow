@@ -29,9 +29,6 @@ mod error;
 mod metrics;
 mod pipeline;
 
-pub mod source;
-pub use source::Message;
-
 use crate::app::store::cbstore::CallbackStore;
 use crate::app::store::datastore::DataStore;
 

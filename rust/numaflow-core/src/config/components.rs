@@ -3,9 +3,6 @@ pub(crate) mod source {
     const DEFAULT_SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
     const DEFAULT_SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
 
-    use std::collections::HashMap;
-    use std::env;
-    use std::sync::Arc;
     use std::{fmt::Debug, time::Duration};
 
     use bytes::Bytes;
@@ -14,7 +11,6 @@ pub(crate) mod source {
     use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
     use tracing::warn;
 
-    use crate::config::{get_namespace, get_pipeline_name};
     use crate::error::Error;
     use crate::Result;
 
@@ -255,7 +251,7 @@ pub(crate) mod source {
                 return pulsar.try_into();
             }
 
-            if let Some(serving) = source.serving.take() {
+            if let Some(_serving) = source.serving.take() {
                 panic!("Serving source is invalid");
             }
 
