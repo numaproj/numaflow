@@ -87,7 +87,7 @@ async fn flatten<T>(handle: tokio::task::JoinHandle<Result<T>>) -> Result<T> {
 pub async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
     // create a callback store for tracking
     let callback_store =
-        JetStreamCallbackStore::new(js_context.clone(), &settings.js_store).await?;
+        JetStreamCallbackStore::new(js_context.clone(), &settings.js_callback_store).await?;
     // Create the message graph from the pipeline spec and the redis store
     let msg_graph = MessageGraph::from_pipeline(&settings.pipeline_spec).map_err(|e| {
         Error::InitError(format!(
@@ -100,7 +100,7 @@ pub async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
     match &settings.store_type {
         StoreType::Nats => {
             let nats_store =
-                JetStreamDataStore::new(js_context.clone(), &settings.js_store).await?;
+                JetStreamDataStore::new(js_context.clone(), &settings.js_callback_store).await?;
             let callback_state = CallbackState::new(msg_graph, nats_store, callback_store).await?;
             let app = crate::AppState {
                 js_context,

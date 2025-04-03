@@ -60,13 +60,13 @@ pub struct Settings {
     pub upstream_addr: String,
     pub drain_timeout_secs: u64,
     pub store_type: StoreType,
-    pub js_store: String,
+    pub js_callback_store: String,
     /// The IP address of the numaserve pod. This will be used to construct the value for X-Numaflow-Callback-Url header
     pub host_ip: String,
     pub api_auth_token: Option<String>,
     pub pipeline_spec: PipelineDCG,
     pub nats_basic_auth: Option<(String, String)>,
-    pub jetstream_stream: String,
+    pub js_message_stream: String,
     pub jetstream_url: String,
 }
 
@@ -86,12 +86,12 @@ impl Default for Settings {
             upstream_addr: "localhost:8888".to_owned(),
             drain_timeout_secs: 600,
             store_type: StoreType::default(),
-            js_store: "kv".to_owned(),
+            js_callback_store: "kv".to_owned(),
             host_ip: "127.0.0.1".to_owned(),
             api_auth_token: None,
             pipeline_spec: Default::default(),
             nats_basic_auth: None,
-            jetstream_stream: "test-stream".into(),
+            js_message_stream: "test-stream".into(),
             jetstream_url: "localhost:4222".into(),
         }
     }
@@ -200,9 +200,9 @@ impl TryFrom<HashMap<String, String>> for Settings {
 
         let mut settings = Settings {
             pipeline_spec,
-            js_store,
+            js_callback_store: js_store,
             nats_basic_auth: Some((nats_username.into(), nats_password.into())),
-            jetstream_stream: js_source_spec.stream,
+            js_message_stream: js_source_spec.stream,
             jetstream_url: js_source_spec.url,
             ..Default::default()
         };

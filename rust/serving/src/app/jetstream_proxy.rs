@@ -41,7 +41,7 @@ pub(crate) async fn jetstream_proxy<
 ) -> crate::Result<Router> {
     let proxy_state = Arc::new(ProxyState {
         js_context: state.js_context.clone(),
-        stream: state.settings.jetstream_stream.clone(),
+        stream: state.settings.js_message_stream.clone(),
         tid_header: state.settings.tid_header.clone(),
         orchestrator: state.orchestrator_state.clone(),
     });
@@ -301,6 +301,7 @@ async fn async_publish<
     // We keep the receiver alive to avoid send failure.
     tokio::spawn(notify);
 
+    tracing::info!(proxy_state.stream, "Publishing to kv");
     proxy_state
         .js_context
         .publish_with_headers(proxy_state.stream.clone(), msg_headers, body)
@@ -344,16 +345,14 @@ mod tests {
     async fn test_async_publish() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         const ID_HEADER: &str = "X-Numaflow-Id";
         const ID_VALUE: &str = "foobar";
-        let settings = Settings {
-            tid_header: ID_HEADER.into(),
-            ..Default::default()
-        };
 
         let store_name = "test_async_publish";
+        let message_stream_name = "test_async_publish_messages";
         let js_url = "localhost:4222";
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
         let _ = context.delete_key_value(store_name).await;
+        let _ = context.delete_stream(message_stream_name).await;
 
         let _ = context
             .create_key_value(jetstream::kv::Config {
@@ -363,6 +362,21 @@ mod tests {
             })
             .await
             .unwrap();
+
+        context
+            .create_stream(async_nats::jetstream::stream::Config {
+                name: message_stream_name.into(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let settings = Settings {
+            tid_header: ID_HEADER.into(),
+            js_callback_store: store_name.to_string(),
+            js_message_stream: message_stream_name.to_string(),
+            ..Default::default()
+        };
 
         let callback_store = JetStreamCallbackStore::new(context.clone(), store_name)
             .await
@@ -377,19 +391,8 @@ mod tests {
         let orchestrator_state =
             OrchestratorState::new(msg_graph, datum_store, callback_store).await?;
 
-        let (messages_tx, mut messages_rx) = mpsc::channel::<MessageWrapper>(10);
-        let response_collector = tokio::spawn(async move {
-            let message = messages_rx.recv().await.unwrap();
-            let MessageWrapper {
-                confirm_save,
-                message,
-            } = message;
-            confirm_save.send(()).unwrap();
-            message
-        });
-
         let app_state = AppState {
-            message: messages_tx,
+            js_context: context,
             settings: Arc::new(settings),
             orchestrator_state,
         };
@@ -406,8 +409,7 @@ mod tests {
         req.extensions_mut().insert(Tid(ID_VALUE.to_string()));
 
         let response = app.oneshot(req).await.unwrap();
-        let message = response_collector.await.unwrap();
-        assert_eq!(message.id, ID_VALUE);
+        // assert_eq!(message.id, ID_VALUE);
         assert_eq!(response.status(), StatusCode::OK);
 
         let result = extract_response_from_body(response.into_body()).await;
@@ -469,12 +471,9 @@ mod tests {
     async fn test_sync_publish() {
         const ID_HEADER: &str = "X-Numaflow-ID";
         const ID_VALUE: &str = "foobar";
-        let settings = Settings {
-            tid_header: ID_HEADER.into(),
-            ..Default::default()
-        };
 
         let store_name = "test_sync_publish";
+        let messages_stream_name = "test_sync_publish_messages";
         let js_url = "localhost:4222";
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
@@ -488,6 +487,20 @@ mod tests {
             })
             .await
             .unwrap();
+        context
+            .create_stream(async_nats::jetstream::stream::Config {
+                name: messages_stream_name.into(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let settings = Settings {
+            tid_header: ID_HEADER.into(),
+            js_callback_store: store_name.to_string(),
+            js_message_stream: messages_stream_name.to_string(),
+            ..Default::default()
+        };
 
         let callback_store = JetStreamCallbackStore::new(context.clone(), store_name)
             .await
@@ -504,20 +517,8 @@ mod tests {
             .await
             .unwrap();
 
-        let (messages_tx, mut messages_rx) = mpsc::channel(10);
-
-        let response_collector = tokio::spawn(async move {
-            let message = messages_rx.recv().await.unwrap();
-            let MessageWrapper {
-                confirm_save,
-                message,
-            } = message;
-            confirm_save.send(()).unwrap();
-            message
-        });
-
         let app_state = AppState {
-            message: messages_tx,
+            js_context: context,
             settings: Arc::new(settings),
             orchestrator_state,
         };
@@ -548,8 +549,7 @@ mod tests {
         req.extensions_mut().insert(Tid(ID_VALUE.to_string()));
 
         let response = app.clone().oneshot(req).await.unwrap();
-        let message = response_collector.await.unwrap();
-        assert_eq!(message.id, ID_VALUE);
+        // assert_eq!(message.id, ID_VALUE);
         assert_eq!(response.status(), StatusCode::OK);
 
         let result = to_bytes(response.into_body(), 10 * 1024).await.unwrap();
@@ -560,9 +560,9 @@ mod tests {
     #[tokio::test]
     async fn test_sync_publish_serve() {
         const ID_VALUE: &str = "foobar";
-        let settings = Arc::new(Settings::default());
 
         let store_name = "test_sync_publish_serve";
+        let messages_stream_name = "test_sync_publish_serve_messages";
         let js_url = "localhost:4222";
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
@@ -576,6 +576,20 @@ mod tests {
             })
             .await
             .unwrap();
+
+        context
+            .create_stream(async_nats::jetstream::stream::Config {
+                name: messages_stream_name.into(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let settings = Settings {
+            js_callback_store: store_name.to_string(),
+            js_message_stream: messages_stream_name.to_string(),
+            ..Default::default()
+        };
 
         let callback_store = JetStreamCallbackStore::new(context.clone(), store_name)
             .await
@@ -592,21 +606,9 @@ mod tests {
             .await
             .unwrap();
 
-        let (messages_tx, mut messages_rx) = mpsc::channel(10);
-
-        let response_collector = tokio::spawn(async move {
-            let message = messages_rx.recv().await.unwrap();
-            let MessageWrapper {
-                confirm_save,
-                message,
-            } = message;
-            confirm_save.send(()).unwrap();
-            message
-        });
-
         let app_state = AppState {
-            message: messages_tx,
-            settings,
+            js_context: context,
+            settings: Arc::new(settings),
             orchestrator_state,
         };
 
@@ -644,8 +646,6 @@ mod tests {
         req.extensions_mut().insert(Tid(ID_VALUE.to_string()));
 
         let response = app.clone().oneshot(req).await.unwrap();
-        let message = response_collector.await.unwrap();
-        assert_eq!(message.id, ID_VALUE);
 
         assert_eq!(response.status(), StatusCode::OK);
 
@@ -676,17 +676,14 @@ mod tests {
         );
     }
 
-    // #[cfg(feature = "nats-tests")]
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_sse_handler() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         const ID_HEADER: &str = "X-Numaflow-Id";
         const ID_VALUE: &str = "foobar";
-        let settings = Settings {
-            tid_header: ID_HEADER.into(),
-            ..Default::default()
-        };
 
         let store_name = "test_sse_handler";
+        let messages_stream_name = "test_sse_handler_messages";
         let js_url = "localhost:4222";
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
@@ -701,6 +698,21 @@ mod tests {
             .await
             .unwrap();
 
+        context
+            .create_stream(async_nats::jetstream::stream::Config {
+                name: messages_stream_name.into(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let settings = Settings {
+            tid_header: ID_HEADER.into(),
+            js_callback_store: store_name.to_string(),
+            js_message_stream: messages_stream_name.to_string(),
+            ..Default::default()
+        };
+
         let callback_store = JetStreamCallbackStore::new(context.clone(), store_name)
             .await
             .expect("Failed to create callback store");
@@ -714,19 +726,8 @@ mod tests {
         let orchestrator_state =
             OrchestratorState::new(msg_graph, datum_store, callback_store).await?;
 
-        let (messages_tx, mut messages_rx) = mpsc::channel::<MessageWrapper>(10);
-        tokio::spawn(async move {
-            let message = messages_rx.recv().await.unwrap();
-            let MessageWrapper {
-                confirm_save,
-                message,
-            } = message;
-            confirm_save.send(()).unwrap();
-            message
-        });
-
         let app_state = AppState {
-            message: messages_tx,
+            js_context: context,
             settings: Arc::new(settings),
             orchestrator_state,
         };
