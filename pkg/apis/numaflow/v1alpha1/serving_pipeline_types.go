@@ -185,12 +185,6 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 				},
 			},
 		},
-		{
-			Name: "SERVING_JETSTREAM_USER",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "isbsvc-default-js-client-auth"}, Key: "client-auth-user"},
-			},
-		},
 	}
 	envVars = append(envVars, req.Env...)
 	c := corev1.Container{
@@ -246,6 +240,10 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 }
 
 func (sp ServingPipeline) GetPipelineObj(req GetServingPipelineResourceReq) Pipeline {
+	servingStoreName := "default"
+	if sp.Spec.Serving.ServingStore != nil && sp.Spec.Serving.ServingStore.Container != nil {
+		servingStoreName = "custom"
+	}
 	// The pipeline spec should have been validated
 	plSpec := sp.Spec.Pipeline.DeepCopy()
 	for i := range plSpec.Vertices {
@@ -260,10 +258,10 @@ func (sp ServingPipeline) GetPipelineObj(req GetServingPipelineResourceReq) Pipe
 		if plSpec.Vertices[i].IsASink() {
 			// TODO: (k8s 1.29)  clean this up once we deprecate the support for k8s < 1.29
 			if isSidecarSupported() {
-				plSpec.Vertices[i].ServingStoreName = ptr.To("default") // FIXME:
+				plSpec.Vertices[i].ServingStoreName = ptr.To(servingStoreName)
 				plSpec.Vertices[i].InitContainers = append(plSpec.Vertices[i].InitContainers, sp.getStoreSidecarContainerSpec(req)...)
 			} else {
-				plSpec.Vertices[i].ServingStoreName = ptr.To("default") // FIXME:
+				plSpec.Vertices[i].ServingStoreName = ptr.To(servingStoreName)
 				plSpec.Vertices[i].Sidecars = append(plSpec.Vertices[i].Sidecars, sp.getStoreSidecarContainerSpec(req)...)
 			}
 		}

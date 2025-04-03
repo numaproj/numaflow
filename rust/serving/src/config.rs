@@ -23,6 +23,8 @@ pub const DEFAULT_CALLBACK_URL_HEADER_KEY: &str = "X-Numaflow-Callback-Url";
 const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
 const DEFAULT_SERVING_STORE_SOCKET: &str = "/var/run/numaflow/serving.sock";
 const DEFAULT_SERVING_STORE_SERVER_INFO_FILE: &str = "/var/run/numaflow/serving-server-info";
+const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
+const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
 
 pub fn generate_certs() -> Result<(Certificate, KeyPair), String> {
     let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
@@ -176,14 +178,20 @@ impl TryFrom<HashMap<String, String>> for Settings {
             ))
         })?;
 
-        let js_basic_auth = js_source_spec.auth.unwrap().basic.unwrap();
-        let auth_user = js_basic_auth.user.unwrap();
-        // let nats_username = get_secret_from_volume(&auth_user.name, &auth_user.key).unwrap(); // FIXME:
-        let nats_username = env_vars.get("NUMAFLOW_ISBSVC_JETSTREAM_USER").unwrap();
-
-        let auth_pass = js_basic_auth.password.unwrap();
-        // let nats_password = get_secret_from_volume(&auth_pass.name, &auth_pass.key).unwrap(); // FIXME:
-        let nats_password = env_vars.get("NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD").unwrap();
+        let nats_username = env_vars
+            .get(ENV_NUMAFLOW_SERVING_JETSTREAM_USER)
+            .ok_or_else(|| {
+                ParseConfig(format!(
+                    "Environment variable '{ENV_NUMAFLOW_SERVING_JETSTREAM_USER}' is not set"
+                ))
+            })?;
+        let nats_password = env_vars
+            .get("NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD")
+            .ok_or_else(|| {
+                ParseConfig(format!(
+                    "Environment variable '{ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD}' is not set"
+                ))
+            })?;
 
         let mut settings = Settings {
             pipeline_spec,
