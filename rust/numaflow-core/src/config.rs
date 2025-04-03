@@ -99,7 +99,6 @@ pub fn config() -> &'static Settings {
 /// CustomResources supported by Numaflow.
 #[derive(Debug, Clone)]
 pub(crate) enum CustomResourceType {
-    Serving(serving::Settings),
     MonoVertex(MonovertexConfig),
     Pipeline(PipelineConfig),
 }
@@ -115,13 +114,6 @@ impl Settings {
     /// Settings are populated through reading the env vars set via the controller. The main
     /// CRD is the base64 spec of the CR.
     fn load() -> Result<Self> {
-        if env::var(serving::ENV_MIN_PIPELINE_SPEC).is_ok() {
-            let vars: HashMap<String, String> = env::vars().collect();
-            let cfg: serving::Settings = vars.try_into().unwrap();
-            return Ok(Self {
-                custom_resource_type: CustomResourceType::Serving(cfg),
-            });
-        }
         if let Ok(obj) = env::var(ENV_MONO_VERTEX_OBJ) {
             let cfg = MonovertexConfig::load(obj)?;
             return Ok(Settings {

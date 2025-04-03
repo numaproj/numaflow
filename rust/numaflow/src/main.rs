@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::env;
 use std::error::Error;
 use std::time::Duration;
@@ -43,6 +44,15 @@ async fn run() -> Result<(), Box<dyn Error>> {
         numaflow_monitor::run()
             .await
             .map_err(|e| format!("Error running monitor binary: {e:?}"))?;
+        return Ok(());
+    }
+
+    if args.contains(&"--serving".to_string()) {
+        if env::var(serving::ENV_MIN_PIPELINE_SPEC).is_ok() {
+            let vars: HashMap<String, String> = env::vars().collect();
+            let cfg: serving::Settings = vars.try_into().unwrap();
+            numaflow_core::run_serving(cfg).await?;
+        }
         return Ok(());
     }
     info!(?args, "Starting with args");

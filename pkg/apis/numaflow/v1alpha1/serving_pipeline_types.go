@@ -195,7 +195,7 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 		Resources:       req.DefaultResources, // TODO: need to have a way to override.
 		Env:             envVars,
 		Command:         []string{NumaflowRustBinary},
-		Args:            []string{"TODO: args?"}, // TODO: args?
+		Args:            []string{"--serving"},
 	}
 	labels := map[string]string{
 		KeyPartOf:              Project,
