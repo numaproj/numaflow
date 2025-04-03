@@ -422,7 +422,8 @@ func TestDataForward_StartWithNoOpWM(t *testing.T) {
 
 	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
 	assert.NoError(t, err)
-	op := pnf.NewProcessAndForward(child, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisher, idleManager, windower)
+	pnfShutdownCh := make(chan struct{})
+	op := pnf.NewProcessAndForward(child, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisher, idleManager, windower, pnfShutdownCh)
 
 	var reduceDataForwarder *DataForward
 	reduceDataForwarder, err = NewDataForward(child, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, wmpublisher, publisher,
@@ -519,7 +520,8 @@ func TestReduceDataForward_IdleWM(t *testing.T) {
 	windower := fixed.NewWindower(5*time.Second, keyedVertex)
 	idleManager, err := wmb.NewIdleManager(1, len(toBuffers))
 	assert.NoError(t, err)
-	op := pnf.NewProcessAndForward(ctx, keyedVertex, CounterReduceTest{}, toBuffers, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower)
+	pnfShutdownCh := make(chan struct{})
+	op := pnf.NewProcessAndForward(ctx, keyedVertex, CounterReduceTest{}, toBuffers, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower, pnfShutdownCh)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffers, pbqManager, storeManager, CounterReduceTest{}, f, publisherMap,
@@ -732,7 +734,8 @@ func TestReduceDataForward_Count(t *testing.T) {
 	windower := fixed.NewWindower(60*time.Second, keyedVertex)
 	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
 	assert.NoError(t, err)
-	op := pnf.NewProcessAndForward(ctx, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower)
+	pnfShutdownCh := make(chan struct{})
+	op := pnf.NewProcessAndForward(ctx, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower, pnfShutdownCh)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publisherMap,
@@ -818,7 +821,9 @@ func TestReduceDataForward_AllowedLatencyCount(t *testing.T) {
 
 	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
 	assert.NoError(t, err)
-	op := pnf.NewProcessAndForward(ctx, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower)
+
+	pnfShutdownCh := make(chan struct{})
+	op := pnf.NewProcessAndForward(ctx, keyedVertex, CounterReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publisherMap, idleManager, windower, pnfShutdownCh)
 
 	var reduceDataForward *DataForward
 	allowedLatency := 1000
@@ -906,7 +911,9 @@ func TestReduceDataForward_Sum(t *testing.T) {
 	windower := fixed.NewWindower(2*time.Minute, keyedVertex)
 	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
 	assert.NoError(t, err)
-	op := pnf.NewProcessAndForward(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
+
+	pnfShutdownCh := make(chan struct{})
+	op := pnf.NewProcessAndForward(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower, pnfShutdownCh)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publishersMap,
@@ -992,7 +999,9 @@ func TestReduceDataForward_Max(t *testing.T) {
 	windower := fixed.NewWindower(5*time.Minute, keyedVertex)
 	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
 	assert.NoError(t, err)
-	op := pnf.NewProcessAndForward(ctx, keyedVertex, MaxReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
+
+	pnfShutdownCh := make(chan struct{})
+	op := pnf.NewProcessAndForward(ctx, keyedVertex, MaxReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower, pnfShutdownCh)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publishersMap,
@@ -1079,7 +1088,9 @@ func TestReduceDataForward_FixedSumWithDifferentKeys(t *testing.T) {
 
 	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
 	assert.NoError(t, err)
-	op := pnf.NewProcessAndForward(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
+
+	pnfShutdownCh := make(chan struct{})
+	op := pnf.NewProcessAndForward(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower, pnfShutdownCh)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publishersMap,
@@ -1186,7 +1197,9 @@ func TestReduceDataForward_SumWithDifferentKeys(t *testing.T) {
 
 	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
 	assert.NoError(t, err)
-	op := pnf.NewProcessAndForward(ctx, keyedVertex, SessionSumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
+
+	pnfShutdownCh := make(chan struct{})
+	op := pnf.NewProcessAndForward(ctx, keyedVertex, SessionSumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower, pnfShutdownCh)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, SessionSumReduceTest{}, f, publishersMap,
@@ -1291,7 +1304,9 @@ func TestReduceDataForward_NonKeyed(t *testing.T) {
 
 	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
 	assert.NoError(t, err)
-	op := pnf.NewProcessAndForward(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
+
+	pnfShutdownCh := make(chan struct{})
+	op := pnf.NewProcessAndForward(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower, pnfShutdownCh)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, nonKeyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publishersMap,
@@ -1382,7 +1397,9 @@ func TestDataForward_WithContextClose(t *testing.T) {
 
 	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
 	assert.NoError(t, err)
-	op := pnf.NewProcessAndForward(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower)
+
+	pnfShutdownCh := make(chan struct{})
+	op := pnf.NewProcessAndForward(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, CounterReduceTest{}, publishersMap, idleManager, windower, pnfShutdownCh)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(cctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, CounterReduceTest{}, f, publishersMap,
@@ -1480,7 +1497,9 @@ func TestReduceDataForward_SumMultiPartitions(t *testing.T) {
 
 	idleManager, err := wmb.NewIdleManager(1, len(toBuffer))
 	assert.NoError(t, err)
-	op := pnf.NewProcessAndForward(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, &myForwardTestRoundRobin{}, publishersMap, idleManager, windower)
+
+	pnfShutdownCh := make(chan struct{})
+	op := pnf.NewProcessAndForward(ctx, keyedVertex, SumReduceTest{}, toBuffer, pbqManager, &myForwardTestRoundRobin{}, publishersMap, idleManager, windower, pnfShutdownCh)
 
 	var reduceDataForward *DataForward
 	reduceDataForward, err = NewDataForward(ctx, keyedVertex, fromBuffer, toBuffer, pbqManager, storeManager, &myForwardTestRoundRobin{}, f, publishersMap,
