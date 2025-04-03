@@ -215,30 +215,42 @@ impl TryFrom<HashMap<String, String>> for Settings {
             })?;
         }
 
-        // check if vertex_obj.spec.serving_store_name == "default"
-        let mut ud_store_enabled = false;
+        let serving_server_settings_encoded = env::var("NUMAFLOW_SERVING_SOURCE_SETTINGS")
+            .map_err(|_| {
+                ParseConfig(
+                    "Environment variable NUMAFLOW_SERVING_SOURCE_SETTINGS is not set".into(),
+                )
+            })?;
+        let serving_server_settings_decoded = BASE64_STANDARD
+            .decode(serving_server_settings_encoded.as_bytes())
+            .map_err(|e| ParseConfig(format!("decoding {ENV_MIN_PIPELINE_SPEC}: {e:?}")))?;
 
-        // Update tid_header from source_spec
-        // settings.tid_header = serving_spec.msg_id_header_key;
+        let serving_server_settings: numaflow_models::models::ServingSpec =
+            serde_json::from_slice(serving_server_settings_decoded.as_slice()).map_err(|err| {
+                ParseConfig(format!(
+                    "Parsing Serving settings from environment variable 'NUMAFLOW_SERVING_SOURCE_SETTINGS': {err:?}"
+                ))
+            })?;
 
-        settings.store_type = if ud_store_enabled {
+        settings.store_type = if serving_server_settings.store.is_some() {
             StoreType::UserDefined(UserDefinedStoreConfig::default())
         } else {
             StoreType::Nats
         };
 
-        // TODO: parse env var NUMAFLOW_SERVING_SOURCE_SETTINGS
+        settings.tid_header = serving_server_settings.msg_id_header_key;
 
-        // FIXME(serving)
-        // settings.drain_timeout_secs =
-        // serving_spec.request_timeout_seconds.unwrap_or(120).max(1) as u64; // Ensure timeout is atleast 1 second
+        settings.drain_timeout_secs = serving_server_settings
+            .request_timeout_seconds
+            .unwrap_or(120)
+            .max(1) as u64; // Ensure timeout is atleast 1 second
 
-        // if let Some(auth) = serving_spec.auth {
-        //     let token = auth.token.unwrap();
-        //     let auth_token = get_secret_from_volume(&token.name, &token.key)
-        //         .map_err(|e| ParseConfig(e.to_string()))?;
-        //     settings.api_auth_token = Some(auth_token);
-        // }
+        if let Some(auth) = serving_server_settings.auth {
+            let token = auth.token.unwrap();
+            let auth_token = get_secret_from_volume(&token.name, &token.key)
+                .map_err(|e| ParseConfig(e.to_string()))?;
+            settings.api_auth_token = Some(auth_token);
+        }
 
         Ok(settings)
     }
