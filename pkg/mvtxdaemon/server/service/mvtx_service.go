@@ -20,6 +20,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"net/http"
 	"time"
 
@@ -112,7 +113,7 @@ func (mvs *MonoVertexService) GetMonoVertexErrors(ctx context.Context, request *
 			for j, containerError := range err.ContainerErrors {
 				containerErrors[j] = &mvtxdaemon.ContainerError{
 					Container: containerError.Container,
-					Timestamp: containerError.Timestamp,
+					Timestamp: timestamppb.New(time.Unix(containerError.Timestamp, 0)),
 					Code:      containerError.Code,
 					Message:   containerError.Message,
 					Details:   containerError.Details,

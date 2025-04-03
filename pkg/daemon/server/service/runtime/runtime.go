@@ -40,7 +40,7 @@ const (
 
 type ErrorDetails struct {
 	Container string `json:"container"`
-	Timestamp string `json:"timestamp"`
+	Timestamp int64  `json:"timestamp"`
 	Code      string `json:"code"`
 	Message   string `json:"message"`
 	Details   string `json:"details"`
