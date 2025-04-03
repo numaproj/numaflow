@@ -227,8 +227,15 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			}
 		}
 
+		// we need to use separate sink handlers for each partition, because each sink handler is mapped to one bidirectional stream
+		// and the bidi stream cannot be shared between partitions.
+		var udsinkHandler *udsink.UDSgRPCBasedUDSink
+		if len(sinkHandlers) > 0 {
+			udsinkHandler = sinkHandlers[index]
+		}
+
 		// create the main sink writer
-		sinkWriter, err := u.createSinkWriter(ctx, &u.VertexInstance.Vertex.Spec.Sink.AbstractSink, sinkHandlers[index])
+		sinkWriter, err := u.createSinkWriter(ctx, &u.VertexInstance.Vertex.Spec.Sink.AbstractSink, udsinkHandler)
 		if err != nil {
 			return fmt.Errorf("failed to find a sink, error: %w", err)
 		}
