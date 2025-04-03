@@ -170,7 +170,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 				return fmt.Errorf("failed on UDSink readiness check, %w", err)
 			}
 
-			// add sinkHandler to healthCheckers
+			// since it is the same UD Container, we need to do health check only once.
 			if index == 0 {
 				healthCheckers = append(healthCheckers, sinkHandler)
 			}
