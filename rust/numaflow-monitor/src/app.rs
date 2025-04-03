@@ -211,7 +211,7 @@ mod tests {
         assert_eq!(api_response.data.len(), 1);
     }
     #[tokio::test]
-    async fn test_handle_runtime_app_errors_internal_error() {
+    async fn test_handle_runtime_app_errors_ok_empty_data() {
         // Initialize runtime and app state
         let runtime = Arc::new(Runtime::new(Some(RuntimeInfoConfig {
             app_error_path: "test-path-error".to_string(),
@@ -236,18 +236,14 @@ mod tests {
         // Call the handler
         let response = router.oneshot(request).await.unwrap();
 
-        // It should throw error since app-error directory doesn't exist
-        // and we are trying to read from it
-        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(response.status(), StatusCode::OK);
 
         let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
             .await
             .unwrap();
         let api_response: ApiResponse = serde_json::from_slice(&body).unwrap();
+        // It should return early since app-error directory doesn't exist
+        // and we are trying to read from it
         assert!(api_response.data.is_empty());
-        assert_eq!(
-            api_response.error_message,
-            Some("file Error - No application errors persisted yet".to_string())
-        );
     }
 }

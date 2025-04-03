@@ -733,7 +733,7 @@ mod tests {
         );
     }
 
-    // #[cfg(feature = "nats-tests")]
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_sse_handler() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         const ID_HEADER: &str = "X-Numaflow-Id";
