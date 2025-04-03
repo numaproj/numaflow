@@ -13,8 +13,10 @@
 
 .collapsable-error-common-title-text {
   width: 25rem;
+  height: 100%;
   font-weight: 500;
   color: #878789;
+  overflow: scroll;
 }
 
 .collapsable-error-accordion-details {

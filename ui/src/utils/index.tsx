@@ -453,11 +453,11 @@ export function formatDuration(seconds: number, precision = 1) {
   return figs.slice(0, precision).join(" ");
 }
 
-export const ago = (date: Date) => {
+export const ago = (date: Date, precision?: number) => {
   if (isNaN(date.getTime())) return "Invalid Date";
 
   const secondsAgo = (new Date().getTime() - date.getTime()) / 1000;
-  const duration = formatDuration(secondsAgo);
+  const duration = formatDuration(secondsAgo, precision);
 
   if (secondsAgo < 0) return "in " + duration;
   else return duration + " ago";
