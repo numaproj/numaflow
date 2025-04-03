@@ -88,13 +88,14 @@ nav:
               - Examples: "user-guide/user-defined-functions/reduce/examples.md"
       - Reference:
           - user-guide/reference/pipeline-tuning.md
-          - user-guide/reference/mvtx-tuning.md
           - user-guide/reference/autoscaling.md
           - user-guide/reference/conditional-forwarding.md
           - user-guide/reference/pipeline-operations.md
           - user-guide/reference/join-vertex.md
           - user-guide/reference/multi-partition.md
           - user-guide/reference/side-inputs.md
+          - user-guide/reference/mvtx-tuning.md
+          - user-guide/reference/mvtx-operations.md
           - Configuration:
               - user-guide/reference/configuration/pod-specifications.md
               - user-guide/reference/configuration/container-resources.md

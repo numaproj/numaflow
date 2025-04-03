@@ -698,7 +698,7 @@ mod tests {
         assert!(handle.is_empty().await.unwrap(), "Tracker should be empty");
     }
 
-    // #[cfg(feature = "nats-tests")]
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_tracker_with_callback_handler() -> Result<()> {
         let store_name = "test_tracker_with_callback_handler";
