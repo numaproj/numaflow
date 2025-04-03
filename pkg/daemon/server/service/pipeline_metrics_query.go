@@ -21,12 +21,12 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"net/http"
 	"time"
 
 	"github.com/prometheus/common/expfmt"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 

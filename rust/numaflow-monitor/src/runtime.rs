@@ -1,7 +1,7 @@
 //! The `runtime` module is responsible for persisting runtime information, such as application errors.
 use crate::config::RuntimeInfoConfig;
 use crate::error::{Error, Result};
-use chrono::{Utc};
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::fs;

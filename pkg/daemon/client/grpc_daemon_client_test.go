@@ -20,10 +20,12 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
@@ -382,7 +384,7 @@ func TestGrpcDaemonClient_GetVertexErrors(t *testing.T) {
 			Replica: "0",
 			ContainerErrors: []*daemon.ContainerError{{
 				Container: "container1",
-				Timestamp: "2023-10-01T12:00:00Z",
+				Timestamp: timestamppb.New(time.Unix(1743673441, 0)),
 				Code:      "Internal",
 				Message:   "message1",
 				Details:   "details1",
