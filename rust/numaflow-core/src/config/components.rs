@@ -40,9 +40,6 @@ pub(crate) mod source {
         Generator(GeneratorConfig),
         UserDefined(UserDefinedConfig),
         Pulsar(PulsarSourceConfig),
-        // Serving source starts an Axum HTTP server in the background.
-        // The settings will be used as application state which gets cloned in each handler on each request.
-        Serving(Arc<serving::Settings>),
         Jetstream(JetstreamSourceConfig),
     }
 

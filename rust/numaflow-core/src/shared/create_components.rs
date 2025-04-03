@@ -333,11 +333,6 @@ pub async fn create_source(
                 watermark_handle,
             ))
         }
-        // for serving we use batch size as 1 as we are not batching the messages
-        // and read ahead is enabled as it supports it.
-        SourceType::Serving(config) => {
-            panic!("Serving source is invalid");
-        }
     }
 }
 
