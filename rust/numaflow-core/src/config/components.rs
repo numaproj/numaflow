@@ -242,42 +242,6 @@ pub(crate) mod source {
         }
     }
 
-    // impl TryFrom<Box<numaflow_models::models::ServingSource>> for SourceType {
-    //     type Error = Error;
-    //     // FIXME: Currently, the same settings comes from user-defined settings and env variables.
-    //     // We parse both, with user-defined values having higher precedence.
-    //     // There should be only one option (user-defined) to define the settings.
-    //     fn try_from(cfg: Box<numaflow_models::models::ServingSource>) -> Result<Self> {
-    //         let env_vars = env::vars().collect::<HashMap<String, String>>();
-    //         let mut settings: serving::Settings = env_vars.try_into()?;
-
-    //         settings.tid_header = cfg.msg_id_header_key;
-
-    //         if let Some(auth) = cfg.auth {
-    //             if let Some(token) = auth.token {
-    //                 let secret = crate::shared::create_components::get_secret_from_volume(
-    //                     &token.name,
-    //                     &token.key,
-    //                 )
-    //                 .map_err(|e| Error::Config(format!("Reading API auth token secret: {e:?}")))?;
-    //                 settings.api_auth_token = Some(secret);
-    //             } else {
-    //                 warn!("Authentication token for Serving API is specified, but the secret is empty");
-    //             };
-    //         }
-
-    //         settings.js_store = format!(
-    //             "{}-{}_SERVING_KV_STORE",
-    //             get_namespace(),
-    //             get_pipeline_name(),
-    //         );
-
-    //         settings.drain_timeout_secs = cfg.request_timeout_seconds.unwrap_or(120).max(1) as u64; // Ensure timeout is atleast 1 second
-
-    //         Ok(SourceType::Serving(Arc::new(settings)))
-    //     }
-    // }
-
     impl TryFrom<Box<Source>> for SourceType {
         type Error = Error;
 

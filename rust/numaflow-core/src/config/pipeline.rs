@@ -314,9 +314,28 @@ impl PipelineConfig {
                 None
             };
 
-            let serving_store_config = if let Some(store_name) = vertex_obj.spec.serving_store_name
+            let serving_store_config = if let Ok(serving_settings) =
+                env::var("NUMAFLOW_SERVING_SOURCE_SETTINGS")
             {
-                if store_name == "default" {
+                let serving_settings_decoded = BASE64_STANDARD
+                    .decode(serving_settings.as_bytes())
+                    .map_err(|e| {
+                        Error::Config(
+                            format!(
+                                "Failed to base64 decode value of environment variable 'NUMAFLOW_SERVING_SOURCE_SETTINGS'. value='{serving_settings}'. Err={e:?}"
+                            )
+                        )
+                    })?;
+                let serving_spec: numaflow_models::models::ServingSpec =
+                    serde_json::from_slice(serving_settings_decoded.as_slice()).map_err(|e| {
+                        Error::Config(
+                            format!(
+                                "Failed to base64 decode value of environment variable 'NUMAFLOW_SERVING_SOURCE_SETTINGS'. value='{serving_settings}'. Err={e:?}"
+                            )
+                        )
+                    })?;
+
+                if serving_spec.store.is_none() {
                     let kv_store = env::var("NUMAFLOW_SERVING_KV_STORE").map_err(|_| {
                         Error::Config("Serving store is default, but environment variable NUMAFLOW_SERVING_KV_STORE is not set".into())
                     })?;
