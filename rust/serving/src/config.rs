@@ -1,10 +1,8 @@
-use std::env;
+use std::collections::HashMap;
 use std::fmt::Debug;
-use std::{collections::HashMap, fmt::format};
 
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
-use numaflow_models::models::{MonoVertex, Vertex, VertexSpec};
 use rcgen::{generate_simple_self_signed, Certificate, CertifiedKey, KeyPair};
 use serde::{Deserialize, Serialize};
 
@@ -13,7 +11,6 @@ use crate::{
     Error::{self, ParseConfig},
 };
 
-const ENV_NUMAFLOW_SERVING_HOST_IP: &str = "NUMAFLOW_SERVING_HOST_IP";
 const ENV_NUMAFLOW_SERVING_APP_PORT: &str = "NUMAFLOW_SERVING_APP_LISTEN_PORT";
 pub const ENV_MIN_PIPELINE_SPEC: &str = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC";
 const ENV_VERTEX_OBJ: &str = "NUMAFLOW_VERTEX_OBJECT";
@@ -61,8 +58,6 @@ pub struct Settings {
     pub drain_timeout_secs: u64,
     pub store_type: StoreType,
     pub js_callback_store: String,
-    /// The IP address of the numaserve pod. This will be used to construct the value for X-Numaflow-Callback-Url header
-    pub host_ip: String,
     pub api_auth_token: Option<String>,
     pub pipeline_spec: PipelineDCG,
     pub nats_basic_auth: Option<(String, String)>,
@@ -87,7 +82,6 @@ impl Default for Settings {
             drain_timeout_secs: 600,
             store_type: StoreType::default(),
             js_callback_store: "kv".to_owned(),
-            host_ip: "127.0.0.1".to_owned(),
             api_auth_token: None,
             pipeline_spec: Default::default(),
             nats_basic_auth: None,
@@ -194,13 +188,13 @@ impl TryFrom<HashMap<String, String>> for Settings {
                 ))
             })?;
 
-        let js_store =  env::var("NUMAFLOW_SERVING_KV_STORE").map_err(|_| {
+        let js_store =  env_vars.get("NUMAFLOW_SERVING_KV_STORE").ok_or_else(|| {
             ParseConfig("Serving store is default, but environment variable NUMAFLOW_SERVING_KV_STORE is not set".into())
         })?;
 
         let mut settings = Settings {
             pipeline_spec,
-            js_callback_store: js_store,
+            js_callback_store: js_store.into(),
             nats_basic_auth: Some((nats_username.into(), nats_password.into())),
             js_message_stream: js_source_spec.stream,
             jetstream_url: js_source_spec.url,
@@ -215,8 +209,9 @@ impl TryFrom<HashMap<String, String>> for Settings {
             })?;
         }
 
-        let serving_server_settings_encoded = env::var("NUMAFLOW_SERVING_SOURCE_SETTINGS")
-            .map_err(|_| {
+        let serving_server_settings_encoded = env_vars
+            .get("NUMAFLOW_SERVING_SOURCE_SETTINGS")
+            .ok_or_else(|| {
                 ParseConfig(
                     "Environment variable NUMAFLOW_SERVING_SOURCE_SETTINGS is not set".into(),
                 )
@@ -286,10 +281,12 @@ mod tests {
     fn test_pipeline_config_parse() {
         // Set up the environment variables
         let env_vars = [
-            (ENV_NUMAFLOW_SERVING_HOST_IP, "10.2.3.5"),
             (ENV_NUMAFLOW_SERVING_APP_PORT, "8443"),
-            (ENV_MIN_PIPELINE_SPEC, "eyJ2ZXJ0aWNlcyI6W3sibmFtZSI6InNlcnZpbmctaW4iLCJzb3VyY2UiOnsic2VydmluZyI6eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQiLCJzdG9yZSI6eyJ1cmwiOiJyZWRpczovL3JlZGlzOjYzNzkifX19LCJjb250YWluZXJUZW1wbGF0ZSI6eyJyZXNvdXJjZXMiOnt9LCJpbWFnZVB1bGxQb2xpY3kiOiJOZXZlciJ9LCJzY2FsZSI6eyJtaW4iOjF9LCJ1cGRhdGVTdHJhdGVneSI6eyJ0eXBlIjoiUm9sbGluZ1VwZGF0ZSIsInJvbGxpbmdVcGRhdGUiOnsibWF4VW5hdmFpbGFibGUiOiIyNSUifX19LHsibmFtZSI6InNlcnZlLXNpbmsiLCJzaW5rIjp7InVkc2luayI6eyJjb250YWluZXIiOnsiaW1hZ2UiOiJzZXJ2ZXNpbms6MC4xIiwiZW52IjpbeyJuYW1lIjoiTlVNQUZMT1dfQ0FMTEJBQ0tfVVJMX0tFWSIsInZhbHVlIjoiWC1OdW1hZmxvdy1DYWxsYmFjay1VcmwifSx7Im5hbWUiOiJOVU1BRkxPV19NU0dfSURfSEVBREVSX0tFWSIsInZhbHVlIjoiWC1OdW1hZmxvdy1JZCJ9XSwicmVzb3VyY2VzIjp7fSwiaW1hZ2VQdWxsUG9saWN5IjoiTmV2ZXIifX0sInJldHJ5U3RyYXRlZ3kiOnt9fSwiY29udGFpbmVyVGVtcGxhdGUiOnsicmVzb3VyY2VzIjp7fSwiaW1hZ2VQdWxsUG9saWN5IjoiTmV2ZXIifSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19fV0sImVkZ2VzIjpbeyJmcm9tIjoic2VydmluZy1pbiIsInRvIjoic2VydmUtc2luayIsImNvbmRpdGlvbnMiOm51bGx9XSwibGlmZWN5Y2xlIjp7fSwid2F0ZXJtYXJrIjp7fX0="),
-            (ENV_VERTEX_OBJ, "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLXBpcGVsaW5lLXNlcnZpbmctaW4iLCJuYW1lc3BhY2UiOiJkZWZhdWx0IiwiY3JlYXRpb25UaW1lc3RhbXAiOm51bGx9LCJzcGVjIjp7Im5hbWUiOiJzZXJ2aW5nLWluIiwic291cmNlIjp7InNlcnZpbmciOnsiYXV0aCI6bnVsbCwic2VydmljZSI6dHJ1ZSwibXNnSURIZWFkZXJLZXkiOiJYLU51bWFmbG93LUlkIiwic3RvcmUiOnsidXJsIjoicmVkaXM6Ly9yZWRpczo2Mzc5In19fSwiY29udGFpbmVyVGVtcGxhdGUiOnsicmVzb3VyY2VzIjp7fSwiaW1hZ2VQdWxsUG9saWN5IjoiTmV2ZXIifSwibGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19LCJwaXBlbGluZU5hbWUiOiJzaW1wbGUtcGlwZWxpbmUiLCJpbnRlclN0ZXBCdWZmZXJTZXJ2aWNlTmFtZSI6IiIsInJlcGxpY2FzIjowLCJ0b0VkZ2VzIjpbeyJmcm9tIjoic2VydmluZy1pbiIsInRvIjoic2VydmUtc2luayIsImNvbmRpdGlvbnMiOm51bGwsImZyb21WZXJ0ZXhUeXBlIjoiU291cmNlIiwiZnJvbVZlcnRleFBhcnRpdGlvbkNvdW50IjoxLCJmcm9tVmVydGV4TGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwidG9WZXJ0ZXhUeXBlIjoiU2luayIsInRvVmVydGV4UGFydGl0aW9uQ291bnQiOjEsInRvVmVydGV4TGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfX1dLCJ3YXRlcm1hcmsiOnsibWF4RGVsYXkiOiIwcyJ9fSwic3RhdHVzIjp7InBoYXNlIjoiIiwicmVwbGljYXMiOjAsImRlc2lyZWRSZXBsaWNhcyI6MCwibGFzdFNjYWxlZEF0IjpudWxsfX0=")
+            ("NUMAFLOW_ISBSVC_JETSTREAM_USER", "testuser"),
+            ("NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD", "testpasswd"),
+            ("NUMAFLOW_SERVING_KV_STORE", "test-kv-store"),
+            ("NUMAFLOW_SERVING_SOURCE_SETTINGS", "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQifQ=="),
+            (ENV_MIN_PIPELINE_SPEC, "eyJ2ZXJ0aWNlcyI6W3sibmFtZSI6ImluIiwic291cmNlIjp7ImpldHN0cmVhbSI6eyJ1cmwiOiJuYXRzOi8vaXNic3ZjLWRlZmF1bHQtanMtc3ZjLmRlZmF1bHQuc3ZjOjQyMjIiLCJzdHJlYW0iOiJzZXJ2aW5nLXNvdXJjZS1zaW1wbGUtcGlwZWxpbmUiLCJ0bHMiOm51bGwsImF1dGgiOnsiYmFzaWMiOnsidXNlciI6eyJuYW1lIjoiaXNic3ZjLWRlZmF1bHQtanMtY2xpZW50LWF1dGgiLCJrZXkiOiJjbGllbnQtYXV0aC11c2VyIn0sInBhc3N3b3JkIjp7Im5hbWUiOiJpc2JzdmMtZGVmYXVsdC1qcy1jbGllbnQtYXV0aCIsImtleSI6ImNsaWVudC1hdXRoLXBhc3N3b3JkIn19fX19LCJjb250YWluZXJUZW1wbGF0ZSI6eyJyZXNvdXJjZXMiOnt9LCJlbnYiOlt7Im5hbWUiOiJOVU1BRkxPV19DQUxMQkFDS19FTkFCTEVEIiwidmFsdWUiOiJ0cnVlIn0seyJuYW1lIjoiTlVNQUZMT1dfU0VSVklOR19TT1VSQ0VfU0VUVElOR1MiLCJ2YWx1ZSI6ImV5SmhkWFJvSWpwdWRXeHNMQ0p6WlhKMmFXTmxJanAwY25WbExDSnRjMmRKUkVobFlXUmxja3RsZVNJNklsZ3RUblZ0WVdac2IzY3RTV1FpZlE9PSJ9LHsibmFtZSI6Ik5VTUFGTE9XX1NFUlZJTkdfS1ZfU1RPUkUiLCJ2YWx1ZSI6InNlcnZpbmctc3RvcmUtc2ltcGxlLXBpcGVsaW5lX1NFUlZJTkdfS1ZfU1RPUkUifV19LCJzY2FsZSI6eyJtaW4iOjEsIm1heCI6MX0sImluaXRDb250YWluZXJzIjpbeyJuYW1lIjoidmFsaWRhdGUtc3RyZWFtLWluaXQiLCJpbWFnZSI6InF1YXkuaW8vbnVtYXByb2ovbnVtYWZsb3c6ODA4MkU2NTYtQTAxOS00QjE1LUE2ODQtNTg2RkM3RDJDQTFGIiwiYXJncyI6WyJpc2JzdmMtdmFsaWRhdGUiLCItLWlzYnN2Yy10eXBlPWpldHN0cmVhbSIsIi0tYnVmZmVycz1zZXJ2aW5nLXNvdXJjZS1zaW1wbGUtcGlwZWxpbmUiXSwiZW52IjpbeyJuYW1lIjoiTlVNQUZMT1dfUElQRUxJTkVfTkFNRSIsInZhbHVlIjoicy1zaW1wbGUtcGlwZWxpbmUifSx7Im5hbWUiOiJHT0RFQlVHIn0seyJuYW1lIjoiTlVNQUZMT1dfSVNCU1ZDX0NPTkZJRyIsInZhbHVlIjoiZXlKcVpYUnpkSEpsWVcwaU9uc2lkWEpzSWpvaWJtRjBjem92TDJselluTjJZeTFrWldaaGRXeDBMV3B6TFhOMll5NWtaV1poZFd4MExuTjJZem8wTWpJeUlpd2lZWFYwYUNJNmV5SmlZWE5wWXlJNmV5SjFjMlZ5SWpwN0ltNWhiV1VpT2lKcGMySnpkbU10WkdWbVlYVnNkQzFxY3kxamJHbGxiblF0WVhWMGFDSXNJbXRsZVNJNkltTnNhV1Z1ZEMxaGRYUm9MWFZ6WlhJaWZTd2ljR0Z6YzNkdmNtUWlPbnNpYm1GdFpTSTZJbWx6WW5OMll5MWtaV1poZFd4MExXcHpMV05zYVdWdWRDMWhkWFJvSWl3aWEyVjVJam9pWTJ4cFpXNTBMV0YxZEdndGNHRnpjM2R2Y21RaWZYMTlMQ0p6ZEhKbFlXMURiMjVtYVdjaU9pSmpiMjV6ZFcxbGNqcGNiaUFnWVdOcmQyRnBkRG9nTmpCelhHNGdJRzFoZUdGamEzQmxibVJwYm1jNklESTFNREF3WEc1dmRHSjFZMnRsZERwY2JpQWdhR2x6ZEc5eWVUb2dNVnh1SUNCdFlYaGllWFJsY3pvZ01GeHVJQ0J0WVhoMllXeDFaWE5wZW1VNklEQmNiaUFnY21Wd2JHbGpZWE02SUROY2JpQWdjM1J2Y21GblpUb2dNRnh1SUNCMGRHdzZJRE5vWEc1d2NtOWpZblZqYTJWME9seHVJQ0JvYVhOMGIzSjVPaUF4WEc0Z0lHMWhlR0o1ZEdWek9pQXdYRzRnSUcxaGVIWmhiSFZsYzJsNlpUb2dNRnh1SUNCeVpYQnNhV05oY3pvZ00xeHVJQ0J6ZEc5eVlXZGxPaUF3WEc0Z0lIUjBiRG9nTnpKb1hHNXpkSEpsWVcwNlhHNGdJR1IxY0d4cFkyRjBaWE02SURZd2MxeHVJQ0J0WVhoaFoyVTZJRGN5YUZ4dUlDQnRZWGhpZVhSbGN6b2dMVEZjYmlBZ2JXRjRiWE5uY3pvZ01UQXdNREF3WEc0Z0lISmxjR3hwWTJGek9pQXpYRzRnSUhKbGRHVnVkR2x2YmpvZ01GeHVJQ0J6ZEc5eVlXZGxPaUF3WEc0aWZYMD0ifSx7Im5hbWUiOiJOVU1BRkxPV19JU0JTVkNfSkVUU1RSRUFNX1VSTCIsInZhbHVlIjoibmF0czovL2lzYnN2Yy1kZWZhdWx0LWpzLXN2Yy5kZWZhdWx0LnN2Yzo0MjIyIn0seyJuYW1lIjoiTlVNQUZMT1dfSVNCU1ZDX0pFVFNUUkVBTV9UTFNfRU5BQkxFRCIsInZhbHVlIjoiZmFsc2UifSx7Im5hbWUiOiJOVU1BRkxPV19JU0JTVkNfSkVUU1RSRUFNX1VTRVIiLCJ2YWx1ZUZyb20iOnsic2VjcmV0S2V5UmVmIjp7Im5hbWUiOiJpc2JzdmMtZGVmYXVsdC1qcy1jbGllbnQtYXV0aCIsImtleSI6ImNsaWVudC1hdXRoLXVzZXIifX19LHsibmFtZSI6Ik5VTUFGTE9XX0lTQlNWQ19KRVRTVFJFQU1fUEFTU1dPUkQiLCJ2YWx1ZUZyb20iOnsic2VjcmV0S2V5UmVmIjp7Im5hbWUiOiJpc2JzdmMtZGVmYXVsdC1qcy1jbGllbnQtYXV0aCIsImtleSI6ImNsaWVudC1hdXRoLXBhc3N3b3JkIn19fV0sInJlc291cmNlcyI6eyJyZXF1ZXN0cyI6eyJjcHUiOiIxMDBtIiwibWVtb3J5IjoiMTI4TWkifX0sImltYWdlUHVsbFBvbGljeSI6IklmTm90UHJlc2VudCJ9XSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19fSx7Im5hbWUiOiJjYXQiLCJ1ZGYiOnsiY29udGFpbmVyIjp7ImltYWdlIjoicXVheS5pby9udW1haW8vbnVtYWZsb3ctZ28vbWFwLWZvcndhcmQtbWVzc2FnZTpzdGFibGUiLCJyZXNvdXJjZXMiOnt9fSwiYnVpbHRpbiI6bnVsbCwiZ3JvdXBCeSI6bnVsbH0sImNvbnRhaW5lclRlbXBsYXRlIjp7InJlc291cmNlcyI6e30sImVudiI6W3sibmFtZSI6Ik5VTUFGTE9XX0NBTExCQUNLX0VOQUJMRUQiLCJ2YWx1ZSI6InRydWUifSx7Im5hbWUiOiJOVU1BRkxPV19TRVJWSU5HX1NPVVJDRV9TRVRUSU5HUyIsInZhbHVlIjoiZXlKaGRYUm9JanB1ZFd4c0xDSnpaWEoyYVdObElqcDBjblZsTENKdGMyZEpSRWhsWVdSbGNrdGxlU0k2SWxndFRuVnRZV1pzYjNjdFNXUWlmUT09In0seyJuYW1lIjoiTlVNQUZMT1dfU0VSVklOR19LVl9TVE9SRSIsInZhbHVlIjoic2VydmluZy1zdG9yZS1zaW1wbGUtcGlwZWxpbmVfU0VSVklOR19LVl9TVE9SRSJ9XX0sInNjYWxlIjp7Im1pbiI6MSwibWF4IjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19fSx7Im5hbWUiOiJvdXQiLCJzaW5rIjp7InVkc2luayI6eyJjb250YWluZXIiOnsiaW1hZ2UiOiJxdWF5LmlvL251bWFpby9udW1hZmxvdy1nby9zaW5rLXNlcnZlOnN0YWJsZSIsInJlc291cmNlcyI6e319fSwicmV0cnlTdHJhdGVneSI6e319LCJjb250YWluZXJUZW1wbGF0ZSI6eyJyZXNvdXJjZXMiOnt9LCJlbnYiOlt7Im5hbWUiOiJOVU1BRkxPV19DQUxMQkFDS19FTkFCTEVEIiwidmFsdWUiOiJ0cnVlIn0seyJuYW1lIjoiTlVNQUZMT1dfU0VSVklOR19TT1VSQ0VfU0VUVElOR1MiLCJ2YWx1ZSI6ImV5SmhkWFJvSWpwdWRXeHNMQ0p6WlhKMmFXTmxJanAwY25WbExDSnRjMmRKUkVobFlXUmxja3RsZVNJNklsZ3RUblZ0WVdac2IzY3RTV1FpZlE9PSJ9LHsibmFtZSI6Ik5VTUFGTE9XX1NFUlZJTkdfS1ZfU1RPUkUiLCJ2YWx1ZSI6InNlcnZpbmctc3RvcmUtc2ltcGxlLXBpcGVsaW5lX1NFUlZJTkdfS1ZfU1RPUkUifV19LCJzY2FsZSI6eyJtaW4iOjEsIm1heCI6MX0sInVwZGF0ZVN0cmF0ZWd5Ijp7InR5cGUiOiJSb2xsaW5nVXBkYXRlIiwicm9sbGluZ1VwZGF0ZSI6eyJtYXhVbmF2YWlsYWJsZSI6IjI1JSJ9fX1dLCJlZGdlcyI6W3siZnJvbSI6ImluIiwidG8iOiJjYXQiLCJjb25kaXRpb25zIjpudWxsfSx7ImZyb20iOiJjYXQiLCJ0byI6Im91dCIsImNvbmRpdGlvbnMiOm51bGx9XSwibGlmZWN5Y2xlIjp7fSwid2F0ZXJtYXJrIjp7fX0="),
         ];
 
         // Call the config method
@@ -307,59 +304,29 @@ mod tests {
             upstream_addr: "localhost:8888".into(),
             drain_timeout_secs: 120,
             store_type: StoreType::Nats,
-            host_ip: "10.2.3.5".into(),
             api_auth_token: None,
+            js_callback_store: "test-kv-store".into(),
+            nats_basic_auth: Some(("testuser".into(), "testpasswd".into())),
+            js_message_stream: "serving-source-simple-pipeline".into(),
+            jetstream_url: "nats://isbsvc-default-js-svc.default.svc:4222".into(),
             pipeline_spec: PipelineDCG {
                 vertices: vec![
-                    Vertex {
-                        name: "serving-in".into(),
+                    Vertex { name: "in".into() },
+                    Vertex { name: "cat".into() },
+                    Vertex { name: "out".into() },
+                ],
+                edges: vec![
+                    Edge {
+                        from: "in".into(),
+                        to: "cat".into(),
+                        conditions: None,
                     },
-                    Vertex {
-                        name: "serve-sink".into(),
+                    Edge {
+                        from: "cat".into(),
+                        to: "out".into(),
+                        conditions: None,
                     },
                 ],
-                edges: vec![Edge {
-                    from: "serving-in".into(),
-                    to: "serve-sink".into(),
-                    conditions: None,
-                }],
-            },
-            ..Default::default()
-        };
-        assert_eq!(settings, expected_config);
-    }
-
-    #[test]
-    fn test_monovertex_config_parse() {
-        // Set up the environment variables
-        let env_vars = [
-            (ENV_NUMAFLOW_SERVING_HOST_IP, "10.2.3.5"),
-            (ENV_NUMAFLOW_SERVING_APP_PORT, "8443"),
-            (ENV_MONOVERTEX_OBJ, "eyJtZXRhZGF0YSI6eyJuYW1lIjoidHJhbnNmb3JtZXItbW9uby12ZXJ0ZXgiLCJuYW1lc3BhY2UiOiJkZWZhdWx0IiwiY3JlYXRpb25UaW1lc3RhbXAiOm51bGx9LCJzcGVjIjp7InJlcGxpY2FzIjowLCJzb3VyY2UiOnsic2VydmluZyI6eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQiLCJzdG9yZSI6eyJ1cmwiOiJyZWRpczovL3JlZGlzOjYzNzkifX19LCJzaW5rIjp7InVkc2luayI6eyJjb250YWluZXIiOnsiaW1hZ2UiOiJzZXJ2ZXNpbms6MC4xIiwiZW52IjpbeyJuYW1lIjoiTlVNQUZMT1dfQ0FMTEJBQ0tfVVJMX0tFWSIsInZhbHVlIjoiWC1OdW1hZmxvdy1DYWxsYmFjay1VcmwifSx7Im5hbWUiOiJOVU1BRkxPV19NU0dfSURfSEVBREVSX0tFWSIsInZhbHVlIjoiWC1OdW1hZmxvdy1JZCJ9XSwicmVzb3VyY2VzIjp7fSwiaW1hZ2VQdWxsUG9saWN5IjoiTmV2ZXIifX0sInJldHJ5U3RyYXRlZ3kiOnt9fSwiY29udGFpbmVyVGVtcGxhdGUiOnsicmVzb3VyY2VzIjp7fSwiZW52IjpbeyJuYW1lIjoiTlVNQUZMT1dfQ0FMTEJBQ0tfRU5BQkxFRCIsInZhbHVlIjoidHJ1ZSJ9XX0sImxpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMifSwic2NhbGUiOnt9LCJ1cGRhdGVTdHJhdGVneSI6e30sImxpZmVjeWNsZSI6e319LCJzdGF0dXMiOnsicmVwbGljYXMiOjAsImRlc2lyZWRSZXBsaWNhcyI6MCwibGFzdFVwZGF0ZWQiOm51bGwsImxhc3RTY2FsZWRBdCI6bnVsbH19"),
-        ];
-
-        // Call the config method
-        let settings: Settings = env_vars
-            .into_iter()
-            .map(|(key, val)| (key.to_owned(), val.to_owned()))
-            .collect::<HashMap<String, String>>()
-            .try_into()
-            .unwrap();
-
-        let expected_config = Settings {
-            tid_header: "X-Numaflow-Id".into(),
-            app_listen_port: 8443,
-            metrics_server_listen_port: 3001,
-            upstream_addr: "localhost:8888".into(),
-            drain_timeout_secs: 120,
-            store_type: StoreType::Nats,
-            host_ip: "localhost".into(),
-            api_auth_token: None,
-            pipeline_spec: PipelineDCG {
-                vertices: vec![Vertex {
-                    name: "source".into(),
-                }],
-                edges: vec![],
             },
             ..Default::default()
         };
