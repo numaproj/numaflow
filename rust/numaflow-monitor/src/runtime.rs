@@ -12,7 +12,7 @@ use std::str;
 use tonic::Status;
 use tracing::error;
 
-const CURRENT_FILE: &str = "current.json";
+const CURRENT_FILE: &str = "current-numa.json";
 
 /// Represents a single runtime error entry persisted by the application.
 #[derive(Serialize, Deserialize, Debug)]
@@ -116,7 +116,12 @@ impl Runtime {
             .collect();
 
         // sort the files based on timestamp
-        files.sort_by_key(|e| e.file_name());
+        files.sort_by_key(|e| {
+            e.file_name()
+                .to_str()
+                .and_then(|name| name.split('-').next())
+                .and_then(|timestamp| timestamp.parse::<i64>().ok())
+        });
 
         // remove the oldest file if the number of files exceeds the limit
         if files.len() >= self.max_error_files_per_container {
@@ -132,10 +137,11 @@ impl Runtime {
         let json_str: String = runtime_error_entry.into();
 
         // we create a file current.json and write into this file first
-        // rename it back to <timestamp>.json once write operation is completed
+        // rename it back to <timestamp>-numa.json once write operation is completed
         // this is to ensure that while reading we skip this file to avoid race condition
         let current_file_path = dir_path.join(CURRENT_FILE);
-        let file_name = format!("{}.json", timestamp);
+        // append numa to the file name to avoid collision with files written from udf with same timestamp
+        let file_name = format!("{}-numa.json", timestamp);
         let final_file_path = dir_path.join(&file_name);
 
         let mut current_file = File::create(&current_file_path)
@@ -163,8 +169,7 @@ impl Runtime {
         let mut errors = Vec::new();
         // if no app errors are persisted, directory wouldn't be created yet
         if !app_err_path.exists() || !app_err_path.is_dir() {
-            let err = Error::File("No application errors persisted yet".to_string());
-            return Err(err);
+            return Ok(errors);
         }
 
         let paths = fs::read_dir(app_err_path)
