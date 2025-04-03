@@ -1,7 +1,21 @@
 # Changelog
 
-## v1.4.3 (2025-02-27)
+## v1.4.4 (2025-04-03)
 
+ * [ae9d93ad](https://github.com/numaproj/numaflow/commit/ae9d93ad0aaaf61854696b1638fd7d813dda7cc8) Update manifests to v1.4.4
+ * [92f169e6](https://github.com/numaproj/numaflow/commit/92f169e608a9b541d0b43c27697541c108bc3ac0) fix: udsink handler for multi partitions
+ * [a3a9fe51](https://github.com/numaproj/numaflow/commit/a3a9fe515d63fb371036e6c8c3ef26ea1a102521) fix: rater tests
+ * [82ef07e8](https://github.com/numaproj/numaflow/commit/82ef07e8ec1d44809ee95ac9cfd493800b3c5307) fix: concurrent invocations to update active pods list in rater (#2478)
+ * [b45cd3f8](https://github.com/numaproj/numaflow/commit/b45cd3f8140ce7a5d6c2f9d66c814dedab3c551a) fix: create a new bidi stream for every partition to avoid race condition in sink (#2517)
+
+### Contributors
+
+ * Adarsh Jain
+ * Yashash H L
+
+## v1.4.3 (2025-02-28)
+
+ * [00639161](https://github.com/numaproj/numaflow/commit/00639161a39ef8a11d15fbe3ff3246472b005d36) fix(ci): upgrade deprecated runner (#2437)
  * [86cfd5a8](https://github.com/numaproj/numaflow/commit/86cfd5a8ced015d1dda529cc01d3bda02a1d86c5) Update manifests to v1.4.3
  * [776781cb](https://github.com/numaproj/numaflow/commit/776781cb9f977f89f0b4a622bc460d18b90a7d73) fix(ci): actions/upload/download-artifact upgrade
  * [868cc5b2](https://github.com/numaproj/numaflow/commit/868cc5b2e1b8a09713c221bbd645ce4290771593) chore(deps): bump github.com/go-jose/go-jose/v4 from 4.0.1 to 4.0.5 (#2428)
@@ -170,17 +184,14 @@
 
 ## v1.3.4 (2025-02-28)
 
- * [1502541f](https://github.com/numaproj/numaflow/commit/1502541fb96eef69d1da8ba66eba273eb884c49a) Update manifests to v1.3.4
- * [618836fc](https://github.com/numaproj/numaflow/commit/618836fceda26f27734ad4ecf7f6a138305d86dd) codegen changes
- * [2e51c3f2](https://github.com/numaproj/numaflow/commit/2e51c3f28368a194a9a8a1478dfccdf97a1a4116) go mod tidy
- * [d88eccb2](https://github.com/numaproj/numaflow/commit/d88eccb27fb98be9d7ac6298a3b0cb5daa491224) cherry pick 2428
- * [2b502789](https://github.com/numaproj/numaflow/commit/2b50278926255c9e82406ae13342dc7d34557224) cherry pick 2339
- * [b2d24745](https://github.com/numaproj/numaflow/commit/b2d24745bedc0ce6e4687faccbbce5aaff2a8bb7) cherry pick 2290
- * [cd7e2582](https://github.com/numaproj/numaflow/commit/cd7e2582da7bd41d1626e48239dec2cb94408c1d) upgrade upload/download artifact
- * [eac4be70](https://github.com/numaproj/numaflow/commit/eac4be7046d437369ed238475ead99379f2844be) chore(deps): bump nanoid from 3.3.7 to 3.3.8 in /ui (#2289)
+ * [31fa578b](https://github.com/numaproj/numaflow/commit/31fa578b4667ddc18f3e7b5e966a89d0027eab3d) fix(ci): upgrade ubuntu runner
+ * [27e061f7](https://github.com/numaproj/numaflow/commit/27e061f7ecd69144e784f280a1b9cef0752a81e9) Update manifests to v1.3.4
+ * [ac161dfb](https://github.com/numaproj/numaflow/commit/ac161dfb83d57a6b066e6bb8599ba28c9b76ee15) chore(deps): security fixes
+ * [e2f6951d](https://github.com/numaproj/numaflow/commit/e2f6951d5cf2e0a83ad35d4335d0a3f7ae18d270) chore(deps): bump nanoid from 3.3.7 to 3.3.8 in /ui (#2289)
 
 ### Contributors
 
+ * Derek Wang
  * adarsh0728
  * dependabot[bot]
 
