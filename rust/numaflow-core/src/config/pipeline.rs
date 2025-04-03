@@ -317,9 +317,10 @@ impl PipelineConfig {
             let serving_store_config = if let Some(store_name) = vertex_obj.spec.serving_store_name
             {
                 if store_name == "default" {
-                    Some(ServingStoreType::Nats(NatsStoreConfig {
-                        name: format!("{}-{}_SERVING_KV_STORE", namespace, pipeline_name),
-                    }))
+                    let kv_store = env::var("NUMAFLOW_SERVING_KV_STORE").map_err(|_| {
+                        Error::Config("Serving store is default, but environment variable NUMAFLOW_SERVING_KV_STORE is not set".into())
+                    })?;
+                    Some(ServingStoreType::Nats(NatsStoreConfig { name: kv_store }))
                 } else {
                     Some(ServingStoreType::UserDefined(
                         UserDefinedStoreConfig::default(),
@@ -487,10 +488,12 @@ impl PipelineConfig {
                         "Parsing value of {ENV_CALLBACK_CONCURRENCY}: {e:?}"
                     ))
                 })?;
+
+            let kv_store = env::var("NUMAFLOW_SERVING_KV_STORE").map_err(|_| {
+                    Error::Config("Serving store is default, but environment variable NUMAFLOW_SERVING_KV_STORE is not set".into())
+                })?;
             callback_config = Some(ServingCallbackConfig {
-                callback_store: Box::leak(
-                    format!("{}-{}_SERVING_KV_STORE", namespace, pipeline_name).into_boxed_str(),
-                ),
+                callback_store: Box::leak(kv_store.into_boxed_str()),
                 callback_concurrency,
             });
         }

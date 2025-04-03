@@ -1,3 +1,4 @@
+use std::env;
 use std::fmt::Debug;
 use std::{collections::HashMap, fmt::format};
 
@@ -193,9 +194,13 @@ impl TryFrom<HashMap<String, String>> for Settings {
                 ))
             })?;
 
+        let js_store =  env::var("NUMAFLOW_SERVING_KV_STORE").map_err(|_| {
+            ParseConfig("Serving store is default, but environment variable NUMAFLOW_SERVING_KV_STORE is not set".into())
+        })?;
+
         let mut settings = Settings {
             pipeline_spec,
-            js_store: "default-s-simple-pipeline_SERVING_KV_STORE".into(), // FIXME:
+            js_store,
             nats_basic_auth: Some((nats_username.into(), nats_password.into())),
             jetstream_stream: js_source_spec.stream,
             jetstream_url: js_source_spec.url,
