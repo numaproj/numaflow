@@ -1,6 +1,6 @@
-use std::{collections::HashMap, str::FromStr, sync::Arc};
+use std::{str::FromStr, sync::Arc};
 
-use async_nats::jetstream::{message, Context};
+use async_nats::jetstream::Context;
 use axum::response::sse::Event;
 use axum::response::Sse;
 use axum::Extension;
@@ -13,7 +13,6 @@ use axum::{
     Json, Router,
 };
 use serde_json::json;
-use tokio::sync::{mpsc, oneshot};
 use tokio_stream::{Stream, StreamExt};
 use tracing::error;
 
@@ -22,7 +21,7 @@ use super::{FetchQueryParams, Tid};
 use crate::app::response::{ApiError, ServeResponse};
 use crate::app::store::cbstore::CallbackStore;
 use crate::app::store::datastore::Error as StoreError;
-use crate::{Error, Message, MessageWrapper, DEFAULT_ID_HEADER};
+use crate::Error;
 
 const NUMAFLOW_RESP_ARRAY_LEN: &str = "Numaflow-Array-Len";
 const NUMAFLOW_RESP_ARRAY_IDX_LEN: &str = "Numaflow-Array-Index-Len";
@@ -31,8 +30,6 @@ struct ProxyState<T, U> {
     js_context: Context,
     stream: String,
     tid_header: String,
-    /// Lets the HTTP handlers know whether they are in a Monovertex or a Pipeline
-    monovertex: bool,
     orchestrator: orchestrator::OrchestratorState<T, U>,
 }
 
@@ -46,7 +43,6 @@ pub(crate) async fn jetstream_proxy<
         js_context: state.js_context.clone(),
         stream: state.settings.jetstream_stream.clone(),
         tid_header: state.settings.tid_header.clone(),
-        monovertex: state.settings.pipeline_spec.edges.is_empty(),
         orchestrator: state.orchestrator_state.clone(),
     });
 
