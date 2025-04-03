@@ -692,6 +692,7 @@ XdvExDsAdjbkBG7ynn9pmMgIJg==
         (js, stream_name.to_string())
     }
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_jetstream_source() {
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
