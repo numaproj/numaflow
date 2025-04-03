@@ -27,7 +27,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	intstr "k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/ptr"
 )
 
 // +kubebuilder:validation:Enum="";Running;Failed;Deleting
@@ -241,10 +240,8 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 }
 
 func (sp ServingPipeline) GetPipelineObj(req GetServingPipelineResourceReq) Pipeline {
-	servingStoreName := "default"
-	if sp.Spec.Serving.ServingStore != nil && sp.Spec.Serving.ServingStore.Container != nil {
-		servingStoreName = "custom"
-	}
+	servingSourceSettings, _ := json.Marshal(sp.Spec.Serving)
+	encodedServingSourceSettings := base64.StdEncoding.EncodeToString(servingSourceSettings)
 	// The pipeline spec should have been validated
 	plSpec := sp.Spec.Pipeline.DeepCopy()
 	for i := range plSpec.Vertices {
@@ -259,10 +256,8 @@ func (sp ServingPipeline) GetPipelineObj(req GetServingPipelineResourceReq) Pipe
 		if plSpec.Vertices[i].IsASink() {
 			// TODO: (k8s 1.29)  clean this up once we deprecate the support for k8s < 1.29
 			if isSidecarSupported() {
-				plSpec.Vertices[i].ServingStoreName = ptr.To(servingStoreName)
 				plSpec.Vertices[i].InitContainers = append(plSpec.Vertices[i].InitContainers, sp.getStoreSidecarContainerSpec(req)...)
 			} else {
-				plSpec.Vertices[i].ServingStoreName = ptr.To(servingStoreName)
 				plSpec.Vertices[i].Sidecars = append(plSpec.Vertices[i].Sidecars, sp.getStoreSidecarContainerSpec(req)...)
 			}
 		}
@@ -272,6 +267,7 @@ func (sp ServingPipeline) GetPipelineObj(req GetServingPipelineResourceReq) Pipe
 		plSpec.Vertices[i].ContainerTemplate.Env = append(
 			plSpec.Vertices[i].ContainerTemplate.Env,
 			corev1.EnvVar{Name: EnvCallbackEnabled, Value: "true"},
+			corev1.EnvVar{Name: "NUMAFLOW_SERVING_SOURCE_SETTINGS", Value: encodedServingSourceSettings},
 			corev1.EnvVar{Name: "NUMAFLOW_SERVING_KV_STORE", Value: fmt.Sprintf("%s_SERVING_KV_STORE", sp.GetServingStoreName())},
 		)
 	}
