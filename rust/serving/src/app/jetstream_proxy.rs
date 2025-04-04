@@ -118,7 +118,7 @@ async fn sse_handler<T, U>(
     Extension(Tid(id)): Extension<Tid>,
     headers: HeaderMap,
     body: Bytes,
-) -> Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>
+) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, ApiError>
 where
     T: Send + Sync + Clone + DataStore + 'static,
     U: Send + Sync + Clone + CallbackStore + 'static,
@@ -139,14 +139,30 @@ where
         .js_context
         .publish_with_headers(proxy_state.stream.clone(), msg_headers, body)
         .await
-        .unwrap()
+        .inspect_err(|err| {
+            tracing::error!(
+                ?err,
+                id,
+                stream = proxy_state.stream,
+                "Saving message to Jetstream"
+            )
+        })
+        .map_err(|_| ApiError::BadGateway("Failed to write message to Jetstream".to_string()))?
         .await
-        .unwrap();
+        .inspect_err(|err| {
+            tracing::error!(
+                ?err,
+                id,
+                stream = proxy_state.stream,
+                "Waiting for message save confirmation from Jetstream"
+            )
+        })
+        .map_err(|_| ApiError::BadGateway("Failed to write message to Jetstream".to_string()))?;
 
     let stream = response_stream
         .map(|response| Ok(Event::default().data(String::from_utf8_lossy(&response))));
 
-    Sse::new(stream)
+    Ok(Sse::new(stream))
 }
 
 async fn sync_publish<
@@ -188,14 +204,29 @@ async fn sync_publish<
         }
     };
 
-    tracing::info!(?msg_headers, "Publishing message with headers");
     proxy_state
         .js_context
         .publish_with_headers(proxy_state.stream.clone(), msg_headers, body)
         .await
-        .unwrap()
+        .inspect_err(|err| {
+            tracing::error!(
+                ?err,
+                id,
+                stream = proxy_state.stream,
+                "Saving message to Jetstream"
+            )
+        })
+        .map_err(|_| ApiError::BadGateway("Failed to write message to Jetstream".to_string()))?
         .await
-        .unwrap();
+        .inspect_err(|err| {
+            tracing::error!(
+                ?err,
+                id,
+                stream = proxy_state.stream,
+                "Waiting for message save confirmation from Jetstream"
+            )
+        })
+        .map_err(|_| ApiError::BadGateway("Failed to write message to Jetstream".to_string()))?;
 
     let processing_result = match notify.await {
         Ok(processing_result) => processing_result,
@@ -301,14 +332,29 @@ async fn async_publish<
     // We keep the receiver alive to avoid send failure.
     tokio::spawn(notify);
 
-    tracing::info!(proxy_state.stream, "Publishing to kv");
     proxy_state
         .js_context
         .publish_with_headers(proxy_state.stream.clone(), msg_headers, body)
         .await
-        .unwrap()
+        .inspect_err(|err| {
+            tracing::error!(
+                ?err,
+                id,
+                stream = proxy_state.stream,
+                "Saving message to Jetstream"
+            )
+        })
+        .map_err(|_| ApiError::BadGateway("Failed to write message to Jetstream".to_string()))?
         .await
-        .unwrap();
+        .inspect_err(|err| {
+            tracing::error!(
+                ?err,
+                id,
+                stream = proxy_state.stream,
+                "Waiting for message save confirmation from Jetstream"
+            )
+        })
+        .map_err(|_| ApiError::BadGateway("Failed to write message to Jetstream".to_string()))?;
 
     Ok(Json(ServeResponse::new(
         "Successfully published message".to_string(),
