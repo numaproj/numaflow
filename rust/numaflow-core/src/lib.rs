@@ -5,7 +5,6 @@ use tokio::signal;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
-
 use crate::config::{config, CustomResourceType};
 
 /// Custom Error handling.
@@ -82,10 +81,11 @@ pub async fn run_serving(config: serving::Settings) -> Result<()> {
 
     let js_client = async_nats::connect_with_options(&config.jetstream_url, opts)
         .await
-        .map_err(|e| error::Error::Connection(e.to_string()))?;
+        .map_err(|e| Error::Connection(e.to_string()))?;
 
     let js_context = jetstream::new(js_client);
-    serving::start(js_context, Arc::new(config)).await.unwrap();
+    serving::start(js_context, Arc::new(config)).await.map_err(|e| Error::Source(e.to_string()))?;
+
     Ok(())
 }
 

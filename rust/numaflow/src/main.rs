@@ -55,9 +55,11 @@ async fn run() -> Result<(), Box<dyn Error>> {
         }
         return Ok(());
     }
+    
     info!(?args, "Starting with args");
     numaflow_core::run()
         .await
         .map_err(|e| format!("Error running rust binary: {e:?}"))?;
+    
     Ok(())
 }

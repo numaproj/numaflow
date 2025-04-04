@@ -42,6 +42,9 @@ pub(crate) struct AppState<T, U> {
     pub(crate) orchestrator_state: OrchestratorState<T, U>,
 }
 
+/// Sets up and starts the main application server and the metrics server
+/// using the provided TLS configuration. It ensures both servers run concurrently and
+/// handles any errors that may occur during their execution.
 async fn serve<T, U>(
     app: AppState<T, U>,
 ) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>
@@ -81,10 +84,12 @@ async fn flatten<T>(handle: tokio::task::JoinHandle<Result<T>>) -> Result<T> {
     }
 }
 
+/// Starts the serving code after setting up the callback store, message DCG processor, and data store.
 pub async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
     // create a callback store for tracking
     let callback_store =
         JetStreamCallbackStore::new(js_context.clone(), &settings.js_callback_store).await?;
+    
     // Create the message graph from the pipeline spec and the redis store
     let msg_graph = MessageGraph::from_pipeline(&settings.pipeline_spec).map_err(|e| {
         Error::InitError(format!(
@@ -93,29 +98,30 @@ pub async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
         ))
     })?;
 
-    // Create a redis store to store the callbacks and the custom responses
+    // Create a store (builtin or user-defined) to store the callbacks and the custom responses
     match &settings.store_type {
         StoreType::Nats => {
             let nats_store =
                 JetStreamDataStore::new(js_context.clone(), &settings.js_callback_store).await?;
             let callback_state = CallbackState::new(msg_graph, nats_store, callback_store).await?;
-            let app = crate::AppState {
+            let app = AppState {
                 js_context,
                 settings,
                 orchestrator_state: callback_state,
             };
-            crate::serve(app).await.unwrap();
+            serve(app).await.map_err(|e| Error::Store(e.to_string()))?
         }
         StoreType::UserDefined(ud_config) => {
             let ud_store = UserDefinedStore::new(ud_config.clone()).await?;
             let callback_state = CallbackState::new(msg_graph, ud_store, callback_store).await?;
-            let app = crate::AppState {
+            let app = AppState {
                 js_context,
                 settings,
                 orchestrator_state: callback_state,
             };
-            crate::serve(app).await.unwrap();
+            serve(app).await.map_err(|e| Error::Store(e.to_string()))?
         }
     }
+    
     Ok(())
 }
