@@ -34,7 +34,6 @@ pub(crate) async fn start_forwarder(
     .await?;
 
     let source = create_components::create_source(
-        None,
         config.batch_size,
         config.read_timeout,
         &config.source_config,

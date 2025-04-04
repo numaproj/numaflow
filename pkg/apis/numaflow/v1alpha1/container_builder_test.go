@@ -60,5 +60,5 @@ func Test_containerBuilder(t *testing.T) {
 	assert.Equal(t, corev1.PullIfNotPresent, c.ImagePullPolicy)
 	assert.Equal(t, []corev1.EnvVar{{Name: "env", Value: "value"}}, c.Env)
 	assert.Equal(t, []corev1.ContainerPort{{Name: "port", ContainerPort: 8080}}, c.Ports)
-	assert.Equal(t, ptr.To[corev1.ContainerRestartPolicy](corev1.ContainerRestartPolicyAlways), c.RestartPolicy)
+	assert.Equal(t, ptr.To(corev1.ContainerRestartPolicyAlways), c.RestartPolicy)
 }

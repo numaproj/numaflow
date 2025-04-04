@@ -120,8 +120,11 @@ pub(crate) async fn create_rpc_channel(socket_path: PathBuf) -> error::Result<Ch
             match connect_with_uds(socket_path.clone()).await {
                 Ok(channel) => Ok(channel),
                 Err(e) => {
-                    warn!(?e, "Failed to connect to UDS socket");
-                    Err(Error::Connection(format!("Failed to connect: {:?}", e)))
+                    warn!(?e, ?socket_path, "Failed to connect to UDS socket");
+                    Err(Error::Connection(format!(
+                        "Failed to connect {socket_path:?}: {:?}",
+                        e
+                    )))
                 }
             }
         },

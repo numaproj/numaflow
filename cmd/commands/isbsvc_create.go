@@ -78,7 +78,7 @@ func NewISBSvcCreateCommand() *cobra.Command {
 					return fmt.Errorf("failed to get an in-cluster nats connection, %w", err)
 				}
 				defer client.Close()
-				isbsClient, err = isbsvc.NewISBJetStreamSvc(pipelineName, client)
+				isbsClient, err = isbsvc.NewISBJetStreamSvc(client)
 				if err != nil {
 					logger.Errorw("Failed to get a ISB Service client.", zap.Error(err))
 					return err
@@ -102,6 +102,6 @@ func NewISBSvcCreateCommand() *cobra.Command {
 	command.Flags().StringSliceVar(&buffers, "buffers", []string{}, "Buffers to create") // --buffers=a,b, --buffers=c
 	command.Flags().StringSliceVar(&buckets, "buckets", []string{}, "Buckets to create") // --buckets=xxa,xxb --buckets=xxc
 	command.Flags().StringVar(&sideInputsStore, "side-inputs-store", "", "Name of the side inputs store")
-	command.Flags().StringVar(&servingSourceStore, "serving-source-store", "", "Serving source streams to create") // --serving-source-store=a
+	command.Flags().StringVar(&servingSourceStore, "serving-store", "", "Serving source streams to create") // --serving-store=a
 	return command
 }

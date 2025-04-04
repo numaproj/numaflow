@@ -92,28 +92,28 @@ func TestRollingUpdateStrategy_GetMaxUnavailable(t *testing.T) {
 		{
 			name: "IntegerMaxUnavailable",
 			strategy: RollingUpdateStrategy{
-				MaxUnavailable: ptr.To[intstr.IntOrString](intstr.FromInt(5)),
+				MaxUnavailable: ptr.To(intstr.FromInt(5)),
 			},
 			expected: intstr.FromInt(5),
 		},
 		{
 			name: "StringMaxUnavailable",
 			strategy: RollingUpdateStrategy{
-				MaxUnavailable: ptr.To[intstr.IntOrString](intstr.FromString("50%")),
+				MaxUnavailable: ptr.To(intstr.FromString("50%")),
 			},
 			expected: intstr.FromString("50%"),
 		},
 		{
 			name: "ZeroIntegerMaxUnavailable",
 			strategy: RollingUpdateStrategy{
-				MaxUnavailable: ptr.To[intstr.IntOrString](intstr.FromInt(0)),
+				MaxUnavailable: ptr.To(intstr.FromInt(0)),
 			},
 			expected: intstr.FromInt(0),
 		},
 		{
 			name: "ZeroPercentMaxUnavailable",
 			strategy: RollingUpdateStrategy{
-				MaxUnavailable: ptr.To[intstr.IntOrString](intstr.FromString("0%")),
+				MaxUnavailable: ptr.To(intstr.FromString("0%")),
 			},
 			expected: intstr.FromString("0%"),
 		},

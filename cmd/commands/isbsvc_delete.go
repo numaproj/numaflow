@@ -65,7 +65,7 @@ func NewISBSvcDeleteCommand() *cobra.Command {
 				}
 				defer client.Close()
 
-				isbsClient, err = isbsvc.NewISBJetStreamSvc(pipelineName, client)
+				isbsClient, err = isbsvc.NewISBJetStreamSvc(client)
 				if err != nil {
 					logger.Errorw("Failed to get a ISB Service client.", zap.Error(err))
 					return err
@@ -86,6 +86,6 @@ func NewISBSvcDeleteCommand() *cobra.Command {
 	command.Flags().StringSliceVar(&buffers, "buffers", []string{}, "Buffers to delete") // --buffers=a,b, --buffers=c
 	command.Flags().StringSliceVar(&buckets, "buckets", []string{}, "Buckets to delete") // --buckets=xxa,xxb --buckets=xxc	return command
 	command.Flags().StringVar(&sideInputsStore, "side-inputs-store", "", "Name of the side inputs store")
-	command.Flags().StringVar(&servingSourceStore, "serving-source-store", "", "Serving source store to delete") // --serving-source-store=a
+	command.Flags().StringVar(&servingSourceStore, "serving-store", "", "Serving source store to delete") // --serving-store=a
 	return command
 }

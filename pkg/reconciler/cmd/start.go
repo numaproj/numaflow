@@ -44,6 +44,7 @@ import (
 	monovtxctrl "github.com/numaproj/numaflow/pkg/reconciler/monovertex"
 	mvtxscaling "github.com/numaproj/numaflow/pkg/reconciler/monovertex/scaling"
 	plctrl "github.com/numaproj/numaflow/pkg/reconciler/pipeline"
+	splctrl "github.com/numaproj/numaflow/pkg/reconciler/servingpipeline"
 	vertexctrl "github.com/numaproj/numaflow/pkg/reconciler/vertex"
 	"github.com/numaproj/numaflow/pkg/reconciler/vertex/scaling"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -154,7 +155,7 @@ func Start(namespaced bool, managedNamespace string) {
 
 	// Watch ISB Services
 	if err := isbSvcController.Watch(source.Kind(mgr.GetCache(), &dfv1.InterStepBufferService{}, &handler.TypedEnqueueRequestForObject[*dfv1.InterStepBufferService]{},
-		predicate.Or[*dfv1.InterStepBufferService](
+		predicate.Or(
 			predicate.TypedGenerationChangedPredicate[*dfv1.InterStepBufferService]{},
 			predicate.TypedLabelChangedPredicate[*dfv1.InterStepBufferService]{},
 		))); err != nil {
@@ -192,14 +193,14 @@ func Start(namespaced bool, managedNamespace string) {
 
 	// Watch Pipelines
 	if err := pipelineController.Watch(source.Kind(mgr.GetCache(), &dfv1.Pipeline{}, &handler.TypedEnqueueRequestForObject[*dfv1.Pipeline]{},
-		predicate.Or[*dfv1.Pipeline](
+		predicate.Or(
 			predicate.TypedGenerationChangedPredicate[*dfv1.Pipeline]{},
 			predicate.TypedLabelChangedPredicate[*dfv1.Pipeline]{},
 		))); err != nil {
 		logger.Fatalw("Unable to watch Pipelines", zap.Error(err))
 	}
 
-	// Watch Vertices with Generation changes (excluding scaling up/down)
+	// Watch Vertices
 	if err := pipelineController.Watch(source.Kind(mgr.GetCache(), &dfv1.Vertex{},
 		handler.TypedEnqueueRequestForOwner[*dfv1.Vertex](mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.Pipeline{}, handler.OnlyControllerOwner()),
 		predicate.TypedResourceVersionChangedPredicate[*dfv1.Vertex]{})); err != nil {
@@ -231,7 +232,7 @@ func Start(namespaced bool, managedNamespace string) {
 
 	// Watch Vertices
 	if err := vertexController.Watch(source.Kind(mgr.GetCache(), &dfv1.Vertex{}, &handler.TypedEnqueueRequestForObject[*dfv1.Vertex]{},
-		predicate.Or[*dfv1.Vertex](
+		predicate.Or(
 			predicate.TypedGenerationChangedPredicate[*dfv1.Vertex]{},
 			predicate.TypedLabelChangedPredicate[*dfv1.Vertex]{},
 		))); err != nil {
@@ -266,7 +267,7 @@ func Start(namespaced bool, managedNamespace string) {
 
 	// Watch MonoVertices
 	if err := monoVertexController.Watch(source.Kind(mgr.GetCache(), &dfv1.MonoVertex{}, &handler.TypedEnqueueRequestForObject[*dfv1.MonoVertex]{},
-		predicate.Or[*dfv1.MonoVertex](
+		predicate.Or(
 			predicate.TypedGenerationChangedPredicate[*dfv1.MonoVertex]{},
 			predicate.TypedLabelChangedPredicate[*dfv1.MonoVertex]{},
 		))); err != nil {
@@ -295,6 +296,45 @@ func Start(namespaced bool, managedNamespace string) {
 		handler.TypedEnqueueRequestForOwner[*appv1.Deployment](mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.MonoVertex{}, handler.OnlyControllerOwner()),
 		predicate.TypedResourceVersionChangedPredicate[*appv1.Deployment]{})); err != nil {
 		logger.Fatalw("Unable to watch Deployments", zap.Error(err))
+	}
+
+	// ServingPipeline controller
+	splController, err := controller.New(dfv1.ControllerServingPipeline, mgr, controller.Options{
+		Reconciler: splctrl.NewReconciler(mgr.GetClient(), mgr.GetScheme(), config, image, logger, mgr.GetEventRecorderFor(dfv1.ControllerServingPipeline)),
+	})
+	if err != nil {
+		logger.Fatalw("Unable to set up ServingPipeline controller", zap.Error(err))
+	}
+
+	// Watch ServingPipelines
+	if err := splController.Watch(source.Kind(mgr.GetCache(), &dfv1.ServingPipeline{}, &handler.TypedEnqueueRequestForObject[*dfv1.ServingPipeline]{},
+		predicate.Or(
+			predicate.TypedGenerationChangedPredicate[*dfv1.ServingPipeline]{},
+			predicate.TypedLabelChangedPredicate[*dfv1.ServingPipeline]{},
+		))); err != nil {
+		logger.Fatalw("Unable to watch ServingPipelines", zap.Error(err))
+	}
+
+	// Watch generated Pipelines
+	// TODO(spl): might need to exclude some of the changes
+	if err := splController.Watch(source.Kind(mgr.GetCache(), &dfv1.Pipeline{},
+		handler.TypedEnqueueRequestForOwner[*dfv1.Pipeline](mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.ServingPipeline{}, handler.OnlyControllerOwner()),
+		predicate.TypedResourceVersionChangedPredicate[*dfv1.Pipeline]{})); err != nil {
+		logger.Fatalw("Unable to watch Pipelines", zap.Error(err))
+	}
+
+	// Watch generated Deployments
+	if err := splController.Watch(source.Kind(mgr.GetCache(), &appv1.Deployment{},
+		handler.TypedEnqueueRequestForOwner[*appv1.Deployment](mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.ServingPipeline{}, handler.OnlyControllerOwner()),
+		predicate.TypedResourceVersionChangedPredicate[*appv1.Deployment]{})); err != nil {
+		logger.Fatalw("Unable to watch Deployments", zap.Error(err))
+	}
+
+	// Watch Services with ResourceVersion changes
+	if err := splController.Watch(source.Kind(mgr.GetCache(), &corev1.Service{},
+		handler.TypedEnqueueRequestForOwner[*corev1.Service](mgr.GetScheme(), mgr.GetRESTMapper(), &dfv1.ServingPipeline{}, handler.OnlyControllerOwner()),
+		predicate.TypedResourceVersionChangedPredicate[*corev1.Service]{})); err != nil {
+		logger.Fatalw("Unable to watch Services", zap.Error(err))
 	}
 
 	// Add Vertex autoscaling runner

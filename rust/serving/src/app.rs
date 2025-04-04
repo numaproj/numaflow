@@ -304,8 +304,8 @@ mod tests {
     use std::sync::Arc;
 
     use crate::app::orchestrator::OrchestratorState as CallbackState;
+    use async_nats::jetstream;
     use axum::http::StatusCode;
-    use tokio::sync::mpsc;
     use tower::ServiceExt;
     use tracker::MessageGraph;
 
@@ -319,29 +319,7 @@ mod tests {
     type Result<T> = core::result::Result<T, Error>;
     type Error = Box<dyn std::error::Error>;
 
-    #[tokio::test]
-    async fn test_setup_app() -> Result<()> {
-        let settings = Arc::new(Settings::default());
-
-        let datum_store = InMemoryDataStore::new(None);
-        let callback_store = InMemoryCallbackStore::new(None);
-
-        let pipeline_spec = PIPELINE_SPEC_ENCODED.parse().unwrap();
-        let msg_graph = MessageGraph::from_pipeline(&pipeline_spec)?;
-
-        let callback_state = CallbackState::new(msg_graph, datum_store, callback_store).await?;
-        let (tx, _) = mpsc::channel(10);
-        let app = AppState {
-            message: tx,
-            settings,
-            orchestrator_state: callback_state,
-        };
-
-        let result = setup_app(app).await;
-        assert!(result.is_ok());
-        Ok(())
-    }
-
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_health_check_endpoints() -> Result<()> {
         let settings = Arc::new(Settings::default());
@@ -352,9 +330,12 @@ mod tests {
         let msg_graph = MessageGraph::from_pipeline(&settings.pipeline_spec)?;
         let callback_state = CallbackState::new(msg_graph, datum_store, callback_store).await?;
 
-        let (messages_tx, _messages_rx) = mpsc::channel(10);
+        let nats_connection = async_nats::connect("localhost:4222")
+            .await
+            .expect("Failed to establish Jetstream connection");
+        let js_context = jetstream::new(nats_connection);
         let app = AppState {
-            message: messages_tx,
+            js_context,
             settings,
             orchestrator_state: callback_state,
         };
@@ -375,6 +356,7 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_auth_middleware() -> Result<()> {
         let settings = Settings {
@@ -389,10 +371,13 @@ mod tests {
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec)?;
         let callback_state = CallbackState::new(msg_graph, datum_store, callback_store).await?;
 
-        let (messages_tx, _messages_rx) = mpsc::channel(10);
+        let nats_connection = async_nats::connect("localhost:4222")
+            .await
+            .expect("Failed to establish Jetstream connection");
+        let js_context = jetstream::new(nats_connection);
 
         let app_state = AppState {
-            message: messages_tx,
+            js_context,
             settings: Arc::new(settings),
             orchestrator_state: callback_state,
         };

@@ -1,12 +1,9 @@
-use std::sync::Arc;
 use std::time::Duration;
 
-use async_nats::jetstream::Context;
 use numaflow_pb::clients::map::map_client::MapClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use serving::ServingSource;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::components::sink::{SinkConfig, SinkType};
@@ -246,7 +243,6 @@ pub(crate) async fn create_mapper(
 /// Creates a source type based on the configuration
 #[allow(clippy::too_many_arguments)]
 pub async fn create_source(
-    js_context: Option<Context>,
     batch_size: usize,
     read_timeout: Duration,
     source_config: &SourceConfig,
@@ -330,26 +326,6 @@ pub async fn create_source(
                 source::SourceType::Jetstream(jetstream),
                 tracker_handle,
                 source_config.read_ahead,
-                transformer,
-                watermark_handle,
-            ))
-        }
-        // for serving we use batch size as 1 as we are not batching the messages
-        // and read ahead is enabled as it supports it.
-        SourceType::Serving(config) => {
-            let serving = ServingSource::new(
-                js_context.expect("Jetstream context is required for serving source"),
-                Arc::clone(config),
-                1,
-                read_timeout,
-                *get_vertex_replica(),
-            )
-            .await?;
-            Ok(Source::new(
-                1,
-                source::SourceType::Serving(serving),
-                tracker_handle,
-                true,
                 transformer,
                 watermark_handle,
             ))
