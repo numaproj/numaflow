@@ -1,0 +1,50 @@
+.collapsable-error-accordion {
+  box-shadow: 0 0 !important;
+  border: 1px solid #c3ced5;
+}
+
+.collapsable-error-title-box {
+  display: flex;
+  width: 100%;
+  margin: 1rem 0;
+  gap: 1rem;
+  align-items: center;
+}
+
+.collapsable-error-common-title-text {
+  width: 25rem;
+  height: 100%;
+  font-weight: 500;
+  color: #878789;
+  overflow: scroll;
+}
+
+.collapsable-error-accordion-details {
+  display: flex;
+  height: 35rem;
+  padding: 0;
+}
+
+.collapsable-error-accordion-details-box {
+  display: flex;
+  background: #f4f5f8;
+  width: 100%;
+  height: 100%;
+  padding: 2rem 0;
+  gap: 1rem;
+}
+
+.collapsable-error-accordion-details-title {
+  margin-left: 6rem;
+  width: 25rem;
+  font-weight: 500;
+  color: #878789;
+}
+
+.collapsable-error-accordion-details-title-content {
+  font-size: 1.4rem;
+  height: 30rem;
+  width: 50rem;
+  flex-grow: 1;
+  overflow: scroll;
+}

@@ -1,7 +1,10 @@
 import React, { useContext } from "react";
 import Box from "@mui/material/Box";
 import { MetricsModalWrapper } from "../../../../../../../../../../../../common/MetricsModalWrapper";
-import { getPodContainerUsePercentages } from "../../../../../../../../../../../../../utils";
+import {
+  ago,
+  getPodContainerUsePercentages,
+} from "../../../../../../../../../../../../../utils";
 import { PodInfoProps } from "../../../../../../../../../../../../../types/declarations/pods";
 import {
   CONTAINER_CPU_UTILIZATION,
@@ -119,7 +122,9 @@ export function ContainerInfo({
           <Box className={"outer-box"}>
             <Box className={"inner-box-title"}>Last Started At</Box>
             <Box className={"inner-box-value"}>
-              {containerInfo?.lastStartedAt || "N/A"}
+              {containerInfo?.lastStartedAt
+                ? ago(new Date(containerInfo.lastStartedAt), 2)
+                : "N/A"}
             </Box>
           </Box>
 

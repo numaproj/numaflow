@@ -61,6 +61,7 @@ export const usePodsViewFetch = (
             pod?.spec?.initContainers
               ?.filter(
                 (initContainer: any) =>
+                  initContainer?.name !== "monitor" &&
                   initContainer?.restartPolicy === "Always"
               )
               ?.forEach((container: any) => containersList.push(container));
