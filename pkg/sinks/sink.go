@@ -65,7 +65,7 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		fromVertexWmStores map[string]store.WatermarkStore
 		sinkWmStores       map[string]store.WatermarkStore
 		idleManager        wmb.IdleManager
-		sinkHandler        *udsink.UDSgRPCBasedUDSink
+		sinkHandlers       []*udsink.UDSgRPCBasedUDSink
 		fbSinkHandler      *udsink.UDSgRPCBasedUDSink
 		healthCheckers     = make([]metrics.HealthChecker, 0)
 		vertexName         = u.VertexInstance.Vertex.Spec.Name
@@ -156,26 +156,34 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 		}
 		metrics.SDKInfo.WithLabelValues(dfv1.ComponentVertex, fmt.Sprintf("%s-%s", pipelineName, vertexName), string(serverinfo.ContainerTypeSinker), serverInfo.Version, string(serverInfo.Language)).Set(1)
 
-		sdkClient, err := sinkclient.New(ctx, serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
-		if err != nil {
-			return fmt.Errorf("failed to create sdk client, %w", err)
-		}
-
-		sinkHandler = udsink.NewUDSgRPCBasedUDSink(sdkClient)
-		// Readiness check
-		if err := sinkHandler.WaitUntilReady(ctx); err != nil {
-			return fmt.Errorf("failed on UDSink readiness check, %w", err)
-		}
-
-		// add sinkHandler to healthCheckers
-		healthCheckers = append(healthCheckers, sinkHandler)
-
-		defer func() {
-			err = sdkClient.CloseConn(ctx)
+		// we should create a new sdk client for each partition, because each client is mapped to one bidirectional stream
+		// and the bidi stream cannot be shared.
+		for index := range u.VertexInstance.Vertex.OwnedBuffers() {
+			sdkClient, err := sinkclient.New(ctx, serverInfo, sdkclient.WithMaxMessageSize(maxMessageSize))
 			if err != nil {
-				log.Warnw("Failed to close sdk client", zap.Error(err))
+				return fmt.Errorf("failed to create sdk client, %w", err)
 			}
-		}()
+
+			sinkHandler := udsink.NewUDSgRPCBasedUDSink(sdkClient)
+			// Readiness check
+			if err := sinkHandler.WaitUntilReady(ctx); err != nil {
+				return fmt.Errorf("failed on UDSink readiness check, %w", err)
+			}
+
+			// since it is the same UD Container, we need to do health check only once.
+			if index == 0 {
+				healthCheckers = append(healthCheckers, sinkHandler)
+			}
+
+			sinkHandlers = append(sinkHandlers, sinkHandler)
+
+			defer func() {
+				err = sdkClient.CloseConn(ctx)
+				if err != nil {
+					log.Warnw("Failed to close sdk client", zap.Error(err))
+				}
+			}()
+		}
 	}
 
 	if u.VertexInstance.Vertex.HasFallbackUDSink() {
@@ -219,8 +227,15 @@ func (u *SinkProcessor) Start(ctx context.Context) error {
 			}
 		}
 
+		// we need to use separate sink handlers for each partition, because each sink handler is mapped to one bidirectional stream
+		// and the bidi stream cannot be shared between partitions.
+		var udsinkHandler *udsink.UDSgRPCBasedUDSink
+		if len(sinkHandlers) > 0 {
+			udsinkHandler = sinkHandlers[index]
+		}
+
 		// create the main sink writer
-		sinkWriter, err := u.createSinkWriter(ctx, &u.VertexInstance.Vertex.Spec.Sink.AbstractSink, sinkHandler)
+		sinkWriter, err := u.createSinkWriter(ctx, &u.VertexInstance.Vertex.Spec.Sink.AbstractSink, udsinkHandler)
 		if err != nil {
 			return fmt.Errorf("failed to find a sink, error: %w", err)
 		}
