@@ -46,13 +46,13 @@ type ErrorDetails struct {
 }
 
 type ErrorApiResponse struct {
-	ErrMessage string         `json:"error_message"`
+	ErrMessage string         `json:"errorMessage"`
 	Data       []ErrorDetails `json:"data"`
 }
 
 type ReplicaErrors struct {
 	Replica         string         `json:"replica"`
-	ContainerErrors []ErrorDetails `json:"container_errors"`
+	ContainerErrors []ErrorDetails `json:"containerErrors"`
 }
 
 // MonoVertexRuntimeCache is an interface for caching and retrieving the runtime information.
