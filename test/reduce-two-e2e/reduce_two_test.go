@@ -247,6 +247,7 @@ func (r *ReduceSuite) testStreamSorter(lang string) {
 				eventTime := strconv.Itoa(eventTimes[i%len(eventTimes)] + i*1000)
 				w.SendMessageTo(pipelineName, "input-one", NewHttpPostRequest().WithBody([]byte("message")).WithHeader("X-Numaflow-Event-Time", eventTime))
 				w.SendMessageTo(pipelineName, "input-two", NewHttpPostRequest().WithBody([]byte("message")).WithHeader("X-Numaflow-Event-Time", eventTime))
+				time.Sleep(10 * time.Millisecond)
 			}
 		}
 	}()

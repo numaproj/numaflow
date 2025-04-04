@@ -42,7 +42,7 @@ spec:
             env:
               - name: SINK_HASH_KEY
                 # The key is set in the format of "pipeline_name-vertex_name"
-                value: "stream-sorter-go-sink"
+                value: "stream-sorter-java-sink"
               - name: MESSAGE_COUNT
                 value: "100"
               - name: CHECK_ORDER
