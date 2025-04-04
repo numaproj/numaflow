@@ -51,7 +51,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
         if env::var(serving::ENV_MIN_PIPELINE_SPEC).is_ok() {
             let vars: HashMap<String, String> = env::vars().collect();
             let cfg: serving::Settings = vars.try_into().unwrap();
-            numaflow_core::run_serving(cfg).await?;
+            serving::run(cfg).await?;
         }
         return Ok(());
     }

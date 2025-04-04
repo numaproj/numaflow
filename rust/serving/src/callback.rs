@@ -72,7 +72,7 @@ impl CallbackHandler {
         let store = js_context
             .get_key_value(store_name)
             .await
-            .expect(&format!("Failed to get kv store '{store_name}'"));
+            .unwrap_or_else(|_| panic!("Failed to get kv store '{store_name}'"));
         let semaphore = Arc::new(Semaphore::new(concurrency_limit));
         Self {
             semaphore,

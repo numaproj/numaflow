@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
-
+use std::time::Duration;
+use async_nats::{jetstream, ConnectOptions};
 use async_nats::jetstream::Context;
 use axum_server::tls_rustls::RustlsConfig;
 use tracing::info;
@@ -32,7 +33,6 @@ mod pipeline;
 use crate::app::store::cbstore::CallbackStore;
 use crate::app::store::datastore::DataStore;
 
-///
 pub mod callback;
 
 #[derive(Clone)]
@@ -82,6 +82,26 @@ async fn flatten<T>(handle: tokio::task::JoinHandle<Result<T>>) -> Result<T> {
         Ok(Err(err)) => Err(err),
         Err(err) => Err(Error::Other(format!("Spawning the server: {err:?}"))),
     }
+}
+
+pub async fn run(config: Settings) -> Result<()> {
+    let mut opts = ConnectOptions::new()
+        .max_reconnects(None) // unlimited reconnects
+        .ping_interval(Duration::from_secs(3))
+        .retry_on_initial_connect();
+
+    if let Some((user, password)) = config.nats_basic_auth.as_ref().cloned() {
+        opts = opts.user_and_password(user, password);
+    }
+
+    let js_client = async_nats::connect_with_options(&config.jetstream_url, opts)
+        .await
+        .map_err(|e| Error::Connection(e.to_string()))?;
+
+    let js_context = jetstream::new(js_client);
+    start(js_context, Arc::new(config)).await.map_err(|e| Error::Source(e.to_string()))?;
+
+    Ok(())
 }
 
 /// Starts the serving code after setting up the callback store, message DCG processor, and data store.

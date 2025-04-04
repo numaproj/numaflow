@@ -169,7 +169,6 @@ async fn start_source_forwarder(
     .await?;
 
     let source = create_components::create_source(
-        Some(js_context.clone()),
         config.batch_size,
         config.read_timeout,
         &source_config.source_config,

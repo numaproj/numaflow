@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use async_nats::jetstream::Context;
 use numaflow_pb::clients::map::map_client::MapClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
@@ -244,7 +243,6 @@ pub(crate) async fn create_mapper(
 /// Creates a source type based on the configuration
 #[allow(clippy::too_many_arguments)]
 pub async fn create_source(
-    js_context: Option<Context>,
     batch_size: usize,
     read_timeout: Duration,
     source_config: &SourceConfig,

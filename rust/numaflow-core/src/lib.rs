@@ -1,6 +1,3 @@
-use std::{sync::Arc, time::Duration};
-
-use async_nats::{jetstream, ConnectOptions};
 use tokio::signal;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -69,25 +66,6 @@ mod watermark;
 
 use numaflow_monitor::runtime::Runtime;
 
-pub async fn run_serving(config: serving::Settings) -> Result<()> {
-    let mut opts = ConnectOptions::new()
-        .max_reconnects(None) // unlimited reconnects
-        .ping_interval(Duration::from_secs(3))
-        .retry_on_initial_connect();
-
-    if let Some((user, password)) = config.nats_basic_auth.as_ref().cloned() {
-        opts = opts.user_and_password(user, password);
-    }
-
-    let js_client = async_nats::connect_with_options(&config.jetstream_url, opts)
-        .await
-        .map_err(|e| Error::Connection(e.to_string()))?;
-
-    let js_context = jetstream::new(js_client);
-    serving::start(js_context, Arc::new(config)).await.map_err(|e| Error::Source(e.to_string()))?;
-
-    Ok(())
-}
 
 pub async fn run() -> Result<()> {
     let cln_token = CancellationToken::new();
