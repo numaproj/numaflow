@@ -1,9 +1,9 @@
+use async_nats::jetstream::Context;
+use async_nats::{jetstream, ConnectOptions};
+use axum_server::tls_rustls::RustlsConfig;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use async_nats::{jetstream, ConnectOptions};
-use async_nats::jetstream::Context;
-use axum_server::tls_rustls::RustlsConfig;
 use tracing::info;
 
 pub use self::error::{Error, Result};
@@ -99,7 +99,9 @@ pub async fn run(config: Settings) -> Result<()> {
         .map_err(|e| Error::Connection(e.to_string()))?;
 
     let js_context = jetstream::new(js_client);
-    start(js_context, Arc::new(config)).await.map_err(|e| Error::Source(e.to_string()))?;
+    start(js_context, Arc::new(config))
+        .await
+        .map_err(|e| Error::Source(e.to_string()))?;
 
     Ok(())
 }
@@ -109,7 +111,7 @@ pub async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
     // create a callback store for tracking
     let callback_store =
         JetStreamCallbackStore::new(js_context.clone(), &settings.js_callback_store).await?;
-    
+
     // Create the message graph from the pipeline spec and the redis store
     let msg_graph = MessageGraph::from_pipeline(&settings.pipeline_spec).map_err(|e| {
         Error::InitError(format!(
@@ -142,6 +144,6 @@ pub async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
             serve(app).await.map_err(|e| Error::Store(e.to_string()))?
         }
     }
-    
+
     Ok(())
 }
