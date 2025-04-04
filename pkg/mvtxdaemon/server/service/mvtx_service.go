@@ -29,6 +29,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // MonoVtxPendingMetric is the metric emitted from the MonoVtx lag reader for pending stats
@@ -90,6 +91,40 @@ func (mvs *MonoVertexService) GetMonoVertexStatus(ctx context.Context, empty *em
 	collectedStatus.Message = dataHealth.Message
 	collectedStatus.Code = dataHealth.Code
 	resp.Status = collectedStatus
+	return resp, nil
+}
+
+// GetMonoVertexErrors returns errors for a given mono vertex by accessing the local cache in the runtime service.
+// The errors are persisted in the local cache by the runtime service.
+// Errors are retrieved for all active replicas for a given mono vertex.
+// A list of replica errors for a given mono vertex is returned.
+func (mvs *MonoVertexService) GetMonoVertexErrors(ctx context.Context, request *mvtxdaemon.GetMonoVertexErrorsRequest) (*mvtxdaemon.GetMonoVertexErrorsResponse, error) {
+	monoVertex := request.GetMonoVertex()
+	resp := new(mvtxdaemon.GetMonoVertexErrorsResponse)
+	localCache := mvs.monoVertexRuntimeCache.GetLocalCache()
+
+	// If the errors are present in the local cache, return the errors.
+	if errors, ok := localCache[monoVertex]; ok {
+		replicaErrors := make([]*mvtxdaemon.ReplicaErrors, len(errors))
+		for i, err := range errors {
+			containerErrors := make([]*mvtxdaemon.ContainerError, len(err.ContainerErrors))
+			for j, containerError := range err.ContainerErrors {
+				containerErrors[j] = &mvtxdaemon.ContainerError{
+					Container: containerError.Container,
+					Timestamp: timestamppb.New(time.Unix(containerError.Timestamp, 0)),
+					Code:      containerError.Code,
+					Message:   containerError.Message,
+					Details:   containerError.Details,
+				}
+			}
+			replicaErrors[i] = &mvtxdaemon.ReplicaErrors{
+				Replica:         err.Replica,
+				ContainerErrors: containerErrors,
+			}
+		}
+		resp.Errors = replicaErrors
+	}
+
 	return resp, nil
 }
 

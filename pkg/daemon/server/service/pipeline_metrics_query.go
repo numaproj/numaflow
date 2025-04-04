@@ -26,6 +26,7 @@ import (
 
 	"github.com/prometheus/common/expfmt"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -230,6 +231,41 @@ func (ps *PipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *dae
 		Message: status.Message,
 		Code:    status.Code,
 	}
+	return resp, nil
+}
+
+// GetVertexErrors returns errors for a given vertex by accessing the local cache in the runtime service.
+// The errors are persisted in the local cache by the runtime service.
+// Errors are retrieved for all active replicas for a given vertex.
+// A list of replica errors for a given vertex is returned.
+func (ps *PipelineMetadataQuery) GetVertexErrors(ctx context.Context, req *daemon.GetVertexErrorsRequest) (*daemon.GetVertexErrorsResponse, error) {
+	pipeline, vertex := req.GetPipeline(), req.GetVertex()
+	cacheKey := fmt.Sprintf("%s-%s", pipeline, vertex)
+	resp := new(daemon.GetVertexErrorsResponse)
+	localCache := ps.pipelineRuntimeCache.GetLocalCache()
+
+	// If the errors are present in the local cache, return the errors.
+	if errors, ok := localCache[cacheKey]; ok {
+		replicaErrors := make([]*daemon.ReplicaErrors, len(errors))
+		for i, err := range errors {
+			containerErrors := make([]*daemon.ContainerError, len(err.ContainerErrors))
+			for j, containerError := range err.ContainerErrors {
+				containerErrors[j] = &daemon.ContainerError{
+					Container: containerError.Container,
+					Timestamp: timestamppb.New(time.Unix(containerError.Timestamp, 0)),
+					Code:      containerError.Code,
+					Message:   containerError.Message,
+					Details:   containerError.Details,
+				}
+			}
+			replicaErrors[i] = &daemon.ReplicaErrors{
+				Replica:         err.Replica,
+				ContainerErrors: containerErrors,
+			}
+		}
+		resp.Errors = replicaErrors
+	}
+
 	return resp, nil
 }
 

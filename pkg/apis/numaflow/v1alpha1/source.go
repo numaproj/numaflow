@@ -66,17 +66,10 @@ func (s Source) getContainers(req getContainerReq) ([]corev1.Container, []corev1
 }
 
 func (s Source) getMainContainer(req getContainerReq) corev1.Container {
-	// volume mount to the runtime path
-	volumeMounts := []corev1.VolumeMount{
-		{
-			Name:      RuntimeDirVolume,
-			MountPath: RuntimeDirMountPath,
-		},
-	}
 	if req.executeRustBinary {
-		return containerBuilder{}.init(req).appendVolumeMounts(volumeMounts...).command(NumaflowRustBinary).args("processor", "--type="+string(VertexTypeSink), "--isbsvc-type="+string(req.isbSvcType), "--rust").build()
+		return containerBuilder{}.init(req).command(NumaflowRustBinary).args("processor", "--type="+string(VertexTypeSink), "--isbsvc-type="+string(req.isbSvcType), "--rust").build()
 	}
-	return containerBuilder{}.init(req).appendVolumeMounts(volumeMounts...).args("processor", "--type="+string(VertexTypeSource), "--isbsvc-type="+string(req.isbSvcType)).build()
+	return containerBuilder{}.init(req).args("processor", "--type="+string(VertexTypeSource), "--isbsvc-type="+string(req.isbSvcType)).build()
 }
 
 func (s Source) getUDTransformerContainer(mainContainerReq getContainerReq) corev1.Container {

@@ -388,7 +388,7 @@ var (
 	// MonoVertexPendingMessages is a gauge used to represent pending messages for a given monovertex
 	MonoVertexPendingMessages = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "monovtx",
-		Name:      "monovtx_pending",
+		Name:      "pending",
 		Help:      "A Gauge to keep track of the total number of pending messages for the monovtx",
 	}, []string{LabelMonoVertexName, LabelPendingPeriod})
 )

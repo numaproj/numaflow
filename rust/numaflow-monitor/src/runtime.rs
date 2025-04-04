@@ -1,7 +1,7 @@
 //! The `runtime` module is responsible for persisting runtime information, such as application errors.
 use crate::config::RuntimeInfoConfig;
 use crate::error::{Error, Result};
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::fs;
@@ -19,8 +19,8 @@ const CURRENT_FILE: &str = "current-numa.json";
 pub(crate) struct RuntimeErrorEntry {
     /// The name of the container where the error occurred.
     pub(crate) container: String,
-    /// The timestamp of the error in RFC 3339 format.
-    pub(crate) timestamp: String,
+    /// The timestamp of the error.
+    pub(crate) timestamp: i64,
     /// The error code.
     pub(crate) code: String,
     /// The error message.
@@ -50,14 +50,9 @@ impl From<(&Status, &str, i64)> for RuntimeErrorEntry {
         // Convert status details from bytes to a string
         let details_str = String::from_utf8_lossy(details_bytes);
 
-        // Convert timestamp to RFC 3339 string
-        let rfc3339_timestamp = DateTime::<Utc>::from_timestamp(timestamp, 0)
-            .unwrap()
-            .to_rfc3339();
-
         RuntimeErrorEntry {
             container: container_name.to_string(),
-            timestamp: rfc3339_timestamp,
+            timestamp: timestamp,
             code,
             message,
             details: details_str.to_string(),
@@ -75,6 +70,7 @@ impl From<RuntimeErrorEntry> for String {
 #[derive(serde::Serialize, serde::Deserialize)]
 pub(crate) struct ApiResponse {
     /// Optional error message for the API response.
+    #[serde(rename = "errorMessage")]
     pub(crate) error_message: Option<String>,
     /// A list of `RuntimeErrorEntry` objects
     pub(crate) data: Vec<RuntimeErrorEntry>,
@@ -385,7 +381,7 @@ mod tests {
         let mut file = fs::File::create(&file_path).unwrap();
         let content = r#"{
                 "container": "test_container",
-                "timestamp": "1234567890",
+                "timestamp": 1234567890,
                 "code": "Internal error",
                 "message": "An error occurred",
                 "details": "Error details"
@@ -404,7 +400,7 @@ mod tests {
 
         assert_eq!(errors.len(), 1);
         assert_eq!(errors[0].container, "test_container");
-        assert_eq!(errors[0].timestamp, "1234567890");
+        assert_eq!(errors[0].timestamp, 1234567890);
         assert_eq!(errors[0].code, "Internal error");
         assert_eq!(errors[0].message, "An error occurred");
         assert_eq!(errors[0].details, "Error details");
@@ -417,7 +413,7 @@ mod tests {
         let mut file = fs::File::create(&file_path).unwrap();
         let invalid_content = r#"{
                 "container": "test_container",
-                "timestamp": 1234,
+                "timestamp": "1234",
                 "code": "Internal error",
                 "message": "An error occurred",
                 "details": "Error details"

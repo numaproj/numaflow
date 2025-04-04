@@ -208,6 +208,56 @@ func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
 	done <- struct{}{}
 }
 
+func (r *ReduceSuite) TestStreamSorterGo() {
+	r.testStreamSorter("go")
+}
+
+func (r *ReduceSuite) TestStreamSorterJava() {
+	r.testStreamSorter("java")
+}
+
+func (r *ReduceSuite) testStreamSorter(lang string) {
+	// the reduce feature is not supported with redis ISBSVC
+	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
+		r.T().SkipNow()
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	w := r.Given().Pipeline(fmt.Sprintf("@testdata/accumulator/stream-sorter-%s.yaml", lang)).
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+	pipelineName := fmt.Sprintf("stream-sorter-%s", lang)
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning()
+
+	done := make(chan struct{})
+	go func() {
+		// publish out-of-order messages to source vertices
+		eventTimes := []int{60000, 59000, 61000, 58000, 62000}
+		for i := 0; true; i++ {
+			select {
+			case <-ctx.Done():
+				return
+			case <-done:
+				return
+			default:
+				eventTime := strconv.Itoa(eventTimes[i%len(eventTimes)] + i*1000)
+				w.SendMessageTo(pipelineName, "input-one", NewHttpPostRequest().WithBody([]byte("message")).WithHeader("X-Numaflow-Event-Time", eventTime))
+				w.SendMessageTo(pipelineName, "input-two", NewHttpPostRequest().WithBody([]byte("message")).WithHeader("X-Numaflow-Event-Time", eventTime))
+				time.Sleep(10 * time.Millisecond)
+			}
+		}
+	}()
+
+	// Check if the sink contains the ordered string
+	w.Expect().RedisSinkContains(pipelineName+"-sink", "ordered")
+	w.Expect().RedisSinkNotContains(pipelineName+"-sink", "not ordered")
+	done <- struct{}{}
+}
+
 func TestSessionSuite(t *testing.T) {
 	suite.Run(t, new(ReduceSuite))
 }

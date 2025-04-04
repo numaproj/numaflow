@@ -223,8 +223,12 @@ func TestMonoVertexGetPodSpec(t *testing.T) {
 				assert.Equal(t, 1, len(c.VolumeMounts))
 			}
 		}
-		for _, c := range podSpec.InitContainers {
-			assert.Equal(t, 1, len(c.VolumeMounts))
+		for i, c := range podSpec.InitContainers {
+			if i == 0 {
+				assert.Equal(t, 1, len(c.VolumeMounts)) // monitor container
+				continue
+			}
+			assert.Equal(t, 2, len(c.VolumeMounts))
 		}
 		envNames := []string{}
 		for _, env := range podSpec.Containers[0].Env {
