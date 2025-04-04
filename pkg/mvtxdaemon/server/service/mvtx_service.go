@@ -100,6 +100,10 @@ func (mvs *MonoVertexService) GetMonoVertexStatus(ctx context.Context, empty *em
 	return resp, nil
 }
 
+// GetMonoVertexErrors returns errors for a given mono vertex by accessing the local cache in the runtime service.
+// The errors are persisted in the local cache by the runtime service.
+// Errors are retrieved for all active replicas for a given mono vertex.
+// A list of replica errors for a given mono vertex is returned.
 func (mvs *MonoVertexService) GetMonoVertexErrors(ctx context.Context, request *mvtxdaemon.GetMonoVertexErrorsRequest) (*mvtxdaemon.GetMonoVertexErrorsResponse, error) {
 	monoVertex := request.GetMonoVertex()
 	resp := new(mvtxdaemon.GetMonoVertexErrorsResponse)

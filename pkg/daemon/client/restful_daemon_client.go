@@ -161,6 +161,7 @@ func (rc *restfulDaemonClient) GetPipelineStatus(ctx context.Context, pipeline s
 	}
 }
 
+// GetVertexErrors returns the []ReplicaErrors response instance for GetVertexErrorsRequest
 func (rc *restfulDaemonClient) GetVertexErrors(ctx context.Context, pipeline, vertex string) ([]*daemon.ReplicaErrors, error) {
 	resp, err := rc.httpClient.Get(fmt.Sprintf("%s/api/v1/pipelines/%s/vertices/%s/errors", rc.hostURL, pipeline, vertex))
 	if err != nil {

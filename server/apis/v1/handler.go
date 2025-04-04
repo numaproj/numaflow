@@ -1262,6 +1262,7 @@ func (h *handler) GetMonoVertexHealth(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
 }
 
+// GetVertexErrors is used to provide the errors of a given vertex
 func (h *handler) GetVertexErrors(c *gin.Context) {
 	ns, pipeline, vertex := c.Param("namespace"), c.Param("pipeline"), c.Param("vertex")
 
@@ -1280,6 +1281,7 @@ func (h *handler) GetVertexErrors(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, errors))
 }
 
+// GetMonoVertexErrors is used to provide the errors of a given mono vertex
 func (h *handler) GetMonoVertexErrors(c *gin.Context) {
 	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
 

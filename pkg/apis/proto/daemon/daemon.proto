@@ -110,11 +110,14 @@ message GetPipelineWatermarksRequest {
   string pipeline = 1;
 }
 
+// GetVertexErrorsRequest is a request message for retrieving the errors for a vertex.
 message GetVertexErrorsRequest {
   string pipeline = 1;
   string vertex = 2;
 }
 
+// ContainerError is used to provide information for a container error
+// including timestamp, error code, message and details
 message ContainerError {
   string container = 1;
   google.protobuf.Timestamp timestamp = 2;
@@ -123,6 +126,7 @@ message ContainerError {
   string details = 5;
 }
 
+// ReplicaErrors is used to provide all the container errors for a replica
 message ReplicaErrors {
   string replica = 1;
   repeated ContainerError containerErrors = 2;

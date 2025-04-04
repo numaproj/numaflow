@@ -37,6 +37,8 @@ const (
 	runtimeErrorsTimeStep = 60 * time.Second
 )
 
+// ErrorDetails is used to provide information for a container error
+// including timestamp, error code, message and details
 type ErrorDetails struct {
 	Container string `json:"container"`
 	Timestamp int64  `json:"timestamp"`
@@ -50,6 +52,7 @@ type ErrorApiResponse struct {
 	Data       []ErrorDetails `json:"data"`
 }
 
+// ReplicaErrors is used to provide all the container errors for a replica
 type ReplicaErrors struct {
 	Replica         string         `json:"replica"`
 	ContainerErrors []ErrorDetails `json:"containerErrors"`

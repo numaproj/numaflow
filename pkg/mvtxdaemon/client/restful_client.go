@@ -104,6 +104,7 @@ func (rc *restfulClient) GetMonoVertexStatus(ctx context.Context) (*mvtxdaemon.M
 
 }
 
+// GetMonoVertexErrors returns the []ReplicaErrors response instance for GetMonoVertexErrorsRequest
 func (rc *restfulClient) GetMonoVertexErrors(ctx context.Context, monoVertex string) ([]*mvtxdaemon.ReplicaErrors, error) {
 	resp, err := rc.httpClient.Get(fmt.Sprintf("%s/api/v1/mono-vertices/%s/errors", rc.hostURL, monoVertex))
 	if err != nil {

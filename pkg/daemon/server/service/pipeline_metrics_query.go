@@ -234,6 +234,10 @@ func (ps *PipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *dae
 	return resp, nil
 }
 
+// GetVertexErrors returns errors for a given vertex by accessing the local cache in the runtime service.
+// The errors are persisted in the local cache by the runtime service.
+// Errors are retrieved for all active replicas for a given vertex.
+// A list of replica errors for a given vertex is returned.
 func (ps *PipelineMetadataQuery) GetVertexErrors(ctx context.Context, req *daemon.GetVertexErrorsRequest) (*daemon.GetVertexErrorsResponse, error) {
 	pipeline, vertex := req.GetPipeline(), req.GetVertex()
 	cacheKey := fmt.Sprintf("%s-%s", pipeline, vertex)

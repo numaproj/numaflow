@@ -121,6 +121,7 @@ func (dc *grpcDaemonClient) GetPipelineStatus(ctx context.Context, pipeline stri
 	}
 }
 
+// GetVertexErrors returns the []ReplicaErrors response instance for GetVertexErrorsRequest
 func (dc *grpcDaemonClient) GetVertexErrors(ctx context.Context, pipeline, vertex string) ([]*daemon.ReplicaErrors, error) {
 	if rspn, err := dc.client.GetVertexErrors(ctx, &daemon.GetVertexErrorsRequest{
 		Pipeline: pipeline,

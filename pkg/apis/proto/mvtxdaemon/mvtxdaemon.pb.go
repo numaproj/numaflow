@@ -263,6 +263,7 @@ func (x *GetMonoVertexStatusResponse) GetStatus() *MonoVertexStatus {
 	return nil
 }
 
+// GetMonoVertexErrorsRequest is a request message for retrieving the errors for a mono vertex.
 type GetMonoVertexErrorsRequest struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -310,6 +311,8 @@ func (x *GetMonoVertexErrorsRequest) GetMonoVertex() string {
 	return ""
 }
 
+// ContainerError is used to provide information for a container error
+// including timestamp, error code, message and details
 type ContainerError struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -389,6 +392,7 @@ func (x *ContainerError) GetDetails() string {
 	return ""
 }
 
+// ReplicaErrors is used to provide all the container errors for a replica
 type ReplicaErrors struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
