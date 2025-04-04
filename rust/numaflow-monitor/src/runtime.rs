@@ -70,6 +70,7 @@ impl From<RuntimeErrorEntry> for String {
 #[derive(serde::Serialize, serde::Deserialize)]
 pub(crate) struct ApiResponse {
     /// Optional error message for the API response.
+    #[serde(rename = "errorMessage")]
     pub(crate) error_message: Option<String>,
     /// A list of `RuntimeErrorEntry` objects
     pub(crate) data: Vec<RuntimeErrorEntry>,
