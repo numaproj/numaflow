@@ -27,21 +27,10 @@ type ServingStore struct {
 	Container *Container `json:"container" protobuf:"bytes,2,opt,name=container"`
 }
 
-// volume mount to the runtime path
-func (s ServingStore) getRuntimeVolumeMount() []corev1.VolumeMount {
-	return []corev1.VolumeMount{
-		{
-			Name:      RuntimeDirVolume,
-			MountPath: RuntimeDirMountPath,
-		},
-	}
-}
-
 func (s ServingStore) getUDStoreContainer(mainContainerReq getContainerReq) corev1.Container {
 	c := containerBuilder{}.
 		name(CtrUdStore).
 		imagePullPolicy(mainContainerReq.imagePullPolicy). // Use the same image pull policy as the main container
-		appendVolumeMounts(s.getRuntimeVolumeMount()...).
 		appendVolumeMounts(mainContainerReq.volumeMounts...).asSidecar()
 	x := s.Container
 	c = c.image(x.Image)

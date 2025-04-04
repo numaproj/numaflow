@@ -300,7 +300,10 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	}
 
 	servingStore := req.PipelineSpec.GetStoreSpec(v.GetServingStoreName())
-	volumeMounts := []corev1.VolumeMount{{Name: varVolumeName, MountPath: PathVarRun}}
+	volumeMounts := []corev1.VolumeMount{
+		{Name: varVolumeName, MountPath: PathVarRun},
+		{Name: RuntimeDirVolume, MountPath: RuntimeDirMountPath},
+	}
 	executeRustBinary, _ := env.GetBool(EnvExecuteRustBinary, false)
 	containerRequest := getContainerReq{
 		isbSvcType:        req.ISBSvcType,

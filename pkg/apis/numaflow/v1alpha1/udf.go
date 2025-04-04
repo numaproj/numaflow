@@ -58,33 +58,23 @@ func (in UDF) getContainers(req getContainerReq) ([]corev1.Container, []corev1.C
 	return sidecarContainers, containers, nil
 }
 
-// volume mount to the runtime path
-func (in UDF) getRuntimeVolumeMount() []corev1.VolumeMount {
-	return []corev1.VolumeMount{
-		{
-			Name:      RuntimeDirVolume,
-			MountPath: RuntimeDirMountPath,
-		},
-	}
-}
 func (in UDF) getMainContainer(req getContainerReq) corev1.Container {
 	if in.GroupBy == nil {
 		if req.executeRustBinary {
-			return containerBuilder{}.init(req).appendVolumeMounts(in.getRuntimeVolumeMount()...).command(NumaflowRustBinary).args("processor", "--type="+string(VertexTypeMapUDF), "--isbsvc-type="+string(req.isbSvcType), "--rust").build()
+			return containerBuilder{}.init(req).command(NumaflowRustBinary).args("processor", "--type="+string(VertexTypeMapUDF), "--isbsvc-type="+string(req.isbSvcType), "--rust").build()
 		}
 		args := []string{"processor", "--type=" + string(VertexTypeMapUDF), "--isbsvc-type=" + string(req.isbSvcType)}
 		return containerBuilder{}.
-			init(req).appendVolumeMounts(in.getRuntimeVolumeMount()...).args(args...).build()
+			init(req).args(args...).build()
 	}
 	return containerBuilder{}.
-		init(req).appendVolumeMounts(in.getRuntimeVolumeMount()...).args("processor", "--type="+string(VertexTypeReduceUDF), "--isbsvc-type="+string(req.isbSvcType)).build()
+		init(req).args("processor", "--type="+string(VertexTypeReduceUDF), "--isbsvc-type="+string(req.isbSvcType)).build()
 }
 
 func (in UDF) getUDFContainer(mainContainerReq getContainerReq) corev1.Container {
 	c := containerBuilder{}.
 		name(CtrUdf).
 		imagePullPolicy(mainContainerReq.imagePullPolicy). // Use the same image pull policy as main container
-		appendVolumeMounts(in.getRuntimeVolumeMount()...).
 		appendVolumeMounts(mainContainerReq.volumeMounts...).asSidecar()
 	if x := in.Container; x != nil && x.Image != "" { // customized image
 		c = c.image(x.Image)
