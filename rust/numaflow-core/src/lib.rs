@@ -1,8 +1,8 @@
+use crate::config::{config, CustomResourceType};
 use tokio::signal;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
-use crate::config::{config, CustomResourceType};
 
 /// Custom Error handling.
 mod error;
@@ -65,7 +65,6 @@ mod serving_store;
 mod watermark;
 
 use numaflow_monitor::runtime::Runtime;
-
 
 pub async fn run() -> Result<()> {
     let cln_token = CancellationToken::new();
