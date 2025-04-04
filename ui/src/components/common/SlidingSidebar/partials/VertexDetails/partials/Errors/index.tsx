@@ -51,17 +51,12 @@ export const Errors = ({ details, square }: ErrorsProps) => {
       details: (ContainerError & { pod: string })[]
     ) => {
       if (details.length === 0) return [];
-      else if (selectedPod === "All" && selectedContainer === "All")
-        return details;
-      else if (selectedContainer === "All") {
-        return details.filter((d) => d.pod === selectedPod);
-      } else if (selectedPod === "All") {
-        return details.filter((d) => d.container === selectedContainer);
-      } else {
-        return details.filter(
-          (d) => d.pod === selectedPod && d.container === selectedContainer
-        );
-      }
+
+      return details.filter(
+        (d) =>
+          (selectedPod === "All" || d.pod === selectedPod) &&
+          (selectedContainer === "All" || d.container === selectedContainer)
+      );
     },
     []
   );
