@@ -201,6 +201,35 @@ func TestRestfulDaemonClient_GetPipelineStatus(t *testing.T) {
 	})
 }
 
+func TestRestfulDaemonClient_GetVertexErrors(t *testing.T) {
+	t.Run("error case", func(t *testing.T) {
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`invalid json`))
+		}))
+		defer server.Close()
+
+		client, _ := NewRESTfulDaemonServiceClient(server.URL)
+		_, err := client.GetVertexErrors(context.Background(), "simple-pipeline", "out")
+		assert.Error(t, err)
+	})
+
+	t.Run("okay", func(t *testing.T) {
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"errors":[{"replica":"0","containerErrors":[{"container":"container1","timestamp":"2023-10-01T12:00:00Z","code":"Internal","message":"message1","details":"details1"}]}]}`))
+		}))
+		defer server.Close()
+
+		client, _ := NewRESTfulDaemonServiceClient(server.URL)
+		errors, err := client.GetVertexErrors(context.Background(), "simple-pipeline", "out")
+		assert.NoError(t, err)
+		assert.Len(t, errors, 1)
+		assert.Equal(t, "container1", errors[0].ContainerErrors[0].Container)
+		assert.Equal(t, "Internal", errors[0].ContainerErrors[0].Code)
+	})
+}
+
 func TestRestfulDaemonClient_Close(t *testing.T) {
 	t.Run("close without error", func(t *testing.T) {
 		client := &restfulDaemonClient{}

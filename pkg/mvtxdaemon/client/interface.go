@@ -27,4 +27,5 @@ type MonoVertexDaemonClient interface {
 	io.Closer
 	GetMonoVertexMetrics(ctx context.Context) (*mvtxdaemon.MonoVertexMetrics, error)
 	GetMonoVertexStatus(ctx context.Context) (*mvtxdaemon.MonoVertexStatus, error)
+	GetMonoVertexErrors(ctx context.Context, monoVertex string) ([]*mvtxdaemon.ReplicaErrors, error)
 }
