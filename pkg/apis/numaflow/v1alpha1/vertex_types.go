@@ -27,7 +27,6 @@ import (
 	resource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/env"
 	"k8s.io/utils/ptr"
 )
 
@@ -304,16 +303,14 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		{Name: varVolumeName, MountPath: PathVarRun},
 		{Name: RuntimeDirVolume, MountPath: RuntimeDirMountPath},
 	}
-	executeRustBinary, _ := env.GetBool(EnvExecuteRustBinary, false)
 	containerRequest := getContainerReq{
-		isbSvcType:        req.ISBSvcType,
-		env:               envVars,
-		image:             req.Image,
-		imagePullPolicy:   req.PullPolicy,
-		resources:         req.DefaultResources,
-		volumeMounts:      volumeMounts,
-		executeRustBinary: executeRustBinary,
-		servingStore:      servingStore,
+		isbSvcType:      req.ISBSvcType,
+		env:             envVars,
+		image:           req.Image,
+		imagePullPolicy: req.PullPolicy,
+		resources:       req.DefaultResources,
+		volumeMounts:    volumeMounts,
+		servingStore:    servingStore,
 	}
 	sidecarContainers, containers, err := v.Spec.getType().getContainers(containerRequest)
 	if err != nil {

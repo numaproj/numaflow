@@ -69,7 +69,10 @@ COPY --from=base /bin/numaflow /bin/numaflow
 COPY --from=base /bin/numaflow-rs /bin/numaflow-rs
 COPY ui/build /ui/build
 
-ENTRYPOINT [ "/bin/numaflow" ]
+COPY entrypoint.sh /bin/entrypoint.sh
+RUN chmod +x /bin/entrypoint.sh
+
+ENTRYPOINT ["/bin/entrypoint.sh"]
 
 ####################################################################################################
 # testbase

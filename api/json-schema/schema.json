@@ -23006,9 +23006,6 @@
           },
           "type": "array"
         },
-        "executeRustBinary": {
-          "type": "boolean"
-        },
         "image": {
           "type": "string"
         },
@@ -23038,7 +23035,6 @@
         "image",
         "volumeMounts",
         "resources",
-        "executeRustBinary",
         "servingStore"
       ],
       "type": "object"

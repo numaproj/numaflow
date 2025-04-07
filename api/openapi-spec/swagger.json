@@ -22984,7 +22984,6 @@
         "image",
         "volumeMounts",
         "resources",
-        "executeRustBinary",
         "servingStore"
       ],
       "properties": {
@@ -22993,9 +22992,6 @@
           "items": {
             "$ref": "#/definitions/io.k8s.api.core.v1.EnvVar"
           }
-        },
-        "executeRustBinary": {
-          "type": "boolean"
         },
         "image": {
           "type": "string"

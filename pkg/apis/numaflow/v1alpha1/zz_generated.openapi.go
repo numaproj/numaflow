@@ -6851,20 +6851,13 @@ func schema_pkg_apis_numaflow_v1alpha1_getContainerReq(ref common.ReferenceCallb
 							Ref:     ref("k8s.io/api/core/v1.ResourceRequirements"),
 						},
 					},
-					"executeRustBinary": {
-						SchemaProps: spec.SchemaProps{
-							Default: false,
-							Type:    []string{"boolean"},
-							Format:  "",
-						},
-					},
 					"servingStore": {
 						SchemaProps: spec.SchemaProps{
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingStore"),
 						},
 					},
 				},
-				Required: []string{"env", "isbSvcType", "imagePullPolicy", "image", "volumeMounts", "resources", "executeRustBinary", "servingStore"},
+				Required: []string{"env", "isbSvcType", "imagePullPolicy", "image", "volumeMounts", "resources", "servingStore"},
 			},
 		},
 		Dependencies: []string{

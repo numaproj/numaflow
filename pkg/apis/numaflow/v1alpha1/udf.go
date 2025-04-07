@@ -60,9 +60,6 @@ func (in UDF) getContainers(req getContainerReq) ([]corev1.Container, []corev1.C
 
 func (in UDF) getMainContainer(req getContainerReq) corev1.Container {
 	if in.GroupBy == nil {
-		if req.executeRustBinary {
-			return containerBuilder{}.init(req).command(NumaflowRustBinary).args("processor", "--type="+string(VertexTypeMapUDF), "--isbsvc-type="+string(req.isbSvcType), "--rust").build()
-		}
 		args := []string{"processor", "--type=" + string(VertexTypeMapUDF), "--isbsvc-type=" + string(req.isbSvcType)}
 		return containerBuilder{}.
 			init(req).args(args...).build()

@@ -620,11 +620,11 @@ async fn sidecar_livez(State(state): State<ComponentHealthChecks>) -> impl IntoR
         ComponentHealthChecks::Monovertex(mut monovertex_state) => {
             // this call also check the health of transformer if it is configured in the Source.
             if !monovertex_state.source.is_ready().await {
-                error!("Monovertex source component is not ready");
+                error!("MonoVertex source component is not ready");
                 return StatusCode::INTERNAL_SERVER_ERROR;
             }
             if !monovertex_state.sink.is_ready().await {
-                error!("Monovertex sink client is not ready");
+                error!("MonoVertex sink client is not ready");
                 return StatusCode::INTERNAL_SERVER_ERROR;
             }
         }

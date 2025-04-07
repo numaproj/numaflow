@@ -38,17 +38,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 async fn run() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
-    // Based on the argument, run the appropriate component.
-    if args.contains(&"--rust".to_string()) {
-        numaflow_core::run()
-            .await
-            .map_err(|e| format!("Error running rust binary: {e:?}"))?;
-    } else if args.contains(&"--monitor".to_string()) {
+    if args.contains(&"--monitor".to_string()) {
         numaflow_monitor::run()
             .await
             .map_err(|e| format!("Error running monitor binary: {e:?}"))?;
     } else {
-        return Err(format!("Invalid argument. Use --rust. Current args = {:?}", args).into());
+        numaflow_core::run()
+            .await
+            .map_err(|e| format!("Error running rust binary: {e:?}"))?;
     }
     Ok(())
 }
