@@ -99,6 +99,10 @@ impl Runtime {
     pub fn persist_application_error(&self, grpc_status: Status) {
         // extract the type of udf container based on the error message
         let container_name = extract_container_name(grpc_status.message());
+        // we do not want to persist errors which do not have a container name
+        if container_name.is_empty() {
+            return;
+        }
         // create a directory for the container if it doesn't exist
         let dir_path = Path::new(&self.application_error_path).join(&container_name);
         if !dir_path.exists() {
@@ -106,9 +110,11 @@ impl Runtime {
         }
 
         // to check the number of files in the directory
+        // additional check in place to consider only files and not directories
         let mut files: Vec<_> = fs::read_dir(&dir_path)
             .expect("Failed to read application errors directory")
             .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.path().is_file())
             .collect();
 
         // sort the files based on timestamp
@@ -122,8 +128,10 @@ impl Runtime {
         // remove the oldest file if the number of files exceeds the limit
         if files.len() >= self.max_error_files_per_container {
             if let Some(oldest_file) = files.first() {
-                fs::remove_file(oldest_file.path())
-                    .expect("Failed to remove the oldest application error file");
+                if oldest_file.path().is_file() {
+                    fs::remove_file(oldest_file.path())
+                        .expect("Failed to remove the oldest application error file");
+                }
             }
         }
 
