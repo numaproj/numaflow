@@ -21,6 +21,7 @@ option go_package = "github.com/numaproj/numaflow/pkg/apis/proto/mvtxdaemon";
 import "google/api/annotations.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/wrappers.proto";
+import "google/protobuf/timestamp.proto";
 
 package mvtxdaemon;
 
@@ -48,6 +49,31 @@ message GetMonoVertexStatusResponse {
   MonoVertexStatus status = 1;
 }
 
+// GetMonoVertexErrorsRequest is a request message for retrieving the errors for a mono vertex.
+message GetMonoVertexErrorsRequest {
+  string monoVertex = 1;
+}
+
+// ContainerError is used to provide information for a container error
+// including timestamp, error code, message and details
+message ContainerError {
+  string container = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string code = 3;
+  string message = 4;
+  string details = 5;
+}
+
+// ReplicaErrors is used to provide all the container errors for a replica
+message ReplicaErrors {
+  string replica = 1;
+  repeated ContainerError containerErrors = 2;
+}
+
+message GetMonoVertexErrorsResponse {
+  repeated ReplicaErrors errors = 1;
+}
+
 // MonoVertexDaemonService is a grpc service that is used to provide APIs for giving any MonoVertex information.
 service MonoVertexDaemonService {
 
@@ -59,4 +85,7 @@ service MonoVertexDaemonService {
     option (google.api.http).get = "/api/v1/status";
   };
 
+  rpc GetMonoVertexErrors (GetMonoVertexErrorsRequest) returns (GetMonoVertexErrorsResponse) {
+    option (google.api.http).get = "/api/v1/mono-vertices/{monoVertex}/errors";
+  };
 }

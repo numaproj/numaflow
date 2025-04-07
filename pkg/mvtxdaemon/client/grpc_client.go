@@ -62,6 +62,15 @@ func (dc *grpcClient) GetMonoVertexStatus(ctx context.Context) (*mvtxdaemon.Mono
 	}
 }
 
+// GetMonoVertexErrors returns the []ReplicaErrors response instance for GetMonoVertexErrorsRequest
+func (dc *grpcClient) GetMonoVertexErrors(ctx context.Context, monoVertex string) ([]*mvtxdaemon.ReplicaErrors, error) {
+	if rspn, err := dc.client.GetMonoVertexErrors(ctx, &mvtxdaemon.GetMonoVertexErrorsRequest{MonoVertex: monoVertex}); err != nil {
+		return nil, err
+	} else {
+		return rspn.Errors, nil
+	}
+}
+
 // Close function closes the gRPC connection, it has to be called after a daemon client has finished all its jobs.
 func (dc *grpcClient) Close() error {
 	if dc.conn != nil {
