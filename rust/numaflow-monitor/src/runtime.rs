@@ -94,12 +94,23 @@ impl Runtime {
         }
     }
 
-    /// Persists a gRPC error as a JSON file in the appropriate container directory. Automatically manages
-    /// the number of files by removing the oldest file if the max file limit is exceeded.
+    /// Persists a gRPC error as a JSON file in the appropriate container directory.
+    /// It organizes error files in a directory structure based on container names and ensures that the
+    /// number of error files per container does not exceed a specified limit. If the limit is exceeded,
+    /// the oldest file is removed to make room for new entries.
+    ///
+    /// # Parameters:
+    /// - `grpc_status`: The gRPC error (`tonic::Status`) to be persisted.
+    ///
+    /// # Example:
+    /// ```rust
+    //  let grpc_status = Status::internal("UDF_EXECUTION_ERROR(container-name): Test error");
+    //  runtime.persist_application_error(grpc_status);
+    /// ```
     pub fn persist_application_error(&self, grpc_status: Status) {
         // extract the type of udf container based on the error message
         let container_name = extract_container_name(grpc_status.message());
-        // we do not want to persist errors which do not have a container name
+        // skip processing if the container name is empty
         if container_name.is_empty() {
             return;
         }
@@ -109,8 +120,8 @@ impl Runtime {
             fs::create_dir_all(&dir_path).expect("Failed to create application errors directory");
         }
 
-        // to check the number of files in the directory
-        // additional check in place to consider only files and not directories
+        // this is to check the number of files in the directory
+        // additional check in place to process only files and ignore directories
         let mut files: Vec<_> = fs::read_dir(&dir_path)
             .expect("Failed to read application errors directory")
             .filter_map(|entry| entry.ok())
@@ -119,19 +130,21 @@ impl Runtime {
 
         // sort the files based on timestamp
         files.sort_by_key(|e| {
-            e.file_name()
-                .to_str()
-                .and_then(|name| name.split('-').next())
-                .and_then(|timestamp| timestamp.parse::<i64>().ok())
+            if e.path().is_file() {
+                e.file_name()
+                    .to_str()
+                    .and_then(|name| name.split('-').next())
+                    .and_then(|timestamp| timestamp.parse::<i64>().ok())
+            } else {
+                None
+            }
         });
 
         // remove the oldest file if the number of files exceeds the limit
         if files.len() >= self.max_error_files_per_container {
             if let Some(oldest_file) = files.first() {
-                if oldest_file.path().is_file() {
-                    fs::remove_file(oldest_file.path())
-                        .expect("Failed to remove the oldest application error file");
-                }
+                fs::remove_file(oldest_file.path())
+                    .expect("Failed to remove the oldest application error file");
             }
         }
 
@@ -140,8 +153,8 @@ impl Runtime {
             RuntimeErrorEntry::from((&grpc_status, container_name.as_str(), timestamp));
         let json_str: String = runtime_error_entry.into();
 
-        // we create a file current.json and write into this file first
-        // rename it back to <timestamp>-numa.json once write operation is completed
+        // Write the error details to a temporary file (`current-numa.json`) and rename it to a
+        // timestamped file once the write operation is complete.
         // this is to ensure that while reading we skip this file to avoid race condition
         let current_file_path = dir_path.join(CURRENT_FILE);
         // append numa to the file name to avoid collision with files written from udf with same timestamp
