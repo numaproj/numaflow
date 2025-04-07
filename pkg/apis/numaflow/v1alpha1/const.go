@@ -150,10 +150,9 @@ const (
 	EnvServingPort                      = "NUMAFLOW_SERVING_APP_LISTEN_PORT"
 	EnvServingMinPipelineSpec           = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC"
 	EnvServingHostIP                    = "NUMAFLOW_SERVING_HOST_IP"
-
-	EnvExecuteRustBinary = "NUMAFLOW_EXECUTE_RUST_BINARY"
-
-	EnvK8sServerVersion = "K8S_SERVER_VERSION"
+	EnvExecuteRustBinary                = "NUMAFLOW_EXECUTE_RUST_BINARY"
+	EnvK8sServerVersion                 = "K8S_SERVER_VERSION"
+	EnvGrpcAlpnEnabled                  = "false" // FIXME: should be removed once grpc go supports a way to disable alpn without setting env
 
 	PathVarRun                  = "/var/run/numaflow"
 	VertexMetricsPort           = 2469

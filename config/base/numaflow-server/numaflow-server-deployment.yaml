@@ -149,6 +149,8 @@ spec:
                 name: numaflow-cmd-params-config
                 key: server.daemon.client.protocol
                 optional: true
+          - name: GRPC_ENFORCE_ALPN_ENABLED
+            value: "false"
           resources:
             limits:
               cpu: 500m

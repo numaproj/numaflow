@@ -29447,6 +29447,8 @@ spec:
               key: controller.leader.election.lease.renew.period
               name: numaflow-cmd-params-config
               optional: true
+        - name: GRPC_ENFORCE_ALPN_ENABLED
+          value: "false"
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
         livenessProbe:
@@ -29665,6 +29667,8 @@ spec:
               key: server.daemon.client.protocol
               name: numaflow-cmd-params-config
               optional: true
+        - name: GRPC_ENFORCE_ALPN_ENABLED
+          value: "false"
         image: quay.io/numaproj/numaflow:latest
         imagePullPolicy: Always
         livenessProbe:
