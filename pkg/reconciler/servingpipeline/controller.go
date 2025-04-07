@@ -427,7 +427,7 @@ func (r *servingPipelineReconciler) createOrUpdateServingService(ctx context.Con
 }
 
 // checkChildrenResourceStatus checks the status of the children resources of the pipeline
-func (r *servingPipelineReconciler) checkChildrenResourceStatus(_ context.Context, spl *dfv1.ServingPipeline) error {
+func (r *servingPipelineReconciler) checkChildrenResourceStatus(ctx context.Context, spl *dfv1.ServingPipeline) error {
 	defer func() {
 		for _, c := range spl.Status.Conditions {
 			if c.Status != metav1.ConditionTrue {
@@ -439,6 +439,38 @@ func (r *servingPipelineReconciler) checkChildrenResourceStatus(_ context.Contex
 		spl.Status.Message = ""
 	}()
 
-	// TODO: add other logic
+	var pipeline dfv1.Pipeline
+	if err := r.client.Get(ctx, client.ObjectKey{Namespace: spl.GetNamespace(), Name: spl.GetPipelineName()}, &pipeline); err != nil {
+		if apierrors.IsNotFound(err) {
+			spl.Status.SetPhase(dfv1.ServingPipelinePhaseFailed, "ServingPipeline's sub-pipeline doesn't exist")
+			return nil
+		}
+		spl.Status.SetPhase(dfv1.ServingPipelinePhaseFailed, err.Error())
+		return err
+	}
+
+	if pipeline.Status.Phase != dfv1.PipelinePhaseRunning {
+		err := fmt.Errorf("expected ServingPipeline's sub-pipeline in running state. Current state=%s", pipeline.Status.Phase)
+		spl.Status.SetPhase(dfv1.ServingPipelinePhaseFailed, err.Error())
+		return err
+	}
+
+	var servingServer appv1.Deployment
+	if err := r.client.Get(ctx, client.ObjectKey{Namespace: spl.GetNamespace(), Name: spl.GetServingServerName()}, &servingServer); err != nil {
+		if apierrors.IsNotFound(err) {
+			spl.Status.SetPhase(dfv1.ServingPipelinePhaseFailed, "Serving server deployment is not found")
+			return nil
+		}
+		spl.Status.SetPhase(dfv1.ServingPipelinePhaseFailed, err.Error())
+		return err
+	}
+
+	if status, reason, msg := reconciler.CheckDeploymentStatus(&servingServer); !status {
+		err := fmt.Errorf("serving server deployment is not healthy: %s, message=%s", reason, msg)
+		spl.Status.SetPhase(dfv1.ServingPipelinePhaseFailed, err.Error())
+		return err
+	}
+
+	spl.Status.MarkPhaseRunning()
 	return nil
 }
