@@ -170,20 +170,19 @@ impl TryFrom<HashMap<String, String>> for Settings {
             ))
         })?;
 
-        let nats_username = env_vars
-            .get(ENV_NUMAFLOW_SERVING_JETSTREAM_USER)
-            .ok_or_else(|| {
-                ParseConfig(format!(
-                    "Environment variable '{ENV_NUMAFLOW_SERVING_JETSTREAM_USER}' is not set"
-                ))
-            })?;
-        let nats_password = env_vars
-            .get("NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD")
-            .ok_or_else(|| {
-                ParseConfig(format!(
-                    "Environment variable '{ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD}' is not set"
-                ))
-            })?;
+        let nats_username = env_vars.get(ENV_NUMAFLOW_SERVING_JETSTREAM_USER);
+        let nats_basic_auth = match nats_username {
+            Some(username) => {
+                let nats_passwd = env_vars
+                    .get("NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD")
+                    .ok_or_else(|| {
+                        ParseConfig(format!(
+                    "Environment variable '{ENV_NUMAFLOW_SERVING_JETSTREAM_USER}' is set, but '{ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD}' is not set"
+                ))})?;
+                Some((username.into(), nats_passwd.into()))
+            }
+            None => None,
+        };
 
         let js_store =  env_vars.get("NUMAFLOW_SERVING_KV_STORE").ok_or_else(|| {
             ParseConfig("Serving store is default, but environment variable NUMAFLOW_SERVING_KV_STORE is not set".into())
@@ -192,7 +191,7 @@ impl TryFrom<HashMap<String, String>> for Settings {
         let mut settings = Settings {
             pipeline_spec,
             js_callback_store: js_store.into(),
-            nats_basic_auth: Some((nats_username.into(), nats_password.into())),
+            nats_basic_auth,
             js_message_stream: js_source_spec.stream,
             jetstream_url: js_source_spec.url,
             ..Default::default()
