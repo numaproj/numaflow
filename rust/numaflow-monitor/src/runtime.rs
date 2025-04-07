@@ -130,14 +130,10 @@ impl Runtime {
 
         // sort the files based on timestamp
         files.sort_by_key(|e| {
-            if e.path().is_file() {
-                e.file_name()
-                    .to_str()
-                    .and_then(|name| name.split('-').next())
-                    .and_then(|timestamp| timestamp.parse::<i64>().ok())
-            } else {
-                None
-            }
+            e.file_name()
+                .to_str()
+                .and_then(|name| name.split('-').next())
+                .and_then(|timestamp| timestamp.parse::<i64>().ok())
         });
 
         // remove the oldest file if the number of files exceeds the limit
@@ -340,6 +336,42 @@ mod tests {
         // Verify the file name format
         let file_name = files[0].file_name().into_string().unwrap();
         assert!(file_name.ends_with(".json"));
+    }
+
+    #[test]
+    fn test_persist_application_error_with_empty_container_name() {
+        // Create a temporary directory for testing
+        let temp_dir = tempdir().unwrap();
+        let application_error_path = temp_dir.path().to_str().unwrap().to_string();
+
+        // Create a Runtime instance with the temporary directory path
+        let runtime = Runtime {
+            application_error_path,
+            max_error_files_per_container: 5,
+        };
+
+        // Create a mock gRPC status with an empty container name
+        let grpc_status = Status::internal("UDF_EXECUTION_ERROR: Test error message");
+
+        // Verify that container name is empty for below grpc_status
+        let container_name = extract_container_name(grpc_status.message());
+        assert!(container_name.is_empty());
+
+        // Call the function to test
+        runtime.persist_application_error(grpc_status.clone());
+
+        // Verify that no files were created in the directory
+        let dir_path = Path::new(&runtime.application_error_path).join(&container_name);
+        if dir_path.exists() {
+            let files: Vec<_> = fs::read_dir(&dir_path)
+                .unwrap()
+                .filter_map(|entry| entry.ok())
+                .collect();
+            assert!(
+                files.is_empty(),
+                "No files should be created in the directory"
+            );
+        }
     }
 
     #[test]
