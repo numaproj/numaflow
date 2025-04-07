@@ -440,5 +440,6 @@ func (r *servingPipelineReconciler) checkChildrenResourceStatus(_ context.Contex
 	}()
 
 	// TODO: add other logic
+	spl.Status.MarkPhaseRunning()
 	return nil
 }
