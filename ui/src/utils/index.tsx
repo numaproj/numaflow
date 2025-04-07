@@ -194,55 +194,14 @@ export function quantityToScalar(quantity: string): number | bigint {
   }
 }
 
-
-export function calculateMemoryPercent(usageMemory: string, requestedMemory: string): string {
-  try {
-    // Extract numeric values from strings (removing "Mi" suffix)
-    const usage = parseInt(usageMemory.replace("Mi", ""), 10);
-    const request = parseInt(requestedMemory.replace("Mi", ""), 10);
-
-    // Handle invalid input or zero requested memory
-    if (isNaN(usage) || isNaN(request) || request === 0) {
-      return "unavailable"
-    }
-
-    // Calculate percentage
-    const percent = (usage / request) * 100;
-    return `${percent.toFixed(2)}%`;
-
-  } catch (error) {
-    return "unavailable";
-  }
-}
-
-export function calculateCPUPercent(usageCPU: string, requestedCPU: string): string{
-  try {
-    // Extract numeric values from strings (removing "m" suffix)
-    const usage = parseInt(usageCPU.replace("m", ""), 10);
-    const request = parseInt(requestedCPU.replace("m", ""), 10);
-
-    // Handle invalid input or zero requested CPU
-    if (isNaN(usage) || isNaN(request) || request === 0) {
-      return "unavailable"; 
-    }
-
-    // Calculate percentage
-    const percent = (usage / request) * 100;
-    return `${percent.toFixed(2)}%`; 
-  } catch (error) {
-    return "unavailable"; 
-  }
-}
-
-
 export function getPodContainerUsePercentages(
   pod: Pod,
   podDetails: PodDetail,
   containerName: string
 ): ResourceUsage {
   if (
-    podDetails?.containerMap instanceof Map === true &&
-    pod.containerSpecMap instanceof Map === true
+    podDetails?.containerMap instanceof Map &&
+    pod.containerSpecMap instanceof Map
   ) {
     const usedCPUParsed: number | undefined =
       podDetails?.containerMap?.get(containerName)?.cpuParsed;
@@ -467,6 +426,41 @@ export const timeAgo = (timestamp: string) => {
         return Math.floor(seconds / format[2]) + " " + format[1] + " " + token;
     }
   return time;
+};
+
+export function formatDuration(seconds: number, precision = 1) {
+  const timeUnits = [
+    { unit: "d", seconds: 86400 },
+    { unit: "h", seconds: 3600 },
+    { unit: "m", seconds: 60 },
+    { unit: "s", seconds: 1 },
+  ];
+
+  let remainingSeconds = Math.abs(Math.round(seconds));
+  const figs = [];
+
+  for (const { unit, seconds: unitSeconds } of timeUnits) {
+    if (
+      remainingSeconds >= unitSeconds ||
+      (unit === "s" && Math.round(seconds) === 0)
+    ) {
+      const value = Math.floor(remainingSeconds / unitSeconds);
+      figs.push(`${value}${unit}`);
+      remainingSeconds %= unitSeconds;
+    }
+  }
+
+  return figs.slice(0, precision).join(" ");
+}
+
+export const ago = (date: Date, precision?: number) => {
+  if (isNaN(date.getTime())) return "Invalid Date";
+
+  const secondsAgo = (new Date().getTime() - date.getTime()) / 1000;
+  const duration = formatDuration(secondsAgo, precision);
+
+  if (secondsAgo < 0) return "in " + duration;
+  else return duration + " ago";
 };
 
 export const PIPELINE_STATUS_TOOLTIP =
