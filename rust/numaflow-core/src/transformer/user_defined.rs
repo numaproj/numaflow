@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use numaflow_monitor::runtime::Runtime;
 use numaflow_pb::clients::sourcetransformer::{
     self, source_transform_client::SourceTransformClient, SourceTransformRequest,
     SourceTransformResponse,
@@ -30,6 +31,7 @@ pub(super) struct UserDefinedTransformer {
     read_tx: mpsc::Sender<SourceTransformRequest>,
     senders: ResponseSenderMap,
     task_handle: tokio::task::JoinHandle<()>,
+    runtime: Runtime,
 }
 
 /// Aborts the background task when the UserDefinedTransformer is dropped.
@@ -109,6 +111,7 @@ impl UserDefinedTransformer {
             read_tx,
             senders: sender_map,
             task_handle,
+            runtime: Runtime::new(None),
         };
 
         Ok(transformer)
@@ -131,6 +134,15 @@ impl UserDefinedTransformer {
             }
         } {
             let msg_id = resp.id;
+
+            // Check if the response has an empty results array
+            // this means we received nil/null as a response from tansform fn
+            // should we wait indefinitely just like sink (we receive EOT and compare length of requests & responses)
+            // or should we return error from sdk's - restarting
+            //
+            // if resp.results.is_empty() {}
+            //
+
             if let Some((msg_info, sender)) = sender_map.lock().await.remove(&msg_id) {
                 let mut response_messages = vec![];
                 for (i, result) in resp.results.into_iter().enumerate() {
