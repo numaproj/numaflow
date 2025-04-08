@@ -104,14 +104,18 @@ impl Runtime {
     ///
     /// # Example:
     /// ```rust
-    //  let grpc_status = Status::internal("UDF_EXECUTION_ERROR(container-name): Test error");
-    //  runtime.persist_application_error(grpc_status);
+    ///  use numaflow_monitor::runtime::Runtime;
+    ///  let grpc_status = tonic::Status::internal("UDF_EXECUTION_ERROR(container-name): Test error");
+    ///  Runtime::new(None).persist_application_error(grpc_status);
     /// ```
     pub fn persist_application_error(&self, grpc_status: Status) {
         // extract the type of udf container based on the error message
         let container_name = extract_container_name(grpc_status.message());
-        // skip processing if the container name is empty
+        // skip processing if the container name is empty. This happens only if
+        // the gRPC status is not created by us (e.g., unknown bugs like https://github.com/grpc/grpc-go/issues/7641)
+        // TODO: we should try to expose this in the UI if we encounter a few of this in prod.
         if container_name.is_empty() {
+            error!(?grpc_status, "unknown-container");
             return;
         }
         // create a directory for the container if it doesn't exist
