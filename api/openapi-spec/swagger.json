@@ -23121,8 +23121,7 @@
         "imagePullPolicy",
         "image",
         "volumeMounts",
-        "resources",
-        "executeRustBinary"
+        "resources"
       ],
       "properties": {
         "env": {
@@ -23130,9 +23129,6 @@
           "items": {
             "$ref": "#/definitions/io.k8s.api.core.v1.EnvVar"
           }
-        },
-        "executeRustBinary": {
-          "type": "boolean"
         },
         "image": {
           "type": "string"

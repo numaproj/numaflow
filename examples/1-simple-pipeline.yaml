@@ -5,6 +5,10 @@ metadata:
 spec:
   vertices:
     - name: in
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       scale:
         min: 1
       # A self data generating source
@@ -13,12 +17,20 @@ spec:
           rpu: 5
           duration: 1s
     - name: cat
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       scale:
         min: 1
       udf:
-        builtin:
-          name: cat # A built-in UDF which simply cats the message
+        container:
+          image: quay.io/numaio/numaflow-go/map-forward-message:stable
     - name: out
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       scale:
         min: 1
       sink:

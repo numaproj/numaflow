@@ -23144,9 +23144,6 @@
           },
           "type": "array"
         },
-        "executeRustBinary": {
-          "type": "boolean"
-        },
         "image": {
           "type": "string"
         },
@@ -23172,8 +23169,7 @@
         "imagePullPolicy",
         "image",
         "volumeMounts",
-        "resources",
-        "executeRustBinary"
+        "resources"
       ],
       "type": "object"
     }
