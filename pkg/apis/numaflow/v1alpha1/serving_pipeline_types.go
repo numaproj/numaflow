@@ -25,6 +25,7 @@ import (
 
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	intstr "k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -187,6 +188,23 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 		},
 	}
 	envVars = append(envVars, req.Env...)
+
+	varVolumeName := "var-run-numaflow"
+	volumes := []corev1.Volume{
+		{
+			Name: varVolumeName,
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{
+				Medium: corev1.StorageMediumMemory,
+			}},
+		},
+		{
+			Name: RuntimeDirVolume,
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{
+				SizeLimit: resource.NewQuantity(RuntimeDirSizeLimit, resource.BinarySI),
+			}},
+		},
+	}
+	volumeMounts := []corev1.VolumeMount{{Name: varVolumeName, MountPath: PathVarRun}}
 	c := corev1.Container{
 		Ports:           []corev1.ContainerPort{{ContainerPort: ServingServicePort}},
 		Name:            CtrMain,
@@ -196,6 +214,7 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 		Env:             envVars,
 		Command:         []string{NumaflowRustBinary},
 		Args:            []string{"--serving"},
+		VolumeMounts:    volumeMounts,
 	}
 	labels := map[string]string{
 		KeyPartOf:              Project,
@@ -216,14 +235,24 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 			Spec: corev1.PodSpec{
 				Containers:     []corev1.Container{c},
 				InitContainers: []corev1.Container{sp.getStreamValidationInitContainerSpec(req)},
+				Volumes:        volumes,
 			},
 		},
 	}
+
+	containerRequest := getContainerReq{
+		env:             envVars,
+		image:           req.Image,
+		imagePullPolicy: req.PullPolicy,
+		resources:       req.DefaultResources,
+		volumeMounts:    volumeMounts,
+	}
+
 	// TODO: (k8s 1.29)  clean this up once we deprecate the support for k8s < 1.29
 	if isSidecarSupported() {
-		spec.Template.Spec.InitContainers = append(spec.Template.Spec.InitContainers, sp.getStoreSidecarContainerSpec(req)...)
+		spec.Template.Spec.InitContainers = append(spec.Template.Spec.InitContainers, sp.getStoreSidecarContainerSpec(containerRequest)...)
 	} else {
-		spec.Template.Spec.Containers = append(spec.Template.Spec.Containers, sp.getStoreSidecarContainerSpec(req)...)
+		spec.Template.Spec.Containers = append(spec.Template.Spec.Containers, sp.getStoreSidecarContainerSpec(containerRequest)...)
 	}
 	// TODO(spl): add template
 	return &appv1.Deployment{
@@ -243,6 +272,15 @@ func (sp ServingPipeline) GetPipelineObj(req GetServingPipelineResourceReq) Pipe
 	servingSourceSettings, _ := json.Marshal(sp.Spec.Serving)
 	encodedServingSourceSettings := base64.StdEncoding.EncodeToString(servingSourceSettings)
 	// The pipeline spec should have been validated
+
+	containerReq := getContainerReq{
+		env:             req.Env,
+		image:           req.Image,
+		imagePullPolicy: req.PullPolicy,
+		resources:       req.DefaultResources,
+		volumeMounts:    []corev1.VolumeMount{{Name: "var-run-numaflow", MountPath: PathVarRun}},
+	}
+
 	plSpec := sp.Spec.Pipeline.DeepCopy()
 	for i := range plSpec.Vertices {
 		if plSpec.Vertices[i].IsASource() { // Must be serving source, replace it
@@ -256,9 +294,9 @@ func (sp ServingPipeline) GetPipelineObj(req GetServingPipelineResourceReq) Pipe
 		if plSpec.Vertices[i].IsASink() {
 			// TODO: (k8s 1.29)  clean this up once we deprecate the support for k8s < 1.29
 			if isSidecarSupported() {
-				plSpec.Vertices[i].InitContainers = append(plSpec.Vertices[i].InitContainers, sp.getStoreSidecarContainerSpec(req)...)
+				plSpec.Vertices[i].InitContainers = append(plSpec.Vertices[i].InitContainers, sp.getStoreSidecarContainerSpec(containerReq)...)
 			} else {
-				plSpec.Vertices[i].Sidecars = append(plSpec.Vertices[i].Sidecars, sp.getStoreSidecarContainerSpec(req)...)
+				plSpec.Vertices[i].Sidecars = append(plSpec.Vertices[i].Sidecars, sp.getStoreSidecarContainerSpec(containerReq)...)
 			}
 		}
 		if plSpec.Vertices[i].ContainerTemplate == nil {
@@ -267,8 +305,9 @@ func (sp ServingPipeline) GetPipelineObj(req GetServingPipelineResourceReq) Pipe
 		plSpec.Vertices[i].ContainerTemplate.Env = append(
 			plSpec.Vertices[i].ContainerTemplate.Env,
 			corev1.EnvVar{Name: EnvCallbackEnabled, Value: "true"},
-			corev1.EnvVar{Name: "NUMAFLOW_SERVING_SOURCE_SETTINGS", Value: encodedServingSourceSettings},
-			corev1.EnvVar{Name: "NUMAFLOW_SERVING_KV_STORE", Value: fmt.Sprintf("%s_SERVING_KV_STORE", sp.GetServingStoreName())},
+			corev1.EnvVar{Name: EnvServingSettings, Value: encodedServingSourceSettings},
+			corev1.EnvVar{Name: EnvServingStore, Value: fmt.Sprintf("%s_SERVING_KV_STORE", sp.GetServingStoreName())},
+			corev1.EnvVar{Name: EnvNumaflowRuntime, Value: "rust"},
 		)
 	}
 	labels := map[string]string{
@@ -342,14 +381,16 @@ func (sp ServingPipeline) getStreamValidationInitContainerSpec(req GetServingPip
 	return c
 }
 
-func (sp ServingPipeline) getStoreSidecarContainerSpec(req GetServingPipelineResourceReq) []corev1.Container {
+func (sp ServingPipeline) getStoreSidecarContainerSpec(req getContainerReq) []corev1.Container {
 	if x := sp.Spec.Serving.ServingStore; x != nil && x.Container != nil {
 		cb := containerBuilder{}.
 			name(CtrUdStore).
 			image(x.Container.Image).
-			imagePullPolicy(req.PullPolicy). // Default pull policy
+			imagePullPolicy(req.imagePullPolicy). // Default pull policy,
 			appendEnv(x.Container.Env...).
+			appendEnv(corev1.EnvVar{Name: EnvUDContainerType, Value: UDContainerStore}).
 			appendVolumeMounts(x.Container.VolumeMounts...).
+			appendVolumeMounts(req.volumeMounts...).
 			resources(x.Container.Resources).
 			securityContext(x.Container.SecurityContext).
 			appendEnvFrom(x.Container.EnvFrom...).

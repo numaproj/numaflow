@@ -154,13 +154,12 @@ const (
 	EnvServingPort                      = "NUMAFLOW_SERVING_APP_LISTEN_PORT"
 	EnvServingMinPipelineSpec           = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC"
 	EnvServingHostIP                    = "NUMAFLOW_SERVING_HOST_IP"
+	EnvK8sServerVersion                 = "K8S_SERVER_VERSION"
+	EnvNumaflowRuntime                  = "NUMAFLOW_RUNTIME"
+	EnvServingSettings                  = "NUMAFLOW_SERVING_SOURCE_SETTINGS"
+	EnvServingStore                     = "NUMAFLOW_SERVING_KV_STORE"
 
-	EnvExecuteRustBinary = "NUMAFLOW_EXECUTE_RUST_BINARY"
-
-	NumaflowRustBinary = "/bin/numaflow-rs"
-
-	EnvK8sServerVersion = "K8S_SERVER_VERSION"
-
+	NumaflowRustBinary          = "/bin/numaflow-rs"
 	PathVarRun                  = "/var/run/numaflow"
 	VertexMetricsPort           = 2469
 	VertexMetricsPortName       = "metrics"

@@ -1607,21 +1607,7 @@ message ServingPipelineStatus {
 }
 
 // ServingSource is the HTTP endpoint for Numaflow.
-// TODO(spl): clean up
 message ServingSource {
-  // +optional
-  optional Authorization auth = 1;
-
-  // Whether to create a ClusterIP Service
-  // +optional
-  optional bool service = 2;
-
-  // The header key from which the message id will be extracted
-  optional string msgIDHeaderKey = 3;
-
-  // Request timeout in seconds. Default value is 120 seconds.
-  // +optional
-  optional uint32 requestTimeoutSeconds = 4;
 }
 
 message ServingSpec {

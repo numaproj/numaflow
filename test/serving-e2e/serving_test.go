@@ -28,7 +28,6 @@ import (
 	"github.com/numaproj/numaflow/test/fixtures"
 )
 
-//go:generate kubectl -n numaflow-system set env deploy/numaflow-controller NUMAFLOW_EXECUTE_RUST_BINARY=true
 //go:generate kubectl -n numaflow-system delete -f testdata/serving-pipeline-cat.yaml --ignore-not-found=true
 //go:generate kubectl -n numaflow-system wait --for=condition=ready pod -l app.kubernetes.io/name=controller-manager --timeout 30s
 

@@ -1,18 +1,15 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: ServingPipeline
 metadata:
-  name: serving-pipeline
+  name: serving-sse-pipeline
 spec:
   serving:
     service: true
     msgIDHeaderKey: "X-Numaflow-Id"
-    store:
-      container:
-        image: quay.io/numaio/numaflow-go/serving-redis-store:stable
-
   pipeline:
     vertices:
       - name: serving-in
+        servingStoreName: default
         scale:
           min: 1
         source:
@@ -23,9 +20,10 @@ spec:
           min: 1
         udf:
           container:
-            image: quay.io/numaio/numaflow-go/map-forward-message:stable
+            image: quay.io/numaio/numaflow-go/map-flatmap-stream:latest
 
       - name: serve-sink
+        servingStoreName: default
         scale:
           min: 1
         sink:
@@ -38,6 +36,3 @@ spec:
         to: cat
       - from: cat
         to: serve-sink
-
-
-
