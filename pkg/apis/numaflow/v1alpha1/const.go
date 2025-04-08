@@ -154,7 +154,6 @@ const (
 	EnvServingPort                      = "NUMAFLOW_SERVING_APP_LISTEN_PORT"
 	EnvServingMinPipelineSpec           = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC"
 	EnvServingHostIP                    = "NUMAFLOW_SERVING_HOST_IP"
-	EnvGrpcAlpnEnabled                  = "GRPC_ENFORCE_ALPN_ENABLED" // FIXME: should be removed once grpc go supports a way to disable alpn without setting env
 	EnvK8sServerVersion                 = "K8S_SERVER_VERSION"
 	EnvNumaflowRuntime                  = "NUMAFLOW_RUNTIME"
 	EnvServingSettings                  = "NUMAFLOW_SERVING_SOURCE_SETTINGS"
