@@ -44,12 +44,14 @@ verbose_file_reads = "warn"
 # and increased build time (with only one line change in code) from 12 seconds to 133 seconds (tested on Mac M2 Max).
 [profile.release]
 lto = "fat"
-# Below settings optimizes for short build times at the expense of larger binary size and slower runtime performance
-# If you have to rebuild image often, uncomment below options and comment out above 'lto' setting
-# lto = "off"
-# opt-level = 0
-# incremental = true
-# codegen-units = 256
+
+# This profile optimizes for short build times at the expense of larger binary size and slower runtime performance.
+# If you have to rebuild image often, in Dockerfile you may replace `--release` passed to cargo command with `--profile quick-release`
+[profile.quick-release]
+inherits = "release"
+codegen-units = 16
+lto = false
+incremental = true
 
 [workspace.dependencies]
 serving = { path = "serving" }
