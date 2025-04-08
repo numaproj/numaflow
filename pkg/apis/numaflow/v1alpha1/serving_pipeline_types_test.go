@@ -188,13 +188,13 @@ func Test_getStoreSidecarContainerSpec(t *testing.T) {
 		},
 	}
 
-	req := GetServingPipelineResourceReq{
-		Image:            "default-image",
-		PullPolicy:       corev1.PullIfNotPresent,
-		DefaultResources: corev1.ResourceRequirements{},
+	containerReq := getContainerReq{
+		image:           "default-image",
+		imagePullPolicy: corev1.PullIfNotPresent,
+		resources:       corev1.ResourceRequirements{},
 	}
 
-	containers := sp.getStoreSidecarContainerSpec(req)
+	containers := sp.getStoreSidecarContainerSpec(containerReq)
 	assert.Equal(t, 1, len(containers))
 	container := containers[0]
 
