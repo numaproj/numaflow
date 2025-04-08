@@ -60,9 +60,6 @@ func (s Sink) getContainers(req getContainerReq) ([]corev1.Container, []corev1.C
 	if s.Fallback != nil && s.Fallback.UDSink != nil {
 		sidecarContainers = append(sidecarContainers, s.getFallbackUDSinkContainer(req))
 	}
-	if req.servingStore != nil && req.servingStore.Container != nil {
-		sidecarContainers = append(sidecarContainers, req.servingStore.getUDStoreContainer(req))
-	}
 	return sidecarContainers, containers, nil
 }
 

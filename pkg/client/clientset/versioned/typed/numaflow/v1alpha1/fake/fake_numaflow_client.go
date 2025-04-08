@@ -40,6 +40,10 @@ func (c *FakeNumaflowV1alpha1) Pipelines(namespace string) v1alpha1.PipelineInte
 	return &FakePipelines{c, namespace}
 }
 
+func (c *FakeNumaflowV1alpha1) ServingPipelines(namespace string) v1alpha1.ServingPipelineInterface {
+	return &FakeServingPipelines{c, namespace}
+}
+
 func (c *FakeNumaflowV1alpha1) Vertices(namespace string) v1alpha1.VertexInterface {
 	return &FakeVertices{c, namespace}
 }

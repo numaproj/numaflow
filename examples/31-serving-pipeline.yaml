@@ -1,0 +1,27 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: ServingPipeline
+metadata:
+  name: simple-pipeline
+spec:
+  serving:
+    service: true
+    msgIDHeaderKey: "X-Numaflow-Id"
+  pipeline:
+    vertices:
+      - name: in
+        source:
+          serving:
+            msgIDHeaderKey: "X-Numaflow-Id"
+      - name: cat
+        udf:
+          builtin:
+            name: cat # A built-in UDF which simply cats the message
+      - name: out
+        sink:
+          # A simple log printing sink
+          log: {}
+    edges:
+      - from: in
+        to: cat
+      - from: cat
+        to: out
