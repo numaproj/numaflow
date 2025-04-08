@@ -26,21 +26,22 @@ const (
 	Project = "numaflow"
 
 	// label/annotation keys.
-	KeyInstance         = "numaflow.numaproj.io/instance" // instance key of the object
-	KeyHash             = "numaflow.numaproj.io/hash"     // hash of the object
-	KeyComponent        = "app.kubernetes.io/component"
-	KeyPartOf           = "app.kubernetes.io/part-of"
-	KeyManagedBy        = "app.kubernetes.io/managed-by"
-	KeyAppName          = "app.kubernetes.io/name"
-	KeyISBSvcName       = "numaflow.numaproj.io/isbsvc-name"
-	KeyISBSvcType       = "numaflow.numaproj.io/isbsvc-type"
-	KeyPipelineName     = "numaflow.numaproj.io/pipeline-name"
-	KeyVertexName       = "numaflow.numaproj.io/vertex-name"
-	KeyMonoVertexName   = "numaflow.numaproj.io/mono-vertex-name"
-	KeyReplica          = "numaflow.numaproj.io/replica"
-	KeySideInputName    = "numaflow.numaproj.io/side-input-name"
-	KeyPauseTimestamp   = "numaflow.numaproj.io/pause-timestamp"
-	KeyDefaultContainer = "kubectl.kubernetes.io/default-container"
+	KeyInstance            = "numaflow.numaproj.io/instance" // instance key of the object
+	KeyHash                = "numaflow.numaproj.io/hash"     // hash of the object
+	KeyComponent           = "app.kubernetes.io/component"
+	KeyPartOf              = "app.kubernetes.io/part-of"
+	KeyManagedBy           = "app.kubernetes.io/managed-by"
+	KeyAppName             = "app.kubernetes.io/name"
+	KeyISBSvcName          = "numaflow.numaproj.io/isbsvc-name"
+	KeyISBSvcType          = "numaflow.numaproj.io/isbsvc-type"
+	KeyPipelineName        = "numaflow.numaproj.io/pipeline-name"
+	KeyVertexName          = "numaflow.numaproj.io/vertex-name"
+	KeyMonoVertexName      = "numaflow.numaproj.io/mono-vertex-name"
+	KeyServingPipelineName = "numaflow.numaproj.io/serving-pipeline-name"
+	KeyReplica             = "numaflow.numaproj.io/replica"
+	KeySideInputName       = "numaflow.numaproj.io/side-input-name"
+	KeyPauseTimestamp      = "numaflow.numaproj.io/pause-timestamp"
+	KeyDefaultContainer    = "kubectl.kubernetes.io/default-container"
 
 	// ID key in the header of sources like http
 	KeyMetaID          = "X-Numaflow-Id"
@@ -98,12 +99,15 @@ const (
 	ComponentSideInputManager  = "side-inputs-manager"
 	ComponentUXServer          = "numaflow-ux"
 	ComponentControllerManager = "controller-manager"
+	ComponentPipeline          = "pipeline"
+	ComponentServingServer     = "serving-server"
 
 	// controllers
-	ControllerISBSvc     = "isbsvc-controller"
-	ControllerPipeline   = "pipeline-controller"
-	ControllerVertex     = "vertex-controller"
-	ControllerMonoVertex = "mono-vertex-controller"
+	ControllerISBSvc          = "isbsvc-controller"
+	ControllerPipeline        = "pipeline-controller"
+	ControllerVertex          = "vertex-controller"
+	ControllerMonoVertex      = "mono-vertex-controller"
+	ControllerServingPipeline = "serving-pipeline-controller"
 
 	// ENV vars
 	EnvNamespace                        = "NUMAFLOW_NAMESPACE"
@@ -150,11 +154,12 @@ const (
 	EnvServingPort                      = "NUMAFLOW_SERVING_APP_LISTEN_PORT"
 	EnvServingMinPipelineSpec           = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC"
 	EnvServingHostIP                    = "NUMAFLOW_SERVING_HOST_IP"
+	EnvK8sServerVersion                 = "K8S_SERVER_VERSION"
+	EnvNumaflowRuntime                  = "NUMAFLOW_RUNTIME"
+	EnvServingSettings                  = "NUMAFLOW_SERVING_SOURCE_SETTINGS"
+	EnvServingStore                     = "NUMAFLOW_SERVING_KV_STORE"
 
-	EnvExecuteRustBinary = "NUMAFLOW_EXECUTE_RUST_BINARY"
-
-	EnvK8sServerVersion = "K8S_SERVER_VERSION"
-
+	NumaflowRustBinary          = "/bin/numaflow-rs"
 	PathVarRun                  = "/var/run/numaflow"
 	VertexMetricsPort           = 2469
 	VertexMetricsPortName       = "metrics"
@@ -168,6 +173,7 @@ const (
 	MonoVertexMonitorPort       = 2470
 	MonoVertexMonitorPortName   = "monitor"
 	MonoVertexDaemonServicePort = 4327
+	ServingServicePort          = 8443
 
 	DefaultRequeueAfter = 10 * time.Second
 

@@ -39,6 +39,7 @@ const (
 	DaemonService_GetVertexMetrics_FullMethodName      = "/daemon.DaemonService/GetVertexMetrics"
 	DaemonService_GetPipelineWatermarks_FullMethodName = "/daemon.DaemonService/GetPipelineWatermarks"
 	DaemonService_GetPipelineStatus_FullMethodName     = "/daemon.DaemonService/GetPipelineStatus"
+	DaemonService_GetVertexErrors_FullMethodName       = "/daemon.DaemonService/GetVertexErrors"
 )
 
 // DaemonServiceClient is the client API for DaemonService service.
@@ -53,6 +54,7 @@ type DaemonServiceClient interface {
 	// GetPipelineWatermarks return the watermark of the given pipeline
 	GetPipelineWatermarks(ctx context.Context, in *GetPipelineWatermarksRequest, opts ...grpc.CallOption) (*GetPipelineWatermarksResponse, error)
 	GetPipelineStatus(ctx context.Context, in *GetPipelineStatusRequest, opts ...grpc.CallOption) (*GetPipelineStatusResponse, error)
+	GetVertexErrors(ctx context.Context, in *GetVertexErrorsRequest, opts ...grpc.CallOption) (*GetVertexErrorsResponse, error)
 }
 
 type daemonServiceClient struct {
@@ -113,6 +115,16 @@ func (c *daemonServiceClient) GetPipelineStatus(ctx context.Context, in *GetPipe
 	return out, nil
 }
 
+func (c *daemonServiceClient) GetVertexErrors(ctx context.Context, in *GetVertexErrorsRequest, opts ...grpc.CallOption) (*GetVertexErrorsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetVertexErrorsResponse)
+	err := c.cc.Invoke(ctx, DaemonService_GetVertexErrors_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DaemonServiceServer is the server API for DaemonService service.
 // All implementations must embed UnimplementedDaemonServiceServer
 // for forward compatibility
@@ -125,6 +137,7 @@ type DaemonServiceServer interface {
 	// GetPipelineWatermarks return the watermark of the given pipeline
 	GetPipelineWatermarks(context.Context, *GetPipelineWatermarksRequest) (*GetPipelineWatermarksResponse, error)
 	GetPipelineStatus(context.Context, *GetPipelineStatusRequest) (*GetPipelineStatusResponse, error)
+	GetVertexErrors(context.Context, *GetVertexErrorsRequest) (*GetVertexErrorsResponse, error)
 	mustEmbedUnimplementedDaemonServiceServer()
 }
 
@@ -146,6 +159,9 @@ func (UnimplementedDaemonServiceServer) GetPipelineWatermarks(context.Context, *
 }
 func (UnimplementedDaemonServiceServer) GetPipelineStatus(context.Context, *GetPipelineStatusRequest) (*GetPipelineStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetPipelineStatus not implemented")
+}
+func (UnimplementedDaemonServiceServer) GetVertexErrors(context.Context, *GetVertexErrorsRequest) (*GetVertexErrorsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetVertexErrors not implemented")
 }
 func (UnimplementedDaemonServiceServer) mustEmbedUnimplementedDaemonServiceServer() {}
 
@@ -250,6 +266,24 @@ func _DaemonService_GetPipelineStatus_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DaemonService_GetVertexErrors_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetVertexErrorsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DaemonServiceServer).GetVertexErrors(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DaemonService_GetVertexErrors_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DaemonServiceServer).GetVertexErrors(ctx, req.(*GetVertexErrorsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DaemonService_ServiceDesc is the grpc.ServiceDesc for DaemonService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -276,6 +310,10 @@ var DaemonService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetPipelineStatus",
 			Handler:    _DaemonService_GetPipelineStatus_Handler,
+		},
+		{
+			MethodName: "GetVertexErrors",
+			Handler:    _DaemonService_GetVertexErrors_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

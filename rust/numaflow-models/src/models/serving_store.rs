@@ -22,16 +22,13 @@ limitations under the License.
 pub struct ServingStore {
     #[serde(rename = "container")]
     pub container: Box<crate::models::Container>,
-    #[serde(rename = "name")]
-    pub name: String,
 }
 
 impl ServingStore {
     /// ServingStore defines information of a Serving Store used in a pipeline
-    pub fn new(container: crate::models::Container, name: String) -> ServingStore {
+    pub fn new(container: crate::models::Container) -> ServingStore {
         ServingStore {
             container: Box::new(container),
-            name,
         }
     }
 }

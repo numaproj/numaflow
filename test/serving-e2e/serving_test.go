@@ -28,8 +28,7 @@ import (
 	"github.com/numaproj/numaflow/test/fixtures"
 )
 
-//go:generate kubectl -n numaflow-system set env deploy/numaflow-controller NUMAFLOW_EXECUTE_RUST_BINARY=true
-//go:generate kubectl delete -f testdata/serving-pipeline-cat.yaml -n numaflow-system --ignore-not-found=true
+//go:generate kubectl -n numaflow-system delete -f testdata/serving-pipeline-cat.yaml --ignore-not-found=true
 //go:generate kubectl -n numaflow-system wait --for=condition=ready pod -l app.kubernetes.io/name=controller-manager --timeout 30s
 
 const Namespace = "numaflow-system"
@@ -64,17 +63,17 @@ func (resp *asyncAPIResponse) validate(expReqId string) error {
 }
 
 func (ss *ServingSuite) TestServingSource() {
-	w := ss.Given().Pipeline("@testdata/serving-pipeline-cat.yaml").
+	w := ss.Given().ServingPipeline("@testdata/serving-pipeline-cat.yaml").
 		When().
-		CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
+		CreateServingPipelineAndWait()
+	defer w.DeleteServingPipelineAndWait()
 
-	w.Expect().VertexPodsRunning()
+	// w.Expect().VertexPodsRunning()
 
-	pipelineName := "serving-source"
-	serviceName := "serving-source-serving-in"
+	servingPipelineName := "serving-source"
+	serviceName := "serving-source-serving"
 	// Check Service
-	cmd := fmt.Sprintf("kubectl -n %s get svc -lnumaflow.numaproj.io/pipeline-name=%s,numaflow.numaproj.io/vertex-name=%s | grep -v CLUSTER-IP | grep -v headless", Namespace, pipelineName, "serving-in")
+	cmd := fmt.Sprintf("kubectl -n %s get svc -lnumaflow.numaproj.io/serving-pipeline-name=%s | grep -v CLUSTER-IP | grep -v headless", Namespace, servingPipelineName)
 	w.Exec("sh", []string{"-c", cmd}, fixtures.OutputRegexp(serviceName))
 
 	// Send a request using sync API
