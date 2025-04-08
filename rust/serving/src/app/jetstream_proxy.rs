@@ -1,5 +1,12 @@
 use std::{str::FromStr, sync::Arc};
 
+use super::{orchestrator, store::datastore::DataStore, AppState};
+use super::{FetchQueryParams, Tid};
+use crate::app::response::{ApiError, ServeResponse};
+use crate::app::store::cbstore::CallbackStore;
+use crate::app::store::datastore::Error as StoreError;
+use crate::metrics::serving_metrics;
+use crate::Error;
 use async_nats::jetstream::Context;
 use axum::response::sse::Event;
 use axum::response::Sse;
@@ -16,14 +23,6 @@ use serde_json::json;
 use tokio::time::Instant;
 use tokio_stream::{Stream, StreamExt};
 use tracing::{error, Instrument};
-
-use super::{orchestrator, store::datastore::DataStore, AppState};
-use super::{FetchQueryParams, Tid};
-use crate::app::response::{ApiError, ServeResponse};
-use crate::app::store::cbstore::CallbackStore;
-use crate::app::store::datastore::Error as StoreError;
-use crate::metrics::serving_metrics;
-use crate::Error;
 
 const NUMAFLOW_RESP_ARRAY_LEN: &str = "Numaflow-Array-Len";
 const NUMAFLOW_RESP_ARRAY_IDX_LEN: &str = "Numaflow-Array-Index-Len";
@@ -358,22 +357,35 @@ async fn async_publish<
         }
     };
 
-    let span = tracing::Span::current();
-    // A send operation happens at the sender end of the notify channel when all callbacks are received.
-    // We keep the receiver alive to avoid send failure.
-    let wait_for_callbacks = async move {
-        match notify.await {
-            Ok(_) => {
-                serving_metrics()
-                    .processing_time
-                    .observe(processing_start.elapsed().as_micros() as f64);
-            }
-            Err(e) => {
-                error!(error = ?e, "Waiting for the pipeline output");
-            }
+    {
+        let span = tracing::Span::current();
+        let mut orchestrator = proxy_state.orchestrator.clone();
+        let id = id.clone();
+        // A send operation happens at the sender end of the notify channel when all callbacks are received.
+        // We keep the receiver alive to avoid send failure.
+        let wait_for_callbacks = async move {
+            match notify.await {
+                Ok(val) => {
+                    match val {
+                        Ok(_) => {}
+                        Err(e) => {
+                            _ = orchestrator
+                                .mark_as_failed(id.as_str(), e.to_string().as_str())
+                                .await
+                                .inspect_err(|e| error!(error=?e, "Failed to mark as failed"));
+                        }
+                    }
+                    serving_metrics()
+                        .processing_time
+                        .observe(processing_start.elapsed().as_micros() as f64);
+                }
+                Err(e) => {
+                    error!(error = ?e, "Waiting for the pipeline output");
+                }
+            };
         };
-    };
-    tokio::spawn(wait_for_callbacks.instrument(span));
+        tokio::spawn(wait_for_callbacks.instrument(span));
+    }
 
     let save_start = Instant::now();
     proxy_state
