@@ -63,7 +63,7 @@ numaflow-pb = { path = "numaflow-pb" }
 numaflow-pulsar = { path = "extns/numaflow-pulsar" }
 numaflow-jetstream = { path = "extns/numaflow-jetstream" }
 numaflow-sqs = { path = "extns/numaflow-sqs" }
-tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.44.2", features = ["macros", "rt-multi-thread"] }
 bytes = "1.9.0"
 tracing = "0.1.41"
 async-nats = "0.39.0"
