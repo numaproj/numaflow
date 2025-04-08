@@ -22,6 +22,8 @@ use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::watermark::{BucketConfig, EdgeWatermarkConfig};
 use crate::config::pipeline::watermark::{IdleConfig, SourceWatermarkConfig};
+use crate::config::ENV_NUMAFLOW_SERVING_KV_STORE;
+use crate::config::ENV_NUMAFLOW_SERVING_SOURCE_SETTINGS;
 use crate::error::Error;
 use crate::Result;
 
@@ -246,6 +248,33 @@ impl PipelineConfig {
         pipeline_spec_obj: String,
         env_vars: impl IntoIterator<Item = (impl Into<String>, impl Into<String>)>,
     ) -> Result<Self> {
+        let env_vars: HashMap<String, String> = env_vars
+            .into_iter()
+            .map(|(key, val)| (key.into(), val.into()))
+            .filter(|(key, _val)| {
+                [
+                    ENV_NUMAFLOW_SERVING_JETSTREAM_URL,
+                    ENV_NUMAFLOW_SERVING_JETSTREAM_USER,
+                    ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD,
+                    ENV_PAF_BATCH_SIZE,
+                    ENV_CALLBACK_ENABLED,
+                    ENV_CALLBACK_CONCURRENCY,
+                    ENV_NUMAFLOW_SERVING_SOURCE_SETTINGS,
+                    ENV_NUMAFLOW_SERVING_KV_STORE,
+                ]
+                .contains(&key.as_str())
+            })
+            .collect();
+
+        info!("Env vars found - {:#?}", env_vars);
+
+        let get_var = |var: &str| -> Result<String> {
+            Ok(env_vars
+                .get(var)
+                .ok_or_else(|| Error::Config(format!("Environment variable {var} is not set")))?
+                .to_string())
+        };
+
         // controller sets this env var.
         let decoded_spec = BASE64_STANDARD
             .decode(pipeline_spec_obj.as_bytes())
@@ -314,12 +343,30 @@ impl PipelineConfig {
                 None
             };
 
-            let serving_store_config = if let Some(store_name) = vertex_obj.spec.serving_store_name
+            let serving_store_config = if let Some(serving_settings) =
+                env_vars.get(ENV_NUMAFLOW_SERVING_SOURCE_SETTINGS)
             {
-                if store_name == "default" {
-                    Some(ServingStoreType::Nats(NatsStoreConfig {
-                        name: format!("{}-{}_SERVING_KV_STORE", namespace, pipeline_name),
-                    }))
+                let serving_settings_decoded = BASE64_STANDARD
+                    .decode(serving_settings.as_bytes())
+                    .map_err(|e| {
+                        Error::Config(
+                            format!(
+                                "Failed to base64 decode value of environment variable '{ENV_NUMAFLOW_SERVING_SOURCE_SETTINGS}'. value='{serving_settings}'. Err={e:?}"
+                            )
+                        )
+                    })?;
+                let serving_spec: numaflow_models::models::ServingSpec =
+                    serde_json::from_slice(serving_settings_decoded.as_slice()).map_err(|e| {
+                        Error::Config(
+                            format!(
+                                "Failed to base64 decode value of environment variable '{ENV_NUMAFLOW_SERVING_SOURCE_SETTINGS}'. value='{serving_settings}'. Err={e:?}"
+                            )
+                        )
+                    })?;
+
+                if serving_spec.store.is_none() {
+                    let kv_store = get_var(ENV_NUMAFLOW_SERVING_KV_STORE)?;
+                    Some(ServingStoreType::Nats(NatsStoreConfig { name: kv_store }))
                 } else {
                     Some(ServingStoreType::UserDefined(
                         UserDefinedStoreConfig::default(),
@@ -347,31 +394,6 @@ impl PipelineConfig {
             return Err(Error::Config(
                 "Only source and sink are supported ATM".to_string(),
             ));
-        };
-
-        let env_vars: HashMap<String, String> = env_vars
-            .into_iter()
-            .map(|(key, val)| (key.into(), val.into()))
-            .filter(|(key, _val)| {
-                [
-                    ENV_NUMAFLOW_SERVING_JETSTREAM_URL,
-                    ENV_NUMAFLOW_SERVING_JETSTREAM_USER,
-                    ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD,
-                    ENV_PAF_BATCH_SIZE,
-                    ENV_CALLBACK_ENABLED,
-                    ENV_CALLBACK_CONCURRENCY,
-                ]
-                .contains(&key.as_str())
-            })
-            .collect();
-
-        info!("Env vars found - {:#?}", env_vars);
-
-        let get_var = |var: &str| -> Result<String> {
-            Ok(env_vars
-                .get(var)
-                .ok_or_else(|| Error::Config(format!("Environment variable {var} is not set")))?
-                .to_string())
         };
 
         let js_client_config = isb::jetstream::ClientConfig {
@@ -487,10 +509,12 @@ impl PipelineConfig {
                         "Parsing value of {ENV_CALLBACK_CONCURRENCY}: {e:?}"
                     ))
                 })?;
+
+            let kv_store = env::var("NUMAFLOW_SERVING_KV_STORE").map_err(|_| {
+                    Error::Config("Serving store is default, but environment variable NUMAFLOW_SERVING_KV_STORE is not set".into())
+                })?;
             callback_config = Some(ServingCallbackConfig {
-                callback_store: Box::leak(
-                    format!("{}-{}_SERVING_KV_STORE", namespace, pipeline_name).into_boxed_str(),
-                ),
+                callback_store: Box::leak(kv_store.into_boxed_str()),
                 callback_concurrency,
             });
         }
@@ -687,7 +711,11 @@ mod tests {
     fn test_pipeline_config_load_sink_vertex() {
         let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLXBpcGVsaW5lLW91dCIsIm5hbWVzcGFjZSI6ImRlZmF1bHQiLCJjcmVhdGlvblRpbWVzdGFtcCI6bnVsbH0sInNwZWMiOnsibmFtZSI6Im91dCIsInNpbmsiOnsiYmxhY2tob2xlIjp7fSwicmV0cnlTdHJhdGVneSI6eyJvbkZhaWx1cmUiOiJyZXRyeSJ9fSwibGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19LCJwaXBlbGluZU5hbWUiOiJzaW1wbGUtcGlwZWxpbmUiLCJpbnRlclN0ZXBCdWZmZXJTZXJ2aWNlTmFtZSI6IiIsInJlcGxpY2FzIjowLCJmcm9tRWRnZXMiOlt7ImZyb20iOiJpbiIsInRvIjoib3V0IiwiY29uZGl0aW9ucyI6bnVsbCwiZnJvbVZlcnRleFR5cGUiOiJTb3VyY2UiLCJmcm9tVmVydGV4UGFydGl0aW9uQ291bnQiOjEsImZyb21WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJTaW5rIiwidG9WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwidG9WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9fV0sIndhdGVybWFyayI6eyJtYXhEZWxheSI6IjBzIn19LCJzdGF0dXMiOnsicGhhc2UiOiIiLCJyZXBsaWNhcyI6MCwiZGVzaXJlZFJlcGxpY2FzIjowLCJsYXN0U2NhbGVkQXQiOm51bGx9fQ==".to_string();
 
-        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let env_vars = [
+            ("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222"),
+            ("NUMAFLOW_SERVING_SOURCE_SETTINGS", "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQifQ=="),
+            ("NUMAFLOW_SERVING_KV_STORE", "test-kv-store"),
+        ];
         let pipeline_config = PipelineConfig::load(pipeline_cfg_base64, env_vars).unwrap();
 
         let expected = PipelineConfig {
@@ -717,7 +745,9 @@ mod tests {
                     retry_config: None,
                 },
                 fb_sink_config: None,
-                serving_store_config: None,
+                serving_store_config: Some(ServingStoreType::Nats(NatsStoreConfig {
+                    name: "test-kv-store".into(),
+                })),
             }),
             metrics_config: MetricsConfig {
                 metrics_server_listen_port: 2469,

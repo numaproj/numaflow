@@ -225,7 +225,8 @@ where
         }
     }
 
-    /// marks the request as failed
+    /// marks the request as failed, FIXME: invoke this when the subgraph generation fails/critical errors
+    #[allow(dead_code)]
     pub(crate) async fn mark_as_failed(&mut self, id: &str, error: &str) -> Result<(), Error> {
         self.callback_store.mark_as_failed(id, error).await?;
         Ok(())

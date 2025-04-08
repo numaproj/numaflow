@@ -6,3 +6,4 @@ resources:
   - numaflow.numaproj.io_pipelines.yaml
   - numaflow.numaproj.io_vertices.yaml
   - numaflow.numaproj.io_monovertices.yaml
+  - numaflow.numaproj.io_servingpipelines.yaml
