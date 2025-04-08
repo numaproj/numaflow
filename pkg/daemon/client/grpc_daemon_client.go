@@ -19,6 +19,7 @@ package client
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -37,10 +38,12 @@ func NewGRPCDaemonServiceClient(address string) (DaemonClient, error) {
 	config := &tls.Config{
 		InsecureSkipVerify: true,
 	}
+
 	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(credentials.NewTLS(config)))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to connect to gRPC server: %w", err)
 	}
+
 	daemonClient := daemon.NewDaemonServiceClient(conn)
 	return &grpcDaemonClient{conn: conn, client: daemonClient}, nil
 }

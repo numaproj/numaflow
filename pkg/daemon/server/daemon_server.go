@@ -27,7 +27,6 @@ import (
 	"os"
 	"time"
 
-	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -114,6 +113,18 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	// pipelineRuntimeCache is used to cache and retrieve the runtime errors
 	pipelineRuntimeCache := runtimeinfo.NewRuntime(ctx, ds.pipeline)
 
+	cer, err := sharedtls.GenerateX509KeyPair()
+	if err != nil {
+		return fmt.Errorf("failed to generate cert: %w", err)
+	}
+
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{*cer},
+		NextProtos:   []string{"h2", "http/1.1"},
+		MinVersion:   tls.VersionTLS12,
+	}
+
+	tlsCreds := credentials.NewTLS(tlsConfig)
 	// Start listener
 	var conn net.Listener
 	var listerErr error
@@ -122,28 +133,34 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to listen: %v", listerErr)
 	}
+	defer conn.Close()
 
-	cer, err := sharedtls.GenerateX509KeyPair()
-	if err != nil {
-		return fmt.Errorf("failed to generate cert: %w", err)
-	}
+	tlsListener := tls.NewListener(conn, tlsConfig)
+	log.Infof("TLS listener wrapping TCP listener")
+	m := cmux.New(tlsListener)
 
-	tlsConfig := &tls.Config{Certificates: []tls.Certificate{*cer}, MinVersion: tls.VersionTLS12}
-	grpcServer, err := ds.newGRPCServer(isbSvcClient, wmFetchers, rater, pipelineRuntimeCache)
+	grpcL := m.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
+	httpL := m.Match(cmux.Any()) // fallback for HTTP/1.1 or anything else
+
+	grpcServer, err := ds.newGRPCServer(isbSvcClient, wmFetchers, rater, tlsCreds, pipelineRuntimeCache)
 	if err != nil {
 		return fmt.Errorf("failed to create grpc server: %w", err)
 	}
+
 	httpServer := ds.newHTTPServer(ctx, v1alpha1.DaemonServicePort, tlsConfig)
 
-	conn = tls.NewListener(conn, tlsConfig)
-	// Cmux is used to support servicing gRPC and HTTP1.1+JSON on the same port
-	tcpm := cmux.New(conn)
-	httpL := tcpm.Match(cmux.HTTP1Fast())
-	grpcL := tcpm.Match(cmux.Any())
-
+	log.Infof("Starting gRPC server...")
 	go func() { _ = grpcServer.Serve(grpcL) }()
+
+	log.Infof("Starting HTTP server...")
 	go func() { _ = httpServer.Serve(httpL) }()
-	go func() { _ = tcpm.Serve() }()
+
+	log.Infof("Starting cmux...")
+	go func() {
+		if err := m.Serve(); err != nil {
+			log.Panicf("cmux serve failed: %v", err)
+		}
+	}()
 
 	// Start the Data flow health status updater
 	go func() {
@@ -180,6 +197,7 @@ func (ds *daemonServer) newGRPCServer(
 	isbSvcClient isbsvc.ISBService,
 	wmFetchers map[v1alpha1.Edge][]fetch.HeadFetcher,
 	rater server.Ratable,
+	serverCreds credentials.TransportCredentials,
 	pipelineRuntimeCache runtimeinfo.PipelineRuntimeCache) (*grpc.Server, error) {
 	// "Prometheus histograms are a great way to measure latency distributions of your RPCs.
 	// However, since it is a bad practice to have metrics of high cardinality the latency monitoring metrics are disabled by default.
@@ -188,9 +206,7 @@ func (ds *daemonServer) newGRPCServer(
 
 	sOpts := []grpc.ServerOption{
 		grpc.ConnectionTimeout(300 * time.Second),
-		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
-			grpc_prometheus.UnaryServerInterceptor,
-		)),
+		grpc.Creds(serverCreds),
 	}
 	grpcServer := grpc.NewServer(sOpts...)
 	grpc_prometheus.Register(grpcServer)
@@ -209,7 +225,7 @@ func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *
 	log := logging.FromContext(ctx)
 	endpoint := fmt.Sprintf(":%d", port)
 	dialOpts := []grpc.DialOption{
-		grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{InsecureSkipVerify: true})),
+		grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)),
 	}
 	gwMuxOpts := runtime.WithMarshalerOption(runtime.MIMEWildcard, new(runtime.JSONPb))
 	gwmux := runtime.NewServeMux(gwMuxOpts,
@@ -225,12 +241,8 @@ func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *
 	if err := daemon.RegisterDaemonServiceHandlerFromEndpoint(ctx, gwmux, endpoint, dialOpts); err != nil {
 		log.Errorw("Failed to register daemon handler on HTTP Server", zap.Error(err))
 	}
+
 	mux := http.NewServeMux()
-	httpServer := http.Server{
-		Addr:      endpoint,
-		Handler:   mux,
-		TLSConfig: tlsConfig,
-	}
 	mux.Handle("/api/", gwmux)
 	mux.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -250,7 +262,10 @@ func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *
 		log.Info("Not enabling pprof debug endpoints")
 	}
 
-	return &httpServer
+	return &http.Server{
+		Addr:    endpoint,
+		Handler: mux,
+	}
 }
 
 // calculate processing lag and watermark_delay to current time using watermark values.
