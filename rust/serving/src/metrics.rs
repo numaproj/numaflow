@@ -28,7 +28,7 @@ pub const SERVING_PATH_LABEL: &str = "path";
 const SERVING_STATUS_LABEL: &str = "status";
 
 // Define the metrics
-const HTTP_REQUESTS_TOTAL: &str = "http_requests_total";
+const HTTP_REQUESTS_TOTAL: &str = "http_requests_count";
 const HTTP_REQUESTS_DURATION: &str = "http_requests_duration";
 
 #[derive(Default)]
@@ -50,9 +50,18 @@ fn global_registry() -> &'static GlobalRegistry {
     GLOBAL_REGISTER.get_or_init(GlobalRegistry::new)
 }
 
-pub struct ServingMetrics {
-    pub http_requests_total: Family<Vec<(String, String)>, Counter>,
-    pub http_requests_duration: Family<Vec<(String, String)>, Histogram>,
+pub(crate) struct ServingMetrics {
+    pub(crate) http_requests_count: Family<Vec<(String, String)>, Counter>,
+    pub(crate) http_requests_duration: Family<Vec<(String, String)>, Histogram>,
+
+    pub(crate) cb_store_register_count: Counter,
+    pub(crate) cb_store_register_fail_count: Counter,
+    pub(crate) cb_store_register_duplicate_count: Counter,
+    pub(crate) cb_store_register_duration: Histogram,
+
+    pub(crate) payload_save_duration: Histogram,
+    pub(crate) datum_retrive_duration: Histogram,
+    pub(crate) processing_time: Histogram,
 }
 
 impl ServingMetrics {
@@ -60,12 +69,30 @@ impl ServingMetrics {
         let http_requests_total = Family::<Vec<(String, String)>, Counter>::default();
         let http_requests_duration =
             Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets(0.001, 2.0, 20))
+                Histogram::new(exponential_buckets(0.001, 2.0, 10))
             });
 
+        let cb_store_register_count = Counter::default();
+        let cb_store_register_fail_count = Counter::default();
+        let cb_store_register_duplicate_count = Counter::default();
+
+        let cb_store_register_duration = Histogram::new(exponential_buckets(0.001, 2.0, 10));
+
+        let payload_save_duration = Histogram::new(exponential_buckets(0.001, 2.0, 10));
+        let datum_retrive_duration = Histogram::new(exponential_buckets(0.001, 2.0, 10));
+
+        let processing_time = Histogram::new(exponential_buckets(1.0, 2.0, 10));
+
         let metrics = Self {
-            http_requests_total,
+            http_requests_count: http_requests_total,
             http_requests_duration,
+            cb_store_register_count,
+            cb_store_register_fail_count,
+            cb_store_register_duplicate_count,
+            cb_store_register_duration,
+            payload_save_duration,
+            datum_retrive_duration,
+            processing_time,
         };
 
         let mut registry = global_registry().registry.lock();
@@ -73,12 +100,54 @@ impl ServingMetrics {
         registry.register(
             HTTP_REQUESTS_TOTAL,
             "A Counter to keep track of the total number of HTTP requests",
-            metrics.http_requests_total.clone(),
+            metrics.http_requests_count.clone(),
         );
         registry.register(
             HTTP_REQUESTS_DURATION,
             "A Histogram to keep track of the duration of HTTP requests",
             metrics.http_requests_duration.clone(),
+        );
+
+        registry.register(
+            "CALLBACK_STORE_REGISTER",
+            "A Counter to keep track of the number of callback store register requests",
+            metrics.cb_store_register_count.clone(),
+        );
+
+        registry.register(
+            "CALLBACK_STORE_REGISTER_FAIL",
+            "A Counter to keep track of the number of failed callback store register requests",
+            metrics.cb_store_register_fail_count.clone(),
+        );
+
+        registry.register(
+            "CALLBACK_STORE_REGISTER_DUPLICATES",
+            "A Counter to keep track of the number of failed callback store register requests due to duplicate request id",
+            metrics.cb_store_register_fail_count.clone(),
+        );
+
+        registry.register(
+            "CALLBACK_STORE_REGISTER_DURATION",
+            "A Histogram to keep track of the duration of the successful callback store register requests",
+            metrics.cb_store_register_duration.clone(),
+        );
+
+        registry.register(
+            "PAYLOAD_JESTREAM_SAVE_DURATION",
+            "A Histogram to keep track of the time it takes to save request payload to Jestream",
+            metrics.payload_save_duration.clone(),
+        );
+
+        registry.register(
+            "DATUM_RETRIEVE_DURATION",
+            "A Histogram to keep track of the latency for retrieving pipeline result from datum store",
+            metrics.datum_retrive_duration.clone(),
+        );
+
+        registry.register(
+            "PROCESSING_TIME",
+            "A Histogram to keep track of the pipeline processing time of a request payload",
+            metrics.processing_time.clone(),
         );
 
         metrics
@@ -149,7 +218,7 @@ pub(crate) async fn capture_metrics(request: Request, next: Next) -> Response {
         .observe(latency);
 
     serving_metrics()
-        .http_requests_total
+        .http_requests_count
         .get_or_create(&labels)
         .inc();
 
@@ -160,6 +229,7 @@ pub(crate) async fn capture_metrics(request: Request, next: Next) -> Response {
 mod tests {
     use std::net::SocketAddr;
     use std::time::Duration;
+    use std::usize;
 
     use axum::body::Body;
     use axum::http::{HeaderMap, StatusCode};
@@ -213,5 +283,126 @@ mod tests {
             .unwrap();
 
         assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_metric_names() {
+        let labels = vec![
+            (SERVING_METHOD_LABEL.to_string(), "GET".to_string()),
+            (
+                SERVING_PATH_LABEL.to_string(),
+                "/v1/process/fetch".to_string(),
+            ),
+            (SERVING_STATUS_LABEL.to_string(), "200".to_string()),
+        ];
+
+        serving_metrics()
+            .http_requests_duration
+            .get_or_create(&labels)
+            .observe(200 as f64);
+
+        serving_metrics()
+            .http_requests_count
+            .get_or_create(&labels)
+            .inc();
+
+        let metrics = metrics_handler().await.into_response().into_body();
+        let metrics = axum::body::to_bytes(metrics, usize::MAX).await.unwrap();
+        let metrics = String::from_utf8_lossy(&metrics);
+
+        assert_eq!(
+            metrics.trim(),
+            r###"
+# HELP http_requests_count A Counter to keep track of the total number of HTTP requests.
+# TYPE http_requests_count counter
+http_requests_count_total{method="GET",path="/v1/process/fetch",status="200"} 1
+# HELP http_requests_duration A Histogram to keep track of the duration of HTTP requests.
+# TYPE http_requests_duration histogram
+http_requests_duration_sum{method="GET",path="/v1/process/fetch",status="200"} 200.0
+http_requests_duration_count{method="GET",path="/v1/process/fetch",status="200"} 1
+http_requests_duration_bucket{le="0.001",method="GET",path="/v1/process/fetch",status="200"} 0
+http_requests_duration_bucket{le="0.002",method="GET",path="/v1/process/fetch",status="200"} 0
+http_requests_duration_bucket{le="0.004",method="GET",path="/v1/process/fetch",status="200"} 0
+http_requests_duration_bucket{le="0.008",method="GET",path="/v1/process/fetch",status="200"} 0
+http_requests_duration_bucket{le="0.016",method="GET",path="/v1/process/fetch",status="200"} 0
+http_requests_duration_bucket{le="0.032",method="GET",path="/v1/process/fetch",status="200"} 0
+http_requests_duration_bucket{le="0.064",method="GET",path="/v1/process/fetch",status="200"} 0
+http_requests_duration_bucket{le="0.128",method="GET",path="/v1/process/fetch",status="200"} 0
+http_requests_duration_bucket{le="0.256",method="GET",path="/v1/process/fetch",status="200"} 0
+http_requests_duration_bucket{le="0.512",method="GET",path="/v1/process/fetch",status="200"} 0
+http_requests_duration_bucket{le="+Inf",method="GET",path="/v1/process/fetch",status="200"} 1
+# HELP CALLBACK_STORE_REGISTER A Counter to keep track of the number of callback store register requests.
+# TYPE CALLBACK_STORE_REGISTER counter
+CALLBACK_STORE_REGISTER_total 0
+# HELP CALLBACK_STORE_REGISTER_FAIL A Counter to keep track of the number of failed callback store register requests.
+# TYPE CALLBACK_STORE_REGISTER_FAIL counter
+CALLBACK_STORE_REGISTER_FAIL_total 0
+# HELP CALLBACK_STORE_REGISTER_DUPLICATES A Counter to keep track of the number of failed callback store register requests due to duplicate request id.
+# TYPE CALLBACK_STORE_REGISTER_DUPLICATES counter
+CALLBACK_STORE_REGISTER_DUPLICATES_total 0
+# HELP CALLBACK_STORE_REGISTER_DURATION A Histogram to keep track of the duration of the successful callback store register requests.
+# TYPE CALLBACK_STORE_REGISTER_DURATION histogram
+CALLBACK_STORE_REGISTER_DURATION_sum 0.0
+CALLBACK_STORE_REGISTER_DURATION_count 0
+CALLBACK_STORE_REGISTER_DURATION_bucket{le="0.001"} 0
+CALLBACK_STORE_REGISTER_DURATION_bucket{le="0.002"} 0
+CALLBACK_STORE_REGISTER_DURATION_bucket{le="0.004"} 0
+CALLBACK_STORE_REGISTER_DURATION_bucket{le="0.008"} 0
+CALLBACK_STORE_REGISTER_DURATION_bucket{le="0.016"} 0
+CALLBACK_STORE_REGISTER_DURATION_bucket{le="0.032"} 0
+CALLBACK_STORE_REGISTER_DURATION_bucket{le="0.064"} 0
+CALLBACK_STORE_REGISTER_DURATION_bucket{le="0.128"} 0
+CALLBACK_STORE_REGISTER_DURATION_bucket{le="0.256"} 0
+CALLBACK_STORE_REGISTER_DURATION_bucket{le="0.512"} 0
+CALLBACK_STORE_REGISTER_DURATION_bucket{le="+Inf"} 0
+# HELP PAYLOAD_JESTREAM_SAVE_DURATION A Histogram to keep track of the time it takes to save request payload to Jestream.
+# TYPE PAYLOAD_JESTREAM_SAVE_DURATION histogram
+PAYLOAD_JESTREAM_SAVE_DURATION_sum 0.0
+PAYLOAD_JESTREAM_SAVE_DURATION_count 0
+PAYLOAD_JESTREAM_SAVE_DURATION_bucket{le="0.001"} 0
+PAYLOAD_JESTREAM_SAVE_DURATION_bucket{le="0.002"} 0
+PAYLOAD_JESTREAM_SAVE_DURATION_bucket{le="0.004"} 0
+PAYLOAD_JESTREAM_SAVE_DURATION_bucket{le="0.008"} 0
+PAYLOAD_JESTREAM_SAVE_DURATION_bucket{le="0.016"} 0
+PAYLOAD_JESTREAM_SAVE_DURATION_bucket{le="0.032"} 0
+PAYLOAD_JESTREAM_SAVE_DURATION_bucket{le="0.064"} 0
+PAYLOAD_JESTREAM_SAVE_DURATION_bucket{le="0.128"} 0
+PAYLOAD_JESTREAM_SAVE_DURATION_bucket{le="0.256"} 0
+PAYLOAD_JESTREAM_SAVE_DURATION_bucket{le="0.512"} 0
+PAYLOAD_JESTREAM_SAVE_DURATION_bucket{le="+Inf"} 0
+# HELP DATUM_RETRIEVE_DURATION A Histogram to keep track of the latency for retrieving pipeline result from datum store.
+# TYPE DATUM_RETRIEVE_DURATION histogram
+DATUM_RETRIEVE_DURATION_sum 0.0
+DATUM_RETRIEVE_DURATION_count 0
+DATUM_RETRIEVE_DURATION_bucket{le="0.001"} 0
+DATUM_RETRIEVE_DURATION_bucket{le="0.002"} 0
+DATUM_RETRIEVE_DURATION_bucket{le="0.004"} 0
+DATUM_RETRIEVE_DURATION_bucket{le="0.008"} 0
+DATUM_RETRIEVE_DURATION_bucket{le="0.016"} 0
+DATUM_RETRIEVE_DURATION_bucket{le="0.032"} 0
+DATUM_RETRIEVE_DURATION_bucket{le="0.064"} 0
+DATUM_RETRIEVE_DURATION_bucket{le="0.128"} 0
+DATUM_RETRIEVE_DURATION_bucket{le="0.256"} 0
+DATUM_RETRIEVE_DURATION_bucket{le="0.512"} 0
+DATUM_RETRIEVE_DURATION_bucket{le="+Inf"} 0
+# HELP PROCESSING_TIME A Histogram to keep track of the pipeline processing time of a request payload.
+# TYPE PROCESSING_TIME histogram
+PROCESSING_TIME_sum 0.0
+PROCESSING_TIME_count 0
+PROCESSING_TIME_bucket{le="1.0"} 0
+PROCESSING_TIME_bucket{le="2.0"} 0
+PROCESSING_TIME_bucket{le="4.0"} 0
+PROCESSING_TIME_bucket{le="8.0"} 0
+PROCESSING_TIME_bucket{le="16.0"} 0
+PROCESSING_TIME_bucket{le="32.0"} 0
+PROCESSING_TIME_bucket{le="64.0"} 0
+PROCESSING_TIME_bucket{le="128.0"} 0
+PROCESSING_TIME_bucket{le="256.0"} 0
+PROCESSING_TIME_bucket{le="512.0"} 0
+PROCESSING_TIME_bucket{le="+Inf"} 0
+# EOF
+        "###
+            .trim()
+        );
     }
 }
