@@ -4,16 +4,20 @@
 //! is stored in [crate::app::store::cbstore].
 use std::sync::Arc;
 
-use crate::app::store::cbstore::{CallbackStore, ProcessingStatus};
-use crate::app::store::datastore::DataStore;
-use crate::app::store::datastore::Result as StoreResult;
-use crate::app::tracker::MessageGraph;
-use crate::Error;
 use bytes::Bytes;
 use tokio::sync::{mpsc, oneshot};
+use tokio::time::Instant;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tracing::{error, info, Instrument};
+
+use crate::app::store::cbstore::{CallbackStore, ProcessingStatus};
+use crate::app::store::datastore::DataStore;
+use crate::app::store::datastore::Error as StoreError;
+use crate::app::store::datastore::Result as StoreResult;
+use crate::app::tracker::MessageGraph;
+use crate::metrics::serving_metrics;
+use crate::Error;
 
 #[derive(Clone)]
 pub(crate) struct OrchestratorState<T, U> {
@@ -54,8 +58,18 @@ where
         let msg_id = id.to_string();
         let mut subgraph = None;
 
+        let start = Instant::now();
         // register the request in the store
-        self.callback_store.register(id).await?;
+        if let Err(e) = self.callback_store.register(id).await {
+            if let StoreError::DuplicateRequest(_) = e {
+                serving_metrics().cb_store_register_duplicate_count.inc();
+            }
+            serving_metrics().cb_store_register_fail_count.inc();
+            return Err(e);
+        }
+        serving_metrics()
+            .cb_store_register_duration
+            .observe(start.elapsed().as_micros() as f64);
 
         // start watching for callbacks
         let (mut callbacks_stream, watch_handle) = self.callback_store.watch_callbacks(id).await?;

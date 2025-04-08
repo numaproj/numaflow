@@ -1,5 +1,12 @@
 use std::{str::FromStr, sync::Arc};
 
+use super::{orchestrator, store::datastore::DataStore, AppState};
+use super::{FetchQueryParams, Tid};
+use crate::app::response::{ApiError, ServeResponse};
+use crate::app::store::cbstore::CallbackStore;
+use crate::app::store::datastore::Error as StoreError;
+use crate::metrics::serving_metrics;
+use crate::Error;
 use async_nats::jetstream::Context;
 use axum::response::sse::Event;
 use axum::response::Sse;
@@ -13,15 +20,9 @@ use axum::{
     Json, Router,
 };
 use serde_json::json;
+use tokio::time::Instant;
 use tokio_stream::{Stream, StreamExt};
-use tracing::error;
-
-use super::{orchestrator, store::datastore::DataStore, AppState};
-use super::{FetchQueryParams, Tid};
-use crate::app::response::{ApiError, ServeResponse};
-use crate::app::store::cbstore::CallbackStore;
-use crate::app::store::datastore::Error as StoreError;
-use crate::Error;
+use tracing::{error, Instrument};
 
 const NUMAFLOW_RESP_ARRAY_LEN: &str = "Numaflow-Array-Len";
 const NUMAFLOW_RESP_ARRAY_IDX_LEN: &str = "Numaflow-Array-Index-Len";
@@ -62,8 +63,14 @@ async fn fetch<
     State(proxy_state): State<Arc<ProxyState<T, U>>>,
     Query(FetchQueryParams { id }): Query<FetchQueryParams>,
 ) -> Response {
+    let datum_retrieve_start = Instant::now();
     let pipeline_result = match proxy_state.orchestrator.clone().retrieve_saved(&id).await {
-        Ok(result) => result,
+        Ok(result) => {
+            serving_metrics()
+                .datum_retrive_duration
+                .observe(datum_retrieve_start.elapsed().as_micros() as f64);
+            result
+        }
         Err(e) => {
             if let Error::Store(e) = e {
                 return Response::builder()
@@ -135,6 +142,7 @@ where
     let mut orchestrator_state = proxy_state.orchestrator.clone();
     let response_stream = orchestrator_state.stream_response(&id).await.unwrap();
 
+    let save_start = Instant::now();
     proxy_state
         .js_context
         .publish_with_headers(proxy_state.stream.clone(), msg_headers, body)
@@ -158,6 +166,9 @@ where
             )
         })
         .map_err(|_| ApiError::BadGateway("Failed to write message to Jetstream".to_string()))?;
+    serving_metrics()
+        .payload_save_duration
+        .observe(save_start.elapsed().as_micros() as f64);
 
     let stream = response_stream
         .map(|response| Ok(Event::default().data(String::from_utf8_lossy(&response))));
@@ -183,6 +194,7 @@ async fn sync_publish<
     }
     msg_headers.insert(proxy_state.tid_header.clone(), id.clone());
 
+    let processing_start = Instant::now();
     // Register the ID in the callback proxy state
     let notify = match proxy_state
         .orchestrator
@@ -204,6 +216,7 @@ async fn sync_publish<
         }
     };
 
+    let save_start = Instant::now();
     proxy_state
         .js_context
         .publish_with_headers(proxy_state.stream.clone(), msg_headers, body)
@@ -227,9 +240,17 @@ async fn sync_publish<
             )
         })
         .map_err(|_| ApiError::BadGateway("Failed to write message to Jetstream".to_string()))?;
+    serving_metrics()
+        .payload_save_duration
+        .observe(save_start.elapsed().as_micros() as f64);
 
     let processing_result = match notify.await {
-        Ok(processing_result) => processing_result,
+        Ok(processing_result) => {
+            serving_metrics()
+                .processing_time
+                .observe(processing_start.elapsed().as_micros() as f64);
+            processing_result
+        }
         Err(e) => {
             error!(error = ?e, "Waiting for the pipeline output");
             return Err(ApiError::InternalServerError(
@@ -248,12 +269,18 @@ async fn sync_publish<
         ));
     }
 
+    let datum_retrieve_start = Instant::now();
     let result = match proxy_state.orchestrator.clone().retrieve_saved(&id).await {
-        Ok(result) => result,
+        Ok(result) => {
+            serving_metrics()
+                .datum_retrive_duration
+                .observe(datum_retrieve_start.elapsed().as_micros() as f64);
+            result
+        }
         Err(e) => {
             error!(error = ?e, "Failed to retrieve from store");
             return Err(ApiError::InternalServerError(
-                "Failed to retrieve from redis".to_string(),
+                "Failed to retrieve result from Datum store".to_string(),
             ));
         }
     };
@@ -308,6 +335,7 @@ async fn async_publish<
     }
     msg_headers.insert(proxy_state.tid_header.clone(), id.clone());
 
+    let processing_start = Instant::now();
     // Register request in Redis
     let notify = match proxy_state
         .orchestrator
@@ -328,10 +356,38 @@ async fn async_publish<
             ));
         }
     };
-    // A send operation happens at the sender end of the notify channel when all callbacks are received.
-    // We keep the receiver alive to avoid send failure.
-    tokio::spawn(notify);
 
+    {
+        let span = tracing::Span::current();
+        let mut orchestrator = proxy_state.orchestrator.clone();
+        let id = id.clone();
+        // A send operation happens at the sender end of the notify channel when all callbacks are received.
+        // We keep the receiver alive to avoid send failure.
+        let wait_for_callbacks = async move {
+            match notify.await {
+                Ok(val) => {
+                    match val {
+                        Ok(_) => {}
+                        Err(e) => {
+                            _ = orchestrator
+                                .mark_as_failed(id.as_str(), e.to_string().as_str())
+                                .await
+                                .inspect_err(|e| error!(error=?e, "Failed to mark as failed"));
+                        }
+                    }
+                    serving_metrics()
+                        .processing_time
+                        .observe(processing_start.elapsed().as_micros() as f64);
+                }
+                Err(e) => {
+                    error!(error = ?e, "Waiting for the pipeline output");
+                }
+            };
+        };
+        tokio::spawn(wait_for_callbacks.instrument(span));
+    }
+
+    let save_start = Instant::now();
     proxy_state
         .js_context
         .publish_with_headers(proxy_state.stream.clone(), msg_headers, body)
@@ -355,6 +411,9 @@ async fn async_publish<
             )
         })
         .map_err(|_| ApiError::BadGateway("Failed to write message to Jetstream".to_string()))?;
+    serving_metrics()
+        .payload_save_duration
+        .observe(save_start.elapsed().as_micros() as f64);
 
     Ok(Json(ServeResponse::new(
         "Successfully published message".to_string(),
