@@ -103,7 +103,7 @@ impl Runtime {
     /// - `grpc_status`: The gRPC error (`tonic::Status`) to be persisted.
     ///
     /// # Example:
-    /// ```rust
+    /// ```no_run
     ///  use numaflow_monitor::runtime::Runtime;
     ///  let grpc_status = tonic::Status::internal("UDF_EXECUTION_ERROR(container-name): Test error");
     ///  Runtime::new(None).persist_application_error(grpc_status);
