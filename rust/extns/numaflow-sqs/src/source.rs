@@ -104,7 +104,7 @@ impl SqsActor {
             .or_default_provider()
             .or_else(Region::new(SQS_DEFAULT_REGION));
 
-        let shared_config = aws_config::defaults(BehaviorVersion::v2024_03_28())
+        let shared_config = aws_config::defaults(BehaviorVersion::latest())
             .timeout_config(
                 TimeoutConfig::builder()
                     .operation_attempt_timeout(Duration::from_secs(10))

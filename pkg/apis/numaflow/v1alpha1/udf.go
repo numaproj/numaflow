@@ -46,23 +46,13 @@ type UDF struct {
 }
 
 func (in UDF) getContainers(req getContainerReq) ([]corev1.Container, []corev1.Container, error) {
-	containers := []corev1.Container{
-		in.getMainContainer(req),
-	}
 	monitorContainer := buildMonitorContainer(req)
 	sidecarContainers := []corev1.Container{monitorContainer, in.getUDFContainer(req)}
-
-	if req.servingStore != nil && req.servingStore.Container != nil {
-		sidecarContainers = append(sidecarContainers, req.servingStore.getUDStoreContainer(req))
-	}
-	return sidecarContainers, containers, nil
+	return sidecarContainers, []corev1.Container{in.getMainContainer(req)}, nil
 }
 
 func (in UDF) getMainContainer(req getContainerReq) corev1.Container {
 	if in.GroupBy == nil {
-		if req.executeRustBinary {
-			return containerBuilder{}.init(req).command(NumaflowRustBinary).args("processor", "--type="+string(VertexTypeMapUDF), "--isbsvc-type="+string(req.isbSvcType), "--rust").build()
-		}
 		args := []string{"processor", "--type=" + string(VertexTypeMapUDF), "--isbsvc-type=" + string(req.isbSvcType)}
 		return containerBuilder{}.
 			init(req).args(args...).build()

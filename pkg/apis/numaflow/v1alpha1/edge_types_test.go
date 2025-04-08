@@ -36,12 +36,12 @@ func Test_EdgeBufferFullWritingStrategy(t *testing.T) {
 		},
 		{
 			name:     "retry until success strategy",
-			edge:     Edge{OnFull: ptr.To[BufferFullWritingStrategy](RetryUntilSuccess)},
+			edge:     Edge{OnFull: ptr.To(RetryUntilSuccess)},
 			expected: RetryUntilSuccess,
 		},
 		{
 			name:     "discard latest strategy",
-			edge:     Edge{OnFull: ptr.To[BufferFullWritingStrategy](DiscardLatest)},
+			edge:     Edge{OnFull: ptr.To(DiscardLatest)},
 			expected: DiscardLatest,
 		},
 		{
@@ -186,6 +186,7 @@ func Test_EdgeGetEdgeName(t *testing.T) {
 		})
 	}
 }
+
 func TestTagConditionsGetOperator(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -199,17 +200,17 @@ func TestTagConditionsGetOperator(t *testing.T) {
 		},
 		{
 			name:     "or operator",
-			tc:       TagConditions{Operator: ptr.To[LogicOperator](LogicOperatorOr)},
+			tc:       TagConditions{Operator: ptr.To(LogicOperatorOr)},
 			expected: LogicOperatorOr,
 		},
 		{
 			name:     "not operator",
-			tc:       TagConditions{Operator: ptr.To[LogicOperator](LogicOperatorNot)},
+			tc:       TagConditions{Operator: ptr.To(LogicOperatorNot)},
 			expected: LogicOperatorNot,
 		},
 		{
 			name:     "and operator",
-			tc:       TagConditions{Operator: ptr.To[LogicOperator](LogicOperatorAnd)},
+			tc:       TagConditions{Operator: ptr.To(LogicOperatorAnd)},
 			expected: LogicOperatorAnd,
 		},
 		{

@@ -94,21 +94,42 @@ impl Runtime {
         }
     }
 
-    /// Persists a gRPC error as a JSON file in the appropriate container directory. Automatically manages
-    /// the number of files by removing the oldest file if the max file limit is exceeded.
+    /// Persists a gRPC error as a JSON file in the appropriate container directory.
+    /// It organizes error files in a directory structure based on container names and ensures that the
+    /// number of error files per container does not exceed a specified limit. If the limit is exceeded,
+    /// the oldest file is removed to make room for new entries.
+    ///
+    /// # Parameters:
+    /// - `grpc_status`: The gRPC error (`tonic::Status`) to be persisted.
+    ///
+    /// # Example:
+    /// ```no_run
+    ///  use numaflow_monitor::runtime::Runtime;
+    ///  let grpc_status = tonic::Status::internal("UDF_EXECUTION_ERROR(container-name): Test error");
+    ///  Runtime::new(None).persist_application_error(grpc_status);
+    /// ```
     pub fn persist_application_error(&self, grpc_status: Status) {
         // extract the type of udf container based on the error message
         let container_name = extract_container_name(grpc_status.message());
+        // skip processing if the container name is empty. This happens only if
+        // the gRPC status is not created by us (e.g., unknown bugs like https://github.com/grpc/grpc-go/issues/7641)
+        // TODO: we should try to expose this in the UI if we encounter a few of this in prod.
+        if container_name.is_empty() {
+            error!(?grpc_status, "unknown-container");
+            return;
+        }
         // create a directory for the container if it doesn't exist
         let dir_path = Path::new(&self.application_error_path).join(&container_name);
         if !dir_path.exists() {
             fs::create_dir_all(&dir_path).expect("Failed to create application errors directory");
         }
 
-        // to check the number of files in the directory
+        // this is to check the number of files in the directory
+        // additional check in place to process only files and ignore directories
         let mut files: Vec<_> = fs::read_dir(&dir_path)
             .expect("Failed to read application errors directory")
             .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.path().is_file())
             .collect();
 
         // sort the files based on timestamp
@@ -132,8 +153,8 @@ impl Runtime {
             RuntimeErrorEntry::from((&grpc_status, container_name.as_str(), timestamp));
         let json_str: String = runtime_error_entry.into();
 
-        // we create a file current.json and write into this file first
-        // rename it back to <timestamp>-numa.json once write operation is completed
+        // Write the error details to a temporary file (`current-numa.json`) and rename it to a
+        // timestamped file once the write operation is complete.
         // this is to ensure that while reading we skip this file to avoid race condition
         let current_file_path = dir_path.join(CURRENT_FILE);
         // append numa to the file name to avoid collision with files written from udf with same timestamp
@@ -319,6 +340,42 @@ mod tests {
         // Verify the file name format
         let file_name = files[0].file_name().into_string().unwrap();
         assert!(file_name.ends_with(".json"));
+    }
+
+    #[test]
+    fn test_persist_application_error_with_empty_container_name() {
+        // Create a temporary directory for testing
+        let temp_dir = tempdir().unwrap();
+        let application_error_path = temp_dir.path().to_str().unwrap().to_string();
+
+        // Create a Runtime instance with the temporary directory path
+        let runtime = Runtime {
+            application_error_path,
+            max_error_files_per_container: 5,
+        };
+
+        // Create a mock gRPC status with an empty container name
+        let grpc_status = Status::internal("UDF_EXECUTION_ERROR: Test error message");
+
+        // Verify that container name is empty for below grpc_status
+        let container_name = extract_container_name(grpc_status.message());
+        assert!(container_name.is_empty());
+
+        // Call the function to test
+        runtime.persist_application_error(grpc_status.clone());
+
+        // Verify that no files were created in the directory
+        let dir_path = Path::new(&runtime.application_error_path).join(&container_name);
+        if dir_path.exists() {
+            let files: Vec<_> = fs::read_dir(&dir_path)
+                .unwrap()
+                .filter_map(|entry| entry.ok())
+                .collect();
+            assert!(
+                files.is_empty(),
+                "No files should be created in the directory"
+            );
+        }
     }
 
     #[test]

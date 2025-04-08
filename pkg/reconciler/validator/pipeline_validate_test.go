@@ -692,7 +692,7 @@ func TestValidateVertex(t *testing.T) {
 			Name: "my-vertex",
 			UpdateStrategy: dfv1.UpdateStrategy{
 				RollingUpdate: &dfv1.RollingUpdateStrategy{
-					MaxUnavailable: ptr.To[intstr.IntOrString](intstr.FromString("10%")),
+					MaxUnavailable: ptr.To(intstr.FromString("10%")),
 				},
 			},
 		}
@@ -705,7 +705,7 @@ func TestValidateVertex(t *testing.T) {
 			Name: "my-vertex",
 			UpdateStrategy: dfv1.UpdateStrategy{
 				RollingUpdate: &dfv1.RollingUpdateStrategy{
-					MaxUnavailable: ptr.To[intstr.IntOrString](intstr.FromInt(3)),
+					MaxUnavailable: ptr.To(intstr.FromInt(3)),
 				},
 			},
 		}

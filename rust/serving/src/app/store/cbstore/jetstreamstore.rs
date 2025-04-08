@@ -43,10 +43,9 @@ pub(crate) struct JetStreamCallbackStore {
 
 impl JetStreamCallbackStore {
     pub(crate) async fn new(js_context: Context, bucket_name: &str) -> StoreResult<Self> {
-        let kv_store = js_context
-            .get_key_value(bucket_name)
-            .await
-            .map_err(|e| StoreError::Connection(format!("Failed to get kv store: {e:?}")))?;
+        let kv_store = js_context.get_key_value(bucket_name).await.map_err(|e| {
+            StoreError::Connection(format!("Failed to get kv store '{bucket_name}': {e:?}"))
+        })?;
         Ok(Self { kv_store })
     }
 }
