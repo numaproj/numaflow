@@ -22040,28 +22040,7 @@
     },
     "io.numaproj.numaflow.v1alpha1.ServingSource": {
       "description": "ServingSource is the HTTP endpoint for Numaflow.",
-      "type": "object",
-      "required": [
-        "msgIDHeaderKey"
-      ],
-      "properties": {
-        "auth": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Authorization"
-        },
-        "msgIDHeaderKey": {
-          "description": "The header key from which the message id will be extracted",
-          "type": "string"
-        },
-        "requestTimeoutSeconds": {
-          "description": "Request timeout in seconds. Default value is 120 seconds.",
-          "type": "integer",
-          "format": "int64"
-        },
-        "service": {
-          "description": "Whether to create a ClusterIP Service",
-          "type": "boolean"
-        }
-      }
+      "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.ServingSpec": {
       "type": "object",

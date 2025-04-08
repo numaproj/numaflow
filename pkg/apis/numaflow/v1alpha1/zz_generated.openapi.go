@@ -5052,40 +5052,8 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingSource(ref common.ReferenceCallbac
 			SchemaProps: spec.SchemaProps{
 				Description: "ServingSource is the HTTP endpoint for Numaflow.",
 				Type:        []string{"object"},
-				Properties: map[string]spec.Schema{
-					"auth": {
-						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Authorization"),
-						},
-					},
-					"service": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Whether to create a ClusterIP Service",
-							Default:     false,
-							Type:        []string{"boolean"},
-							Format:      "",
-						},
-					},
-					"msgIDHeaderKey": {
-						SchemaProps: spec.SchemaProps{
-							Description: "The header key from which the message id will be extracted",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"requestTimeoutSeconds": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Request timeout in seconds. Default value is 120 seconds.",
-							Type:        []string{"integer"},
-							Format:      "int64",
-						},
-					},
-				},
-				Required: []string{"msgIDHeaderKey"},
 			},
 		},
-		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Authorization"},
 	}
 }
 

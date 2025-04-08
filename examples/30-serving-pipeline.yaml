@@ -9,9 +9,7 @@ spec:
       scale:
         min: 1
       source:
-        serving:
-          service: true
-          msgIDHeaderKey: "X-Numaflow-Id"
+        serving: {}
 
     - name: cat
       scale:

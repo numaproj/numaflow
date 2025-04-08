@@ -5133,32 +5133,6 @@ spec:
                     - topic
                     type: object
                   serving:
-                    properties:
-                      auth:
-                        properties:
-                          token:
-                            properties:
-                              key:
-                                type: string
-                              name:
-                                default: ""
-                                type: string
-                              optional:
-                                type: boolean
-                            required:
-                            - key
-                            type: object
-                            x-kubernetes-map-type: atomic
-                        type: object
-                      msgIDHeaderKey:
-                        type: string
-                      requestTimeoutSeconds:
-                        format: int32
-                        type: integer
-                      service:
-                        type: boolean
-                    required:
-                    - msgIDHeaderKey
                     type: object
                   transformer:
                     properties:
