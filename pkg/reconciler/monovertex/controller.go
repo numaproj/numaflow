@@ -509,7 +509,7 @@ func (mr *monoVertexReconciler) createOrUpdateDaemonService(ctx context.Context,
 
 func (mr *monoVertexReconciler) createOrUpdateDaemonDeployment(ctx context.Context, monoVtx *dfv1.MonoVertex) error {
 	log := logging.FromContext(ctx)
-	envs := []corev1.EnvVar{{Name: dfv1.EnvMonoVertexName, Value: monoVtx.Name}, {Name: dfv1.EnvGrpcAlpnEnabled, Value: "false"}}
+	envs := []corev1.EnvVar{{Name: dfv1.EnvMonoVertexName, Value: monoVtx.Name}}
 
 	req := dfv1.GetMonoVertexDaemonDeploymentReq{
 		Image:            mr.image,

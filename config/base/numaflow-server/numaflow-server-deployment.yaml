@@ -21,136 +21,134 @@ spec:
         runAsNonRoot: true
         runAsUser: 9737
       volumes:
-      - name: env-volume
-        emptyDir: {}
-      - name: rbac-config
-        configMap:
-          name: numaflow-server-rbac-config
-      - name: metrics-proxy-config
-        configMap:
-          name: numaflow-server-metrics-proxy-config
+        - name: env-volume
+          emptyDir: {}
+        - name: rbac-config
+          configMap:
+            name: numaflow-server-rbac-config
+        - name: metrics-proxy-config
+          configMap:
+            name: numaflow-server-metrics-proxy-config
       initContainers:
-      - name: server-init
-        image: quay.io/numaproj/numaflow:latest
-        args:
-        - "server-init"
-        imagePullPolicy: Always
-        env:
-        - name: NUMAFLOW_SERVER_BASE_HREF
-          valueFrom:
-            configMapKeyRef:
-              name: numaflow-cmd-params-config
-              key: server.base.href
-              optional: true
-        volumeMounts:
-        - mountPath: /opt/numaflow
-          name: env-volume
-      - name: server-secrets-init
-        image: quay.io/numaproj/numaflow:latest
-        args:
-        - "server-secrets-init"
-        imagePullPolicy: Always
-        env:
-          - name: NAMESPACE
-            valueFrom:
-              fieldRef:
-                fieldPath: metadata.namespace
-          - name: NUMAFLOW_SERVER_DISABLE_AUTH
-            valueFrom:
-              configMapKeyRef:
-                name: numaflow-cmd-params-config
-                key: server.disable.auth
-                optional: true
+        - name: server-init
+          image: quay.io/numaproj/numaflow:latest
+          args:
+            - "server-init"
+          imagePullPolicy: Always
+          env:
+            - name: NUMAFLOW_SERVER_BASE_HREF
+              valueFrom:
+                configMapKeyRef:
+                  name: numaflow-cmd-params-config
+                  key: server.base.href
+                  optional: true
+          volumeMounts:
+            - mountPath: /opt/numaflow
+              name: env-volume
+        - name: server-secrets-init
+          image: quay.io/numaproj/numaflow:latest
+          args:
+            - "server-secrets-init"
+          imagePullPolicy: Always
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NUMAFLOW_SERVER_DISABLE_AUTH
+              valueFrom:
+                configMapKeyRef:
+                  name: numaflow-cmd-params-config
+                  key: server.disable.auth
+                  optional: true
       containers:
         - name: main
           image: quay.io/numaproj/numaflow:latest
           args:
-          - "server"
+            - "server"
           imagePullPolicy: Always
           volumeMounts:
-          - mountPath: /ui/build/runtime-env.js
-            name: env-volume
-            subPath: runtime-env.js
-          - mountPath: /ui/build/index.html
-            name: env-volume
-            subPath: index.html
-          - mountPath: /etc/numaflow
-            name: rbac-config
-          - mountPath: /etc/numaflow/metrics-proxy
-            name: metrics-proxy-config
+            - mountPath: /ui/build/runtime-env.js
+              name: env-volume
+              subPath: runtime-env.js
+            - mountPath: /ui/build/index.html
+              name: env-volume
+              subPath: index.html
+            - mountPath: /etc/numaflow
+              name: rbac-config
+            - mountPath: /etc/numaflow/metrics-proxy
+              name: metrics-proxy-config
           env:
-          - name: NAMESPACE
-            valueFrom:
-              fieldRef:
-                fieldPath: metadata.namespace
-          - name: NUMAFLOW_SERVER_INSECURE
-            valueFrom:
-              configMapKeyRef:
-                name: numaflow-cmd-params-config
-                key: server.insecure
-                optional: true
-          - name: NUMAFLOW_SERVER_PORT_NUMBER
-            valueFrom:
-              configMapKeyRef:
-                name: numaflow-cmd-params-config
-                key: server.port
-                optional: true
-          - name: NUMAFLOW_SERVER_NAMESPACED
-            valueFrom:
-              configMapKeyRef:
-                name: numaflow-cmd-params-config
-                key: namespaced
-                optional: true
-          - name: NUMAFLOW_SERVER_MANAGED_NAMESPACE
-            valueFrom:
-              configMapKeyRef:
-                name: numaflow-cmd-params-config
-                key: managed.namespace
-                optional: true
-          - name: NUMAFLOW_SERVER_BASE_HREF
-            valueFrom:
-              configMapKeyRef:
-                name: numaflow-cmd-params-config
-                key: server.base.href
-                optional: true
-          - name: NUMAFLOW_SERVER_READONLY
-            valueFrom:
-              configMapKeyRef:
-                name: numaflow-cmd-params-config
-                key: server.readonly
-                optional: true
-          - name: NUMAFLOW_SERVER_DISABLE_AUTH
-            valueFrom:
-              configMapKeyRef:
-                name: numaflow-cmd-params-config
-                key: server.disable.auth
-                optional: true
-          - name: NUMAFLOW_SERVER_DEX_SERVER_ADDR
-            valueFrom:
-              configMapKeyRef:
-                name: numaflow-cmd-params-config
-                key: server.dex.server
-                optional: true
-          - name: NUMAFLOW_SERVER_ADDRESS
-            valueFrom:
-              configMapKeyRef:
-                name: numaflow-cmd-params-config
-                key: server.address
-                optional: true
-          - name: NUMAFLOW_SERVER_CORS_ALLOWED_ORIGINS
-            valueFrom:
-              configMapKeyRef:
-                name: numaflow-cmd-params-config
-                key: server.cors.allowed.origins
-                optional: true
-          - name: NUMAFLOW_SERVER_DAEMON_CLIENT_PROTOCOL
-            valueFrom:
-              configMapKeyRef:
-                name: numaflow-cmd-params-config
-                key: server.daemon.client.protocol
-                optional: true
-          - name: GRPC_ENFORCE_ALPN_ENABLED
-            value: "false"
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NUMAFLOW_SERVER_INSECURE
+              valueFrom:
+                configMapKeyRef:
+                  name: numaflow-cmd-params-config
+                  key: server.insecure
+                  optional: true
+            - name: NUMAFLOW_SERVER_PORT_NUMBER
+              valueFrom:
+                configMapKeyRef:
+                  name: numaflow-cmd-params-config
+                  key: server.port
+                  optional: true
+            - name: NUMAFLOW_SERVER_NAMESPACED
+              valueFrom:
+                configMapKeyRef:
+                  name: numaflow-cmd-params-config
+                  key: namespaced
+                  optional: true
+            - name: NUMAFLOW_SERVER_MANAGED_NAMESPACE
+              valueFrom:
+                configMapKeyRef:
+                  name: numaflow-cmd-params-config
+                  key: managed.namespace
+                  optional: true
+            - name: NUMAFLOW_SERVER_BASE_HREF
+              valueFrom:
+                configMapKeyRef:
+                  name: numaflow-cmd-params-config
+                  key: server.base.href
+                  optional: true
+            - name: NUMAFLOW_SERVER_READONLY
+              valueFrom:
+                configMapKeyRef:
+                  name: numaflow-cmd-params-config
+                  key: server.readonly
+                  optional: true
+            - name: NUMAFLOW_SERVER_DISABLE_AUTH
+              valueFrom:
+                configMapKeyRef:
+                  name: numaflow-cmd-params-config
+                  key: server.disable.auth
+                  optional: true
+            - name: NUMAFLOW_SERVER_DEX_SERVER_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: numaflow-cmd-params-config
+                  key: server.dex.server
+                  optional: true
+            - name: NUMAFLOW_SERVER_ADDRESS
+              valueFrom:
+                configMapKeyRef:
+                  name: numaflow-cmd-params-config
+                  key: server.address
+                  optional: true
+            - name: NUMAFLOW_SERVER_CORS_ALLOWED_ORIGINS
+              valueFrom:
+                configMapKeyRef:
+                  name: numaflow-cmd-params-config
+                  key: server.cors.allowed.origins
+                  optional: true
+            - name: NUMAFLOW_SERVER_DAEMON_CLIENT_PROTOCOL
+              valueFrom:
+                configMapKeyRef:
+                  name: numaflow-cmd-params-config
+                  key: server.daemon.client.protocol
+                  optional: true
           resources:
             limits:
               cpu: 500m

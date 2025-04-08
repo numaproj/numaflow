@@ -69,8 +69,6 @@ spec:
                   name: numaflow-cmd-params-config
                   key: controller.leader.election.lease.renew.period
                   optional: true
-            - name: GRPC_ENFORCE_ALPN_ENABLED
-              value: "false"
           volumeMounts:
             - mountPath: /etc/numaflow
               name: controller-config-volume
