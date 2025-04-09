@@ -31,16 +31,18 @@ import (
 )
 
 type When struct {
-	t                *testing.T
-	isbSvcClient     flowpkg.InterStepBufferServiceInterface
-	pipelineClient   flowpkg.PipelineInterface
-	vertexClient     flowpkg.VertexInterface
-	monoVertexClient flowpkg.MonoVertexInterface
-	isbSvc           *dfv1.InterStepBufferService
-	pipeline         *dfv1.Pipeline
-	monoVertex       *dfv1.MonoVertex
-	restConfig       *rest.Config
-	kubeClient       kubernetes.Interface
+	t                     *testing.T
+	isbSvcClient          flowpkg.InterStepBufferServiceInterface
+	pipelineClient        flowpkg.PipelineInterface
+	servingPipelineClient flowpkg.ServingPipelineInterface
+	vertexClient          flowpkg.VertexInterface
+	monoVertexClient      flowpkg.MonoVertexInterface
+	isbSvc                *dfv1.InterStepBufferService
+	pipeline              *dfv1.Pipeline
+	servingPipeline       *dfv1.ServingPipeline
+	monoVertex            *dfv1.MonoVertex
+	restConfig            *rest.Config
+	kubeClient            kubernetes.Interface
 
 	portForwarderStopChannels map[string]chan struct{}
 	streamLogsStopChannels    map[string]chan struct{}
@@ -98,6 +100,26 @@ func (w *When) CreatePipelineAndWait() *When {
 	}
 	// wait
 	if err := WaitForPipelineRunning(ctx, w.pipelineClient, w.pipeline.Name, defaultTimeout); err != nil {
+		w.t.Fatal(err)
+	}
+	return w
+}
+
+func (w *When) CreateServingPipelineAndWait() *When {
+	w.t.Helper()
+	if w.servingPipeline == nil {
+		w.t.Fatal("No ServingPipeline to create")
+	}
+	w.t.Log("Creating ServingPipeline", w.servingPipeline.Name)
+	ctx := context.Background()
+	i, err := w.servingPipelineClient.Create(ctx, w.servingPipeline, metav1.CreateOptions{})
+	if err != nil {
+		w.t.Fatal(err)
+	} else {
+		w.servingPipeline = i
+	}
+	// wait
+	if err := WaitForServingPipelineRunning(ctx, w.servingPipelineClient, w.servingPipeline.Name, 3*time.Minute); err != nil {
 		w.t.Fatal(err)
 	}
 	return w
@@ -179,6 +201,38 @@ func (w *When) DeleteMonoVertexAndWait() *When {
 		podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
 		if err != nil {
 			w.t.Fatalf("Error getting mono vertex pods: %v", err)
+		}
+		if len(podList.Items) == 0 {
+			return w
+		}
+		time.Sleep(2 * time.Second)
+	}
+}
+
+func (w *When) DeleteServingPipelineAndWait() *When {
+	w.t.Helper()
+	if w.servingPipeline == nil {
+		w.t.Fatal("No ServingPipeline to delete")
+	}
+	w.t.Log("Deleting ServingPipeline", w.servingPipeline.Name)
+	ctx := context.Background()
+	if err := w.servingPipelineClient.Delete(ctx, w.servingPipeline.Name, metav1.DeleteOptions{}); err != nil {
+		w.t.Fatal(err)
+	}
+
+	timeout := defaultTimeout
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	labelSelector := fmt.Sprintf("%s=%s", dfv1.KeyServingPipelineName, w.servingPipeline.Name)
+	for {
+		select {
+		case <-ctx.Done():
+			w.t.Fatalf("Timeout after %v waiting for ServingPipeline pods terminating", timeout)
+		default:
+		}
+		podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
+		if err != nil {
+			w.t.Fatalf("Error getting ServingPipeline pods: %v", err)
 		}
 		if len(podList.Items) == 0 {
 			return w

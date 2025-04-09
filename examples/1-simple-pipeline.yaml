@@ -16,8 +16,8 @@ spec:
       scale:
         min: 1
       udf:
-        builtin:
-          name: cat # A built-in UDF which simply cats the message
+        container:
+          image: quay.io/numaio/numaflow-go/map-forward-message:stable
     - name: out
       scale:
         min: 1

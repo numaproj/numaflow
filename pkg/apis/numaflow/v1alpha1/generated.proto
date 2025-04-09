@@ -207,6 +207,7 @@ message AbstractVertex {
   // +optional
   optional UpdateStrategy updateStrategy = 16;
 
+  // TODO(spl): clean up
   // Names of the serving store used in this vertex.
   // +optional
   optional string servingStoreName = 17;
@@ -596,6 +597,18 @@ message GetRedisStatefulSetSpecReq {
   optional string healthConfigMapName = 15;
 
   optional .k8s.io.api.core.v1.ResourceRequirements defaultResources = 16;
+}
+
+message GetServingPipelineResourceReq {
+  optional BufferServiceConfig isbSvcConfig = 1;
+
+  optional string image = 2;
+
+  optional string pullPolicy = 3;
+
+  repeated .k8s.io.api.core.v1.EnvVar env = 4;
+
+  optional .k8s.io.api.core.v1.ResourceRequirements defaultResources = 5;
 }
 
 message GetSideInputDeploymentReq {
@@ -1257,10 +1270,6 @@ message PipelineSpec {
   // SideInputs defines the Side Inputs of a pipeline.
   // +optional
   repeated SideInput sideInputs = 8;
-
-  // ServingStore defines the Serving Store for this pipeline.
-  // +optional
-  optional ServingStore servingStore = 9;
 }
 
 message PipelineStatus {
@@ -1548,8 +1557,60 @@ message Scale {
   optional uint32 replicasPerScaleDown = 12;
 }
 
+// +genclient
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:shortName=spl
+// +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
+// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +k8s:openapi-gen=true
+message ServingPipeline {
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+
+  optional ServingPipelineSpec spec = 2;
+
+  // +optional
+  optional ServingPipelineStatus status = 3;
+}
+
+// +kubebuilder:object:root=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+message ServingPipelineList {
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
+
+  repeated Pipeline items = 2;
+}
+
+message ServingPipelineSpec {
+  optional ServingSpec serving = 1;
+
+  optional PipelineSpec pipeline = 2;
+}
+
+message ServingPipelineStatus {
+  optional Status status = 1;
+
+  // +optional
+  optional string phase = 2;
+
+  // +optional
+  optional string message = 3;
+
+  // +optional
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time lastUpdated = 4;
+
+  // The generation observed by the ServingPipeline controller.
+  // +optional
+  optional int64 observedGeneration = 11;
+}
+
 // ServingSource is the HTTP endpoint for Numaflow.
 message ServingSource {
+}
+
+message ServingSpec {
   // +optional
   optional Authorization auth = 1;
 
@@ -1563,13 +1624,14 @@ message ServingSource {
   // Request timeout in seconds. Default value is 120 seconds.
   // +optional
   optional uint32 requestTimeoutSeconds = 4;
+
+  // +optional
+  optional ServingStore store = 5;
 }
 
 // ServingStore defines information of a Serving Store used in a pipeline
 message ServingStore {
-  optional string name = 1;
-
-  optional Container container = 2;
+  optional Container container = 1;
 }
 
 // SessionWindow describes a session window

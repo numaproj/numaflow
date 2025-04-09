@@ -83,7 +83,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 			return err
 		}
 		defer natsClientPool.CloseAll()
-		isbSvcClient, err = isbsvc.NewISBJetStreamSvc(ds.pipeline.Name, natsClientPool.NextAvailableClient())
+		isbSvcClient, err = isbsvc.NewISBJetStreamSvc(natsClientPool.NextAvailableClient())
 		if err != nil {
 			log.Errorw("Failed to get an ISB Service client.", zap.Error(err))
 			return err
@@ -128,7 +128,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 		return fmt.Errorf("failed to generate cert: %w", err)
 	}
 
-	tlsConfig := &tls.Config{Certificates: []tls.Certificate{*cer}, MinVersion: tls.VersionTLS12}
+	tlsConfig := &tls.Config{Certificates: []tls.Certificate{*cer}, MinVersion: tls.VersionTLS12, NextProtos: []string{"http/1.1", "h2"}}
 	grpcServer, err := ds.newGRPCServer(isbSvcClient, wmFetchers, rater, pipelineRuntimeCache)
 	if err != nil {
 		return fmt.Errorf("failed to create grpc server: %w", err)

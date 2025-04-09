@@ -46,36 +46,19 @@ type UDF struct {
 }
 
 func (in UDF) getContainers(req getContainerReq) ([]corev1.Container, []corev1.Container, error) {
-	containers := []corev1.Container{
-		in.getMainContainer(req),
-	}
 	monitorContainer := buildMonitorContainer(req)
 	sidecarContainers := []corev1.Container{monitorContainer, in.getUDFContainer(req)}
-
-	if req.servingStore != nil && req.servingStore.Container != nil {
-		sidecarContainers = append(sidecarContainers, req.servingStore.getUDStoreContainer(req))
-	}
-	return sidecarContainers, containers, nil
+	return sidecarContainers, []corev1.Container{in.getMainContainer(req)}, nil
 }
 
 func (in UDF) getMainContainer(req getContainerReq) corev1.Container {
-	// volume mount to the runtime path
-	volumeMounts := []corev1.VolumeMount{
-		{
-			Name:      RuntimeDirVolume,
-			MountPath: RuntimeDirMountPath,
-		},
-	}
 	if in.GroupBy == nil {
-		if req.executeRustBinary {
-			return containerBuilder{}.init(req).appendVolumeMounts(volumeMounts...).command(NumaflowRustBinary).args("processor", "--type="+string(VertexTypeMapUDF), "--isbsvc-type="+string(req.isbSvcType), "--rust").build()
-		}
 		args := []string{"processor", "--type=" + string(VertexTypeMapUDF), "--isbsvc-type=" + string(req.isbSvcType)}
 		return containerBuilder{}.
-			init(req).appendVolumeMounts(volumeMounts...).args(args...).build()
+			init(req).args(args...).build()
 	}
 	return containerBuilder{}.
-		init(req).appendVolumeMounts(volumeMounts...).args("processor", "--type="+string(VertexTypeReduceUDF), "--isbsvc-type="+string(req.isbSvcType)).build()
+		init(req).args("processor", "--type="+string(VertexTypeReduceUDF), "--isbsvc-type="+string(req.isbSvcType)).build()
 }
 
 func (in UDF) getUDFContainer(mainContainerReq getContainerReq) corev1.Container {

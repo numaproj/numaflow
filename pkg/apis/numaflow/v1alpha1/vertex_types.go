@@ -20,14 +20,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	resource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/env"
 	"k8s.io/utils/ptr"
 )
 
@@ -54,8 +52,6 @@ const (
 	VertexTypeMapUDF    VertexType = "MapUDF"
 	VertexTypeReduceUDF VertexType = "ReduceUDF"
 )
-
-const NumaflowRustBinary = "/bin/numaflow-rs"
 
 // +genclient
 // +kubebuilder:object:root=true
@@ -147,26 +143,7 @@ func (v Vertex) GetServiceObjs() []*corev1.Service {
 	if x := v.Spec.Source; x != nil && x.HTTP != nil && x.HTTP.Service {
 		svcs = append(svcs, v.getServiceObj(v.Name, false, map[string]int32{VertexHTTPSPortName: VertexHTTPSPort}))
 	}
-	// serving source uses the same port as the http source, because both can't be configured at the same time
-	if x := v.Spec.Source; x != nil && x.Serving != nil && x.Serving.Service {
-		svcs = append(svcs, v.getServiceObj(v.Name, false, map[string]int32{VertexHTTPSPortName: VertexHTTPSPort}))
-	}
 	return svcs
-}
-
-func (v Vertex) GetServingSourceStreamName() string {
-	return fmt.Sprintf("%s-%s-serving-source", v.Spec.PipelineName, v.Spec.Name)
-}
-
-func (v Vertex) GetServingStoreName() string {
-	if v.HasServingStore() {
-		return *v.Spec.ServingStoreName
-	}
-	return ""
-}
-
-func (v Vertex) HasServingStore() bool {
-	return v.Spec.ServingStoreName != nil
 }
 
 func (v Vertex) getServiceObj(name string, headless bool, ports map[string]int32) *corev1.Service {
@@ -263,7 +240,7 @@ func (v Vertex) simpleCopy() Vertex {
 
 func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 	vertexCopy := v.simpleCopy()
-	v.Spec.Scale = Scale{LookbackSeconds: ptr.To[uint32](uint32(v.Spec.Scale.GetLookbackSeconds()))}
+	v.Spec.Scale = Scale{LookbackSeconds: ptr.To(uint32(v.Spec.Scale.GetLookbackSeconds()))}
 	vertexBytes, err := json.Marshal(vertexCopy)
 	if err != nil {
 		return nil, errors.New("failed to marshal vertex spec")
@@ -273,14 +250,7 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		{Name: EnvVertexObject, Value: encodedVertexSpec},
 	}
 
-	commonEnvVars := v.commonEnvs()
-	for _, vtx := range req.PipelineSpec.Vertices {
-		if vtx.IsASource() && vtx.Source.Serving != nil {
-			commonEnvVars = append(commonEnvVars, corev1.EnvVar{Name: EnvCallbackEnabled, Value: "true"})
-		}
-	}
-
-	envVars = append(envVars, commonEnvVars...)
+	envVars = append(envVars, v.commonEnvs()...)
 	envVars = append(envVars, req.Env...)
 
 	varVolumeName := "var-run-numaflow"
@@ -299,18 +269,14 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		},
 	}
 
-	servingStore := req.PipelineSpec.GetStoreSpec(v.GetServingStoreName())
 	volumeMounts := []corev1.VolumeMount{{Name: varVolumeName, MountPath: PathVarRun}}
-	executeRustBinary, _ := env.GetBool(EnvExecuteRustBinary, false)
 	containerRequest := getContainerReq{
-		isbSvcType:        req.ISBSvcType,
-		env:               envVars,
-		image:             req.Image,
-		imagePullPolicy:   req.PullPolicy,
-		resources:         req.DefaultResources,
-		volumeMounts:      volumeMounts,
-		executeRustBinary: executeRustBinary,
-		servingStore:      servingStore,
+		isbSvcType:      req.ISBSvcType,
+		env:             envVars,
+		image:           req.Image,
+		imagePullPolicy: req.PullPolicy,
+		resources:       req.DefaultResources,
+		volumeMounts:    volumeMounts,
 	}
 	sidecarContainers, containers, err := v.Spec.getType().getContainers(containerRequest)
 	if err != nil {
@@ -406,35 +372,6 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		initContainers = append(initContainers, sidecarContainers...)
 	} else {
 		containers = append(containers, sidecarContainers...)
-	}
-
-	if v.IsASource() && v.Spec.Source.Serving != nil {
-		// Create a SimplifiedPipelineSpec and populate it with the vertex names and edges
-		simplifiedPipelineSpec := PipelineSpec{
-			Vertices: req.PipelineSpec.Vertices,
-			Edges:    req.PipelineSpec.Edges,
-		}
-
-		pipelineSpecBytes, err := json.Marshal(simplifiedPipelineSpec)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal pipeline spec, error: %w", err)
-		}
-		encodedPipelineSpec := base64.StdEncoding.EncodeToString(pipelineSpecBytes)
-
-		containers[0].Env = append(
-			containers[0].Env,
-			// set the serving source stream name in the environment because the numa container will be reading from it
-			corev1.EnvVar{Name: EnvServingMinPipelineSpec, Value: encodedPipelineSpec},
-			corev1.EnvVar{Name: EnvServingPort, Value: strconv.Itoa(VertexHTTPSPort)},
-			corev1.EnvVar{
-				Name: EnvServingHostIP,
-				ValueFrom: &corev1.EnvVarSource{
-					FieldRef: &corev1.ObjectFieldSelector{
-						FieldPath: "status.podIP",
-					},
-				},
-			},
-		)
 	}
 
 	spec := &corev1.PodSpec{
@@ -632,6 +569,7 @@ type AbstractVertex struct {
 	// +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
 	// +optional
 	UpdateStrategy UpdateStrategy `json:"updateStrategy,omitempty" protobuf:"bytes,16,opt,name=updateStrategy"`
+	// TODO(spl): clean up
 	// Names of the serving store used in this vertex.
 	// +optional
 	ServingStoreName *string `json:"servingStoreName,omitempty" protobuf:"bytes,17,opt,name=servingStoreName"`
@@ -708,10 +646,6 @@ func (av AbstractVertex) IsMapUDF() bool {
 
 func (av AbstractVertex) IsReduceUDF() bool {
 	return av.UDF != nil && av.UDF.GroupBy != nil
-}
-
-func (av AbstractVertex) IsAServingSource() bool {
-	return av.Source != nil && av.Source.Serving != nil
 }
 
 func (av AbstractVertex) OwnedBufferNames(namespace, pipeline string) []string {

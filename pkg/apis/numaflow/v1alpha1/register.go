@@ -32,14 +32,16 @@ var (
 	// AddToScheme adds the types in this group-version to the given scheme.
 	AddToScheme = SchemeBuilder.AddToScheme
 
-	ISBGroupVersionKind            = SchemeGroupVersion.WithKind("InterStepBufferService")
-	ISBGroupVersionResource        = SchemeGroupVersion.WithResource("interstepbufferservices")
-	PipelineGroupVersionKind       = SchemeGroupVersion.WithKind("Pipeline")
-	PipelineGroupVersionResource   = SchemeGroupVersion.WithResource("pipelines")
-	VertexGroupVersionKind         = SchemeGroupVersion.WithKind("Vertex")
-	VertexGroupVersionResource     = SchemeGroupVersion.WithResource("vertices")
-	MonoVertexGroupVersionKind     = SchemeGroupVersion.WithKind("MonoVertex")
-	MonoVertexGroupVersionResource = SchemeGroupVersion.WithResource("monovertices")
+	ISBGroupVersionKind                 = SchemeGroupVersion.WithKind("InterStepBufferService")
+	ISBGroupVersionResource             = SchemeGroupVersion.WithResource("interstepbufferservices")
+	PipelineGroupVersionKind            = SchemeGroupVersion.WithKind("Pipeline")
+	PipelineGroupVersionResource        = SchemeGroupVersion.WithResource("pipelines")
+	VertexGroupVersionKind              = SchemeGroupVersion.WithKind("Vertex")
+	VertexGroupVersionResource          = SchemeGroupVersion.WithResource("vertices")
+	MonoVertexGroupVersionKind          = SchemeGroupVersion.WithKind("MonoVertex")
+	MonoVertexGroupVersionResource      = SchemeGroupVersion.WithResource("monovertices")
+	ServingPipelineGroupVersionKind     = SchemeGroupVersion.WithKind("ServingPipeline")
+	ServingPipelineGroupVersionResource = SchemeGroupVersion.WithResource("servingpipelines")
 )
 
 // Resource takes an unqualified resource and returns a Group qualified GroupResource
@@ -57,6 +59,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&VertexList{},
 		&MonoVertex{},
 		&MonoVertexList{},
+		&ServingPipeline{},
+		&ServingPipelineList{},
 	)
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil

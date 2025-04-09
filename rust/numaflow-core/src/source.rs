@@ -50,10 +50,7 @@ pub(crate) mod pulsar;
 
 pub(crate) mod jetstream;
 
-pub(crate) mod serving;
 pub(crate) mod sqs;
-
-use serving::ServingSource;
 
 use crate::transformer::Transformer;
 use crate::watermark::source::SourceWatermarkHandle;
@@ -96,7 +93,6 @@ pub(crate) enum SourceType {
     #[allow(clippy::upper_case_acronyms)]
     #[allow(dead_code)] // TODO(SQS): remove it when integrated with controller
     SQS(SQSSource),
-    Serving(ServingSource),
     Jetstream(JetstreamSource),
 }
 
@@ -246,13 +242,6 @@ impl Source {
                         sqs_source.clone(),
                         sqs_source,
                     );
-                    actor.run().await;
-                });
-            }
-            SourceType::Serving(serving) => {
-                tokio::spawn(async move {
-                    let actor =
-                        SourceActor::new(receiver, serving.clone(), serving.clone(), serving);
                     actor.run().await;
                 });
             }

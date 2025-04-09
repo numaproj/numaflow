@@ -42,6 +42,14 @@ type PipelineListerExpansion interface{}
 // PipelineNamespaceLister.
 type PipelineNamespaceListerExpansion interface{}
 
+// ServingPipelineListerExpansion allows custom methods to be added to
+// ServingPipelineLister.
+type ServingPipelineListerExpansion interface{}
+
+// ServingPipelineNamespaceListerExpansion allows custom methods to be added to
+// ServingPipelineNamespaceLister.
+type ServingPipelineNamespaceListerExpansion interface{}
+
 // VertexListerExpansion allows custom methods to be added to
 // VertexLister.
 type VertexListerExpansion interface{}
