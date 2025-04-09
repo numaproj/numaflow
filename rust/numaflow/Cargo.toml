@@ -3,6 +3,10 @@ name = "numaflow"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "entrypoint"
+path = "src/bin/entrypoint.rs"
+
 [lints]
 workspace = true
 
