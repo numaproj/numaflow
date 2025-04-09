@@ -10,9 +10,17 @@ use std::io::Write;
 use std::os::unix::fs::DirBuilderExt as _;
 use std::path::Path;
 use std::str;
+use std::sync::{Arc, OnceLock};
+use tokio::sync::Mutex;
 use tonic::Status;
 use tracing::error;
 use uuid::Uuid;
+
+static PERSIST_ERROR_LOCK: OnceLock<Arc<Mutex<()>>> = OnceLock::new();
+
+fn get_persist_error_lock() -> &'static Arc<Mutex<()>> {
+    PERSIST_ERROR_LOCK.get_or_init(|| Arc::new(Mutex::new(())))
+}
 
 /// Represents a single runtime error entry persisted by the application.
 #[derive(Serialize, Deserialize, Debug)]
@@ -110,7 +118,7 @@ impl Runtime {
     /// let runtime = Runtime::new(None);
     /// runtime.persist_application_error(grpc_status);
     /// ```
-    pub fn persist_application_error(&self, grpc_status: Status) {
+    pub async fn persist_application_error(&self, grpc_status: Status) {
         // extract the type of udf container based on the error message
         let container_name = extract_container_name(grpc_status.message());
         // skip processing if the container name is empty. This happens only if
@@ -132,9 +140,11 @@ impl Runtime {
                 .expect("Failed to create application errors directory");
         }
 
+        let _lock = get_persist_error_lock().lock().await;
+
         // this is to check the number of files in the directory
         // additional check in place to process only files and ignore directories
-        // ignore files starting with current prefix
+        // ignore files starting with prefix `current`
         let mut files: Vec<_> = fs::read_dir(&dir_path)
             .expect("Failed to read application errors directory")
             .filter_map(|entry| entry.ok())
@@ -336,8 +346,8 @@ mod tests {
         assert_eq!(runtime_without_config.max_error_files_per_container, 10);
     }
 
-    #[test]
-    fn test_persist_application_error() {
+    #[tokio::test]
+    async fn test_persist_application_error() {
         // Create a temporary directory for testing
         let temp_dir = tempdir().unwrap();
         let application_error_path = temp_dir.path().to_str().unwrap().to_string();
@@ -352,7 +362,7 @@ mod tests {
         let grpc_status = Status::internal("UDF_EXECUTION_ERROR(udsource): Test error message");
 
         // Call the function to test
-        runtime.persist_application_error(grpc_status.clone());
+        runtime.persist_application_error(grpc_status.clone()).await;
 
         // Verify that the directory for the container was created
         let container_name = extract_container_name(grpc_status.message());
@@ -371,8 +381,8 @@ mod tests {
         assert!(file_name.ends_with(".json"));
     }
 
-    #[test]
-    fn test_persist_application_error_with_empty_container_name() {
+    #[tokio::test]
+    async fn test_persist_application_error_with_empty_container_name() {
         // Create a temporary directory for testing
         let temp_dir = tempdir().unwrap();
         let application_error_path = temp_dir.path().to_str().unwrap().to_string();
@@ -391,7 +401,7 @@ mod tests {
         assert!(container_name.is_empty());
 
         // Call the function to test
-        runtime.persist_application_error(grpc_status.clone());
+        runtime.persist_application_error(grpc_status.clone()).await;
 
         // Verify that no files were created in the directory
         let dir_path = Path::new(&runtime.application_error_path).join(&container_name);
@@ -541,7 +551,9 @@ mod tests {
                 barrier_clone.wait().await;
 
                 // Call persist_application_error
-                runtime_clone.persist_application_error(grpc_status_clone.clone());
+                runtime_clone
+                    .persist_application_error(grpc_status_clone.clone())
+                    .await;
             });
 
             handles.push(handle);

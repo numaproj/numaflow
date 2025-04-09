@@ -88,7 +88,7 @@ pub async fn run() -> Result<()> {
             if let Err(e) = monovertex::start_forwarder(cln_token, &config).await {
                 if let Error::Grpc(e) = e {
                     error!(error=?e, "Monovertex failed because of UDF failure");
-                    runtime.persist_application_error(e)
+                    runtime.persist_application_error(e).await;
                 } else {
                     error!(?e, "Error running monovertex");
                 }
@@ -103,7 +103,7 @@ pub async fn run() -> Result<()> {
             if let Err(e) = pipeline::start_forwarder(cln_token, config).await {
                 if let Error::Grpc(e) = e {
                     error!(error=?e, "Pipeline failed because of UDF failure");
-                    runtime.persist_application_error(e)
+                    runtime.persist_application_error(e).await;
                 } else {
                     error!(?e, "Error running pipeline");
                 }

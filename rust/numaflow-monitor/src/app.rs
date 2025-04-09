@@ -174,7 +174,7 @@ mod tests {
         let grpc_status = Status::internal("UDF_EXECUTION_ERROR(udsource): Test error message");
 
         // Call the function to persist error in temp app directory
-        runtime.persist_application_error(grpc_status.clone());
+        runtime.persist_application_error(grpc_status.clone()).await;
 
         let state = Arc::new(AppState {
             runtime: Arc::new(runtime),

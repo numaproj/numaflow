@@ -1,8 +1,7 @@
-use std::sync::Arc;
-
 use bytes::Bytes;
 use numaflow_monitor::runtime::Runtime;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot, Semaphore};
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
@@ -134,12 +133,12 @@ impl Transformer {
             error!("received empty response from server (transformer), we will wait indefinitely");
             // persist the error for debugging
             Runtime::new(None).persist_application_error(Status::with_details(
-                Code::Internal,
-                "UDF_PARTIAL_RESPONSE(transformer)",
-                Bytes::from_static(
-                    b"received empty response from server (transformer), we will wait indefinitely",
-                ),
-            ));
+                    Code::Internal,
+                    "UDF_PARTIAL_RESPONSE(transformer)",
+                    Bytes::from_static(
+                        b"received empty response from server (transformer), we will wait indefinitely",
+                    ),
+            )).await;
             futures::future::pending::<()>().await;
         }
 

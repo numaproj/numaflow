@@ -136,7 +136,7 @@ impl Sink for UserDefinedSink {
                         Bytes::from_static(
                             b"received EOT message before all responses are received from ud sink",
                         ),
-                    ));
+                    )).await;
                 } else {
                     break;
                 }
