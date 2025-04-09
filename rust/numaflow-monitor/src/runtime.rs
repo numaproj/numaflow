@@ -104,9 +104,11 @@ impl Runtime {
     ///
     /// # Example:
     /// ```no_run
-    ///  use numaflow_monitor::runtime::Runtime;
-    ///  let grpc_status = tonic::Status::internal("UDF_EXECUTION_ERROR(container-name): Test error");
-    ///  Runtime::new(None).persist_application_error(grpc_status);
+    /// use numaflow_monitor::runtime::Runtime;
+    ///
+    /// let grpc_status = tonic::Status::internal("UDF_EXECUTION_ERROR(container-name): Test error");
+    /// let runtime = Runtime::new(None);
+    /// runtime.persist_application_error(grpc_status);
     /// ```
     pub fn persist_application_error(&self, grpc_status: Status) {
         // extract the type of udf container based on the error message
