@@ -544,6 +544,29 @@ const LineChartComponent = ({
               </Box>
             );
           })}
+        {filtersList?.filter((filterEle: any) => !filterEle?.required)?.length >
+          0 && (
+          <Box
+            className={"line-chart-filters"}
+            sx={{
+              display: fromModal ? "none" : "flex",
+            }}
+          >
+            <Box sx={{ mr: "1rem" }}>Filters</Box>
+            <FiltersDropdown
+              items={filtersList?.filter(
+                (filterEle: any) => !filterEle?.required
+              )}
+              namespaceId={namespaceId}
+              pipelineId={pipelineId}
+              type={type}
+              vertexId={vertexId}
+              setFilters={setFilters}
+              selectedPodName={pod?.name}
+              metric={metric}
+            />
+          </Box>
+        )}
         {fromModal && (
           <Box className={"line-chart-modal-desc"}>{getMetricsModalDesc()}</Box>
         )}
@@ -553,30 +576,6 @@ const LineChartComponent = ({
           </Box>
         )}
       </Box>
-
-      {filtersList?.filter((filterEle: any) => !filterEle?.required)?.length >
-        0 && (
-        <Box
-          className={"line-chart-filters"}
-          sx={{
-            display: fromModal ? "none" : "flex",
-          }}
-        >
-          <Box sx={{ mr: "1rem" }}>Filters</Box>
-          <FiltersDropdown
-            items={filtersList?.filter(
-              (filterEle: any) => !filterEle?.required
-            )}
-            namespaceId={namespaceId}
-            pipelineId={pipelineId}
-            type={type}
-            vertexId={vertexId}
-            setFilters={setFilters}
-            selectedPodName={pod?.name}
-            metric={metric}
-          />
-        </Box>
-      )}
 
       {isLoading && (
         <Box className={"line-chart-loading"}>
@@ -637,7 +636,7 @@ const LineChartComponent = ({
                 type="monotone"
                 dataKey={`${value}`}
                 stroke={getRandomColor(index)}
-                activeDot={{ r: 8 }}
+                dot={false}
               />
             ))}
 
