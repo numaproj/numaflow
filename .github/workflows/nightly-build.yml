@@ -110,6 +110,11 @@ jobs:
         with:
           name: numaflow-rs-linux-arm64
           path: rust/numaflow-rs-linux-arm64
+      - name: Upload entrypoint binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: entrypoint-linux-arm64
+          path: rust/entrypoint-linux-arm64
 
   build-push-linux-multi:
     name: Build & push linux/amd64 and linux/arm64

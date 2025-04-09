@@ -6,23 +6,21 @@ use std::process::Command;
 const NUMAFLOW_GOLANG: &str = "/bin/numaflow";
 const NUMAFLOW_RUST: &str = "/bin/numaflow-rs";
 
-fn start_golang() -> Result<(), Box<dyn Error>> {
-    let mut cmd = Command::new(NUMAFLOW_GOLANG);
-    Err(cmd.args(env::args()).envs(env::vars()).exec().into())
-}
-
-fn start_rust() -> Result<(), Box<dyn Error>> {
-    let mut cmd = Command::new(NUMAFLOW_RUST);
-    Err(cmd.args(env::args()).envs(env::vars()).exec().into())
-}
-
 fn main() -> Result<(), Box<dyn Error>> {
-    // start Golang if NUMAFLOW_RUNTIME == Golang.
-    // This is a temporary solution until port the entire dataplane to rust.
-    let is_golang = env::var("NUMAFLOW_RUNTIME").unwrap_or("golang".to_string());
-    if is_golang == "golang" {
-        start_golang()
+    // Determine the runtime based on the NUMAFLOW_RUNTIME environment variable
+    let runtime = env::var("NUMAFLOW_RUNTIME").unwrap_or_else(|_| "golang".to_string());
+
+    // Collect arguments, skipping the first one (binary name)
+    let args: Vec<String> = env::args().skip(1).collect();
+
+    // Choose the appropriate binary to execute
+    let binary = if runtime == "rust" {
+        NUMAFLOW_RUST
     } else {
-        start_rust()
-    }
+        NUMAFLOW_GOLANG
+    };
+
+    // Replace the current process with the chosen binary
+    let mut cmd = Command::new(binary);
+    Err(cmd.args(args).envs(env::vars()).exec().into())
 }
