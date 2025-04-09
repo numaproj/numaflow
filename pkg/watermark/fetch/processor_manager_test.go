@@ -66,6 +66,9 @@ func TestProcessorManager(t *testing.T) {
 		var err error
 		for i := 0; i < 3; i++ {
 			err = wmStore.HeartbeatStore().PutKV(ctx, "p1", []byte(fmt.Sprintf("%d", time.Now().Unix())))
+			if errors.Is(err, ctx.Err()) {
+				return
+			}
 			assert.NoError(t, err)
 			time.Sleep(1 * time.Second)
 		}
@@ -81,6 +84,9 @@ func TestProcessorManager(t *testing.T) {
 			select {
 			case <-time.After(1 * time.Second):
 				err := wmStore.HeartbeatStore().PutKV(ctx, "p2", []byte(fmt.Sprintf("%d", time.Now().Unix())))
+				if errors.Is(err, ctx.Err()) {
+					return
+				}
 				assert.NoError(t, err)
 			case <-ctx.Done():
 				return

@@ -10,7 +10,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Determine the runtime based on the NUMAFLOW_RUNTIME environment variable
     let runtime = env::var("NUMAFLOW_RUNTIME").unwrap_or_else(|_| "golang".to_string());
 
-    // Collect arguments, skipping the first one (binary name)
+    // Collect arguments, skipping the first one (binary name) because we will replace the process
+    // with the chosen binary.
     let args: Vec<String> = env::args().skip(1).collect();
 
     // Choose the appropriate binary to execute

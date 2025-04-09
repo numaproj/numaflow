@@ -83,12 +83,14 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v1.9.0
         with:
           rustflags: ""
-      - name: Install dependenices
+      - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu protobuf-compiler
       - name: Build binary
         run: RUSTFLAGS='-C target-feature=+crt-static -C linker=aarch64-linux-gnu-gcc' cargo build --release --target aarch64-unknown-linux-gnu
       - name: Rename binary
-        run: cp -pv target/aarch64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-arm64
+        run: |
+          cp -pv target/aarch64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-arm64
+          cp -pv target/aarch64-unknown-linux-gnu/release/entrypoint entrypoint-linux-arm64
       - name: Upload numaflow binary
         uses: actions/upload-artifact@v4
         with:

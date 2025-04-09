@@ -104,7 +104,9 @@ jobs:
       - name: Build binary
         run: RUSTFLAGS='-C target-feature=+crt-static -C linker=aarch64-linux-gnu-gcc' cargo build --release --target aarch64-unknown-linux-gnu
       - name: Rename binary
-        run: cp -pv target/aarch64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-arm64
+        run: |
+          cp -pv target/aarch64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-arm64
+          cp -pv target/aarch64-unknown-linux-gnu/release/entrypoint entrypoint-linux-arm64
       - name: Upload numaflow binary
         uses: actions/upload-artifact@v4
         with:
