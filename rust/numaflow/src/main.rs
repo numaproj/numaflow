@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 use std::env;
 use std::error::Error;
-use std::os::unix::process::CommandExt;
-use std::process::Command;
 use std::time::Duration;
 use tracing::{error, info};
 use tracing_subscriber::layer::SubscriberExt;
