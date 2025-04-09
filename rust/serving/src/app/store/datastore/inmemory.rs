@@ -72,8 +72,8 @@ mod tests {
     use tokio_stream::StreamExt;
 
     use super::*;
-    use crate::app::store::datastore::inmemory::InMemoryDataStore;
     use crate::app::store::datastore::DataStore;
+    use crate::app::store::datastore::inmemory::InMemoryDataStore;
 
     fn create_test_store() -> InMemoryDataStore {
         let mut datum_map: HashMap<String, Vec<Vec<u8>>> = HashMap::new();

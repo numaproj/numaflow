@@ -2,10 +2,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use numaflow_pb::clients::map::map_client::MapClient;
-use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 use tokio::task::JoinHandle;
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::{info, warn};
@@ -696,9 +696,9 @@ mod tests {
 
     use super::*;
     use crate::{
+        Result,
         message::{MessageID, Offset, StringOffset},
         shared::grpc::create_rpc_channel,
-        Result,
     };
 
     struct SimpleMapper;
@@ -962,10 +962,12 @@ mod tests {
         // Await the join handle and expect an error due to the panic
         let result = map_handle.await.unwrap();
         assert!(result.is_err(), "Expected an error due to panic");
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("PanicCat panicked!"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("PanicCat panicked!")
+        );
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(
@@ -1389,10 +1391,12 @@ mod tests {
         // Await the join handle and expect an error due to the panic
         let result = map_handle.await.unwrap();
         assert!(result.is_err(), "Expected an error due to panic");
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("PanicFlatmapStream panicked!"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("PanicFlatmapStream panicked!")
+        );
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(

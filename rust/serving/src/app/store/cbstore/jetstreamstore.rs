@@ -20,14 +20,14 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_nats::jetstream::kv::{CreateErrorKind, Store};
 use async_nats::jetstream::Context;
+use async_nats::jetstream::kv::{CreateErrorKind, Store};
 use bytes::Bytes;
 use chrono::Utc;
 use tokio::task::JoinHandle;
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
-use tracing::{info, Instrument};
+use tokio_stream::wrappers::ReceiverStream;
+use tracing::{Instrument, info};
 
 use crate::app::store::cbstore::ProcessingStatus;
 use crate::app::store::datastore::{Error as StoreError, Result as StoreResult};

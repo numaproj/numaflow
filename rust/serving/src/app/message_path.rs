@@ -1,6 +1,7 @@
 use axum::{
+    Router,
     extract::{Query, State},
-    routing, Router,
+    routing,
 };
 
 use crate::app::orchestrator::OrchestratorState as CallbackState;

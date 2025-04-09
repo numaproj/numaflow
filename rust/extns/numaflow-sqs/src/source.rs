@@ -8,10 +8,10 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use aws_config::{meta::region::RegionProviderChain, BehaviorVersion};
+use aws_config::{BehaviorVersion, meta::region::RegionProviderChain};
+use aws_sdk_sqs::Client;
 use aws_sdk_sqs::config::Region;
 use aws_sdk_sqs::types::{MessageSystemAttributeName, QueueAttributeName};
-use aws_sdk_sqs::Client;
 use aws_smithy_types::timeout::TimeoutConfig;
 use bytes::Bytes;
 use chrono::{DateTime, TimeZone, Utc};
@@ -504,7 +504,7 @@ impl SQSSource {
 #[cfg(test)]
 mod tests {
     use aws_sdk_sqs::Config;
-    use aws_smithy_mocks_experimental::{mock, MockResponseInterceptor, Rule, RuleMode};
+    use aws_smithy_mocks_experimental::{MockResponseInterceptor, Rule, RuleMode, mock};
     use aws_smithy_types::error::ErrorMetadata;
 
     use super::*;

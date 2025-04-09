@@ -445,9 +445,9 @@ impl ProcessorManager {
 #[cfg(test)]
 mod tests {
     use async_nats::jetstream;
+    use async_nats::jetstream::Context;
     use async_nats::jetstream::kv::Config;
     use async_nats::jetstream::kv::Store;
-    use async_nats::jetstream::Context;
     use bytes::{Bytes, BytesMut};
     use prost::Message;
 
@@ -669,7 +669,9 @@ mod tests {
             }
 
             if start_time.elapsed() > Duration::from_secs(1) {
-                panic!("Test failed: Processors were not added or WMBs were not tracked within 1 second");
+                panic!(
+                    "Test failed: Processors were not added or WMBs were not tracked within 1 second"
+                );
             }
         }
         // Abort the tasks

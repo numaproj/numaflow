@@ -1,28 +1,28 @@
 use std::{str::FromStr, sync::Arc};
 
-use super::{orchestrator, store::datastore::DataStore, AppState};
+use super::{AppState, orchestrator, store::datastore::DataStore};
 use super::{FetchQueryParams, Tid};
+use crate::Error;
 use crate::app::response::{ApiError, ServeResponse};
 use crate::app::store::cbstore::CallbackStore;
 use crate::app::store::datastore::Error as StoreError;
 use crate::metrics::serving_metrics;
-use crate::Error;
 use async_nats::jetstream::Context;
-use axum::response::sse::Event;
-use axum::response::Sse;
 use axum::Extension;
+use axum::response::Sse;
+use axum::response::sse::Event;
 use axum::{
+    Json, Router,
     body::{Body, Bytes},
     extract::{Query, State},
     http::{HeaderMap, HeaderName, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
-    Json, Router,
 };
 use serde_json::json;
 use tokio::time::Instant;
 use tokio_stream::{Stream, StreamExt};
-use tracing::{error, Instrument};
+use tracing::{Instrument, error};
 
 const NUMAFLOW_RESP_ARRAY_LEN: &str = "Numaflow-Array-Len";
 const NUMAFLOW_RESP_ARRAY_IDX_LEN: &str = "Numaflow-Array-Index-Len";
@@ -425,6 +425,7 @@ async fn async_publish<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Settings;
     use crate::app::orchestrator::OrchestratorState;
     use crate::app::router_with_auth;
     use crate::app::store::cbstore::jetstreamstore::JetStreamCallbackStore;
@@ -433,12 +434,11 @@ mod tests {
     use crate::callback::{Callback, Response};
     use crate::config::DEFAULT_ID_HEADER;
     use crate::pipeline::PipelineDCG;
-    use crate::Settings;
     use async_nats::jetstream;
-    use axum::body::{to_bytes, Body};
+    use axum::body::{Body, to_bytes};
     use axum::extract::Request;
     use axum::http::header::{CONTENT_LENGTH, CONTENT_TYPE};
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
     use std::sync::Arc;
     use tokio::net::TcpListener;
     use tower::ServiceExt;
