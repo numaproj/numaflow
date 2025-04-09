@@ -21,4 +21,4 @@ Always create a release branch for the releases, for example branch `release-0.5
    git push -d {your-remote} stable
    git push {your-remote} stable
    ```
-1. [Non RC release only] Release the new version in [helm-charts](https://github.com/numaproj/helm-charts).
+1. [Non RC release only] Release the new version in [helm-charts](https://github.com/numaproj/helm-charts/tree/main/charts/numaflow).
