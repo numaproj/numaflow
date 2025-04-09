@@ -71,6 +71,12 @@ jobs:
         with:
           name: numaflow-rs-linux-amd64
           path: rust/numaflow-rs-linux-amd64
+      - name: Upload entrypoint binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: entrypoint-linux-amd64
+          path: rust/entrypoint-linux-amd64
+          if-no-files-found: error
 
   build-rust-arm64:
     runs-on: ubuntu-24.04
