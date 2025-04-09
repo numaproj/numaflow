@@ -7,12 +7,12 @@ use std::convert::TryFrom;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
+use std::os::unix::fs::DirBuilderExt as _;
 use std::path::Path;
 use std::str;
 use tonic::Status;
 use tracing::error;
-
-const CURRENT_FILE: &str = "current-numa.json";
+use uuid::Uuid;
 
 /// Represents a single runtime error entry persisted by the application.
 #[derive(Serialize, Deserialize, Debug)]
@@ -121,15 +121,29 @@ impl Runtime {
         // create a directory for the container if it doesn't exist
         let dir_path = Path::new(&self.application_error_path).join(&container_name);
         if !dir_path.exists() {
-            fs::create_dir_all(&dir_path).expect("Failed to create application errors directory");
+            // create directory with permissions to read, write, and execute for all
+            let mut builder = fs::DirBuilder::new();
+            builder.recursive(true);
+            builder.mode(0o777);
+            builder
+                .create(&dir_path)
+                .expect("Failed to create application errors directory");
         }
 
         // this is to check the number of files in the directory
         // additional check in place to process only files and ignore directories
+        // ignore files starting with current prefix
         let mut files: Vec<_> = fs::read_dir(&dir_path)
             .expect("Failed to read application errors directory")
             .filter_map(|entry| entry.ok())
             .filter(|entry| entry.path().is_file())
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_str()
+                    .map(|name| !name.starts_with("current"))
+                    .unwrap_or(false)
+            })
             .collect();
 
         // sort the files based on timestamp
@@ -140,11 +154,20 @@ impl Runtime {
                 .and_then(|timestamp| timestamp.parse::<i64>().ok())
         });
 
-        // remove the oldest file if the number of files exceeds the limit
-        if files.len() >= self.max_error_files_per_container {
+        // remove the oldest files until the number of files is within the max limit
+        // this is to ensure that we don't exceed the max limit of files in the container directory
+        while files.len() >= self.max_error_files_per_container {
             if let Some(oldest_file) = files.first() {
-                fs::remove_file(oldest_file.path())
-                    .expect("Failed to remove the oldest application error file");
+                if let Err(e) = fs::remove_file(oldest_file.path()) {
+                    error!(
+                        "Failed to remove the oldest application error file: {:?}, error: {:?}",
+                        oldest_file.path(),
+                        e
+                    );
+                    break;
+                }
+                // Remove the file from the list after successful deletion
+                files.remove(0);
             }
         }
 
@@ -153,12 +176,14 @@ impl Runtime {
             RuntimeErrorEntry::from((&grpc_status, container_name.as_str(), timestamp));
         let json_str: String = runtime_error_entry.into();
 
-        // Write the error details to a temporary file (`current-numa.json`) and rename it to a
+        // Write the error details to a temporary file and rename it to a
         // timestamped file once the write operation is complete.
         // this is to ensure that while reading we skip this file to avoid race condition
-        let current_file_path = dir_path.join(CURRENT_FILE);
-        // append numa to the file name to avoid collision with files written from udf with same timestamp
-        let file_name = format!("{}-numa.json", timestamp);
+        let uuid = Uuid::new_v4();
+        let current_file_name = format!("current-numa-{}.json", uuid);
+        let current_file_path = dir_path.join(&current_file_name);
+        // append numa to the file name to denote files created by numa container
+        let file_name = format!("{}-numa-{}.json", timestamp, uuid);
         let final_file_path = dir_path.join(&file_name);
 
         let mut current_file = File::create(&current_file_path)
@@ -217,7 +242,7 @@ impl Runtime {
                     .file_name()
                     .to_str()
                     .expect("file name should be valid")
-                    == CURRENT_FILE
+                    .starts_with("current")
                 {
                     continue;
                 }
@@ -282,7 +307,9 @@ mod tests {
     use crate::runtime::process_file_entry;
     use std::fs;
     use std::io::Write;
+    use std::sync::Arc;
     use tempfile::tempdir;
+    use tokio::sync::Barrier;
 
     #[test]
     fn test_runtime_new() {
@@ -483,5 +510,63 @@ mod tests {
         let result: Result<()> = process_file_entry(&file_entry, &mut errors);
         assert!(result.is_err());
         assert_eq!(errors.len(), 0);
+    }
+    #[tokio::test]
+    async fn test_persist_application_error_concurrent() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let application_error_path = temp_dir.path().to_str().unwrap().to_string();
+
+        // Create a Runtime instance with the temporary directory path
+        let runtime = Arc::new(Runtime {
+            application_error_path,
+            max_error_files_per_container: 10,
+        });
+
+        let barrier = Arc::new(Barrier::new(5));
+        // Create a mock gRPC status
+        let grpc_status =
+            Status::internal("UDF_EXECUTION_ERROR(test-container): Test error message");
+
+        // Spawn 5 threads to call persist_application_error concurrently
+        let mut handles = vec![];
+        for _i in 0..5 {
+            let runtime_clone = runtime.clone();
+            let barrier_clone = barrier.clone();
+            let grpc_status_clone = grpc_status.clone();
+
+            let handle = tokio::spawn(async move {
+                // Wait for all threads to be ready
+                barrier_clone.wait().await;
+
+                // Call persist_application_error
+                runtime_clone.persist_application_error(grpc_status_clone.clone());
+            });
+
+            handles.push(handle);
+        }
+
+        // Wait for all threads to complete
+        for handle in handles {
+            handle.await.unwrap();
+        }
+
+        // Verify that the directory for the container was created
+        let container_name = extract_container_name(grpc_status.message());
+        let dir_path = Path::new(&runtime.application_error_path).join(&container_name);
+        assert!(dir_path.exists());
+
+        // Verify that 5 error files were created
+        let files: Vec<_> = fs::read_dir(&dir_path)
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .collect();
+        assert_eq!(files.len(), 5);
+
+        // Verify the file name format
+        for file in files {
+            let file_name = file.file_name().into_string().unwrap();
+            assert!(file_name.ends_with(".json"));
+            assert!(file_name.contains("numa"));
+        }
     }
 }

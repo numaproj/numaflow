@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use numaflow_monitor::runtime::Runtime;
 use numaflow_pb::clients::sourcetransformer::{
     self, source_transform_client::SourceTransformClient, SourceTransformRequest,
     SourceTransformResponse,
@@ -31,7 +30,6 @@ pub(super) struct UserDefinedTransformer {
     read_tx: mpsc::Sender<SourceTransformRequest>,
     senders: ResponseSenderMap,
     task_handle: tokio::task::JoinHandle<()>,
-    runtime: Runtime,
 }
 
 /// Aborts the background task when the UserDefinedTransformer is dropped.
@@ -111,7 +109,6 @@ impl UserDefinedTransformer {
             read_tx,
             senders: sender_map,
             task_handle,
-            runtime: Runtime::new(None),
         };
 
         Ok(transformer)

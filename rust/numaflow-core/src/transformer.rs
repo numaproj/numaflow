@@ -1,9 +1,13 @@
 use std::sync::Arc;
 
+use bytes::Bytes;
+use numaflow_monitor::runtime::Runtime;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use tokio::sync::{mpsc, oneshot, Semaphore};
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
+use tonic::{Code, Status};
+use tracing::error;
 
 use crate::error::Error;
 use crate::message::Message;
@@ -125,6 +129,19 @@ impl Transformer {
                 response.map_err(|e| Error::Transformer(format!("failed to receive response: {}", e)))??
             }
         };
+
+        if response.is_empty() {
+            error!("received empty response from server (transformer), we will wait indefinitely");
+            // persist the error for debugging
+            Runtime::new(None).persist_application_error(Status::with_details(
+                Code::Internal,
+                "UDF_PARTIAL_RESPONSE(transformer)",
+                Bytes::from_static(
+                    b"received empty response from server (transformer), we will wait indefinitely",
+                ),
+            ));
+            futures::future::pending::<()>().await;
+        }
 
         monovertex_metrics()
             .transformer
