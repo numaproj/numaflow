@@ -8,22 +8,8 @@ use tracing::{error, info};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-const NUNAFLOW_GOLANG: &str = "/bin/numaflow";
-
-fn start_golang() -> Result<(), Box<dyn Error>> {
-    let mut cmd = Command::new(NUNAFLOW_GOLANG);
-    Err(cmd.args(env::args()).envs(env::vars()).exec().into())
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    // check whether environment variable
-     let is_golang =  env::var("NUMAFLOW_RUNTIME").unwrap_or("golang".to_string());
-    if is_golang == "golang" {
-        start_golang()?;
-        return Ok(());
-    }
-
     info!("Starting numaflow");
     // Set up the tracing subscriber. RUST_LOG can be used to set the log level.
     // The default log level is `info`. The `axum::rejection=trace` enables showing
@@ -50,7 +36,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         return Err(e);
     }
     info!("Exiting...");
-    
+
     Ok(())
 }
 

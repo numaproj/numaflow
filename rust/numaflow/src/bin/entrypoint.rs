@@ -16,12 +16,12 @@ fn start_rust() -> Result<(), Box<dyn Error>> {
     Err(cmd.args(env::args()).envs(env::vars()).exec().into())
 }
 
- fn main() -> Result<(), Box<dyn Error>> {
-     // check whether environment variable
-     let is_golang = env::var("NUMAFLOW_RUNTIME").unwrap_or("golang".to_string());
-     if is_golang == "golang" {
-         start_golang()
-     } else { 
-         start_rust()
-     }
- }
+fn main() -> Result<(), Box<dyn Error>> {
+    // check whether environment variable
+    let is_golang = env::var("NUMAFLOW_RUNTIME").unwrap_or("golang".to_string());
+    if is_golang == "golang" {
+        start_golang()
+    } else {
+        start_rust()
+    }
+}
