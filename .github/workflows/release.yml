@@ -130,10 +130,22 @@ jobs:
           name: numaflow-rs-linux-amd64
           path: dist/
 
+      - name: Download Entrypoint amd64 binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: entrypoint-linux-amd64
+          path: dist/
+
       - name: Download Rust arm64 binaries
         uses: actions/download-artifact@v4
         with:
           name: numaflow-rs-linux-arm64
+          path: dist/
+
+      - name: Download Entrypoint arm64 binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: entrypoint-linux-arm64
           path: dist/
 
       - name: Registry Login

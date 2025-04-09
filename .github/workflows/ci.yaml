@@ -267,6 +267,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: numaflow-rs-linux-amd64
+      - name: Download Entrypoint amd64 binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: entrypoint-linux-amd64
       - name: Install k3d
         run: curl -sfL https://raw.githubusercontent.com/rancher/k3d/main/install.sh | bash &
       - name: Create a cluster
