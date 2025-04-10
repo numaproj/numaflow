@@ -88,8 +88,7 @@ func CalculatePending(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookback
 		return pendingNotAvailable
 	}
 	startIndex := findStartIndex(lookbackSeconds, counts)
-	// we consider the last but one element as the end index because the last element might be incomplete
-	// we can be sure that the last but one element in the queue is complete.
+	// we consider the last element as the end index
 	endIndex := len(counts) - 1
 	if startIndex == indexNotFound {
 		return pendingNotAvailable
@@ -103,10 +102,10 @@ func CalculatePending(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookback
 			num++
 		}
 	}
-	if num > 0 {
-		return delta / num
+	if num == 0 {
+		return pendingNotAvailable
 	}
-	return delta
+	return delta / num
 }
 
 // findStartIndex finds the index of the first element in the queue that is within the lookback seconds
