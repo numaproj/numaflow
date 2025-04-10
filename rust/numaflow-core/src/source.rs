@@ -5,7 +5,6 @@
 //! [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 
 use std::sync::Arc;
-
 use numaflow_jetstream::JetstreamSource;
 use numaflow_pulsar::source::PulsarSource;
 use numaflow_sqs::source::SQSSource;
@@ -16,9 +15,10 @@ use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
+use tonic::transport::Channel;
 use tracing::warn;
 use tracing::{error, info};
-
+use numaflow_pb::clients::source::source_client::SourceClient;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
 use crate::message::ReadAck;
@@ -67,9 +67,6 @@ pub(crate) trait SourceReader {
 
     /// number of partitions processed by this source.
     async fn partitions(&mut self) -> Result<Vec<u16>>;
-
-    /// Check if the source is ready to read.
-    async fn is_ready(&mut self) -> bool;
 }
 
 /// Set of Ack related items that has to be implemented to become a Source.
@@ -113,9 +110,6 @@ enum ActorMessage {
     },
     Partitions {
         respond_to: oneshot::Sender<Result<Vec<u16>>>,
-    },
-    IsReady {
-        respond_to: oneshot::Sender<bool>,
     },
 }
 
@@ -166,10 +160,6 @@ where
                 let partitions = self.reader.partitions().await;
                 let _ = respond_to.send(partitions);
             }
-            ActorMessage::IsReady { respond_to } => {
-                let is_ready = self.reader.is_ready().await;
-                let _ = respond_to.send(is_ready);
-            }
         }
     }
 
@@ -197,6 +187,7 @@ pub(crate) struct Source {
     /// Transformer handler for transforming messages from Source.
     transformer: Option<Transformer>,
     watermark_handle: Option<SourceWatermarkHandle>,
+    health_checker: Option<SourceClient<Channel>>,
 }
 
 impl Source {
@@ -210,8 +201,10 @@ impl Source {
         watermark_handle: Option<SourceWatermarkHandle>,
     ) -> Self {
         let (sender, receiver) = mpsc::channel(batch_size);
+        let mut health_checker = None;
         match src_type {
             SourceType::UserDefinedSource(reader, acker, lag_reader) => {
+                health_checker = Some(reader.get_source_client());
                 tokio::spawn(async move {
                     let actor = SourceActor::new(receiver, reader, acker, lag_reader);
                     actor.run().await;
@@ -253,6 +246,7 @@ impl Source {
                 });
             }
         };
+
         Self {
             read_batch_size: batch_size,
             sender,
@@ -260,6 +254,7 @@ impl Source {
             read_ahead,
             transformer,
             watermark_handle,
+            health_checker,
         }
     }
 
@@ -560,20 +555,27 @@ impl Source {
         }
     }
 
-    pub(crate) async fn is_ready(&mut self) -> bool {
-        let (tx, rx) = oneshot::channel();
-        self.sender
-            .send(ActorMessage::IsReady { respond_to: tx })
-            .await
-            .expect("send should not fail");
-
-        let transformer_is_ready = if let Some(transformer) = &mut self.transformer {
-            transformer.is_ready().await
+    pub(crate) async fn ready(&mut self) -> bool {
+        let source_ready = if let Some(client) = &mut self.health_checker {
+            let request = tonic::Request::new(());
+            match client.is_ready(request).await {
+                Ok(response) => response.into_inner().ready,
+                Err(e) => {
+                    error!("Source is not ready: {:?}", e);
+                    false
+                }
+            }
         } else {
             true
         };
 
-        transformer_is_ready && rx.await.is_ok()
+        let transformer_ready = if let Some(client) = &mut self.transformer {
+            client.ready().await
+        } else {
+            true
+        };
+
+        source_ready && transformer_ready
     }
 }
 
