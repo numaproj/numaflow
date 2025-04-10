@@ -52,7 +52,7 @@ impl From<(&Status, &str, i64)> for RuntimeErrorEntry {
 
         RuntimeErrorEntry {
             container: container_name.to_string(),
-            timestamp: timestamp,
+            timestamp,
             code,
             message,
             details: details_str.to_string(),
