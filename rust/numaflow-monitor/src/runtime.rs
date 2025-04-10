@@ -88,12 +88,9 @@ pub fn persist_application_error(grpc_status: Status) {
     if PERSIST_APPLICATION_ERROR_ONCE.set(()).is_err() {
         return;
     }
-
-    let application_error_path = RuntimeInfoConfig::default().app_error_path;
-    let max_error_files_per_container = RuntimeInfoConfig::default().max_error_files_per_container;
     persist_application_error_to_file(
-        application_error_path,
-        max_error_files_per_container,
+        RuntimeInfoConfig::default().app_error_path,
+        RuntimeInfoConfig::default().max_error_files_per_container,
         grpc_status,
     );
 }
@@ -351,8 +348,8 @@ mod tests {
         assert_eq!(runtime_without_config.max_error_files_per_container, 10);
     }
 
-    #[tokio::test]
-    async fn test_persist_application_error_to_file() {
+    #[test]
+    fn test_persist_application_error_to_file() {
         // Create a temporary directory for testing
         let temp_dir = tempdir().unwrap();
         let application_error_path = temp_dir.path().to_str().unwrap().to_string();
@@ -380,8 +377,8 @@ mod tests {
         assert!(file_name.ends_with(".json"));
     }
 
-    #[tokio::test]
-    async fn test_persist_application_error_with_empty_container_name() {
+    #[test]
+    fn test_persist_application_error_with_empty_container_name() {
         // Create a temporary directory for testing
         let temp_dir = tempdir().unwrap();
         let application_error_path = temp_dir.path().to_str().unwrap().to_string();
