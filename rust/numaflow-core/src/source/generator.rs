@@ -84,7 +84,12 @@ mod stream_generator {
             }
             if key_count > 0 && rpu % key_count as usize != 0 {
                 let new_rpu = rpu - (rpu % key_count as usize);
-                warn!(rpu, key_count, "Specified RPU is not a multiple of the KeyCount. This may lead to uneven distribution of messages across keys. RPUs will be adjusted to {}", new_rpu);
+                warn!(
+                    rpu,
+                    key_count,
+                    "Specified RPU is not a multiple of the KeyCount. This may lead to uneven distribution of messages across keys. RPUs will be adjusted to {}",
+                    new_rpu
+                );
                 rpu = new_rpu;
             }
 

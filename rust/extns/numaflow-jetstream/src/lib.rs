@@ -3,11 +3,11 @@ use std::{collections::HashMap, time::Duration};
 
 use async_nats::jetstream::{AckKind, Message as JetstreamMessage};
 use async_nats::{
-    jetstream::consumer::{
-        pull::{Config, Stream},
-        Consumer, PullConsumer,
-    },
     ConnectOptions,
+    jetstream::consumer::{
+        Consumer, PullConsumer,
+        pull::{Config, Stream},
+    },
 };
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
@@ -185,7 +185,9 @@ impl JetstreamActor {
         tls_config: TlsConfig,
     ) -> Result<ConnectOptions> {
         if tls_config.insecure_skip_verify {
-            tracing::warn!("'insecureSkipVerify' is set to true, certificate validation will not be performed when connecting to NATS server");
+            tracing::warn!(
+                "'insecureSkipVerify' is set to true, certificate validation will not be performed when connecting to NATS server"
+            );
             let tls_client_config = rustls::ClientConfig::builder()
                 .dangerous()
                 .with_custom_certificate_verifier(Arc::new(NoVerifier))
@@ -660,8 +662,8 @@ XdvExDsAdjbkBG7ynn9pmMgIJg==
         assert!(result.is_ok());
     }
 
-    use async_nats::jetstream::stream::Config as StreamConfig;
     use async_nats::jetstream::Context;
+    use async_nats::jetstream::stream::Config as StreamConfig;
     use tokio::time::Duration;
 
     async fn setup_jetstream() -> (Context, String) {

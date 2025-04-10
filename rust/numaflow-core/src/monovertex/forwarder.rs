@@ -34,10 +34,10 @@
 
 use tokio_util::sync::CancellationToken;
 
+use crate::Error;
 use crate::error;
 use crate::sink::SinkWriter;
 use crate::source::Source;
-use crate::Error;
 
 /// Forwarder is responsible for reading messages from the source, applying transformation if
 /// transformer is present, writing the messages to the sink, and then acknowledging the messages
@@ -104,6 +104,7 @@ mod tests {
     use tokio::task::JoinHandle;
     use tokio_util::sync::CancellationToken;
 
+    use crate::Result;
     use crate::monovertex::forwarder::Forwarder;
     use crate::shared::grpc::create_rpc_channel;
     use crate::sink::{SinkClientType, SinkWriterBuilder};
@@ -111,7 +112,6 @@ mod tests {
     use crate::source::{Source, SourceType};
     use crate::tracker::TrackerHandle;
     use crate::transformer::Transformer;
-    use crate::Result;
 
     struct SimpleSource {
         num: usize,

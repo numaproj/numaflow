@@ -2,10 +2,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use numaflow_pb::clients::sourcetransformer::{
-    self, source_transform_client::SourceTransformClient, SourceTransformRequest,
-    SourceTransformResponse,
+    self, SourceTransformRequest, SourceTransformResponse,
+    source_transform_client::SourceTransformClient,
 };
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use tonic::{Request, Streaming};

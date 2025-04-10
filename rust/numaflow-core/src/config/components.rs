@@ -11,8 +11,8 @@ pub(crate) mod source {
     use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
     use tracing::warn;
 
-    use crate::error::Error;
     use crate::Result;
+    use crate::error::Error;
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct SourceConfig {
@@ -320,8 +320,8 @@ pub(crate) mod sink {
 
     use numaflow_models::models::{Backoff, RetryStrategy, Sink};
 
-    use crate::error::Error;
     use crate::Result;
+    use crate::error::Error;
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct SinkConfig {

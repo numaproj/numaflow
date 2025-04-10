@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
-use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use numaflow_models::models::PipelineSpec;
 use serde::{Deserialize, Serialize};
 

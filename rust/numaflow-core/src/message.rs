@@ -8,8 +8,8 @@ use chrono::{DateTime, Utc};
 use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
 
-use crate::shared::grpc::prost_timestamp_from_utc;
 use crate::Error;
+use crate::shared::grpc::prost_timestamp_from_utc;
 
 const DROP: &str = "U+005C__DROP__";
 

@@ -77,7 +77,10 @@ impl SourceIdleDetector {
         // this could happen if step interval and increment-by are set aggressively
         let now = Utc::now().timestamp_millis();
         if idle_wm > now {
-            warn!(?idle_wm, "idle config is aggressive (reduce step/increment-by), wm > now(), resetting to now()");
+            warn!(
+                ?idle_wm,
+                "idle config is aggressive (reduce step/increment-by), wm > now(), resetting to now()"
+            );
             idle_wm = now;
         }
 

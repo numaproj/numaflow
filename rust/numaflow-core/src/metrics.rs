@@ -8,7 +8,7 @@ use axum::body::Body;
 use axum::extract::State;
 use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 use axum_server::tls_rustls::RustlsConfig;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
@@ -16,18 +16,18 @@ use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::metrics::histogram::Histogram;
 use prometheus_client::registry::Registry;
-use rcgen::{generate_simple_self_signed, CertifiedKey};
+use rcgen::{CertifiedKey, generate_simple_self_signed};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time;
 use tracing::{debug, error, info};
 
+use crate::Error;
 use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica};
 use crate::mapper::map::MapHandle;
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
 use crate::sink::SinkWriter;
 use crate::source::Source;
-use crate::Error;
 
 // SDK information
 const SDK_INFO: &str = "sdk_info";
@@ -965,8 +965,8 @@ mod tests {
     use super::*;
     use crate::shared::grpc::create_rpc_channel;
     use crate::sink::{SinkClientType, SinkWriterBuilder};
-    use crate::source::user_defined::new_source;
     use crate::source::SourceType;
+    use crate::source::user_defined::new_source;
     use crate::tracker::TrackerHandle;
 
     struct SimpleSource;

@@ -13,8 +13,8 @@ use prost_types::Timestamp;
 use tokio::net::UnixStream;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
-use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
+use tonic::transport::{Channel, Endpoint};
 use tower::service_fn;
 use tracing::{info, warn};
 

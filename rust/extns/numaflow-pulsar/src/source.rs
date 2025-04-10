@@ -4,7 +4,7 @@ use std::{collections::HashMap, time::Duration};
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use pulsar::Authentication;
-use pulsar::{proto::MessageIdData, Consumer, ConsumerOptions, Pulsar, SubType, TokioExecutor};
+use pulsar::{Consumer, ConsumerOptions, Pulsar, SubType, TokioExecutor, proto::MessageIdData};
 use tokio::time::Instant;
 use tokio::{
     sync::{mpsc, oneshot},

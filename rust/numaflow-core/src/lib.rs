@@ -1,4 +1,7 @@
-use crate::config::{config, CustomResourceType};
+use std::collections::HashMap;
+
+use crate::config::CustomResourceType;
+use config::Settings;
 use tokio::signal;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -80,7 +83,9 @@ pub async fn run() -> Result<()> {
         Ok(())
     });
 
-    let crd_type = config().custom_resource_type.clone();
+    let env_vars: HashMap<String, String> = std::env::vars().collect();
+    let settings = Settings::load(env_vars)?;
+    let crd_type = settings.custom_resource_type.clone();
     match crd_type {
         CustomResourceType::MonoVertex(config) => {
             info!("Starting monovertex forwarder with config: {:#?}", config);

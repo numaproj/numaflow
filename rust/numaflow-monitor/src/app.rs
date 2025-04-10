@@ -1,16 +1,16 @@
 //! This module contains the main application logic for the sidecar monitor server.
-use axum::{extract::State, response::IntoResponse, routing::get, Json, Router};
-use axum_server::{tls_rustls::RustlsConfig, Handle};
+use axum::{Json, Router, extract::State, response::IntoResponse, routing::get};
+use axum_server::{Handle, tls_rustls::RustlsConfig};
 use http::StatusCode;
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::signal;
 use tracing::{error, info};
 
 use crate::{
+    MonitorServerConfig,
     config::RuntimeInfoConfig,
     error::Error,
     runtime::{ApiResponse, Runtime},
-    MonitorServerConfig,
 };
 
 /// AppState represents the shared application state that is accessible across all handlers.

@@ -3,16 +3,16 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_nats::jetstream::{
-    consumer::PullConsumer, AckKind, Context, Message as JetstreamMessage,
+    AckKind, Context, Message as JetstreamMessage, consumer::PullConsumer,
 };
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use prost::Message as ProtoMessage;
-use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::{self, Instant};
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::warn;
 use tracing::{error, info};
@@ -27,7 +27,7 @@ use crate::metrics::{
 use crate::shared::grpc::utc_from_timestamp;
 use crate::tracker::TrackerHandle;
 use crate::watermark::isb::ISBWatermarkHandle;
-use crate::{metrics, Result};
+use crate::{Result, metrics};
 
 const ACK_RETRY_INTERVAL: u64 = 100;
 const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
@@ -647,7 +647,7 @@ mod tests {
     #[tokio::test]
     async fn test_child_tasks_not_aborted() {
         use tokio::task;
-        use tokio::time::{sleep, Duration};
+        use tokio::time::{Duration, sleep};
 
         // Parent task
         let parent_task = task::spawn(async {

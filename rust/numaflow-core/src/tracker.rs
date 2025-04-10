@@ -15,15 +15,15 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
-use serving::callback::CallbackHandler;
 use serving::DEFAULT_ID_HEADER;
+use serving::callback::CallbackHandler;
 use tokio::sync::{mpsc, oneshot};
 use tracing::error;
 
+use crate::Result;
 use crate::error::Error;
 use crate::message::{Message, Offset, ReadAck};
 use crate::watermark::isb::ISBWatermarkHandle;
-use crate::Result;
 
 /// TrackerEntry represents the state of a tracked message.
 #[derive(Debug)]
@@ -486,7 +486,7 @@ mod tests {
     use futures::StreamExt;
     use std::sync::Arc;
     use tokio::sync::oneshot;
-    use tokio::time::{timeout, Duration};
+    use tokio::time::{Duration, timeout};
 
     use super::*;
     use crate::message::StringOffset;

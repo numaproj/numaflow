@@ -1,11 +1,12 @@
+use std::collections::HashMap;
 use std::env;
 use std::sync::OnceLock;
 
 use monovertex::MonovertexConfig;
 
-use crate::config::pipeline::PipelineConfig;
 use crate::Error;
 use crate::Result;
+use crate::config::pipeline::PipelineConfig;
 
 const ENV_MONO_VERTEX_OBJ: &str = "NUMAFLOW_MONO_VERTEX_OBJECT";
 const ENV_VERTEX_OBJ: &str = "NUMAFLOW_VERTEX_OBJECT";
@@ -86,17 +87,6 @@ pub(crate) fn get_namespace() -> &'static str {
     NAMESPACE.get_or_init(|| env::var(NUMAFLOW_NAMESPACE).unwrap_or("default".to_string()))
 }
 
-/// Exposes the [Settings] via lazy loading.
-pub fn config() -> &'static Settings {
-    static CONF: OnceLock<Settings> = OnceLock::new();
-    CONF.get_or_init(|| match Settings::load() {
-        Ok(v) => v,
-        Err(e) => {
-            panic!("Failed to load configuration: {:?}", e);
-        }
-    })
-}
-
 /// CustomResources supported by Numaflow.
 #[derive(Debug, Clone)]
 pub(crate) enum CustomResourceType {
@@ -114,16 +104,16 @@ impl Settings {
     /// load based on the CRD type, either a pipeline or a monovertex.
     /// Settings are populated through reading the env vars set via the controller. The main
     /// CRD is the base64 spec of the CR.
-    fn load() -> Result<Self> {
-        if let Ok(obj) = env::var(ENV_MONO_VERTEX_OBJ) {
-            let cfg = MonovertexConfig::load(obj)?;
+    pub(crate) fn load(env_vars: HashMap<String, String>) -> Result<Self> {
+        if env_vars.contains_key(ENV_MONO_VERTEX_OBJ) {
+            let cfg = MonovertexConfig::load(env_vars)?;
             return Ok(Settings {
                 custom_resource_type: CustomResourceType::MonoVertex(cfg),
             });
         }
 
-        if let Ok(obj) = env::var(ENV_VERTEX_OBJ) {
-            let cfg = PipelineConfig::load(obj, env::vars())?;
+        if let Some(obj) = env_vars.get(ENV_VERTEX_OBJ) {
+            let cfg = PipelineConfig::load(obj.clone(), env::vars())?;
             return Ok(Settings {
                 custom_resource_type: CustomResourceType::Pipeline(cfg),
             });
@@ -134,14 +124,14 @@ impl Settings {
 
 #[cfg(test)]
 mod tests {
-    use std::env;
+    use std::collections::HashMap;
 
-    use base64::prelude::BASE64_STANDARD;
     use base64::Engine;
+    use base64::prelude::BASE64_STANDARD;
     use serde_json::json;
 
     use crate::config::components::sink::OnFailureStrategy;
-    use crate::config::{CustomResourceType, Settings, ENV_MONO_VERTEX_OBJ};
+    use crate::config::{CustomResourceType, ENV_MONO_VERTEX_OBJ, Settings};
 
     #[test]
     fn test_settings_load_combined() {
@@ -192,15 +182,15 @@ mod tests {
             });
             let json_str = json_data.to_string();
             let encoded_json = BASE64_STANDARD.encode(json_str);
-            env::set_var(ENV_MONO_VERTEX_OBJ, encoded_json);
+            let mut env_vars = HashMap::new();
+            env_vars.insert(ENV_MONO_VERTEX_OBJ.to_string(), encoded_json);
 
             // Execute and verify
-            let settings = Settings::load().unwrap();
+            let settings = Settings::load(env_vars).unwrap();
             assert!(matches!(
                 settings.custom_resource_type,
                 CustomResourceType::MonoVertex(_)
             ));
-            env::remove_var(ENV_MONO_VERTEX_OBJ);
         }
 
         {
@@ -243,10 +233,11 @@ mod tests {
             });
             let json_str = json_data.to_string();
             let encoded_json = BASE64_STANDARD.encode(json_str);
-            env::set_var(ENV_MONO_VERTEX_OBJ, encoded_json);
+            let mut env_vars = HashMap::new();
+            env_vars.insert(ENV_MONO_VERTEX_OBJ.to_string(), encoded_json);
 
             // Execute and verify
-            let settings = Settings::load().unwrap();
+            let settings = Settings::load(env_vars).unwrap();
             let mvtx_cfg = match settings.custom_resource_type {
                 CustomResourceType::MonoVertex(cfg) => cfg,
                 CustomResourceType::Pipeline(_) => panic!("Invalid configuration type"),
@@ -269,7 +260,6 @@ mod tests {
                     .sink_retry_interval_in_ms,
                 1000
             );
-            env::remove_var(ENV_MONO_VERTEX_OBJ);
         }
 
         {
@@ -313,10 +303,11 @@ mod tests {
             });
             let json_str = json_data.to_string();
             let encoded_json = BASE64_STANDARD.encode(json_str);
-            env::set_var(ENV_MONO_VERTEX_OBJ, encoded_json);
+            let mut env_vars = HashMap::new();
+            env_vars.insert(ENV_MONO_VERTEX_OBJ.to_string(), encoded_json);
 
             // Execute and verify
-            let settings = Settings::load().unwrap();
+            let settings = Settings::load(env_vars).unwrap();
             let mvtx_cfg = match settings.custom_resource_type {
                 CustomResourceType::MonoVertex(cfg) => cfg,
                 CustomResourceType::Pipeline(_) => panic!("Invalid configuration type"),
@@ -349,7 +340,6 @@ mod tests {
                     .sink_retry_interval_in_ms,
                 1000
             );
-            env::remove_var(ENV_MONO_VERTEX_OBJ);
         }
         {
             // Test Invalid on failure strategy to use default
@@ -392,10 +382,11 @@ mod tests {
             });
             let json_str = json_data.to_string();
             let encoded_json = BASE64_STANDARD.encode(json_str);
-            env::set_var(ENV_MONO_VERTEX_OBJ, encoded_json);
+            let mut env_vars = HashMap::new();
+            env_vars.insert(ENV_MONO_VERTEX_OBJ.to_string(), encoded_json);
 
             // Execute and verify
-            let settings = Settings::load().unwrap();
+            let settings = Settings::load(env_vars).unwrap();
             let mvtx_config = match settings.custom_resource_type {
                 CustomResourceType::MonoVertex(cfg) => cfg,
                 CustomResourceType::Pipeline(_) => panic!("Invalid configuration type"),
@@ -428,7 +419,6 @@ mod tests {
                     .sink_retry_interval_in_ms,
                 1000
             );
-            env::remove_var(ENV_MONO_VERTEX_OBJ);
         }
     }
 }

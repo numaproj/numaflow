@@ -6,11 +6,11 @@ use tonic::transport::Channel;
 use tonic::{Request, Streaming};
 use tracing::error;
 
+use crate::Error;
+use crate::Result;
 use crate::message::Message;
 use crate::shared::grpc::prost_timestamp_from_utc;
 use crate::sink::{ResponseFromSink, Sink};
-use crate::Error;
-use crate::Result;
 
 const DEFAULT_CHANNEL_SIZE: usize = 1000;
 
@@ -126,7 +126,9 @@ impl Sink for UserDefinedSink {
 
             if response.status.is_some_and(|s| s.eot) {
                 if responses.len() != num_requests {
-                    error!("received EOT message before all responses are received, we will wait indefinitely for the remaining responses");
+                    error!(
+                        "received EOT message before all responses are received, we will wait indefinitely for the remaining responses"
+                    );
                 } else {
                     break;
                 }

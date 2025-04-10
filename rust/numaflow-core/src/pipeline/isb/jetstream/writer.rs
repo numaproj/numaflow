@@ -1,32 +1,32 @@
 use std::collections::HashMap;
 use std::hash::DefaultHasher;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use async_nats::jetstream::Context;
 use async_nats::jetstream::consumer::PullConsumer;
 use async_nats::jetstream::context::PublishAckFuture;
 use async_nats::jetstream::publish::PublishAck;
 use async_nats::jetstream::stream::RetentionPolicy::Limits;
-use async_nats::jetstream::Context;
 use bytes::BytesMut;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
-use tokio::time::{sleep, Instant};
-use tokio_stream::wrappers::ReceiverStream;
+use tokio::time::{Instant, sleep};
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
-use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
+use crate::Result;
 use crate::config::pipeline::ToVertexConfig;
+use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, Offset};
 use crate::metrics::{pipeline_isb_metric_labels, pipeline_metrics};
 use crate::shared::forward;
 use crate::tracker::TrackerHandle;
 use crate::watermark::WatermarkHandle;
-use crate::Result;
 
 const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
 const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
