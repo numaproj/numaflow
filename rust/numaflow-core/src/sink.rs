@@ -112,37 +112,47 @@ struct HealthCheckClients {
 
 impl HealthCheckClients {
     pub(crate) async fn ready(&mut self) -> bool {
-        if let Some(sink_client) = &mut self.sink_client {
-            return match sink_client.is_ready(tonic::Request::new(())).await {
+        let sink = if let Some(sink_client) = &mut self.sink_client {
+            match sink_client.is_ready(tonic::Request::new(())).await {
                 Ok(ready) => ready.into_inner().ready,
                 Err(e) => {
                     error!(?e, "Sink client is not ready");
                     false
                 }
-            };
-        }
-        if let Some(fb_sink_client) = &mut self.fb_sink_client {
-            return match fb_sink_client.is_ready(tonic::Request::new(())).await {
+            }
+        } else {
+            true
+        };
+
+        let fb_sink = if let Some(fb_sink_client) = &mut self.fb_sink_client {
+            match fb_sink_client.is_ready(tonic::Request::new(())).await {
                 Ok(ready) => ready.into_inner().ready,
                 Err(e) => {
                     error!(?e, "Fallback Sink client is not ready");
                     false
                 }
-            };
-        }
-        if let Some(store_client) = &mut self.store_client {
-            return match store_client.is_ready(tonic::Request::new(())).await {
+            }
+        } else {
+            true
+        };
+
+        let serve_store = if let Some(store_client) = &mut self.store_client {
+            match store_client.is_ready(tonic::Request::new(())).await {
                 Ok(ready) => ready.into_inner().ready,
                 Err(e) => {
                     error!(?e, "Store client is not ready");
                     false
                 }
-            };
-        }
-        true
+            }
+        } else {
+            true
+        };
+
+        sink && fb_sink && serve_store
     }
 }
 
+/// HealthCheckClientsBuilder is a builder for HealthCheckClients.
 struct HealthCheckClientsBuilder {
     sink_client: Option<SinkClient<Channel>>,
     fb_sink_client: Option<SinkClient<Channel>>,
@@ -248,8 +258,10 @@ impl SinkWriterBuilder {
 
     /// Build the SinkWriter, it also starts the SinkActor to handle messages.
     pub(crate) async fn build(self) -> Result<SinkWriter> {
-        let (sender, receiver) = mpsc::channel(self.batch_size);
+        let (sink_handle, receiver) = mpsc::channel(self.batch_size);
         let mut health_check_builder = HealthCheckClientsBuilder::new();
+
+        // starting sinks
         match self.sink_client {
             SinkClientType::Log => {
                 let log_sink = log::LogSink;
@@ -275,6 +287,7 @@ impl SinkWriterBuilder {
             }
         };
 
+        // start fallback sinks
         let fb_sink_handle = if let Some(fb_sink_client) = self.fb_sink_client {
             let (fb_sender, fb_receiver) = mpsc::channel(self.batch_size);
             match fb_sink_client {
@@ -306,21 +319,26 @@ impl SinkWriterBuilder {
             None
         };
 
+        // NOTE: we do not start the serving store sink because it is over unary while the rest are
+        // streaming.
+
         if let Some(ServingStore::UserDefined(store)) = &self.serving_store {
             health_check_builder = health_check_builder.store_client(store.get_store_client());
         }
+
+        let health_check_clients = health_check_builder.build();
 
         Ok(SinkWriter {
             batch_size: self.batch_size,
             chunk_timeout: self.chunk_timeout,
             retry_config: self.retry_config,
-            sink_handle: sender,
+            sink_handle,
             fb_sink_handle,
             tracker_handle: self.tracker_handle,
             shutting_down: false,
             final_result: Ok(()),
             serving_store: self.serving_store,
-            health_check_clients: health_check_builder.build(),
+            health_check_clients,
         })
     }
 }
