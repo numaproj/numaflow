@@ -131,7 +131,9 @@ impl Transformer {
                 Code::Internal,
                 "UDF_PARTIAL_RESPONSE(transformer)",
                 Bytes::from_static(
-                    b"received empty response from server (transformer), we will wait indefinitely",
+                    b"received End-Of-Transmission (EOT) before all responses are received from ud sink,\
+                            we will wait indefinitely for the remaining responses. This indicates that there is a bug\
+                            in the user-code. Please check whether you are accidentally skipping the messages.",
                 ),
             ));
             futures::future::pending::<()>().await;
