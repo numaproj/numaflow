@@ -132,7 +132,7 @@ impl Sink for UserDefinedSink {
                         Code::Internal,
                         "UDF_PARTIAL_RESPONSE(udsink)",
                         Bytes::from_static(
-                            b"received End-Of-Transmission (EOT) before all responses are received from ud sink,\
+                            b"received End-Of-Transmission (EOT) before all responses are received from the ud-sink,\
                             we will wait indefinitely for the remaining responses. This indicates that there is a bug\
                             in the user-code. Please check whether you are accidentally skipping the messages.",
                         ),
