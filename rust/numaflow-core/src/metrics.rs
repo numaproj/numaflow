@@ -10,6 +10,7 @@ use axum::http::{Response, StatusCode};
 use axum::response::IntoResponse;
 use axum::{routing::get, Router};
 use axum_server::tls_rustls::RustlsConfig;
+use futures::sink;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
@@ -67,6 +68,8 @@ const READ_TOTAL: &str = "read";
 const READ_BYTES_TOTAL: &str = "read_bytes";
 const ACK_TOTAL: &str = "ack";
 const SINK_WRITE_TOTAL: &str = "write";
+const SINK_WRITE_ERRORS_TOTAL: &str = "write_errors";
+const SINK_DROPPED_TOTAL: &str = "dropped";
 const DROPPED_TOTAL: &str = "dropped";
 const FALLBACK_SINK_WRITE_TOTAL: &str = "write";
 
@@ -82,6 +85,7 @@ const WRITE_TIME: &str = "write_time";
 const TRANSFORM_TIME: &str = "time";
 const ACK_TIME: &str = "ack_time";
 const SINK_TIME: &str = "time";
+const FALLBACK_SINK_TIME: &str = "time";
 
 const PIPELINE_FORWARDER_READ_TOTAL: &str = "data_read";
 
@@ -93,8 +97,8 @@ pub(crate) enum ComponentHealthChecks {
     Pipeline(PipelineComponents),
 }
 
-/// MonovertexComponents is used to store the all the components required for running mvtx. Transformer
-/// and Fallback Sink ism missing because they are internally referenced by Source and Sink.
+/// MonovertexComponents is used to store all the components required for running mvtx. Transformer
+/// and Fallback Sink is missing because they are internally referenced by Source and Sink.
 #[derive(Clone)]
 pub(crate) struct MonovertexComponents {
     pub(crate) source: Source,
@@ -201,11 +205,14 @@ pub(crate) struct PipelineMetrics {
 pub(crate) struct SinkMetrics {
     pub(crate) write_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) dropped_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) write_errors_total: Family<Vec<(String, String)>, Counter>,
 }
 
 /// Family of metrics for the Fallback Sink
 pub(crate) struct FallbackSinkMetrics {
     pub(crate) write_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) time: Family<Vec<(String, String)>, Histogram>,
 }
 
 /// Family of metrics for the Transformer
@@ -284,10 +291,15 @@ impl MonoVtxMetrics {
                 time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                     Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
                 }),
+                dropped_total: Family::<Vec<(String, String)>, Counter>::default(),
+                write_errors_total: Family::<Vec<(String, String)>, Counter>::default(),
             },
 
             fb_sink: FallbackSinkMetrics {
                 write_total: Family::<Vec<(String, String)>, Counter>::default(),
+                time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                    Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
+                }),
             },
         };
 
@@ -359,6 +371,16 @@ impl MonoVtxMetrics {
             "A Histogram to keep track of the total time taken to Write to the Sink, in microseconds",
             metrics.sink.time.clone(),
         );
+        sink_registry.register(
+            SINK_WRITE_ERRORS_TOTAL,
+            "A counter to keep track of the total number of write errors for the sink",
+            metrics.sink.write_errors_total.clone(),
+        );
+        sink_registry.register(
+            SINK_DROPPED_TOTAL,
+            "A counter to keep track of the total number of messages dropped by sink",
+            metrics.sink.dropped_total.clone(),
+        );
 
         // Fallback Sink metrics
         let fb_sink_registry = registry.sub_registry_with_prefix(FALLBACK_SINK_REGISTRY_PREFIX);
@@ -368,6 +390,9 @@ impl MonoVtxMetrics {
             "A Counter to keep track of the total number of messages written to the fallback sink",
             metrics.fb_sink.write_total.clone(),
         );
+        fb_sink_registry.register(FALLBACK_SINK_TIME, 
+            "A Histogram to keep track of the total time taken to Write to the fallback sink, in microseconds", 
+            metrics.fb_sink.time.clone());
         metrics
     }
 }
