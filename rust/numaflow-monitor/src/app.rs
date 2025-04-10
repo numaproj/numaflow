@@ -116,6 +116,7 @@ async fn graceful_shutdown(handle: Handle, server_config: MonitorServerConfig) {
 mod tests {
     use crate::config::generate_certs;
     use crate::error::Result;
+    use crate::runtime::persist_application_error_to_file;
 
     use super::*;
     use axum::body::Body;
@@ -166,7 +167,7 @@ mod tests {
 
         // Create a Runtime instance with the temporary directory path
         let runtime = Runtime::new(Some(RuntimeInfoConfig {
-            app_error_path: application_error_path,
+            app_error_path: application_error_path.clone(),
             max_error_files_per_container: 2,
         }));
 
@@ -174,7 +175,7 @@ mod tests {
         let grpc_status = Status::internal("UDF_EXECUTION_ERROR(udsource): Test error message");
 
         // Call the function to persist error in temp app directory
-        runtime.persist_application_error(grpc_status.clone()).await;
+        persist_application_error_to_file(application_error_path, 5, grpc_status.clone());
 
         let state = Arc::new(AppState {
             runtime: Arc::new(runtime),

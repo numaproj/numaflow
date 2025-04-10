@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use numaflow_monitor::runtime::Runtime;
+use numaflow_monitor::runtime;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::{Handshake, SinkRequest, SinkResponse, TransmissionStatus};
 use tokio::sync::mpsc;
@@ -130,13 +130,13 @@ impl Sink for UserDefinedSink {
                 if responses.len() != num_requests {
                     error!("received EOT message before all responses are received, we will wait indefinitely for the remaining responses");
                     // persist the error for debugging
-                    Runtime::new(None).persist_application_error(Status::with_details(
+                    runtime::persist_application_error(Status::with_details(
                         Code::Internal,
                         "UDF_PARTIAL_RESPONSE(udsink)",
                         Bytes::from_static(
                             b"received EOT message before all responses are received from ud sink",
                         ),
-                    )).await;
+                    ));
                 } else {
                     break;
                 }
