@@ -20,8 +20,6 @@ limitations under the License.
 pub struct GetContainerReq {
     #[serde(rename = "env")]
     pub env: Vec<k8s_openapi::api::core::v1::EnvVar>,
-    #[serde(rename = "executeRustBinary")]
-    pub execute_rust_binary: bool,
     #[serde(rename = "image")]
     pub image: String,
     #[serde(rename = "imagePullPolicy")]
@@ -30,8 +28,6 @@ pub struct GetContainerReq {
     pub isb_svc_type: String,
     #[serde(rename = "resources")]
     pub resources: k8s_openapi::api::core::v1::ResourceRequirements,
-    #[serde(rename = "servingStore")]
-    pub serving_store: Box<crate::models::ServingStore>,
     #[serde(rename = "volumeMounts")]
     pub volume_mounts: Vec<k8s_openapi::api::core::v1::VolumeMount>,
 }
@@ -39,22 +35,18 @@ pub struct GetContainerReq {
 impl GetContainerReq {
     pub fn new(
         env: Vec<k8s_openapi::api::core::v1::EnvVar>,
-        execute_rust_binary: bool,
         image: String,
         image_pull_policy: String,
         isb_svc_type: String,
         resources: k8s_openapi::api::core::v1::ResourceRequirements,
-        serving_store: crate::models::ServingStore,
         volume_mounts: Vec<k8s_openapi::api::core::v1::VolumeMount>,
     ) -> GetContainerReq {
         GetContainerReq {
             env,
-            execute_rust_binary,
             image,
             image_pull_policy,
             isb_svc_type,
             resources,
-            serving_store: Box::new(serving_store),
             volume_mounts,
         }
     }

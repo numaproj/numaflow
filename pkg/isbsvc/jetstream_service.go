@@ -33,21 +33,19 @@ import (
 )
 
 type jetStreamSvc struct {
-	pipelineName string
-	jsClient     *jsclient.Client
-	js           nats.JetStreamContext
+	jsClient *jsclient.Client
+	js       nats.JetStreamContext
 }
 
-func NewISBJetStreamSvc(pipelineName string, jsClient *jsclient.Client) (ISBService, error) {
+func NewISBJetStreamSvc(jsClient *jsclient.Client) (ISBService, error) {
 	jsCtx, err := jsClient.JetStreamContext()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get a JetStream context from nats connection, %w", err)
 	}
 
 	j := &jetStreamSvc{
-		pipelineName: pipelineName,
-		jsClient:     jsClient,
-		js:           jsCtx,
+		jsClient: jsClient,
+		js:       jsCtx,
 	}
 	return j, nil
 }

@@ -20380,6 +20380,36 @@
       ],
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.GetServingPipelineResourceReq": {
+      "properties": {
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
+        "Env": {
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.EnvVar"
+          },
+          "type": "array"
+        },
+        "ISBSvcConfig": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.BufferServiceConfig"
+        },
+        "Image": {
+          "type": "string"
+        },
+        "PullPolicy": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ISBSvcConfig",
+        "Image",
+        "PullPolicy",
+        "Env",
+        "DefaultResources"
+      ],
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.GetSideInputDeploymentReq": {
       "properties": {
         "DefaultResources": {
@@ -21552,10 +21582,6 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PipelineLimits",
           "description": "Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, they could be overridden by each vertex's settings"
         },
-        "servingStore": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingStore",
-          "description": "ServingStore defines the Serving Store for this pipeline."
-        },
         "sideInputs": {
           "description": "SideInputs defines the Side Inputs of a pipeline.",
           "items": {
@@ -21937,8 +21963,100 @@
       },
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.ServingPipeline": {
+      "properties": {
+        "apiVersion": {
+          "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+          "type": "string"
+        },
+        "kind": {
+          "description": "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"
+        },
+        "spec": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingPipelineSpec"
+        },
+        "status": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingPipelineStatus"
+        }
+      },
+      "required": [
+        "spec"
+      ],
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.ServingPipelineList": {
+      "properties": {
+        "apiVersion": {
+          "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Pipeline"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "description": "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ListMeta"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.ServingPipelineSpec": {
+      "properties": {
+        "pipeline": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PipelineSpec"
+        },
+        "serving": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingSpec"
+        }
+      },
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.ServingPipelineStatus": {
+      "properties": {
+        "conditions": {
+          "description": "Conditions are the latest available observations of a resource's current state.",
+          "items": {
+            "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Condition"
+          },
+          "type": "array",
+          "x-kubernetes-patch-merge-key": "type",
+          "x-kubernetes-patch-strategy": "merge"
+        },
+        "lastUpdated": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time"
+        },
+        "message": {
+          "type": "string"
+        },
+        "observedGeneration": {
+          "description": "The generation observed by the ServingPipeline controller.",
+          "format": "int64",
+          "type": "integer"
+        },
+        "phase": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.ServingSource": {
       "description": "ServingSource is the HTTP endpoint for Numaflow.",
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.ServingSpec": {
       "properties": {
         "auth": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Authorization"
@@ -21955,6 +22073,9 @@
         "service": {
           "description": "Whether to create a ClusterIP Service",
           "type": "boolean"
+        },
+        "store": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingStore"
         }
       },
       "required": [
@@ -21967,13 +22088,9 @@
       "properties": {
         "container": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Container"
-        },
-        "name": {
-          "type": "string"
         }
       },
       "required": [
-        "name",
         "container"
       ],
       "type": "object"
@@ -23006,9 +23123,6 @@
           },
           "type": "array"
         },
-        "executeRustBinary": {
-          "type": "boolean"
-        },
         "image": {
           "type": "string"
         },
@@ -23020,9 +23134,6 @@
         },
         "resources": {
           "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
-        },
-        "servingStore": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingStore"
         },
         "volumeMounts": {
           "items": {
@@ -23037,9 +23148,7 @@
         "imagePullPolicy",
         "image",
         "volumeMounts",
-        "resources",
-        "executeRustBinary",
-        "servingStore"
+        "resources"
       ],
       "type": "object"
     }

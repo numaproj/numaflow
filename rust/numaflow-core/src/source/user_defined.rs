@@ -110,6 +110,10 @@ impl UserDefinedSourceRead {
 
         Ok((read_tx, resp_stream))
     }
+
+    pub(crate) fn get_source_client(&self) -> SourceClient<Channel> {
+        self.source_client.clone()
+    }
 }
 
 /// Convert [`read_response::Result`] to [`Message`]
@@ -210,13 +214,6 @@ impl SourceReader for UserDefinedSourceRead {
             .partitions;
 
         Ok(partitions.iter().map(|p| *p as u16).collect())
-    }
-
-    async fn is_ready(&mut self) -> bool {
-        match self.source_client.is_ready(Request::new(())).await {
-            Ok(response) => response.into_inner().ready,
-            Err(_) => false,
-        }
     }
 }
 

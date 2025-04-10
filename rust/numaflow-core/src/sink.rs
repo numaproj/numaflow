@@ -6,6 +6,7 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
+use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::sink_response;
 use numaflow_pb::clients::sink::Status::{Failure, Fallback, Serve, Success};
@@ -58,24 +59,17 @@ const NUMAFLOW_ID_HEADER: &str = "X-Numaflow-Id";
 pub(crate) trait LocalSink {
     /// Write the messages to the Sink.
     async fn sink(&mut self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>>;
-    /// Check if the Sink is ready to accept messages.
-    async fn is_ready(&mut self) -> bool;
 }
 
-/// ActorMessage is a message that is sent to the SinkActor.
-enum ActorMessage {
-    Sink {
-        messages: Vec<Message>,
-        respond_to: oneshot::Sender<Result<Vec<ResponseFromSink>>>,
-    },
-    IsReady {
-        respond_to: oneshot::Sender<bool>,
-    },
+/// SinkActorMessage is a message that is sent to the SinkActor.
+struct SinkActorMessage {
+    messages: Vec<Message>,
+    respond_to: oneshot::Sender<Result<Vec<ResponseFromSink>>>,
 }
 
 /// SinkActor is an actor that handles messages sent to the Sink.
 struct SinkActor<T> {
-    actor_messages: Receiver<ActorMessage>,
+    actor_messages: Receiver<SinkActorMessage>,
     sink: T,
 }
 
@@ -83,27 +77,16 @@ impl<T> SinkActor<T>
 where
     T: Sink,
 {
-    fn new(actor_messages: Receiver<ActorMessage>, sink: T) -> Self {
+    fn new(actor_messages: Receiver<SinkActorMessage>, sink: T) -> Self {
         Self {
             actor_messages,
             sink,
         }
     }
 
-    async fn handle_message(&mut self, msg: ActorMessage) {
-        match msg {
-            ActorMessage::Sink {
-                messages,
-                respond_to,
-            } => {
-                let response = self.sink.sink(messages).await;
-                let _ = respond_to.send(response);
-            }
-            ActorMessage::IsReady { respond_to } => {
-                let response = self.sink.is_ready().await;
-                let _ = respond_to.send(response);
-            }
-        }
+    async fn handle_message(&mut self, msg: SinkActorMessage) {
+        let result = self.sink.sink(msg.messages).await;
+        let _ = msg.respond_to.send(result);
     }
 
     async fn run(mut self) {
@@ -119,6 +102,96 @@ pub(crate) enum SinkClientType {
     UserDefined(SinkClient<Channel>),
 }
 
+/// User defined clients which will be used for doing sidecar health checks.
+#[derive(Clone)]
+struct HealthCheckClients {
+    sink_client: Option<SinkClient<Channel>>,
+    fb_sink_client: Option<SinkClient<Channel>>,
+    store_client: Option<ServingStoreClient<Channel>>,
+}
+
+impl HealthCheckClients {
+    pub(crate) async fn ready(&mut self) -> bool {
+        let sink = if let Some(sink_client) = &mut self.sink_client {
+            match sink_client.is_ready(tonic::Request::new(())).await {
+                Ok(ready) => ready.into_inner().ready,
+                Err(e) => {
+                    error!(?e, "Sink client is not ready");
+                    false
+                }
+            }
+        } else {
+            true
+        };
+
+        let fb_sink = if let Some(fb_sink_client) = &mut self.fb_sink_client {
+            match fb_sink_client.is_ready(tonic::Request::new(())).await {
+                Ok(ready) => ready.into_inner().ready,
+                Err(e) => {
+                    error!(?e, "Fallback Sink client is not ready");
+                    false
+                }
+            }
+        } else {
+            true
+        };
+
+        let serve_store = if let Some(store_client) = &mut self.store_client {
+            match store_client.is_ready(tonic::Request::new(())).await {
+                Ok(ready) => ready.into_inner().ready,
+                Err(e) => {
+                    error!(?e, "Store client is not ready");
+                    false
+                }
+            }
+        } else {
+            true
+        };
+
+        sink && fb_sink && serve_store
+    }
+}
+
+/// HealthCheckClientsBuilder is a builder for HealthCheckClients.
+struct HealthCheckClientsBuilder {
+    sink_client: Option<SinkClient<Channel>>,
+    fb_sink_client: Option<SinkClient<Channel>>,
+    store_client: Option<ServingStoreClient<Channel>>,
+}
+
+impl HealthCheckClientsBuilder {
+    fn new() -> Self {
+        Self {
+            sink_client: None,
+            fb_sink_client: None,
+            store_client: None,
+        }
+    }
+
+    fn sink_client(mut self, sink_client: SinkClient<Channel>) -> Self {
+        self.sink_client = Some(sink_client);
+        self
+    }
+
+    fn fb_sink_client(mut self, fb_sink_client: SinkClient<Channel>) -> Self {
+        self.fb_sink_client = Some(fb_sink_client);
+        self
+    }
+
+    fn store_client(mut self, store_client: ServingStoreClient<Channel>) -> Self {
+        self.store_client = Some(store_client);
+        self
+    }
+
+    fn build(self) -> HealthCheckClients {
+        HealthCheckClients {
+            sink_client: self.sink_client,
+            fb_sink_client: self.fb_sink_client,
+            store_client: self.store_client,
+        }
+    }
+}
+
 /// SinkWriter is a writer that writes messages to the Sink.
 ///
 /// Error handling and shutdown: There can non-retryable errors(udsink panics etc), in that case we will
@@ -130,12 +203,13 @@ pub(super) struct SinkWriter {
     batch_size: usize,
     chunk_timeout: Duration,
     retry_config: RetryConfig,
-    sink_handle: mpsc::Sender<ActorMessage>,
-    fb_sink_handle: Option<mpsc::Sender<ActorMessage>>,
+    sink_handle: mpsc::Sender<SinkActorMessage>,
+    fb_sink_handle: Option<mpsc::Sender<SinkActorMessage>>,
     tracker_handle: TrackerHandle,
     shutting_down: bool,
     final_result: Result<()>,
     serving_store: Option<ServingStore>,
+    health_check_clients: HealthCheckClients,
 }
 
 /// SinkWriterBuilder is a builder to build a SinkWriter.
@@ -184,8 +258,10 @@ impl SinkWriterBuilder {
 
     /// Build the SinkWriter, it also starts the SinkActor to handle messages.
     pub(crate) async fn build(self) -> Result<SinkWriter> {
-        let (sender, receiver) = mpsc::channel(self.batch_size);
+        let (sink_handle, receiver) = mpsc::channel(self.batch_size);
+        let mut health_check_builder = HealthCheckClientsBuilder::new();
 
+        // starting sinks
         match self.sink_client {
             SinkClientType::Log => {
                 let log_sink = log::LogSink;
@@ -202,6 +278,7 @@ impl SinkWriterBuilder {
                 });
             }
             SinkClientType::UserDefined(sink_client) => {
+                health_check_builder = health_check_builder.sink_client(sink_client.clone());
                 let sink = UserDefinedSink::new(sink_client).await?;
                 tokio::spawn(async {
                     let actor = SinkActor::new(receiver, sink);
@@ -210,6 +287,7 @@ impl SinkWriterBuilder {
             }
         };
 
+        // start fallback sinks
         let fb_sink_handle = if let Some(fb_sink_client) = self.fb_sink_client {
             let (fb_sender, fb_receiver) = mpsc::channel(self.batch_size);
             match fb_sink_client {
@@ -228,6 +306,7 @@ impl SinkWriterBuilder {
                     });
                 }
                 SinkClientType::UserDefined(sink_client) => {
+                    health_check_builder = health_check_builder.fb_sink_client(sink_client.clone());
                     let sink = UserDefinedSink::new(sink_client).await?;
                     tokio::spawn(async {
                         let actor = SinkActor::new(fb_receiver, sink);
@@ -240,16 +319,26 @@ impl SinkWriterBuilder {
             None
         };
 
+        // NOTE: we do not start the serving store sink because it is over unary while the rest are
+        // streaming.
+
+        if let Some(ServingStore::UserDefined(store)) = &self.serving_store {
+            health_check_builder = health_check_builder.store_client(store.get_store_client());
+        }
+
+        let health_check_clients = health_check_builder.build();
+
         Ok(SinkWriter {
             batch_size: self.batch_size,
             chunk_timeout: self.chunk_timeout,
             retry_config: self.retry_config,
-            sink_handle: sender,
+            sink_handle,
             fb_sink_handle,
             tracker_handle: self.tracker_handle,
             shutting_down: false,
             final_result: Ok(()),
             serving_store: self.serving_store,
+            health_check_clients,
         })
     }
 }
@@ -258,7 +347,7 @@ impl SinkWriter {
     /// Sink the messages to the Sink.
     async fn sink(&self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>> {
         let (tx, rx) = oneshot::channel();
-        let msg = ActorMessage::Sink {
+        let msg = SinkActorMessage {
             messages,
             respond_to: tx,
         };
@@ -276,7 +365,7 @@ impl SinkWriter {
         }
 
         let (tx, rx) = oneshot::channel();
-        let msg = ActorMessage::Sink {
+        let msg = SinkActorMessage {
             messages,
             respond_to: tx,
         };
@@ -752,34 +841,8 @@ impl SinkWriter {
     }
 
     // Check if the Sink is ready to accept messages.
-    pub(crate) async fn is_ready(&self) -> bool {
-        let (tx, rx) = oneshot::channel();
-
-        self.sink_handle
-            .send(ActorMessage::IsReady { respond_to: tx })
-            .await
-            .expect("Error sending message to sink actor");
-
-        let is_primary_sink_ready = rx.await.unwrap_or(false);
-        if !is_primary_sink_ready {
-            warn!("Primary sink is not ready");
-        }
-
-        // If there is a fallback sink, check if it is ready
-        if let Some(fb_sink_handle) = &self.fb_sink_handle {
-            let (tx, rx) = oneshot::channel();
-            fb_sink_handle
-                .send(ActorMessage::IsReady { respond_to: tx })
-                .await
-                .expect("Error sending message to fallback sink actor");
-            let is_fallback_sink_ready = rx.await.unwrap_or(false);
-            if !is_fallback_sink_ready {
-                warn!("Fallback sink is not ready");
-            }
-            is_primary_sink_ready && is_fallback_sink_ready
-        } else {
-            is_primary_sink_ready
-        }
+    pub(crate) async fn ready(&mut self) -> bool {
+        self.health_check_clients.ready().await
     }
 }
 

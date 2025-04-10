@@ -24,4 +24,6 @@ type MonoVertexExpansion interface{}
 
 type PipelineExpansion interface{}
 
+type ServingPipelineExpansion interface{}
+
 type VertexExpansion interface{}
