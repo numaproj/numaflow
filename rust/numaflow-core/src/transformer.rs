@@ -1,16 +1,16 @@
 use std::sync::Arc;
 
-use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use tokio::sync::{mpsc, oneshot, Semaphore};
-use tokio_util::sync::CancellationToken;
-use tonic::transport::Channel;
-use tracing::error;
 use crate::error::Error;
 use crate::message::Message;
 use crate::metrics::{monovertex_metrics, mvtx_forward_metric_labels};
 use crate::tracker::TrackerHandle;
 use crate::transformer::user_defined::UserDefinedTransformer;
 use crate::Result;
+use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use tokio::sync::{mpsc, oneshot, Semaphore};
+use tokio_util::sync::CancellationToken;
+use tonic::transport::Channel;
+use tracing::error;
 
 /// User-Defined Transformer is a custom transformer that can be built by the user.
 ///
@@ -30,7 +30,10 @@ struct TransformerActor {
 }
 
 impl TransformerActor {
-    fn new(receiver: mpsc::Receiver<TransformerActorMessage>, transformer: UserDefinedTransformer) -> Self {
+    fn new(
+        receiver: mpsc::Receiver<TransformerActorMessage>,
+        transformer: UserDefinedTransformer,
+    ) -> Self {
         Self {
             receiver,
             transformer,
@@ -41,7 +44,9 @@ impl TransformerActor {
     /// and the response is sent back to the caller using oneshot in this actor, this is because the
     /// downstream can handle multiple messages at once.
     async fn handle_message(&mut self, msg: TransformerActorMessage) {
-        self.transformer.transform(msg.message, msg.respond_to).await;
+        self.transformer
+            .transform(msg.message, msg.respond_to)
+            .await;
     }
 
     async fn run(mut self) {

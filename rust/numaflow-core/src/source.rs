@@ -4,21 +4,6 @@
 //! [Source]: https://numaflow.numaproj.io/user-guide/sources/overview/
 //! [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 
-use std::sync::Arc;
-use numaflow_jetstream::JetstreamSource;
-use numaflow_pulsar::source::PulsarSource;
-use numaflow_sqs::source::SQSSource;
-use tokio::sync::OwnedSemaphorePermit;
-use tokio::sync::Semaphore;
-use tokio::sync::{mpsc, oneshot};
-use tokio::task::JoinHandle;
-use tokio::time::Instant;
-use tokio_stream::wrappers::ReceiverStream;
-use tokio_util::sync::CancellationToken;
-use tonic::transport::Channel;
-use tracing::warn;
-use tracing::{error, info};
-use numaflow_pb::clients::source::source_client::SourceClient;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
 use crate::message::ReadAck;
@@ -32,6 +17,21 @@ use crate::{
     metrics,
     reader::LagReader,
 };
+use numaflow_jetstream::JetstreamSource;
+use numaflow_pb::clients::source::source_client::SourceClient;
+use numaflow_pulsar::source::PulsarSource;
+use numaflow_sqs::source::SQSSource;
+use std::sync::Arc;
+use tokio::sync::OwnedSemaphorePermit;
+use tokio::sync::Semaphore;
+use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
+use tokio::time::Instant;
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
+use tonic::transport::Channel;
+use tracing::warn;
+use tracing::{error, info};
 
 /// [User-Defined Source] extends Numaflow to add custom sources supported outside the builtins.
 ///

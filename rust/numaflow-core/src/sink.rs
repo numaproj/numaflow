@@ -6,6 +6,7 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
+use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::sink_response;
 use numaflow_pb::clients::sink::Status::{Failure, Fallback, Serve, Success};
@@ -19,7 +20,6 @@ use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::{error, info, warn};
-use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
 use user_defined::UserDefinedSink;
 
 use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
@@ -119,7 +119,7 @@ impl HealthCheckClients {
                     error!(?e, "Sink client is not ready");
                     false
                 }
-            }
+            };
         }
         if let Some(fb_sink_client) = &mut self.fb_sink_client {
             return match fb_sink_client.is_ready(tonic::Request::new(())).await {
@@ -128,7 +128,7 @@ impl HealthCheckClients {
                     error!(?e, "Fallback Sink client is not ready");
                     false
                 }
-            }
+            };
         }
         if let Some(store_client) = &mut self.store_client {
             return match store_client.is_ready(tonic::Request::new(())).await {
@@ -137,7 +137,7 @@ impl HealthCheckClients {
                     error!(?e, "Store client is not ready");
                     false
                 }
-            }
+            };
         }
         true
     }
@@ -321,7 +321,6 @@ impl SinkWriterBuilder {
             final_result: Ok(()),
             serving_store: self.serving_store,
             health_check_clients: health_check_builder.build(),
-
         })
     }
 }

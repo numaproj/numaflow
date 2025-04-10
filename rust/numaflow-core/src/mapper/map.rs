@@ -616,10 +616,7 @@ impl MapHandle {
     // Returns true if the mapper is ready to accept messages.
     pub(crate) async fn ready(&mut self) -> bool {
         if let Some(client) = &mut self.health_checker {
-            match client
-                .is_ready(tonic::Request::new(()))
-                .await
-            {
+            match client.is_ready(tonic::Request::new(())).await {
                 Ok(response) => response.into_inner().ready,
                 Err(e) => {
                     error!(?e, "Map Client is not ready");
