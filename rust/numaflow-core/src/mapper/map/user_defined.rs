@@ -47,7 +47,6 @@ impl From<Message> for MapRequest {
 /// UserDefinedUnaryMap is a grpc client that sends unary requests to the map server
 /// and forwards the responses.
 pub(in crate::mapper) struct UserDefinedUnaryMap {
-    unary_map_client: MapClient<Channel>,
     read_tx: mpsc::Sender<MapRequest>,
     senders: ResponseSenderMap,
     task_handle: tokio::task::JoinHandle<()>,
@@ -80,7 +79,6 @@ impl UserDefinedUnaryMap {
         ));
 
         let mapper = Self {
-            unary_map_client: client,
             read_tx,
             senders: sender_map,
             task_handle,
@@ -129,19 +127,11 @@ impl UserDefinedUnaryMap {
 
         let _ = self.read_tx.send(message.into()).await;
     }
-
-    pub(in crate::mapper) async fn is_ready(&mut self) -> bool {
-        match self.unary_map_client.is_ready(Request::new(())).await {
-            Ok(response) => response.into_inner().ready,
-            Err(_) => false,
-        }
-    }
 }
 
 /// UserDefinedBatchMap is a grpc client that sends batch requests to the map server
 /// and forwards the responses.
 pub(in crate::mapper) struct UserDefinedBatchMap {
-    batch_map_client: MapClient<Channel>,
     read_tx: mpsc::Sender<MapRequest>,
     senders: ResponseSenderMap,
     task_handle: tokio::task::JoinHandle<()>,
@@ -174,7 +164,6 @@ impl UserDefinedBatchMap {
         ));
 
         let mapper = Self {
-            batch_map_client: client,
             read_tx,
             senders: sender_map,
             task_handle,
@@ -246,13 +235,6 @@ impl UserDefinedBatchMap {
             .await
             .expect("failed to send eot request");
     }
-
-    pub(in crate::mapper) async fn is_ready(&mut self) -> bool {
-        match self.batch_map_client.is_ready(Request::new(())).await {
-            Ok(response) => response.into_inner().ready,
-            Err(_) => false,
-        }
-    }
 }
 
 /// Processes the response from the server and sends it to the appropriate oneshot sender
@@ -312,7 +294,6 @@ async fn create_response_stream(
 
 /// UserDefinedStreamMap is a grpc client that sends stream requests to the map server
 pub(in crate::mapper) struct UserDefinedStreamMap {
-    stream_map_client: MapClient<Channel>,
     read_tx: mpsc::Sender<MapRequest>,
     senders: StreamResponseSenderMap,
     task_handle: tokio::task::JoinHandle<()>,
@@ -345,7 +326,6 @@ impl UserDefinedStreamMap {
         ));
 
         let mapper = Self {
-            stream_map_client: client,
             read_tx,
             senders: sender_map,
             task_handle,
@@ -421,13 +401,6 @@ impl UserDefinedStreamMap {
             .send(message.into())
             .await
             .expect("failed to send message");
-    }
-
-    pub(in crate::mapper) async fn is_ready(&mut self) -> bool {
-        match self.stream_map_client.is_ready(Request::new(())).await {
-            Ok(response) => response.into_inner().ready,
-            Err(_) => false,
-        }
     }
 }
 

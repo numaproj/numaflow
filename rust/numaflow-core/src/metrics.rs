@@ -619,31 +619,31 @@ async fn sidecar_livez(State(state): State<ComponentHealthChecks>) -> impl IntoR
     match state {
         ComponentHealthChecks::Monovertex(mut monovertex_state) => {
             // this call also check the health of transformer if it is configured in the Source.
-            if !monovertex_state.source.is_ready().await {
+            if !monovertex_state.source.ready().await {
                 error!("Monovertex source component is not ready");
                 return StatusCode::INTERNAL_SERVER_ERROR;
             }
-            if !monovertex_state.sink.is_ready().await {
+            if !monovertex_state.sink.ready().await {
                 error!("Monovertex sink client is not ready");
                 return StatusCode::INTERNAL_SERVER_ERROR;
             }
         }
         ComponentHealthChecks::Pipeline(pipeline_state) => match pipeline_state {
             PipelineComponents::Source(mut source) => {
-                if !source.is_ready().await {
+                if !source.ready().await {
                     error!("Pipeline source component is not ready");
                     return StatusCode::INTERNAL_SERVER_ERROR;
                 }
             }
-            PipelineComponents::Sink(sink) => {
+            PipelineComponents::Sink(mut sink) => {
                 // this call also check for fbsink if it is there
-                if !sink.is_ready().await {
+                if !sink.ready().await {
                     error!("Pipeline sink component is not ready");
                     return StatusCode::INTERNAL_SERVER_ERROR;
                 }
             }
             PipelineComponents::Map(mut map) => {
-                if !map.is_ready().await {
+                if !map.ready().await {
                     error!("Pipeline map component is not ready");
                     return StatusCode::INTERNAL_SERVER_ERROR;
                 }

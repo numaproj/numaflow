@@ -18,7 +18,6 @@ const DEFAULT_CHANNEL_SIZE: usize = 1000;
 
 /// User-Defined Sink code writes messages to a custom [SinkWriter].
 pub struct UserDefinedSink {
-    sink_rpc_client: SinkClient<Channel>,
     sink_tx: mpsc::Sender<SinkRequest>,
     resp_stream: Streaming<SinkResponse>,
 }
@@ -80,7 +79,6 @@ impl UserDefinedSink {
         }
 
         Ok(Self {
-            sink_rpc_client: client,
             sink_tx,
             resp_stream,
         })
@@ -150,15 +148,7 @@ impl Sink for UserDefinedSink {
                     .collect::<Vec<ResponseFromSink>>(),
             );
         }
-
         Ok(responses)
-    }
-
-    async fn is_ready(&mut self) -> bool {
-        match self.sink_rpc_client.is_ready(Request::new(())).await {
-            Ok(response) => response.into_inner().ready,
-            Err(_) => false,
-        }
     }
 }
 
