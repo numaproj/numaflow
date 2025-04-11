@@ -1,5 +1,5 @@
 package v1alpha1
 
-// ServingSource is the HTTP endpoint for Numaflow.
+// ServingSource is a placeholder for ServingPipeline source vertex.
 type ServingSource struct {
 }

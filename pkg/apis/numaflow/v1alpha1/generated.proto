@@ -210,11 +210,6 @@ message AbstractVertex {
   // +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
   // +optional
   optional UpdateStrategy updateStrategy = 16;
-
-  // TODO(spl): clean up
-  // Names of the serving store used in this vertex.
-  // +optional
-  optional string servingStoreName = 17;
 }
 
 // AccumulatorWindow describes a special kind of SessionWindow (similar to Global Window) where output should
@@ -1613,7 +1608,7 @@ message ServingPipelineStatus {
   optional int64 observedGeneration = 11;
 }
 
-// ServingSource is the HTTP endpoint for Numaflow.
+// ServingSource is a placeholder for ServingPipeline source vertex.
 message ServingSource {
 }
 
@@ -1639,7 +1634,7 @@ message ServingSpec {
   // +optional
   optional ContainerTemplate containerTemplate = 6;
 
-  // Number of replicas. If an HPA is used to manage the deployment object, do not set this field.
+  // Number of replicas.
   // +optional
   optional int32 replicas = 7;
 }

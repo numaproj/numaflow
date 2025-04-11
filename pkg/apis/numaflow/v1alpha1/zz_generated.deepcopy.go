@@ -218,11 +218,6 @@ func (in *AbstractVertex) DeepCopyInto(out *AbstractVertex) {
 		(*in).DeepCopyInto(*out)
 	}
 	in.UpdateStrategy.DeepCopyInto(&out.UpdateStrategy)
-	if in.ServingStoreName != nil {
-		in, out := &in.ServingStoreName, &out.ServingStoreName
-		*out = new(string)
-		**out = **in
-	}
 	return
 }
 

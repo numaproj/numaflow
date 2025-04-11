@@ -25,7 +25,7 @@ pub struct ServingSpec {
     /// The header key from which the message id will be extracted
     #[serde(rename = "msgIDHeaderKey")]
     pub msg_id_header_key: String,
-    /// Number of replicas. If an HPA is used to manage the deployment object, do not set this field.
+    /// Number of replicas.
     #[serde(rename = "replicas", skip_serializing_if = "Option::is_none")]
     pub replicas: Option<i32>,
     /// Request timeout in seconds. Default value is 120 seconds.
