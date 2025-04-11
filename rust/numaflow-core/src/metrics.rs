@@ -71,6 +71,7 @@ const SINK_WRITE_ERRORS_TOTAL: &str = "write_errors";
 const SINK_DROPPED_TOTAL: &str = "dropped";
 const DROPPED_TOTAL: &str = "dropped";
 const FALLBACK_SINK_WRITE_TOTAL: &str = "write";
+const TRANSFORMER_DROPPED_TOTAL: &str = "dropped";
 
 // pending as gauge for mvtx (these metric names are hardcoded in the auto-scaler)
 const PENDING: &str = "pending";
@@ -218,6 +219,7 @@ pub(crate) struct FallbackSinkMetrics {
 pub(crate) struct TransformerMetrics {
     /// Transformer latency
     pub(crate) time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) dropped_total: Family<Vec<(String, String)>, Counter>,
 }
 
 pub(crate) struct PipelineForwarderMetrics {
@@ -283,6 +285,7 @@ impl MonoVtxMetrics {
                 time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                     Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
                 }),
+                dropped_total: Family::<Vec<(String, String)>, Counter>::default(),
             },
 
             sink: SinkMetrics {
@@ -357,6 +360,11 @@ impl MonoVtxMetrics {
             "A Histogram to keep track of the total time taken to Transform, in microseconds",
             metrics.transformer.time.clone(),
         );
+        transformer_registry.register(
+            TRANSFORMER_DROPPED_TOTAL,
+            "A Counter to keep track of the total number of messages dropped by the transformer",
+            metrics.transformer.dropped_total.clone(),
+        );
 
         // Sink metrics
         let sink_registry = registry.sub_registry_with_prefix(SINK_REGISTRY_PREFIX);
@@ -389,8 +397,8 @@ impl MonoVtxMetrics {
             "A Counter to keep track of the total number of messages written to the fallback sink",
             metrics.fb_sink.write_total.clone(),
         );
-        fb_sink_registry.register(FALLBACK_SINK_TIME, 
-            "A Histogram to keep track of the total time taken to Write to the fallback sink, in microseconds", 
+        fb_sink_registry.register(FALLBACK_SINK_TIME,
+            "A Histogram to keep track of the total time taken to Write to the fallback sink, in microseconds",
             metrics.fb_sink.time.clone());
         metrics
     }

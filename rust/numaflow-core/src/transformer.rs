@@ -191,6 +191,17 @@ impl Transformer {
                 Err(e) => return Err(Error::Transformer(format!("task join failed: {}", e))),
             }
         }
+        let dropped_messages_count = transformed_messages
+            .iter()
+            .filter(|message| message.dropped())
+            .count();
+        if dropped_messages_count > 0 {
+            monovertex_metrics()
+                .transformer
+                .dropped_total
+                .get_or_create(mvtx_forward_metric_labels())
+                .inc_by(dropped_messages_count as u64);
+        }
         Ok(transformed_messages)
     }
 
