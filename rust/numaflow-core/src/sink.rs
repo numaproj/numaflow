@@ -459,10 +459,6 @@ impl SinkWriter {
                             .time
                             .get_or_create(mvtx_forward_metric_labels())
                             .observe(sink_start.elapsed().as_micros() as f64);
-                        monovertex_metrics()
-                            .dropped_total
-                            .get_or_create(mvtx_forward_metric_labels())
-                            .inc_by((total_msgs - total_valid_msgs) as u64);
                     } else {
                         pipeline_metrics()
                             .forwarder
@@ -511,6 +507,7 @@ impl SinkWriter {
         // start with the original set of message to be sent.
         // we will overwrite this vec with failed messages and will keep retrying.
         let mut messages_to_send = messages;
+        let mut write_errors_total = 0;
 
         // only breaks out of this loop based on the retry strategy unless all the messages have been written to sink
         // successfully.
@@ -535,6 +532,7 @@ impl SinkWriter {
                             "Retry attempt {} due to retryable error. Errors: {:?}",
                             attempts, error_map
                         );
+                        write_errors_total += error_map.len();
                     }
                     Err(e) => Err(e)?,
                 }
@@ -571,10 +569,24 @@ impl SinkWriter {
         let fb_msgs_total = fallback_msgs.len();
         // If there are fallback messages, write them to the fallback sink
         if !fallback_msgs.is_empty() {
+            let fallback_sink_start = time::Instant::now();
             self.handle_fallback_messages(fallback_msgs, retry_config)
                 .await?;
+            if is_mono_vertex() {
+                monovertex_metrics()
+                    .fb_sink
+                    .write_total
+                    .get_or_create(mvtx_forward_metric_labels())
+                    .inc_by(fb_msgs_total as u64);
+                monovertex_metrics()
+                    .fb_sink
+                    .time
+                    .get_or_create(mvtx_forward_metric_labels())
+                    .observe(fallback_sink_start.elapsed().as_micros() as f64);
+            }
         }
 
+        let serving_msgs_total = serving_msgs.len();
         // If there are serving messages, write them to the serving store
         if !serving_msgs.is_empty() {
             self.handle_serving_messages(serving_msgs).await?;
@@ -585,12 +597,12 @@ impl SinkWriter {
                 .sink
                 .write_total
                 .get_or_create(mvtx_forward_metric_labels())
-                .inc_by((total_msgs - fb_msgs_total) as u64);
+                .inc_by((total_msgs - fb_msgs_total - serving_msgs_total) as u64);
             monovertex_metrics()
-                .fb_sink
-                .write_total
+                .sink
+                .write_errors_total
                 .get_or_create(mvtx_forward_metric_labels())
-                .inc_by(fb_msgs_total as u64);
+                .inc_by((write_errors_total) as u64);
         } else {
             pipeline_metrics()
                 .forwarder
@@ -633,6 +645,14 @@ impl SinkWriter {
                     "Dropping messages after {} attempts. Errors: {:?}",
                     attempts, error_map
                 );
+                if is_mono_vertex() {
+                    // update the drop metric count with the messages left for sink
+                    monovertex_metrics()
+                        .sink
+                        .dropped_total
+                        .get_or_create(mvtx_forward_metric_labels())
+                        .inc_by((messages_to_send.len()) as u64);
+                }
             }
             // if we need to move the messages to the fallback, return false
             OnFailureStrategy::Fallback => {
@@ -650,7 +670,7 @@ impl SinkWriter {
     }
 
     /// Writes to sink once and will return true if successful, else false. Please note that it
-    /// mutates is incoming fields.
+    /// mutates its incoming fields.
     async fn write_to_sink_once(
         &mut self,
         error_map: &mut HashMap<String, i32>,
