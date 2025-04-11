@@ -15,7 +15,10 @@ limitations under the License.
 */
 package v1alpha1
 
-import corev1 "k8s.io/api/core/v1"
+import (
+	corev1 "k8s.io/api/core/v1"
+	resource "k8s.io/apimachinery/pkg/api/resource"
+)
 
 // volume mount to the runtime path
 func getRuntimeVolumeMount() []corev1.VolumeMount {
@@ -28,6 +31,13 @@ func getRuntimeVolumeMount() []corev1.VolumeMount {
 }
 func buildMonitorContainer(req getContainerReq) corev1.Container {
 	return containerBuilder{}.init(req).
+		resources(corev1.ResourceRequirements{
+			Limits: corev1.ResourceList{},
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("10m"),
+				corev1.ResourceMemory: resource.MustParse("20Mi"),
+			},
+		}).
 		volumeMounts(getRuntimeVolumeMount()...).
 		name(CtrMonitor).
 		asSidecar().
