@@ -60,8 +60,11 @@ func TestBuildMonitorContainer(t *testing.T) {
 	assert.Equal(t, "test-value", container.Env[0].Value, "Environment variable value mismatch")
 
 	// Verify resource requirements
-	assert.Equal(t, req.resources.Limits, container.Resources.Limits, "Resource limits mismatch")
-	assert.Equal(t, req.resources.Requests, container.Resources.Requests, "Resource requests mismatch")
+	assert.Equal(t, container.Resources.Limits, corev1.ResourceList{}, "Resource limits mismatch")
+	assert.Equal(t, container.Resources.Requests, corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse("10m"),
+		corev1.ResourceMemory: resource.MustParse("20Mi"),
+	}, "Resource requests mismatch")
 
 	// Verify volume mounts --> should overwrite req's volume mounts
 	assert.Equal(t, 1, len(container.VolumeMounts), "Volume mount count mismatch")
