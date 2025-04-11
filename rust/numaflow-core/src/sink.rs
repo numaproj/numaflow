@@ -659,7 +659,6 @@ impl SinkWriter {
         // start with the original set of message to be sent.
         // we will overwrite this vec with failed messages and will keep retrying.
         let mut messages_to_send = fallback_msgs;
-        let total_fallback_msgs = fallback_msgs.len();
 
         let default_retry = retry_config
             .sink_default_retry_strategy
@@ -736,7 +735,6 @@ impl SinkWriter {
                 Err(e) => return Err(e),
             }
         }
-
         if !messages_to_send.is_empty() {
             return Err(Error::Sink(format!(
                 "Failed to write messages to fallback sink after {} attempts. Errors: {:?}",
