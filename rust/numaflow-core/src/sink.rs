@@ -513,7 +513,7 @@ impl SinkWriter {
                 .sink
                 .write_errors_total
                 .get_or_create(mvtx_forward_metric_labels())
-                .inc_by(write_errors_total as u64)
+                .inc_by((write_errors_total) as u64);
         } else {
             pipeline_metrics()
                 .forwarder
