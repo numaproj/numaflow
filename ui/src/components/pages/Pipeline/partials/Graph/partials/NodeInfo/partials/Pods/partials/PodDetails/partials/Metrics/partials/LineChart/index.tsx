@@ -1,4 +1,11 @@
-import { useCallback, useContext, useEffect, useState } from "react";
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   CartesianGrid,
   Line,
@@ -7,7 +14,6 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-  Text,
 } from "recharts";
 import Box from "@mui/material/Box";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -146,7 +152,7 @@ const CustomTooltip = ({
         {tooltipVal.map((entry: any, index: any) => {
           const formattedValue = getDefaultFormatter(entry?.value, displayName);
           return (
-            <Box key={`item-${index}`} sx={{ display: "flex" }}>
+            <Box className={"tooltip-entry-container"} key={`item-${index}`}>
               <Box
                 className={"tooltip-entry"}
                 sx={{
@@ -154,7 +160,7 @@ const CustomTooltip = ({
                   color: entry?.color,
                 }}
               >
-                {entry?.name}:
+                {entry?.name}
               </Box>
               <Box sx={{ color: entry?.color }}>{formattedValue}</Box>
             </Box>
@@ -163,13 +169,6 @@ const CustomTooltip = ({
       </Box>
     </Box>
   );
-};
-
-const getYAxisLabel = (unit: string) => {
-  if (unit !== "") {
-    return unit;
-  }
-  return "";
 };
 
 const getDefaultFormatter = (value: number, displayName: string) => {
@@ -276,6 +275,10 @@ const LineChartComponent = ({
   const [pinnedTooltip, setPinnedTooltip] = useState<any>(null);
   const [tooltipX, setTooltipX] = useState<number | undefined>(undefined);
   const [tooltipY, setTooltipY] = useState<number | undefined>(undefined);
+  const [isFilterFocused, setFilterFocused] = useState<boolean>(false);
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
   const getRandomColor = useCallback((index: number) => {
     const hue = (index * 137.508) % 360;
@@ -510,15 +513,76 @@ const LineChartComponent = ({
     if (chartData) updateChartData();
   }, [chartData, updateChartData]);
 
+  const handleResize = useCallback((entries: ResizeObserverEntry[]) => {
+    if (entries && entries.length > 0) {
+      setContainerWidth(entries[0].contentRect.width);
+    }
+  }, []);
+
+  useEffect(() => {
+    resizeObserverRef.current = new ResizeObserver(handleResize);
+
+    if (
+      !isLoading &&
+      !error &&
+      transformedData?.length > 0 &&
+      chartContainerRef.current
+    ) {
+      resizeObserverRef.current.observe(chartContainerRef.current);
+    } else {
+      if (resizeObserverRef.current) {
+        resizeObserverRef.current.disconnect();
+      }
+    }
+
+    return () => {
+      if (resizeObserverRef.current) {
+        resizeObserverRef.current.disconnect();
+      }
+    };
+  }, [isLoading, error, transformedData, handleResize]);
+
+  const calculateInterval = useCallback(() => {
+    if (!transformedData) {
+      return 0;
+    }
+
+    // filtering points with minutes in multiple of 5
+    const filteredData = transformedData.filter((td) => {
+      const minutes = td?.time?.split(" ")[0]?.split(":")[1];
+      return Number(minutes) % 5 === 0;
+    });
+
+    const dataLength = filteredData.length;
+
+    const getInterval = (maxPoints: number) => {
+      if (dataLength <= maxPoints) return 0;
+      const interval = Math.floor(dataLength / maxPoints);
+      return interval === 4 ? 3 : Math.max(1, interval);
+    };
+
+    if (containerWidth > 1300) return getInterval(24);
+    else if (containerWidth > 650) return getInterval(12);
+    else return getInterval(6);
+  }, [containerWidth, transformedData]);
+
+  const roundTimestampToNearestFiveMinutes = useCallback(
+    (timestamp: string): string => {
+      const minutes = timestamp?.split(" ")[0]?.split(":")[1];
+      return Number(minutes) % 5 === 0 ? timestamp : "";
+    },
+    []
+  );
+
+  const getMetricsModalDesc = useMemo(() => {
+    return `This chart represents the above metric at a ${metricsReq?.dimension} level over the selected time period.`;
+  }, []);
+
   if (paramsList?.length === 0) return <></>;
 
   const hasTimeParams = paramsList?.some((param) =>
     ["start_time", "end_time"].includes(param?.name)
   );
-
-  const getMetricsModalDesc = () => {
-    return `This chart represents the above metric at a ${metricsReq?.dimension} level over the selected time period.`;
-  };
 
   return (
     <Box>
@@ -532,7 +596,7 @@ const LineChartComponent = ({
               <Box
                 display={fromModal ? "none" : "flex"}
                 key={`line-chart-${param?.name}`}
-                sx={{ minWidth: 120, fontSize: "2rem" }}
+                sx={{ gap: "1rem" }}
               >
                 <Dropdown
                   metric={metric}
@@ -552,7 +616,14 @@ const LineChartComponent = ({
               display: fromModal ? "none" : "flex",
             }}
           >
-            <Box sx={{ mr: "1rem" }}>Filters</Box>
+            <Box
+              className={"line-chart-filters-label"}
+              sx={{
+                color: isFilterFocused ? "#0077c5" : "rgba(0, 0, 0, 0.54)",
+              }}
+            >
+              Filters
+            </Box>
             <FiltersDropdown
               items={filtersList?.filter(
                 (filterEle: any) => !filterEle?.required
@@ -563,12 +634,14 @@ const LineChartComponent = ({
               vertexId={vertexId}
               setFilters={setFilters}
               selectedPodName={pod?.name}
+              isFilterFocused={isFilterFocused}
+              setFilterFocused={setFilterFocused}
               metric={metric}
             />
           </Box>
         )}
         {fromModal && (
-          <Box className={"line-chart-modal-desc"}>{getMetricsModalDesc()}</Box>
+          <Box className={"line-chart-modal-desc"}>{getMetricsModalDesc}</Box>
         )}
         {hasTimeParams && (
           <Box key="line-chart-preset">
@@ -586,15 +659,10 @@ const LineChartComponent = ({
       {!isLoading && error && <EmptyChart message={error?.toString()} />}
 
       {!isLoading && !error && transformedData?.length > 0 && (
-        <ResponsiveContainer width="100%" height={400}>
+        <ResponsiveContainer ref={chartContainerRef} width="100%" height={400}>
           <LineChart
             data={transformedData}
-            margin={{
-              top: 5,
-              right: 30,
-              left: 30,
-              bottom: 5,
-            }}
+            margin={{ top: 10, right: 10, left: 5, bottom: 0 }}
             style={{ cursor: "pointer" }}
             onClick={(state) => {
               if (!pinnedTooltip) {
@@ -609,24 +677,27 @@ const LineChartComponent = ({
             }}
           >
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="time" padding={{ left: 30, right: 30 }}></XAxis>
+            <XAxis
+              dataKey="time"
+              padding={{ left: 15, right: 15 }}
+              axisLine={{ stroke: "#8D9096" }}
+              tickFormatter={roundTimestampToNearestFiveMinutes}
+              interval={calculateInterval()}
+              tick={{
+                fontSize: "1rem",
+                fontFamily: "Avenir Next, sans-serif",
+              }}
+            ></XAxis>
             <YAxis
-              label={
-                <Text
-                  x={-160}
-                  y={15}
-                  dy={5}
-                  transform="rotate(-90)"
-                  fontSize={14}
-                  textAnchor="middle"
-                >
-                  {getYAxisLabel(metric?.unit)}
-                </Text>
-              }
+              axisLine={{ stroke: "#8D9096" }}
               tickFormatter={getTickFormatter(
                 metric?.unit,
                 metric?.display_name
               )}
+              tick={{
+                fontSize: "1rem",
+                fontFamily: "Avenir Next, sans-serif",
+              }}
             />
             <CartesianGrid stroke="#f5f5f5"></CartesianGrid>
 
