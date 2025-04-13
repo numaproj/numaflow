@@ -101,13 +101,16 @@ pub(crate) fn persist_application_error_to_file(
     grpc_status: Status,
 ) {
     // extract the type of udf container based on the error message
-    let container_name = extract_container_name(grpc_status.message());
-    // skip processing if the container name is empty. This happens only if
-    // the gRPC status is not created by us (e.g., unknown bugs like https://github.com/grpc/grpc-go/issues/7641)
-    // TODO: we should try to expose this in the UI if we encounter a few of this in prod.
+    let mut container_name = extract_container_name(grpc_status.message());
+    // Setting container to "numa" if the container name is empty. This scenario occurs in the following cases:
+    // 1. The error is a gRPC error, but the gRPC status was not created by this application.
+    //    For example, this can happen due to unknown bugs in the gRPC library, such as:
+    //    https://github.com/grpc/grpc-go/issues/7641
+    // 2. The error is not a gRPC error, and no container name could be extracted from the error message.
+    // In such cases, "numa" is used as the default container name to ensure that the error is logged
+    // and persisted in a consistent manner.
     if container_name.is_empty() {
-        error!(?grpc_status, "unknown-container");
-        return;
+        container_name = String::from("numa")
     }
     // create a directory for the container if it doesn't exist with permissions to read, write, and execute for all
     let dir_path = Path::new(&application_error_path.clone()).join(&container_name);

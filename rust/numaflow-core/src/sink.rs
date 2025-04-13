@@ -357,10 +357,11 @@ impl SinkWriter {
 
     /// Sink the messages to the Fallback Sink.
     async fn fb_sink(&self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>> {
+        // additional check here, we should have already checked whether the handle exist or not by now
         if self.fb_sink_handle.is_none() {
-            return Err(Error::Sink(
-                "Response contains fallback messages but no fallback sink is configured"
-                    .to_string(),
+            return Err(Error::FbSink(
+                "Response contains fallback messages but no fallback sink is configured.
+                Please update the spec to configure fallback sink https://numaflow.numaproj.io/user-guide/sinks/fallback/ ".to_string(),
             ));
         }
 
@@ -717,9 +718,9 @@ impl SinkWriter {
         retry_config: &RetryConfig,
     ) -> Result<()> {
         if self.fb_sink_handle.is_none() {
-            return Err(Error::Sink(
-                "Response contains fallback messages but no fallback sink is configured"
-                    .to_string(),
+            return Err(Error::FbSink(
+                "Response contains fallback messages but no fallback sink is configured.
+                Please update the spec to configure fallback sink https://numaflow.numaproj.io/user-guide/sinks/fallback/".to_string(),
             ));
         }
 
@@ -778,13 +779,13 @@ impl SinkWriter {
 
                     // specifying fallback status in fallback response is not allowed
                     if contains_fallback_status {
-                        return Err(Error::Sink(
+                        return Err(Error::FbSink(
                             "Fallback response contains fallback status".to_string(),
                         ));
                     }
 
                     if contains_serving_status {
-                        return Err(Error::Sink(
+                        return Err(Error::FbSink(
                             "Fallback response contains serving status".to_string(),
                         ));
                     }
@@ -805,7 +806,7 @@ impl SinkWriter {
             }
         }
         if !messages_to_send.is_empty() {
-            return Err(Error::Sink(format!(
+            return Err(Error::FbSink(format!(
                 "Failed to write messages to fallback sink after {} attempts. Errors: {:?}",
                 attempts, fallback_error_map
             )));
