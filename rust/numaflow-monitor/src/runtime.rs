@@ -100,18 +100,8 @@ pub(crate) fn persist_application_error_to_file(
     max_error_files_per_container: usize,
     grpc_status: Status,
 ) {
-    // extract the type of udf container based on the error message
-    let mut container_name = extract_container_name(grpc_status.message());
-    // Setting container to "numa" if the container name is empty. This scenario occurs in the following cases:
-    // 1. The error is a gRPC error, but the gRPC status was not created by this application.
-    //    For example, this can happen due to unknown bugs in the gRPC library, such as:
-    //    https://github.com/grpc/grpc-go/issues/7641
-    // 2. The error is not a gRPC error, and no container name could be extracted from the error message.
-    // In such cases, "numa" is used as the default container name to ensure that the error is logged
-    // and persisted in a consistent manner.
-    if container_name.is_empty() {
-        container_name = String::from("numa")
-    }
+    // extract the type of container based on the error message
+    let container_name = extract_container_name(grpc_status.message());
     // create a directory for the container if it doesn't exist with permissions to read, write, and execute for all
     let dir_path = Path::new(&application_error_path.clone()).join(&container_name);
     if !dir_path.exists() {
@@ -291,7 +281,13 @@ fn extract_container_name(error_message: &str) -> String {
             return error_message[start + 1..start + 1 + end].to_string();
         }
     }
-    String::new()
+    // Setting container to "numa" as the default container name to ensure that the error is
+    // persisted in a consistent manner. This can happen in following cases:
+    // 1. The error is a gRPC error, but the gRPC status was not created by this application.
+    //    For example, this can happen due to unknown bugs in the gRPC library, such as:
+    //    https://github.com/grpc/grpc-go/issues/7641
+    // 2. The error is not a gRPC error, and no container name could be extracted from the error message.
+    String::from("numa")
 }
 
 ///  Processes a single file entry, deserializing its content into a `RuntimeErrorEntry` and adding it
@@ -390,23 +386,22 @@ mod tests {
 
         // Verify that container name is empty for below grpc_status
         let container_name = extract_container_name(grpc_status.message());
-        assert!(container_name.is_empty());
+        assert_eq!(container_name, "numa".to_string());
+        let dir_path = Path::new(&application_error_path).join(&container_name);
 
         // Call the function to test
         persist_application_error_to_file(application_error_path.clone(), 5, grpc_status.clone());
 
-        // Verify that no files were created in the directory
-        let dir_path = Path::new(&application_error_path).join(&container_name);
-        if dir_path.exists() {
-            let files: Vec<_> = fs::read_dir(&dir_path)
-                .unwrap()
-                .filter_map(|entry| entry.ok())
-                .collect();
-            assert!(
-                files.is_empty(),
-                "No files should be created in the directory"
-            );
-        }
+        // Verify that a new error file was created
+        let files: Vec<_> = fs::read_dir(&dir_path)
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .collect();
+        assert_eq!(files.len(), 1);
+
+        // Verify the file name format
+        let file_name = files[0].file_name().into_string().unwrap();
+        assert!(file_name.ends_with(".json"));
     }
 
     #[test]
