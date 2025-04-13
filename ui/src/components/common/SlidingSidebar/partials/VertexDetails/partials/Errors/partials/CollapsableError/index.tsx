@@ -15,6 +15,20 @@ interface CollapsableErrorProps {
   detail: ContainerError & { pod: string };
 }
 
+const highlightFilePaths = (text: string) => {
+  const filePathRegex = /((?:\/[^\s]+)+\.[a-zA-Z0-9]+)/g;
+  return text.split(filePathRegex).map((part, index) => {
+    if (filePathRegex.test(part)) {
+      return (
+        <span key={index} style={{ color: "blue", fontWeight: "bold" }}>
+          {part}
+        </span>
+      );
+    }
+    return part;
+  });
+};
+
 export const CollapsableError = ({ detail }: CollapsableErrorProps) => {
   const [expanded, setExpanded] = useState(false);
 
@@ -82,7 +96,9 @@ export const CollapsableError = ({ detail }: CollapsableErrorProps) => {
           </Box>
           <Divider orientation="vertical" flexItem color={"#878789"} />
           <Box className={"collapsable-error-accordion-details-title-content"}>
-            {detail.details}
+            <pre style={{ whiteSpace: "pre-wrap", wordWrap: "break-word" }}>
+              {highlightFilePaths(detail.details)}
+            </pre>
           </Box>
           <Divider
             orientation="vertical"
