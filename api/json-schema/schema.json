@@ -19478,7 +19478,7 @@
         },
         "serve": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServeSink",
-          "description": "Serve sink is intended to use with ServingPipeline to return results"
+          "description": "Serve sink is used to return results when working with a ServingPipeline."
         },
         "udsink": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSink",
@@ -22265,7 +22265,7 @@
         },
         "serve": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServeSink",
-          "description": "Serve sink is intended to use with ServingPipeline to return results"
+          "description": "Serve sink is used to return results when working with a ServingPipeline."
         },
         "udsink": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSink",

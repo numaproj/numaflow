@@ -19482,7 +19482,7 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log"
         },
         "serve": {
-          "description": "Serve sink is intended to use with ServingPipeline to return results",
+          "description": "Serve sink is used to return results when working with a ServingPipeline.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServeSink"
         },
         "udsink": {
@@ -22251,7 +22251,7 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RetryStrategy"
         },
         "serve": {
-          "description": "Serve sink is intended to use with ServingPipeline to return results",
+          "description": "Serve sink is used to return results when working with a ServingPipeline.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServeSink"
         },
         "udsink": {

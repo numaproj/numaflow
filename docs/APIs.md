@@ -527,7 +527,8 @@ UDSink sink is used to write the data to the user-defined sink.
 <em>(Optional)</em>
 <p>
 
-Serve sink is intended to use with ServingPipeline to return results
+Serve sink is used to return results when working with a
+ServingPipeline.
 </p>
 
 </td>

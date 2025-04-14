@@ -143,7 +143,7 @@ message AbstractSink {
   // +optional
   optional UDSink udsink = 4;
 
-  // Serve sink is intended to use with ServingPipeline to return results
+  // Serve sink is used to return results when working with a ServingPipeline.
   // +optional
   optional ServeSink serve = 5;
 }

@@ -325,7 +325,7 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractSink(ref common.ReferenceCallback
 					},
 					"serve": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Serve sink is intended to use with ServingPipeline to return results",
+							Description: "Serve sink is used to return results when working with a ServingPipeline.",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServeSink"),
 						},
 					},
@@ -5436,7 +5436,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Sink(ref common.ReferenceCallback) common
 					},
 					"serve": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Serve sink is intended to use with ServingPipeline to return results",
+							Description: "Serve sink is used to return results when working with a ServingPipeline.",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServeSink"),
 						},
 					},
