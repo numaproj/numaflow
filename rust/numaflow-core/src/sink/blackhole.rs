@@ -16,10 +16,6 @@ impl Sink for BlackholeSink {
             .collect();
         Ok(output)
     }
-
-    async fn is_ready(&mut self) -> bool {
-        true
-    }
 }
 
 #[cfg(test)]

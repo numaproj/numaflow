@@ -38,6 +38,10 @@ impl UserDefinedStore {
         })?;
         Ok(())
     }
+
+    pub(crate) fn get_store_client(&self) -> ServingStoreClient<Channel> {
+        self.client.clone()
+    }
 }
 
 #[cfg(test)]
