@@ -39,4 +39,4 @@ ServingPipeline enables request/response interaction with streaming systems, all
 ### Use Cases
 - Machine learning inference (e.g., send features, receive predictions)   
 - Event-driven APIs backed by stream processing logic  
-- Asynchronous request/response workflows over SSE or HTTP 
+- Asynchronous request/response workflows over SSE or HTTP
