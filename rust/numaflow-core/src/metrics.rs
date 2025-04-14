@@ -1428,8 +1428,23 @@ mod tests {
             .time
             .get_or_create(&common_labels)
             .observe(5.0);
+        metrics
+            .transformer
+            .dropped_total
+            .get_or_create(&common_labels)
+            .inc_by(2);
 
         metrics.sink.write_total.get_or_create(&common_labels).inc();
+        metrics
+            .sink
+            .write_errors_total
+            .get_or_create(&common_labels)
+            .inc_by(3);
+        metrics
+            .sink
+            .dropped_total
+            .get_or_create(&common_labels)
+            .inc_by(2);
         metrics.sink.time.get_or_create(&common_labels).observe(4.0);
 
         metrics
@@ -1437,6 +1452,11 @@ mod tests {
             .write_total
             .get_or_create(&common_labels)
             .inc();
+        metrics
+            .fb_sink
+            .time
+            .get_or_create(&common_labels)
+            .observe(5.0);
 
         // Validate the metric names
         let state = global_registry().registry.lock();
@@ -1462,11 +1482,17 @@ mod tests {
             r#"monovtx_transformer_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 5.0"#,
             r#"monovtx_transformer_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_transformer_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_transformer_dropped_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 2"#,
             r#"monovtx_sink_write_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_sink_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 4.0"#,
             r#"monovtx_sink_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_sink_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_sink_write_errors_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 3"#,
+            r#"monovtx_sink_dropped_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 2"#,
             r#"monovtx_fallback_sink_write_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_fallback_sink_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 5.0"#,
+            r#"monovtx_fallback_sink_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_fallback_sink_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
         ];
 
         let got = buffer

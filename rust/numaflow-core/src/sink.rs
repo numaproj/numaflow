@@ -483,18 +483,7 @@ impl SinkWriter {
             let fallback_sink_start = time::Instant::now();
             self.handle_fallback_messages(fallback_msgs, retry_config)
                 .await?;
-            if is_mono_vertex() {
-                monovertex_metrics()
-                    .fb_sink
-                    .write_total
-                    .get_or_create(mvtx_forward_metric_labels())
-                    .inc_by(fb_msgs_total as u64);
-                monovertex_metrics()
-                    .fb_sink
-                    .time
-                    .get_or_create(mvtx_forward_metric_labels())
-                    .observe(fallback_sink_start.elapsed().as_micros() as f64);
-            }
+            Self::send_fb_sink_metrics(fb_msgs_total, fallback_sink_start);
         }
 
         let serving_msgs_total = serving_msgs.len();
@@ -799,6 +788,21 @@ impl SinkWriter {
             is_primary_sink_ready && is_fallback_sink_ready
         } else {
             is_primary_sink_ready
+        }
+    }
+
+    fn send_fb_sink_metrics(fb_msgs_total: usize, fallback_sink_start: time::Instant) {
+        if is_mono_vertex() {
+            monovertex_metrics()
+                .fb_sink
+                .write_total
+                .get_or_create(mvtx_forward_metric_labels())
+                .inc_by(fb_msgs_total as u64);
+            monovertex_metrics()
+                .fb_sink
+                .time
+                .get_or_create(mvtx_forward_metric_labels())
+                .observe(fallback_sink_start.elapsed().as_micros() as f64);
         }
     }
 }
