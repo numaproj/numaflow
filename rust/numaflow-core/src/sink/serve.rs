@@ -10,7 +10,7 @@ impl Sink for ServeSink {
         for msg in messages {
             result.push(ResponseFromSink {
                 id: msg.id.to_string(),
-                status: ResponseStatusFromSink::Success,
+                status: ResponseStatusFromSink::Serve,
                 serve_response: Some(msg.value.into()),
             })
         }
