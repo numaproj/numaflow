@@ -216,22 +216,9 @@ const getDefaultFormatter = (value: number, displayName: string) => {
   }
 };
 
-const getTickFormatter = (unit: string, displayName: string) => {
-  const formatValue = (value: number) => {
-    const formattedValue = parseFloat(value?.toFixed(2)); // Format to 2 decimal places
-    return formattedValue % 1 === 0
-      ? Math.floor(formattedValue)
-      : formattedValue; // Remove trailing .0
-  };
+const getTickFormatter = (displayName: string) => {
   return (value: number) => {
-    switch (unit) {
-      case "s":
-        return `${formatValue(value / 1000000)}`;
-      case "ms":
-        return `${formatValue(value / 1000)}`;
-      default:
-        return getDefaultFormatter(value, displayName);
-    }
+    return getDefaultFormatter(value, displayName);
   };
 };
 
@@ -542,7 +529,7 @@ const LineChartComponent = ({
     };
   }, [isLoading, error, transformedData, handleResize]);
 
-  const calculateInterval = useCallback(() => {
+  const calculateInterval = useMemo(() => {
     if (!transformedData) {
       return 0;
     }
@@ -576,7 +563,7 @@ const LineChartComponent = ({
 
   const getMetricsModalDesc = useMemo(() => {
     return `This chart represents the above metric at a ${metricsReq?.dimension} level over the selected time period.`;
-  }, []);
+  }, [metricsReq?.dimension]);
 
   if (paramsList?.length === 0) return <></>;
 
@@ -682,7 +669,7 @@ const LineChartComponent = ({
               padding={{ left: 15, right: 15 }}
               axisLine={{ stroke: "#8D9096" }}
               tickFormatter={roundTimestampToNearestFiveMinutes}
-              interval={calculateInterval()}
+              interval={calculateInterval}
               tick={{
                 fontSize: "1rem",
                 fontFamily: "Avenir Next, sans-serif",
@@ -690,10 +677,7 @@ const LineChartComponent = ({
             ></XAxis>
             <YAxis
               axisLine={{ stroke: "#8D9096" }}
-              tickFormatter={getTickFormatter(
-                metric?.unit,
-                metric?.display_name
-              )}
+              tickFormatter={getTickFormatter(metric?.display_name)}
               tick={{
                 fontSize: "1rem",
                 fontFamily: "Avenir Next, sans-serif",
