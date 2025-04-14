@@ -30,7 +30,7 @@ mod tests {
     use crate::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
 
     #[tokio::test]
-    async fn test_log_sink() {
+    async fn test_serve_sink() {
         let mut sink = ServeSink;
         let messages = vec![
             Message {
@@ -70,7 +70,7 @@ mod tests {
         let expected_responses = messages
             .iter()
             .map(|msg| ResponseFromSink {
-                status: ResponseStatusFromSink::Success,
+                status: ResponseStatusFromSink::Serve,
                 id: msg.id.to_string(),
                 serve_response: Some(msg.value.clone().into()),
             })

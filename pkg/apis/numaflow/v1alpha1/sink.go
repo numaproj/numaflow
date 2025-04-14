@@ -46,7 +46,7 @@ type AbstractSink struct {
 	// UDSink sink is used to write the data to the user-defined sink.
 	// +optional
 	UDSink *UDSink `json:"udsink,omitempty" protobuf:"bytes,4,opt,name=udsink"`
-	// Serve sink is intended to use with ServingPipeline to return results
+	// Serve sink is used to return results when working with a ServingPipeline.
 	// +optional
 	Serve *ServeSink `json:"serve,omitempty" protobuf:"bytes,5,opt,name=serve"`
 }
