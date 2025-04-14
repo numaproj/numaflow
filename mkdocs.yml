@@ -40,6 +40,7 @@ nav:
       - quick-start.md
   - User Guide:
       - Core Concepts:
+          - Overview: "core-concepts/overview.md"
           - core-concepts/pipeline.md
           - core-concepts/vertex.md
           - core-concepts/monovertex.md
@@ -86,6 +87,13 @@ nav:
                   - Sliding: "user-guide/user-defined-functions/reduce/windowing/sliding.md"
                   - Session: "user-guide/user-defined-functions/reduce/windowing/session.md"
               - Examples: "user-guide/user-defined-functions/reduce/examples.md"
+      - SDKs:
+          - Overview: user-guide/sdks/overview.md
+          - Compatibility: user-guide/sdks/compatibility.md
+          - Golang: user-guide/sdks/golang.md
+          - Java: user-guide/sdks/java.md
+          - Python: user-guide/sdks/python.md
+          - Rust: user-guide/sdks/rust.md
       - Reference:
           - user-guide/reference/pipeline-tuning.md
           - user-guide/reference/autoscaling.md
