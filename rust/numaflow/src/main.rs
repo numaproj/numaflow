@@ -34,6 +34,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         return Err(e);
     }
     info!("Exiting...");
+
     Ok(())
 }
 

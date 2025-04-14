@@ -69,10 +69,6 @@ impl SourceReader for JetstreamSource {
     async fn partitions(&mut self) -> Result<Vec<u16>> {
         Ok(vec![*get_vertex_replica()])
     }
-
-    async fn is_ready(&mut self) -> bool {
-        true
-    }
 }
 
 impl SourceAcker for JetstreamSource {
@@ -177,7 +173,6 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(source.is_ready().await);
         assert_eq!(source.partitions().await.unwrap(), vec![0]);
 
         // Test SourceReader::read

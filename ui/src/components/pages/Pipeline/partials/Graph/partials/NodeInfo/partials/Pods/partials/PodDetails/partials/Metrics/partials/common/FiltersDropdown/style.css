@@ -1,0 +1,66 @@
+.filter-menu-item {
+    width: fit-content !important;
+    min-width: 13rem !important;
+    display: flex !important;
+    justify-content: space-between !important;
+}
+
+.filter-menu-item-name {
+    text-overflow: ellipsis;
+    font-size: 1.3rem;
+    font-family: Avenir Next, sans-serif;
+}
+
+.filter-menu-item-forward-icon {
+    height: 2rem !important;
+    width: 2rem !important;
+    color: #0077C5 !important;
+}
+
+.filters-dropdown-container {
+    display: flex;
+    align-items: center;
+    min-width: 13rem;
+    width: 100%;
+    border-radius: 0.4rem;
+    height: 5rem;
+    padding: 1rem;
+    gap: 1rem;
+}
+
+.filters-dropdown-selected-filters-container {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background-color: #E3E5E8;
+    border-radius: 0.4rem;
+    justify-content: space-between;
+    width: fit-content;
+    max-width: 25rem;
+}
+
+.filters-dropdown-selected-filter-value {
+    font-family: "Avenir Next", sans-serif;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    color: #393A3D;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.filters-dropdown-add-filter-button {
+    color: #0077C5 !important;
+    width: 11rem !important;
+    font-family: "Avenir Next", sans-serif !important;
+    font-size: 1.1rem !important;
+    font-weight: bold !important;
+    text-transform: capitalize !important;
+    align-items: end !important;
+}
+
+.filters-dropdown-active-filters-options {
+    height: fit-content;
+    max-height: 25rem;
+    overflow: scroll;
+}
