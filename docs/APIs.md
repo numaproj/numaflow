@@ -514,6 +514,26 @@ UDSink sink is used to write the data to the user-defined sink.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>serve</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServeSink"> ServeSink </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Serve sink is intended to use with ServingPipeline to return results
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -10041,6 +10061,21 @@ too aggressive scaling down operations
 </tbody>
 
 </table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.ServeSink">
+
+ServeSink
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractSink">AbstractSink</a>)
+</p>
+
+<p>
+
+</p>
 
 <h3 id="numaflow.numaproj.io/v1alpha1.ServingPipeline">
 
