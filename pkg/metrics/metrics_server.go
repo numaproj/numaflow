@@ -288,7 +288,7 @@ func (ms *metricsServer) Start(ctx context.Context) (func(ctx context.Context) e
 	}
 	replica, err := strconv.Atoi(replicaStr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid replica %q", replicaStr)
+		return nil, fmt.Errorf("invalid replica value %q: %w", replicaStr, err)
 	}
 	// Buildup pending information
 	// If the vertex is a source, then only trigger for pod replica id=0
