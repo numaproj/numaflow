@@ -15,10 +15,20 @@ interface CollapsableErrorProps {
   detail: ContainerError & { pod: string };
 }
 
-const highlightFilePaths = (text: string) => {
-  const filePathRegex = /((?:\/[^\s]+)+\.[a-zA-Z0-9]+)/g;
+// removes initial escape sequences from details
+const cleanText = (text: string) => {
+  const initialEscapeSequences = ["\b\r\u00123", "\b\r\u0012H", "\b\r\u00128"];
+  const regex = new RegExp(`^(${initialEscapeSequences.join("|")})`);
+  return text.replace(regex, "");
+};
+
+const highlightFilePaths = (rawText: string) => {
+  const text = cleanText(rawText);
+  const filePathRegex = /((?:\/[^\s]+)+\.[a-zA-Z0-9:]+)|(\bat\s+[^\n]+)/g;
+  const exclusionList = ["/google.rpc.DebugInfo", "/debug.Stack"];
+
   return text.split(filePathRegex).map((part, index) => {
-    if (filePathRegex.test(part)) {
+    if (filePathRegex.test(part) && !exclusionList.includes(part)) {
       return (
         <span key={index} style={{ color: "blue", fontWeight: "bold" }}>
           {part}
