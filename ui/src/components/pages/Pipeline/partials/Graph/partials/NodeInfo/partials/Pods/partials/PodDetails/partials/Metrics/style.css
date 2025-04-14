@@ -1,0 +1,31 @@
+.metrics-discover-metrics-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+}
+
+.metrics-discover-metrics-error {
+  font-size: 1.4rem;
+  font-family: Avenir Next, sans-serif;
+  padding: 2rem 0;
+}
+
+.metrics-discover-metrics-not-found {
+  font-size: 1.4rem;
+  font-family: Avenir Next, sans-serif;
+  padding: 2rem 0;
+}
+
+.metrics-accordion-summary {
+  display: flex;
+  align-items: center;
+  font-family: Avenir Next, sans-serif;
+  font-weight: 500;
+  gap: 1rem;
+}
+
+.metrics-accordion-summary-tooltip {
+  font-size: 1.2rem !important;
+  font-family: Avenir Next, sans-serif !important;
+}
