@@ -1,0 +1,23 @@
+.metrics-modal-title-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 3rem;
+}
+
+.metrics-modal-title {
+    font-size: 1.6rem;
+    font-family: Avenir Next, sans-serif;
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.metrics-modal-redirect {
+    display: flex;
+    flex-direction: row-reverse;
+    text-decoration: underline;
+    color: #0077C5;
+    cursor: pointer;
+    padding: 0.5rem;
+    font-family: Avenir Next, sans-serif;
+}

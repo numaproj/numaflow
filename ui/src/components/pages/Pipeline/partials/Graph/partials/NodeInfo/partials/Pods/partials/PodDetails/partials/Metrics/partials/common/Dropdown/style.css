@@ -1,0 +1,19 @@
+.dropdown-menu-items {
+    font-size: 1.3rem !important;
+    font-family: Avenir Next, sans-serif !important;
+}
+
+.dropdown-form-select {
+    width: 13rem;
+}
+
+.dropdown-input-label {
+    font-size: 1.4rem !important;
+    font-family: Avenir Next, sans-serif !important;
+}
+
+.dropdown-select-value {
+    font-size: 1.4rem !important;
+    font-family: Avenir Next, sans-serif !important;
+    height: 5rem !important;
+}

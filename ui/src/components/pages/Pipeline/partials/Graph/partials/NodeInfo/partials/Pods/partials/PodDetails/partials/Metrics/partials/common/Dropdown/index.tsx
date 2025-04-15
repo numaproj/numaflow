@@ -12,6 +12,8 @@ import {
   quantileOptions,
 } from "../../../utils/constants";
 
+import "./style.css";
+
 export interface MetricDropDownProps {
   metric: any;
   type: string;
@@ -68,9 +70,9 @@ const Dropdown = ({
       case "dimension":
         return metric?.dimensions?.map((dimension: any) => (
           <MenuItem
+            className={"dropdown-menu-items"}
             key={`dropdown-${dimension?.name}`}
             value={dimension?.name}
-            sx={{ fontSize: "1.4rem" }}
           >
             {dimensionMap[dimension?.name]}
           </MenuItem>
@@ -78,9 +80,9 @@ const Dropdown = ({
       case "quantile":
         return quantileOptions?.map((quantile: string) => (
           <MenuItem
+            className={"dropdown-menu-items"}
             key={`dropdown-${quantile}`}
             value={quantile}
-            sx={{ fontSize: "1.4rem" }}
           >
             {quantileMap[quantile]}
           </MenuItem>
@@ -88,9 +90,9 @@ const Dropdown = ({
       case "duration":
         return durationOptions?.map((duration: string) => (
           <MenuItem
+            className={"dropdown-menu-items"}
             key={`dropdown-${duration}`}
             value={duration}
-            sx={{ fontSize: "1.4rem" }}
           >
             {durationMap[duration]}
           </MenuItem>
@@ -109,11 +111,15 @@ const Dropdown = ({
   ]);
 
   return (
-    <FormControl fullWidth>
-      <InputLabel id={`${field}-select-label`} sx={{ fontSize: "1.4rem" }}>
+    <FormControl className={"dropdown-form-select"}>
+      <InputLabel
+        className={"dropdown-input-label"}
+        id={`${field}-select-label`}
+      >
         {fieldName}
       </InputLabel>
       <Select
+        className={"dropdown-select-value"}
         labelId={`${field}-select-label`}
         id={`${field}-select`}
         value={value}
@@ -122,7 +128,6 @@ const Dropdown = ({
           setValue(e.target.value);
           setMetricReq((prev: any) => ({ ...prev, [field]: e.target.value }));
         }}
-        sx={{ fontSize: "1.6rem", height: "50px" }}
       >
         {getDropDownEntries}
       </Select>
