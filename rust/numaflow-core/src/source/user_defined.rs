@@ -129,12 +129,18 @@ impl TryFrom<read_response::Result> for Message {
 
             Some(_) => {
                 return Err(Error::Source(
-                    "Invalid offset found in response".to_string(),
+                    "Invalid offset found in response. \
+                    This is user code error. Please make sure that offset is not empty in response."
+                        .to_string(),
                 ));
             }
 
             None => {
-                return Err(Error::Source("Offset not found".to_string()));
+                return Err(Error::Source(
+                    "Offset not found. This is user code error. \
+                    Please make sure that offset is present in response."
+                        .to_string(),
+                ));
             }
         };
 
