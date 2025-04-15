@@ -91,6 +91,7 @@ nav:
       - SDKs:
           - Overview: user-guide/sdks/overview.md
           - Compatibility: user-guide/sdks/compatibility.md
+          - Features: user-guide/sdks/features.md
       - Reference:
           - user-guide/reference/pipeline-tuning.md
           - user-guide/reference/autoscaling.md
