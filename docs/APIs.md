@@ -1774,6 +1774,7 @@ ContainerTemplate
 <a href="#numaflow.numaproj.io/v1alpha1.JobTemplate">JobTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSpec">MonoVertexSpec</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.ServingSource">ServingSource</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.SideInputsManagerTemplate">SideInputsManagerTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.VertexTemplate">VertexTemplate</a>)
 </p>
@@ -10428,6 +10429,53 @@ ServingSource is the HTTP endpoint for Numaflow.
 </p>
 
 </p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>containerTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
+ContainerTemplate </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Container template for the main numa container.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
 
 <h3 id="numaflow.numaproj.io/v1alpha1.ServingSpec">
 

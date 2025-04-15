@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	intstr "k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 )
 
 // +kubebuilder:validation:Enum="";Running;Failed;Deleting
@@ -309,6 +310,11 @@ func (sp ServingPipeline) GetPipelineObj(req GetServingPipelineResourceReq) Pipe
 			corev1.EnvVar{Name: EnvServingStore, Value: fmt.Sprintf("%s_SERVING_KV_STORE", sp.GetServingStoreName())},
 			corev1.EnvVar{Name: EnvNumaflowRuntime, Value: "rust"},
 		)
+		if plSpec.Vertices[i].Scale.Min == nil {
+			// Set min count to 1 if user has not set a value.
+			// Else, vertices will scale down to zero and initial set of requests will have high latency.
+			plSpec.Vertices[i].Scale.Min = ptr.To[int32](1)
+		}
 	}
 	labels := map[string]string{
 		KeyPartOf:              Project,

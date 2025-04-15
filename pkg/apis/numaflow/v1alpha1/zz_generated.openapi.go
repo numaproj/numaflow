@@ -5069,8 +5069,18 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingSource(ref common.ReferenceCallbac
 			SchemaProps: spec.SchemaProps{
 				Description: "ServingSource is the HTTP endpoint for Numaflow.",
 				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"containerTemplate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Container template for the main numa container.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
+						},
+					},
+				},
 			},
 		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"},
 	}
 }
 

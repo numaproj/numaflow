@@ -22061,6 +22061,12 @@
     },
     "io.numaproj.numaflow.v1alpha1.ServingSource": {
       "description": "ServingSource is the HTTP endpoint for Numaflow.",
+      "properties": {
+        "containerTemplate": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate",
+          "description": "Container template for the main numa container."
+        }
+      },
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.ServingSpec": {
