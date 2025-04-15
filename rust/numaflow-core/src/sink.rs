@@ -357,7 +357,6 @@ impl SinkWriter {
 
     /// Sink the messages to the Fallback Sink.
     async fn fb_sink(&self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>> {
-        // additional check here, we should have already checked whether the handle exist or not by now
         if self.fb_sink_handle.is_none() {
             return Err(Error::FbSink(
                 "Response contains fallback messages but no fallback sink is configured. \
