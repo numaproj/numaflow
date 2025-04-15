@@ -51,6 +51,12 @@ pub(crate) async fn create_sink_writer(
             SinkClientType::Blackhole,
             tracker_handle,
         ),
+        SinkType::Serve => SinkWriterBuilder::new(
+            batch_size,
+            read_timeout,
+            SinkClientType::Serve,
+            tracker_handle,
+        ),
         SinkType::UserDefined(ud_config) => {
             let sink_server_info =
                 sdk_server_info(ud_config.server_info_path.clone().into(), cln_token.clone())
@@ -89,6 +95,10 @@ pub(crate) async fn create_sink_writer(
         return match fb_sink.sink_type.clone() {
             SinkType::Log(_) => Ok(sink_writer_builder
                 .fb_sink_client(SinkClientType::Log)
+                .build()
+                .await?),
+            SinkType::Serve => Ok(sink_writer_builder
+                .fb_sink_client(SinkClientType::Serve)
                 .build()
                 .await?),
             SinkType::Blackhole(_) => Ok(sink_writer_builder
