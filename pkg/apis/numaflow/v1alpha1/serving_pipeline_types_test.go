@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"k8s.io/apimachinery/pkg/api/resource"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -227,6 +228,14 @@ func Test_GetPipelineObj(t *testing.T) {
 			},
 			Serving: ServingSpec{
 				Service: true,
+				ContainerTemplate: &ContainerTemplate{
+					Env: []corev1.EnvVar{{Name: "TEST_ENV", Value: "test-value"}},
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("1942Mi"),
+						},
+					},
+				},
 			},
 		},
 	}
@@ -261,6 +270,16 @@ func Test_GetPipelineObj(t *testing.T) {
 
 	// Validate environment variables
 	envVars := sourceVertex.ContainerTemplate.Env
-	assert.Contains(t, envVars, corev1.EnvVar{Name: "NUMAFLOW_SERVING_SOURCE_SETTINGS", Value: "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6bnVsbH0="})
+	assert.Contains(t, envVars, corev1.EnvVar{Name: "NUMAFLOW_SERVING_SOURCE_SETTINGS", Value: "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6bnVsbCwiY29udGFpbmVyVGVtcGxhdGUiOnsicmVzb3VyY2VzIjp7InJlcXVlc3RzIjp7Im1lbW9yeSI6IjE5NDJNaSJ9fSwiZW52IjpbeyJuYW1lIjoiVEVTVF9FTlYiLCJ2YWx1ZSI6InRlc3QtdmFsdWUifV19fQ=="})
 	assert.Contains(t, envVars, corev1.EnvVar{Name: "NUMAFLOW_SERVING_KV_STORE", Value: "serving-store-test-serving-pipeline_SERVING_KV_STORE"})
+
+	servingDeployReq := GetServingPipelineResourceReq{
+		ISBSvcConfig: BufferServiceConfig{JetStream: &JetStreamConfig{URL: "nats://test-url"}},
+		Image:        "quay.io/numaproj/numaflow:stable",
+		PullPolicy:   corev1.PullIfNotPresent,
+	}
+	deploy, err := sp.GetServingDeploymentObj(servingDeployReq)
+	assert.NoError(t, err)
+	assert.Contains(t, deploy.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{Name: "TEST_ENV", Value: "test-value"})
+	assert.Equal(t, deploy.Spec.Template.Spec.Containers[0].Resources.Requests.Memory().String(), "1942Mi")
 }

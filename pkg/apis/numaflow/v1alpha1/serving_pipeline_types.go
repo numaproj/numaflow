@@ -84,7 +84,7 @@ type ServingSpec struct {
 	RequestTimeoutSecs *uint32 `json:"requestTimeoutSeconds,omitempty" protobuf:"varint,4,opt,name=requestTimeoutSeconds"`
 	// +optional
 	ServingStore *ServingStore `json:"store,omitempty" protobuf:"bytes,5,rep,name=store"`
-	// Container template for the main serving container.
+	// Container template for the serving container.
 	// +optional
 	ContainerTemplate *ContainerTemplate `json:"containerTemplate,omitempty" protobuf:"bytes,6,opt,name=containerTemplate"`
 }
@@ -226,7 +226,9 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 		c.SecurityContext = ct.SecurityContext
 		// Numaflow specific env vars should not be overwritten by user-specified ones.
 		c.Env = append(ct.Env[:len(ct.Env):len(ct.Env)], c.Env...)
-		c.EnvFrom = ct.EnvFrom
+		if len(ct.EnvFrom) > 0 {
+			c.EnvFrom = ct.EnvFrom
+		}
 	}
 	labels := map[string]string{
 		KeyPartOf:              Project,
