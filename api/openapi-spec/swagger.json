@@ -22047,13 +22047,7 @@
     },
     "io.numaproj.numaflow.v1alpha1.ServingSource": {
       "description": "ServingSource is the HTTP endpoint for Numaflow.",
-      "type": "object",
-      "properties": {
-        "containerTemplate": {
-          "description": "Container template for the main numa container.",
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate"
-        }
-      }
+      "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.ServingSpec": {
       "type": "object",
@@ -22063,6 +22057,10 @@
       "properties": {
         "auth": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Authorization"
+        },
+        "containerTemplate": {
+          "description": "Container template for the main serving container.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate"
         },
         "msgIDHeaderKey": {
           "description": "The header key from which the message id will be extracted",

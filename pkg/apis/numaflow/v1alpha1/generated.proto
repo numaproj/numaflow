@@ -1615,9 +1615,6 @@ message ServingPipelineStatus {
 
 // ServingSource is the HTTP endpoint for Numaflow.
 message ServingSource {
-  // Container template for the main numa container.
-  // +optional
-  optional ContainerTemplate containerTemplate = 5;
 }
 
 message ServingSpec {
@@ -1637,6 +1634,10 @@ message ServingSpec {
 
   // +optional
   optional ServingStore store = 5;
+
+  // Container template for the main serving container.
+  // +optional
+  optional ContainerTemplate containerTemplate = 6;
 }
 
 // ServingStore defines information of a Serving Store used in a pipeline

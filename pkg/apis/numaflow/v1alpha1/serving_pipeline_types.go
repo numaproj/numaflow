@@ -84,6 +84,9 @@ type ServingSpec struct {
 	RequestTimeoutSecs *uint32 `json:"requestTimeoutSeconds,omitempty" protobuf:"varint,4,opt,name=requestTimeoutSeconds"`
 	// +optional
 	ServingStore *ServingStore `json:"store,omitempty" protobuf:"bytes,5,rep,name=store"`
+	// Container template for the main serving container.
+	// +optional
+	ContainerTemplate *ContainerTemplate `json:"containerTemplate,omitempty" protobuf:"bytes,6,opt,name=containerTemplate"`
 }
 
 // ServingStore defines information of a Serving Store used in a pipeline
@@ -211,11 +214,19 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 		Name:            CtrMain,
 		Image:           req.Image,
 		ImagePullPolicy: req.PullPolicy,
-		Resources:       req.DefaultResources, // TODO: need to have a way to override.
+		Resources:       req.DefaultResources,
 		Env:             envVars,
 		Command:         []string{NumaflowRustBinary},
 		Args:            []string{"--serving"},
 		VolumeMounts:    volumeMounts,
+	}
+	if ct := sp.Spec.Serving.ContainerTemplate; ct != nil {
+		c.Resources = ct.Resources
+		c.ImagePullPolicy = ct.ImagePullPolicy
+		c.SecurityContext = ct.SecurityContext
+		// Numaflow specific env vars should not be overwritten by user-specified ones.
+		c.Env = append(ct.Env[:len(ct.Env):len(ct.Env)], c.Env...)
+		c.EnvFrom = ct.EnvFrom
 	}
 	labels := map[string]string{
 		KeyPartOf:              Project,

@@ -19,16 +19,11 @@ limitations under the License.
 /// ServingSource : ServingSource is the HTTP endpoint for Numaflow.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct ServingSource {
-    #[serde(rename = "containerTemplate", skip_serializing_if = "Option::is_none")]
-    pub container_template: Option<Box<crate::models::ContainerTemplate>>,
-}
+pub struct ServingSource {}
 
 impl ServingSource {
     /// ServingSource is the HTTP endpoint for Numaflow.
     pub fn new() -> ServingSource {
-        ServingSource {
-            container_template: None,
-        }
+        ServingSource {}
     }
 }
