@@ -6,12 +6,7 @@ spec:
   source:
     udsource:
       container:
-        image: quay.io/numaio/numaflow-rs/simple-source:stable
-    # transformer is an optional container to do any transformation to the incoming data before passing to the sink
-    transformer:
-      container:
-        image: quay.io/numaio/numaflow-rs/source-transformer-now:stable
+        image: quay.io/numaio/numaflow-go/source-simple-source:stable
+        imagePullPolicy: Never
   sink:
-    udsink:
-      container:
-        image: quay.io/numaio/numaflow-rs/sink-log:stable
+    blackhole: {}

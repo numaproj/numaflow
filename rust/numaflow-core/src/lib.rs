@@ -90,7 +90,6 @@ pub async fn run() -> Result<()> {
                     runtime::persist_application_error(e);
                 } else {
                     error!(?e, "Error running monovertex");
-                    // TODO(ada): check if we can have a more informative message
                     runtime::persist_application_error(Status::with_details(
                         Code::Internal,
                         "Error occurred while running MonoVertex".to_string(),

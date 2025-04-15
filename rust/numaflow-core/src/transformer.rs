@@ -112,15 +112,15 @@ impl Transformer {
         transform_handle
             .send(msg)
             .await
-            .map_err(|e| Error::Transformer(format!("failed to send message: {}", e)))?;
+            .map_err(|e| Error::Transformer(format!("failed to send message to server: {}", e)))?;
 
         // wait for the response
         let response = tokio::select! {
             _ = cln_token.cancelled() => {
-                return Err(Error::Transformer("cancelled".to_string()));
+                return Err(Error::Transformer("cancellation token cancelled".to_string()));
             }
             response = receiver => {
-                response.map_err(|e| Error::Transformer(format!("failed to receive response: {}", e)))??
+                response.map_err(|e| Error::Transformer(format!("failed to receive response from server: {}", e)))??
             }
         };
 
