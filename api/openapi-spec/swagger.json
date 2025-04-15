@@ -22059,7 +22059,7 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Authorization"
         },
         "containerTemplate": {
-          "description": "Container template for the main serving container.",
+          "description": "Container template for the serving container.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate"
         },
         "msgIDHeaderKey": {

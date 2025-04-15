@@ -5114,7 +5114,7 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingSpec(ref common.ReferenceCallback)
 					},
 					"containerTemplate": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Container template for the main serving container.",
+							Description: "Container template for the serving container.",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
 						},
 					},

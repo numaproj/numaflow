@@ -22070,7 +22070,7 @@
         },
         "containerTemplate": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate",
-          "description": "Container template for the main serving container."
+          "description": "Container template for the serving container."
         },
         "msgIDHeaderKey": {
           "description": "The header key from which the message id will be extracted",

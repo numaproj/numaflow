@@ -10569,7 +10569,7 @@ ContainerTemplate </a> </em>
 <em>(Optional)</em>
 <p>
 
-Container template for the main serving container.
+Container template for the serving container.
 </p>
 
 </td>

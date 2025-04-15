@@ -1635,7 +1635,7 @@ message ServingSpec {
   // +optional
   optional ServingStore store = 5;
 
-  // Container template for the main serving container.
+  // Container template for the serving container.
   // +optional
   optional ContainerTemplate containerTemplate = 6;
 }
