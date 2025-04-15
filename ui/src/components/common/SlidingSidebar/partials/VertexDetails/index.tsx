@@ -268,7 +268,7 @@ export function VertexDetails({
   }, []);
 
   useEffect(() => {
-    constructDetails(errorsDetailsData);
+    if (errorsDetailsData) constructDetails(errorsDetailsData);
   }, [errorsDetailsData, constructDetails]);
 
   const filterErrorsWithinLast24Hours = useCallback(
