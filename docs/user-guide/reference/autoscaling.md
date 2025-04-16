@@ -81,7 +81,8 @@ spec:
   fast you want the vertex to process all the pending messages, defaults to `20`. It is only effective for the MonoVertices or `Source` vertices in a Pipeline that
   support autoscaling, typically increasing the value leads to lower processing rate, thus less replicas.
 - `targetBufferAvailability` - [[Pipeline](../../core-concepts/pipeline.md) Only] Targeted buffer availability in percentage, defaults to `50`. It is only effective for `UDF`
-  and `Sink` vertices of a Pipeline, it determines how aggressive you want to do for autoscaling, increasing the value will bring more replicas.
+  and `Sink` vertices of a Pipeline, it determines how aggressive you want to do for autoscaling, increasing the value will bring more replicas. For aggressive autoscaling,
+  set this value to `> 100`.
 - `replicasPerScaleUp` - Maximum number of replica change happens in one scale up operation, defaults to `2`. For
   example, if current replica number is 3, the calculated desired replica number is 8; instead of scaling up the vertex to 8, it only does 5.
 - `replicasPerScaleDown` - Maximum number of replica change happens in one scale down operation, defaults to `2`. For
