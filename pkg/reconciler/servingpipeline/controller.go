@@ -84,6 +84,7 @@ func (r *servingPipelineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	result, reconcileErr := r.reconcile(ctx, splCopy)
 	if reconcileErr != nil {
 		log.Errorw("Reconcile error", zap.Error(reconcileErr))
+		return ctrl.Result{}, reconcileErr
 	}
 	splCopy.Status.LastUpdated = metav1.Now()
 	if !equality.Semantic.DeepEqual(spl.Finalizers, splCopy.Finalizers) {
