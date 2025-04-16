@@ -8,19 +8,19 @@
       
       
       
-      <link rel="icon" href="../../../assets/numaproj.svg">
+      <link rel="icon" href="../../assets/numaproj.svg">
       <meta name="generator" content="mkdocs-1.3.0, mkdocs-material-8.3.9">
     
     
       
-        <title>Nats Source - Numaflow - Data/streaming processing platform on Kubernetes</title>
+        <title>ServingPipeline - Numaflow - Data/streaming processing platform on Kubernetes</title>
       
     
     
-      <link rel="stylesheet" href="../../../assets/stylesheets/main.1d29e8d0.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.1d29e8d0.min.css">
       
         
-        <link rel="stylesheet" href="../../../assets/stylesheets/palette.cbb835fc.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.cbb835fc.min.css">
         
       
       
@@ -36,7 +36,7 @@
       
     
     
-    <script>__md_scope=new URL("../../..",location),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
   
@@ -74,7 +74,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#nats-source" class="md-skip">
+        <a href="#servingpipeline" class="md-skip">
           Skip to content
         </a>
       
@@ -90,9 +90,9 @@
 
 <header class="md-header md-header--lifted" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../.." title="Numaflow - Data/streaming processing platform on Kubernetes" class="md-header__button md-logo" aria-label="Numaflow - Data/streaming processing platform on Kubernetes" data-md-component="logo">
+    <a href="../.." title="Numaflow - Data/streaming processing platform on Kubernetes" class="md-header__button md-logo" aria-label="Numaflow - Data/streaming processing platform on Kubernetes" data-md-component="logo">
       
-  <img src="../../../assets/logo.png" alt="logo">
+  <img src="../../assets/logo.png" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -108,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Nats Source
+              ServingPipeline
             
           </span>
         </div>
@@ -199,7 +199,7 @@
 
 
   <li class="md-tabs__item">
-    <a href="../../.." class="md-tabs__link">
+    <a href="../.." class="md-tabs__link">
       Home
     </a>
   </li>
@@ -214,7 +214,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../../quick-start/" class="md-tabs__link">
+      <a href="../../quick-start/" class="md-tabs__link">
         Getting Started
       </a>
     </li>
@@ -237,7 +237,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../../core-concepts/pipeline/" class="md-tabs__link md-tabs__link--active">
+      <a href="../pipeline/" class="md-tabs__link md-tabs__link--active">
         User Guide
       </a>
     </li>
@@ -255,7 +255,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../../operations/releases/" class="md-tabs__link">
+      <a href="../../operations/releases/" class="md-tabs__link">
         Operator Manual
       </a>
     </li>
@@ -271,7 +271,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../../development/development/" class="md-tabs__link">
+      <a href="../../development/development/" class="md-tabs__link">
         Contributor Guide
       </a>
     </li>
@@ -317,9 +317,9 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../.." title="Numaflow - Data/streaming processing platform on Kubernetes" class="md-nav__button md-logo" aria-label="Numaflow - Data/streaming processing platform on Kubernetes" data-md-component="logo">
+    <a href="../.." title="Numaflow - Data/streaming processing platform on Kubernetes" class="md-nav__button md-logo" aria-label="Numaflow - Data/streaming processing platform on Kubernetes" data-md-component="logo">
       
-  <img src="../../../assets/logo.png" alt="logo">
+  <img src="../../assets/logo.png" alt="logo">
 
     </a>
     Numaflow - Data/streaming processing platform on Kubernetes
@@ -347,7 +347,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../.." class="md-nav__link">
+      <a href="../.." class="md-nav__link">
         Home
       </a>
     </li>
@@ -388,7 +388,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../quick-start/" class="md-nav__link">
+      <a href="../../quick-start/" class="md-nav__link">
         Quick Start
       </a>
     </li>
@@ -436,12 +436,14 @@
               
   
   
+    
+  
   
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_1" type="checkbox" id="__nav_3_1" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_1" type="checkbox" id="__nav_3_1" checked>
       
       
       
@@ -464,7 +466,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../core-concepts/pipeline/" class="md-nav__link">
+      <a href="../pipeline/" class="md-nav__link">
         Pipeline
       </a>
     </li>
@@ -478,7 +480,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../core-concepts/vertex/" class="md-nav__link">
+      <a href="../vertex/" class="md-nav__link">
         Vertex
       </a>
     </li>
@@ -492,169 +494,8 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../core-concepts/monovertex/" class="md-nav__link">
+      <a href="../monovertex/" class="md-nav__link">
         MonoVertex
-      </a>
-    </li>
-  
-
-            
-          
-            
-              
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../core-concepts/serving/" class="md-nav__link">
-        ServingPipeline
-      </a>
-    </li>
-  
-
-            
-          
-            
-              
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../core-concepts/inter-step-buffer/" class="md-nav__link">
-        Inter-Step Buffer
-      </a>
-    </li>
-  
-
-            
-          
-            
-              
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../core-concepts/inter-step-buffer-service/" class="md-nav__link">
-        Inter-Step Buffer Service
-      </a>
-    </li>
-  
-
-            
-          
-            
-              
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../../../core-concepts/watermarks/" class="md-nav__link">
-        Watermarks
-      </a>
-    </li>
-  
-
-            
-          
-        </ul>
-      </nav>
-    </li>
-  
-
-            
-          
-            
-              
-  
-  
-    
-  
-  
-    
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
-      
-      
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2" type="checkbox" id="__nav_3_2" checked>
-      
-      
-      
-      
-        <label class="md-nav__link" for="__nav_3_2">
-          Sources
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <nav class="md-nav" aria-label="Sources" data-md-level="2">
-        <label class="md-nav__title" for="__nav_3_2">
-          <span class="md-nav__icon md-icon"></span>
-          Sources
-        </label>
-        <ul class="md-nav__list" data-md-scrollfix>
-          
-            
-              
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../overview/" class="md-nav__link">
-        Overview
-      </a>
-    </li>
-  
-
-            
-          
-            
-              
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../generator/" class="md-nav__link">
-        Generator Source
-      </a>
-    </li>
-  
-
-            
-          
-            
-              
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../http/" class="md-nav__link">
-        HTTP Source
-      </a>
-    </li>
-  
-
-            
-          
-            
-              
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../kafka/" class="md-nav__link">
-        Kafka Source
-      </a>
-    </li>
-  
-
-            
-          
-            
-              
-  
-  
-  
-    <li class="md-nav__item">
-      <a href="../pulsar/" class="md-nav__link">
-        Pulsar Source
       </a>
     </li>
   
@@ -677,12 +518,12 @@
       
       
         <label class="md-nav__link md-nav__link--active" for="__toc">
-          Nats Source
+          ServingPipeline
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <a href="./" class="md-nav__link md-nav__link--active">
-        Nats Source
+        ServingPipeline
       </a>
       
         
@@ -701,8 +542,69 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#auth" class="md-nav__link">
-    Auth
+  <a href="#use-cases-of-servingpipeline" class="md-nav__link">
+    Use Cases of ServingPipeline
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#anatomy-of-servingpipeline" class="md-nav__link">
+    Anatomy of ServingPipeline
+  </a>
+  
+    <nav class="md-nav" aria-label="Anatomy of ServingPipeline">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration-specserving" class="md-nav__link">
+    Configuration (spec.serving)
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#custom-results-store-specservingstore" class="md-nav__link">
+    Custom Results Store (spec.serving.store)
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#user-defined-sink-implementation-for-serving" class="md-nav__link">
+    User-Defined Sink Implementation for Serving
+  </a>
+  
+    <nav class="md-nav" aria-label="User-Defined Sink Implementation for Serving">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-go-sdk" class="md-nav__link">
+    Example (Go SDK)
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-endpoints" class="md-nav__link">
+    API Endpoints
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#interaction-example" class="md-nav__link">
+    Interaction Example
   </a>
   
 </li>
@@ -722,7 +624,166 @@
   
   
     <li class="md-nav__item">
-      <a href="../user-defined-sources/" class="md-nav__link">
+      <a href="../inter-step-buffer/" class="md-nav__link">
+        Inter-Step Buffer
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../inter-step-buffer-service/" class="md-nav__link">
+        Inter-Step Buffer Service
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../watermarks/" class="md-nav__link">
+        Watermarks
+      </a>
+    </li>
+  
+
+            
+          
+        </ul>
+      </nav>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+      
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2" type="checkbox" id="__nav_3_2" >
+      
+      
+      
+      
+        <label class="md-nav__link" for="__nav_3_2">
+          Sources
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <nav class="md-nav" aria-label="Sources" data-md-level="2">
+        <label class="md-nav__title" for="__nav_3_2">
+          <span class="md-nav__icon md-icon"></span>
+          Sources
+        </label>
+        <ul class="md-nav__list" data-md-scrollfix>
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/sources/overview/" class="md-nav__link">
+        Overview
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/sources/generator/" class="md-nav__link">
+        Generator Source
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/sources/http/" class="md-nav__link">
+        HTTP Source
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/sources/kafka/" class="md-nav__link">
+        Kafka Source
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/sources/pulsar/" class="md-nav__link">
+        Pulsar Source
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/sources/nats/" class="md-nav__link">
+        Nats Source
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/sources/user-defined-sources/" class="md-nav__link">
         User-defined Sources
       </a>
     </li>
@@ -762,7 +823,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../transformer/overview/" class="md-nav__link">
+      <a href="../../user-guide/sources/transformer/overview/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -802,7 +863,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../transformer/builtin-transformers/" class="md-nav__link">
+      <a href="../../user-guide/sources/transformer/builtin-transformers/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -816,7 +877,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../transformer/builtin-transformers/filter/" class="md-nav__link">
+      <a href="../../user-guide/sources/transformer/builtin-transformers/filter/" class="md-nav__link">
         Filter
       </a>
     </li>
@@ -830,7 +891,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../transformer/builtin-transformers/event-time-extractor/" class="md-nav__link">
+      <a href="../../user-guide/sources/transformer/builtin-transformers/event-time-extractor/" class="md-nav__link">
         Event Time Extractor
       </a>
     </li>
@@ -844,7 +905,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../transformer/builtin-transformers/time-extraction-filter/" class="md-nav__link">
+      <a href="../../user-guide/sources/transformer/builtin-transformers/time-extraction-filter/" class="md-nav__link">
         Event Time Extraction Filter
       </a>
     </li>
@@ -905,7 +966,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sinks/overview/" class="md-nav__link">
+      <a href="../../user-guide/sinks/overview/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -919,7 +980,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sinks/kafka/" class="md-nav__link">
+      <a href="../../user-guide/sinks/kafka/" class="md-nav__link">
         Kafka Sink
       </a>
     </li>
@@ -933,7 +994,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sinks/log/" class="md-nav__link">
+      <a href="../../user-guide/sinks/log/" class="md-nav__link">
         Log Sink
       </a>
     </li>
@@ -947,7 +1008,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sinks/blackhole/" class="md-nav__link">
+      <a href="../../user-guide/sinks/blackhole/" class="md-nav__link">
         Blackhole Sink
       </a>
     </li>
@@ -961,7 +1022,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sinks/user-defined-sinks/" class="md-nav__link">
+      <a href="../../user-guide/sinks/user-defined-sinks/" class="md-nav__link">
         User-defined Sinks
       </a>
     </li>
@@ -975,7 +1036,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sinks/fallback/" class="md-nav__link">
+      <a href="../../user-guide/sinks/fallback/" class="md-nav__link">
         Fallback Sink
       </a>
     </li>
@@ -989,7 +1050,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sinks/retry-strategy/" class="md-nav__link">
+      <a href="../../user-guide/sinks/retry-strategy/" class="md-nav__link">
         Retry Strategy
       </a>
     </li>
@@ -1036,7 +1097,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/user-defined-functions/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/user-defined-functions/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -1076,7 +1137,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/map/map/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/map/map/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -1116,7 +1177,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/map/builtin-functions/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/map/builtin-functions/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -1130,7 +1191,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/map/builtin-functions/cat/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/map/builtin-functions/cat/" class="md-nav__link">
         Cat
       </a>
     </li>
@@ -1144,7 +1205,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/map/builtin-functions/filter/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/map/builtin-functions/filter/" class="md-nav__link">
         Filter
       </a>
     </li>
@@ -1165,7 +1226,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/map/examples/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/map/examples/" class="md-nav__link">
         Examples
       </a>
     </li>
@@ -1212,7 +1273,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/reduce/reduce/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/reduce/reduce/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -1252,7 +1313,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/reduce/windowing/windowing/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/reduce/windowing/windowing/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -1266,7 +1327,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/reduce/windowing/fixed/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/reduce/windowing/fixed/" class="md-nav__link">
         Fixed
       </a>
     </li>
@@ -1280,7 +1341,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/reduce/windowing/sliding/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/reduce/windowing/sliding/" class="md-nav__link">
         Sliding
       </a>
     </li>
@@ -1294,7 +1355,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/reduce/windowing/session/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/reduce/windowing/session/" class="md-nav__link">
         Session
       </a>
     </li>
@@ -1315,7 +1376,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../user-defined-functions/reduce/examples/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/reduce/examples/" class="md-nav__link">
         Examples
       </a>
     </li>
@@ -1369,7 +1430,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/pipeline-tuning/" class="md-nav__link">
+      <a href="../../user-guide/reference/pipeline-tuning/" class="md-nav__link">
         Pipeline Tuning
       </a>
     </li>
@@ -1383,7 +1444,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/autoscaling/" class="md-nav__link">
+      <a href="../../user-guide/reference/autoscaling/" class="md-nav__link">
         Autoscaling
       </a>
     </li>
@@ -1397,7 +1458,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/conditional-forwarding/" class="md-nav__link">
+      <a href="../../user-guide/reference/conditional-forwarding/" class="md-nav__link">
         Conditional Forwarding
       </a>
     </li>
@@ -1411,7 +1472,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/pipeline-operations/" class="md-nav__link">
+      <a href="../../user-guide/reference/pipeline-operations/" class="md-nav__link">
         Pipeline Operations
       </a>
     </li>
@@ -1425,7 +1486,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/join-vertex/" class="md-nav__link">
+      <a href="../../user-guide/reference/join-vertex/" class="md-nav__link">
         Joins and Cycles
       </a>
     </li>
@@ -1439,7 +1500,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/multi-partition/" class="md-nav__link">
+      <a href="../../user-guide/reference/multi-partition/" class="md-nav__link">
         Multi-partitioned Edges
       </a>
     </li>
@@ -1453,7 +1514,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/side-inputs/" class="md-nav__link">
+      <a href="../../user-guide/reference/side-inputs/" class="md-nav__link">
         Side Inputs
       </a>
     </li>
@@ -1467,7 +1528,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/mvtx-tuning/" class="md-nav__link">
+      <a href="../../user-guide/reference/mvtx-tuning/" class="md-nav__link">
         MonoVertex Tuning
       </a>
     </li>
@@ -1481,7 +1542,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/mvtx-operations/" class="md-nav__link">
+      <a href="../../user-guide/reference/mvtx-operations/" class="md-nav__link">
         MonoVertex Operations
       </a>
     </li>
@@ -1521,7 +1582,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/pod-specifications/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/pod-specifications/" class="md-nav__link">
         Pod Specifications
       </a>
     </li>
@@ -1535,7 +1596,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/container-resources/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/container-resources/" class="md-nav__link">
         Container Resources
       </a>
     </li>
@@ -1549,7 +1610,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/volumes/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/volumes/" class="md-nav__link">
         Volumes
       </a>
     </li>
@@ -1563,7 +1624,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/environment-variables/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/environment-variables/" class="md-nav__link">
         Environment Variables
       </a>
     </li>
@@ -1577,7 +1638,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/labels-and-annotations/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/labels-and-annotations/" class="md-nav__link">
         Labels And Annotations
       </a>
     </li>
@@ -1591,7 +1652,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/init-containers/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/init-containers/" class="md-nav__link">
         Init Containers
       </a>
     </li>
@@ -1605,7 +1666,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/sidecar-containers/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/sidecar-containers/" class="md-nav__link">
         Sidecar Containers
       </a>
     </li>
@@ -1619,7 +1680,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/liveness-and-readiness/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/liveness-and-readiness/" class="md-nav__link">
         Liveness and Readiness
       </a>
     </li>
@@ -1633,7 +1694,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/pipeline-customization/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/pipeline-customization/" class="md-nav__link">
         Pipeline Customization
       </a>
     </li>
@@ -1647,7 +1708,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/dra/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/dra/" class="md-nav__link">
         Dynamic Resource Allocation
       </a>
     </li>
@@ -1661,7 +1722,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/istio/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/istio/" class="md-nav__link">
         Running on Istio
       </a>
     </li>
@@ -1675,7 +1736,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/max-message-size/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/max-message-size/" class="md-nav__link">
         Maximum Message Size
       </a>
     </li>
@@ -1689,7 +1750,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/configuration/update-strategy/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/update-strategy/" class="md-nav__link">
         Update Strategy
       </a>
     </li>
@@ -1710,7 +1771,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../reference/kustomize/kustomize/" class="md-nav__link">
+      <a href="../../user-guide/reference/kustomize/kustomize/" class="md-nav__link">
         Kustomize Integration
       </a>
     </li>
@@ -1724,7 +1785,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../APIs/" class="md-nav__link">
+      <a href="../../APIs/" class="md-nav__link">
         APIs
       </a>
     </li>
@@ -1771,7 +1832,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../use-cases/overview/" class="md-nav__link">
+      <a href="../../user-guide/use-cases/overview/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -1785,7 +1846,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../use-cases/monitoring-and-observability/" class="md-nav__link">
+      <a href="../../user-guide/use-cases/monitoring-and-observability/" class="md-nav__link">
         Monitoring and Observability
       </a>
     </li>
@@ -1840,7 +1901,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operations/releases/" class="md-nav__link">
+      <a href="../../operations/releases/" class="md-nav__link">
         Releases ⧉
       </a>
     </li>
@@ -1854,7 +1915,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operations/installation/" class="md-nav__link">
+      <a href="../../operations/installation/" class="md-nav__link">
         Installation
       </a>
     </li>
@@ -1868,7 +1929,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operations/validating-webhook/" class="md-nav__link">
+      <a href="../../operations/validating-webhook/" class="md-nav__link">
         Validating Webhook
       </a>
     </li>
@@ -1908,7 +1969,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operations/controller-configmap/" class="md-nav__link">
+      <a href="../../operations/controller-configmap/" class="md-nav__link">
         Controller Configuration
       </a>
     </li>
@@ -1948,7 +2009,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operations/ui/ui-access-path/" class="md-nav__link">
+      <a href="../../operations/ui/ui-access-path/" class="md-nav__link">
         Access Path
       </a>
     </li>
@@ -1988,7 +2049,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operations/ui/authn/authentication/" class="md-nav__link">
+      <a href="../../operations/ui/authn/authentication/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -2002,7 +2063,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operations/ui/authn/dex/" class="md-nav__link">
+      <a href="../../operations/ui/authn/dex/" class="md-nav__link">
         SSO with Dex
       </a>
     </li>
@@ -2016,7 +2077,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operations/ui/authn/local-users/" class="md-nav__link">
+      <a href="../../operations/ui/authn/local-users/" class="md-nav__link">
         Local Users
       </a>
     </li>
@@ -2037,7 +2098,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operations/ui/authz/rbac/" class="md-nav__link">
+      <a href="../../operations/ui/authz/rbac/" class="md-nav__link">
         Authorization
       </a>
     </li>
@@ -2058,7 +2119,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operations/metrics/metrics/" class="md-nav__link">
+      <a href="../../operations/metrics/metrics/" class="md-nav__link">
         Metrics
       </a>
     </li>
@@ -2072,7 +2133,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operations/grafana/" class="md-nav__link">
+      <a href="../../operations/grafana/" class="md-nav__link">
         Grafana
       </a>
     </li>
@@ -2093,7 +2154,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../operations/security/" class="md-nav__link">
+      <a href="../../operations/security/" class="md-nav__link">
         Security
       </a>
     </li>
@@ -2141,7 +2202,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../development/development/" class="md-nav__link">
+      <a href="../../development/development/" class="md-nav__link">
         Development
       </a>
     </li>
@@ -2181,7 +2242,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specifications/overview/" class="md-nav__link">
+      <a href="../../specifications/overview/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -2195,7 +2256,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specifications/controllers/" class="md-nav__link">
+      <a href="../../specifications/controllers/" class="md-nav__link">
         Controllers
       </a>
     </li>
@@ -2209,7 +2270,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specifications/autoscaling/" class="md-nav__link">
+      <a href="../../specifications/autoscaling/" class="md-nav__link">
         Autoscaling
       </a>
     </li>
@@ -2223,7 +2284,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specifications/edges-buffers-buckets/" class="md-nav__link">
+      <a href="../../specifications/edges-buffers-buckets/" class="md-nav__link">
         Edges, Buffers and Buckets
       </a>
     </li>
@@ -2237,7 +2298,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specifications/side-inputs/" class="md-nav__link">
+      <a href="../../specifications/side-inputs/" class="md-nav__link">
         Side Inputs
       </a>
     </li>
@@ -2251,7 +2312,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../specifications/authorization/" class="md-nav__link">
+      <a href="../../specifications/authorization/" class="md-nav__link">
         UI Authorization
       </a>
     </li>
@@ -2272,7 +2333,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../development/debugging/" class="md-nav__link">
+      <a href="../../development/debugging/" class="md-nav__link">
         How To Debug
       </a>
     </li>
@@ -2286,7 +2347,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../development/static-code-analysis/" class="md-nav__link">
+      <a href="../../development/static-code-analysis/" class="md-nav__link">
         Static Code Analysis
       </a>
     </li>
@@ -2300,7 +2361,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../development/releasing/" class="md-nav__link">
+      <a href="../../development/releasing/" class="md-nav__link">
         How To Release
       </a>
     </li>
@@ -2356,8 +2417,69 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#auth" class="md-nav__link">
-    Auth
+  <a href="#use-cases-of-servingpipeline" class="md-nav__link">
+    Use Cases of ServingPipeline
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#anatomy-of-servingpipeline" class="md-nav__link">
+    Anatomy of ServingPipeline
+  </a>
+  
+    <nav class="md-nav" aria-label="Anatomy of ServingPipeline">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration-specserving" class="md-nav__link">
+    Configuration (spec.serving)
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#custom-results-store-specservingstore" class="md-nav__link">
+    Custom Results Store (spec.serving.store)
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#user-defined-sink-implementation-for-serving" class="md-nav__link">
+    User-Defined Sink Implementation for Serving
+  </a>
+  
+    <nav class="md-nav" aria-label="User-Defined Sink Implementation for Serving">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-go-sdk" class="md-nav__link">
+    Example (Go SDK)
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-endpoints" class="md-nav__link">
+    API Endpoints
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#interaction-example" class="md-nav__link">
+    Interaction Example
   </a>
   
 </li>
@@ -2374,44 +2496,150 @@
             <article class="md-content__inner md-typeset">
               
                 
-  <a href="https://github.com/numaproj/numaflow/edit/main/docs/user-guide/sources/nats.md" title="Edit this page" class="md-content__button md-icon">
+  <a href="https://github.com/numaproj/numaflow/edit/main/docs/core-concepts/serving.md" title="Edit this page" class="md-content__button md-icon">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
   </a>
 
 
 
-<h1 id="nats-source">Nats Source<a class="headerlink" href="#nats-source" title="Permanent link">&para;</a></h1>
-<p>A <code>Nats</code> source is used to ingest the messages from a nats subject.</p>
-<div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
-<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">input</span>
-<span class="w">      </span><span class="nt">source</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">nats</span><span class="p">:</span>
-<span class="w">          </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">nats://demo.nats.io</span><span class="w"> </span><span class="c1"># Multiple urls separated by comma.</span>
-<span class="w">          </span><span class="nt">subject</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-subject</span>
-<span class="w">          </span><span class="nt">queue</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-queue</span><span class="w"> </span><span class="c1"># Queue subscription, see https://docs.nats.io/using-nats/developer/receiving/queues</span>
-<span class="w">          </span><span class="nt">tls</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional.</span>
-<span class="w">            </span><span class="nt">insecureSkipVerify</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, whether to skip TLS verification. Default to false.</span>
-<span class="w">            </span><span class="nt">caCertSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, a secret reference, which contains the CA Cert.</span>
-<span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-ca-cert</span>
-<span class="w">              </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-ca-cert-key</span>
-<span class="w">            </span><span class="nt">certSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, pointing to a secret reference which contains the Cert.</span>
-<span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-cert</span>
-<span class="w">              </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-cert-key</span>
-<span class="w">            </span><span class="nt">keySecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, pointing to a secret reference which contains the Private Key.</span>
-<span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pk</span>
-<span class="w">              </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pk-key</span>
-<span class="w">          </span><span class="nt">auth</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional.</span>
-<span class="w">            </span><span class="nt">basic</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, pointing to the secret references which contain user name and password.</span>
-<span class="w">              </span><span class="nt">user</span><span class="p">:</span>
-<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-secret</span>
-<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-user</span>
-<span class="w">              </span><span class="nt">password</span><span class="p">:</span>
-<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-secret</span>
-<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-password</span>
+<h1 id="servingpipeline">ServingPipeline<a class="headerlink" href="#servingpipeline" title="Permanent link">&para;</a></h1>
+<p>The <code>ServingPipeline</code> is a specialized Numaflow resource designed to expose a standard Numaflow data processing 
+<a href="../pipeline/">Pipeline</a> as an interactive HTTP service. The major design idea behind <code>ServingPipeline</code> is to bridge traditional 
+request/response API patterns with the power of Numaflow's stream processing capabilities, allowing external clients to 
+directly inject data, trigger processing, and retrieve results via familiar REST or Server-Sent Events (SSE) mechanisms.</p>
+<p>A <code>ServingPipeline</code> consists of two main parts:</p>
+<ol>
+<li>An <strong>HTTP Serving Layer:</strong> Defined in <code>spec.serving</code>, this configures the external interface, including service 
+exposure, request identification (via headers), timeouts, authentication, and result storage options.</li>
+<li>A <strong>Standard Numaflow Pipeline:</strong> Defined in <code>spec.pipeline</code>, this contains the familiar vertices and edges for data
+processing. However, it <em>must</em> use a specific <code>serving</code> source as its entry point and conclude with a User Defined 
+Sink (UDSink) capable of handling serving responses (using <code>ResponseServe</code>).</li>
+</ol>
+<p>This structure enables features like synchronous (<code>/sync</code>), asynchronous (<code>/async</code>), and streaming (<code>/sse</code>) API endpoints,
+along with request tracking via unique IDs. Unlike a standard <code>Pipeline</code> focused purely on stream processing, <code>ServingPipeline</code>
+adds this interactive HTTP request/response lifecycle management layer on top.</p>
+<p>The major benefits of <code>ServingPipeline</code> are as follows:</p>
+<ul>
+<li><strong>API Exposure:</strong> Easily expose complex stream processing logic or ML models within Numaflow pipelines via standard 
+RESTful APIs.</li>
+<li><strong>Interactive Workflows:</strong> Supports common application patterns requiring synchronous request/response or traceable
+asynchronous tasks initiated via HTTP.</li>
+<li><strong>Flexible Interaction:</strong> Offers synchronous, asynchronous, and streaming (Server-Sent Events) options for clients
+to receive results based on their needs.</li>
+<li><strong>Traceability:</strong> Built-in request ID mechanism allows tracking individual requests and retrieving their specific
+results or status.</li>
+</ul>
+<h2 id="use-cases-of-servingpipeline">Use Cases of ServingPipeline<a class="headerlink" href="#use-cases-of-servingpipeline" title="Permanent link">&para;</a></h2>
+<p><code>ServingPipeline</code> is ideal for scenarios where external systems or users need to interact directly with a Numaflow pipeline via HTTP:</p>
+<ul>
+<li><strong>ML Model Serving:</strong> Deploying a machine learning model within a Numaflow pipeline (e.g., for pre/post-processing) 
+and exposing it as a real-time inference API endpoint.</li>
+<li><strong>Interactive Data Services:</strong> Building services for data validation, enrichment, or transformation where clients 
+submit data via an API call and receive the processed result.</li>
+<li><strong>API Gateway Pattern:</strong> Using <code>ServingPipeline</code> as a front-end to trigger event-driven backends processed by Numaflow,
+potentially returning a final status or result synchronously or asynchronously.</li>
+<li><strong>Traceable Asynchronous Jobs:</strong> Kicking off complex, multi-step processing within Numaflow via an API call and 
+allowing the client to poll for status or results later using a unique request ID.</li>
+</ul>
+<h2 id="anatomy-of-servingpipeline">Anatomy of ServingPipeline<a class="headerlink" href="#anatomy-of-servingpipeline" title="Permanent link">&para;</a></h2>
+<p>A <code>ServingPipeline</code> resource defines both the serving layer configuration (<code>spec.serving</code>) and the underlying processing
+pipeline (<code>spec.pipeline</code>).</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ServingPipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">serving-pipeline-custom-store</span><span class="w"> </span><span class="c1"># Example name</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="c1"># Configures the HTTP serving aspects</span>
+<span class="w">  </span><span class="nt">serving</span><span class="p">:</span>
+<span class="w">    </span><span class="l l-Scalar l-Scalar-Plain">... serving configuration options ...</span>
+
+<span class="w">  </span><span class="c1"># Defines the underlying Numaflow pipeline for processing</span>
+<span class="w">  </span><span class="nt">pipeline</span><span class="p">:</span>
+<span class="w">    </span><span class="l l-Scalar l-Scalar-Plain">... pipeline ...</span>
 </code></pre></div>
-<h2 id="auth">Auth<a class="headerlink" href="#auth" title="Permanent link">&para;</a></h2>
-<p>The <code>auth</code> strategies supported in <code>nats</code> source include <code>basic</code> (user and password), <code>token</code> and <code>nkey</code>, check the <a href="https://github.com/numaproj/numaflow/blob/main/docs/APIs.md#numaflow.numaproj.io/v1alpha1.NatsAuth">API</a> for the details.</p>
+<h3 id="configuration-specserving">Configuration (<code>spec.serving</code>)<a class="headerlink" href="#configuration-specserving" title="Permanent link">&para;</a></h3>
+<p>This section configures the HTTP interface:</p>
+<ul>
+<li><code>service</code> (boolean): If <code>true</code>, automatically creates a Kubernetes Service.</li>
+<li><code>msgIDHeaderKey</code> (string): The HTTP header key for the unique Request ID.</li>
+<li><code>requestTimeoutSeconds</code> (integer): Timeout for <code>/sync</code> and <code>/sse</code> requests (default: <code>120</code>).</li>
+<li><code>auth</code>: Optional configuration for token-based authentication using a Kubernetes <code>Secret</code>.</li>
+<li><code>store</code>: Optional configuration for a custom result storage backend. If omitted, internal storage (e.g., JetStream) is 
+used. See <a href="#custom-results-store-specservingstore">Custom Results Store</a> below.</li>
+</ul>
+<h3 id="custom-results-store-specservingstore">Custom Results Store (<code>spec.serving.store</code>)<a class="headerlink" href="#custom-results-store-specservingstore" title="Permanent link">&para;</a></h3>
+<p>You can provide a custom storage backend by specifying a container image in <code>spec.serving.store.container</code>. This 
+container must implement a specific gRPC interface (defined in the Numaflow SDKs) for storing (<code>Put</code>) and retrieving
+(<code>Get</code>) results associated with request IDs. This allows using preferred databases or caches.</p>
+<p>Refer to the Numaflow SDK documentation for your language for the exact interface. The Go interface requires methods like:</p>
+<div class="highlight"><pre><span></span><code><span class="kd">type</span><span class="w"> </span><span class="nx">ServingStorer</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">Put</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">put</span><span class="w"> </span><span class="nx">PutDatum</span><span class="p">)</span>
+<span class="w">    </span><span class="nx">Get</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">get</span><span class="w"> </span><span class="nx">GetDatum</span><span class="p">)</span><span class="w"> </span><span class="nx">StoredResult</span>
+<span class="p">}</span>
+<span class="c1">// PutDatum, GetDatum, StoredResult provide necessary details</span>
+</code></pre></div>
+<p>A Golang example can be found <a href="https://github.com/numaproj/numaflow-go/tree/main/pkg/servingstore">here</a>.</p>
+<h3 id="user-defined-sink-implementation-for-serving">User-Defined Sink Implementation for Serving<a class="headerlink" href="#user-defined-sink-implementation-for-serving" title="Permanent link">&para;</a></h3>
+<p>The User Defined Sink (UDSink) in a <code>ServingPipeline</code>'s pipeline (<code>spec.pipeline.vertices[].sink.udsink</code>) must signal the
+final response payload for the original HTTP request. Use the <strong><code>ResponseServe(requestID, resultBytes)</code></strong> function (or 
+SDK equivalent) in your sink code.</p>
+<h4 id="example-go-sdk">Example (Go SDK)<a class="headerlink" href="#example-go-sdk" title="Permanent link">&para;</a></h4>
+<p><div class="highlight"><pre><span></span><code><span class="kd">type</span><span class="w"> </span><span class="nx">serveSink</span><span class="w"> </span><span class="kd">struct</span><span class="p">{}</span>
+
+<span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">l</span><span class="w"> </span><span class="o">*</span><span class="nx">serveSink</span><span class="p">)</span><span class="w"> </span><span class="nx">Sink</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">datumStreamCh</span><span class="w"> </span><span class="o">&lt;-</span><span class="kd">chan</span><span class="w"> </span><span class="nx">sinksdk</span><span class="p">.</span><span class="nx">Datum</span><span class="p">)</span><span class="w"> </span><span class="nx">sinksdk</span><span class="p">.</span><span class="nx">Responses</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">result</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">sinksdk</span><span class="p">.</span><span class="nx">ResponsesBuilder</span><span class="p">()</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="nx">d</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="k">range</span><span class="w"> </span><span class="nx">datumStreamCh</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">id</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">d</span><span class="p">.</span><span class="nx">ID</span><span class="p">()</span><span class="w"> </span><span class="c1">// Original Request ID</span>
+<span class="w">        </span><span class="nx">val</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">d</span><span class="p">.</span><span class="nx">Value</span><span class="p">()</span><span class="w"> </span><span class="c1">// Final payload from pipeline</span>
+<span class="w">        </span><span class="c1">// Use ResponseServe to mark &#39;val&#39; as the result for &#39;id&#39;</span>
+<span class="w">        </span><span class="nx">result</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="nx">result</span><span class="p">.</span><span class="nx">Append</span><span class="p">(</span><span class="nx">sinksdk</span><span class="p">.</span><span class="nx">ResponseServe</span><span class="p">(</span><span class="nx">id</span><span class="p">,</span><span class="w"> </span><span class="nx">val</span><span class="p">))</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">result</span>
+<span class="p">}</span>
+</code></pre></div>
+A complete example can be found <a href="https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/serve">here</a>.</p>
+<p>Using <code>ResponseServe</code> ensures the result is correctly stored and available via the API endpoints.</p>
+<h2 id="api-endpoints">API Endpoints<a class="headerlink" href="#api-endpoints" title="Permanent link">&para;</a></h2>
+<p>The <code>ServingPipeline</code> exposes the following endpoints:</p>
+<ul>
+<li><code>POST /v1/process/sync</code>: Submit data, wait for result in response body.</li>
+<li><code>POST /v1/process/async</code>: Submit data, return immediately; fetch result later.</li>
+<li><code>GET /v1/process/fetch?id=&lt;request_id&gt;</code>: Retrieve status/result(s) for a request ID.</li>
+<li><code>GET /v1/process/sse?id=&lt;request_id&gt;</code>: Stream results using Server-Sent Events.</li>
+<li><code>GET /v1/process/message?id=&lt;request_id&gt;</code>: Get message path info.</li>
+</ul>
+<h2 id="interaction-example">Interaction Example<a class="headerlink" href="#interaction-example" title="Permanent link">&para;</a></h2>
+<ol>
+<li>
+<p><strong>Submit data synchronously:</strong></p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-k<span class="w"> </span>-XPOST<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--header<span class="w"> </span><span class="s1">&#39;X-Numaflow-Id: job-456&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--header<span class="w"> </span><span class="s1">&#39;content-type: application/json&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--header<span class="w"> </span><span class="s1">&#39;Authorization: Bearer &lt;your-token-if-auth-enabled&gt;&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--data<span class="w"> </span><span class="s1">&#39;{&quot;value&quot;:123}&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--url<span class="w"> </span>https://&lt;serving-pipeline-service-address&gt;:8443/v1/process/sync
+</code></pre></div>
+</li>
+<li>
+<p><strong>Fetch results later:</strong></p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-k<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--header<span class="w"> </span><span class="s1">&#39;Authorization: Bearer &lt;your-token-if-auth-enabled&gt;&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--url<span class="w"> </span>https://&lt;serving-pipeline-service-address&gt;:8443/v1/process/fetch?id<span class="o">=</span>job-456
+</code></pre></div>
+</li>
+<li>
+<p><strong>Stream results using SSE:</strong></p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-k<span class="w"> </span>-N<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--header<span class="w"> </span><span class="s1">&#39;X-Numaflow-Id: stream-789&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--header<span class="w"> </span><span class="s1">&#39;Authorization: Bearer &lt;your-token-if-auth-enabled&gt;&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--url<span class="w"> </span>https://&lt;serving-pipeline-service-address&gt;:8443/v1/process/sse?id<span class="o">=</span>stream-789
+<span class="c1"># Client receives events as results become available</span>
+</code></pre></div>
+</li>
+</ol>
+<p>To query <code>ServingPipeline</code> objects with <code>kubectl</code>:</p>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>get<span class="w"> </span>servingpipeline
+</code></pre></div>
 
               
             </article>
@@ -2432,7 +2660,7 @@
     <nav class="md-footer__inner md-grid" aria-label="Footer" >
       
         
-        <a href="../pulsar/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Pulsar Source" rel="prev">
+        <a href="../monovertex/" class="md-footer__link md-footer__link--prev" aria-label="Previous: MonoVertex" rel="prev">
           <div class="md-footer__button md-icon">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
           </div>
@@ -2441,20 +2669,20 @@
               <span class="md-footer__direction">
                 Previous
               </span>
-              Pulsar Source
+              MonoVertex
             </div>
           </div>
         </a>
       
       
         
-        <a href="../user-defined-sources/" class="md-footer__link md-footer__link--next" aria-label="Next: User-defined Sources" rel="next">
+        <a href="../inter-step-buffer/" class="md-footer__link md-footer__link--next" aria-label="Next: Inter-Step Buffer" rel="next">
           <div class="md-footer__title">
             <div class="md-ellipsis">
               <span class="md-footer__direction">
                 Next
               </span>
-              User-defined Sources
+              Inter-Step Buffer
             </div>
           </div>
           <div class="md-footer__button md-icon">
@@ -2484,10 +2712,10 @@
     <div class="md-dialog" data-md-component="dialog">
       <div class="md-dialog__inner md-typeset"></div>
     </div>
-    <script id="__config" type="application/json">{"base": "../../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.top"], "search": "../../../assets/javascripts/workers/search.b97dbffb.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.placeholder": "Search", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version.title": "Select version"}}</script>
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.top"], "search": "../../assets/javascripts/workers/search.b97dbffb.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.placeholder": "Search", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version.title": "Select version"}}</script>
     
     
-      <script src="../../../assets/javascripts/bundle.6c7ad80a.min.js"></script>
+      <script src="../../assets/javascripts/bundle.6c7ad80a.min.js"></script>
       
     
   </body>
