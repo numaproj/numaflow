@@ -26,8 +26,8 @@ one, making it a lightweight option for handling simple event processing pattern
 
 ## Pipeline
 
-[Pipeline](pipeline.md) is designed for developing real-time stream processing pipelines. It allows you to connect multiple vertices—each
-representing a processing step—to handle data. Pipelines can include multiple sources and sinks, enabling integration with
+[Pipeline](pipeline.md) is designed for developing real-time stream processing pipelines. It allows you to connect multiple vertices — each
+representing a processing step — to handle data. Pipelines can include multiple sources and sinks, enabling integration with
 diverse systems at both the input and output stages.
 
 Each step in a pipeline can perform operations like transformation, routing, reduction, or aggregation, and is independently
@@ -42,7 +42,7 @@ scalable. This makes Pipelines ideal for building robust, modular stream process
 ## Serving
 
 [Serving](./serving.md) enables request/response interaction with streaming systems, allowing external clients to send data and 
-receive processed results in real time through interfaces like REST or Server-Sent Events (SSE)
+receive processed results in real time through interfaces like REST or Server-Sent Events (SSE).
 
 ### Use Cases
 - Machine learning inference (e.g., send features, receive predictions)   
