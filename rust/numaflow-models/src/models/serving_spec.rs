@@ -31,6 +31,8 @@ pub struct ServingSpec {
         skip_serializing_if = "Option::is_none"
     )]
     pub request_timeout_seconds: Option<i64>,
+    #[serde(rename = "scale", skip_serializing_if = "Option::is_none")]
+    pub scale: Option<Box<crate::models::Scale>>,
     /// Whether to create a ClusterIP Service
     #[serde(rename = "service", skip_serializing_if = "Option::is_none")]
     pub service: Option<bool>,
@@ -45,6 +47,7 @@ impl ServingSpec {
             container_template: None,
             msg_id_header_key,
             request_timeout_seconds: None,
+            scale: None,
             service: None,
             store: None,
         }

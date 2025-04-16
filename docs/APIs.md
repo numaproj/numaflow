@@ -9776,7 +9776,8 @@ Scale
 
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSpec">MonoVertexSpec</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSpec">MonoVertexSpec</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.ServingSpec">ServingSpec</a>)
 </p>
 
 <p>
@@ -10570,6 +10571,26 @@ ContainerTemplate </a> </em>
 <p>
 
 Container template for the serving container.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>scale</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Scale"> Scale </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Settings for autoscaling
 </p>
 
 </td>

@@ -22081,6 +22081,10 @@
           "format": "int64",
           "type": "integer"
         },
+        "scale": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Scale",
+          "description": "Settings for autoscaling"
+        },
         "service": {
           "description": "Whether to create a ClusterIP Service",
           "type": "boolean"

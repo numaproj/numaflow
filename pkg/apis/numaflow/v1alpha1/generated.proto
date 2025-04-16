@@ -1638,6 +1638,10 @@ message ServingSpec {
   // Container template for the serving container.
   // +optional
   optional ContainerTemplate containerTemplate = 6;
+
+  // Settings for autoscaling
+  // +optional
+  optional Scale scale = 7;
 }
 
 // ServingStore defines information of a Serving Store used in a pipeline

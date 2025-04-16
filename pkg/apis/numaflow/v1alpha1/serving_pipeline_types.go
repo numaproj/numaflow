@@ -87,6 +87,9 @@ type ServingSpec struct {
 	// Container template for the serving container.
 	// +optional
 	ContainerTemplate *ContainerTemplate `json:"containerTemplate,omitempty" protobuf:"bytes,6,opt,name=containerTemplate"`
+	// Settings for autoscaling
+	// +optional
+	Scale Scale `json:"scale,omitempty" protobuf:"bytes,7,opt,name=scale"`
 }
 
 // ServingStore defines information of a Serving Store used in a pipeline
@@ -221,14 +224,7 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 		VolumeMounts:    volumeMounts,
 	}
 	if ct := sp.Spec.Serving.ContainerTemplate; ct != nil {
-		c.Resources = ct.Resources
-		c.ImagePullPolicy = ct.ImagePullPolicy
-		c.SecurityContext = ct.SecurityContext
-		// Numaflow specific env vars should not be overwritten by user-specified ones.
-		c.Env = append(ct.Env[:len(ct.Env):len(ct.Env)], c.Env...)
-		if len(ct.EnvFrom) > 0 {
-			c.EnvFrom = ct.EnvFrom
-		}
+		ct.ApplyToContainer(&c)
 	}
 	labels := map[string]string{
 		KeyPartOf:              Project,

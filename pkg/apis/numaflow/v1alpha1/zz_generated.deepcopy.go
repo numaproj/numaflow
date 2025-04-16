@@ -2545,6 +2545,7 @@ func (in *ServingSpec) DeepCopyInto(out *ServingSpec) {
 		*out = new(ContainerTemplate)
 		(*in).DeepCopyInto(*out)
 	}
+	in.Scale.DeepCopyInto(&out.Scale)
 	return
 }
 
