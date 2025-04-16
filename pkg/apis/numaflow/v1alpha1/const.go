@@ -108,6 +108,7 @@ const (
 	ControllerVertex          = "vertex-controller"
 	ControllerMonoVertex      = "mono-vertex-controller"
 	ControllerServingPipeline = "serving-pipeline-controller"
+	ComponentHPA              = "serving-server-hpa"
 
 	// ENV vars
 	EnvNamespace                        = "NUMAFLOW_NAMESPACE"
