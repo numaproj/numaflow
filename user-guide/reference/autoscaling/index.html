@@ -2613,7 +2613,7 @@ the <a href="../../sources/overview/"><code>Source</code></a> types (please chec
   fast you want the vertex to process all the pending messages, defaults to <code>20</code>. It is only effective for the MonoVertices or <code>Source</code> vertices in a Pipeline that
   support autoscaling, typically increasing the value leads to lower processing rate, thus less replicas.</li>
 <li><code>targetBufferAvailability</code> - [<a href="../../../core-concepts/pipeline/">Pipeline</a> Only] Targeted buffer availability in percentage, defaults to <code>50</code>. It is only effective for <code>UDF</code>
-  and <code>Sink</code> vertices of a Pipeline, it determines how aggressive you want to do for autoscaling, increasing the value will bring more replicas.</li>
+  and <code>Sink</code> vertices of a Pipeline, it determines how aggressive you want to do for autoscaling, increasing the value will bring more replicas. The value could be <code>&gt; 100</code> if you would like to achieve very aggressive autoscaling.</li>
 <li><code>replicasPerScaleUp</code> - Maximum number of replica change happens in one scale up operation, defaults to <code>2</code>. For
   example, if current replica number is 3, the calculated desired replica number is 8; instead of scaling up the vertex to 8, it only does 5.</li>
 <li><code>replicasPerScaleDown</code> - Maximum number of replica change happens in one scale down operation, defaults to <code>2</code>. For
