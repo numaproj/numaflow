@@ -49,7 +49,7 @@ We define a target available buffer length, and then calculate how many replicas
   desiredReplicas = targetAvailableBufferLength / singleReplicaContribution
 ```
 
-**NOTE** If you want aggressive auto-scaling, set `targetBufferAvailability`  to a value `> 100`. 
+**NOTE** If you want aggressive auto-scaling, set `targetBufferAvailability` to a value `> 100`. 
 
 ## Back Pressure Impact
 
