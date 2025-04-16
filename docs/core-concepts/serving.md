@@ -54,51 +54,11 @@ metadata:
 spec:
   # Configures the HTTP serving aspects
   serving:
-    # If true, creates a Kubernetes Service to expose the pipeline
-    service: true
-    # Specifies the HTTP header key used for the unique request ID
-    msgIDHeaderKey: "X-Numaflow-Id"
-    # Timeout for synchronous and SSE requests in seconds (default: 120)
-    requestTimeoutSeconds: 900
-    # Optional: Configure authentication via K8s secret
-    auth:
-      name: serving-api-token # Name of the Kubernetes Secret
-      key: token             # Key within the Secret holding the token
-    # Optional: Specify a custom store for results
-    store:
-      container:
-        # Image for the custom store implementation
-        image: quay.io/numaio/numaflow-go/serving-redis-store:stable
+    ... serving configuration options ...
 
   # Defines the underlying Numaflow pipeline for processing
   pipeline:
-    vertices:
-      # Input vertex using the special 'serving' source
-      - name: serving-in
-        scale:
-          min: 1
-        source:
-          serving: {}
-      # Example processing vertex
-      - name: cat
-        scale:
-          min: 1
-        udf:
-          container:
-            image: quay.io/numaio/numaflow-go/map-forward-message:stable
-      # Output vertex using a compatible 'udsink' to handle results
-      - name: out
-        scale:
-          min: 1
-        sink:
-          udsink: # Sink must be implemented to handle serving responses
-            container:
-              image: quay.io/numaio/numaflow-go/sink-serve:stable # Example image
-    edges:
-      - from: serving-in
-        to: cat
-      - from: cat
-        to: out
+    ... pipeline ...
 ```
 
 ### Configuration (`spec.serving`)
@@ -128,23 +88,17 @@ type ServingStorer interface {
 // PutDatum, GetDatum, StoredResult provide necessary details
 ```
 
-### Sink Implementation for Serving
+A Golang example can be found [here](https://github.com/numaproj/numaflow-go/tree/main/pkg/servingstore).
+
+### User-Defined Sink Implementation for Serving
 
 The User Defined Sink (UDSink) in a `ServingPipeline`'s pipeline (`spec.pipeline.vertices[].sink.udsink`) must signal the
 final response payload for the original HTTP request. Use the **`ResponseServe(requestID, resultBytes)`** function (or 
 SDK equivalent) in your sink code.
 
-**Example (Go SDK):**
+#### Example (Go SDK)
 
 ```golang
-package main
-
-import (
-	"context"
-	"log"
-	sinksdk "github.com/numaproj/numaflow-go/pkg/sinker"
-)
-
 type serveSink struct{}
 
 func (l *serveSink) Sink(ctx context.Context, datumStreamCh <-chan sinksdk.Datum) sinksdk.Responses {
@@ -157,14 +111,8 @@ func (l *serveSink) Sink(ctx context.Context, datumStreamCh <-chan sinksdk.Datum
 	}
 	return result
 }
-
-func main() {
-	err := sinksdk.NewServer(&serveSink{}).Start(context.Background())
-	if err != nil {
-		log.Panic("Failed to start sink server: ", err)
-	}
-}
 ```
+A complete example can be found [here](https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/serve).
 
 Using `ResponseServe` ensures the result is correctly stored and available via the API endpoints.
 
