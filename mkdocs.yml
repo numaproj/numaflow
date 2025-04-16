@@ -41,15 +41,13 @@ nav:
   - User Guide:
       - Core Concepts:
           - Overview: "core-concepts/overview.md"
-          - core-concepts/monovertex.md
           - core-concepts/pipeline.md
-          - core-concepts/vertex.md
           - core-concepts/monovertex.md
           - core-concepts/serving.md
+          - core-concepts/vertex.md
           - core-concepts/inter-step-buffer.md
           - core-concepts/inter-step-buffer-service.md
           - core-concepts/watermarks.md
-          - core-concepts/servingpipeline.md
       - Sources:
           - Overview: "user-guide/sources/overview.md"
           - user-guide/sources/generator.md
