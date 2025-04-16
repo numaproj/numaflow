@@ -142,6 +142,10 @@ message AbstractSink {
   // UDSink sink is used to write the data to the user-defined sink.
   // +optional
   optional UDSink udsink = 4;
+
+  // Serve sink is used to return results when working with a ServingPipeline.
+  // +optional
+  optional ServeSink serve = 5;
 }
 
 message AbstractVertex {
@@ -1555,6 +1559,9 @@ message Scale {
   // The is use to prevent from too aggressive scaling down operations
   // +optional
   optional uint32 replicasPerScaleDown = 12;
+}
+
+message ServeSink {
 }
 
 // +genclient

@@ -24,7 +24,6 @@ import { Pod } from "../../../../../../../../../../../../../types/declarations/p
 
 import "./style.css";
 
-
 export interface MetricsProps {
   namespaceId: string;
   pipelineId: string;
@@ -73,14 +72,7 @@ export function Metrics({
 
   if (discoveredMetricsLoading) {
     return (
-      <Box
-        sx={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "100%",
-        }}
-      >
+      <Box className={"metrics-discover-metrics-loading"}>
         <CircularProgress />
       </Box>
     );
@@ -88,7 +80,7 @@ export function Metrics({
 
   if (discoveredMetricsError) {
     return (
-      <Box sx={{ mt: "2rem", ml: "2rem", fontSize: "1.6rem" }}>
+      <Box className={"metrics-discover-metrics-error"}>
         Failed to discover metrics for the {type}: {discoveredMetricsError}
       </Box>
     );
@@ -119,7 +111,11 @@ export function Metrics({
       );
     } else {
       if (setMetricsFound) setMetricsFound(false);
-      return <Box sx={{ fontSize: "1.4rem" }}>No metrics found</Box>;
+      return (
+        <Box className={"metrics-discover-metrics-not-found"}>
+          No metrics found
+        </Box>
+      );
     }
   }
 
@@ -143,11 +139,11 @@ export function Metrics({
               aria-controls={`${metric?.metric_name}-content`}
               id={`${metric?.metric_name}-header`}
             >
-              <Box sx={{ display: "flex", alignItems: "center" }}>
+              <Box className={"metrics-accordion-summary"}>
                 {metric?.display_name || metric?.metric_name}
                 <Tooltip
                   title={
-                    <Typography sx={{ fontSize: "1.4rem" }}>
+                    <Typography className={"metrics-accordion-summary-tooltip"}>
                       {metric?.metric_description ||
                         metric?.display_name ||
                         metric?.metric_name}
@@ -156,7 +152,7 @@ export function Metrics({
                   arrow
                   placement={"top-start"}
                 >
-                  <Box sx={{ marginLeft: 1 }}>
+                  <Box>
                     <InfoOutlinedIcon sx={{ cursor: "pointer" }} />
                   </Box>
                 </Tooltip>

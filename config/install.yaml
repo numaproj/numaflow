@@ -6854,6 +6854,8 @@ spec:
                         type: object
                       log:
                         type: object
+                      serve:
+                        type: object
                       udsink:
                         properties:
                           container:
@@ -7438,6 +7440,8 @@ spec:
                       onFailure:
                         default: retry
                         type: string
+                    type: object
+                  serve:
                     type: object
                   udsink:
                     properties:
@@ -18198,6 +18202,8 @@ spec:
                               type: object
                             log:
                               type: object
+                            serve:
+                              type: object
                             udsink:
                               properties:
                                 container:
@@ -18782,6 +18788,8 @@ spec:
                             onFailure:
                               default: retry
                               type: string
+                          type: object
+                        serve:
                           type: object
                         udsink:
                           properties:
@@ -29917,6 +29925,8 @@ spec:
                                   type: object
                                 log:
                                   type: object
+                                serve:
+                                  type: object
                                 udsink:
                                   properties:
                                     container:
@@ -30501,6 +30511,8 @@ spec:
                                 onFailure:
                                   default: retry
                                   type: string
+                              type: object
+                            serve:
                               type: object
                             udsink:
                               properties:
@@ -36759,6 +36771,8 @@ spec:
                         type: object
                       log:
                         type: object
+                      serve:
+                        type: object
                       udsink:
                         properties:
                           container:
@@ -37343,6 +37357,8 @@ spec:
                       onFailure:
                         default: retry
                         type: string
+                    type: object
+                  serve:
                     type: object
                   udsink:
                     properties:
@@ -40851,8 +40867,7 @@ data:
     \     required: false\n  metrics:\n    - metric_name: vertex_pending_messages\n
     \     display_name: Vertex Pending Messages\n      metric_description: This gauge
     metric keeps track of the total number of messages that are waiting to be processed
-    over varying time frames of 1min, 5min, 15min and default period of 2min. \n      #
-    set \"Units\" or unset for default behaviour\n      # unit: Units\n      required_filters:\n
+    over varying time frames of 1min, 5min, 15min and default period of 2min. \n      required_filters:\n
     \       - namespace\n        - pipeline\n        - vertex\n      dimensions:\n
     \       - name: pod\n          # expr: optional expression for prometheus query\n
     \         # overrides the default expression\n          filters:\n            -
@@ -40867,8 +40882,7 @@ data:
     \ metrics:\n    - metric_name: monovtx_pending\n      display_name: MonoVertex
     Pending Messages\n      metric_description: This gauge metric keeps track of the
     total number of messages that are waiting to be processed over varying time frames
-    of 1min, 5min, 15min and default period of 2min. \n      # set \"Units\" or unset
-    for default behaviour\n      # unit: Units\n      required_filters:\n        -
+    of 1min, 5min, 15min and default period of 2min. \n      required_filters:\n        -
     namespace\n        - mvtx_name\n      dimensions:\n        - name: pod\n          #
     expr: optional expression for prometheus query\n          # overrides the default
     expression\n          filters:\n            - name: pod\n              required:
@@ -40885,16 +40899,12 @@ data:
     \ metrics:\n    - metric_name: monovtx_processing_time_bucket\n      display_name:
     MonoVertex Processing Time Latency\n      metric_description: This metric represents
     a histogram to keep track of the total time taken to forward a chunk of messages.\n
-    \     # set \"Units\" or unset for default behaviour otherwise set \"s\" or \"ms\"
-    for latency metrics\n      # Note: latency values are in μs\n      # unit: s\n
     \     required_filters:\n        - namespace\n        - mvtx_name\n      dimensions:\n
     \       - name: mono-vertex\n        - name: pod\n          filters:\n            -
     name: pod\n              required: false\n    - metric_name: monovtx_sink_time_bucket\n
     \     display_name: MonoVertex Sink Write Time Latency\n      metric_description:
     This metric represents a histogram to keep track of the total time taken to write
-    to the Sink.\n      # set \"Units\" or unset for default behaviour otherwise set
-    \"s\" or \"ms\" for latency metrics\n      # Note: latency values are in μs\n
-    \     # unit: ms\n      required_filters:\n        - namespace\n        - mvtx_name\n
+    to the Sink.\n      required_filters:\n        - namespace\n        - mvtx_name\n
     \     dimensions:\n        - name: mono-vertex\n        - name: pod\n          filters:\n
     \           - name: pod\n              required: false\n\n- name: vertex_throughput\n
     \ objects: \n    - vertex\n  title: Vertex Throughput and Message Rates\n  description:
@@ -40904,20 +40914,18 @@ data:
     start_time\n      required: false\n    - name: end_time\n      required: false\n
     \ metrics:\n    - metric_name: forwarder_data_read_total\n      display_name:
     Vertex Read Processing Rate\n      metric_description: This metric represents
-    the total number of data messages read per second.\n      # set \"Units\" or unset
-    for default behaviour\n      # unit: Units\n      required_filters:\n        -
-    namespace\n        - pipeline\n        - vertex\n      dimensions:\n        -
-    name: vertex\n        - name: pod\n          filters:\n            - name: pod\n
-    \             required: false\n\n- name: mono_vertex_throughput\n  objects: \n
-    \   - mono-vertex\n  title: MonoVertex Throughput and Message Rates\n  description:
+    the total number of data messages read per second.\n      required_filters:\n
+    \       - namespace\n        - pipeline\n        - vertex\n      dimensions:\n
+    \       - name: vertex\n        - name: pod\n          filters:\n            -
+    name: pod\n              required: false\n\n- name: mono_vertex_throughput\n  objects:
+    \n    - mono-vertex\n  title: MonoVertex Throughput and Message Rates\n  description:
     This pattern measures the throughput of a MonoVertex in messages per second across
     different dimensions.\n  expr: sum(rate($metric_name{$filters}[$duration])) by
     ($dimension)\n  params:\n    - name: duration\n      required: true\n    - name:
     start_time\n      required: false\n    - name: end_time\n      required: false\n
     \ metrics:\n    - metric_name: monovtx_read_total\n      display_name: MonoVertex
     Read Processing Rate\n      metric_description: This metric represents the total
-    number of data messages read per second.\n      # set \"Units\" or unset for default
-    behaviour\n      # unit: Units\n      required_filters:\n        - namespace\n
+    number of data messages read per second.\n      required_filters:\n        - namespace\n
     \       - mvtx_name\n      dimensions:\n        - name: mono-vertex\n        -
     name: pod\n          filters:\n            - name: pod\n              required:
     false\n\n- name: pod_cpu_memory_utilization\n  objects: \n    - mono-vertex\n
