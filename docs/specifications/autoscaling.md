@@ -49,6 +49,8 @@ We define a target available buffer length, and then calculate how many replicas
   desiredReplicas = targetAvailableBufferLength / singleReplicaContribution
 ```
 
+**NOTE** If you want aggressive auto-scaling, set `targetBufferAvailability`  to a value `> 100`. 
+
 ## Back Pressure Impact
 
 Back pressure is considered during autoscaling (which is only available for Source and UDF vertices).
