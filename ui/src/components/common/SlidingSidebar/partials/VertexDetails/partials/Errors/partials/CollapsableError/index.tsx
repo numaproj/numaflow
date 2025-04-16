@@ -15,6 +15,30 @@ interface CollapsableErrorProps {
   detail: ContainerError & { pod: string };
 }
 
+// removes initial escape sequences from details
+const cleanText = (text: string) => {
+  const initialEscapeSequences = ["\b\r\u00123", "\b\r\u0012H", "\b\r\u00128"];
+  const regex = new RegExp(`^(${initialEscapeSequences.join("|")})`);
+  return text.replace(regex, "");
+};
+
+const highlightFilePaths = (rawText: string) => {
+  const text = cleanText(rawText);
+  const filePathRegex = /((?:\/[^\s]+)+\.[a-zA-Z0-9:]+)|(\bat\s+[^\n]+)/g;
+  const exclusionList = ["/google.rpc.DebugInfo", "/debug.Stack"];
+
+  return text.split(filePathRegex).map((part, index) => {
+    if (filePathRegex.test(part) && !exclusionList.includes(part)) {
+      return (
+        <span key={index} style={{ color: "blue", fontWeight: "bold" }}>
+          {part}
+        </span>
+      );
+    }
+    return part;
+  });
+};
+
 export const CollapsableError = ({ detail }: CollapsableErrorProps) => {
   const [expanded, setExpanded] = useState(false);
 
@@ -51,21 +75,21 @@ export const CollapsableError = ({ detail }: CollapsableErrorProps) => {
             className={"collapsable-error-common-title-text"}
             sx={{ ml: "4.6rem" }}
           >
-            {detail.pod}
+            {detail?.pod || "Missing pod name"}
           </Box>
           <Box className={"collapsable-error-common-title-text"}>
-            {detail.container}
+            {detail?.container || "Missing container name"}
           </Box>
           <Box
             className={"collapsable-error-common-title-text"}
             sx={{ flexGrow: 1 }}
           >
-            {detail.message}
+            {detail?.message || "Missing error message"}
           </Box>
           <Box className={"collapsable-error-common-title-text"}>
-            <Box>{ago(new Date(detail.timestamp))}</Box>
+            <Box>{ago(new Date(detail?.timestamp))}</Box>
             <Box>
-              {moment(new Date(detail.timestamp)).calendar(null, {
+              {moment(new Date(detail?.timestamp)).calendar(null, {
                 sameDay: "[Today at] LT",
                 lastDay: "[Yesterday at] LT",
                 lastWeek: "[Last] dddd [at] LT",
@@ -82,7 +106,11 @@ export const CollapsableError = ({ detail }: CollapsableErrorProps) => {
           </Box>
           <Divider orientation="vertical" flexItem color={"#878789"} />
           <Box className={"collapsable-error-accordion-details-title-content"}>
-            {detail.details}
+            <pre style={{ whiteSpace: "pre-wrap", wordWrap: "break-word" }}>
+              {detail?.details
+                ? highlightFilePaths(detail.details)
+                : "Missing details"}
+            </pre>
           </Box>
           <Divider
             orientation="vertical"

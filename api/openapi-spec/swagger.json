@@ -19481,6 +19481,10 @@
           "description": "Log sink is used to write the data to the log.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log"
         },
+        "serve": {
+          "description": "Serve sink is used to return results when working with a ServingPipeline.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServeSink"
+        },
         "udsink": {
           "description": "UDSink sink is used to write the data to the user-defined sink.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSink"
@@ -21949,6 +21953,9 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.ServeSink": {
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.ServingPipeline": {
       "type": "object",
       "required": [
@@ -22242,6 +22249,10 @@
         "retryStrategy": {
           "description": "RetryStrategy struct encapsulates the settings for retrying operations in the event of failures.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RetryStrategy"
+        },
+        "serve": {
+          "description": "Serve sink is used to return results when working with a ServingPipeline.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServeSink"
         },
         "udsink": {
           "description": "UDSink sink is used to write the data to the user-defined sink.",
