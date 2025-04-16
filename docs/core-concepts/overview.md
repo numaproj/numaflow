@@ -4,7 +4,7 @@ Numaflow is a Kubernetes-native platform for event processing at scale, purpose-
 applications, real-time stream processing pipelines, and serving systems. It provides a set of modular and composable 
 building blocks to help developers process events and serve efficiently in cloud-native environments.
 
-The following sections introduce the core concepts that power these capabilities
+The following sections introduce the core concepts of Numaflow.
 
 * [MonoVertex](#monovertex)
 * [Pipeline](#pipeline)
