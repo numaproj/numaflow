@@ -110,6 +110,13 @@ type ServingPipelineStatus struct {
 	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,11,opt,name=observedGeneration"`
 }
 
+func (sp ServingSpec) GetRequestTimeoutSecs() uint32 {
+	if sp.RequestTimeoutSecs == nil {
+		return 120
+	}
+	return *sp.RequestTimeoutSecs
+}
+
 // Generate the stream name in JetStream used for serving source
 func (sp ServingPipeline) GenerateSourceStreamName() string {
 	return fmt.Sprintf("serving-source-%s", sp.Name)
@@ -244,9 +251,10 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 				Annotations: map[string]string{},
 			},
 			Spec: corev1.PodSpec{
-				Containers:     []corev1.Container{c},
-				InitContainers: []corev1.Container{sp.getStreamValidationInitContainerSpec(req)},
-				Volumes:        volumes,
+				Containers:                    []corev1.Container{c},
+				InitContainers:                []corev1.Container{sp.getStreamValidationInitContainerSpec(req)},
+				Volumes:                       volumes,
+				TerminationGracePeriodSeconds: req.TerminationGracePeriodSeconds,
 			},
 		},
 	}

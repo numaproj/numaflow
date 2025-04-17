@@ -336,12 +336,13 @@ func (r *servingPipelineReconciler) createOrUpdateServingServer(ctx context.Cont
 	log := logging.FromContext(ctx)
 	_, envs := sharedutil.GetIsbSvcEnvVars(isbSvcConfig)
 	req := dfv1.GetServingPipelineResourceReq{
-		ISBSvcConfig:     isbSvcConfig,
-		Image:            r.image,
-		PullPolicy:       corev1.PullPolicy(sharedutil.LookupEnvStringOr(dfv1.EnvImagePullPolicy, "")),
-		Env:              envs,
-		Replicas:         spl.Spec.Serving.Replicas,
-		DefaultResources: r.config.GetDefaults().GetDefaultContainerResources(),
+		ISBSvcConfig:                  isbSvcConfig,
+		Image:                         r.image,
+		PullPolicy:                    corev1.PullPolicy(sharedutil.LookupEnvStringOr(dfv1.EnvImagePullPolicy, "")),
+		Env:                           envs,
+		Replicas:                      spl.Spec.Serving.Replicas,
+		TerminationGracePeriodSeconds: ptr.To(int64(spl.Spec.Serving.GetRequestTimeoutSecs() + 10)),
+		DefaultResources:              r.config.GetDefaults().GetDefaultContainerResources(),
 	}
 	deploy, err := spl.GetServingDeploymentObj(req)
 	if err != nil {

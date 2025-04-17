@@ -2035,8 +2035,14 @@ func schema_pkg_apis_numaflow_v1alpha1_GetServingPipelineResourceReq(ref common.
 							Format: "int32",
 						},
 					},
+					"TerminationGracePeriodSeconds": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int64",
+						},
+					},
 				},
-				Required: []string{"ISBSvcConfig", "Image", "PullPolicy", "Env", "DefaultResources", "Replicas"},
+				Required: []string{"ISBSvcConfig", "Image", "PullPolicy", "Env", "DefaultResources", "Replicas", "TerminationGracePeriodSeconds"},
 			},
 		},
 		Dependencies: []string{

@@ -20407,6 +20407,10 @@
         "Replicas": {
           "format": "int32",
           "type": "integer"
+        },
+        "TerminationGracePeriodSeconds": {
+          "format": "int64",
+          "type": "integer"
         }
       },
       "required": [
@@ -20415,7 +20419,8 @@
         "PullPolicy",
         "Env",
         "DefaultResources",
-        "Replicas"
+        "Replicas",
+        "TerminationGracePeriodSeconds"
       ],
       "type": "object"
     },

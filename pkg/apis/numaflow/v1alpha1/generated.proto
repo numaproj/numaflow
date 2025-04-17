@@ -615,6 +615,8 @@ message GetServingPipelineResourceReq {
   optional .k8s.io.api.core.v1.ResourceRequirements defaultResources = 5;
 
   optional int32 replicas = 6;
+
+  optional int64 terminationGracePeriodSeconds = 7;
 }
 
 message GetSideInputDeploymentReq {
