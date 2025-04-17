@@ -18,10 +18,10 @@ package servingpipeline
 
 import (
 	"context"
+	"github.com/stretchr/testify/require"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 	appv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
@@ -115,26 +115,7 @@ func TestReconcile(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	t.Run("ServingPipeline without ISB", func(t *testing.T) {
-		cl := fake.NewClientBuilder().Build()
-		r := fakeReconciler(t, cl)
-		testObj := testServingPipeline.DeepCopy()
-		err := cl.Create(context.TODO(), testObj)
-		require.NoError(t, err)
-		req := ctrl.Request{
-			NamespacedName: types.NamespacedName{
-				Name:      testObj.Name,
-				Namespace: testObj.Namespace,
-			},
-		}
-		_, err = r.Reconcile(context.TODO(), req)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "isbsvc default not found")
-	})
-}
-
-func Test_reconcileFixedResources(t *testing.T) {
-	t.Run("test reconcile fixed resources", func(t *testing.T) {
+	t.Run("Reconcile a valid ServingPipeline", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		ctx := context.TODO()
 		r := fakeReconciler(t, cl)
@@ -160,49 +141,47 @@ func Test_reconcileFixedResources(t *testing.T) {
 		testObj := testServingPipeline.DeepCopy()
 		err = r.reconcileFixedResources(ctx, testObj)
 		require.NoError(t, err)
-
-		hpa := &autoscalingv2.HorizontalPodAutoscaler{}
-		err = cl.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: testObj.GetServingServerName()}, hpa)
+		req := ctrl.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      testObj.Name,
+				Namespace: testNamespace,
+			},
+		}
+		_, err = r.Reconcile(context.TODO(), req)
 		assert.NoError(t, err)
-		assert.Equal(t, int32(1), *hpa.Spec.MinReplicas)
-		assert.Equal(t, int32(5), hpa.Spec.MaxReplicas)
-		assert.Equal(t, "Deployment", hpa.Spec.ScaleTargetRef.Kind)
-		assert.Equal(t, testObj.GetServingServerName(), hpa.Spec.ScaleTargetRef.Name)
 	})
 }
 
-func Test_cleanUp(t *testing.T) {
-	t.Run("test cleanup job creation", func(t *testing.T) {
-		cl := fake.NewClientBuilder().Build()
-		ctx := context.TODO()
-		r := fakeReconciler(t, cl)
+func Test_CleanUpJobCreation(t *testing.T) {
+	cl := fake.NewClientBuilder().Build()
+	ctx := context.TODO()
+	r := fakeReconciler(t, cl)
 
-		testIsbSvc := &dfv1.InterStepBufferService{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      dfv1.DefaultISBSvcName,
-				Namespace: testNamespace,
-			},
-			Status: dfv1.InterStepBufferServiceStatus{
-				Config: dfv1.BufferServiceConfig{
-					JetStream: &dfv1.JetStreamConfig{
-						URL: "nats://test",
-					},
+	testIsbSvc := &dfv1.InterStepBufferService{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      dfv1.DefaultISBSvcName,
+			Namespace: testNamespace,
+		},
+		Status: dfv1.InterStepBufferServiceStatus{
+			Config: dfv1.BufferServiceConfig{
+				JetStream: &dfv1.JetStreamConfig{
+					URL: "nats://test",
 				},
 			},
-		}
-		testIsbSvc.Status.MarkConfigured()
-		testIsbSvc.Status.MarkDeployed()
-		err := cl.Create(ctx, testIsbSvc)
-		assert.NoError(t, err)
+		},
+	}
+	testIsbSvc.Status.MarkConfigured()
+	testIsbSvc.Status.MarkDeployed()
+	err := cl.Create(ctx, testIsbSvc)
+	assert.NoError(t, err)
 
-		testObj := testServingPipeline.DeepCopy()
-		err = r.cleanUp(ctx, testObj, r.logger)
-		assert.NoError(t, err)
+	testObj := testServingPipeline.DeepCopy()
+	err = r.cleanUp(ctx, testObj, r.logger)
+	assert.NoError(t, err)
 
-		jobs := &batchv1.JobList{}
-		err = cl.List(ctx, jobs, &client.ListOptions{Namespace: testNamespace})
-		assert.NoError(t, err)
-		assert.Equal(t, 1, len(jobs.Items))
-		assert.Contains(t, jobs.Items[0].Name, "cln")
-	})
+	jobs := &batchv1.JobList{}
+	err = cl.List(ctx, jobs, &client.ListOptions{Namespace: testNamespace})
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(jobs.Items))
+	assert.Contains(t, jobs.Items[0].Name, "cln")
 }

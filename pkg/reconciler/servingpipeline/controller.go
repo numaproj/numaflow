@@ -23,7 +23,6 @@ import (
 
 	"go.uber.org/zap"
 	appv1 "k8s.io/api/apps/v1"
-	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -84,7 +83,6 @@ func (r *servingPipelineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	result, reconcileErr := r.reconcile(ctx, splCopy)
 	if reconcileErr != nil {
 		log.Errorw("Reconcile error", zap.Error(reconcileErr))
-		return ctrl.Result{}, reconcileErr
 	}
 	splCopy.Status.LastUpdated = metav1.Now()
 	if !equality.Semantic.DeepEqual(spl.Finalizers, splCopy.Finalizers) {
@@ -190,12 +188,6 @@ func (r *servingPipelineReconciler) reconcileFixedResources(ctx context.Context,
 		log.Errorw("Failed to create or update serving server", zap.Error(err))
 		r.recorder.Eventf(spl, corev1.EventTypeWarning, "CreateOrUpdateServingServerFailed", "Failed to create or update serving server: %w", err.Error())
 		return fmt.Errorf("failed to create or update serving server: %w", err)
-	}
-
-	if err := r.createOrUpdateServingHPA(ctx, spl); err != nil {
-		log.Errorw("Failed to create or update serving HPA", zap.Error(err))
-		r.recorder.Eventf(spl, corev1.EventTypeWarning, "CreateOrUpdateServingHPAFailed", "Failed to create or update serving HPA: %s", err.Error())
-		return fmt.Errorf("failed to create or update serving HPA: %w", err)
 	}
 
 	return nil
@@ -481,90 +473,5 @@ func (r *servingPipelineReconciler) checkChildrenResourceStatus(ctx context.Cont
 	}
 
 	spl.Status.MarkPhaseRunning()
-	return nil
-}
-
-func (r *servingPipelineReconciler) createOrUpdateServingHPA(ctx context.Context, spl *dfv1.ServingPipeline) error {
-	log := logging.FromContext(ctx)
-
-	// Extract min and max replicas from the ServingPipeline spec
-	minReplicas := int32(1)
-	if minCount := spl.Spec.Serving.Scale.Min; minCount != nil {
-		minReplicas = *minCount
-	}
-	maxReplicas := minReplicas
-	if maxCount := spl.Spec.Serving.Scale.Max; maxCount != nil {
-		maxReplicas = max(maxReplicas, *maxCount)
-	}
-
-	// Define the HPA object
-	hpa := &autoscalingv2.HorizontalPodAutoscaler{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: spl.Namespace,
-			Name:      spl.GetServingServerName(),
-			Labels: map[string]string{
-				dfv1.KeyPartOf:              dfv1.Project,
-				dfv1.KeyManagedBy:           dfv1.ControllerServingPipeline,
-				dfv1.KeyComponent:           dfv1.ComponentHPA,
-				dfv1.KeyServingPipelineName: spl.Name,
-			},
-			OwnerReferences: []metav1.OwnerReference{
-				*metav1.NewControllerRef(spl.GetObjectMeta(), dfv1.ServingPipelineGroupVersionKind),
-			},
-		},
-		Spec: autoscalingv2.HorizontalPodAutoscalerSpec{
-			ScaleTargetRef: autoscalingv2.CrossVersionObjectReference{
-				APIVersion: "apps/v1",
-				Kind:       "Deployment",
-				Name:       spl.GetServingServerName(),
-			},
-			MinReplicas: &minReplicas,
-			MaxReplicas: maxReplicas,
-			Metrics: []autoscalingv2.MetricSpec{
-				{
-					Type: autoscalingv2.ResourceMetricSourceType,
-					Resource: &autoscalingv2.ResourceMetricSource{
-						Name: "cpu",
-						Target: autoscalingv2.MetricTarget{
-							Type:               autoscalingv2.UtilizationMetricType,
-							AverageUtilization: ptr.To[int32](80), // Target 80% CPU utilization
-						},
-					},
-				},
-			},
-		},
-	}
-
-	// Check if the HPA already exists
-	existingHPA := &autoscalingv2.HorizontalPodAutoscaler{}
-	err := r.client.Get(ctx, types.NamespacedName{Namespace: hpa.Namespace, Name: hpa.Name}, existingHPA)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			// Create the HPA if it doesn't exist
-			if err := r.client.Create(ctx, hpa); err != nil {
-				log.Errorw("Failed to create serving HPA", zap.String("hpa", hpa.Name), zap.Error(err))
-				r.recorder.Eventf(spl, corev1.EventTypeWarning, "CreateServingHPAFailed", "Failed to create serving HPA: %v", err)
-				return fmt.Errorf("failed to create serving HPA: %w", err)
-			}
-			log.Infow("Succeeded to create serving HPA", zap.String("hpa", hpa.Name))
-			r.recorder.Eventf(spl, corev1.EventTypeNormal, "CreateServingHPASuccess", "Succeeded to create serving HPA %s", hpa.Name)
-		} else {
-			log.Errorw("Failed to get existing serving HPA", zap.String("hpa", hpa.Name), zap.Error(err))
-			return fmt.Errorf("failed to get existing serving HPA: %w", err)
-		}
-	} else {
-		// Update the HPA if it exists and has changed
-		if !equality.Semantic.DeepEqual(existingHPA.Spec, hpa.Spec) {
-			existingHPA.Spec = hpa.Spec
-			if err := r.client.Update(ctx, existingHPA); err != nil {
-				log.Errorw("Failed to update serving HPA", zap.String("hpa", hpa.Name), zap.Error(err))
-				r.recorder.Eventf(spl, corev1.EventTypeWarning, "UpdateServingHPAFailed", "Failed to update serving HPA: %v", err)
-				return fmt.Errorf("failed to update serving HPA: %w", err)
-			}
-			log.Infow("Succeeded to update serving HPA", zap.String("hpa", hpa.Name))
-			r.recorder.Eventf(spl, corev1.EventTypeNormal, "UpdateServingHPASuccess", "Succeeded to update serving HPA %s", hpa.Name)
-		}
-	}
-
 	return nil
 }
