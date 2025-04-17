@@ -2029,8 +2029,14 @@ func schema_pkg_apis_numaflow_v1alpha1_GetServingPipelineResourceReq(ref common.
 							Ref:     ref("k8s.io/api/core/v1.ResourceRequirements"),
 						},
 					},
+					"Replicas": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int32",
+						},
+					},
 				},
-				Required: []string{"ISBSvcConfig", "Image", "PullPolicy", "Env", "DefaultResources"},
+				Required: []string{"ISBSvcConfig", "Image", "PullPolicy", "Env", "DefaultResources", "Replicas"},
 			},
 		},
 		Dependencies: []string{
@@ -5118,11 +5124,11 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingSpec(ref common.ReferenceCallback)
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
 						},
 					},
-					"scale": {
+					"replicas": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Settings for autoscaling",
-							Default:     map[string]interface{}{},
-							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale"),
+							Description: "Number of replicas. If an HPA is used to manage the deployment object, do not set this field.",
+							Type:        []string{"integer"},
+							Format:      "int32",
 						},
 					},
 				},
@@ -5130,7 +5136,7 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingSpec(ref common.ReferenceCallback)
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Authorization", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingStore"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Authorization", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingStore"},
 	}
 }
 

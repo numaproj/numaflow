@@ -20395,7 +20395,8 @@
         "Image",
         "PullPolicy",
         "Env",
-        "DefaultResources"
+        "DefaultResources",
+        "Replicas"
       ],
       "properties": {
         "DefaultResources": {
@@ -20415,6 +20416,10 @@
         },
         "PullPolicy": {
           "type": "string"
+        },
+        "Replicas": {
+          "type": "integer",
+          "format": "int32"
         }
       }
     },
@@ -22066,14 +22071,15 @@
           "description": "The header key from which the message id will be extracted",
           "type": "string"
         },
+        "replicas": {
+          "description": "Number of replicas. If an HPA is used to manage the deployment object, do not set this field.",
+          "type": "integer",
+          "format": "int32"
+        },
         "requestTimeoutSeconds": {
           "description": "Request timeout in seconds. Default value is 120 seconds.",
           "type": "integer",
           "format": "int64"
-        },
-        "scale": {
-          "description": "Settings for autoscaling",
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Scale"
         },
         "service": {
           "description": "Whether to create a ClusterIP Service",

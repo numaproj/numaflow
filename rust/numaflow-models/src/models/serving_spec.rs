@@ -25,14 +25,15 @@ pub struct ServingSpec {
     /// The header key from which the message id will be extracted
     #[serde(rename = "msgIDHeaderKey")]
     pub msg_id_header_key: String,
+    /// Number of replicas. If an HPA is used to manage the deployment object, do not set this field.
+    #[serde(rename = "replicas", skip_serializing_if = "Option::is_none")]
+    pub replicas: Option<i32>,
     /// Request timeout in seconds. Default value is 120 seconds.
     #[serde(
         rename = "requestTimeoutSeconds",
         skip_serializing_if = "Option::is_none"
     )]
     pub request_timeout_seconds: Option<i64>,
-    #[serde(rename = "scale", skip_serializing_if = "Option::is_none")]
-    pub scale: Option<Box<crate::models::Scale>>,
     /// Whether to create a ClusterIP Service
     #[serde(rename = "service", skip_serializing_if = "Option::is_none")]
     pub service: Option<bool>,
@@ -46,8 +47,8 @@ impl ServingSpec {
             auth: None,
             container_template: None,
             msg_id_header_key,
+            replicas: None,
             request_timeout_seconds: None,
-            scale: None,
             service: None,
             store: None,
         }

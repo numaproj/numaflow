@@ -926,6 +926,11 @@ func (in *GetServingPipelineResourceReq) DeepCopyInto(out *GetServingPipelineRes
 		}
 	}
 	in.DefaultResources.DeepCopyInto(&out.DefaultResources)
+	if in.Replicas != nil {
+		in, out := &in.Replicas, &out.Replicas
+		*out = new(int32)
+		**out = **in
+	}
 	return
 }
 
@@ -2545,7 +2550,11 @@ func (in *ServingSpec) DeepCopyInto(out *ServingSpec) {
 		*out = new(ContainerTemplate)
 		(*in).DeepCopyInto(*out)
 	}
-	in.Scale.DeepCopyInto(&out.Scale)
+	if in.Replicas != nil {
+		in, out := &in.Replicas, &out.Replicas
+		*out = new(int32)
+		**out = **in
+	}
 	return
 }
 

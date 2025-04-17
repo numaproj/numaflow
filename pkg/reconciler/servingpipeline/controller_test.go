@@ -18,10 +18,10 @@ package servingpipeline
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 	appv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
@@ -72,10 +72,7 @@ var (
 				},
 			},
 			Serving: dfv1.ServingSpec{
-				Scale: dfv1.Scale{
-					Min: ptr.To[int32](1),
-					Max: ptr.To[int32](5),
-				},
+				Replicas: ptr.To[int32](5),
 			},
 		},
 	}
@@ -148,7 +145,15 @@ func TestReconcile(t *testing.T) {
 			},
 		}
 		_, err = r.Reconcile(context.TODO(), req)
-		assert.NoError(t, err)
+		require.NoError(t, err)
+
+		serverDeploy := &appv1.Deployment{}
+		err = cl.Get(context.TODO(), types.NamespacedName{
+			Namespace: testServingPipeline.Namespace,
+			Name:      testServingPipeline.GetServingServerName(),
+		}, serverDeploy)
+		require.NoError(t, err)
+		require.Equal(t, int32(5), *serverDeploy.Spec.Replicas)
 	})
 }
 
@@ -173,15 +178,15 @@ func Test_CleanUpJobCreation(t *testing.T) {
 	testIsbSvc.Status.MarkConfigured()
 	testIsbSvc.Status.MarkDeployed()
 	err := cl.Create(ctx, testIsbSvc)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	testObj := testServingPipeline.DeepCopy()
 	err = r.cleanUp(ctx, testObj, r.logger)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	jobs := &batchv1.JobList{}
 	err = cl.List(ctx, jobs, &client.ListOptions{Namespace: testNamespace})
-	assert.NoError(t, err)
-	assert.Equal(t, 1, len(jobs.Items))
-	assert.Contains(t, jobs.Items[0].Name, "cln")
+	require.NoError(t, err)
+	require.Equal(t, 1, len(jobs.Items))
+	require.Contains(t, jobs.Items[0].Name, "cln")
 }

@@ -340,6 +340,7 @@ func (r *servingPipelineReconciler) createOrUpdateServingServer(ctx context.Cont
 		Image:            r.image,
 		PullPolicy:       corev1.PullPolicy(sharedutil.LookupEnvStringOr(dfv1.EnvImagePullPolicy, "")),
 		Env:              envs,
+		Replicas:         spl.Spec.Serving.Replicas,
 		DefaultResources: r.config.GetDefaults().GetDefaultContainerResources(),
 	}
 	deploy, err := spl.GetServingDeploymentObj(req)

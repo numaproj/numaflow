@@ -3783,6 +3783,19 @@ Kubernetes core/v1.ResourceRequirements </a> </em>
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>Replicas</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -9776,8 +9789,7 @@ Scale
 
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.AbstractVertex">AbstractVertex</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSpec">MonoVertexSpec</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.ServingSpec">ServingSpec</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSpec">MonoVertexSpec</a>)
 </p>
 
 <p>
@@ -10581,8 +10593,7 @@ Container template for the serving container.
 
 <td>
 
-<code>scale</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.Scale"> Scale </a> </em>
+<code>replicas</code></br> <em> int32 </em>
 </td>
 
 <td>
@@ -10590,7 +10601,8 @@ Container template for the serving container.
 <em>(Optional)</em>
 <p>
 
-Settings for autoscaling
+Number of replicas. If an HPA is used to manage the deployment object,
+do not set this field.
 </p>
 
 </td>

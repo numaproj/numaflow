@@ -28,6 +28,8 @@ pub struct GetServingPipelineResourceReq {
     pub image: String,
     #[serde(rename = "PullPolicy")]
     pub pull_policy: String,
+    #[serde(rename = "Replicas")]
+    pub replicas: i32,
 }
 
 impl GetServingPipelineResourceReq {
@@ -37,6 +39,7 @@ impl GetServingPipelineResourceReq {
         isb_svc_config: crate::models::BufferServiceConfig,
         image: String,
         pull_policy: String,
+        replicas: i32,
     ) -> GetServingPipelineResourceReq {
         GetServingPipelineResourceReq {
             default_resources,
@@ -44,6 +47,7 @@ impl GetServingPipelineResourceReq {
             isb_svc_config: Box::new(isb_svc_config),
             image,
             pull_policy,
+            replicas,
         }
     }
 }

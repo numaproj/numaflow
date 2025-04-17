@@ -87,9 +87,9 @@ type ServingSpec struct {
 	// Container template for the serving container.
 	// +optional
 	ContainerTemplate *ContainerTemplate `json:"containerTemplate,omitempty" protobuf:"bytes,6,opt,name=containerTemplate"`
-	// Settings for autoscaling
+	// Number of replicas. If an HPA is used to manage the deployment object, do not set this field.
 	// +optional
-	Scale Scale `json:"scale,omitempty" protobuf:"bytes,7,opt,name=scale"`
+	Replicas *int32 `json:"replicas,omitempty" protobuf:"varint,7,opt,name=replicas"`
 }
 
 // ServingStore defines information of a Serving Store used in a pipeline
@@ -237,6 +237,7 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 		Selector: &metav1.LabelSelector{
 			MatchLabels: labels,
 		},
+		Replicas: req.Replicas,
 		Template: corev1.PodTemplateSpec{
 			ObjectMeta: metav1.ObjectMeta{
 				Labels:      labels,
