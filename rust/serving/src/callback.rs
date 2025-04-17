@@ -111,7 +111,7 @@ impl CallbackHandler {
         let store = self.store.clone();
         let handle = tokio::spawn(async move {
             let timestamp = Utc::now().timestamp_nanos_opt().unwrap();
-            let callbacks_key = format!("cb.{id}.{vertex_name}.{timestamp}");
+            let callbacks_key = format!("cb.0.{id}.{vertex_name}.{timestamp}");
             let interval = fixed::Interval::from_millis(1000).take(2);
 
             let _permit = permit;

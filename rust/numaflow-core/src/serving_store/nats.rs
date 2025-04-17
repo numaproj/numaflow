@@ -18,7 +18,7 @@ impl NatsServingStore {
         nats_store_config: NatsStoreConfig,
     ) -> crate::Result<Self> {
         let store = js_context
-            .get_key_value(nats_store_config.name.as_str())
+            .get_key_value(nats_store_config.rs_store_name.as_str())
             .await
             .map_err(|e| crate::Error::Connection(format!("Failed to get kv store: {e:?}")))?;
         Ok(Self { store })
@@ -32,7 +32,7 @@ impl NatsServingStore {
         payload: Vec<u8>,
     ) -> crate::Result<()> {
         let id = format!(
-            "rs.{id}.{}.{}",
+            "rs.0.{id}.{}.{}",
             origin,
             Utc::now().timestamp_nanos_opt().unwrap()
         );

@@ -1,24 +1,77 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: ServingPipeline
 metadata:
-  name: serving-pipeline
+  name: serving-two-pipeline
 spec:
   serving:
     service: true
     msgIDHeaderKey: "X-Numaflow-Id"
+    requestTimeoutSeconds: 900
   pipeline:
+#    interStepBufferServiceName: serving-pipeline
+    limits:
+      readTimeout: "10ms"
+      readBatchSize: 100
     vertices:
       - name: in
+        scale:
+          min: 1
+          max: 1
+        containerTemplate:
+          resources:
+            requests:
+              cpu: 1
+              memory: 200Mi
+            limits:
+              cpu: 1
+              memory: 200Mi
         source:
           serving: {}
       - name: cat
+        scale:
+          min: 1
+          max: 1
+        containerTemplate:
+          resources:
+            requests:
+              cpu: 1
+              memory: 200Mi
+            limits:
+              cpu: 1
+              memory: 200Mi
         udf:
           container:
             image: quay.io/numaio/numaflow-go/map-forward-message:stable
+            resources:
+              requests:
+                cpu: 1
+                memory: 200Mi
+              limits:
+                cpu: 1
+                memory: 200Mi
       - name: out
+        scale:
+          min: 1
+          max: 1
+        containerTemplate:
+          resources:
+            requests:
+              cpu: 1
+              memory: 200Mi
+            limits:
+              cpu: 1
+              memory: 200Mi
         sink:
-          # A simple log printing sink
-          log: {}
+          udsink:
+            container:
+              image: quay.io/numaio/numaflow-go/sink-serve:stable
+              resources:
+                requests:
+                  cpu: 1
+                  memory: 200Mi
+                limits:
+                  cpu: 1
+                  memory: 200Mi
     edges:
       - from: in
         to: cat

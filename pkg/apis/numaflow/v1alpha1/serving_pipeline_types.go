@@ -176,7 +176,8 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 		{Name: EnvPod, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
 		{Name: EnvServingMinPipelineSpec, Value: encodedPipelineSpec},
 		{Name: "NUMAFLOW_SERVING_SOURCE_SETTINGS", Value: encodedServingSourceSettings},
-		{Name: "NUMAFLOW_SERVING_KV_STORE", Value: fmt.Sprintf("%s_SERVING_KV_STORE", sp.GetServingStoreName())},
+		{Name: EnvServingCallbackStore, Value: fmt.Sprintf("%s_SERVING_CALLBACK_STORE", sp.GetServingStoreName())},
+		{Name: EnvServingResponseStore, Value: fmt.Sprintf("%s_SERVING_RESPONSE_STORE", sp.GetServingStoreName())},
 		{Name: EnvServingPort, Value: strconv.Itoa(ServingServicePort)},
 		{ // TODO: do we still need it?
 			Name: EnvServingHostIP,
@@ -306,7 +307,8 @@ func (sp ServingPipeline) GetPipelineObj(req GetServingPipelineResourceReq) Pipe
 			plSpec.Vertices[i].ContainerTemplate.Env,
 			corev1.EnvVar{Name: EnvCallbackEnabled, Value: "true"},
 			corev1.EnvVar{Name: EnvServingSettings, Value: encodedServingSourceSettings},
-			corev1.EnvVar{Name: EnvServingStore, Value: fmt.Sprintf("%s_SERVING_KV_STORE", sp.GetServingStoreName())},
+			corev1.EnvVar{Name: EnvServingCallbackStore, Value: fmt.Sprintf("%s_SERVING_CALLBACK_STORE", sp.GetServingStoreName())},
+			corev1.EnvVar{Name: EnvServingResponseStore, Value: fmt.Sprintf("%s_SERVING_RESPONSE_STORE", sp.GetServingStoreName())},
 			corev1.EnvVar{Name: EnvNumaflowRuntime, Value: "rust"},
 		)
 	}

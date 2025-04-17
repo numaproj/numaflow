@@ -1,284 +1,443 @@
-//! Stores the callback and status information in JetStream KV store. Each callback from the vertex
-//! will be stored as a new entry in the store. The status of the request will be updated as the
-//! processing progresses.
-//!
-//! **JetStream Callback Entry Format**
-//!
-//! Callback key - cb.{id}.{vertex_name}.{timestamp}
-//!
-//! Callback value - JSON serialized Callback struct
-//!
-//! NOTE: cb.{id}.start.processing and cb.{id}.done.processing keys are used to signal the start and
-//! end of processing so that the watchers can stop watching for new callbacks.
-//!
-//! **Status Entry Format**
-//!
-//! Status Key - status.{id}
-//!
-//! Status Value - JSON serialized [ProcessingStatus] enum
-
-use std::sync::Arc;
-use std::time::Duration;
-
-use async_nats::jetstream::kv::{CreateErrorKind, Store};
-use async_nats::jetstream::Context;
-use bytes::Bytes;
-use chrono::Utc;
-use tokio::task::JoinHandle;
-use tokio_stream::wrappers::ReceiverStream;
-use tokio_stream::StreamExt;
-use tracing::{info, Instrument};
+//! Stores the callback and status information in JetStream KV stores.
+//! A central watcher task per instance monitors callbacks for that instance.
+//! Status includes the processing replica ID and is stored as a serialized enum.
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use crate::app::store::cbstore::ProcessingStatus;
 use crate::app::store::datastore::{Error as StoreError, Result as StoreResult};
 use crate::callback::Callback;
+use async_nats::jetstream::kv::{ Store};
+use async_nats::jetstream::Context;
+use bytes::Bytes;
+use chrono::Utc;
+use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::StreamExt;
+use tracing::{debug, error, info, trace_span, warn, Instrument};
 
-/// JetStream implementation of the callback store. JetStream KV store is used to store the
-/// callback and status information. We use the Watch feature of JetStream to monitor the status
-/// of the processing.
+const CALLBACK_KEY_PREFIX: &str = "cb";
+const STATUS_KEY_PREFIX: &str = "status";
+const RESPONSE_KEY_PREFIX: &str = "rs";
+const START_PROCESSING_MARKER: &str = "start.processing";
+const DONE_PROCESSING_MARKER: &str = "done.processing";
+
+/// JetStream implementation of the callback store using a central watcher per instance.
 #[derive(Clone)]
 pub(crate) struct JetStreamCallbackStore {
-    kv_store: Store,
+    pod_replica_id: String,
+    callback_kv: Store,
+    response_kv: Store,
+    callback_senders: Arc<Mutex<HashMap<String, mpsc::Sender<Arc<Callback>>>>>,
+    _watcher_handle: Arc<JoinHandle<()>>,
 }
 
 impl JetStreamCallbackStore {
-    pub(crate) async fn new(js_context: Context, bucket_name: &str) -> StoreResult<Self> {
-        let kv_store = js_context.get_key_value(bucket_name).await.map_err(|e| {
-            StoreError::Connection(format!("Failed to get kv store '{bucket_name}': {e:?}"))
+    pub(crate) async fn new(
+        js_context: Context,
+        pod_replica_id: String,
+        callback_bucket: &str,
+        response_bucket: &str,
+    ) -> StoreResult<Self> {
+        info!(
+            pod_replica_id,
+            callback_bucket, response_bucket, "Initializing JetStreamCallbackStore"
+        );
+
+        let callback_kv = js_context
+            .get_key_value(callback_bucket)
+            .await
+            .map_err(|e| {
+                StoreError::Connection(format!(
+                    "Failed to get callback kv store '{callback_bucket}': {e:?}"
+                ))
+            })?;
+
+        let response_kv = js_context
+            .get_key_value(response_bucket)
+            .await
+            .map_err(|e| {
+                StoreError::Connection(format!(
+                    "Failed to get status kv store '{response_bucket}': {e:?}"
+                ))
+            })?;
+
+        let callback_senders = Arc::new(Mutex::new(HashMap::new()));
+
+        // Spawn and store handle for the central watcher task
+        let central_watcher_handle = Self::spawn_central_watcher(
+            pod_replica_id.clone(),
+            callback_kv.clone(),
+            Arc::clone(&callback_senders),
+        );
+
+        Ok(Self {
+            pod_replica_id,
+            callback_kv,
+            response_kv,
+            callback_senders,
+            _watcher_handle: Arc::new(central_watcher_handle), // Store central handle
+        })
+    }
+
+    fn spawn_central_watcher(
+        pod_replica_id: String,
+        kv_store: Store,
+        senders: Arc<Mutex<HashMap<String, mpsc::Sender<Arc<Callback>>>>>,
+    ) -> JoinHandle<()> {
+        let span = tracing::info_span!("central_callback_watcher", replica_id = %pod_replica_id);
+        let mut latest_revision = 1;
+
+        tokio::spawn(async move {
+            // Watch key specific to this replica
+            let watch_key_pattern = format!("{}.{}.*.*.*", CALLBACK_KEY_PREFIX, pod_replica_id);
+            info!(watch_key_pattern, "Starting central callback watcher");
+
+            let mut watcher = loop {
+                // Use watch_any for robustness against missed updates if watcher restarts
+                match kv_store.watch(&watch_key_pattern).await {
+                    Ok(w) => {
+                        info!(watch_key_pattern, "Central watcher established");
+                        break w;
+                    },
+                    Err(e) => {
+                        error!(error = %e, "Failed to establish initial watch for {}. Retrying...", watch_key_pattern);
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    }
+                };
+            };
+
+            // Main watch loop
+            loop {
+                match watcher.next().await {
+                    Some(Ok(entry)) => {
+                        latest_revision = entry.revision;
+                        debug!(key = %entry.key, operation = ?entry.operation, revision = entry.revision, "Central watcher received entry");
+
+                        // Skip deletions/purges, only process Put operations for new callbacks
+                        if entry.operation != async_nats::jetstream::kv::Operation::Put {
+                            continue;
+                        }
+
+                        // Parse key: cb.{pod_replica_id}.{id}.{vertex_name}.{timestamp}
+                        let parts: Vec<&str> = entry.key.splitn(5, '.').collect();
+                        let pod_replica = parts[1];
+                        let request_id = parts[2];
+                        if parts.len() < 5 || parts[0] != CALLBACK_KEY_PREFIX || pod_replica != pod_replica_id {
+                            error!(key = %entry.key, "Received unexpected key format in central watcher");
+                            continue;
+                        }
+
+                        match entry.value.try_into() {
+                            Ok(callback_obj) => {
+                                let callback: Arc<Callback> = Arc::new(callback_obj);
+                                let mut sender = None;
+                                {
+                                    let senders_guard = senders.lock().expect("Failed to acquire lock");
+                                    if let Some(cb_sender) = senders_guard.get(request_id) {
+                                        sender = Some(cb_sender.clone());
+                                    }
+                                }
+                                if let Some(sender) = sender {
+                                    if sender.send(callback).await.is_err() {
+                                        warn!(request_id = %request_id, "Receiver dropped during send. Stopping watch.");
+                                        break;
+                                    }
+                                } else {
+                                    warn!(request_id = %request_id, "No active sender found for received callback");
+                                }
+                            }
+                            Err(e) => {
+                                error!(key = %entry.key, error = ?e, "Failed to deserialize callback in central watcher");
+                            }
+                        }
+                    }
+                    Some(Err(e)) => {
+                        error!(error = %e, "Error from central watcher stream. Re-establishing watch...");
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                        watcher = loop {
+                            match kv_store.watch_from_revision(&watch_key_pattern, latest_revision+1).await {
+                                Ok(w) => {
+                                    info!("Central watcher re-established after error.");
+                                    break w;
+                                },
+                                Err(re_e) => {
+                                    error!(error = %re_e, "Failed to re-establish watch. Trying again after delay.");
+                                    tokio::time::sleep(Duration::from_millis(100)).await;
+                                }
+                            }
+                        };
+                    }
+                    None => {
+                        error!("Central watcher stream ended unexpectedly. Attempting to restart.");
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                        watcher = loop {
+                            match kv_store.watch_from_revision(&watch_key_pattern, latest_revision+1).await {
+                                Ok(w) => {
+                                    info!("Central watcher restarted after stream ended.");
+                                    break w;
+                                },
+                                Err(e) => {
+                                    error!(?e, "Failed to restart watch. Trying again after delay.");
+                                    tokio::time::sleep(Duration::from_millis(100)).await;
+                                }
+                            }
+                        };
+                    }
+                }
+            }
+        }.instrument(span))
+    }
+
+    async fn update_status(&self, id: &str, status: ProcessingStatus) -> StoreResult<()> {
+        let key = format!("{}.{}", STATUS_KEY_PREFIX, id);
+        debug!(id, replica_id = %status.replica_id(), status = ?status, "Updating status");
+        let status_bytes = serde_json::to_vec(&status).map_err(|e| {
+            StoreError::StoreWrite(format!("Failed to serialize status for {id}: {e:?}"))
         })?;
-        Ok(Self { kv_store })
+
+        self.callback_kv
+            .put(key, Bytes::from(status_bytes))
+            .await
+            .map_err(|e| {
+                StoreError::StoreWrite(format!("Failed to update status for {id}: {e:?}"))
+            })?;
+        Ok(())
+    }
+
+    fn deserialize_status(entry_value: Bytes) -> StoreResult<ProcessingStatus> {
+        // Takes Bytes directly now
+        serde_json::from_slice(&entry_value).map_err(|e| {
+            StoreError::StoreRead(format!(
+                "Failed to deserialize ProcessingStatus JSON: {:?}",
+                e
+            ))
+        })
+    }
+
+    async fn watch_historical_callbacks(
+        callback_kv: Store,
+        previous_replica_id: String,
+        id: String,
+        tx: mpsc::Sender<Arc<Callback>>,
+    ) {
+        let key_pattern = format!("{}.{}.{}.*.*", CALLBACK_KEY_PREFIX, previous_replica_id, id);
+        info!(request_id = %id, %previous_replica_id, key_pattern, "Historical scan task started");
+
+        let mut entries_stream = match callback_kv.watch(&key_pattern).await {
+            Ok(stream) => stream,
+            Err(e) => {
+                error!(request_id = %id, error = %e, "Failed to initiate historical callback scan");
+                return;
+            }
+        };
+
+        let mut count = 0;
+        while let Some(entry_result) = entries_stream.next().await {
+            match entry_result {
+                Ok(entry) => {
+                    if entry.operation == async_nats::jetstream::kv::Operation::Delete {
+                        return;
+                    }
+                    match entry.value.try_into() {
+                        Ok(callback_obj) => {
+                            let callback = Arc::new(callback_obj);
+                            if tx.send(callback).await.is_err() {
+                                warn!(request_id = %id, "Receiver dropped during historical send. Stopping scan stream.");
+                                break;
+                            }
+                            count += 1;
+                        }
+                        Err(e) => {
+                            error!(request_id = %id, key = %entry.key, error = %e, "Failed to deserialize historical callback during scan");
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!(request_id = %id, error = %e, "Error iterating historical callback scan stream. Stopping scan.");
+                    break;
+                }
+            }
+        }
+        info!(?id, count, "Finished streaming historical callbacks.");
     }
 }
 
 impl super::CallbackStore for JetStreamCallbackStore {
-    /// registers a request id in the store. If the `id` already exists in the store,
-    /// `StoreError::DuplicateRequest` error is returned.
-    async fn register(&mut self, id: &str) -> StoreResult<()> {
-        // status.{id} is the key for the status of the request, we set it to InProgress
-        let status_key = format!("status.{id}");
-        info!(id, "Registering key in Jetstream KV store");
-
-        self.kv_store
-            .create(&status_key, ProcessingStatus::InProgress.into())
-            .await
-            .map_err(|e| {
-                if e.kind() == CreateErrorKind::AlreadyExists {
-                    StoreError::DuplicateRequest(id.to_string())
-                } else {
-                    StoreError::StoreWrite(format!(
-                        "Failed to register request id {status_key} in kv store: {e:?}"
-                    ))
-                }
-            })?;
-
-        let current_timestamp = Utc::now().timestamp().to_string();
-        let response_key = format!("rs.{id}.start.processing");
-        self.kv_store
-            // we start with some key so that JetStream won't return early thinking there is
-            // nothing to watch.
-            .create(&response_key, Bytes::from(current_timestamp.clone()))
-            .await
-            .map_err(|e| {
-                if e.kind() == CreateErrorKind::AlreadyExists {
-                    StoreError::DuplicateRequest(id.to_string())
-                } else {
-                    StoreError::StoreWrite(format!(
-                        "Failed to register request id {response_key} in kv store: {e:?}"
-                    ))
-                }
-            })?;
-
-        let callbacks_key = format!("cb.{id}.start.processing");
-        self.kv_store
-            // same as above
-            .create(&callbacks_key, Bytes::from(current_timestamp))
-            .await
-            .map_err(|e| {
-                if e.kind() == CreateErrorKind::AlreadyExists {
-                    StoreError::DuplicateRequest(id.to_string())
-                } else {
-                    StoreError::StoreWrite(format!(
-                        "Failed to register request id {callbacks_key} in kv store: {e:?}"
-                    ))
-                }
-            })?;
-
-        Ok(())
-    }
-    /// de-registers a request id from the store. Updates the status of the request to completed and
-    /// stores the subgraph of the request.
     async fn deregister(&mut self, id: &str, sub_graph: &str) -> StoreResult<()> {
-        let key = format!("status.{id}");
-        self.kv_store
-            .put(
-                key,
-                ProcessingStatus::Completed(sub_graph.to_string()).into(),
-            )
-            .await
-            .map_err(|e| {
-                StoreError::StoreWrite(format!("Failed to mark request as done in kv store: {e:?}"))
-            })?;
-
-        // we need to update the callbacks and response keys to signal the end of processing so that
-        // the watchers can stop watching for new callbacks and responses.
-        let current_timestamp = Utc::now().timestamp().to_string();
-        let callbacks_key = format!("cb.{id}.done.processing");
-        self.kv_store
-            .put(callbacks_key, Bytes::from(current_timestamp.clone()))
-            .await
-            .map_err(|e| {
-                StoreError::StoreWrite(format!("Failed to mark request as done in kv store: {e:?}"))
-            })?;
-
-        let response_key = format!("rs.{id}.done.processing");
-        self.kv_store
-            .put(response_key, Bytes::from(current_timestamp.clone()))
-            .await
-            .map_err(|e| {
-                StoreError::StoreWrite(format!("Failed to mark request as done in kv store: {e:?}"))
-            })?;
-
-        Ok(())
-    }
-
-    /// updates the status of a request in the store to failed and stores the error message.
-    async fn mark_as_failed(&mut self, id: &str, error: &str) -> StoreResult<()> {
-        let key = format!("status.{id}");
-        self.kv_store
-            .put(key, ProcessingStatus::Failed(error.to_string()).into())
-            .await
-            .map_err(|e| {
-                StoreError::StoreWrite(format!(
-                    "Failed to mark request as failed in kv store: {e:?}"
-                ))
-            })?;
-        Ok(())
-    }
-
-    /// watches for callbacks in the store for a given request id.
-    async fn watch_callbacks(
-        &mut self,
-        id: &str,
-    ) -> StoreResult<(ReceiverStream<Arc<Callback>>, JoinHandle<()>)> {
-        // the callbacks are stored in the format cb.{id}.{vertex_name}.{timestamp}
-        // so we can watch for all keys that start with cb.{id}.*
-        let callbacks_key = format!("cb.{id}.*.*");
-        let mut watcher = self
-            .kv_store
-            .watch_from_revision(&callbacks_key, 1)
-            .await
-            .map_err(|e| {
-                StoreError::StoreRead(format!("Failed to watch request id in kv store: {e:?}"))
-            })?;
-
-        let kv_store = self.kv_store.clone();
-
-        let (tx, rx) = tokio::sync::mpsc::channel(10);
-
-        let callbacks_init_key = format!("cb.{id}.start.processing");
-        let callbacks_done_key = format!("cb.{id}.done.processing");
-
-        let span = tracing::Span::current();
-
-        let callback_watcher = async move {
-            let mut received_events = false;
-            let mut attempts = 0;
-            while !received_events && attempts < 5 {
-                attempts += 1;
-                while let Some(watch_event) = watcher.next().await {
-                    received_events = true;
-                    let entry = match watch_event {
-                        Ok(event) => event,
-                        Err(e) => {
-                            tracing::error!(?e, "Received error from Jetstream KV watcher");
-                            // Recreate the watcher and start processing the events again
-                            received_events = false;
-                            break;
-                        }
-                    };
-
-                    // init key is used to signal the start of processing, the value will be the timestamp.
-                    if entry.key == callbacks_init_key {
-                        tracing::debug!(
-                            callbacks_init_key,
-                            "Received event for the init key. Ignoring it"
-                        );
-                        continue;
-                    }
-
-                    // done key is used to signal the end of processing, we can break the loop
-                    if entry.key == callbacks_done_key {
-                        tracing::debug!(
-                            callbacks_done_key,
-                            "Received event for the callback_done_key. Stopping the watcher task"
-                        );
-                        break;
-                    }
-
-                    let cbr: Callback = entry
-                        .value
-                        .try_into()
-                        .inspect_err(|err| tracing::error!(?err, "Failed to deserialize callback"))
-                        .expect("Failed to deserialize callback");
-
-                    tx.send(Arc::new(cbr))
-                        .await
-                        .inspect_err(|err| {
-                            tracing::error!(
-                                ?err,
-                                "Failed to send callback details from watcher task to main task"
-                            )
-                        })
-                        .expect("Failed to send callback");
-                }
-                if !received_events && attempts < 5 {
-                    tracing::warn!(
-                        callbacks_key,
-                        "Watcher for Jetstream key didn't return any events. Will recreate the watcher in 20ms"
-                    );
-                    tokio::time::sleep(Duration::from_millis(20)).await;
-                    watcher = kv_store
-                        .watch_from_revision(&callbacks_key, 1)
-                        .await
-                        .map_err(|e| {
-                            StoreError::StoreRead(format!(
-                                "Failed to watch request id in kv store: {e:?}"
-                            ))
-                        })
-                        .inspect_err(|err| {
-                            tracing::error!(?err, callbacks_key, "Failed to recreate the watcher")
-                        })
-                        .expect("Failed to recreate the watcher");
-                }
-            }
-            if !received_events {
-                tracing::error!(
-                    callbacks_key,
-                    "Watcher for Jetstream key didn't return any events even after retries"
-                );
-            }
+        let completed_status = ProcessingStatus::Completed {
+            subgraph: sub_graph.to_string(),
+            replica_id: self.pod_replica_id.clone(),
         };
 
-        let handle = tokio::spawn(callback_watcher.instrument(span));
-
-        Ok((ReceiverStream::new(rx), handle))
-    }
-
-    /// returns the status of a request in the store.
-    async fn status(&mut self, id: &str) -> StoreResult<ProcessingStatus> {
-        let key = format!("status.{id}");
-        let status = self.kv_store.get(&key).await.map_err(|e| {
-            StoreError::StoreRead(format!("Failed to get status for request id: {e:?}"))
+        self.update_status(id, completed_status).await?;
+        self.callback_kv.delete(id).await.map_err(|e| {
+            StoreError::StoreWrite(format!("Failed to delete callback for {id}: {e:?}"))
         })?;
-        let Some(status) = status else {
-            return Err(StoreError::InvalidRequestId(id.to_string()));
+
+        {
+            // Remove sender from the map *after* successfully updating status
+            let mut senders_guard = self.callback_senders.lock().expect("Failed to acquire lock");
+            if senders_guard.remove(id).is_some() {
+                debug!(id, "Removed active sender during deregistration.");
+            } else {
+                debug!(id, "No active sender found during deregistration (might not have been watched or already removed).");
+            }
+        }
+
+        debug!(%id, replica_id = %self.pod_replica_id, "De-registering request for data collection.");
+        let done_key = format!(
+            "{}.{}.{}.{}",
+            RESPONSE_KEY_PREFIX, self.pod_replica_id, id, DONE_PROCESSING_MARKER
+        );
+        match self.response_kv.put(done_key.clone(), Bytes::new()).await {
+            Ok(_) => {
+                debug!(%id, %done_key, "Successfully wrote done processing marker.");
+            }
+            Err(e) => {
+                error!(%id, %done_key, error = %e, "Failed to write done processing marker.");
+                return Err(StoreError::StoreWrite(format!(
+                    "Failed to write done marker {done_key}: {e:?}"
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    async fn mark_as_failed(&mut self, id: &str, error: &str) -> StoreResult<()> {
+        info!(id, replica_id = %self.pod_replica_id, error, "Marking request as failed");
+        let failed_status = ProcessingStatus::Failed {
+            error: error.to_string(),
+            replica_id: self.pod_replica_id.clone(),
         };
-        Ok(status.into())
+        self.update_status(id, failed_status).await?;
+
+        // Remove sender from the map *after* successfully updating status
+        let mut senders_guard = self.callback_senders.lock().expect("Failed to lock senders");
+        if senders_guard.remove(id).is_some() {
+            debug!(id, "Removed active sender during failure marking.");
+        } else {
+            debug!(id, "No active sender found during failure marking (might not have been watched or already removed).");
+        }
+        Ok(())
+    }
+
+    // watch_callbacks now spawns task that streams historical scan results
+    async fn register_and_watch(&mut self, id: &str) -> StoreResult<ReceiverStream<Arc<Callback>>> {
+        let start_time = Utc::now();
+        let status_key = format!("{}.{}", STATUS_KEY_PREFIX, id);
+        info!(id, replica_id = %self.pod_replica_id, "Registering request");
+
+        let initial_status = ProcessingStatus::InProgress {
+            replica_id: self.pod_replica_id.clone(),
+        };
+        let status_bytes = serde_json::to_vec(&initial_status).map_err(|e| {
+            StoreError::StoreWrite(format!(
+                "Failed to serialize initial status for {id}: {e:?}"
+            ))
+        })?;
+
+        let status_start_time = Instant::now();
+        let current_status = match self
+            .callback_kv
+            .put(&status_key, Bytes::from(status_bytes))
+            .await
+        {
+            Ok(_) => {
+                initial_status
+            }
+            Err(e) => {
+                error!(id, status_key, error = %e, "Failed to create status entry during registration.");
+                return Err(StoreError::StoreWrite(format!(
+                    "Failed to register request id {status_key} in status kv store: {e:?}"
+                )));
+            }
+        };
+        info!(?id, "Time taken to write status={:?}", status_start_time.elapsed().as_millis());
+        let span =
+            trace_span!("watch_callbacks", request_id = id, replica_id = %self.pod_replica_id);
+        let _enter = span.enter();
+
+        let (tx, rx) = mpsc::channel(10);
+        match &current_status {
+            ProcessingStatus::InProgress {
+                replica_id: processing_replica_id,
+            } => {
+                if processing_replica_id != &self.pod_replica_id {
+                    warn!(current_replica = %self.pod_replica_id, previous_replica = %processing_replica_id, "Fail over detected. Taking over request processing.");
+                    let callback_kv_clone = self.callback_kv.clone();
+                    let id_clone = id.to_string();
+                    let tx_clone = tx.clone();
+                    let previous_replica_id = processing_replica_id.clone();
+
+                    // Spawn a separate task for historical callbacks
+                    tokio::spawn(async move {
+                        JetStreamCallbackStore::watch_historical_callbacks(
+                            callback_kv_clone,
+                            previous_replica_id,
+                            id_clone,
+                            tx_clone,
+                        )
+                        .await;
+                    });
+                } else {
+                    debug!("Already processing on this replica.");
+                }
+            }
+            ProcessingStatus::Completed { .. } | ProcessingStatus::Failed { .. } => {
+                error!(status = ?current_status, "Attempted to watch callbacks for a completed/failed request.");
+                return Err(StoreError::InvalidRequestId(format!(
+                    "Request {id} already finished: {:?}",
+                    current_status
+                )));
+            }
+        }
+
+        {
+            let callback_write_time = Instant::now();
+            let mut senders_guard = self.callback_senders.lock().expect("Failed to lock senders");
+            if senders_guard.contains_key(id) {
+                error!("Duplicate watch attempt detected.");
+                drop(senders_guard);
+                return Err(StoreError::StoreWrite(format!(
+                    "Duplicate watch attempt for ID {id}"
+                )));
+            }
+            senders_guard.insert(id.to_string(), tx);
+            info!("Time taken to add sender={:?}", callback_write_time.elapsed().as_millis());
+        }
+
+        let current_timestamp = Utc::now().timestamp().to_string();
+        let response_key = format!(
+            "{}.{}.{}.{}",
+            RESPONSE_KEY_PREFIX, self.pod_replica_id, id, START_PROCESSING_MARKER
+        );
+
+        self.response_kv
+            .create(&response_key, Bytes::from(current_timestamp))
+            .await
+            .map_err(|e| {
+                StoreError::StoreWrite(format!("Failed to create response entry for {id}: {e:?}"))
+            })?;
+
+        info!("Time taken to register={:?}", (Utc::now() - start_time).num_milliseconds());
+        Ok(ReceiverStream::new(rx))
+    }
+
+    async fn status(&mut self, id: &str) -> StoreResult<ProcessingStatus> {
+        let key = format!("{}.{}", STATUS_KEY_PREFIX, id);
+        let entry = self.callback_kv.get(&key).await.map_err(|e| {
+            StoreError::StoreRead(format!("Failed to get status for request id {id}: {e:?}"))
+        })?;
+        match entry {
+            Some(e) => Self::deserialize_status(e),
+            None => Err(StoreError::InvalidRequestId(id.to_string())),
+        }
     }
 
     async fn ready(&mut self) -> bool {
-        // we do not need to implement a health check for the JetStream connection because it is the
-        // ISB and it has to be up.
         true
     }
 }
@@ -287,44 +446,10 @@ impl super::CallbackStore for JetStreamCallbackStore {
 mod tests {
     use async_nats::jetstream;
     use async_nats::jetstream::kv::Config;
-    use bytes::Bytes;
-    use chrono::Utc;
+    use tokio_stream::StreamExt;
 
-    use super::*;
-    use crate::app::store::cbstore::CallbackStore;
-
-    #[cfg(feature = "nats-tests")]
     #[tokio::test]
-    async fn test_register() {
-        let js_url = "localhost:4222";
-        let client = async_nats::connect(js_url).await.unwrap();
-        let context = jetstream::new(client);
-        let serving_store = "test_serving_store";
-
-        context
-            .create_key_value(Config {
-                bucket: serving_store.to_string(),
-                history: 1,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-
-        let mut store = JetStreamCallbackStore::new(context.clone(), serving_store)
-            .await
-            .unwrap();
-
-        let id = "AFA7E0A1-3F0A-4C1B-AB94-BDA57694648D";
-        let result = store.register(id).await;
-        assert!(result.is_ok());
-
-        // delete store
-        context.delete_key_value(serving_store).await.unwrap();
-    }
-
-    #[cfg(feature = "nats-tests")]
-    #[tokio::test]
-    async fn test_watch_callbacks() {
+    async fn test_watch_revision() {
         let js_url = "localhost:4222";
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
@@ -333,7 +458,7 @@ mod tests {
         // Delete bucket so that re-running the test won't fail
         let _ = context.delete_key_value(serving_store).await;
 
-        context
+        let store = context
             .create_key_value(Config {
                 bucket: serving_store.to_string(),
                 description: "test_description".to_string(),
@@ -343,123 +468,76 @@ mod tests {
             .await
             .unwrap();
 
-        let mut store = JetStreamCallbackStore::new(context.clone(), serving_store)
+        // insert 10 dummy values to the store with keys "x.0" to "x.9"
+        for i in 0..10 {
+            let key = format!("x.{i}");
+            store.put(key, format!("value {i}").into()).await.unwrap();
+            let key = format!("y.{i}");
+            store.put(key, format!("value {i}").into()).await.unwrap();
+        }
+
+        for i in 0..10 {
+            let key = format!("y.{i}");
+            store.put(key, format!("value {i}").into()).await.unwrap();
+        }
+
+        let mut latest_revision = 1;
+        // watch for the 5 values, and create a new watch with revision and watch another 5
+        let mut watcher = store
+            .watch_from_revision("x.*", latest_revision)
             .await
             .unwrap();
+        let mut count = 0;
+        while let Some(entry) = watcher.next().await {
+            match entry {
+                Ok(entry) => {
+                    println!(
+                        "Key: {}, Value: {}, Revision: {}",
+                        entry.key,
+                        String::from_utf8_lossy(&entry.value),
+                        entry.revision
+                    );
+                    count += 1;
+                    latest_revision = entry.revision;
+                }
+                Err(e) => {
+                    println!("Error: {}", e);
+                }
+            }
+            if count == 5 {
+                break;
+            }
+        }
 
-        let id = "test_watch_id_two";
-        store.register(id).await.unwrap();
+        for i in 0..1000 {
+            let key = format!("z.{i}");
+            store.put(key, format!("value {i}").into()).await.unwrap();
+        }
 
-        let (mut rx, handle) = store.watch_callbacks(id).await.unwrap();
-
-        // Simulate a callback being added to the store
-        let callback = Callback {
-            id: id.to_string(),
-            vertex: "test_vertex".to_string(),
-            cb_time: 12345,
-            from_vertex: "test_from_vertex".to_string(),
-            responses: vec![],
-        };
-        let key = format!("cb.{id}.0.{}", Utc::now().timestamp());
-        store
-            .kv_store
-            .put(key, Bytes::from(serde_json::to_vec(&callback).unwrap()))
+        // Create a new watch with revision
+        let mut watcher = store
+            .watch_from_revision("x.*", latest_revision + 1)
             .await
             .unwrap();
-
-        // Verify that the callback is received
-        let received_callback = rx.next().await.unwrap();
-        assert_eq!(received_callback.id, callback.id);
-        assert_eq!(received_callback.vertex, callback.vertex);
-        assert_eq!(received_callback.cb_time, callback.cb_time);
-        assert_eq!(received_callback.from_vertex, callback.from_vertex);
-        assert_eq!(received_callback.responses.len(), callback.responses.len());
-
-        handle.abort();
-
-        // delete store
-        context.delete_key_value(serving_store).await.unwrap();
-    }
-
-    #[cfg(feature = "nats-tests")]
-    #[tokio::test]
-    async fn test_deregister() {
-        let js_url = "localhost:4222";
-        let client = async_nats::connect(js_url).await.unwrap();
-        let context = jetstream::new(client);
-        let serving_store = "test_deregister_store";
-
-        // Delete bucket so that re-running the test won't fail
-        let _ = context.delete_key_value(serving_store).await;
-
-        context
-            .create_key_value(Config {
-                bucket: serving_store.to_string(),
-                description: "test_description".to_string(),
-                history: 15,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-
-        let mut store = JetStreamCallbackStore::new(context.clone(), serving_store)
-            .await
-            .unwrap();
-
-        let id = "test_deregister_id";
-        store.register(id).await.unwrap();
-
-        let sub_graph = "test_sub_graph";
-        let result = store.deregister(id, sub_graph).await;
-        assert!(result.is_ok());
-
-        // Verify that the status is marked as completed
-        let status = store.status(id).await.unwrap();
-        assert!(matches!(status, ProcessingStatus::Completed(_)));
-
-        // delete store
-        context.delete_key_value(serving_store).await.unwrap();
-    }
-
-    #[cfg(feature = "nats-tests")]
-    #[tokio::test]
-    async fn test_mark_as_failed() {
-        let js_url = "localhost:4222";
-        let client = async_nats::connect(js_url).await.unwrap();
-        let context = jetstream::new(client);
-        let serving_store = "test_mark_as_failed_store";
-
-        // Delete bucket so that re-running the test won't fail
-        let _ = context.delete_key_value(serving_store).await;
-
-        context
-            .create_key_value(Config {
-                bucket: serving_store.to_string(),
-                description: "test_description".to_string(),
-                history: 15,
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-
-        let mut store = JetStreamCallbackStore::new(context.clone(), serving_store)
-            .await
-            .unwrap();
-
-        assert!(store.ready().await);
-
-        let id = "test_mark_as_failed_id";
-        store.register(id).await.unwrap();
-
-        let error_message = "test_error_message";
-        let result = store.mark_as_failed(id, error_message).await;
-        assert!(result.is_ok());
-
-        // Verify that the status is marked as failed
-        let status = store.status(id).await.unwrap();
-        assert!(matches!(status, ProcessingStatus::Failed(_)));
-
-        // delete store
-        context.delete_key_value(serving_store).await.unwrap();
+        count = 0;
+        while let Some(entry) = watcher.next().await {
+            match entry {
+                Ok(entry) => {
+                    println!(
+                        "Key: {}, Value: {}, Revision: {}",
+                        entry.key,
+                        String::from_utf8_lossy(&entry.value),
+                        entry.revision
+                    );
+                    count += 1;
+                }
+                Err(e) => {
+                    println!("Error: {}", e);
+                }
+            }
+            if count == 5 {
+                break;
+            }
+        }
     }
 }

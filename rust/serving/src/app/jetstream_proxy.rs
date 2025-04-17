@@ -22,7 +22,7 @@ use axum::{
 use serde_json::json;
 use tokio::time::Instant;
 use tokio_stream::{Stream, StreamExt};
-use tracing::{error, Instrument};
+use tracing::{error, info, Instrument};
 
 const NUMAFLOW_RESP_ARRAY_LEN: &str = "Numaflow-Array-Len";
 const NUMAFLOW_RESP_ARRAY_IDX_LEN: &str = "Numaflow-Array-Index-Len";
@@ -222,24 +222,25 @@ async fn sync_publish<
         .publish_with_headers(proxy_state.stream.clone(), msg_headers, body)
         .await
         .inspect_err(|err| {
-            tracing::error!(
+            error!(
                 ?err,
                 id,
                 stream = proxy_state.stream,
-                "Saving message to Jetstream"
+                "Saving message to JetStream"
             )
         })
-        .map_err(|_| ApiError::BadGateway("Failed to write message to Jetstream".to_string()))?
+        .map_err(|_| ApiError::BadGateway("Failed to write message to JetStream".to_string()))?
         .await
         .inspect_err(|err| {
-            tracing::error!(
+            error!(
                 ?err,
                 id,
                 stream = proxy_state.stream,
-                "Waiting for message save confirmation from Jetstream"
+                "Waiting for message save confirmation from JetStream"
             )
         })
-        .map_err(|_| ApiError::BadGateway("Failed to write message to Jetstream".to_string()))?;
+        .map_err(|_| ApiError::BadGateway("Failed to write message to JetStream".to_string()))?;
+    info!("Time taken to save message to Jetstream={:?}", save_start.elapsed().as_millis());
     serving_metrics()
         .payload_save_duration
         .observe(save_start.elapsed().as_micros() as f64);
@@ -249,6 +250,7 @@ async fn sync_publish<
             serving_metrics()
                 .processing_time
                 .observe(processing_start.elapsed().as_micros() as f64);
+            info!("Time taken to process message={:?}", processing_start.elapsed().as_millis());
             processing_result
         }
         Err(e) => {
@@ -260,7 +262,7 @@ async fn sync_publish<
     };
 
     if let Err(err) = processing_result {
-        tracing::error!(
+        error!(
             ?err,
             "The request processing task failed. Returning error to the client"
         );
@@ -275,6 +277,7 @@ async fn sync_publish<
             serving_metrics()
                 .datum_retrive_duration
                 .observe(datum_retrieve_start.elapsed().as_micros() as f64);
+            info!("Time taken to retrieve message from store={:?}", datum_retrieve_start.elapsed().as_millis());
             result
         }
         Err(e) => {
@@ -313,7 +316,6 @@ async fn sync_publish<
 
     // concatenate as single result, should use header values to decompose based on the len
     let body = result.concat();
-
     Ok((header_map, body).into_response())
 }
 
@@ -356,7 +358,7 @@ async fn async_publish<
             ));
         }
     };
-
+    info!("Time taken to register message={:?}", processing_start.elapsed().as_millis());
     {
         let span = tracing::Span::current();
         let mut orchestrator = proxy_state.orchestrator.clone();
@@ -393,7 +395,7 @@ async fn async_publish<
         .publish_with_headers(proxy_state.stream.clone(), msg_headers, body)
         .await
         .inspect_err(|err| {
-            tracing::error!(
+            error!(
                 ?err,
                 id,
                 stream = proxy_state.stream,
@@ -403,7 +405,7 @@ async fn async_publish<
         .map_err(|_| ApiError::BadGateway("Failed to write message to Jetstream".to_string()))?
         .await
         .inspect_err(|err| {
-            tracing::error!(
+            error!(
                 ?err,
                 id,
                 stream = proxy_state.stream,
@@ -414,6 +416,8 @@ async fn async_publish<
     serving_metrics()
         .payload_save_duration
         .observe(save_start.elapsed().as_micros() as f64);
+    info!("Time taken to save message to Jetstream={:?}", save_start.elapsed().as_millis());
+
 
     Ok(Json(ServeResponse::new(
         "Successfully published message".to_string(),
@@ -483,11 +487,12 @@ mod tests {
             ..Default::default()
         };
 
-        let callback_store = JetStreamCallbackStore::new(context.clone(), store_name)
-            .await
-            .expect("Failed to create callback store");
+        let callback_store =
+            JetStreamCallbackStore::new(context.clone(), "0".to_string(), store_name, store_name)
+                .await
+                .expect("Failed to create callback store");
 
-        let datum_store = JetStreamDataStore::new(context.clone(), store_name)
+        let datum_store = JetStreamDataStore::new(context.clone(), store_name, "0".to_string())
             .await
             .expect("Failed to create datum store");
 
@@ -607,11 +612,12 @@ mod tests {
             ..Default::default()
         };
 
-        let callback_store = JetStreamCallbackStore::new(context.clone(), store_name)
-            .await
-            .expect("Failed to create callback store");
+        let callback_store =
+            JetStreamCallbackStore::new(context.clone(), "0".to_string(), store_name, store_name)
+                .await
+                .expect("Failed to create callback store");
 
-        let datum_store = JetStreamDataStore::new(context.clone(), store_name)
+        let datum_store = JetStreamDataStore::new(context.clone(), store_name, "0".to_string())
             .await
             .expect("Failed to create datum store");
 
@@ -696,11 +702,12 @@ mod tests {
             ..Default::default()
         };
 
-        let callback_store = JetStreamCallbackStore::new(context.clone(), store_name)
-            .await
-            .expect("Failed to create callback store");
+        let callback_store =
+            JetStreamCallbackStore::new(context.clone(), "0".to_string(), store_name, store_name)
+                .await
+                .expect("Failed to create callback store");
 
-        let datum_store = JetStreamDataStore::new(context.clone(), store_name)
+        let datum_store = JetStreamDataStore::new(context.clone(), store_name, "0".to_string())
             .await
             .expect("Failed to create datum store");
 
@@ -818,11 +825,12 @@ mod tests {
             ..Default::default()
         };
 
-        let callback_store = JetStreamCallbackStore::new(context.clone(), store_name)
-            .await
-            .expect("Failed to create callback store");
+        let callback_store =
+            JetStreamCallbackStore::new(context.clone(), "0".to_string(), store_name, store_name)
+                .await
+                .expect("Failed to create callback store");
 
-        let datum_store = JetStreamDataStore::new(context.clone(), store_name)
+        let datum_store = JetStreamDataStore::new(context.clone(), store_name, "0".to_string())
             .await
             .expect("Failed to create datum store");
 

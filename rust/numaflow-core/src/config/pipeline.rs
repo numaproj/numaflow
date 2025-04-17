@@ -9,7 +9,10 @@ use serde::Deserialize;
 use serde_json::from_slice;
 use tracing::info;
 
-use super::{DEFAULT_CALLBACK_CONCURRENCY, ENV_CALLBACK_CONCURRENCY, ENV_CALLBACK_ENABLED};
+use super::{
+    DEFAULT_CALLBACK_CONCURRENCY, ENV_CALLBACK_CONCURRENCY, ENV_CALLBACK_ENABLED,
+    ENV_NUMAFLOW_SERVING_RESPONSE_STORE,
+};
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::sink::SinkType;
@@ -22,7 +25,7 @@ use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::watermark::{BucketConfig, EdgeWatermarkConfig};
 use crate::config::pipeline::watermark::{IdleConfig, SourceWatermarkConfig};
-use crate::config::ENV_NUMAFLOW_SERVING_KV_STORE;
+use crate::config::ENV_NUMAFLOW_SERVING_CALLBACK_STORE;
 use crate::config::ENV_NUMAFLOW_SERVING_SOURCE_SETTINGS;
 use crate::error::Error;
 use crate::Result;
@@ -205,7 +208,7 @@ pub(crate) struct UserDefinedStoreConfig {
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub(crate) struct NatsStoreConfig {
-    pub(crate) name: String,
+    pub(crate) rs_store_name: String,
 }
 
 impl Default for UserDefinedStoreConfig {
@@ -260,7 +263,8 @@ impl PipelineConfig {
                     ENV_CALLBACK_ENABLED,
                     ENV_CALLBACK_CONCURRENCY,
                     ENV_NUMAFLOW_SERVING_SOURCE_SETTINGS,
-                    ENV_NUMAFLOW_SERVING_KV_STORE,
+                    ENV_NUMAFLOW_SERVING_CALLBACK_STORE,
+                    ENV_NUMAFLOW_SERVING_RESPONSE_STORE,
                 ]
                 .contains(&key.as_str())
             })
@@ -356,7 +360,7 @@ impl PipelineConfig {
                         )
                     })?;
                 let serving_spec: numaflow_models::models::ServingSpec =
-                    serde_json::from_slice(serving_settings_decoded.as_slice()).map_err(|e| {
+                    from_slice(serving_settings_decoded.as_slice()).map_err(|e| {
                         Error::Config(
                             format!(
                                 "Failed to base64 decode value of environment variable '{ENV_NUMAFLOW_SERVING_SOURCE_SETTINGS}'. value='{serving_settings}'. Err={e:?}"
@@ -365,8 +369,10 @@ impl PipelineConfig {
                     })?;
 
                 if serving_spec.store.is_none() {
-                    let kv_store = get_var(ENV_NUMAFLOW_SERVING_KV_STORE)?;
-                    Some(ServingStoreType::Nats(NatsStoreConfig { name: kv_store }))
+                    let rs_kv_store = get_var(ENV_NUMAFLOW_SERVING_RESPONSE_STORE)?;
+                    Some(ServingStoreType::Nats(NatsStoreConfig {
+                        rs_store_name: rs_kv_store,
+                    }))
                 } else {
                     Some(ServingStoreType::UserDefined(
                         UserDefinedStoreConfig::default(),
@@ -510,8 +516,8 @@ impl PipelineConfig {
                     ))
                 })?;
 
-            let kv_store = env::var("NUMAFLOW_SERVING_KV_STORE").map_err(|_| {
-                    Error::Config("Serving store is default, but environment variable NUMAFLOW_SERVING_KV_STORE is not set".into())
+            let kv_store = env::var(ENV_NUMAFLOW_SERVING_CALLBACK_STORE).map_err(|_| {
+                    Error::Config("Serving store is default, but environment variable NUMAFLOW_SERVING_CALLBACK_STORE is not set".into())
                 })?;
             callback_config = Some(ServingCallbackConfig {
                 callback_store: Box::leak(kv_store.into_boxed_str()),
@@ -714,7 +720,7 @@ mod tests {
         let env_vars = [
             ("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222"),
             ("NUMAFLOW_SERVING_SOURCE_SETTINGS", "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQifQ=="),
-            ("NUMAFLOW_SERVING_KV_STORE", "test-kv-store"),
+            ("NUMAFLOW_SERVING_CALLBACK_STORE", "test-kv-store"),
         ];
         let pipeline_config = PipelineConfig::load(pipeline_cfg_base64, env_vars).unwrap();
 
@@ -746,7 +752,7 @@ mod tests {
                 },
                 fb_sink_config: None,
                 serving_store_config: Some(ServingStoreType::Nats(NatsStoreConfig {
-                    name: "test-kv-store".into(),
+                    rs_store_name: "test-kv-store".into(),
                 })),
             }),
             metrics_config: MetricsConfig {

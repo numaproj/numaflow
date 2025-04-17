@@ -6,10 +6,9 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use tokio::sync::{mpsc, oneshot};
-use tokio::time::Instant;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
-use tracing::{error, info, Instrument};
+use tracing::{debug, error, Instrument};
 
 use crate::app::store::cbstore::{CallbackStore, ProcessingStatus};
 use crate::app::store::datastore::DataStore;
@@ -58,32 +57,25 @@ where
         let msg_id = id.to_string();
         let mut subgraph = None;
 
-        let start = Instant::now();
-        // register the request in the store
-        if let Err(e) = self.callback_store.register(id).await {
-            if let StoreError::DuplicateRequest(_) = e {
-                serving_metrics().cb_store_register_duplicate_count.inc();
-            }
-            serving_metrics().cb_store_register_fail_count.inc();
-            return Err(e);
-        }
-        serving_metrics()
-            .cb_store_register_duration
-            .observe(start.elapsed().as_micros() as f64);
-
         // start watching for callbacks
-        let (mut callbacks_stream, watch_handle) = self.callback_store.watch_callbacks(id).await?;
+        let mut callbacks_stream = match self.callback_store.register_and_watch(id).await {
+            Ok(stream) => stream,
+            Err(e) => {
+                if let StoreError::DuplicateRequest(_) = e {
+                    serving_metrics().cb_store_register_duplicate_count.inc();
+                }
+                serving_metrics().cb_store_register_fail_count.inc();
+                return Err(e);
+            }
+        };
 
         let mut cb_store = self.callback_store.clone();
-
         let span = tracing::Span::current();
-
         let callback_watcher = async move {
-            let _handle = watch_handle;
             let mut callbacks = Vec::new();
 
             while let Some(cb) = callbacks_stream.next().await {
-                info!(?cb, ?msg_id, "Received callback");
+                debug!(?cb, ?msg_id, "Received callback");
                 callbacks.push(cb);
                 subgraph = match sub_graph_generator
                     .generate_subgraph_from_callbacks(msg_id.clone(), callbacks.clone())
@@ -112,7 +104,7 @@ where
                     "Subgraph could not be generated for the given ID",
                 )))
                 .inspect_err(|err| {
-                    tracing::error!(
+                    error!(
                         ?err,
                         "Failed to send subgraph generation error to main task over channel"
                     )
@@ -123,7 +115,7 @@ where
                     .mark_as_failed(&msg_id, "Subgraph could not be generated")
                     .await
                     .inspect_err(|err| {
-                        tracing::error!(
+                        error!(
                             ?err,
                             "Failed to mark subgraph generation failure in callback store"
                         )
@@ -134,7 +126,6 @@ where
 
         // https://github.com/tokio-rs/tracing/blob/b4868674ba73f3963b125ec38b57efaadc714d90/examples/examples/tokio-spawny-thing.rs#L25
         tokio::spawn(callback_watcher.instrument(span));
-
         Ok(rx)
     }
 
@@ -143,12 +134,12 @@ where
         // check the status of the request, if its completed, then retrieve the data
         let status = self.callback_store.status(id).await?;
         match status {
-            ProcessingStatus::InProgress => Ok(None),
-            ProcessingStatus::Completed(_) => {
+            ProcessingStatus::InProgress { .. } => Ok(None),
+            ProcessingStatus::Completed { .. } => {
                 let data = self.datum_store.retrieve_data(id).await?;
                 Ok(Some(data))
             }
-            ProcessingStatus::Failed(error) => {
+            ProcessingStatus::Failed { error, .. } => {
                 error!(?error, "Request failed");
                 Err(Error::Other(format!("Request failed: {}", error)))
             }
@@ -167,15 +158,11 @@ where
         let msg_id = id.to_string();
         let mut subgraph = None;
 
-        // register the request in the store
-        self.callback_store.register(id).await?;
-
         // start watching for callbacks
-        let (mut callbacks_stream, watch_handle) = self.callback_store.watch_callbacks(id).await?;
+        let mut callbacks_stream = self.callback_store.register_and_watch(id).await?;
 
         let mut cb_store = self.callback_store.clone();
         tokio::spawn(async move {
-            let _handle = watch_handle;
             let mut callbacks = Vec::new();
 
             while let Some(cb) = callbacks_stream.next().await {
@@ -230,9 +217,9 @@ where
     ) -> Result<String, Error> {
         let status = self.callback_store.status(id).await?;
         match status {
-            ProcessingStatus::InProgress => Ok("Request In Progress".to_string()),
-            ProcessingStatus::Completed(sub_graph) => Ok(sub_graph),
-            ProcessingStatus::Failed(error) => {
+            ProcessingStatus::InProgress { .. } => Ok("Request In Progress".to_string()),
+            ProcessingStatus::Completed { subgraph, .. } => Ok(subgraph),
+            ProcessingStatus::Failed { error, .. } => {
                 error!(?error, "Request failed");
                 Err(Error::SubGraphGenerator(error))
             }
@@ -288,11 +275,12 @@ mod tests {
             .await
             .unwrap();
 
-        let callback_store = JetStreamCallbackStore::new(context.clone(), store_name)
-            .await
-            .expect("Failed to create callback store");
+        let callback_store =
+            JetStreamCallbackStore::new(context.clone(), "0".to_string(), store_name, store_name)
+                .await
+                .expect("Failed to create callback store");
 
-        let datum_store = JetStreamDataStore::new(context.clone(), store_name)
+        let datum_store = JetStreamDataStore::new(context.clone(), store_name, "0".to_string())
             .await
             .expect("Failed to create datum store");
 
@@ -409,11 +397,12 @@ mod tests {
             .await
             .unwrap();
 
-        let callback_store = JetStreamCallbackStore::new(context.clone(), store_name)
-            .await
-            .expect("Failed to create callback store");
+        let callback_store =
+            JetStreamCallbackStore::new(context.clone(), "0".to_string(), store_name, store_name)
+                .await
+                .expect("Failed to create callback store");
 
-        let datum_store = JetStreamDataStore::new(context.clone(), store_name)
+        let datum_store = JetStreamDataStore::new(context.clone(), store_name, "0".to_string())
             .await
             .expect("Failed to create datum store");
 

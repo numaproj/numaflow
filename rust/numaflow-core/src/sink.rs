@@ -1214,7 +1214,7 @@ mod tests {
             NatsServingStore::new(
                 context.clone(),
                 NatsStoreConfig {
-                    name: serving_store.to_string(),
+                    rs_store_name: serving_store.to_string(),
                 },
             )
             .await
