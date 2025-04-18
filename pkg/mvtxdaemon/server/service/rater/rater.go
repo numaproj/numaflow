@@ -19,9 +19,12 @@ package rater
 import (
 	"crypto/tls"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/isb"
 	"math"
 	"net/http"
 	"time"
+
+	dto "github.com/prometheus/client_model/go"
 
 	"github.com/prometheus/common/expfmt"
 	"go.uber.org/atomic"
@@ -37,6 +40,7 @@ import (
 
 const CountWindow = time.Second * 10
 const monoVtxReadMetricName = "monovtx_read_total"
+const monoVtxPendingRawMetric = "monovtx_pending_raw"
 
 // MaxLookback is the upper limit beyond which lookback value is not increased
 // by the dynamic algorithm. This is chosen as a conservative limit
@@ -47,6 +51,7 @@ const monoVtxReadMetricName = "monovtx_read_total"
 type MonoVtxRatable interface {
 	Start(ctx context.Context) error
 	GetRates() map[string]*wrapperspb.DoubleValue
+	GetPending() map[string]*wrapperspb.Int64Value
 }
 
 var _ MonoVtxRatable = (*Rater)(nil)
@@ -71,14 +76,16 @@ type Rater struct {
 	podTracker *PodTracker
 	// timestampedPodCounts is a queue of timestamped counts for the MonoVertex
 	timestampedPodCounts *sharedqueue.OverflowQueue[*TimestampedCounts]
+	// timestampedPendingCount is a queue of timestamped pending counts for the MonoVertex
+	timestampedPendingCount *sharedqueue.OverflowQueue[*TimestampedCounts]
 	// lookBackSeconds is the lookback time window used for scaling calculations
 	// this can be updated dynamically, defaults to user-specified value in the spec
 	lookBackSeconds *atomic.Float64
 	options         *options
 }
 
-// PodReadCount is a struct to maintain count of messages read by a pod of MonoVertex
-type PodReadCount struct {
+// PodMetricsCount is a struct to maintain count of messages read by a pod of MonoVertex
+type PodMetricsCount struct {
 	// pod name of the pod
 	name string
 	// represents the count of messages read by the pod
@@ -86,12 +93,12 @@ type PodReadCount struct {
 }
 
 // Name returns the pod name
-func (p *PodReadCount) Name() string {
+func (p *PodMetricsCount) Name() string {
 	return p.name
 }
 
 // ReadCount returns the value of the messages read by the Pod
-func (p *PodReadCount) ReadCount() float64 {
+func (p *PodMetricsCount) ReadCount() float64 {
 	return p.readCount
 }
 
@@ -112,7 +119,8 @@ func NewRater(ctx context.Context, mv *v1alpha1.MonoVertex, opts ...Option) *Rat
 	rater.podTracker = NewPodTracker(ctx, mv)
 	// maintain the total counts of the last 30 minutes(1800 seconds) since we support 1m, 5m, 15m lookback seconds.
 	rater.timestampedPodCounts = sharedqueue.New[*TimestampedCounts](int(1800 / CountWindow.Seconds()))
-
+	// maintain the total pending counts of the last 30 minutes(1800 seconds) since we support 1m, 5m, 15m lookback seconds.
+	rater.timestampedPendingCount = sharedqueue.New[*TimestampedCounts](int(1800 / CountWindow.Seconds()))
 	for _, opt := range opts {
 		if opt != nil {
 			opt(rater.options)
@@ -148,24 +156,36 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 	if err != nil {
 		return err
 	}
-	var podReadCount *PodReadCount
-	if r.podTracker.IsActive(key) {
-		podReadCount = r.getPodReadCounts(pInfo.podName)
-		if podReadCount == nil {
-			log.Debugf("Failed retrieving total podReadCounts for pod %s", pInfo.podName)
-		}
-	} else {
-		log.Debugf("Pod %s does not exist, updating it with nil...", pInfo.podName)
-		podReadCount = nil
-	}
+	var podReadCount, podPendingCount *PodMetricsCount
 	now := time.Now().Add(CountWindow).Truncate(CountWindow).Unix()
+
+	if !r.podTracker.IsActive(key) {
+		log.Debugf("Pod %s does not exist, updating it with nil...", pInfo.podName)
+	} else {
+		podMetrics := r.getPodMetrics(pInfo.podName)
+		if podMetrics == nil {
+			log.Debugf("No metrics available for pod %s", pInfo.podName)
+		} else {
+			podReadCount = r.getPodReadCounts(pInfo.podName, podMetrics)
+			if podReadCount == nil {
+				log.Debugf("Failed retrieving read counts for pod %s", pInfo.podName)
+			}
+			// Pending is only fetched from replica 0. Only maintain that in the timeline
+			if pInfo.replica == 0 {
+				podPendingCount = r.getPodPendingCounts(pInfo.podName, podMetrics)
+				if podPendingCount == nil {
+					log.Debugf("Failed retrieving pending counts for pod %s", pInfo.podName)
+				}
+				UpdateCount(r.timestampedPendingCount, now, podPendingCount)
+			}
+		}
+	}
 	UpdateCount(r.timestampedPodCounts, now, podReadCount)
 	return nil
 }
 
-// getPodReadCounts returns the total number of messages read by the pod
-// It fetches the total pod read counts from the Prometheus metrics endpoint.
-func (r *Rater) getPodReadCounts(podName string) *PodReadCount {
+// getPodMetrics Fetches the metrics for a given pod from the Prometheus metrics endpoint.
+func (r *Rater) getPodMetrics(podName string) map[string]*dto.MetricFamily {
 	headlessServiceName := r.monoVertex.GetHeadlessServiceName()
 	// scrape the read total metric from pod metric port
 	// example for 0th pod: https://simple-mono-vertex-mv-0.simple-mono-vertex-mv-headless.default.svc:2469/metrics
@@ -183,7 +203,11 @@ func (r *Rater) getPodReadCounts(podName string) *PodReadCount {
 		r.log.Errorf("[Pod name %s]:  failed parsing to prometheus metric families, %v", podName, err.Error())
 		return nil
 	}
+	return result
+}
 
+// getPodReadCounts returns the total number of messages read by the pod
+func (r *Rater) getPodReadCounts(podName string, result map[string]*dto.MetricFamily) *PodMetricsCount {
 	if value, ok := result[monoVtxReadMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
 		metricsList := value.GetMetric()
 		// Each pod should be emitting only one metric with this name, so we should be able to take the first value
@@ -191,12 +215,41 @@ func (r *Rater) getPodReadCounts(podName string) *PodReadCount {
 		// We use Untyped here as the counter metric family shows up as untyped from the rust client
 		// TODO(MonoVertex): Check further on this to understand why not type is counter
 		// https://github.com/prometheus/client_rust/issues/194
-		podReadCount := &PodReadCount{podName, metricsList[0].Untyped.GetValue()}
+		podReadCount := &PodMetricsCount{podName, metricsList[0].Untyped.GetValue()}
 		return podReadCount
 	} else {
 		r.log.Infof("[Pod name %s]: Metric %q is unavailable, the pod might haven't started processing data", podName, monoVtxReadMetricName)
 		return nil
 	}
+}
+
+// getPodPendingCounts returns the total number of pending messages for a pod
+func (r *Rater) getPodPendingCounts(podName string, result map[string]*dto.MetricFamily) *PodMetricsCount {
+	if value, ok := result[monoVtxPendingRawMetric]; ok && value != nil && len(value.GetMetric()) > 0 {
+		metricsList := value.GetMetric()
+		podPendingCount := &PodMetricsCount{podName, metricsList[0].Gauge.GetValue()}
+		return podPendingCount
+	} else {
+		r.log.Infof("[Pod name %s]: Metric %q is unavailable, the pod might haven't started processing data", podName, monoVtxPendingRawMetric)
+	}
+	return nil
+}
+
+// GetPending returns the pending count for the mono vertex
+func (r *Rater) GetPending() map[string]*wrapperspb.Int64Value {
+	r.log.Debugf("Current timestampedPodCounts for MonoVertex %s is: %v", r.monoVertex.Name, r.timestampedPendingCount)
+	var result = make(map[string]*wrapperspb.Int64Value)
+	// calculate pending for each lookback seconds
+	for n, i := range r.buildLookbackSecondsMap() {
+		pending := CalculatePending(r.timestampedPendingCount, i)
+		result[n] = wrapperspb.Int64(pending)
+		// Expose the metric for pending
+		if pending != isb.PendingNotAvailable {
+			metrics.MonoVertexPendingMessages.WithLabelValues(r.monoVertex.Name, n).Set(float64(pending))
+		}
+	}
+	r.log.Debugf("Got Pending for MonoVertex %s: %v", r.monoVertex.Name, result)
+	return result
 }
 
 // GetRates returns the rate metrics for the MonoVertex.
