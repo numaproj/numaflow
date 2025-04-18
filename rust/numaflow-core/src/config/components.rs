@@ -333,6 +333,7 @@ pub(crate) mod sink {
     pub(crate) enum SinkType {
         Log(LogConfig),
         Blackhole(BlackholeConfig),
+        Serve,
         UserDefined(UserDefinedConfig),
     }
 
@@ -355,6 +356,7 @@ pub(crate) mod sink {
                         .as_ref()
                         .map(|_| Ok(SinkType::Blackhole(BlackholeConfig::default())))
                 })
+                .or_else(|| sink.serve.as_ref().map(|_| Ok(SinkType::Serve)))
                 .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
         }
 
@@ -376,6 +378,7 @@ pub(crate) mod sink {
                             .as_ref()
                             .map(|_| Ok(SinkType::Blackhole(BlackholeConfig::default())))
                     })
+                    .or_else(|| sink.serve.as_ref().map(|_| Ok(SinkType::Serve)))
                     .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
             } else {
                 Err(Error::Config("Fallback sink not found".to_string()))

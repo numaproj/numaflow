@@ -189,6 +189,7 @@ func (r *servingPipelineReconciler) reconcileFixedResources(ctx context.Context,
 		r.recorder.Eventf(spl, corev1.EventTypeWarning, "CreateOrUpdateServingServerFailed", "Failed to create or update serving server: %w", err.Error())
 		return fmt.Errorf("failed to create or update serving server: %w", err)
 	}
+
 	return nil
 }
 

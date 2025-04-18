@@ -88,6 +88,15 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		return fmt.Errorf("pipeline has no sink, at least one vertex with 'sink' defined is required")
 	}
 
+	labels := pl.GetLabels()
+	if _, ok := labels[dfv1.KeyServingPipelineName]; !ok {
+		for sinkName, sinVtxCfg := range sinks {
+			if sinVtxCfg.Sink.Serve != nil {
+				return fmt.Errorf("builtin 'serve' sink used in %q vertex is only allowed with ServingPipeline", sinkName)
+			}
+		}
+	}
+
 	var servingSource *dfv1.AbstractVertex
 	for _, srcVtx := range sources {
 		if srcVtx.Source.Serving != nil {

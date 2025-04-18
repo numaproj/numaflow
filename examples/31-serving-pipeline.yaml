@@ -17,8 +17,7 @@ spec:
             image: quay.io/numaio/numaflow-go/map-forward-message:stable
       - name: out
         sink:
-          # A simple log printing sink
-          log: {}
+          serve: {}
     edges:
       - from: in
         to: cat

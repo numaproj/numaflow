@@ -142,6 +142,10 @@ message AbstractSink {
   // UDSink sink is used to write the data to the user-defined sink.
   // +optional
   optional UDSink udsink = 4;
+
+  // Serve sink is used to return results when working with a ServingPipeline.
+  // +optional
+  optional ServeSink serve = 5;
 }
 
 message AbstractVertex {
@@ -1557,6 +1561,9 @@ message Scale {
   optional uint32 replicasPerScaleDown = 12;
 }
 
+message ServeSink {
+}
+
 // +genclient
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:shortName=spl
@@ -1627,6 +1634,14 @@ message ServingSpec {
 
   // +optional
   optional ServingStore store = 5;
+
+  // Container template for the serving container.
+  // +optional
+  optional ContainerTemplate containerTemplate = 6;
+
+  // Number of replicas. If an HPA is used to manage the deployment object, do not set this field.
+  // +optional
+  optional int32 replicas = 7;
 }
 
 // ServingStore defines information of a Serving Store used in a pipeline

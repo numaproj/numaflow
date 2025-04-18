@@ -150,6 +150,8 @@ pub mod saslo_auth;
 pub use self::saslo_auth::SasloAuth;
 pub mod scale;
 pub use self::scale::Scale;
+pub mod serve_sink;
+pub use self::serve_sink::ServeSink;
 pub mod serving_pipeline;
 pub use self::serving_pipeline::ServingPipeline;
 pub mod serving_pipeline_list;
