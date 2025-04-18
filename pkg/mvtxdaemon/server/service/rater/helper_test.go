@@ -17,10 +17,11 @@ limitations under the License.
 package rater
 
 import (
-	"github.com/numaproj/numaflow/pkg/isb"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/numaproj/numaflow/pkg/isb"
 
 	"github.com/stretchr/testify/assert"
 

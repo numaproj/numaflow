@@ -17,9 +17,10 @@ limitations under the License.
 package rater
 
 import (
-	"github.com/numaproj/numaflow/pkg/isb"
 	"math"
 	"time"
+
+	"github.com/numaproj/numaflow/pkg/isb"
 
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
