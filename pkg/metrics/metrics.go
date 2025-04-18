@@ -32,7 +32,6 @@ const (
 	LabelVertexType         = "vertex_type"
 	LabelPartitionName      = "partition_name"
 	LabelMonoVertexName     = "mvtx_name"
-	LabelPendingPeriod      = "period"
 	LabelComponent          = "component"
 	LabelComponentName      = "component_name"
 	LabelSDKLanguage        = "language"
@@ -390,5 +389,5 @@ var (
 		Subsystem: "monovtx",
 		Name:      "pending",
 		Help:      "A Gauge to keep track of the total number of pending messages for the monovtx",
-	}, []string{LabelMonoVertexName, LabelPendingPeriod})
+	}, []string{LabelMonoVertexName, LabelPeriod})
 )

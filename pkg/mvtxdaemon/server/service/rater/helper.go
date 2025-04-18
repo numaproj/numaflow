@@ -17,6 +17,7 @@ limitations under the License.
 package rater
 
 import (
+	"github.com/numaproj/numaflow/pkg/isb"
 	"math"
 	"time"
 
@@ -29,8 +30,6 @@ const (
 	// rateNotAvailable is returned when the processing rate cannot be derived from the currently
 	// available pod data, a negative min is returned to indicate this.
 	rateNotAvailable = float64(math.MinInt)
-	// pendingNotAvailable default value returned when Pending not available
-	pendingNotAvailable = int64(-1)
 )
 
 // UpdateCount updates the count for a given timestamp in the queue.
@@ -85,13 +84,13 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 func CalculatePending(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64) int64 {
 	counts := q.Items()
 	if len(counts) <= 1 {
-		return pendingNotAvailable
+		return isb.PendingNotAvailable
 	}
 	startIndex := findStartIndex(lookbackSeconds, counts)
 	// we consider the last element as the end index
 	endIndex := len(counts) - 1
 	if startIndex == indexNotFound {
-		return pendingNotAvailable
+		return isb.PendingNotAvailable
 	}
 	delta := int64(0)
 	num := int64(0)
@@ -103,7 +102,7 @@ func CalculatePending(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookback
 		}
 	}
 	if num == 0 {
-		return pendingNotAvailable
+		return isb.PendingNotAvailable
 	}
 	return delta / num
 }
