@@ -554,6 +554,9 @@ pub(crate) mod metrics {
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct MetricsConfig {
+        // TODO(lookback) - using new implementation for monovertex right now,
+        // remove extra fields from here once new corresponding pipeline changes
+        // in the daemon are done.
         pub metrics_server_listen_port: u16,
         pub lag_check_interval_in_secs: u16,
         pub lag_refresh_interval_in_secs: u16,

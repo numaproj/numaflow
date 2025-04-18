@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -281,10 +282,22 @@ func (ms *metricsServer) Start(ctx context.Context) (func(ctx context.Context) e
 		Handler:   mux,
 		TLSConfig: &tls.Config{Certificates: []tls.Certificate{*cer}, MinVersion: tls.VersionTLS12},
 	}
+	replicaStr, defined := os.LookupEnv(dfv1.EnvReplica)
+	if !defined {
+		return nil, fmt.Errorf("required environment variable '%s' not defined", dfv1.EnvReplica)
+	}
+	replica, err := strconv.Atoi(replicaStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid replica value %q: %w", replicaStr, err)
+	}
 	// Buildup pending information
-	go ms.buildupPendingInfo(ctx)
-	// Expose pending metrics
-	go ms.exposePendingMetrics(ctx)
+	// If the vertex is a source, then only trigger for pod replica id=0
+	if !(ms.vertex.IsASource() && replica != 0) {
+		go ms.buildupPendingInfo(ctx)
+		// Expose pending metrics
+		go ms.exposePendingMetrics(ctx)
+	}
+
 	go func() {
 		log.Info("Starting metrics HTTPS server")
 		if err := httpServer.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
