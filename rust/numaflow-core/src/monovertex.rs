@@ -82,9 +82,9 @@ async fn start(
     cln_token: CancellationToken,
 ) -> error::Result<()> {
     // Store the pending reader handle outside, so it doesn't get dropped immediately.
-    let mut _pending_reader_handle: Option<PendingReaderTasks_> = None;
+
     // only check the pending and lag for source for pod_id = 0
-    if mvtx_config.replica == 0 {
+    let _pending_reader_handle: Option<PendingReaderTasks_> = if mvtx_config.replica == 0 {
         // start the pending reader to publish pending metrics
         let pending_reader = shared::metrics::create_pending_reader(
             &mvtx_config.metrics_config,
@@ -94,8 +94,11 @@ async fn start(
         // TODO(lookback) - using new implementation for monovertex right now,
         // deprecate old implementation and use this for pipeline as well once
         // corresponding changes are completed.
-        _pending_reader_handle = Some(pending_reader.start_(is_mono_vertex()).await);
-    }
+        Some(pending_reader.start_(is_mono_vertex()).await)
+    } else {
+        None
+    };
+
     let forwarder = forwarder::Forwarder::new(source, sink);
 
     info!("Forwarder is starting...");
