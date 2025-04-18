@@ -5060,7 +5060,7 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingSource(ref common.ReferenceCallbac
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "ServingSource is a placeholder for ServingPipeline source vertex.",
+				Description: "ServingSource is the source vertex for ServingPipeline and should be used only with ServingPipeline.",
 				Type:        []string{"object"},
 			},
 		},

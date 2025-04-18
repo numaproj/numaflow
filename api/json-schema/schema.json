@@ -22056,7 +22056,7 @@
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.ServingSource": {
-      "description": "ServingSource is a placeholder for ServingPipeline source vertex.",
+      "description": "ServingSource is the source vertex for ServingPipeline and should be used only with ServingPipeline.",
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.ServingSpec": {

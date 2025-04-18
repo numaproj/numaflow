@@ -1608,7 +1608,7 @@ message ServingPipelineStatus {
   optional int64 observedGeneration = 11;
 }
 
-// ServingSource is a placeholder for ServingPipeline source vertex.
+// ServingSource is the source vertex for ServingPipeline and should be used only with ServingPipeline.
 message ServingSource {
 }
 
