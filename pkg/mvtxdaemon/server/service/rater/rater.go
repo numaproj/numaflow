@@ -183,7 +183,7 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 	return nil
 }
 
-// getPodMetrics Fetches the total pod read counts from the Prometheus metrics endpoint.
+// getPodMetrics Fetches the metrics for a given pod from the Prometheus metrics endpoint.
 func (r *Rater) getPodMetrics(podName string) map[string]*dto.MetricFamily {
 	headlessServiceName := r.monoVertex.GetHeadlessServiceName()
 	// scrape the read total metric from pod metric port
@@ -259,7 +259,7 @@ func (r *Rater) GetRates() map[string]*wrapperspb.DoubleValue {
 		rate := CalculateRate(r.timestampedPodCounts, i)
 		result[n] = wrapperspb.Double(rate)
 	}
-	r.log.Infof("Got rates for MonoVertex %s: %v", r.monoVertex.Name, result)
+	r.log.Debugf("Got rates for MonoVertex %s: %v", r.monoVertex.Name, result)
 	return result
 }
 
