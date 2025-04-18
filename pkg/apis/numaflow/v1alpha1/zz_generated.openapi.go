@@ -5112,12 +5112,25 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingSpec(ref common.ReferenceCallback)
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingStore"),
 						},
 					},
+					"containerTemplate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Container template for the serving container.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
+						},
+					},
+					"replicas": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Number of replicas. If an HPA is used to manage the deployment object, do not set this field.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 				},
 				Required: []string{"msgIDHeaderKey"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Authorization", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingStore"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Authorization", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingStore"},
 	}
 }
 

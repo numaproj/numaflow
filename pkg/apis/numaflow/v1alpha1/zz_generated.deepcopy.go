@@ -2540,6 +2540,16 @@ func (in *ServingSpec) DeepCopyInto(out *ServingSpec) {
 		*out = new(ServingStore)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.ContainerTemplate != nil {
+		in, out := &in.ContainerTemplate, &out.ContainerTemplate
+		*out = new(ContainerTemplate)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.Replicas != nil {
+		in, out := &in.Replicas, &out.Replicas
+		*out = new(int32)
+		**out = **in
+	}
 	return
 }
 
