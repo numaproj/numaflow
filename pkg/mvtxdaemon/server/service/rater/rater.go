@@ -19,6 +19,7 @@ package rater
 import (
 	"crypto/tls"
 	"fmt"
+	"github.com/numaproj/numaflow/pkg/isb"
 	"math"
 	"net/http"
 	"time"
@@ -243,9 +244,11 @@ func (r *Rater) GetPending() map[string]*wrapperspb.Int64Value {
 		pending := CalculatePending(r.timestampedPendingCount, i)
 		result[n] = wrapperspb.Int64(pending)
 		// Expose the metric for pending
-		metrics.MonoVertexPendingMessages.WithLabelValues(r.monoVertex.Name, n).Set(float64(pending))
+		if pending != isb.PendingNotAvailable {
+			metrics.MonoVertexPendingMessages.WithLabelValues(r.monoVertex.Name, n).Set(float64(pending))
+		}
 	}
-	r.log.Infof("Got Pending for MonoVertex %s: %v", r.monoVertex.Name, result)
+	r.log.Debugf("Got Pending for MonoVertex %s: %v", r.monoVertex.Name, result)
 	return result
 }
 
