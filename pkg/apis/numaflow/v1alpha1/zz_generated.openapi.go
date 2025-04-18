@@ -608,13 +608,6 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref common.ReferenceCallba
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy"),
 						},
 					},
-					"servingStoreName": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Names of the serving store used in this vertex.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
 				},
 				Required: []string{"name"},
 			},
@@ -5067,7 +5060,7 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingSource(ref common.ReferenceCallbac
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "ServingSource is the HTTP endpoint for Numaflow.",
+				Description: "ServingSource is the source vertex for ServingPipeline and should be used only with ServingPipeline.",
 				Type:        []string{"object"},
 			},
 		},
@@ -5120,7 +5113,7 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingSpec(ref common.ReferenceCallback)
 					},
 					"replicas": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Number of replicas. If an HPA is used to manage the deployment object, do not set this field.",
+							Description: "Initial replicas of the serving server deployment.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -6340,13 +6333,6 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 							Description: "The strategy to use to replace existing pods with new ones.",
 							Default:     map[string]interface{}{},
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy"),
-						},
-					},
-					"servingStoreName": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Names of the serving store used in this vertex.",
-							Type:        []string{"string"},
-							Format:      "",
 						},
 					},
 					"pipelineName": {

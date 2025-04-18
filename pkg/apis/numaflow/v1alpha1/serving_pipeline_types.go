@@ -87,7 +87,7 @@ type ServingSpec struct {
 	// Container template for the serving container.
 	// +optional
 	ContainerTemplate *ContainerTemplate `json:"containerTemplate,omitempty" protobuf:"bytes,6,opt,name=containerTemplate"`
-	// Number of replicas. If an HPA is used to manage the deployment object, do not set this field.
+	// Initial replicas of the serving server deployment.
 	// +optional
 	Replicas *int32 `json:"replicas,omitempty" protobuf:"varint,7,opt,name=replicas"`
 }

@@ -19586,10 +19586,6 @@
           "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
-        "servingStoreName": {
-          "description": "Names of the serving store used in this vertex.",
-          "type": "string"
-        },
         "sideInputs": {
           "description": "Names of the side inputs used in this vertex.",
           "items": {
@@ -22060,7 +22056,7 @@
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.ServingSource": {
-      "description": "ServingSource is the HTTP endpoint for Numaflow.",
+      "description": "ServingSource is the source vertex for ServingPipeline and should be used only with ServingPipeline.",
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.ServingSpec": {
@@ -22077,7 +22073,7 @@
           "type": "string"
         },
         "replicas": {
-          "description": "Number of replicas. If an HPA is used to manage the deployment object, do not set this field.",
+          "description": "Initial replicas of the serving server deployment.",
           "format": "int32",
           "type": "integer"
         },
@@ -22720,10 +22716,6 @@
         },
         "serviceAccountName": {
           "description": "ServiceAccountName applied to the pod",
-          "type": "string"
-        },
-        "servingStoreName": {
-          "description": "Names of the serving store used in this vertex.",
           "type": "string"
         },
         "sideInputs": {

@@ -882,25 +882,6 @@ The strategy to use to replace existing pods with new ones.
 
 </tr>
 
-<tr>
-
-<td>
-
-<code>servingStoreName</code></br> <em> string </em>
-</td>
-
-<td>
-
-<em>(Optional)</em>
-<p>
-
-TODO(spl): clean up Names of the serving store used in this vertex.
-</p>
-
-</td>
-
-</tr>
-
 </tbody>
 
 </table>
@@ -10425,7 +10406,8 @@ ServingSource
 
 <p>
 
-ServingSource is the HTTP endpoint for Numaflow.
+ServingSource is the source vertex for ServingPipeline and should be
+used only with ServingPipeline.
 </p>
 
 </p>
@@ -10588,8 +10570,7 @@ Container template for the serving container.
 <em>(Optional)</em>
 <p>
 
-Number of replicas. If an HPA is used to manage the deployment object,
-do not set this field.
+Initial replicas of the serving server deployment.
 </p>
 
 </td>

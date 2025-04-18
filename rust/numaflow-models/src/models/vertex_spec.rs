@@ -88,9 +88,6 @@ pub struct VertexSpec {
     /// ServiceAccountName applied to the pod
     #[serde(rename = "serviceAccountName", skip_serializing_if = "Option::is_none")]
     pub service_account_name: Option<String>,
-    /// Names of the serving store used in this vertex.
-    #[serde(rename = "servingStoreName", skip_serializing_if = "Option::is_none")]
-    pub serving_store_name: Option<String>,
     /// Names of the side inputs used in this vertex.
     #[serde(rename = "sideInputs", skip_serializing_if = "Option::is_none")]
     pub side_inputs: Option<Vec<String>>,
@@ -149,7 +146,6 @@ impl VertexSpec {
             scale: None,
             security_context: None,
             service_account_name: None,
-            serving_store_name: None,
             side_inputs: None,
             side_inputs_container_template: None,
             sidecars: None,

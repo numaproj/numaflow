@@ -7130,8 +7130,6 @@ spec:
                           type: object
                         serviceAccountName:
                           type: string
-                        servingStoreName:
-                          type: string
                         sideInputs:
                           items:
                             type: string

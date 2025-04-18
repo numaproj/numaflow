@@ -17000,8 +17000,6 @@ spec:
                       type: object
                     serviceAccountName:
                       type: string
-                    servingStoreName:
-                      type: string
                     sideInputs:
                       items:
                         type: string
@@ -28723,8 +28721,6 @@ spec:
                           type: object
                         serviceAccountName:
                           type: string
-                        servingStoreName:
-                          type: string
                         sideInputs:
                           items:
                             type: string
@@ -35808,8 +35804,6 @@ spec:
                     type: object
                 type: object
               serviceAccountName:
-                type: string
-              servingStoreName:
                 type: string
               sideInputs:
                 items:
