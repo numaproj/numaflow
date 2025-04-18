@@ -3783,32 +3783,6 @@ Kubernetes core/v1.ResourceRequirements </a> </em>
 
 </tr>
 
-<tr>
-
-<td>
-
-<code>Replicas</code></br> <em> int32 </em>
-</td>
-
-<td>
-
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
-<code>TerminationGracePeriodSeconds</code></br> <em> int64 </em>
-</td>
-
-<td>
-
-</td>
-
-</tr>
-
 </tbody>
 
 </table>

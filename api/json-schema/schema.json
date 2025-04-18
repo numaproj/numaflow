@@ -20403,14 +20403,6 @@
         },
         "PullPolicy": {
           "type": "string"
-        },
-        "Replicas": {
-          "format": "int32",
-          "type": "integer"
-        },
-        "TerminationGracePeriodSeconds": {
-          "format": "int64",
-          "type": "integer"
         }
       },
       "required": [
@@ -20418,9 +20410,7 @@
         "Image",
         "PullPolicy",
         "Env",
-        "DefaultResources",
-        "Replicas",
-        "TerminationGracePeriodSeconds"
+        "DefaultResources"
       ],
       "type": "object"
     },

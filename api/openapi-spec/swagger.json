@@ -20395,9 +20395,7 @@
         "Image",
         "PullPolicy",
         "Env",
-        "DefaultResources",
-        "Replicas",
-        "TerminationGracePeriodSeconds"
+        "DefaultResources"
       ],
       "properties": {
         "DefaultResources": {
@@ -20417,14 +20415,6 @@
         },
         "PullPolicy": {
           "type": "string"
-        },
-        "Replicas": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "TerminationGracePeriodSeconds": {
-          "type": "integer",
-          "format": "int64"
         }
       }
     },

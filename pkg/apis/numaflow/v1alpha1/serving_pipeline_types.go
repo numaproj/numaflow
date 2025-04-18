@@ -244,7 +244,7 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 		Selector: &metav1.LabelSelector{
 			MatchLabels: labels,
 		},
-		Replicas: req.Replicas,
+		Replicas: sp.Spec.Serving.Replicas,
 		Template: corev1.PodTemplateSpec{
 			ObjectMeta: metav1.ObjectMeta{
 				Labels:      labels,
@@ -254,7 +254,7 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 				Containers:                    []corev1.Container{c},
 				InitContainers:                []corev1.Container{sp.getStreamValidationInitContainerSpec(req)},
 				Volumes:                       volumes,
-				TerminationGracePeriodSeconds: req.TerminationGracePeriodSeconds,
+				TerminationGracePeriodSeconds: ptr.To(int64(sp.Spec.Serving.GetRequestTimeoutSecs() + 10)),
 			},
 		},
 	}

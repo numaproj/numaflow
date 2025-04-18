@@ -28,10 +28,6 @@ pub struct GetServingPipelineResourceReq {
     pub image: String,
     #[serde(rename = "PullPolicy")]
     pub pull_policy: String,
-    #[serde(rename = "Replicas")]
-    pub replicas: i32,
-    #[serde(rename = "TerminationGracePeriodSeconds")]
-    pub termination_grace_period_seconds: i64,
 }
 
 impl GetServingPipelineResourceReq {
@@ -41,8 +37,6 @@ impl GetServingPipelineResourceReq {
         isb_svc_config: crate::models::BufferServiceConfig,
         image: String,
         pull_policy: String,
-        replicas: i32,
-        termination_grace_period_seconds: i64,
     ) -> GetServingPipelineResourceReq {
         GetServingPipelineResourceReq {
             default_resources,
@@ -50,8 +44,6 @@ impl GetServingPipelineResourceReq {
             isb_svc_config: Box::new(isb_svc_config),
             image,
             pull_policy,
-            replicas,
-            termination_grace_period_seconds,
         }
     }
 }

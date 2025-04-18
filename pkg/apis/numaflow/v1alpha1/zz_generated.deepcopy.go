@@ -926,16 +926,6 @@ func (in *GetServingPipelineResourceReq) DeepCopyInto(out *GetServingPipelineRes
 		}
 	}
 	in.DefaultResources.DeepCopyInto(&out.DefaultResources)
-	if in.Replicas != nil {
-		in, out := &in.Replicas, &out.Replicas
-		*out = new(int32)
-		**out = **in
-	}
-	if in.TerminationGracePeriodSeconds != nil {
-		in, out := &in.TerminationGracePeriodSeconds, &out.TerminationGracePeriodSeconds
-		*out = new(int64)
-		**out = **in
-	}
 	return
 }
 

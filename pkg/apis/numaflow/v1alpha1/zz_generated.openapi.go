@@ -2029,20 +2029,8 @@ func schema_pkg_apis_numaflow_v1alpha1_GetServingPipelineResourceReq(ref common.
 							Ref:     ref("k8s.io/api/core/v1.ResourceRequirements"),
 						},
 					},
-					"Replicas": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int32",
-						},
-					},
-					"TerminationGracePeriodSeconds": {
-						SchemaProps: spec.SchemaProps{
-							Type:   []string{"integer"},
-							Format: "int64",
-						},
-					},
 				},
-				Required: []string{"ISBSvcConfig", "Image", "PullPolicy", "Env", "DefaultResources", "Replicas", "TerminationGracePeriodSeconds"},
+				Required: []string{"ISBSvcConfig", "Image", "PullPolicy", "Env", "DefaultResources"},
 			},
 		},
 		Dependencies: []string{
