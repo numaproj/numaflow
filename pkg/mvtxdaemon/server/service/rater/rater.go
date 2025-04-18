@@ -19,13 +19,11 @@ package rater
 import (
 	"crypto/tls"
 	"fmt"
-	"github.com/numaproj/numaflow/pkg/isb"
 	"math"
 	"net/http"
 	"time"
 
 	dto "github.com/prometheus/client_model/go"
-
 	"github.com/prometheus/common/expfmt"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -33,6 +31,7 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
