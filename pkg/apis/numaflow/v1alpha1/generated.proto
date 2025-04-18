@@ -1634,7 +1634,7 @@ message ServingSpec {
   // +optional
   optional ContainerTemplate containerTemplate = 6;
 
-  // Number of replicas.
+  // Initial replicas of the serving server deployment.
   // +optional
   optional int32 replicas = 7;
 }

@@ -10569,7 +10569,7 @@ Container template for the serving container.
 <em>(Optional)</em>
 <p>
 
-Number of replicas.
+Initial replicas of the serving server deployment.
 </p>
 
 </td>

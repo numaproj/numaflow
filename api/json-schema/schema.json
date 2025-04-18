@@ -22073,7 +22073,7 @@
           "type": "string"
         },
         "replicas": {
-          "description": "Number of replicas.",
+          "description": "Initial replicas of the serving server deployment.",
           "format": "int32",
           "type": "integer"
         },

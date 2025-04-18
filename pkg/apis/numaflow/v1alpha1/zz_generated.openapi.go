@@ -5113,7 +5113,7 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingSpec(ref common.ReferenceCallback)
 					},
 					"replicas": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Number of replicas.",
+							Description: "Initial replicas of the serving server deployment.",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},

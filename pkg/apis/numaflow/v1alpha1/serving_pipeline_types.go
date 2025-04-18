@@ -87,7 +87,7 @@ type ServingSpec struct {
 	// Container template for the serving container.
 	// +optional
 	ContainerTemplate *ContainerTemplate `json:"containerTemplate,omitempty" protobuf:"bytes,6,opt,name=containerTemplate"`
-	// Number of replicas.
+	// Initial replicas of the serving server deployment.
 	// +optional
 	Replicas *int32 `json:"replicas,omitempty" protobuf:"varint,7,opt,name=replicas"`
 }
