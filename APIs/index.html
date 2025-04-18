@@ -4192,6 +4192,7 @@ ContainerTemplate
 <a href="#numaflow.numaproj.io/v1alpha1.JobTemplate">JobTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSpec">MonoVertexSpec</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.ServingSpec">ServingSpec</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.SideInputsManagerTemplate">SideInputsManagerTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.VertexTemplate">VertexTemplate</a>)
 </p>
@@ -12968,6 +12969,47 @@ Request timeout in seconds. Default value is 120 seconds.
 <td>
 
 <em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>containerTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
+ContainerTemplate </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Container template for the serving container.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>replicas</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Number of replicas. If an HPA is used to manage the deployment object,
+do not set this field.
+</p>
+
 </td>
 
 </tr>
