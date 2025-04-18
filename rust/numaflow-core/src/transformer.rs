@@ -1,4 +1,12 @@
+use bytes::Bytes;
+use numaflow_monitor::runtime;
+use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use std::sync::Arc;
+use tokio::sync::{mpsc, oneshot, Semaphore};
+use tokio_util::sync::CancellationToken;
+use tonic::transport::Channel;
+use tonic::{Code, Status};
+use tracing::error;
 
 use crate::error::Error;
 use crate::message::Message;
@@ -6,11 +14,6 @@ use crate::metrics::{monovertex_metrics, mvtx_forward_metric_labels};
 use crate::tracker::TrackerHandle;
 use crate::transformer::user_defined::UserDefinedTransformer;
 use crate::Result;
-use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use tokio::sync::{mpsc, oneshot, Semaphore};
-use tokio_util::sync::CancellationToken;
-use tonic::transport::Channel;
-use tracing::error;
 
 /// User-Defined Transformer is a custom transformer that can be built by the user.
 ///
@@ -120,6 +123,21 @@ impl Transformer {
                 response.map_err(|e| Error::Transformer(format!("failed to receive response: {}", e)))??
             }
         };
+
+        if response.is_empty() {
+            error!("received empty response from server (transformer), we will wait indefinitely");
+            // persist the error for debugging
+            runtime::persist_application_error(Status::with_details(
+                Code::Internal,
+                "UDF_PARTIAL_RESPONSE(transformer)",
+                Bytes::from_static(
+                    b"received End-Of-Transmission (EOT) before all responses are received from the transformer,\
+                            we will wait indefinitely for the remaining responses. This indicates that there is a bug\
+                            in the user-code. Please check whether you are accidentally skipping the messages.",
+                ),
+            ));
+            futures::future::pending::<()>().await;
+        }
 
         monovertex_metrics()
             .transformer

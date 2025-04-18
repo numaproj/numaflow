@@ -22,7 +22,7 @@
 .collapsable-error-accordion-details {
   display: flex;
   height: 35rem;
-  padding: 0;
+  padding: 0 !important;
 }
 
 .collapsable-error-accordion-details-box {

@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	intstr "k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 )
 
 // +kubebuilder:validation:Enum="";Running;Failed;Deleting
@@ -83,6 +84,12 @@ type ServingSpec struct {
 	RequestTimeoutSecs *uint32 `json:"requestTimeoutSeconds,omitempty" protobuf:"varint,4,opt,name=requestTimeoutSeconds"`
 	// +optional
 	ServingStore *ServingStore `json:"store,omitempty" protobuf:"bytes,5,rep,name=store"`
+	// Container template for the serving container.
+	// +optional
+	ContainerTemplate *ContainerTemplate `json:"containerTemplate,omitempty" protobuf:"bytes,6,opt,name=containerTemplate"`
+	// Number of replicas. If an HPA is used to manage the deployment object, do not set this field.
+	// +optional
+	Replicas *int32 `json:"replicas,omitempty" protobuf:"varint,7,opt,name=replicas"`
 }
 
 // ServingStore defines information of a Serving Store used in a pipeline
@@ -101,6 +108,13 @@ type ServingPipelineStatus struct {
 	// The generation observed by the ServingPipeline controller.
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty" protobuf:"varint,11,opt,name=observedGeneration"`
+}
+
+func (sp ServingSpec) GetRequestTimeoutSecs() uint32 {
+	if sp.RequestTimeoutSecs == nil {
+		return 120
+	}
+	return *sp.RequestTimeoutSecs
 }
 
 // Generate the stream name in JetStream used for serving source
@@ -210,11 +224,14 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 		Name:            CtrMain,
 		Image:           req.Image,
 		ImagePullPolicy: req.PullPolicy,
-		Resources:       req.DefaultResources, // TODO: need to have a way to override.
+		Resources:       req.DefaultResources,
 		Env:             envVars,
 		Command:         []string{NumaflowRustBinary},
 		Args:            []string{"--serving"},
 		VolumeMounts:    volumeMounts,
+	}
+	if ct := sp.Spec.Serving.ContainerTemplate; ct != nil {
+		ct.ApplyToContainer(&c)
 	}
 	labels := map[string]string{
 		KeyPartOf:              Project,
@@ -227,15 +244,17 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 		Selector: &metav1.LabelSelector{
 			MatchLabels: labels,
 		},
+		Replicas: sp.Spec.Serving.Replicas,
 		Template: corev1.PodTemplateSpec{
 			ObjectMeta: metav1.ObjectMeta{
 				Labels:      labels,
 				Annotations: map[string]string{},
 			},
 			Spec: corev1.PodSpec{
-				Containers:     []corev1.Container{c},
-				InitContainers: []corev1.Container{sp.getStreamValidationInitContainerSpec(req)},
-				Volumes:        volumes,
+				Containers:                    []corev1.Container{c},
+				InitContainers:                []corev1.Container{sp.getStreamValidationInitContainerSpec(req)},
+				Volumes:                       volumes,
+				TerminationGracePeriodSeconds: ptr.To(int64(sp.Spec.Serving.GetRequestTimeoutSecs() + 10)),
 			},
 		},
 	}
@@ -309,6 +328,11 @@ func (sp ServingPipeline) GetPipelineObj(req GetServingPipelineResourceReq) Pipe
 			corev1.EnvVar{Name: EnvServingStore, Value: fmt.Sprintf("%s_SERVING_KV_STORE", sp.GetServingStoreName())},
 			corev1.EnvVar{Name: EnvNumaflowRuntime, Value: "rust"},
 		)
+		if plSpec.Vertices[i].Scale.Min == nil {
+			// Set min count to 1 if user has not set a value.
+			// Else, vertices will scale down to zero and initial set of requests will have high latency.
+			plSpec.Vertices[i].Scale.Min = ptr.To[int32](1)
+		}
 	}
 	labels := map[string]string{
 		KeyPartOf:              Project,

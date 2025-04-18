@@ -19476,6 +19476,10 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log",
           "description": "Log sink is used to write the data to the log."
         },
+        "serve": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServeSink",
+          "description": "Serve sink is used to return results when working with a ServingPipeline."
+        },
         "udsink": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSink",
           "description": "UDSink sink is used to write the data to the user-defined sink."
@@ -21963,6 +21967,9 @@
       },
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.ServeSink": {
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.ServingPipeline": {
       "properties": {
         "apiVersion": {
@@ -22061,9 +22068,18 @@
         "auth": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Authorization"
         },
+        "containerTemplate": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate",
+          "description": "Container template for the serving container."
+        },
         "msgIDHeaderKey": {
           "description": "The header key from which the message id will be extracted",
           "type": "string"
+        },
+        "replicas": {
+          "description": "Number of replicas. If an HPA is used to manage the deployment object, do not set this field.",
+          "format": "int32",
+          "type": "integer"
         },
         "requestTimeoutSeconds": {
           "description": "Request timeout in seconds. Default value is 120 seconds.",
@@ -22255,6 +22271,10 @@
         "retryStrategy": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RetryStrategy",
           "description": "RetryStrategy struct encapsulates the settings for retrying operations in the event of failures."
+        },
+        "serve": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServeSink",
+          "description": "Serve sink is used to return results when working with a ServingPipeline."
         },
         "udsink": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSink",

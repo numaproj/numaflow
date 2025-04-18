@@ -7,11 +7,14 @@ use std::convert::TryFrom;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
+use std::os::unix::fs::DirBuilderExt as _;
 use std::path::Path;
 use std::str;
+use std::sync::OnceLock;
 use tonic::Status;
 use tracing::error;
 
+static PERSIST_APPLICATION_ERROR_ONCE: OnceLock<()> = OnceLock::new();
 const CURRENT_FILE: &str = "current-numa.json";
 
 /// Represents a single runtime error entry persisted by the application.
@@ -66,6 +69,121 @@ impl From<RuntimeErrorEntry> for String {
     }
 }
 
+/// Persists a gRPC error as a JSON file in the appropriate container directory.
+/// It organizes error files in a directory structure based on container names and ensures that the
+/// number of error files per container (files may be written from udf) does not exceed a specified limit.
+/// If the limit is exceeded, the oldest file is removed to make room for new entry. This function runs only once.
+///
+/// # Parameters:
+/// - `grpc_status`: The gRPC error (`tonic::Status`) to be persisted.
+///
+/// # Example:
+/// ```no_run
+///  use numaflow_monitor::runtime;
+///  let grpc_status = tonic::Status::internal("UDF_EXECUTION_ERROR(container-name): Test error");
+///  runtime::persist_application_error(grpc_status);
+/// ```
+//
+pub fn persist_application_error(grpc_status: Status) {
+    if PERSIST_APPLICATION_ERROR_ONCE.set(()).is_err() {
+        return;
+    }
+    persist_application_error_to_file(
+        RuntimeInfoConfig::default().app_error_path,
+        RuntimeInfoConfig::default().max_error_files_per_container,
+        grpc_status,
+    );
+}
+
+pub(crate) fn persist_application_error_to_file(
+    application_error_path: String,
+    max_error_files_per_container: usize,
+    grpc_status: Status,
+) {
+    // extract the type of udf container based on the error message
+    let container_name = extract_container_name(grpc_status.message());
+    // skip processing if the container name is empty. This happens only if
+    // the gRPC status is not created by us (e.g., unknown bugs like https://github.com/grpc/grpc-go/issues/7641)
+    // TODO: we should try to expose this in the UI if we encounter a few of this in prod.
+    if container_name.is_empty() {
+        error!(?grpc_status, "unknown-container");
+        return;
+    }
+    // create a directory for the container if it doesn't exist with permissions to read, write, and execute for all
+    let dir_path = Path::new(&application_error_path.clone()).join(&container_name);
+    if !dir_path.exists() {
+        let mut builder = fs::DirBuilder::new();
+        builder.recursive(true);
+        builder.mode(0o777);
+        builder
+            .create(&dir_path)
+            .expect("Failed to create application errors directory");
+    }
+
+    // this is to check the number of files in the directory
+    // additional check in place to process only files and ignore directories
+    // ignore files starting with prefix `current`
+    let mut files: Vec<_> = fs::read_dir(&dir_path)
+        .expect("Failed to read application errors directory")
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.path().is_file())
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_str()
+                .map(|name| !name.starts_with("current"))
+                .unwrap_or(false)
+        })
+        .collect();
+
+    // sort the files based on timestamp
+    files.sort_by_key(|e| {
+        e.file_name()
+            .to_str()
+            .and_then(|name| name.split('-').next())
+            .and_then(|timestamp| timestamp.parse::<i64>().ok())
+    });
+
+    // remove the oldest files until the number of files is within the max limit
+    // this is to ensure that we don't exceed the max limit of files in the container directory
+    while files.len() >= max_error_files_per_container {
+        if let Some(oldest_file) = files.first() {
+            if let Err(e) = fs::remove_file(oldest_file.path()) {
+                error!(
+                    "Failed to remove the oldest application error file: {:?}, error: {:?}",
+                    oldest_file.path(),
+                    e
+                );
+                break;
+            }
+            files.remove(0);
+        }
+    }
+
+    let timestamp = Utc::now().timestamp();
+    let runtime_error_entry =
+        RuntimeErrorEntry::from((&grpc_status, container_name.as_str(), timestamp));
+    let json_str: String = runtime_error_entry.into();
+
+    // Write the error details to a temporary file and rename it to a
+    // timestamped file once the write operation is complete.
+    // this is to ensure that while reading we skip this file to avoid race condition
+    let current_file_path = dir_path.join(CURRENT_FILE);
+    // append numa to the file name to denote files created by numa container
+    let file_name = format!("{}-numa.json", timestamp);
+    let final_file_path = dir_path.join(&file_name);
+
+    let mut current_file =
+        File::create(&current_file_path).expect("Failed to create current application errors file");
+    current_file
+        .write_all(json_str.as_bytes())
+        .expect("Failed to write to current application error file");
+
+    // rename the current file to the final file name once write operation completes
+    fs::rename(&current_file_path, &final_file_path)
+        .expect("Failed to rename current file to final file name");
+}
+
 /// A structure used to represent API responses containing runtime error entries.
 #[derive(serde::Serialize, serde::Deserialize)]
 pub(crate) struct ApiResponse {
@@ -76,6 +194,7 @@ pub(crate) struct ApiResponse {
     pub(crate) data: Vec<RuntimeErrorEntry>,
 }
 
+#[allow(dead_code)]
 /// Response for managing runtime error persistence and retrieval.
 pub struct Runtime {
     /// The root directory where error files are stored.
@@ -92,84 +211,6 @@ impl Runtime {
             application_error_path: config.app_error_path,
             max_error_files_per_container: config.max_error_files_per_container,
         }
-    }
-
-    /// Persists a gRPC error as a JSON file in the appropriate container directory.
-    /// It organizes error files in a directory structure based on container names and ensures that the
-    /// number of error files per container does not exceed a specified limit. If the limit is exceeded,
-    /// the oldest file is removed to make room for new entries.
-    ///
-    /// # Parameters:
-    /// - `grpc_status`: The gRPC error (`tonic::Status`) to be persisted.
-    ///
-    /// # Example:
-    /// ```no_run
-    ///  use numaflow_monitor::runtime::Runtime;
-    ///  let grpc_status = tonic::Status::internal("UDF_EXECUTION_ERROR(container-name): Test error");
-    ///  Runtime::new(None).persist_application_error(grpc_status);
-    /// ```
-    pub fn persist_application_error(&self, grpc_status: Status) {
-        // extract the type of udf container based on the error message
-        let container_name = extract_container_name(grpc_status.message());
-        // skip processing if the container name is empty. This happens only if
-        // the gRPC status is not created by us (e.g., unknown bugs like https://github.com/grpc/grpc-go/issues/7641)
-        // TODO: we should try to expose this in the UI if we encounter a few of this in prod.
-        if container_name.is_empty() {
-            error!(?grpc_status, "unknown-container");
-            return;
-        }
-        // create a directory for the container if it doesn't exist
-        let dir_path = Path::new(&self.application_error_path).join(&container_name);
-        if !dir_path.exists() {
-            fs::create_dir_all(&dir_path).expect("Failed to create application errors directory");
-        }
-
-        // this is to check the number of files in the directory
-        // additional check in place to process only files and ignore directories
-        let mut files: Vec<_> = fs::read_dir(&dir_path)
-            .expect("Failed to read application errors directory")
-            .filter_map(|entry| entry.ok())
-            .filter(|entry| entry.path().is_file())
-            .collect();
-
-        // sort the files based on timestamp
-        files.sort_by_key(|e| {
-            e.file_name()
-                .to_str()
-                .and_then(|name| name.split('-').next())
-                .and_then(|timestamp| timestamp.parse::<i64>().ok())
-        });
-
-        // remove the oldest file if the number of files exceeds the limit
-        if files.len() >= self.max_error_files_per_container {
-            if let Some(oldest_file) = files.first() {
-                fs::remove_file(oldest_file.path())
-                    .expect("Failed to remove the oldest application error file");
-            }
-        }
-
-        let timestamp = Utc::now().timestamp();
-        let runtime_error_entry =
-            RuntimeErrorEntry::from((&grpc_status, container_name.as_str(), timestamp));
-        let json_str: String = runtime_error_entry.into();
-
-        // Write the error details to a temporary file (`current-numa.json`) and rename it to a
-        // timestamped file once the write operation is complete.
-        // this is to ensure that while reading we skip this file to avoid race condition
-        let current_file_path = dir_path.join(CURRENT_FILE);
-        // append numa to the file name to avoid collision with files written from udf with same timestamp
-        let file_name = format!("{}-numa.json", timestamp);
-        let final_file_path = dir_path.join(&file_name);
-
-        let mut current_file = File::create(&current_file_path)
-            .expect("Failed to create current application errors file");
-        current_file
-            .write_all(json_str.as_bytes())
-            .expect("Failed to write to current application error file");
-
-        // rename the current file to the final file name once write operation completes
-        fs::rename(&current_file_path, &final_file_path)
-            .expect("Failed to rename current file to final file name");
     }
 
     // ## File Structure
@@ -217,7 +258,7 @@ impl Runtime {
                     .file_name()
                     .to_str()
                     .expect("file name should be valid")
-                    == CURRENT_FILE
+                    .starts_with("current")
                 {
                     continue;
                 }
@@ -308,26 +349,20 @@ mod tests {
     }
 
     #[test]
-    fn test_persist_application_error() {
+    fn test_persist_application_error_to_file() {
         // Create a temporary directory for testing
         let temp_dir = tempdir().unwrap();
         let application_error_path = temp_dir.path().to_str().unwrap().to_string();
-
-        // Create a Runtime instance with the temporary directory path
-        let runtime = Runtime {
-            application_error_path,
-            max_error_files_per_container: 5,
-        };
 
         // Create a mock gRPC status
         let grpc_status = Status::internal("UDF_EXECUTION_ERROR(udsource): Test error message");
 
         // Call the function to test
-        runtime.persist_application_error(grpc_status.clone());
+        persist_application_error_to_file(application_error_path.clone(), 5, grpc_status.clone());
 
         // Verify that the directory for the container was created
         let container_name = extract_container_name(grpc_status.message());
-        let dir_path = Path::new(&runtime.application_error_path).join(&container_name);
+        let dir_path = Path::new(&application_error_path).join(&container_name);
         assert!(dir_path.exists());
 
         // Verify that a new error file was created
@@ -347,13 +382,6 @@ mod tests {
         // Create a temporary directory for testing
         let temp_dir = tempdir().unwrap();
         let application_error_path = temp_dir.path().to_str().unwrap().to_string();
-
-        // Create a Runtime instance with the temporary directory path
-        let runtime = Runtime {
-            application_error_path,
-            max_error_files_per_container: 5,
-        };
-
         // Create a mock gRPC status with an empty container name
         let grpc_status = Status::internal("UDF_EXECUTION_ERROR: Test error message");
 
@@ -362,10 +390,10 @@ mod tests {
         assert!(container_name.is_empty());
 
         // Call the function to test
-        runtime.persist_application_error(grpc_status.clone());
+        persist_application_error_to_file(application_error_path.clone(), 5, grpc_status.clone());
 
         // Verify that no files were created in the directory
-        let dir_path = Path::new(&runtime.application_error_path).join(&container_name);
+        let dir_path = Path::new(&application_error_path).join(&container_name);
         if dir_path.exists() {
             let files: Vec<_> = fs::read_dir(&dir_path)
                 .unwrap()
