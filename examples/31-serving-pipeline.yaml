@@ -10,8 +10,8 @@ spec:
   pipeline:
 #    interStepBufferServiceName: serving-pipeline
     limits:
+      readBatchSize: 50
       readTimeout: "10ms"
-      readBatchSize: 100
     vertices:
       - name: in
         scale:

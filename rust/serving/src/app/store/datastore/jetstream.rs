@@ -8,8 +8,8 @@
 //! Response Key - rs.{id}.{vertex_name}.{timestamp}
 //!
 //! Response Value - response_payload
-
 use crate::app::store::datastore::{DataStore, Error as StoreError, Result as StoreResult};
+use crate::config::RequestType;
 use async_nats::jetstream::kv::Store;
 use async_nats::jetstream::Context;
 use bytes::{Buf, BufMut, Bytes};
@@ -17,6 +17,8 @@ use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::mpsc;
+use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tokio_stream::wrappers::ReceiverStream;
@@ -76,7 +78,7 @@ fn extract_bytes_list(merged: &Bytes) -> Result<Vec<Bytes>, String> {
 pub(crate) struct JetStreamDataStore {
     kv_store: Store,
     pod_replica_id: String,
-    _watcher_handle: Arc<JoinHandle<()>>,
+    responses_map: Arc<Mutex<HashMap<String, ResponseMode>>>,
 }
 
 impl JetStreamDataStore {
@@ -90,10 +92,12 @@ impl JetStreamDataStore {
             .await
             .map_err(|e| StoreError::Connection(format!("Failed to get datum kv store: {e:?}")))?;
 
+        let responses_map = Arc::new(Mutex::new(HashMap::new()));
         // start the central watcher
-        let central_watcher_handle = Self::spawn_central_watcher(
+        Self::spawn_central_watcher(
             pod_replica_id.clone(),
             kv_store.clone(),
+            Arc::clone(&responses_map),
         );
         info!(
             "Central watcher spawned for pod replica ID: {}",
@@ -102,7 +106,7 @@ impl JetStreamDataStore {
         Ok(Self {
             kv_store,
             pod_replica_id,
-            _watcher_handle: Arc::new(central_watcher_handle),
+            responses_map,
         })
     }
 
@@ -110,9 +114,9 @@ impl JetStreamDataStore {
     fn spawn_central_watcher(
         pod_replica_id: String,
         kv_store: Store,
+        responses_map: Arc<Mutex<HashMap<String, ResponseMode>>>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
-            let mut response_map = HashMap::new();
             let watch_pattern = format!("{}.{}.*.*.*", RESPONSE_KEY_PREFIX, pod_replica_id);
             info!(watch_pattern, "Starting central data watcher");
             let mut latest_revision = 1;
@@ -124,7 +128,7 @@ impl JetStreamDataStore {
                         break w;
                     }
                     Err(e) => {
-                        error!(error = %e, "Failed to establish initial watch for {}. Retrying...", watch_pattern);
+                        error!(error = ?e, "Failed to establish initial watch for {}. Retrying...", watch_pattern);
                         tokio::time::sleep(Duration::from_millis(100)).await;
                     }
                 };
@@ -158,13 +162,50 @@ impl JetStreamDataStore {
                         }
 
                         if key_suffix == START_PROCESSING_MARKER {
-                            if response_map.contains_key(request_id) {
-                                warn!(
-                                    ?request_id,
-                                    "Start processing marker already exists for this request ID"
-                                );
-                            } else {
-                                response_map.insert(parts[2].to_string(), Vec::new());
+                            let request_type = RequestType::try_from(entry.value.clone())
+                                .expect("Failed to convert request type");
+                            match request_type {
+                                RequestType::Sse => {
+                                    let (tx, rx) = mpsc::channel(10);
+                                    let mut response_map = responses_map.lock().await;
+                                    if response_map.contains_key(request_id) {
+                                        warn!(
+                                            ?request_id,
+                                            "Start processing marker already exists for this request ID"
+                                        );
+                                    } else {
+                                        response_map
+                                            .insert(request_id.to_string(), ResponseMode::Sse(tx));
+                                    }
+                                }
+                                RequestType::Sync => {
+                                    let mut response_map = responses_map.lock().await;
+                                    if response_map.contains_key(request_id) {
+                                        warn!(
+                                            ?request_id,
+                                            "Start processing marker already exists for this request ID"
+                                        );
+                                    } else {
+                                        response_map.insert(
+                                            request_id.to_string(),
+                                            ResponseMode::Sync(Vec::new()),
+                                        );
+                                    }
+                                }
+                                RequestType::Async => {
+                                    let mut response_map = responses_map.lock().await;
+                                    if response_map.contains_key(request_id) {
+                                        warn!(
+                                            ?request_id,
+                                            "Start processing marker already exists for this request ID"
+                                        );
+                                    } else {
+                                        response_map.insert(
+                                            request_id.to_string(),
+                                            ResponseMode::Async(Vec::new()),
+                                        );
+                                    }
+                                }
                             }
                             continue;
                         }
@@ -174,29 +215,70 @@ impl JetStreamDataStore {
                                 "{}.{}.{}",
                                 RESPONSE_KEY_PREFIX, pod_replica_id, FINAL_RESULT_KEY_SUFFIX
                             );
-                            if let Some(responses) = response_map.remove(request_id) {
-                                let merged_response = merge_bytes_list(&responses);
-                                kv_store
-                                    .put(final_result_key.clone(), merged_response)
-                                    .await
-                                    .unwrap();
-                            } else {
-                                error!(?request_id, "Not able to write final response");
+
+                            // Extract the response_mode while holding the lock
+                            let response_mode = {
+                                let mut response_map = responses_map.lock().await;
+                                response_map.get_mut(request_id).cloned()
+                            };
+
+                            let Some(response_mode) = response_mode else {
+                                continue;
+                            };
+
+                            match response_mode {
+                                ResponseMode::Sync(responses) => {
+                                    let merged_response = merge_bytes_list(&responses);
+
+                                    // Perform the I/O operation outside the lock
+                                    kv_store
+                                        .put(final_result_key.clone(), merged_response)
+                                        .await
+                                        .expect("Failed to put final-result key");
+                                }
+                                ResponseMode::Async(responses) => {
+                                    let merged_response = merge_bytes_list(&responses);
+
+                                    // Perform the I/O operation outside the lock
+                                    kv_store
+                                        .put(final_result_key.clone(), merged_response)
+                                        .await
+                                        .unwrap();
+
+                                    let mut response_map = responses_map.lock().await;
+                                    response_map.remove(request_id);
+                                }
+                                ResponseMode::Sse(_) => {
+                                    // The responses are already being sent to the channel
+                                    let mut response_map = responses_map.lock().await;
+                                    response_map.remove(request_id);
+                                }
                             }
                             continue;
                         }
 
-                        if let Some(responses) = response_map.get_mut(request_id) {
-                            responses.push(entry.value.clone());
-                        } else {
-                            error!(?request_id, "Received response for unregistered request ID");
+                        let mut response_map = responses_map.lock().await;
+                        if let Some(response_mode) = response_map.get_mut(request_id) {
+                            match response_mode {
+                                ResponseMode::Sse(tx) => {
+                                    if let Err(e) = tx.send(Arc::new(entry.value)).await {
+                                        error!(error = ?e, "Failed to send SSE response");
+                                    }
+                                }
+                                ResponseMode::Sync(responses) => {
+                                    responses.push(entry.value);
+                                }
+                                ResponseMode::Async(responses) => {
+                                    responses.push(entry.value);
+                                }
+                            }
                         }
                     }
 
                     Some(Err(e)) => {
-                        error!(error = %e, "Error from central watcher stream. Re-establishing watch...");
-                        tokio::time::sleep(Duration::from_millis(100)).await;
+                        error!(error = ?e, "Error from central watcher stream. Re-establishing watch...");
                         watcher = loop {
+                            tokio::time::sleep(Duration::from_millis(100)).await;
                             match kv_store
                                 .watch_from_revision(&watch_pattern, latest_revision + 1)
                                 .await
@@ -208,8 +290,7 @@ impl JetStreamDataStore {
                                     break w;
                                 }
                                 Err(re_e) => {
-                                    error!(error = %re_e, "Failed to re-establish watch. Trying again after delay.");
-                                    tokio::time::sleep(Duration::from_millis(100)).await;
+                                    error!(error = ?re_e, "Failed to re-establish watch. Trying again after delay.");
                                 }
                             }
                         };
@@ -217,8 +298,8 @@ impl JetStreamDataStore {
 
                     None => {
                         error!("Central watcher stream ended unexpectedly. Attempting to restart.");
-                        tokio::time::sleep(Duration::from_millis(100)).await;
                         watcher = loop {
+                            tokio::time::sleep(Duration::from_millis(100)).await;
                             match kv_store
                                 .watch_from_revision(&watch_pattern, latest_revision + 1)
                                 .await
@@ -228,8 +309,7 @@ impl JetStreamDataStore {
                                     break w;
                                 }
                                 Err(re_e) => {
-                                    error!(error = %re_e, "Failed to restart watch. Trying again after delay.");
-                                    tokio::time::sleep(Duration::from_millis(100)).await;
+                                    error!(error = ?re_e, "Failed to restart watch. Trying again after delay.");
                                 }
                             }
                         };
@@ -240,27 +320,43 @@ impl JetStreamDataStore {
     }
 }
 
+#[derive(Clone)]
+enum ResponseMode {
+    Sse(mpsc::Sender<Arc<Bytes>>),
+    Sync(Vec<Bytes>),
+    Async(Vec<Bytes>),
+}
+
 impl DataStore for JetStreamDataStore {
     /// Retrieve a data from the store. If the datum is not found, `None` is returned.
     async fn retrieve_data(&mut self, id: &str) -> StoreResult<Vec<Vec<u8>>> {
-        // get the final result from the kv store
+        // Check if the data exists in the in-memory map
+        {
+            if let Some(ResponseMode::Sync(data) | ResponseMode::Async(data)) = self.responses_map.lock().await.remove(id) {
+                return Ok(data.iter().map(|b| b.to_vec()).collect());
+            }
+        }
+
+        // Fallback to retrieving the data from the store
         let final_result_key = format!(
             "{}.{}.{}",
             RESPONSE_KEY_PREFIX, self.pod_replica_id, FINAL_RESULT_KEY_SUFFIX
         );
+
         loop {
             let response = self.kv_store.get(&final_result_key).await.map_err(|e| {
                 StoreError::StoreRead(format!(
                     "Failed to get final result key from kv store: {e:?}"
                 ))
             })?;
+
             if let Some(result) = response {
                 let extracted = extract_bytes_list(&result).map_err(|e| {
                     StoreError::StoreRead(format!("Failed to extract bytes list: {e:?}"))
                 })?;
                 return Ok(extracted.iter().map(|b| b.to_vec()).collect());
             } else {
-                    warn!(%id, "No final result key found in kv store, retrying");
+                warn!(?id, "No final result key found in kv store, retrying");
                 sleep(Duration::from_millis(20)).await;
             }
         }
@@ -292,7 +388,7 @@ impl DataStore for JetStreamDataStore {
                 let entry = match watch_event {
                     Ok(event) => event,
                     Err(e) => {
-                        error!(?e, "Received error from Jetstream KV watcher");
+                        error!(?e, "Received error from JetStream KV watcher");
                         continue;
                     }
                 };

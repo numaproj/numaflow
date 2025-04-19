@@ -105,9 +105,9 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 			}); err != nil {
 				return fmt.Errorf("failed to create serving source KV %q, %w", cbStoreName, err)
 			}
-			log.Infow("Succeeded to create a serving source KV", zap.String("kvName", cbStoreName))
+			log.Infow("Succeeded to create a serving source Callback KV", zap.String("kvName", cbStoreName))
 		}
-		rsStoreName := JetStreamServingResultStoreName(servingSourceStore)
+		rsStoreName := JetStreamServingResponseStoreName(servingSourceStore)
 		if _, err := jss.js.KeyValue(rsStoreName); err != nil {
 			if !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
 				return fmt.Errorf("failed to query information of KV %q, %w", rsStoreName, err)
@@ -123,7 +123,25 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 			}); err != nil {
 				return fmt.Errorf("failed to create serving source KV %q, %w", rsStoreName, err)
 			}
-			log.Infow("Succeeded to create a serving source KV", zap.String("kvName", rsStoreName))
+			log.Infow("Succeeded to create a serving source Response KV", zap.String("kvName", rsStoreName))
+		}
+		statusStoreName := JetStreamServingStatusStoreName(servingSourceStore)
+		if _, err := jss.js.KeyValue(statusStoreName); err != nil {
+			if !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
+				return fmt.Errorf("failed to query information of KV %q, %w", statusStoreName, err)
+			}
+			if _, err := jss.js.CreateKeyValue(&nats.KeyValueConfig{
+				Bucket:       statusStoreName,
+				MaxValueSize: 0,
+				History:      1,
+				TTL:          2 * time.Hour,
+				MaxBytes:     0,
+				Storage:      nats.FileStorage,
+				Replicas:     v.GetInt("stream.replicas"),
+			}); err != nil {
+				return fmt.Errorf("failed to create serving source KV %q, %w", statusStoreName, err)
+			}
+			log.Infow("Succeeded to create a serving source Status KV", zap.String("kvName", statusStoreName))
 		}
 	}
 
@@ -266,12 +284,16 @@ func (jss *jetStreamSvc) DeleteBuffersAndBuckets(ctx context.Context, buffers, b
 	if servingSourceStore != "" {
 		servingSourceCallbackStoreKVName := JetStreamServingCallbackStoreName(servingSourceStore)
 		if err := jss.js.DeleteKeyValue(servingSourceCallbackStoreKVName); err != nil && !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
-			return fmt.Errorf("failed to serving source callback store %q, %w", servingSourceCallbackStoreKVName, err)
+			return fmt.Errorf("failed to delete serving source callback store %q, %w", servingSourceCallbackStoreKVName, err)
 		}
 		log.Infow("Succeeded to delete a serving source store", zap.String("kvName", servingSourceCallbackStoreKVName))
-		servingSourceResponseStoreKVName := JetStreamServingResultStoreName(servingSourceStore)
+		servingSourceResponseStoreKVName := JetStreamServingResponseStoreName(servingSourceStore)
 		if err := jss.js.DeleteKeyValue(servingSourceResponseStoreKVName); err != nil && !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
-			return fmt.Errorf("failed to serving source store %q, %w", servingSourceResponseStoreKVName, err)
+			return fmt.Errorf("failed to delete serving source response store %q, %w", servingSourceResponseStoreKVName, err)
+		}
+		servingSourceStatusStoreKVName := JetStreamServingStatusStoreName(servingSourceStore)
+		if err := jss.js.DeleteKeyValue(servingSourceStatusStoreKVName); err != nil && !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
+			return fmt.Errorf("failed to delete serving source status store %q, %w", servingSourceStatusStoreKVName, err)
 		}
 		log.Infow("Succeeded to delete a serving source response store", zap.String("kvName", servingSourceResponseStoreKVName))
 	}
@@ -309,11 +331,15 @@ func (jss *jetStreamSvc) ValidateBuffersAndBuckets(ctx context.Context, buffers,
 	if servingSourceStore != "" {
 		servingSourceCallbackStoreKVName := JetStreamServingCallbackStoreName(servingSourceStore)
 		if _, err := jss.js.KeyValue(servingSourceCallbackStoreKVName); err != nil {
-			return fmt.Errorf("failed to query serving source store KV %q, %w", servingSourceCallbackStoreKVName, err)
+			return fmt.Errorf("failed to query serving source callback store KV %q, %w", servingSourceCallbackStoreKVName, err)
 		}
-		servingSourceResponseStoreKVName := JetStreamServingCallbackStoreName(servingSourceStore)
+		servingSourceResponseStoreKVName := JetStreamServingResponseStoreName(servingSourceStore)
 		if _, err := jss.js.KeyValue(servingSourceResponseStoreKVName); err != nil {
-			return fmt.Errorf("failed to query serving source store KV %q, %w", servingSourceResponseStoreKVName, err)
+			return fmt.Errorf("failed to query serving source response store KV %q, %w", servingSourceResponseStoreKVName, err)
+		}
+		servingSourceStatusStoreKVName := JetStreamServingStatusStoreName(servingSourceStore)
+		if _, err := jss.js.KeyValue(servingSourceStatusStoreKVName); err != nil {
+			return fmt.Errorf("failed to query serving source status store KV %q, %w", servingSourceStatusStoreKVName, err)
 		}
 	}
 	return nil
@@ -374,6 +400,10 @@ func JetStreamServingCallbackStoreName(servingSourceStoreName string) string {
 	return fmt.Sprintf("%s_SERVING_CALLBACK_STORE", servingSourceStoreName)
 }
 
-func JetStreamServingResultStoreName(servingSourceStoreName string) string {
+func JetStreamServingResponseStoreName(servingSourceStoreName string) string {
 	return fmt.Sprintf("%s_SERVING_RESPONSE_STORE", servingSourceStoreName)
+}
+
+func JetStreamServingStatusStoreName(servingSourceStoreName string) string {
+	return fmt.Sprintf("%s_SERVING_STATUS_STORE", servingSourceStoreName)
 }

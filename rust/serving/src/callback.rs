@@ -88,10 +88,7 @@ impl CallbackHandler {
         previous_vertex: String,
         responses: Vec<Option<Vec<String>>>,
     ) -> crate::Result<JoinHandle<()>> {
-        let cb_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("System time is older than Unix epoch time")
-            .as_millis() as u64;
+        let cb_time = Utc::now().timestamp_millis() as u64;
 
         let responses = responses
             .into_iter()

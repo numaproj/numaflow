@@ -1,15 +1,15 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-use base64::prelude::BASE64_STANDARD;
-use base64::Engine;
-use rcgen::{generate_simple_self_signed, Certificate, CertifiedKey, KeyPair};
-use serde::{Deserialize, Serialize};
-
 use crate::{
     pipeline::PipelineDCG,
     Error::{self, ParseConfig},
 };
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine;
+use bytes::Bytes;
+use rcgen::{generate_simple_self_signed, Certificate, CertifiedKey, KeyPair};
+use serde::{Deserialize, Serialize};
 
 const ENV_NUMAFLOW_SERVING_APP_PORT: &str = "NUMAFLOW_SERVING_APP_LISTEN_PORT";
 pub const ENV_MIN_PIPELINE_SPEC: &str = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC";
@@ -22,11 +22,35 @@ const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USE
 const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
 const ENV_NUMAFLOW_SERVING_CALLBACK_STORE: &str = "NUMAFLOW_SERVING_CALLBACK_STORE";
 const ENV_NUMAFLOW_SERVING_RESPONSE_STORE: &str = "NUMAFLOW_SERVING_RESPONSE_STORE";
+const ENV_NUMAFLOW_SERVING_STATUS_STORE: &str = "NUMAFLOW_SERVING_STATUS_STORE";
 
 pub fn generate_certs() -> Result<(Certificate, KeyPair), String> {
     let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
         .map_err(|e| format!("Failed to generate cert {:?}", e))?;
     Ok((cert, key_pair))
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub(crate) enum RequestType {
+    Sse,
+    Sync,
+    Async,
+}
+
+impl TryInto<Bytes> for RequestType {
+    type Error = serde_json::Error;
+
+    fn try_into(self) -> Result<Bytes, Self::Error> {
+        Ok(Bytes::from(serde_json::to_vec(&self)?))
+    }
+}
+
+impl TryFrom<Bytes> for RequestType {
+    type Error = serde_json::Error;
+
+    fn try_from(value: Bytes) -> Result<Self, Self::Error> {
+        serde_json::from_slice(&value)
+    }
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -58,6 +82,7 @@ pub struct Settings {
     pub store_type: StoreType,
     pub js_callback_store: String,
     pub js_response_store: String,
+    pub js_status_store: String,
     pub api_auth_token: Option<String>,
     pub pipeline_spec: PipelineDCG,
     pub nats_basic_auth: Option<(String, String)>,
@@ -81,8 +106,9 @@ impl Default for Settings {
             upstream_addr: "localhost:8888".to_owned(),
             drain_timeout_secs: 600,
             store_type: StoreType::default(),
-            js_callback_store: "kv".to_owned(),
-            js_response_store: "kv".to_owned(),
+            js_callback_store: "callback-kv".to_owned(),
+            js_response_store: "response-kv".to_owned(),
+            js_status_store: "status-kv".to_owned(),
             api_auth_token: None,
             pipeline_spec: Default::default(),
             nats_basic_auth: None,
@@ -200,6 +226,12 @@ impl TryFrom<HashMap<String, String>> for Settings {
                 ParseConfig("Serving store is default, but environment variable is not set".into())
             })?;
 
+        let js_status_store = env_vars
+            .get(ENV_NUMAFLOW_SERVING_STATUS_STORE)
+            .ok_or_else(|| {
+                ParseConfig("Serving store is default, but environment variable is not set".into())
+            })?;
+
         let mut settings = Settings {
             pipeline_spec,
             js_callback_store: js_cb_store.into(),
@@ -207,6 +239,7 @@ impl TryFrom<HashMap<String, String>> for Settings {
             js_message_stream: js_source_spec.stream,
             jetstream_url: js_source_spec.url,
             js_response_store: js_response_store.into(),
+            js_status_store: js_status_store.into(),
             ..Default::default()
         };
 
@@ -247,7 +280,7 @@ impl TryFrom<HashMap<String, String>> for Settings {
         settings.drain_timeout_secs = serving_server_settings
             .request_timeout_seconds
             .unwrap_or(120)
-            .max(1) as u64; // Ensure timeout is atleast 1 second
+            .max(1) as u64; // Ensure timeout is at least 1 second
 
         if let Some(auth) = serving_server_settings.auth {
             let token = auth.token.unwrap();

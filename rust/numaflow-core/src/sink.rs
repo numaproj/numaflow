@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 use std::time::Duration;
-
+use bytes::Bytes;
 use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::sink_response;
@@ -382,6 +382,7 @@ impl SinkWriter {
     ) -> Result<JoinHandle<Result<()>>> {
         let handle: JoinHandle<Result<()>> = tokio::spawn({
             async move {
+                info!(?self.batch_size, ?self.chunk_timeout, "Starting sink writer");
                 let chunk_stream =
                     messages_stream.chunks_timeout(self.batch_size, self.chunk_timeout);
 
@@ -397,7 +398,7 @@ impl SinkWriter {
                             break;
                         }
                     };
-
+                    info!(len = ?batch.len(), "Received batch of messages");
                     // we are in shutting down mode, we will not be writing to the sink
                     // tell tracker to nack the messages.
                     if self.shutting_down {
@@ -820,21 +821,22 @@ impl SinkWriter {
                 "Response contains serving messages but no serving store is configured".to_string(),
             ));
         };
-
+        
+        let mut payloads = Vec::with_capacity(serving_msgs.len());
         for msg in serving_msgs {
-            let payload = msg.value.clone().into();
             let id = msg
                 .headers
                 .get(NUMAFLOW_ID_HEADER)
-                .ok_or(Error::Sink("Missing numaflow id header".to_string()))?;
+                .ok_or(Error::Sink("Missing numaflow id header".to_string()))?.clone();
+            payloads.push((id, msg.value.into()));
+        }
 
-            match serving_store {
-                ServingStore::UserDefined(ud_store) => {
-                    ud_store.put_datum(id, get_vertex_name(), payload).await?;
-                }
-                ServingStore::Nats(nats_store) => {
-                    nats_store.put_datum(id, get_vertex_name(), payload).await?;
-                }
+        match serving_store {
+            ServingStore::UserDefined(ud_store) => {
+                ud_store.put_datum( get_vertex_name(), payloads).await?;
+            }
+            ServingStore::Nats(nats_store) => {
+                nats_store.put_datum(get_vertex_name(), payloads).await?;
             }
         }
         Ok(())

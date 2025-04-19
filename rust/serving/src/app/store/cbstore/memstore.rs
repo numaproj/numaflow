@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::app::store::datastore::{Error as StoreError, Result as StoreResult};
+use crate::callback::Callback;
+use crate::config::RequestType;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use tokio_stream::wrappers::ReceiverStream;
-
-use crate::app::store::datastore::{Error as StoreError, Result as StoreResult};
-use crate::callback::Callback;
 
 /// An in-memory implementation of the callback store. Only used for testing.
 #[derive(Clone)]
@@ -39,7 +39,11 @@ impl super::CallbackStore for InMemoryCallbackStore {
         Ok(())
     }
 
-    async fn register_and_watch(&mut self, id: &str) -> StoreResult<ReceiverStream<Arc<Callback>>> {
+    async fn register_and_watch(
+        &mut self,
+        id: &str,
+        _request_type: RequestType,
+    ) -> StoreResult<ReceiverStream<Arc<Callback>>> {
         let mut data = self.data.lock().await;
         if data.contains_key(id) {
             return Err(StoreError::DuplicateRequest(id.to_string()));
@@ -115,7 +119,10 @@ mod tests {
         let mut store = create_test_store();
         let id = "test_id";
 
-        let mut rx = store.register_and_watch(id).await.unwrap();
+        let mut rx = store
+            .register_and_watch(id, RequestType::Sync)
+            .await
+            .unwrap();
         let received_callback = rx.next().await.unwrap();
         assert_eq!(received_callback.id, "test_id");
         assert_eq!(received_callback.vertex, "vertex");

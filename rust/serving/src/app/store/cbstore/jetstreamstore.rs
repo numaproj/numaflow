@@ -8,7 +8,8 @@ use std::time::{Duration, Instant};
 use crate::app::store::cbstore::ProcessingStatus;
 use crate::app::store::datastore::{Error as StoreError, Result as StoreResult};
 use crate::callback::Callback;
-use async_nats::jetstream::kv::{ Store};
+use crate::config::RequestType;
+use async_nats::jetstream::kv::{CreateErrorKind, Store};
 use async_nats::jetstream::Context;
 use bytes::Bytes;
 use chrono::Utc;
@@ -16,7 +17,7 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
-use tracing::{debug, error, info, trace_span, warn, Instrument};
+use tracing::{debug, error, info, warn, Instrument};
 
 const CALLBACK_KEY_PREFIX: &str = "cb";
 const STATUS_KEY_PREFIX: &str = "status";
@@ -24,14 +25,14 @@ const RESPONSE_KEY_PREFIX: &str = "rs";
 const START_PROCESSING_MARKER: &str = "start.processing";
 const DONE_PROCESSING_MARKER: &str = "done.processing";
 
-/// JetStream implementation of the callback store using a central watcher per instance.
+/// JetStream implementation of the callback store.
 #[derive(Clone)]
 pub(crate) struct JetStreamCallbackStore {
     pod_replica_id: String,
     callback_kv: Store,
+    status_kv: Store,
     response_kv: Store,
     callback_senders: Arc<Mutex<HashMap<String, mpsc::Sender<Arc<Callback>>>>>,
-    _watcher_handle: Arc<JoinHandle<()>>,
 }
 
 impl JetStreamCallbackStore {
@@ -39,6 +40,7 @@ impl JetStreamCallbackStore {
         js_context: Context,
         pod_replica_id: String,
         callback_bucket: &str,
+        status_bucket: &str,
         response_bucket: &str,
     ) -> StoreResult<Self> {
         info!(
@@ -55,6 +57,12 @@ impl JetStreamCallbackStore {
                 ))
             })?;
 
+        let status_kv = js_context.get_key_value(status_bucket).await.map_err(|e| {
+            StoreError::Connection(format!(
+                "Failed to get status kv store '{status_bucket}': {e:?}"
+            ))
+        })?;
+
         let response_kv = js_context
             .get_key_value(response_bucket)
             .await
@@ -65,9 +73,7 @@ impl JetStreamCallbackStore {
             })?;
 
         let callback_senders = Arc::new(Mutex::new(HashMap::new()));
-
-        // Spawn and store handle for the central watcher task
-        let central_watcher_handle = Self::spawn_central_watcher(
+        Self::spawn_central_watcher(
             pod_replica_id.clone(),
             callback_kv.clone(),
             Arc::clone(&callback_senders),
@@ -76,9 +82,9 @@ impl JetStreamCallbackStore {
         Ok(Self {
             pod_replica_id,
             callback_kv,
+            status_kv,
             response_kv,
             callback_senders,
-            _watcher_handle: Arc::new(central_watcher_handle), // Store central handle
         })
     }
 
@@ -87,7 +93,7 @@ impl JetStreamCallbackStore {
         kv_store: Store,
         senders: Arc<Mutex<HashMap<String, mpsc::Sender<Arc<Callback>>>>>,
     ) -> JoinHandle<()> {
-        let span = tracing::info_span!("central_callback_watcher", replica_id = %pod_replica_id);
+        let span = tracing::info_span!("central_callback_watcher", replica_id = ?pod_replica_id);
         let mut latest_revision = 1;
 
         tokio::spawn(async move {
@@ -103,7 +109,7 @@ impl JetStreamCallbackStore {
                         break w;
                     },
                     Err(e) => {
-                        error!(error = %e, "Failed to establish initial watch for {}. Retrying...", watch_key_pattern);
+                        error!(error = ?e, "Failed to establish initial watch for {}. Retrying...", watch_key_pattern);
                         tokio::time::sleep(Duration::from_millis(100)).await;
                     }
                 };
@@ -113,8 +119,9 @@ impl JetStreamCallbackStore {
             loop {
                 match watcher.next().await {
                     Some(Ok(entry)) => {
+                        let cb_process_time = Instant::now();
                         latest_revision = entry.revision;
-                        debug!(key = %entry.key, operation = ?entry.operation, revision = entry.revision, "Central watcher received entry");
+                        debug!(key = ?entry.key, operation = ?entry.operation, revision = entry.revision, "Central watcher received entry");
 
                         // Skip deletions/purges, only process Put operations for new callbacks
                         if entry.operation != async_nats::jetstream::kv::Operation::Put {
@@ -126,13 +133,15 @@ impl JetStreamCallbackStore {
                         let pod_replica = parts[1];
                         let request_id = parts[2];
                         if parts.len() < 5 || parts[0] != CALLBACK_KEY_PREFIX || pod_replica != pod_replica_id {
-                            error!(key = %entry.key, "Received unexpected key format in central watcher");
+                            error!(key = ?entry.key, "Received unexpected key format in central watcher");
                             continue;
                         }
 
                         match entry.value.try_into() {
                             Ok(callback_obj) => {
                                 let callback: Arc<Callback> = Arc::new(callback_obj);
+                                let current_time = Utc::now().timestamp_millis() as u64;
+                                info!(id = ?callback.id, "Received cb with time diff={:?}", current_time - callback.cb_time);
                                 let mut sender = None;
                                 {
                                     let senders_guard = senders.lock().expect("Failed to acquire lock");
@@ -142,20 +151,21 @@ impl JetStreamCallbackStore {
                                 }
                                 if let Some(sender) = sender {
                                     if sender.send(callback).await.is_err() {
-                                        warn!(request_id = %request_id, "Receiver dropped during send. Stopping watch.");
+                                        warn!(request_id = ?request_id, "Receiver dropped during send. Stopping watch.");
                                         break;
                                     }
                                 } else {
-                                    warn!(request_id = %request_id, "No active sender found for received callback");
+                                    warn!(request_id = ?request_id, "No active sender found for received callback");
                                 }
                             }
                             Err(e) => {
-                                error!(key = %entry.key, error = ?e, "Failed to deserialize callback in central watcher");
+                                error!(key = ?entry.key, error = ?e, "Failed to deserialize callback in central watcher");
                             }
                         }
+                        info!("Time taken to process a callback={:?}", cb_process_time.elapsed().as_millis());
                     }
                     Some(Err(e)) => {
-                        error!(error = %e, "Error from central watcher stream. Re-establishing watch...");
+                        error!(error = ?e, "Error from central watcher stream. Re-establishing watch...");
                         tokio::time::sleep(Duration::from_millis(100)).await;
                         watcher = loop {
                             match kv_store.watch_from_revision(&watch_key_pattern, latest_revision+1).await {
@@ -164,7 +174,7 @@ impl JetStreamCallbackStore {
                                     break w;
                                 },
                                 Err(re_e) => {
-                                    error!(error = %re_e, "Failed to re-establish watch. Trying again after delay.");
+                                    error!(error = ?re_e, "Failed to re-establish watch. Trying again after delay.");
                                     tokio::time::sleep(Duration::from_millis(100)).await;
                                 }
                             }
@@ -193,28 +203,15 @@ impl JetStreamCallbackStore {
 
     async fn update_status(&self, id: &str, status: ProcessingStatus) -> StoreResult<()> {
         let key = format!("{}.{}", STATUS_KEY_PREFIX, id);
-        debug!(id, replica_id = %status.replica_id(), status = ?status, "Updating status");
-        let status_bytes = serde_json::to_vec(&status).map_err(|e| {
+
+        let status_bytes: Bytes = status.try_into().map_err(|e| {
             StoreError::StoreWrite(format!("Failed to serialize status for {id}: {e:?}"))
         })?;
 
-        self.callback_kv
-            .put(key, Bytes::from(status_bytes))
-            .await
-            .map_err(|e| {
-                StoreError::StoreWrite(format!("Failed to update status for {id}: {e:?}"))
-            })?;
+        self.status_kv.put(key, status_bytes).await.map_err(|e| {
+            StoreError::StoreWrite(format!("Failed to update status for {id}: {e:?}"))
+        })?;
         Ok(())
-    }
-
-    fn deserialize_status(entry_value: Bytes) -> StoreResult<ProcessingStatus> {
-        // Takes Bytes directly now
-        serde_json::from_slice(&entry_value).map_err(|e| {
-            StoreError::StoreRead(format!(
-                "Failed to deserialize ProcessingStatus JSON: {:?}",
-                e
-            ))
-        })
     }
 
     async fn watch_historical_callbacks(
@@ -224,12 +221,12 @@ impl JetStreamCallbackStore {
         tx: mpsc::Sender<Arc<Callback>>,
     ) {
         let key_pattern = format!("{}.{}.{}.*.*", CALLBACK_KEY_PREFIX, previous_replica_id, id);
-        info!(request_id = %id, %previous_replica_id, key_pattern, "Historical scan task started");
+        info!(request_id = ?id, ?previous_replica_id, key_pattern, "Historical scan task started");
 
         let mut entries_stream = match callback_kv.watch(&key_pattern).await {
             Ok(stream) => stream,
             Err(e) => {
-                error!(request_id = %id, error = %e, "Failed to initiate historical callback scan");
+                error!(request_id = ?id, error = ?e, "Failed to initiate historical callback scan");
                 return;
             }
         };
@@ -245,18 +242,18 @@ impl JetStreamCallbackStore {
                         Ok(callback_obj) => {
                             let callback = Arc::new(callback_obj);
                             if tx.send(callback).await.is_err() {
-                                warn!(request_id = %id, "Receiver dropped during historical send. Stopping scan stream.");
+                                warn!(request_id = ?id, "Receiver dropped during historical send. Stopping scan stream.");
                                 break;
                             }
                             count += 1;
                         }
                         Err(e) => {
-                            error!(request_id = %id, key = %entry.key, error = %e, "Failed to deserialize historical callback during scan");
+                            error!(request_id = ?id, key = ?entry.key, error = ?e, "Failed to deserialize historical callback during scan");
                         }
                     }
                 }
                 Err(e) => {
-                    error!(request_id = %id, error = %e, "Error iterating historical callback scan stream. Stopping scan.");
+                    error!(request_id = ?id, error = ?e, "Error iterating historical callback scan stream. Stopping scan.");
                     break;
                 }
             }
@@ -273,13 +270,12 @@ impl super::CallbackStore for JetStreamCallbackStore {
         };
 
         self.update_status(id, completed_status).await?;
-        self.callback_kv.delete(id).await.map_err(|e| {
-            StoreError::StoreWrite(format!("Failed to delete callback for {id}: {e:?}"))
-        })?;
-
         {
             // Remove sender from the map *after* successfully updating status
-            let mut senders_guard = self.callback_senders.lock().expect("Failed to acquire lock");
+            let mut senders_guard = self
+                .callback_senders
+                .lock()
+                .expect("Failed to acquire lock");
             if senders_guard.remove(id).is_some() {
                 debug!(id, "Removed active sender during deregistration.");
             } else {
@@ -287,17 +283,17 @@ impl super::CallbackStore for JetStreamCallbackStore {
             }
         }
 
-        debug!(%id, replica_id = %self.pod_replica_id, "De-registering request for data collection.");
+        debug!(?id, replica_id = ?self.pod_replica_id, "De-registering request for data collection.");
         let done_key = format!(
             "{}.{}.{}.{}",
             RESPONSE_KEY_PREFIX, self.pod_replica_id, id, DONE_PROCESSING_MARKER
         );
         match self.response_kv.put(done_key.clone(), Bytes::new()).await {
             Ok(_) => {
-                debug!(%id, %done_key, "Successfully wrote done processing marker.");
+                debug!(?id, ?done_key, "Successfully wrote done processing marker.");
             }
             Err(e) => {
-                error!(%id, %done_key, error = %e, "Failed to write done processing marker.");
+                error!(?id, ?done_key, error = ?e, "Failed to write done processing marker.");
                 return Err(StoreError::StoreWrite(format!(
                     "Failed to write done marker {done_key}: {e:?}"
                 )));
@@ -307,7 +303,7 @@ impl super::CallbackStore for JetStreamCallbackStore {
     }
 
     async fn mark_as_failed(&mut self, id: &str, error: &str) -> StoreResult<()> {
-        info!(id, replica_id = %self.pod_replica_id, error, "Marking request as failed");
+        info!(id, replica_id = ?self.pod_replica_id, error, "Marking request as failed");
         let failed_status = ProcessingStatus::Failed {
             error: error.to_string(),
             replica_id: self.pod_replica_id.clone(),
@@ -315,7 +311,10 @@ impl super::CallbackStore for JetStreamCallbackStore {
         self.update_status(id, failed_status).await?;
 
         // Remove sender from the map *after* successfully updating status
-        let mut senders_guard = self.callback_senders.lock().expect("Failed to lock senders");
+        let mut senders_guard = self
+            .callback_senders
+            .lock()
+            .expect("Failed to lock senders");
         if senders_guard.remove(id).is_some() {
             debug!(id, "Removed active sender during failure marking.");
         } else {
@@ -324,41 +323,56 @@ impl super::CallbackStore for JetStreamCallbackStore {
         Ok(())
     }
 
-    // watch_callbacks now spawns task that streams historical scan results
-    async fn register_and_watch(&mut self, id: &str) -> StoreResult<ReceiverStream<Arc<Callback>>> {
-        let start_time = Utc::now();
+    async fn register_and_watch(
+        &mut self,
+        id: &str,
+        request_type: RequestType,
+    ) -> StoreResult<ReceiverStream<Arc<Callback>>> {
+        let start_time = Instant::now();
         let status_key = format!("{}.{}", STATUS_KEY_PREFIX, id);
-        info!(id, replica_id = %self.pod_replica_id, "Registering request");
+        debug!(id, replica_id = ?self.pod_replica_id, "Registering request");
 
         let initial_status = ProcessingStatus::InProgress {
             replica_id: self.pod_replica_id.clone(),
         };
-        let status_bytes = serde_json::to_vec(&initial_status).map_err(|e| {
-            StoreError::StoreWrite(format!(
-                "Failed to serialize initial status for {id}: {e:?}"
-            ))
+        let status_bytes: Bytes = initial_status.clone().try_into().map_err(|e| {
+            StoreError::StoreWrite(format!("Failed to serialize status for {id}: {e:?}"))
         })?;
 
-        let status_start_time = Instant::now();
         let current_status = match self
             .callback_kv
-            .put(&status_key, Bytes::from(status_bytes))
+            .create(&status_key, status_bytes)
             .await
         {
             Ok(_) => {
+                info!(id, status_key, "Request registered successfully.");
                 initial_status
             }
             Err(e) => {
-                error!(id, status_key, error = %e, "Failed to create status entry during registration.");
-                return Err(StoreError::StoreWrite(format!(
-                    "Failed to register request id {status_key} in status kv store: {e:?}"
-                )));
+                if e.kind() == CreateErrorKind::AlreadyExists {
+                    warn!(
+                        id,
+                        status_key, "Registration attempt failed: Request ID already exists."
+                    );
+                    let status_entry = self.callback_kv.get(&status_key).await.map_err(|e| {
+                        StoreError::StoreRead(format!(
+                            "Failed to get status for watch check {id}: {e:?}"
+                        ))
+                    })?;
+                    ProcessingStatus::try_from(status_entry.expect("status should be present"))
+                        .map_err(|e| {
+                            StoreError::StoreRead(format!(
+                                "Failed to deserialize status for watch check {id}: {e:?}"
+                            ))
+                        })?
+                } else {
+                    error!(id, status_key, error = ?e, "Failed to create status entry during registration.");
+                    return Err(StoreError::StoreWrite(format!(
+                        "Failed to register request id {status_key} in status kv store: {e:?}"
+                    )));
+                }
             }
         };
-        info!(?id, "Time taken to write status={:?}", status_start_time.elapsed().as_millis());
-        let span =
-            trace_span!("watch_callbacks", request_id = id, replica_id = %self.pod_replica_id);
-        let _enter = span.enter();
 
         let (tx, rx) = mpsc::channel(10);
         match &current_status {
@@ -366,7 +380,7 @@ impl super::CallbackStore for JetStreamCallbackStore {
                 replica_id: processing_replica_id,
             } => {
                 if processing_replica_id != &self.pod_replica_id {
-                    warn!(current_replica = %self.pod_replica_id, previous_replica = %processing_replica_id, "Fail over detected. Taking over request processing.");
+                    warn!(current_replica = ?self.pod_replica_id, previous_replica = ?processing_replica_id, "Fail over detected. Taking over request processing.");
                     let callback_kv_clone = self.callback_kv.clone();
                     let id_clone = id.to_string();
                     let tx_clone = tx.clone();
@@ -396,33 +410,33 @@ impl super::CallbackStore for JetStreamCallbackStore {
         }
 
         {
-            let callback_write_time = Instant::now();
-            let mut senders_guard = self.callback_senders.lock().expect("Failed to lock senders");
-            if senders_guard.contains_key(id) {
-                error!("Duplicate watch attempt detected.");
-                drop(senders_guard);
-                return Err(StoreError::StoreWrite(format!(
-                    "Duplicate watch attempt for ID {id}"
-                )));
-            }
+            let mut senders_guard = self
+                .callback_senders
+                .lock()
+                .expect("Failed to lock senders");
             senders_guard.insert(id.to_string(), tx);
-            info!("Time taken to add sender={:?}", callback_write_time.elapsed().as_millis());
         }
 
-        let current_timestamp = Utc::now().timestamp().to_string();
         let response_key = format!(
             "{}.{}.{}.{}",
             RESPONSE_KEY_PREFIX, self.pod_replica_id, id, START_PROCESSING_MARKER
         );
 
+        let request_type_bytes: Bytes = request_type.try_into().map_err(|e| {
+            StoreError::StoreWrite(format!("Failed to serialize request type for {id}: {e:?}"))
+        })?;
+
         self.response_kv
-            .create(&response_key, Bytes::from(current_timestamp))
+            .put(&response_key, request_type_bytes)
             .await
             .map_err(|e| {
                 StoreError::StoreWrite(format!("Failed to create response entry for {id}: {e:?}"))
             })?;
 
-        info!("Time taken to register={:?}", (Utc::now() - start_time).num_milliseconds());
+        info!(
+            "Time taken to register={:?}",
+            start_time.elapsed().as_millis()
+        );
         Ok(ReceiverStream::new(rx))
     }
 
@@ -432,7 +446,9 @@ impl super::CallbackStore for JetStreamCallbackStore {
             StoreError::StoreRead(format!("Failed to get status for request id {id}: {e:?}"))
         })?;
         match entry {
-            Some(e) => Self::deserialize_status(e),
+            Some(status) => ProcessingStatus::try_from(status).map_err(|e| {
+                StoreError::StoreRead(format!("Failed to deserialize status for {id}: {e:?}"))
+            }),
             None => Err(StoreError::InvalidRequestId(id.to_string())),
         }
     }

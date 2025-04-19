@@ -178,6 +178,7 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 		{Name: "NUMAFLOW_SERVING_SOURCE_SETTINGS", Value: encodedServingSourceSettings},
 		{Name: EnvServingCallbackStore, Value: fmt.Sprintf("%s_SERVING_CALLBACK_STORE", sp.GetServingStoreName())},
 		{Name: EnvServingResponseStore, Value: fmt.Sprintf("%s_SERVING_RESPONSE_STORE", sp.GetServingStoreName())},
+		{Name: EnvServingStatusStore, Value: fmt.Sprintf("%s_SERVING_STATUS_STORE", sp.GetServingStoreName())},
 		{Name: EnvServingPort, Value: strconv.Itoa(ServingServicePort)},
 		{ // TODO: do we still need it?
 			Name: EnvServingHostIP,
@@ -309,6 +310,7 @@ func (sp ServingPipeline) GetPipelineObj(req GetServingPipelineResourceReq) Pipe
 			corev1.EnvVar{Name: EnvServingSettings, Value: encodedServingSourceSettings},
 			corev1.EnvVar{Name: EnvServingCallbackStore, Value: fmt.Sprintf("%s_SERVING_CALLBACK_STORE", sp.GetServingStoreName())},
 			corev1.EnvVar{Name: EnvServingResponseStore, Value: fmt.Sprintf("%s_SERVING_RESPONSE_STORE", sp.GetServingStoreName())},
+			corev1.EnvVar{Name: EnvServingStatusStore, Value: fmt.Sprintf("%s_SERVING_STATUS_STORE", sp.GetServingStoreName())},
 			corev1.EnvVar{Name: EnvNumaflowRuntime, Value: "rust"},
 		)
 	}

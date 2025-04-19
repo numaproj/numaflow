@@ -113,6 +113,7 @@ async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
         js_context.clone(),
         "0".to_string(),
         &settings.js_callback_store,
+        &settings.js_status_store,
         &settings.js_response_store,
     )
     .await?;

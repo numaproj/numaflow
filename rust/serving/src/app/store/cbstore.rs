@@ -2,13 +2,14 @@
 //! build the processing graph which is used to check whether the processing is complete or not.
 //! The progress as the message moves from one vertex to another is **streamed** and the serving
 //! host that accepted that message from the client will be **watching** that stream of callbacks.
-use std::sync::Arc;
-
+use bytes::Bytes;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::app::store::datastore::Result as StoreResult;
 use crate::callback::Callback;
+use crate::config::RequestType;
 
 /// JetStream based callback store
 pub(crate) mod jetstreamstore;
@@ -33,14 +34,18 @@ pub(crate) enum ProcessingStatus {
     },
 }
 
-// Helper to extract replica_id regardless of variant
-impl ProcessingStatus {
-    fn replica_id(&self) -> &str {
-        match self {
-            ProcessingStatus::InProgress { replica_id } => replica_id,
-            ProcessingStatus::Completed { replica_id, .. } => replica_id,
-            ProcessingStatus::Failed { replica_id, .. } => replica_id,
-        }
+impl TryFrom<Bytes> for ProcessingStatus {
+    type Error = serde_json::Error;
+
+    fn try_from(value: Bytes) -> Result<Self, Self::Error> {
+        serde_json::from_slice(&value)
+    }
+}
+
+impl TryFrom<ProcessingStatus> for Bytes {
+    type Error = serde_json::Error;
+    fn try_from(status: ProcessingStatus) -> Result<Bytes, serde_json::Error> {
+        Ok(Bytes::from(serde_json::to_vec(&status)?))
     }
 }
 
@@ -54,7 +59,11 @@ pub(crate) trait LocalCallbackStore {
     async fn mark_as_failed(&mut self, id: &str, error: &str) -> StoreResult<()>;
     /// watch the callback payloads for a given request id to determine whether the
     /// request is complete.
-    async fn register_and_watch(&mut self, id: &str) -> StoreResult<ReceiverStream<Arc<Callback>>>;
+    async fn register_and_watch(
+        &mut self,
+        id: &str,
+        request_type: RequestType,
+    ) -> StoreResult<ReceiverStream<Arc<Callback>>>;
     /// retrieve the processing status of a request id.
     async fn status(&mut self, id: &str) -> StoreResult<ProcessingStatus>;
     /// check if the store is ready
