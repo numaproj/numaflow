@@ -3,7 +3,7 @@ import "google/protobuf/timestamp.proto";
 
 package aligned_wal;
 
-// SegmentHeader for the Aligned Wall.
+// SegmentHeader for the Aligned WAL.
 message SegmentHeader {
   // start_time of the window
   google.protobuf.Timestamp start_time = 1;
