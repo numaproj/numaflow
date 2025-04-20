@@ -2195,6 +2195,13 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#others" class="md-nav__link">
+    Others
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2578,6 +2585,13 @@
         
       </ul>
     </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#others" class="md-nav__link">
+    Others
+  </a>
   
 </li>
         
@@ -3004,6 +3018,109 @@
 </tr>
 </tbody>
 </table>
+<h3 id="others">Others<a class="headerlink" href="#others" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Metric name</th>
+<th>Metric type</th>
+<th>Labels</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>build_info</code></td>
+<td>Gauge</td>
+<td><code>component=&lt;component&gt;</code> <br> <code>component_name=&lt;component_name&gt;</code> <br> <code>version=&lt;version&gt;</code> <br> <code>platform=&lt;platform&gt;</code></td>
+<td>A metric with a constant value '1', labeled by Numaflow binary version, platform, and other information. The value of <code>component</code> could be 'daemon', 'vertex', 'mono-vertex-daemon', etc</td>
+</tr>
+<tr>
+<td><code>controller_build_info</code></td>
+<td>Gauge</td>
+<td><code>version=&lt;version&gt;</code> <br> <code>platform=&lt;platform&gt;</code></td>
+<td>A metric with a constant value '1', labeled with controller version and platform from which Numaflow was built</td>
+</tr>
+<tr>
+<td><code>sdk_info</code></td>
+<td>Gauge</td>
+<td><code>component=&lt;component&gt;</code> <br> <code>component_name=&lt;component_name&gt;</code> <br> <code>type=&lt;sdk_type&gt;</code> <br> <code>version=&lt;sdk_version&gt;</code> <br> <code>language=&lt;sdk_language&gt;</code></td>
+<td>A metric with a constant value '1', labeled by SDK information such as version, language, and type</td>
+</tr>
+<tr>
+<td><code>controller_pipeline_desired_phase</code></td>
+<td>Gauge</td>
+<td><code>ns=&lt;namespace&gt;</code> <br> <code>pipeline=&lt;pipeline&gt;</code></td>
+<td>A metric to indicate the pipeline phase. '1' means Running, '2' means Paused</td>
+</tr>
+<tr>
+<td><code>controller_pipeline_current_phase</code></td>
+<td>Gauge</td>
+<td><code>ns=&lt;namespace&gt;</code> <br> <code>pipeline=&lt;pipeline&gt;</code></td>
+<td>A metric to indicate the pipeline phase. '0' means Unknown, '1' means Running, '2' means Paused, '3' means Failed, '4' means Pausing, '5' means 'Deleting'</td>
+</tr>
+<tr>
+<td><code>controller_monovtx_desired_phase</code></td>
+<td>Gauge</td>
+<td><code>ns=&lt;namespace&gt;</code> <br> <code>mvtx_name=&lt;mvtx&gt;</code></td>
+<td>A metric to indicate the MonoVertex phase. '1' means Running, '2' means Paused</td>
+</tr>
+<tr>
+<td><code>controller_monovtx_current_phase</code></td>
+<td>Gauge</td>
+<td><code>ns=&lt;namespace&gt;</code> <br> <code>mvtx_name=&lt;mvtx&gt;</code></td>
+<td>A metric to indicate the MonoVertex phase. '0' means Unknown, '1' means Running, '2' means Paused, '3' means Failed</td>
+</tr>
+<tr>
+<td><code>controller_vertex_desired_replicas</code></td>
+<td>Gauge</td>
+<td><code>ns=&lt;namespace&gt;</code> <br> <code>pipeline=&lt;pipeline&gt;</code> <br> <code>vertex=&lt;vertex&gt;</code></td>
+<td>A metric indicates the desired replicas of a Vertex</td>
+</tr>
+<tr>
+<td><code>controller_vertex_current_replicas</code></td>
+<td>Gauge</td>
+<td><code>ns=&lt;namespace&gt;</code> <br> <code>pipeline=&lt;pipeline&gt;</code> <br> <code>vertex=&lt;vertex&gt;</code></td>
+<td>A metric indicates the current replicas of a Vertex</td>
+</tr>
+<tr>
+<td><code>controller_vertex_min_replicas</code></td>
+<td>Gauge</td>
+<td><code>ns=&lt;namespace&gt;</code> <br> <code>pipeline=&lt;pipeline&gt;</code> <br> <code>vertex=&lt;vertex&gt;</code></td>
+<td>A metric indicates the min replicas of a Vertex</td>
+</tr>
+<tr>
+<td><code>controller_vertex_max_replicas</code></td>
+<td>Gauge</td>
+<td><code>ns=&lt;namespace&gt;</code> <br> <code>pipeline=&lt;pipeline&gt;</code> <br> <code>vertex=&lt;vertex&gt;</code></td>
+<td>A metric indicates the max replicas of a Vertex</td>
+</tr>
+<tr>
+<td><code>controller_monovtx_desired_replicas</code></td>
+<td>Gauge</td>
+<td><code>ns=&lt;namespace&gt;</code> <br> <code>mvtx_name=&lt;mvtx&gt;</code></td>
+<td>A metric indicates the desired replicas of a MonoVertex</td>
+</tr>
+<tr>
+<td><code>controller_monovtx_current_replicas</code></td>
+<td>Gauge</td>
+<td><code>ns=&lt;namespace&gt;</code> <br> <code>mvtx_name=&lt;mvtx&gt;</code></td>
+<td>A metric indicates the current replicas of a MonoVertex</td>
+</tr>
+<tr>
+<td><code>controller_monovtx_min_replicas</code></td>
+<td>Gauge</td>
+<td><code>ns=&lt;namespace&gt;</code> <br> <code>mvtx_name=&lt;mvtx&gt;</code></td>
+<td>A metric indicates the min replicas of a MonoVertex</td>
+</tr>
+<tr>
+<td><code>controller_monovtx_max_replicas</code></td>
+<td>Gauge</td>
+<td><code>ns=&lt;namespace&gt;</code> <br> <code>mvtx_name=&lt;mvtx&gt;</code></td>
+<td>A metric indicates the max replicas of a MonoVertex</td>
+</tr>
+</tbody>
+</table>
 <h2 id="prometheus-operator-for-scraping-metrics">Prometheus Operator for Scraping Metrics:<a class="headerlink" href="#prometheus-operator-for-scraping-metrics" title="Permanent link">&para;</a></h2>
 <p>You can follow the <a href="https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/getting-started/installation.md">prometheus operator</a> setup guide if you would like to use prometheus operator configured in your cluster.</p>
 <p>You can also set up prometheus operator via <a href="https://bitnami.com/stack/prometheus-operator/helm">helm</a>.</p>
@@ -3052,6 +3169,50 @@
 <span class="w">      </span><span class="nt">app.kubernetes.io/part-of</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow</span>
 <span class="w">    </span><span class="nt">matchExpressions</span><span class="p">:</span>
 <span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/pipeline-name</span>
+<span class="w">        </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Exists</span>
+<span class="nn">---</span>
+<span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">monitoring.coreos.com/v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ServiceMonitor</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">labels</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">app.kubernetes.io/part-of</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-mvtx-metrics</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">endpoints</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">scheme</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https</span>
+<span class="w">      </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">metrics</span>
+<span class="w">      </span><span class="nt">targetPort</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2469</span>
+<span class="w">      </span><span class="nt">tlsConfig</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">insecureSkipVerify</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">selector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">matchLabels</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">app.kubernetes.io/component</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mono-vertex</span>
+<span class="w">      </span><span class="nt">app.kubernetes.io/managed-by</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mono-vertex-controller</span>
+<span class="w">      </span><span class="nt">app.kubernetes.io/part-of</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow</span>
+<span class="w">    </span><span class="nt">matchExpressions</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/mono-vertex-name</span>
+<span class="w">        </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Exists</span>
+<span class="nn">---</span>
+<span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">monitoring.coreos.com/v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ServiceMonitor</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">labels</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">app.kubernetes.io/part-of</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow-mvtx-daemon-metrics</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">endpoints</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">scheme</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https</span>
+<span class="w">      </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">tcp</span>
+<span class="w">      </span><span class="nt">targetPort</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4327</span>
+<span class="w">      </span><span class="nt">tlsConfig</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">insecureSkipVerify</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">selector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">matchLabels</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">app.kubernetes.io/component</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mono-vertex-daemon</span>
+<span class="w">      </span><span class="nt">app.kubernetes.io/managed-by</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mono-vertex-controller</span>
+<span class="w">      </span><span class="nt">app.kubernetes.io/part-of</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow</span>
+<span class="w">    </span><span class="nt">matchExpressions</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/mono-vertex-name</span>
 <span class="w">        </span><span class="nt">operator</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Exists</span>
 <span class="nn">---</span>
 <span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">monitoring.coreos.com/v1</span>
