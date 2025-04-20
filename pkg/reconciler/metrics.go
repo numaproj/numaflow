@@ -54,7 +54,7 @@ var (
 	PipelineCurrentPhase = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "controller",
 		Name:      "pipeline_current_phase",
-		Help:      "A metric to indicate the pipeline phase. '0' means Unknown, '1' means Running, '2' means Paused, '3' means Failed, '4' means Pausing, '5' means 'Deleting'.",
+		Help:      "A metric to indicate the pipeline phase. '0' means Unknown, '1' means Running, '2' means Paused, '3' means Failed, '4' means Pausing, '5' means 'Deleting'",
 	}, []string{metrics.LabelNamespace, metrics.LabelPipeline})
 
 	MonoVertexHealth = prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -72,7 +72,7 @@ var (
 	MonoVertexCurrentPhase = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "controller",
 		Name:      "monovtx_current_phase",
-		Help:      "A metric to indicate the MonoVertex phase. '0' means Unknown, '1' means Running, '2' means Paused, '3' means Failed.",
+		Help:      "A metric to indicate the MonoVertex phase. '0' means Unknown, '1' means Running, '2' means Paused, '3' means Failed",
 	}, []string{metrics.LabelNamespace, metrics.LabelMonoVertexName})
 
 	// JetStreamISBSvcReplicas indicates the replicas of a JetStream ISB Service.

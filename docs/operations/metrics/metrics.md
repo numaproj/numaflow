@@ -89,6 +89,26 @@ These metrics can be used to determine if there are any errors in the pipeline.
 | `isb_redis_buffer_usage` | Gauge       | `buffer=<buffer-name>` | Indicates the usage/utilization of a Redis ISB                                                                                               |
 | `isb_redis_consumer_lag` | Gauge       | `buffer=<buffer-name>` | Indicates the the consumer lag of a Redis ISB                                                                                                |
 
+### Others
+
+| Metric name                           | Metric type | Labels                                                                                                                                            | Description                                                                                                                                                                              |
+| ------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `build_info`                          | Gauge       | `component=<component>` <br> `component_name=<component_name>` <br> `version=<version>` <br> `platform=<platform>`                                | A metric with a constant value '1', labeled by Numaflow binary version, platform, and other information. The value of `component` could be 'daemon', 'vertex', 'mono-vertex-daemon', etc |
+| `controller_build_info`               | Gauge       | `version=<version>` <br> `platform=<platform>`                                                                                                    | A metric with a constant value '1', labeled with controller version and platform from which Numaflow was built                                                                           |
+| `sdk_info`                            | Gauge       | `component=<component>` <br> `component_name=<component_name>` <br> `type=<sdk_type>` <br> `version=<sdk_version>` <br> `language=<sdk_language>` | A metric with a constant value '1', labeled by SDK information such as version, language, and type                                                                                       |
+| `controller_pipeline_desired_phase`   | Gauge       | `ns=<namespace>` <br> `pipeline=<pipeline>`                                                                                                       | A metric to indicate the pipeline phase. '1' means Running, '2' means Paused                                                                                                             |
+| `controller_pipeline_current_phase`   | Gauge       | `ns=<namespace>` <br> `pipeline=<pipeline>`                                                                                                       | A metric to indicate the pipeline phase. '0' means Unknown, '1' means Running, '2' means Paused, '3' means Failed, '4' means Pausing, '5' means 'Deleting'                               |
+| `controller_monovtx_desired_phase`    | Gauge       | `ns=<namespace>` <br> `mvtx_name=<mvtx>`                                                                                                          | A metric to indicate the MonoVertex phase. '1' means Running, '2' means Paused                                                                                                           |
+| `controller_monovtx_current_phase`    | Gauge       | `ns=<namespace>` <br> `mvtx_name=<mvtx>`                                                                                                          | A metric to indicate the MonoVertex phase. '0' means Unknown, '1' means Running, '2' means Paused, '3' means Failed                                                                      |
+| `controller_vertex_desired_replicas`  | Gauge       | `ns=<namespace>` <br> `pipeline=<pipeline>` <br> `vertex=<vertex>`                                                                                | A metric indicates the desired replicas of a Vertex                                                                                                                                      |
+| `controller_vertex_current_replicas`  | Gauge       | `ns=<namespace>` <br> `pipeline=<pipeline>` <br> `vertex=<vertex>`                                                                                | A metric indicates the current replicas of a Vertex                                                                                                                                      |
+| `controller_vertex_min_replicas`      | Gauge       | `ns=<namespace>` <br> `pipeline=<pipeline>` <br> `vertex=<vertex>`                                                                                | A metric indicates the min replicas of a Vertex                                                                                                                                          |
+| `controller_vertex_max_replicas`      | Gauge       | `ns=<namespace>` <br> `pipeline=<pipeline>` <br> `vertex=<vertex>`                                                                                | A metric indicates the max replicas of a Vertex                                                                                                                                          |
+| `controller_monovtx_desired_replicas` | Gauge       | `ns=<namespace>` <br> `mvtx_name=<mvtx>`                                                                                                          | A metric indicates the desired replicas of a MonoVertex                                                                                                                                  |
+| `controller_monovtx_current_replicas` | Gauge       | `ns=<namespace>` <br> `mvtx_name=<mvtx>`                                                                                                          | A metric indicates the current replicas of a MonoVertex                                                                                                                                  |
+| `controller_monovtx_min_replicas`     | Gauge       | `ns=<namespace>` <br> `mvtx_name=<mvtx>`                                                                                                          | A metric indicates the min replicas of a MonoVertex                                                                                                                                      |
+| `controller_monovtx_max_replicas`     | Gauge       | `ns=<namespace>` <br> `mvtx_name=<mvtx>`                                                                                                          | A metric indicates the max replicas of a MonoVertex                                                                                                                                      |
+
 ## Prometheus Operator for Scraping Metrics:
 
 You can follow the [prometheus operator](https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/getting-started/installation.md) setup guide if you would like to use prometheus operator configured in your cluster.
@@ -142,6 +162,50 @@ spec:
       app.kubernetes.io/part-of: numaflow
     matchExpressions:
       - key: numaflow.numaproj.io/pipeline-name
+        operator: Exists
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    app.kubernetes.io/part-of: numaflow
+  name: numaflow-mvtx-metrics
+spec:
+  endpoints:
+    - scheme: https
+      port: metrics
+      targetPort: 2469
+      tlsConfig:
+        insecureSkipVerify: true
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: mono-vertex
+      app.kubernetes.io/managed-by: mono-vertex-controller
+      app.kubernetes.io/part-of: numaflow
+    matchExpressions:
+      - key: numaflow.numaproj.io/mono-vertex-name
+        operator: Exists
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    app.kubernetes.io/part-of: numaflow
+  name: numaflow-mvtx-daemon-metrics
+spec:
+  endpoints:
+    - scheme: https
+      port: tcp
+      targetPort: 4327
+      tlsConfig:
+        insecureSkipVerify: true
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: mono-vertex-daemon
+      app.kubernetes.io/managed-by: mono-vertex-controller
+      app.kubernetes.io/part-of: numaflow
+    matchExpressions:
+      - key: numaflow.numaproj.io/mono-vertex-name
         operator: Exists
 ---
 apiVersion: monitoring.coreos.com/v1
