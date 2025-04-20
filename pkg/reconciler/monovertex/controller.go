@@ -114,6 +114,8 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 		} else {
 			reconciler.MonoVertexHealth.WithLabelValues(monoVtx.Namespace, monoVtx.Name).Set(0)
 		}
+		reconciler.MonoVertexDesiredPhase.WithLabelValues(monoVtx.Namespace, monoVtx.Name).Set(float64(monoVtx.Spec.Lifecycle.GetDesiredPhase().Code()))
+		reconciler.MonoVertexCurrentPhase.WithLabelValues(monoVtx.Namespace, monoVtx.Name).Set(float64(monoVtx.Status.Phase.Code()))
 	}()
 
 	monoVtx.Status.InitializeConditions()
@@ -628,4 +630,6 @@ func cleanupMetrics(namespace, mvtx string) {
 	_ = reconciler.MonoVertexCurrentReplicas.DeleteLabelValues(namespace, mvtx)
 	_ = reconciler.MonoVertexMaxReplicas.DeleteLabelValues(namespace, mvtx)
 	_ = reconciler.MonoVertexMinReplicas.DeleteLabelValues(namespace, mvtx)
+	_ = reconciler.MonoVertexDesiredPhase.DeleteLabelValues(namespace, mvtx)
+	_ = reconciler.MonoVertexCurrentPhase.DeleteLabelValues(namespace, mvtx)
 }

@@ -49,6 +49,21 @@ const (
 	MonoVertexPodsHealthy ConditionType = "PodsHealthy"
 )
 
+func (mvp MonoVertexPhase) Code() int {
+	switch mvp {
+	case MonoVertexPhaseUnknown:
+		return 0
+	case MonoVertexPhaseRunning:
+		return 1
+	case MonoVertexPhasePaused:
+		return 2
+	case MonoVertexPhaseFailed:
+		return 3
+	default:
+		return 0
+	}
+}
+
 // +genclient
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:shortName=mvtx

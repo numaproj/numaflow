@@ -140,6 +140,8 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 			controllerutil.RemoveFinalizer(pl, deprecatedFinalizerName)
 			// Clean up metrics
 			_ = reconciler.PipelineHealth.DeleteLabelValues(pl.Namespace, pl.Name)
+			_ = reconciler.PipelineDesiredPhase.DeleteLabelValues(pl.Namespace, pl.Name)
+			_ = reconciler.PipelineCurrentPhase.DeleteLabelValues(pl.Namespace, pl.Name)
 			// Delete corresponding vertex metrics
 			_ = reconciler.VertexDesiredReplicas.DeletePartialMatch(map[string]string{metrics.LabelNamespace: pl.Namespace, metrics.LabelPipeline: pl.Name})
 			_ = reconciler.VertexCurrentReplicas.DeletePartialMatch(map[string]string{metrics.LabelNamespace: pl.Namespace, metrics.LabelPipeline: pl.Name})
@@ -155,6 +157,8 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 		} else {
 			reconciler.PipelineHealth.WithLabelValues(pl.Namespace, pl.Name).Set(0)
 		}
+		reconciler.PipelineDesiredPhase.WithLabelValues(pl.Namespace, pl.Name).Set(float64(pl.GetDesiredPhase().Code()))
+		reconciler.PipelineCurrentPhase.WithLabelValues(pl.Namespace, pl.Name).Set(float64(pl.Status.Phase.Code()))
 	}()
 
 	pl.Status.InitConditions()
