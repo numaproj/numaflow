@@ -21,7 +21,6 @@ struct FileWriterActor {
     file_index: usize,
     flush_interval_millis: Duration,
     max_file_size: u64,
-    rotate: bool,
 }
 
 impl FileWriterActor {
@@ -38,7 +37,7 @@ impl FileWriterActor {
                             self.write_data(data).await?;
                         }
                         FileWriterMessage::Rotate => {
-                            self.rotate = true
+                            self.rotate_file().await?
                         }
                     }
                 }
@@ -56,14 +55,13 @@ impl FileWriterActor {
     }
 
     async fn write_data(&mut self, data: Bytes) -> io::Result<()> {
-        if self.current_size >= self.max_file_size || self.rotate {
+        if self.current_size >= self.max_file_size {
             self.rotate_file().await?;
         }
 
         self.current_file.write_all(&data).await?;
-        self.current_size += data.len() as u64;
 
-        self.rotate = false;
+        self.current_size += data.len() as u64;
 
         Ok(())
     }
@@ -114,7 +112,6 @@ impl FileWriterActor {
             file_index: 1,
             max_file_size,
             flush_interval_millis,
-            rotate: false,
         }
     }
 }
@@ -133,18 +130,18 @@ async fn start_file_writer(
     Ok(tx)
 }
 
-// pub(crate) async fn start(base_path: PathBuf) -> io::Result<Sender<FileWriterMessage>> {
-//     let file = FileWriterActor::open_file(&base_path, 0).await?;
-//
-//     let actor = FileWriterActor::new(
-//         base_path,
-//         file,
-//         100 * 1024 * 1024,
-//         Duration::from_millis(1000),
-//     );
-//
-//     start_file_writer(actor).await
-// }
+pub(crate) async fn start(base_path: PathBuf) -> io::Result<Sender<FileWriterMessage>> {
+    let file = FileWriterActor::open_file(&base_path, 0).await?;
+
+    let actor = FileWriterActor::new(
+        base_path,
+        file,
+        100 * 1024 * 1024,
+        Duration::from_millis(1000),
+    );
+
+    start_file_writer(actor).await
+}
 
 #[cfg(test)]
 mod tests {
