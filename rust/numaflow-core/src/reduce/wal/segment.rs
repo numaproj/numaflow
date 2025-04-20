@@ -1,6 +1,7 @@
 use bytes::Bytes;
 use chrono::Utc;
 use std::{io, path::PathBuf};
+use tokio::io::BufWriter;
 use tokio::{
     fs::{File, OpenOptions},
     io::AsyncWriteExt,
@@ -16,11 +17,12 @@ pub(crate) enum FileWriterMessage {
 
 struct FileWriterActor {
     base_path: PathBuf,
-    current_file: File,
+    current_file: BufWriter<File>,
     current_size: u64,
     file_index: usize,
     flush_interval_millis: Duration,
     max_file_size: u64,
+    // TODO: add flush on size
 }
 
 impl FileWriterActor {
@@ -70,7 +72,7 @@ impl FileWriterActor {
         self.current_file.flush().await
     }
 
-    async fn open_file(base_path: &PathBuf, idx: usize) -> io::Result<File> {
+    async fn open_file(base_path: &PathBuf, idx: usize) -> io::Result<BufWriter<File>> {
         let new_path = base_path.join(format!(
             "segment_{}_{}.data",
             idx,
@@ -79,12 +81,14 @@ impl FileWriterActor {
 
         debug!(?new_path, "opened new WAL segment");
 
-        OpenOptions::new()
+        let file = OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
             .open(new_path)
-            .await
+            .await?;
+
+        Ok(BufWriter::new(file))
     }
 
     async fn rotate_file(&mut self) -> io::Result<()> {
@@ -101,7 +105,7 @@ impl FileWriterActor {
 impl FileWriterActor {
     pub(crate) fn new(
         base_path: PathBuf,
-        current_file: File,
+        current_file: BufWriter<File>,
         max_file_size: u64,
         flush_interval_millis: Duration,
     ) -> Self {
