@@ -33,12 +33,13 @@ import (
 
 // PodTracker tracks the active pods for a MonoVertex.
 type PodTracker struct {
-	monoVertex      *v1alpha1.MonoVertex
-	log             *zap.SugaredLogger
-	httpClient      monitorHttpClient
-	activePodsCount int
-	activePodsMutex sync.RWMutex
-	refreshInterval time.Duration
+	monoVertex          *v1alpha1.MonoVertex
+	log                 *zap.SugaredLogger
+	httpClient          monitorHttpClient
+	activePodsCount     int
+	activePodsMutex     sync.RWMutex
+	refreshInterval     time.Duration
+	firstPodsUpdateChan chan struct{} // Channel to signal the first active pods update is done
 }
 
 // NewPodTracker creates a new pod tracker instance.
@@ -52,7 +53,8 @@ func NewPodTracker(ctx context.Context, mv *v1alpha1.MonoVertex) *PodTracker {
 			},
 			Timeout: time.Second,
 		},
-		refreshInterval: 30 * time.Second,
+		refreshInterval:     30 * time.Second,
+		firstPodsUpdateChan: make(chan struct{}),
 	}
 	return pt
 }
@@ -67,6 +69,8 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 func (pt *PodTracker) trackActivePods(ctx context.Context) {
 	// start updating active pods as soon as called and then after every refreshInterval
 	pt.updateActivePods()
+	// close the channel to signal first update
+	close(pt.firstPodsUpdateChan)
 	ticker := time.NewTicker(pt.refreshInterval)
 	defer ticker.Stop()
 	for {

@@ -111,10 +111,10 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 		}
 	}()
 
-	// Start the monoVertexRuntimeCache
+	// Start the MonoVertex Runtime Cache Refresher
 	go func() {
 		if err := monoVertexRuntimeCache.StartCacheRefresher(ctx); err != nil {
-			log.Panic(fmt.Errorf("failed to start the runtime: %w", err))
+			log.Panic(fmt.Errorf("failed to start the MonoVertex runtime cache refresher: %w", err))
 		}
 	}()
 
