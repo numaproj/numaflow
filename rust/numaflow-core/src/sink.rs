@@ -3,13 +3,12 @@
 //!
 //! [Sink]: https://numaflow.numaproj.io/user-guide/sinks/overview/
 
-use std::collections::HashMap;
-use std::time::Duration;
-use bytes::Bytes;
 use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::sink_response;
 use numaflow_pb::clients::sink::Status::{Failure, Fallback, Serve, Success};
+use std::collections::HashMap;
+use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -20,6 +19,7 @@ use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::{error, info, warn};
+use serving::{DEFAULT_ID_HEADER, DEFAULT_REPLICA_ID_HEADER};
 use user_defined::UserDefinedSink;
 
 use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
@@ -49,7 +49,6 @@ mod log;
 /// [User-Defined Sink]: https://numaflow.numaproj.io/user-guide/sinks/user-defined-sinks/
 mod user_defined;
 
-const NUMAFLOW_ID_HEADER: &str = "X-Numaflow-Id";
 
 /// Set of items to be implemented be a Numaflow Sink.
 ///
@@ -821,19 +820,25 @@ impl SinkWriter {
                 "Response contains serving messages but no serving store is configured".to_string(),
             ));
         };
-        
+
         let mut payloads = Vec::with_capacity(serving_msgs.len());
         for msg in serving_msgs {
             let id = msg
                 .headers
-                .get(NUMAFLOW_ID_HEADER)
-                .ok_or(Error::Sink("Missing numaflow id header".to_string()))?.clone();
-            payloads.push((id, msg.value.into()));
+                .get(DEFAULT_ID_HEADER)
+                .ok_or(Error::Sink("Missing numaflow id header".to_string()))?
+                .clone();
+            let pod_replica = msg
+                .headers
+                .get(DEFAULT_REPLICA_ID_HEADER)
+                .ok_or(Error::Sink("Missing pod replica header".to_string()))?
+                .clone();
+            payloads.push((id, pod_replica, msg.value.into()));
         }
 
         match serving_store {
             ServingStore::UserDefined(ud_store) => {
-                ud_store.put_datum( get_vertex_name(), payloads).await?;
+                ud_store.put_datum(get_vertex_name(), payloads).await?;
             }
             ServingStore::Nats(nats_store) => {
                 nats_store.put_datum(get_vertex_name(), payloads).await?;
@@ -1260,7 +1265,7 @@ mod tests {
         let messages: Vec<Message> = (0..10)
             .map(|i| {
                 let mut headers = HashMap::new();
-                headers.insert(NUMAFLOW_ID_HEADER.to_string(), format!("id_{}", i));
+                headers.insert(DEFAULT_ID_HEADER.to_string(), format!("id_{}", i));
                 Message {
                     typ: Default::default(),
                     keys: Arc::from(vec!["serve".to_string()]),

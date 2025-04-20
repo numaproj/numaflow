@@ -2,18 +2,17 @@
 //! A central watcher task per instance monitors callbacks for that instance.
 //! Status includes the processing replica ID and is stored as a serialized enum.
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::app::store::cbstore::ProcessingStatus;
 use crate::app::store::datastore::{Error as StoreError, Result as StoreResult};
 use crate::callback::Callback;
 use crate::config::RequestType;
-use async_nats::jetstream::kv::{CreateErrorKind, Store};
+use async_nats::jetstream::kv::{CreateErrorKind, Store, Watch};
 use async_nats::jetstream::Context;
 use bytes::Bytes;
-use chrono::Utc;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
@@ -132,67 +131,39 @@ impl JetStreamCallbackStore {
                         let parts: Vec<&str> = entry.key.splitn(5, '.').collect();
                         let pod_replica = parts[1];
                         let request_id = parts[2];
+
                         if parts.len() < 5 || parts[0] != CALLBACK_KEY_PREFIX || pod_replica != pod_replica_id {
                             error!(key = ?entry.key, "Received unexpected key format in central watcher");
                             continue;
                         }
 
-                        match entry.value.try_into() {
-                            Ok(callback_obj) => {
-                                let callback: Arc<Callback> = Arc::new(callback_obj);
-                                let current_time = Utc::now().timestamp_millis() as u64;
-                                info!(id = ?callback.id, "Received cb with time diff={:?}", current_time - callback.cb_time);
-                                let mut sender = None;
-                                {
-                                    let senders_guard = senders.lock().expect("Failed to acquire lock");
-                                    if let Some(cb_sender) = senders_guard.get(request_id) {
-                                        sender = Some(cb_sender.clone());
-                                    }
-                                }
-                                if let Some(sender) = sender {
-                                    if sender.send(callback).await.is_err() {
-                                        warn!(request_id = ?request_id, "Receiver dropped during send. Stopping watch.");
-                                        break;
-                                    }
-                                } else {
-                                    warn!(request_id = ?request_id, "No active sender found for received callback");
-                                }
-                            }
-                            Err(e) => {
-                                error!(key = ?entry.key, error = ?e, "Failed to deserialize callback in central watcher");
-                            }
+                        let callback: Arc<Callback> = Arc::new(entry.value.try_into().expect("Failed to deserialize callback"));
+                        let senders_guard = senders.lock().await;
+                        if let Some(cb_sender) = senders_guard.get(request_id) {
+                            cb_sender.send(callback).await.expect("Failed to send callback");
+                        } else {
+                            warn!(id = ?callback.id, "No active sender found for request id. Callback not sent.");
+                            continue;
                         }
                         info!("Time taken to process a callback={:?}", cb_process_time.elapsed().as_millis());
                     }
                     Some(Err(e)) => {
                         error!(error = ?e, "Error from central watcher stream. Re-establishing watch...");
-                        tokio::time::sleep(Duration::from_millis(100)).await;
-                        watcher = loop {
-                            match kv_store.watch_from_revision(&watch_key_pattern, latest_revision+1).await {
-                                Ok(w) => {
-                                    info!("Central watcher re-established after error.");
-                                    break w;
-                                },
-                                Err(re_e) => {
-                                    error!(error = ?re_e, "Failed to re-establish watch. Trying again after delay.");
-                                    tokio::time::sleep(Duration::from_millis(100)).await;
-                                }
+                        watcher = match Self::create_watcher(&kv_store, &watch_key_pattern, latest_revision + 1).await {
+                            Ok(stream) => stream,
+                            Err(re_e) => {
+                                error!(error = ?re_e, "Failed to recreate watcher. Stopping scan.");
+                                break;
                             }
                         };
                     }
                     None => {
                         error!("Central watcher stream ended unexpectedly. Attempting to restart.");
-                        tokio::time::sleep(Duration::from_millis(100)).await;
-                        watcher = loop {
-                            match kv_store.watch_from_revision(&watch_key_pattern, latest_revision+1).await {
-                                Ok(w) => {
-                                    info!("Central watcher restarted after stream ended.");
-                                    break w;
-                                },
-                                Err(e) => {
-                                    error!(?e, "Failed to restart watch. Trying again after delay.");
-                                    tokio::time::sleep(Duration::from_millis(100)).await;
-                                }
+                        watcher = match Self::create_watcher(&kv_store, &watch_key_pattern, latest_revision+1).await {
+                            Ok(stream) => stream,
+                            Err(e) => {
+                                error!(?e, "Failed to recreate watcher. Stopping scan.");
+                                break;
                             }
                         };
                     }
@@ -222,8 +193,15 @@ impl JetStreamCallbackStore {
     ) {
         let key_pattern = format!("{}.{}.{}.*.*", CALLBACK_KEY_PREFIX, previous_replica_id, id);
         info!(request_id = ?id, ?previous_replica_id, key_pattern, "Historical scan task started");
+        let mut latest_revision = 1;
 
-        let mut entries_stream = match callback_kv.watch(&key_pattern).await {
+        let mut entries_stream = match Self::create_watcher(
+            &callback_kv,
+            &key_pattern,
+            latest_revision,
+        )
+        .await
+        {
             Ok(stream) => stream,
             Err(e) => {
                 error!(request_id = ?id, error = ?e, "Failed to initiate historical callback scan");
@@ -232,9 +210,10 @@ impl JetStreamCallbackStore {
         };
 
         let mut count = 0;
-        while let Some(entry_result) = entries_stream.next().await {
-            match entry_result {
-                Ok(entry) => {
+        loop {
+            match entries_stream.next().await {
+                Some(Ok(entry)) => {
+                    latest_revision = entry.revision;
                     if entry.operation == async_nats::jetstream::kv::Operation::Delete {
                         return;
                     }
@@ -252,13 +231,63 @@ impl JetStreamCallbackStore {
                         }
                     }
                 }
-                Err(e) => {
-                    error!(request_id = ?id, error = ?e, "Error iterating historical callback scan stream. Stopping scan.");
-                    break;
+                Some(Err(e)) => {
+                    error!(request_id = ?id, error = ?e, "Error iterating historical callback scan stream. Recreating watcher...");
+                    entries_stream = match Self::create_watcher(
+                        &callback_kv,
+                        &key_pattern,
+                        latest_revision + 1,
+                    )
+                    .await
+                    {
+                        Ok(stream) => stream,
+                        Err(re_e) => {
+                            error!(request_id = ?id, error = ?re_e, "Failed to recreate watcher. Stopping scan.");
+                            break;
+                        }
+                    };
+                }
+                None => {
+                    error!(request_id = ?id, "Historical callback stream ended unexpectedly. Recreating watcher...");
+                    entries_stream = match Self::create_watcher(
+                        &callback_kv,
+                        &key_pattern,
+                        latest_revision + 1,
+                    )
+                    .await
+                    {
+                        Ok(stream) => stream,
+                        Err(re_e) => {
+                            error!(request_id = ?id, error = ?re_e, "Failed to recreate watcher. Stopping scan.");
+                            break;
+                        }
+                    };
                 }
             }
         }
         info!(?id, count, "Finished streaming historical callbacks.");
+    }
+
+    async fn create_watcher(
+        callback_kv: &Store,
+        key_pattern: &str,
+        start_revision: u64,
+    ) -> StoreResult<Watch> {
+        loop {
+            match callback_kv
+                .watch_from_revision(key_pattern, start_revision)
+                .await
+            {
+                Ok(watcher) => {
+                    info!(key_pattern, start_revision, "Watcher created successfully");
+                    return Ok(watcher);
+                }
+                Err(e) => {
+                    error!(error = ?e, "Failed to create watcher. Retrying...");
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+            }
+        }
     }
 }
 
@@ -272,10 +301,7 @@ impl super::CallbackStore for JetStreamCallbackStore {
         self.update_status(id, completed_status).await?;
         {
             // Remove sender from the map *after* successfully updating status
-            let mut senders_guard = self
-                .callback_senders
-                .lock()
-                .expect("Failed to acquire lock");
+            let mut senders_guard = self.callback_senders.lock().await;
             if senders_guard.remove(id).is_some() {
                 debug!(id, "Removed active sender during deregistration.");
             } else {
@@ -311,10 +337,7 @@ impl super::CallbackStore for JetStreamCallbackStore {
         self.update_status(id, failed_status).await?;
 
         // Remove sender from the map *after* successfully updating status
-        let mut senders_guard = self
-            .callback_senders
-            .lock()
-            .expect("Failed to lock senders");
+        let mut senders_guard = self.callback_senders.lock().await;
         if senders_guard.remove(id).is_some() {
             debug!(id, "Removed active sender during failure marking.");
         } else {
@@ -339,11 +362,7 @@ impl super::CallbackStore for JetStreamCallbackStore {
             StoreError::StoreWrite(format!("Failed to serialize status for {id}: {e:?}"))
         })?;
 
-        let current_status = match self
-            .callback_kv
-            .create(&status_key, status_bytes)
-            .await
-        {
+        let current_status = match self.callback_kv.create(&status_key, status_bytes).await {
             Ok(_) => {
                 info!(id, status_key, "Request registered successfully.");
                 initial_status
@@ -410,10 +429,7 @@ impl super::CallbackStore for JetStreamCallbackStore {
         }
 
         {
-            let mut senders_guard = self
-                .callback_senders
-                .lock()
-                .expect("Failed to lock senders");
+            let mut senders_guard = self.callback_senders.lock().await;
             senders_guard.insert(id.to_string(), tx);
         }
 

@@ -5,7 +5,7 @@ use super::{FetchQueryParams, Tid};
 use crate::app::response::{ApiError, ServeResponse};
 use crate::app::store::cbstore::CallbackStore;
 use crate::app::store::datastore::Error as StoreError;
-use crate::config::RequestType;
+use crate::config::{get_pod_replica, RequestType, DEFAULT_REPLICA_ID_HEADER};
 use crate::metrics::serving_metrics;
 use crate::Error;
 use async_nats::jetstream::Context;
@@ -23,7 +23,7 @@ use axum::{
 use serde_json::json;
 use tokio::time::Instant;
 use tokio_stream::{Stream, StreamExt};
-use tracing::{debug, error, info, Instrument};
+use tracing::{error, info, Instrument};
 
 const NUMAFLOW_RESP_ARRAY_LEN: &str = "Numaflow-Array-Len";
 const NUMAFLOW_RESP_ARRAY_IDX_LEN: &str = "Numaflow-Array-Index-Len";
@@ -139,6 +139,7 @@ where
         );
     }
     msg_headers.insert(proxy_state.tid_header.clone(), id.clone());
+    msg_headers.insert(DEFAULT_REPLICA_ID_HEADER, get_pod_replica().to_string());
 
     let mut orchestrator_state = proxy_state.orchestrator.clone();
     let response_stream = orchestrator_state
@@ -197,6 +198,7 @@ async fn sync_publish<
         );
     }
     msg_headers.insert(proxy_state.tid_header.clone(), id.clone());
+    msg_headers.insert(DEFAULT_REPLICA_ID_HEADER, get_pod_replica().to_string());
 
     let processing_start = Instant::now();
     // Register the ID in the callback proxy state
@@ -294,7 +296,7 @@ async fn sync_publish<
             result
         }
         Err(e) => {
-                error!(error = ?e, "Failed to retrieve from store");
+            error!(error = ?e, "Failed to retrieve from store");
             return Err(ApiError::InternalServerError(
                 "Failed to retrieve result from Datum store".to_string(),
             ));
@@ -349,6 +351,7 @@ async fn async_publish<
         );
     }
     msg_headers.insert(proxy_state.tid_header.clone(), id.clone());
+    msg_headers.insert(DEFAULT_REPLICA_ID_HEADER, get_pod_replica().to_string());
 
     let processing_start = Instant::now();
     // Register request in Redis

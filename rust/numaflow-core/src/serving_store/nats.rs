@@ -1,8 +1,8 @@
+use crate::config::pipeline::NatsStoreConfig;
 use async_nats::jetstream::kv::Store;
 use async_nats::jetstream::Context;
 use bytes::Bytes;
 use chrono::Utc;
-use crate::config::pipeline::NatsStoreConfig;
 
 /// Nats serving store to store the serving responses.
 #[derive(Clone)]
@@ -27,22 +27,23 @@ impl NatsServingStore {
     pub(crate) async fn put_datum(
         &mut self,
         origin: &str,
-        payloads: Vec<(String, Bytes)>,
+        payloads: Vec<(String, String, Bytes)>,
     ) -> crate::Result<()> {
         let mut tasks = Vec::new();
 
         for payload in payloads {
             let id = format!(
-                "rs.0.{}.{}.{}",
+                "rs.{}.{}.{}.{}",
+                payload.1,
                 payload.0,
                 origin,
                 Utc::now().timestamp_nanos_opt().unwrap()
             );
-            
+
             let store = self.store.clone();
             let task = tokio::spawn(async move {
                 store
-                    .put(id, payload.1)
+                    .put(id, payload.2)
                     .await
                     .map_err(|e| crate::Error::Sink(format!("Failed to put datum: {e:?}")))
             });
@@ -51,7 +52,9 @@ impl NatsServingStore {
         }
 
         for task in tasks {
-            let result = task.await.map_err(|e| crate::Error::Sink(format!("Task failed: {e:?}")))?;
+            let result = task
+                .await
+                .map_err(|e| crate::Error::Sink(format!("Task failed: {e:?}")))?;
             result?; // Propagate the first error, if any
         }
         Ok(())

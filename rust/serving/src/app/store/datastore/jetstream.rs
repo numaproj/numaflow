@@ -10,7 +10,7 @@
 //! Response Value - response_payload
 use crate::app::store::datastore::{DataStore, Error as StoreError, Result as StoreResult};
 use crate::config::RequestType;
-use async_nats::jetstream::kv::Store;
+use async_nats::jetstream::kv::{Store, Watch};
 use async_nats::jetstream::Context;
 use bytes::{Buf, BufMut, Bytes};
 use std::collections::HashMap;
@@ -20,7 +20,6 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
-use tokio::time::sleep;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tracing::{error, info, warn};
@@ -131,7 +130,7 @@ impl JetStreamDataStore {
                         error!(error = ?e, "Failed to establish initial watch for {}. Retrying...", watch_pattern);
                         tokio::time::sleep(Duration::from_millis(100)).await;
                     }
-                };
+                }
             };
 
             loop {
@@ -146,177 +145,178 @@ impl JetStreamDataStore {
                             continue;
                         }
 
-                        // Parse key: rs.{pod_replica_id}.{id}.{vertex_name}.{timestamp}
-                        let parts: Vec<&str> = entry.key.splitn(5, '.').collect();
-
-                        let pod_replica_id = parts[1];
-                        let request_id = parts[2];
-                        let key_suffix = format!("{}.{}", parts[3], parts[4]);
-
-                        if parts.len() < 5
-                            || parts[0] != RESPONSE_KEY_PREFIX
-                            || parts[1] != pod_replica_id
+                        if let Err(e) =
+                            Self::process_entry(&entry, &responses_map, &pod_replica_id, &kv_store)
+                                .await
                         {
-                            error!(key = ?entry.key, "Received unexpected key format in central watcher");
-                            continue;
-                        }
-
-                        if key_suffix == START_PROCESSING_MARKER {
-                            let request_type = RequestType::try_from(entry.value.clone())
-                                .expect("Failed to convert request type");
-                            match request_type {
-                                RequestType::Sse => {
-                                    let (tx, rx) = mpsc::channel(10);
-                                    let mut response_map = responses_map.lock().await;
-                                    if response_map.contains_key(request_id) {
-                                        warn!(
-                                            ?request_id,
-                                            "Start processing marker already exists for this request ID"
-                                        );
-                                    } else {
-                                        response_map
-                                            .insert(request_id.to_string(), ResponseMode::Sse(tx));
-                                    }
-                                }
-                                RequestType::Sync => {
-                                    let mut response_map = responses_map.lock().await;
-                                    if response_map.contains_key(request_id) {
-                                        warn!(
-                                            ?request_id,
-                                            "Start processing marker already exists for this request ID"
-                                        );
-                                    } else {
-                                        response_map.insert(
-                                            request_id.to_string(),
-                                            ResponseMode::Sync(Vec::new()),
-                                        );
-                                    }
-                                }
-                                RequestType::Async => {
-                                    let mut response_map = responses_map.lock().await;
-                                    if response_map.contains_key(request_id) {
-                                        warn!(
-                                            ?request_id,
-                                            "Start processing marker already exists for this request ID"
-                                        );
-                                    } else {
-                                        response_map.insert(
-                                            request_id.to_string(),
-                                            ResponseMode::Async(Vec::new()),
-                                        );
-                                    }
-                                }
-                            }
-                            continue;
-                        }
-
-                        if key_suffix == DONE_PROCESSING_MARKER {
-                            let final_result_key = format!(
-                                "{}.{}.{}",
-                                RESPONSE_KEY_PREFIX, pod_replica_id, FINAL_RESULT_KEY_SUFFIX
-                            );
-
-                            // Extract the response_mode while holding the lock
-                            let response_mode = {
-                                let mut response_map = responses_map.lock().await;
-                                response_map.get_mut(request_id).cloned()
-                            };
-
-                            let Some(response_mode) = response_mode else {
-                                continue;
-                            };
-
-                            match response_mode {
-                                ResponseMode::Sync(responses) => {
-                                    let merged_response = merge_bytes_list(&responses);
-
-                                    // Perform the I/O operation outside the lock
-                                    kv_store
-                                        .put(final_result_key.clone(), merged_response)
-                                        .await
-                                        .expect("Failed to put final-result key");
-                                }
-                                ResponseMode::Async(responses) => {
-                                    let merged_response = merge_bytes_list(&responses);
-
-                                    // Perform the I/O operation outside the lock
-                                    kv_store
-                                        .put(final_result_key.clone(), merged_response)
-                                        .await
-                                        .unwrap();
-
-                                    let mut response_map = responses_map.lock().await;
-                                    response_map.remove(request_id);
-                                }
-                                ResponseMode::Sse(_) => {
-                                    // The responses are already being sent to the channel
-                                    let mut response_map = responses_map.lock().await;
-                                    response_map.remove(request_id);
-                                }
-                            }
-                            continue;
-                        }
-
-                        let mut response_map = responses_map.lock().await;
-                        if let Some(response_mode) = response_map.get_mut(request_id) {
-                            match response_mode {
-                                ResponseMode::Sse(tx) => {
-                                    if let Err(e) = tx.send(Arc::new(entry.value)).await {
-                                        error!(error = ?e, "Failed to send SSE response");
-                                    }
-                                }
-                                ResponseMode::Sync(responses) => {
-                                    responses.push(entry.value);
-                                }
-                                ResponseMode::Async(responses) => {
-                                    responses.push(entry.value);
-                                }
-                            }
+                            error!(error = ?e, "Failed to process entry");
                         }
                     }
-
                     Some(Err(e)) => {
-                        error!(error = ?e, "Error from central watcher stream. Re-establishing watch...");
-                        watcher = loop {
-                            tokio::time::sleep(Duration::from_millis(100)).await;
-                            match kv_store
-                                .watch_from_revision(&watch_pattern, latest_revision + 1)
-                                .await
-                            {
-                                Ok(w) => {
-                                    info!(
-                                        "Central result store watcher re-established after error."
-                                    );
-                                    break w;
-                                }
-                                Err(re_e) => {
-                                    error!(error = ?re_e, "Failed to re-establish watch. Trying again after delay.");
-                                }
+                        error!(error = ?e, "Error from watcher stream. Re-establishing...");
+                        watcher = match Self::create_watcher(
+                            &kv_store,
+                            &watch_pattern,
+                            latest_revision + 1,
+                        )
+                        .await
+                        {
+                            Ok(w) => w,
+                            Err(re_e) => {
+                                error!(error = ?re_e, "Failed to re-establish watcher. Exiting...");
+                                break;
                             }
                         };
                     }
-
                     None => {
-                        error!("Central watcher stream ended unexpectedly. Attempting to restart.");
-                        watcher = loop {
-                            tokio::time::sleep(Duration::from_millis(100)).await;
-                            match kv_store
-                                .watch_from_revision(&watch_pattern, latest_revision + 1)
-                                .await
-                            {
-                                Ok(w) => {
-                                    info!("Central result store  watcher restarted after stream ended.");
-                                    break w;
-                                }
-                                Err(re_e) => {
-                                    error!(error = ?re_e, "Failed to restart watch. Trying again after delay.");
-                                }
+                        error!("Watcher stream ended unexpectedly. Re-establishing...");
+                        watcher = match Self::create_watcher(
+                            &kv_store,
+                            &watch_pattern,
+                            latest_revision + 1,
+                        )
+                        .await
+                        {
+                            Ok(w) => w,
+                            Err(re_e) => {
+                                error!(error = ?re_e, "Failed to re-establish watcher. Exiting...");
+                                break;
                             }
                         };
                     }
                 }
             }
         })
+    }
+
+    async fn create_watcher(
+        kv_store: &Store,
+        watch_pattern: &str,
+        start_revision: u64,
+    ) -> StoreResult<Watch> {
+        loop {
+            match kv_store
+                .watch_from_revision(watch_pattern, start_revision)
+                .await
+            {
+                Ok(watcher) => {
+                    info!(
+                        watch_pattern,
+                        start_revision, "Watcher created successfully"
+                    );
+                    return Ok(watcher);
+                }
+                Err(e) => {
+                    error!(error = ?e, "Failed to create watcher. Retrying...");
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+            }
+        }
+    }
+
+    async fn process_entry(
+        entry: &async_nats::jetstream::kv::Entry,
+        responses_map: &Arc<Mutex<HashMap<String, ResponseMode>>>,
+        pod_replica_id: &str,
+        kv_store: &Store,
+    ) -> Result<(), String> {
+        let parts: Vec<&str> = entry.key.splitn(5, '.').collect();
+        if parts.len() < 5 || parts[0] != RESPONSE_KEY_PREFIX || parts[1] != pod_replica_id {
+            return Err(format!("Unexpected key format: {}", entry.key));
+        }
+
+        let request_id = parts[2];
+        let key_suffix = format!("{}.{}", parts[3], parts[4]);
+
+        if key_suffix == START_PROCESSING_MARKER {
+            let request_type = RequestType::try_from(entry.value.clone())
+                .map_err(|e| format!("Failed to convert request type: {:?}", e))?;
+            
+            if request_type == RequestType::Sse {
+                return Ok(())
+            }
+            
+            let mut response_map = responses_map.lock().await;
+            if response_map.contains_key(request_id) {
+                error!(
+                    ?request_id,
+                    "Start processing marker already exists for this request ID"
+                );
+                return Err(format!(
+                    "Start processing marker already exists for request ID: {}",
+                    request_id
+                ));
+            }
+            match request_type {
+                RequestType::Sync => {
+                    response_map.insert(request_id.to_string(), ResponseMode::Sync(Vec::new()));
+                }
+                RequestType::Async => {
+                    response_map.insert(request_id.to_string(), ResponseMode::Async(Vec::new()));
+                }
+                _ => {}
+            }
+        } else if key_suffix == DONE_PROCESSING_MARKER {
+            let mut response_map = responses_map.lock().await;
+            if let Some(response_mode) = response_map.remove(request_id) {
+                if let ResponseMode::Sync(responses) | ResponseMode::Async(responses) =
+                    response_mode
+                {
+                    let merged_response = merge_bytes_list(&responses);
+                    let final_result_key = format!(
+                        "{}.{}.{}",
+                        RESPONSE_KEY_PREFIX, pod_replica_id, FINAL_RESULT_KEY_SUFFIX
+                    );
+                    kv_store
+                        .put(final_result_key, merged_response)
+                        .await
+                        .map_err(|e| format!("Failed to put final result: {:?}", e))?;
+                }
+            }
+        } else {
+            let mut response_map = responses_map.lock().await;
+            if let Some(response_mode) = response_map.get_mut(request_id) {
+                match response_mode {
+                    ResponseMode::Sse(tx) => {
+                        tx.send(Arc::new(entry.value.clone()))
+                            .await
+                            .map_err(|e| format!("Failed to send SSE response: {:?}", e))?;
+                    }
+                    ResponseMode::Sync(responses) | ResponseMode::Async(responses) => {
+                        responses.push(entry.value.clone());
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn get_data_from_kv_store(&self, id: &str) -> StoreResult<Vec<Vec<u8>>> {
+        let final_result_key = format!(
+            "{}.{}.{}",
+            RESPONSE_KEY_PREFIX, self.pod_replica_id, FINAL_RESULT_KEY_SUFFIX
+        );
+
+        loop {
+            match self.kv_store.get(&final_result_key).await {
+                Ok(Some(result)) => {
+                    return extract_bytes_list(&result)
+                        .map(|extracted| extracted.iter().map(|b| b.to_vec()).collect())
+                        .map_err(|e| {
+                            StoreError::StoreRead(format!("Failed to extract bytes list: {e:?}"))
+                        });
+                }
+                Ok(None) => {
+                    warn!(?id, "No final result key found in KV store, retrying...");
+                    tokio::time::sleep(Duration::from_millis(5)).await;
+                }
+                Err(e) => {
+                    return Err(StoreError::StoreRead(format!(
+                        "Failed to get final result key from KV store: {e:?}"
+                    )));
+                }
+            }
+        }
     }
 }
 
@@ -330,89 +330,19 @@ enum ResponseMode {
 impl DataStore for JetStreamDataStore {
     /// Retrieve a data from the store. If the datum is not found, `None` is returned.
     async fn retrieve_data(&mut self, id: &str) -> StoreResult<Vec<Vec<u8>>> {
-        // Check if the data exists in the in-memory map
-        {
-            if let Some(ResponseMode::Sync(data) | ResponseMode::Async(data)) = self.responses_map.lock().await.remove(id) {
-                return Ok(data.iter().map(|b| b.to_vec()).collect());
-            }
-        }
-
-        // Fallback to retrieving the data from the store
-        let final_result_key = format!(
-            "{}.{}.{}",
-            RESPONSE_KEY_PREFIX, self.pod_replica_id, FINAL_RESULT_KEY_SUFFIX
-        );
-
-        loop {
-            let response = self.kv_store.get(&final_result_key).await.map_err(|e| {
-                StoreError::StoreRead(format!(
-                    "Failed to get final result key from kv store: {e:?}"
-                ))
-            })?;
-
-            if let Some(result) = response {
-                let extracted = extract_bytes_list(&result).map_err(|e| {
-                    StoreError::StoreRead(format!("Failed to extract bytes list: {e:?}"))
-                })?;
-                return Ok(extracted.iter().map(|b| b.to_vec()).collect());
-            } else {
-                warn!(?id, "No final result key found in kv store, retrying");
-                sleep(Duration::from_millis(20)).await;
-            }
-        }
+        // Fallback to retrieving data from the KV store
+        self.get_data_from_kv_store(id).await
     }
 
     /// Stream the response from the store. The response is streamed as it is added to the store.
-    async fn stream_data(
-        &mut self,
-        id: &str,
-    ) -> StoreResult<(ReceiverStream<Arc<Bytes>>, JoinHandle<()>)> {
-        // the responses in kv bucket are stored in the format rs.{id}.{vertex_name}.{timestamp}
-        // so we should watch for all keys that start with rs.{id}
-        let watch_key = format!("rs.{}.{id}.*.*", self.pod_replica_id);
+    async fn stream_data(&mut self, id: &str) -> StoreResult<ReceiverStream<Arc<Bytes>>> {
+        let (tx, rx) = mpsc::channel(10);
 
-        let mut watcher = self
-            .kv_store
-            .watch_from_revision(&watch_key, 1)
-            .await
-            .map_err(|e| {
-                StoreError::StoreRead(format!("Failed to watch request id in kv store: {e:?}"))
-            })?;
+        // Update the in-memory map with the new tx
+        let mut response_map = self.responses_map.lock().await;
+        response_map.insert(id.to_string(), ResponseMode::Sse(tx));
 
-        let (tx, rx) = tokio::sync::mpsc::channel(10);
-        let response_init_key = format!("rs.{}.{id}.start.processing", self.pod_replica_id);
-        let response_done_key = format!("rs.{}.{id}.done.processing", self.pod_replica_id);
-
-        let handle = tokio::spawn(async move {
-            while let Some(watch_event) = watcher.next().await {
-                let entry = match watch_event {
-                    Ok(event) => event,
-                    Err(e) => {
-                        error!(?e, "Received error from JetStream KV watcher");
-                        continue;
-                    }
-                };
-
-                // init key is used to signal the start of processing, the value will be empty
-                // we can skip the init key
-                if entry.key == response_init_key {
-                    continue;
-                }
-
-                // done key is used to signal the end of processing, we can break the loop
-                if entry.key == response_done_key {
-                    break;
-                }
-
-                if !entry.value.is_empty() {
-                    tx.send(Arc::new(entry.value))
-                        .await
-                        .expect("Failed to send response");
-                }
-            }
-        });
-
-        Ok((ReceiverStream::new(rx), handle))
+        Ok(ReceiverStream::new(rx))
     }
 
     async fn ready(&mut self) -> bool {

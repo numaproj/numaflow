@@ -8,7 +8,6 @@ use http::Uri;
 use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
 use numaflow_pb::clients::serving::GetRequest;
 use tokio::net::UnixStream;
-use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::{Channel, Endpoint};
 use tower::service_fn;
@@ -46,10 +45,7 @@ impl DataStore for UserDefinedStore {
         Ok(payloads.iter().map(|p| p.value.clone()).collect())
     }
 
-    async fn stream_data(
-        &mut self,
-        _id: &str,
-    ) -> StoreResult<(ReceiverStream<Arc<Bytes>>, JoinHandle<()>)> {
+    async fn stream_data(&mut self, _id: &str) -> StoreResult<ReceiverStream<Arc<Bytes>>> {
         unimplemented!("stream_response is not supported for UserDefinedStore")
     }
 

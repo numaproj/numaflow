@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use thiserror::Error;
-use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 
 /// JetStream based datum store
@@ -48,10 +47,7 @@ pub(crate) trait LocalDataStore {
     /// retrieve the data from the store
     async fn retrieve_data(&mut self, id: &str) -> Result<Vec<Vec<u8>>>;
     /// streams the data from the store
-    async fn stream_data(
-        &mut self,
-        id: &str,
-    ) -> Result<(ReceiverStream<Arc<Bytes>>, JoinHandle<()>)>;
+    async fn stream_data(&mut self, id: &str) -> Result<ReceiverStream<Arc<Bytes>>>;
     /// check if the store is ready
     async fn ready(&mut self) -> bool;
 }

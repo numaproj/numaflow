@@ -13,7 +13,7 @@ use crate::app::store::cbstore::jetstreamstore::JetStreamCallbackStore;
 use crate::app::store::datastore::jetstream::JetStreamDataStore;
 use crate::app::store::datastore::user_defined::UserDefinedStore;
 use crate::app::tracker::MessageGraph;
-use crate::config::generate_certs;
+use crate::config::{generate_certs, get_pod_replica};
 use crate::config::StoreType;
 use crate::metrics::start_https_metrics_server;
 use app::orchestrator::OrchestratorState;
@@ -22,7 +22,7 @@ mod app;
 
 mod config;
 pub use {
-    config::Settings, config::DEFAULT_CALLBACK_URL_HEADER_KEY, config::DEFAULT_ID_HEADER,
+    config::Settings, config::DEFAULT_CALLBACK_URL_HEADER_KEY, config::DEFAULT_ID_HEADER, config::DEFAULT_REPLICA_ID_HEADER,
     config::ENV_MIN_PIPELINE_SPEC,
 };
 
@@ -111,7 +111,7 @@ async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
     // create a callback store for tracking
     let callback_store = JetStreamCallbackStore::new(
         js_context.clone(),
-        "0".to_string(),
+        get_pod_replica().to_string(),
         &settings.js_callback_store,
         &settings.js_status_store,
         &settings.js_response_store,
@@ -132,7 +132,7 @@ async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
             let nats_store = JetStreamDataStore::new(
                 js_context.clone(),
                 &settings.js_response_store,
-                "0".to_string(),
+                get_pod_replica().to_string(),
             )
             .await?;
             let callback_state = CallbackState::new(msg_graph, nats_store, callback_store).await?;

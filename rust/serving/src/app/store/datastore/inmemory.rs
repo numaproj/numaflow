@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::app::store::datastore::{Error as StoreError, Result as StoreResult};
@@ -43,10 +42,7 @@ impl super::DataStore for InMemoryDataStore {
     }
 
     /// Streams the responses for a given id from the `HashMap`.
-    async fn stream_data(
-        &mut self,
-        id: &str,
-    ) -> StoreResult<(ReceiverStream<Arc<Bytes>>, JoinHandle<()>)> {
+    async fn stream_data(&mut self, id: &str) -> StoreResult<ReceiverStream<Arc<Bytes>>> {
         let (tx, rx) = tokio::sync::mpsc::channel(10);
         let data = self.data.lock().await;
         if let Some(response) = data.get(id) {
@@ -56,7 +52,7 @@ impl super::DataStore for InMemoryDataStore {
                     .map_err(|_| StoreError::StoreRead("Failed to send datum".to_string()))?;
             }
         }
-        Ok((ReceiverStream::new(rx), tokio::task::spawn(async {})))
+        Ok(ReceiverStream::new(rx))
     }
 
     async fn ready(&mut self) -> bool {
@@ -102,7 +98,7 @@ mod tests {
     async fn test_stream_response() {
         let mut store = create_test_store();
         let id = "test_id_saved";
-        let (mut rx, _handle) = store.stream_data(id).await.unwrap();
+        let mut rx = store.stream_data(id).await.unwrap();
         let received_response = rx.next().await.unwrap();
         assert_eq!(
             received_response,

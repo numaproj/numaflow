@@ -24,7 +24,7 @@ impl UserDefinedStore {
     pub(crate) async fn put_datum(
         &mut self,
         origin: &str,
-        payloads: Vec<(String, Bytes)>,
+        payloads: Vec<(String, String, Bytes)>,
     ) -> crate::Result<()> {
         let mut tasks = Vec::new();
 
@@ -38,7 +38,7 @@ impl UserDefinedStore {
                     id: id.clone(),
                     payloads: vec![Payload {
                         origin: origin.clone(),
-                        value: payload.1.to_vec(),
+                        value: payload.2.to_vec(),
                     }],
                 };
                 client.put(request).await.map_err(|e| {
@@ -50,7 +50,9 @@ impl UserDefinedStore {
         }
 
         for task in tasks {
-            let result = task.await.map_err(|e| crate::Error::Sink(format!("Task failed: {e:?}")))?;
+            let result = task
+                .await
+                .map_err(|e| crate::Error::Sink(format!("Task failed: {e:?}")))?;
             result?; // Propagate the first error, if any
         }
 
@@ -122,7 +124,7 @@ mod tests {
         let mut store = UserDefinedStore::new(config).await.unwrap();
         let id = "test_id";
         let origin = "test_origin";
-        let payloads = vec![(id.to_string(), Bytes::from("test_payload"))];
+        let payloads = vec![(id.to_string(), "0".to_string(), Bytes::from("test_payload"))];
         let result = store.put_datum(origin, payloads).await;
         assert!(result.is_ok());
 

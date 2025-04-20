@@ -1,7 +1,7 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: ServingPipeline
 metadata:
-  name: serving-two-pipeline
+  name: serving-pipeline
 spec:
   serving:
     service: true

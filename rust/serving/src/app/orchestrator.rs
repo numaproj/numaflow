@@ -2,10 +2,10 @@
 //! and then fetch the messages once the results of the processing is stored in [crate::app::store::datastore] by
 //! different Sink. This subtly means that we even support streaming the results. The processing state
 //! is stored in [crate::app::store::cbstore].
-use std::sync::Arc;
-use std::time::Instant;
 use bytes::Bytes;
 use chrono::Utc;
+use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
@@ -79,12 +79,17 @@ where
         let span = tracing::Span::current();
         let callback_watcher = async move {
             let mut callbacks = Vec::new();
-            let mut start_time = Instant::now();
+            let start_time = Instant::now();
             let mut count = 0;
             while let Some(cb) = callbacks_stream.next().await {
                 let current_time_in_millis = Utc::now().timestamp_millis() as u64;
                 debug!(?cb, ?msg_id, "Received callback");
-                info!(?msg_id, "Received {count} callback at time diff={:?}, callback time diff={:?}", start_time.elapsed().as_millis(), current_time_in_millis - cb.cb_time);
+                info!(
+                    ?msg_id,
+                    "Received {count} callback at time diff={:?}, callback time diff={:?}",
+                    start_time.elapsed().as_millis(),
+                    current_time_in_millis - cb.cb_time
+                );
                 count += 1;
                 callbacks.push(cb);
                 subgraph = match sub_graph_generator
@@ -212,7 +217,7 @@ where
         });
 
         // watch for data stored in the datastore
-        let (mut response_stream, _handle) = self.datum_store.stream_data(id).await?;
+        let mut response_stream = self.datum_store.stream_data(id).await?;
         tokio::spawn(async move {
             while let Some(response) = response_stream.next().await {
                 tx.send(response).await.expect("Failed to send response");
@@ -239,8 +244,7 @@ where
         }
     }
 
-    /// marks the request as failed, FIXME: invoke this when the subgraph generation fails/critical errors
-    #[allow(dead_code)]
+    /// marks the request as failed
     pub(crate) async fn mark_as_failed(&mut self, id: &str, error: &str) -> Result<(), Error> {
         self.callback_store.mark_as_failed(id, error).await?;
         Ok(())

@@ -170,24 +170,16 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 		return nil, fmt.Errorf("failed to marshal serving source settings: %w", err)
 	}
 	encodedServingSourceSettings := base64.StdEncoding.EncodeToString(servingSourceSettings)
-
 	envVars := []corev1.EnvVar{
 		{Name: EnvNamespace, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},
 		{Name: EnvPod, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
 		{Name: EnvServingMinPipelineSpec, Value: encodedPipelineSpec},
-		{Name: "NUMAFLOW_SERVING_SOURCE_SETTINGS", Value: encodedServingSourceSettings},
+		{Name: EnvServingSettings, Value: encodedServingSourceSettings},
 		{Name: EnvServingCallbackStore, Value: fmt.Sprintf("%s_SERVING_CALLBACK_STORE", sp.GetServingStoreName())},
 		{Name: EnvServingResponseStore, Value: fmt.Sprintf("%s_SERVING_RESPONSE_STORE", sp.GetServingStoreName())},
 		{Name: EnvServingStatusStore, Value: fmt.Sprintf("%s_SERVING_STATUS_STORE", sp.GetServingStoreName())},
 		{Name: EnvServingPort, Value: strconv.Itoa(ServingServicePort)},
-		{ // TODO: do we still need it?
-			Name: EnvServingHostIP,
-			ValueFrom: &corev1.EnvVarSource{
-				FieldRef: &corev1.ObjectFieldSelector{
-					FieldPath: "status.podIP",
-				},
-			},
-		},
+		{Name: EnvReplica, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + KeyReplica + "']"}}},
 	}
 	envVars = append(envVars, req.Env...)
 

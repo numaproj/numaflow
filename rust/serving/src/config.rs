@@ -1,6 +1,7 @@
 use std::collections::HashMap;
+use std::env;
 use std::fmt::Debug;
-
+use std::sync::OnceLock;
 use crate::{
     pipeline::PipelineDCG,
     Error::{self, ParseConfig},
@@ -14,6 +15,7 @@ use serde::{Deserialize, Serialize};
 const ENV_NUMAFLOW_SERVING_APP_PORT: &str = "NUMAFLOW_SERVING_APP_LISTEN_PORT";
 pub const ENV_MIN_PIPELINE_SPEC: &str = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC";
 pub const DEFAULT_ID_HEADER: &str = "X-Numaflow-Id";
+pub const DEFAULT_REPLICA_ID_HEADER: &str = "X-Numaflow-Replica-Id";
 pub const DEFAULT_CALLBACK_URL_HEADER_KEY: &str = "X-Numaflow-Callback-Url";
 const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
 const DEFAULT_SERVING_STORE_SOCKET: &str = "/var/run/numaflow/serving.sock";
@@ -23,11 +25,23 @@ const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM
 const ENV_NUMAFLOW_SERVING_CALLBACK_STORE: &str = "NUMAFLOW_SERVING_CALLBACK_STORE";
 const ENV_NUMAFLOW_SERVING_RESPONSE_STORE: &str = "NUMAFLOW_SERVING_RESPONSE_STORE";
 const ENV_NUMAFLOW_SERVING_STATUS_STORE: &str = "NUMAFLOW_SERVING_STATUS_STORE";
+const ENV_NUMAFLOW_REPLICA: &str = "NUMAFLOW_REPLICA";
 
 pub fn generate_certs() -> Result<(Certificate, KeyPair), String> {
     let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
         .map_err(|e| format!("Failed to generate cert {:?}", e))?;
     Ok((cert, key_pair))
+}
+
+static POD_REPLICA: OnceLock<u16> = OnceLock::new();
+
+pub(crate) fn get_pod_replica() -> &'static u16 {
+    POD_REPLICA.get_or_init(|| {
+        env::var(ENV_NUMAFLOW_REPLICA)
+            .unwrap_or_default()
+            .parse()
+            .unwrap_or(0)
+    })
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
