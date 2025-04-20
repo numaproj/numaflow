@@ -1,4 +1,5 @@
 use crate::config::{config, CustomResourceType};
+use numaflow_monitor::runtime;
 use tokio::signal;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -64,7 +65,11 @@ mod serving_store;
 /// [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 mod watermark;
 
-use numaflow_monitor::runtime;
+/// [Reduce] is a function which "collects" a group of items and then perform some "reduction" operation
+/// on all of them, thus reducing them to a single value.
+///
+/// [Reduce]:https://numaflow.numaproj.io/user-guide/user-defined-functions/reduce/reduce/
+mod reduce;
 
 pub async fn run() -> Result<()> {
     let cln_token = CancellationToken::new();
