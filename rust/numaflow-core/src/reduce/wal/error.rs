@@ -6,7 +6,7 @@ pub(crate) type WalResult<T> = Result<T, Error>;
 #[derive(Debug)]
 pub(crate) enum Error {
     /// Error while writing a particular WAL entry
-    Entry {
+    WriteEntry {
         id: String,
         err: String,
     },
@@ -16,7 +16,7 @@ pub(crate) enum Error {
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::Entry { id, err } => {
+            Error::WriteEntry { id, err } => {
                 write!(f, "failed to write {id} due to {err}")
             }
             Error::Io(err) => {
