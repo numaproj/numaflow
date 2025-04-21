@@ -375,9 +375,9 @@ impl SinkWriter {
     /// Sink the messages to the Fallback Sink.
     async fn fb_sink(&self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>> {
         if self.fb_sink_handle.is_none() {
-            return Err(Error::Sink(
-                "Response contains fallback messages but no fallback sink is configured"
-                    .to_string(),
+            return Err(Error::FbSink(
+                "Response contains fallback messages but no fallback sink is configured. \
+                Please update the spec to configure fallback sink https://numaflow.numaproj.io/user-guide/sinks/fallback/ ".to_string(),
             ));
         }
 
@@ -557,7 +557,10 @@ impl SinkWriter {
                 // if we are shutting down, stop the retry
                 if cln_token.is_cancelled() {
                     return Err(Error::Sink(
-                        "Cancellation token triggered during retry".to_string(),
+                        "Cancellation token triggered during retry. \
+                        This happens when we are shutting down due to some error \
+                        and will no longer re-try writing to sink."
+                            .to_string(),
                     ));
                 }
             }
@@ -743,9 +746,9 @@ impl SinkWriter {
         retry_config: &RetryConfig,
     ) -> Result<()> {
         if self.fb_sink_handle.is_none() {
-            return Err(Error::Sink(
-                "Response contains fallback messages but no fallback sink is configured"
-                    .to_string(),
+            return Err(Error::FbSink(
+                "Response contains fallback messages but no fallback sink is configured. \
+                Please update the spec to configure fallback sink https://numaflow.numaproj.io/user-guide/sinks/fallback/".to_string(),
             ));
         }
 
@@ -804,14 +807,18 @@ impl SinkWriter {
 
                     // specifying fallback status in fallback response is not allowed
                     if contains_fallback_status {
-                        return Err(Error::Sink(
-                            "Fallback response contains fallback status".to_string(),
+                        return Err(Error::FbSink(
+                            "Fallback response contains fallback status. \
+                            Specifying fallback status in fallback response is not allowed."
+                                .to_string(),
                         ));
                     }
 
                     if contains_serving_status {
-                        return Err(Error::Sink(
-                            "Fallback response contains serving status".to_string(),
+                        return Err(Error::FbSink(
+                            "Fallback response contains serving status. \
+                            Specifying serving status in fallback response is not allowed."
+                                .to_string(),
                         ));
                     }
 
@@ -831,9 +838,10 @@ impl SinkWriter {
             }
         }
         if !messages_to_send.is_empty() {
-            return Err(Error::Sink(format!(
-                "Failed to write messages to fallback sink after {} attempts. Errors: {:?}",
-                attempts, fallback_error_map
+            return Err(Error::FbSink(format!(
+                "Failed to write messages to fallback sink after {} attempts. \
+                Max Attempts configured: {} Errors: {:?}",
+                attempts, max_attempts, fallback_error_map
             )));
         }
         Ok(())
@@ -843,16 +851,19 @@ impl SinkWriter {
     async fn handle_serving_messages(&mut self, serving_msgs: Vec<Message>) -> Result<()> {
         let Some(serving_store) = &mut self.serving_store else {
             return Err(Error::Sink(
-                "Response contains serving messages but no serving store is configured".to_string(),
+                "Response contains serving messages but no serving store is configured. \
+                Please consider updating spec to configure serving store."
+                    .to_string(),
             ));
         };
 
         for msg in serving_msgs {
             let payload = msg.value.clone().into();
-            let id = msg
-                .headers
-                .get(NUMAFLOW_ID_HEADER)
-                .ok_or(Error::Sink("Missing numaflow id header".to_string()))?;
+            let id = msg.headers.get(NUMAFLOW_ID_HEADER).ok_or(Error::Sink(
+                "Missing numaflow id header. \
+                Numaflow Id header should be there in the serving message headers."
+                    .to_string(),
+            ))?;
 
             match serving_store {
                 ServingStore::UserDefined(ud_store) => {
