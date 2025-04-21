@@ -1,3 +1,4 @@
+use crate::reduce::wal::error::WalResult;
 use bytes::Bytes;
 use chrono::Utc;
 use futures::StreamExt;
@@ -12,9 +13,7 @@ use tokio::{
 };
 use tokio_stream::wrappers::ReceiverStream;
 use tracing::{debug, error, info, warn};
-
 // TODO: we should use a custom error which will have the information of id, so that the callee can nack the message when there is an error.
-pub(crate) type WriteResult = Result<String, io::Error>;
 
 pub(crate) enum FileWriterMessage {
     WriteData { id: String, data: Bytes },
@@ -33,11 +32,14 @@ struct FileWriterActor {
 }
 
 impl Drop for FileWriterActor {
-    fn drop(&mut self) {}
+    fn drop(&mut self) {
+        let e = tokio::runtime::Handle::current().block_on(self.flush());
+        error!(?e, "failed to flush in drop")
+    }
 }
 
 impl FileWriterActor {
-    async fn start_processing(mut self) -> Result<(), io::Error> {
+    async fn start_processing(mut self) -> WalResult<()> {
         let mut flush_timer = interval(self.flush_interval);
         loop {
             tokio::select! {
@@ -56,7 +58,7 @@ impl FileWriterActor {
     }
 
     // handle message should only return critical errors
-    async fn handle_message(&mut self, msg: FileWriterMessage) -> io::Result<()> {
+    async fn handle_message(&mut self, msg: FileWriterMessage) -> WalResult<()> {
         match msg {
             FileWriterMessage::WriteData { id, data } => {
                 self.write_data(data).await?;
@@ -69,7 +71,7 @@ impl FileWriterActor {
         Ok(())
     }
 
-    async fn write_data(&mut self, data: Bytes) -> io::Result<()> {
+    async fn write_data(&mut self, data: Bytes) -> WalResult<()> {
         if self.current_size > 0 && self.current_size + data.len() as u64 > self.max_file_size {
             self.rotate_file().await?;
         }
@@ -80,13 +82,15 @@ impl FileWriterActor {
         Ok(())
     }
 
-    async fn flush(&mut self) -> Result<(), io::Error> {
+    async fn flush(&mut self) -> WalResult<()> {
         self.current_file.flush().await?;
         Ok(())
     }
 
-    async fn open_file(base_path: &PathBuf, idx: usize) -> io::Result<BufWriter<File>> {
-        let timestamp_nanos = Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    async fn open_file(base_path: &PathBuf, idx: usize) -> WalResult<BufWriter<File>> {
+        let timestamp_nanos = Utc::now()
+            .timestamp_nanos_opt()
+            .unwrap_or(Utc::now().timestamp_micros());
         let new_path = base_path.join(format!("segment_{:06}_{}.wal", idx, timestamp_nanos));
 
         debug!(path = %new_path.display(), "Opening new WAL segment file");
@@ -102,7 +106,7 @@ impl FileWriterActor {
         Ok(BufWriter::new(file))
     }
 
-    async fn rotate_file(&mut self) -> Result<(), io::Error> {
+    async fn rotate_file(&mut self) -> WalResult<()> {
         info!(
             current_size = ?self.current_size,
             file_index = ?self.file_index,
@@ -164,11 +168,12 @@ impl WAL {
         })
     }
 
-    // TODO: should streaming write return the spawned task handle so that we can await on that for any critical errors
+    /// Start the WAL for streaming write.
+    /// CANCEL SAFETY: This is not cancel safe.
     pub(crate) async fn streaming_write(
         self,
         stream: ReceiverStream<FileWriterMessage>,
-    ) -> Result<(ReceiverStream<String>, JoinHandle<Result<(), io::Error>>), io::Error> {
+    ) -> WalResult<(ReceiverStream<String>, JoinHandle<WalResult<()>>)> {
         let initial_file = FileWriterActor::open_file(&self.base_path, 0).await?;
 
         let (result_tx, result_rx) = mpsc::channel::<String>(self.channel_buffer_size);
@@ -188,7 +193,7 @@ impl WAL {
         actor.current_size = 0;
         actor.file_index = 0;
 
-        let handle: JoinHandle<Result<(), io::Error>> = tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             actor.start_processing().await?;
             Ok(())
         });
