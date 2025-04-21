@@ -373,9 +373,9 @@ impl SinkWriter {
     /// Sink the messages to the Fallback Sink.
     async fn fb_sink(&self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>> {
         if self.fb_sink_handle.is_none() {
-            return Err(Error::Sink(
-                "Response contains fallback messages but no fallback sink is configured"
-                    .to_string(),
+            return Err(Error::FbSink(
+                "Response contains fallback messages but no fallback sink is configured. \
+                Please update the spec to configure fallback sink https://numaflow.numaproj.io/user-guide/sinks/fallback/ ".to_string(),
             ));
         }
 
@@ -475,10 +475,6 @@ impl SinkWriter {
                             .time
                             .get_or_create(mvtx_forward_metric_labels())
                             .observe(sink_start.elapsed().as_micros() as f64);
-                        monovertex_metrics()
-                            .dropped_total
-                            .get_or_create(mvtx_forward_metric_labels())
-                            .inc_by((total_msgs - total_valid_msgs) as u64);
                     } else {
                         pipeline_metrics()
                             .forwarder
@@ -527,6 +523,7 @@ impl SinkWriter {
         // start with the original set of message to be sent.
         // we will overwrite this vec with failed messages and will keep retrying.
         let mut messages_to_send = messages;
+        let mut write_errors_total = 0;
 
         // only breaks out of this loop based on the retry strategy unless all the messages have been written to sink
         // successfully.
@@ -551,6 +548,7 @@ impl SinkWriter {
                             "Retry attempt {} due to retryable error. Errors: {:?}",
                             attempts, error_map
                         );
+                        write_errors_total += error_map.len();
                     }
                     Err(e) => Err(e)?,
                 }
@@ -558,7 +556,10 @@ impl SinkWriter {
                 // if we are shutting down, stop the retry
                 if cln_token.is_cancelled() {
                     return Err(Error::Sink(
-                        "Cancellation token triggered during retry".to_string(),
+                        "Cancellation token triggered during retry. \
+                        This happens when we are shutting down due to some error \
+                        and will no longer re-try writing to sink."
+                            .to_string(),
                     ));
                 }
             }
@@ -587,10 +588,13 @@ impl SinkWriter {
         let fb_msgs_total = fallback_msgs.len();
         // If there are fallback messages, write them to the fallback sink
         if !fallback_msgs.is_empty() {
+            let fallback_sink_start = time::Instant::now();
             self.handle_fallback_messages(fallback_msgs, retry_config)
                 .await?;
+            Self::send_fb_sink_metrics(fb_msgs_total, fallback_sink_start);
         }
 
+        let serving_msgs_total = serving_msgs.len();
         // If there are serving messages, write them to the serving store
         if !serving_msgs.is_empty() {
             self.handle_serving_messages(serving_msgs).await?;
@@ -601,12 +605,12 @@ impl SinkWriter {
                 .sink
                 .write_total
                 .get_or_create(mvtx_forward_metric_labels())
-                .inc_by((total_msgs - fb_msgs_total) as u64);
+                .inc_by((total_msgs - fb_msgs_total - serving_msgs_total) as u64);
             monovertex_metrics()
-                .fb_sink
-                .write_total
+                .sink
+                .write_errors_total
                 .get_or_create(mvtx_forward_metric_labels())
-                .inc_by(fb_msgs_total as u64);
+                .inc_by((write_errors_total) as u64);
         } else {
             pipeline_metrics()
                 .forwarder
@@ -649,6 +653,14 @@ impl SinkWriter {
                     "Dropping messages after {} attempts. Errors: {:?}",
                     attempts, error_map
                 );
+                if is_mono_vertex() {
+                    // update the drop metric count with the messages left for sink
+                    monovertex_metrics()
+                        .sink
+                        .dropped_total
+                        .get_or_create(mvtx_forward_metric_labels())
+                        .inc_by((messages_to_send.len()) as u64);
+                }
             }
             // if we need to move the messages to the fallback, return false
             OnFailureStrategy::Fallback => {
@@ -666,7 +678,7 @@ impl SinkWriter {
     }
 
     /// Writes to sink once and will return true if successful, else false. Please note that it
-    /// mutates is incoming fields.
+    /// mutates its incoming fields.
     async fn write_to_sink_once(
         &mut self,
         error_map: &mut HashMap<String, i32>,
@@ -733,9 +745,9 @@ impl SinkWriter {
         retry_config: &RetryConfig,
     ) -> Result<()> {
         if self.fb_sink_handle.is_none() {
-            return Err(Error::Sink(
-                "Response contains fallback messages but no fallback sink is configured"
-                    .to_string(),
+            return Err(Error::FbSink(
+                "Response contains fallback messages but no fallback sink is configured. \
+                Please update the spec to configure fallback sink https://numaflow.numaproj.io/user-guide/sinks/fallback/".to_string(),
             ));
         }
 
@@ -794,14 +806,18 @@ impl SinkWriter {
 
                     // specifying fallback status in fallback response is not allowed
                     if contains_fallback_status {
-                        return Err(Error::Sink(
-                            "Fallback response contains fallback status".to_string(),
+                        return Err(Error::FbSink(
+                            "Fallback response contains fallback status. \
+                            Specifying fallback status in fallback response is not allowed."
+                                .to_string(),
                         ));
                     }
 
                     if contains_serving_status {
-                        return Err(Error::Sink(
-                            "Fallback response contains serving status".to_string(),
+                        return Err(Error::FbSink(
+                            "Fallback response contains serving status. \
+                            Specifying serving status in fallback response is not allowed."
+                                .to_string(),
                         ));
                     }
 
@@ -821,9 +837,10 @@ impl SinkWriter {
             }
         }
         if !messages_to_send.is_empty() {
-            return Err(Error::Sink(format!(
-                "Failed to write messages to fallback sink after {} attempts. Errors: {:?}",
-                attempts, fallback_error_map
+            return Err(Error::FbSink(format!(
+                "Failed to write messages to fallback sink after {} attempts. \
+                Max Attempts configured: {} Errors: {:?}",
+                attempts, max_attempts, fallback_error_map
             )));
         }
         Ok(())
@@ -833,7 +850,9 @@ impl SinkWriter {
     async fn handle_serving_messages(&mut self, serving_msgs: Vec<Message>) -> Result<()> {
         let Some(serving_store) = &mut self.serving_store else {
             return Err(Error::Sink(
-                "Response contains serving messages but no serving store is configured".to_string(),
+                "Response contains serving messages but no serving store is configured. \
+                Please consider updating spec to configure serving store."
+                    .to_string(),
             ));
         };
 
@@ -867,6 +886,21 @@ impl SinkWriter {
     // Check if the Sink is ready to accept messages.
     pub(crate) async fn ready(&mut self) -> bool {
         self.health_check_clients.ready().await
+    }
+
+    fn send_fb_sink_metrics(fb_msgs_total: usize, fallback_sink_start: time::Instant) {
+        if is_mono_vertex() {
+            monovertex_metrics()
+                .fb_sink
+                .write_total
+                .get_or_create(mvtx_forward_metric_labels())
+                .inc_by(fb_msgs_total as u64);
+            monovertex_metrics()
+                .fb_sink
+                .time
+                .get_or_create(mvtx_forward_metric_labels())
+                .observe(fallback_sink_start.elapsed().as_micros() as f64);
+        }
     }
 }
 

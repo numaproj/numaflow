@@ -67,8 +67,11 @@ const READ_TOTAL: &str = "read";
 const READ_BYTES_TOTAL: &str = "read_bytes";
 const ACK_TOTAL: &str = "ack";
 const SINK_WRITE_TOTAL: &str = "write";
+const SINK_WRITE_ERRORS_TOTAL: &str = "write_errors";
+const SINK_DROPPED_TOTAL: &str = "dropped";
 const DROPPED_TOTAL: &str = "dropped";
 const FALLBACK_SINK_WRITE_TOTAL: &str = "write";
+const TRANSFORMER_DROPPED_TOTAL: &str = "dropped";
 
 // pending as gauge for mvtx (these metric names are hardcoded in the auto-scaler)
 const PENDING: &str = "pending";
@@ -84,6 +87,7 @@ const WRITE_TIME: &str = "write_time";
 const TRANSFORM_TIME: &str = "time";
 const ACK_TIME: &str = "ack_time";
 const SINK_TIME: &str = "time";
+const FALLBACK_SINK_TIME: &str = "time";
 
 const PIPELINE_FORWARDER_READ_TOTAL: &str = "data_read";
 
@@ -95,8 +99,8 @@ pub(crate) enum ComponentHealthChecks {
     Pipeline(PipelineComponents),
 }
 
-/// MonovertexComponents is used to store the all the components required for running mvtx. Transformer
-/// and Fallback Sink ism missing because they are internally referenced by Source and Sink.
+/// MonovertexComponents is used to store all the components required for running mvtx. Transformer
+/// and Fallback Sink is missing because they are internally referenced by Source and Sink.
 #[derive(Clone)]
 pub(crate) struct MonovertexComponents {
     pub(crate) source: Source,
@@ -211,17 +215,21 @@ pub(crate) struct PipelineMetrics {
 pub(crate) struct SinkMetrics {
     pub(crate) write_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) dropped_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) write_errors_total: Family<Vec<(String, String)>, Counter>,
 }
 
 /// Family of metrics for the Fallback Sink
 pub(crate) struct FallbackSinkMetrics {
     pub(crate) write_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) time: Family<Vec<(String, String)>, Histogram>,
 }
 
 /// Family of metrics for the Transformer
 pub(crate) struct TransformerMetrics {
     /// Transformer latency
     pub(crate) time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) dropped_total: Family<Vec<(String, String)>, Counter>,
 }
 
 pub(crate) struct PipelineForwarderMetrics {
@@ -291,6 +299,7 @@ impl MonoVtxMetrics {
                 time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                     Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
                 }),
+                dropped_total: Family::<Vec<(String, String)>, Counter>::default(),
             },
 
             sink: SinkMetrics {
@@ -298,10 +307,15 @@ impl MonoVtxMetrics {
                 time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                     Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
                 }),
+                dropped_total: Family::<Vec<(String, String)>, Counter>::default(),
+                write_errors_total: Family::<Vec<(String, String)>, Counter>::default(),
             },
 
             fb_sink: FallbackSinkMetrics {
                 write_total: Family::<Vec<(String, String)>, Counter>::default(),
+                time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                    Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
+                }),
             },
         };
 
@@ -367,6 +381,11 @@ impl MonoVtxMetrics {
             "A Histogram to keep track of the total time taken to Transform, in microseconds",
             metrics.transformer.time.clone(),
         );
+        transformer_registry.register(
+            TRANSFORMER_DROPPED_TOTAL,
+            "A Counter to keep track of the total number of messages dropped by the transformer",
+            metrics.transformer.dropped_total.clone(),
+        );
 
         // Sink metrics
         let sink_registry = registry.sub_registry_with_prefix(SINK_REGISTRY_PREFIX);
@@ -380,6 +399,16 @@ impl MonoVtxMetrics {
             "A Histogram to keep track of the total time taken to Write to the Sink, in microseconds",
             metrics.sink.time.clone(),
         );
+        sink_registry.register(
+            SINK_WRITE_ERRORS_TOTAL,
+            "A counter to keep track of the total number of write errors for the sink",
+            metrics.sink.write_errors_total.clone(),
+        );
+        sink_registry.register(
+            SINK_DROPPED_TOTAL,
+            "A counter to keep track of the total number of messages dropped by sink",
+            metrics.sink.dropped_total.clone(),
+        );
 
         // Fallback Sink metrics
         let fb_sink_registry = registry.sub_registry_with_prefix(FALLBACK_SINK_REGISTRY_PREFIX);
@@ -389,6 +418,9 @@ impl MonoVtxMetrics {
             "A Counter to keep track of the total number of messages written to the fallback sink",
             metrics.fb_sink.write_total.clone(),
         );
+        fb_sink_registry.register(FALLBACK_SINK_TIME,
+            "A Histogram to keep track of the total time taken to Write to the fallback sink, in microseconds",
+            metrics.fb_sink.time.clone());
         metrics
     }
 }
@@ -1533,8 +1565,23 @@ mod tests {
             .time
             .get_or_create(&common_labels)
             .observe(5.0);
+        metrics
+            .transformer
+            .dropped_total
+            .get_or_create(&common_labels)
+            .inc_by(2);
 
         metrics.sink.write_total.get_or_create(&common_labels).inc();
+        metrics
+            .sink
+            .write_errors_total
+            .get_or_create(&common_labels)
+            .inc_by(3);
+        metrics
+            .sink
+            .dropped_total
+            .get_or_create(&common_labels)
+            .inc_by(2);
         metrics.sink.time.get_or_create(&common_labels).observe(4.0);
 
         metrics
@@ -1542,6 +1589,11 @@ mod tests {
             .write_total
             .get_or_create(&common_labels)
             .inc();
+        metrics
+            .fb_sink
+            .time
+            .get_or_create(&common_labels)
+            .observe(5.0);
 
         // Validate the metric names
         let state = global_registry().registry.lock();
@@ -1567,11 +1619,17 @@ mod tests {
             r#"monovtx_transformer_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 5.0"#,
             r#"monovtx_transformer_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_transformer_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_transformer_dropped_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 2"#,
             r#"monovtx_sink_write_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_sink_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 4.0"#,
             r#"monovtx_sink_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_sink_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_sink_write_errors_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 3"#,
+            r#"monovtx_sink_dropped_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 2"#,
             r#"monovtx_fallback_sink_write_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_fallback_sink_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 5.0"#,
+            r#"monovtx_fallback_sink_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_fallback_sink_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
         ];
 
         let got = buffer

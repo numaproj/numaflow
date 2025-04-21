@@ -13,6 +13,9 @@ pub enum Error {
     #[error("Sink Error - {0}")]
     Sink(String),
 
+    #[error("Fallback Sink Error - {0}")]
+    FbSink(String),
+
     #[error("Transformer Error - {0}")]
     Transformer(String),
 
