@@ -721,6 +721,7 @@ mod tests {
             ("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222"),
             ("NUMAFLOW_SERVING_SOURCE_SETTINGS", "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQifQ=="),
             ("NUMAFLOW_SERVING_CALLBACK_STORE", "test-kv-store"),
+            ("NUMAFLOW_SERVING_RESPONSE_STORE", "test-kv-store"),
         ];
         let pipeline_config = PipelineConfig::load(pipeline_cfg_base64, env_vars).unwrap();
 

@@ -182,10 +182,8 @@ where
         let mut cb_store = self.callback_store.clone();
         tokio::spawn(async move {
             let mut callbacks = Vec::new();
-
             while let Some(cb) = callbacks_stream.next().await {
                 callbacks.push(cb);
-
                 subgraph = match sub_graph_generator
                     .generate_subgraph_from_callbacks(msg_id.clone(), callbacks.clone())
                 {
@@ -276,6 +274,7 @@ mod tests {
         let js_url = "localhost:4222";
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
+        let pod_replica = "0";
 
         let pipeline_spec: PipelineDCG = PIPELINE_SPEC_ENCODED.parse().unwrap();
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec).unwrap();
@@ -294,7 +293,7 @@ mod tests {
 
         let callback_store = JetStreamCallbackStore::new(
             context.clone(),
-            "0".to_string(),
+            pod_replica.to_string(),
             store_name,
             store_name,
             store_name,
@@ -302,7 +301,7 @@ mod tests {
         .await
         .expect("Failed to create callback store");
 
-        let datum_store = JetStreamDataStore::new(context.clone(), store_name, "0".to_string())
+        let datum_store = JetStreamDataStore::new(context.clone(), store_name, pod_replica.to_string())
             .await
             .expect("Failed to create datum store");
 
@@ -360,32 +359,49 @@ mod tests {
             },
         ];
 
-        // put the callbacks into the store
-        for (i, cb) in cbs.drain(..).enumerate() {
-            kv_store
-                .put(
-                    format!("cb.{}.{}.{}", id, i, Utc::now().timestamp()),
-                    cb.try_into().unwrap(),
-                )
-                .await
-                .unwrap();
-        }
+        let request_id = id.clone();
+        tokio::spawn(async move {
+            // once the start processing rs is present then only write the response
+            let rs_key = format!("rs.{pod_replica}.{request_id}.start.processing");
+            let start_time = Instant::now();
+            loop {
+                if let Some(value) = kv_store.get(&rs_key).await.unwrap() {
+                    break;
+                }
 
-        // put responses to datum store
-        let responses = vec![
-            Bytes::from_static(b"response1"),
-            Bytes::from_static(b"response2"),
-        ];
+                if start_time.elapsed().as_millis() > 1000 {
+                    panic!("Timed out waiting for start processing key");
+                }
 
-        for (i, response) in responses.iter().enumerate() {
-            kv_store
-                .put(
-                    format!("rs.{}.{}.{}", id, i, Utc::now().timestamp()),
-                    response.clone(),
-                )
-                .await
-                .unwrap();
-        }
+            }
+            // put responses to datum store
+            let responses = vec![
+                Bytes::from_static(b"response1"),
+                Bytes::from_static(b"response2"),
+            ];
+
+            for (i, response) in responses.iter().enumerate() {
+                kv_store
+                    .put(
+                        format!("rs.{pod_replica}.{request_id}.{}.{}", i, Utc::now().timestamp()),
+                        response.clone(),
+                    )
+                    .await
+                    .unwrap();
+            }
+
+            // put the callbacks into the store
+            for (i, cb) in cbs.drain(..).enumerate() {
+                kv_store
+                    .put(
+                        format!("cb.{pod_replica}.{request_id}.{}.{}", i, Utc::now().timestamp_millis()),
+                        cb.try_into().unwrap(),
+                    )
+                    .await
+                    .unwrap();
+            }
+        });
+
 
         // Test process_request
         let result = state.process_request(&id, RequestType::Sync).await.unwrap();
@@ -400,12 +416,13 @@ mod tests {
         assert_eq!(result[1], b"response2");
     }
 
-    #[cfg(feature = "nats-tests")]
+    // #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_stream_response() {
         let js_url = "localhost:4222";
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
+        let pod_replica = "0";
 
         let store_name = "test_stream_response";
         let _ = context.delete_key_value(store_name).await;
@@ -421,7 +438,7 @@ mod tests {
 
         let callback_store = JetStreamCallbackStore::new(
             context.clone(),
-            "0".to_string(),
+            pod_replica.to_string(),
             store_name,
             store_name,
             store_name,
@@ -429,7 +446,7 @@ mod tests {
         .await
         .expect("Failed to create callback store");
 
-        let datum_store = JetStreamDataStore::new(context.clone(), store_name, "0".to_string())
+        let datum_store = JetStreamDataStore::new(context.clone(), store_name, pod_replica.to_string())
             .await
             .expect("Failed to create datum store");
 
@@ -443,7 +460,6 @@ mod tests {
 
         let id = "test_id".to_string();
 
-        // Test insert_callback_requests
         let mut cbs = vec![
             Callback {
                 id: id.clone(),
@@ -491,35 +507,51 @@ mod tests {
             },
         ];
 
-        // put the callbacks into the store
-        for (i, cb) in cbs.drain(..).enumerate() {
-            kv_store
-                .put(
-                    format!("cb.{}.{}.{}", id, i, Utc::now().timestamp_millis()),
-                    cb.try_into().unwrap(),
-                )
-                .await
-                .unwrap();
-        }
+        let request_id = id.clone();
+        tokio::spawn(async move {
+            // once the start processing rs is present then only write the response
+            let rs_key = format!("rs.{pod_replica}.{request_id}.start.processing");
+            let start_time = Instant::now();
+            loop {
+                if let Some(value) = kv_store.get(&rs_key).await.unwrap() {
+                    break;
+                }
 
-        // put responses to datum store
-        let responses = vec![
-            Bytes::from_static(b"response1"),
-            Bytes::from_static(b"response2"),
-            Bytes::from_static(b"response3"),
-            Bytes::from_static(b"response4"),
-            Bytes::from_static(b"response5"),
-        ];
+                if start_time.elapsed().as_millis() > 1000 {
+                    panic!("Timed out waiting for start processing key");
+                }
 
-        for (i, response) in responses.iter().enumerate() {
-            kv_store
-                .put(
-                    format!("rs.{}.{}.{}", id, i, Utc::now().timestamp()),
-                    response.clone(),
-                )
-                .await
-                .unwrap();
-        }
+            }
+            // put responses to datum store
+            let responses = vec![
+                Bytes::from_static(b"response1"),
+                Bytes::from_static(b"response2"),
+                Bytes::from_static(b"response3"),
+                Bytes::from_static(b"response4"),
+                Bytes::from_static(b"response5"),
+            ];
+
+            for (i, response) in responses.iter().enumerate() {
+                kv_store
+                    .put(
+                        format!("rs.{pod_replica}.{request_id}.{}.{}", i, Utc::now().timestamp()),
+                        response.clone(),
+                    )
+                    .await
+                    .unwrap();
+            }
+
+            // put the callbacks into the store
+            for (i, cb) in cbs.drain(..).enumerate() {
+                kv_store
+                    .put(
+                        format!("cb.{pod_replica}.{request_id}.{}.{}", i, Utc::now().timestamp_millis()),
+                        cb.try_into().unwrap(),
+                    )
+                    .await
+                    .unwrap();
+            }
+        });
 
         // stream response
         let response_stream = state.stream_response(&id, RequestType::Sse).await.unwrap();

@@ -89,6 +89,7 @@ pub struct Settings {
     /// The HTTP header used to communicate to the client about the unique id assigned for a request in the store
     /// The client may also set the value of this header when sending the payload.
     pub tid_header: String,
+    pub pod_replica: String,
     pub app_listen_port: u16,
     pub metrics_server_listen_port: u16,
     pub upstream_addr: String,
@@ -115,6 +116,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             tid_header: DEFAULT_ID_HEADER.to_owned(),
+            pod_replica: "0".to_owned(),
             app_listen_port: 3000,
             metrics_server_listen_port: 3001,
             upstream_addr: "localhost:8888".to_owned(),
@@ -290,6 +292,7 @@ impl TryFrom<HashMap<String, String>> for Settings {
         };
 
         settings.tid_header = serving_server_settings.msg_id_header_key;
+        settings.pod_replica = env::var(ENV_NUMAFLOW_REPLICA).unwrap_or_else(|_| "0".to_string());
 
         settings.drain_timeout_secs = serving_server_settings
             .request_timeout_seconds
@@ -326,6 +329,7 @@ mod tests {
         let settings = Settings::default();
 
         assert_eq!(settings.tid_header, "X-Numaflow-Id");
+        assert_eq!(settings.pod_replica, "0");
         assert_eq!(settings.app_listen_port, 3000);
         assert_eq!(settings.metrics_server_listen_port, 3001);
         assert_eq!(settings.upstream_addr, "localhost:8888");
@@ -341,6 +345,8 @@ mod tests {
             ("NUMAFLOW_ISBSVC_JETSTREAM_USER", "testuser"),
             ("NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD", "testpasswd"),
             ("NUMAFLOW_SERVING_CALLBACK_STORE", "test-kv-store"),
+            ("NUMAFLOW_SERVING_STATUS_STORE", "test-kv-store"),
+            ("NUMAFLOW_SERVING_RESPONSE_STORE", "test-kv-store"),
             ("NUMAFLOW_SERVING_SOURCE_SETTINGS", "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQifQ=="),
             (ENV_MIN_PIPELINE_SPEC, "eyJ2ZXJ0aWNlcyI6W3sibmFtZSI6ImluIiwic291cmNlIjp7ImpldHN0cmVhbSI6eyJ1cmwiOiJuYXRzOi8vaXNic3ZjLWRlZmF1bHQtanMtc3ZjLmRlZmF1bHQuc3ZjOjQyMjIiLCJzdHJlYW0iOiJzZXJ2aW5nLXNvdXJjZS1zaW1wbGUtcGlwZWxpbmUiLCJ0bHMiOm51bGwsImF1dGgiOnsiYmFzaWMiOnsidXNlciI6eyJuYW1lIjoiaXNic3ZjLWRlZmF1bHQtanMtY2xpZW50LWF1dGgiLCJrZXkiOiJjbGllbnQtYXV0aC11c2VyIn0sInBhc3N3b3JkIjp7Im5hbWUiOiJpc2JzdmMtZGVmYXVsdC1qcy1jbGllbnQtYXV0aCIsImtleSI6ImNsaWVudC1hdXRoLXBhc3N3b3JkIn19fX19LCJjb250YWluZXJUZW1wbGF0ZSI6eyJyZXNvdXJjZXMiOnt9LCJlbnYiOlt7Im5hbWUiOiJOVU1BRkxPV19DQUxMQkFDS19FTkFCTEVEIiwidmFsdWUiOiJ0cnVlIn0seyJuYW1lIjoiTlVNQUZMT1dfU0VSVklOR19TT1VSQ0VfU0VUVElOR1MiLCJ2YWx1ZSI6ImV5SmhkWFJvSWpwdWRXeHNMQ0p6WlhKMmFXTmxJanAwY25WbExDSnRjMmRKUkVobFlXUmxja3RsZVNJNklsZ3RUblZ0WVdac2IzY3RTV1FpZlE9PSJ9LHsibmFtZSI6Ik5VTUFGTE9XX1NFUlZJTkdfS1ZfU1RPUkUiLCJ2YWx1ZSI6InNlcnZpbmctc3RvcmUtc2ltcGxlLXBpcGVsaW5lX1NFUlZJTkdfS1ZfU1RPUkUifV19LCJzY2FsZSI6eyJtaW4iOjEsIm1heCI6MX0sImluaXRDb250YWluZXJzIjpbeyJuYW1lIjoidmFsaWRhdGUtc3RyZWFtLWluaXQiLCJpbWFnZSI6InF1YXkuaW8vbnVtYXByb2ovbnVtYWZsb3c6ODA4MkU2NTYtQTAxOS00QjE1LUE2ODQtNTg2RkM3RDJDQTFGIiwiYXJncyI6WyJpc2JzdmMtdmFsaWRhdGUiLCItLWlzYnN2Yy10eXBlPWpldHN0cmVhbSIsIi0tYnVmZmVycz1zZXJ2aW5nLXNvdXJjZS1zaW1wbGUtcGlwZWxpbmUiXSwiZW52IjpbeyJuYW1lIjoiTlVNQUZMT1dfUElQRUxJTkVfTkFNRSIsInZhbHVlIjoicy1zaW1wbGUtcGlwZWxpbmUifSx7Im5hbWUiOiJHT0RFQlVHIn0seyJuYW1lIjoiTlVNQUZMT1dfSVNCU1ZDX0NPTkZJRyIsInZhbHVlIjoiZXlKcVpYUnpkSEpsWVcwaU9uc2lkWEpzSWpvaWJtRjBjem92TDJselluTjJZeTFrWldaaGRXeDBMV3B6TFhOMll5NWtaV1poZFd4MExuTjJZem8wTWpJeUlpd2lZWFYwYUNJNmV5SmlZWE5wWXlJNmV5SjFjMlZ5SWpwN0ltNWhiV1VpT2lKcGMySnpkbU10WkdWbVlYVnNkQzFxY3kxamJHbGxiblF0WVhWMGFDSXNJbXRsZVNJNkltTnNhV1Z1ZEMxaGRYUm9MWFZ6WlhJaWZTd2ljR0Z6YzNkdmNtUWlPbnNpYm1GdFpTSTZJbWx6WW5OMll5MWtaV1poZFd4MExXcHpMV05zYVdWdWRDMWhkWFJvSWl3aWEyVjVJam9pWTJ4cFpXNTBMV0YxZEdndGNHRnpjM2R2Y21RaWZYMTlMQ0p6ZEhKbFlXMURiMjVtYVdjaU9pSmpiMjV6ZFcxbGNqcGNiaUFnWVdOcmQyRnBkRG9nTmpCelhHNGdJRzFoZUdGamEzQmxibVJwYm1jNklESTFNREF3WEc1dmRHSjFZMnRsZERwY2JpQWdhR2x6ZEc5eWVUb2dNVnh1SUNCdFlYaGllWFJsY3pvZ01GeHVJQ0J0WVhoMllXeDFaWE5wZW1VNklEQmNiaUFnY21Wd2JHbGpZWE02SUROY2JpQWdjM1J2Y21GblpUb2dNRnh1SUNCMGRHdzZJRE5vWEc1d2NtOWpZblZqYTJWME9seHVJQ0JvYVhOMGIzSjVPaUF4WEc0Z0lHMWhlR0o1ZEdWek9pQXdYRzRnSUcxaGVIWmhiSFZsYzJsNlpUb2dNRnh1SUNCeVpYQnNhV05oY3pvZ00xeHVJQ0J6ZEc5eVlXZGxPaUF3WEc0Z0lIUjBiRG9nTnpKb1hHNXpkSEpsWVcwNlhHNGdJR1IxY0d4cFkyRjBaWE02SURZd2MxeHVJQ0J0WVhoaFoyVTZJRGN5YUZ4dUlDQnRZWGhpZVhSbGN6b2dMVEZjYmlBZ2JXRjRiWE5uY3pvZ01UQXdNREF3WEc0Z0lISmxjR3hwWTJGek9pQXpYRzRnSUhKbGRHVnVkR2x2YmpvZ01GeHVJQ0J6ZEc5eVlXZGxPaUF3WEc0aWZYMD0ifSx7Im5hbWUiOiJOVU1BRkxPV19JU0JTVkNfSkVUU1RSRUFNX1VSTCIsInZhbHVlIjoibmF0czovL2lzYnN2Yy1kZWZhdWx0LWpzLXN2Yy5kZWZhdWx0LnN2Yzo0MjIyIn0seyJuYW1lIjoiTlVNQUZMT1dfSVNCU1ZDX0pFVFNUUkVBTV9UTFNfRU5BQkxFRCIsInZhbHVlIjoiZmFsc2UifSx7Im5hbWUiOiJOVU1BRkxPV19JU0JTVkNfSkVUU1RSRUFNX1VTRVIiLCJ2YWx1ZUZyb20iOnsic2VjcmV0S2V5UmVmIjp7Im5hbWUiOiJpc2JzdmMtZGVmYXVsdC1qcy1jbGllbnQtYXV0aCIsImtleSI6ImNsaWVudC1hdXRoLXVzZXIifX19LHsibmFtZSI6Ik5VTUFGTE9XX0lTQlNWQ19KRVRTVFJFQU1fUEFTU1dPUkQiLCJ2YWx1ZUZyb20iOnsic2VjcmV0S2V5UmVmIjp7Im5hbWUiOiJpc2JzdmMtZGVmYXVsdC1qcy1jbGllbnQtYXV0aCIsImtleSI6ImNsaWVudC1hdXRoLXBhc3N3b3JkIn19fV0sInJlc291cmNlcyI6eyJyZXF1ZXN0cyI6eyJjcHUiOiIxMDBtIiwibWVtb3J5IjoiMTI4TWkifX0sImltYWdlUHVsbFBvbGljeSI6IklmTm90UHJlc2VudCJ9XSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19fSx7Im5hbWUiOiJjYXQiLCJ1ZGYiOnsiY29udGFpbmVyIjp7ImltYWdlIjoicXVheS5pby9udW1haW8vbnVtYWZsb3ctZ28vbWFwLWZvcndhcmQtbWVzc2FnZTpzdGFibGUiLCJyZXNvdXJjZXMiOnt9fSwiYnVpbHRpbiI6bnVsbCwiZ3JvdXBCeSI6bnVsbH0sImNvbnRhaW5lclRlbXBsYXRlIjp7InJlc291cmNlcyI6e30sImVudiI6W3sibmFtZSI6Ik5VTUFGTE9XX0NBTExCQUNLX0VOQUJMRUQiLCJ2YWx1ZSI6InRydWUifSx7Im5hbWUiOiJOVU1BRkxPV19TRVJWSU5HX1NPVVJDRV9TRVRUSU5HUyIsInZhbHVlIjoiZXlKaGRYUm9JanB1ZFd4c0xDSnpaWEoyYVdObElqcDBjblZsTENKdGMyZEpSRWhsWVdSbGNrdGxlU0k2SWxndFRuVnRZV1pzYjNjdFNXUWlmUT09In0seyJuYW1lIjoiTlVNQUZMT1dfU0VSVklOR19LVl9TVE9SRSIsInZhbHVlIjoic2VydmluZy1zdG9yZS1zaW1wbGUtcGlwZWxpbmVfU0VSVklOR19LVl9TVE9SRSJ9XX0sInNjYWxlIjp7Im1pbiI6MSwibWF4IjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19fSx7Im5hbWUiOiJvdXQiLCJzaW5rIjp7InVkc2luayI6eyJjb250YWluZXIiOnsiaW1hZ2UiOiJxdWF5LmlvL251bWFpby9udW1hZmxvdy1nby9zaW5rLXNlcnZlOnN0YWJsZSIsInJlc291cmNlcyI6e319fSwicmV0cnlTdHJhdGVneSI6e319LCJjb250YWluZXJUZW1wbGF0ZSI6eyJyZXNvdXJjZXMiOnt9LCJlbnYiOlt7Im5hbWUiOiJOVU1BRkxPV19DQUxMQkFDS19FTkFCTEVEIiwidmFsdWUiOiJ0cnVlIn0seyJuYW1lIjoiTlVNQUZMT1dfU0VSVklOR19TT1VSQ0VfU0VUVElOR1MiLCJ2YWx1ZSI6ImV5SmhkWFJvSWpwdWRXeHNMQ0p6WlhKMmFXTmxJanAwY25WbExDSnRjMmRKUkVobFlXUmxja3RsZVNJNklsZ3RUblZ0WVdac2IzY3RTV1FpZlE9PSJ9LHsibmFtZSI6Ik5VTUFGTE9XX1NFUlZJTkdfS1ZfU1RPUkUiLCJ2YWx1ZSI6InNlcnZpbmctc3RvcmUtc2ltcGxlLXBpcGVsaW5lX1NFUlZJTkdfS1ZfU1RPUkUifV19LCJzY2FsZSI6eyJtaW4iOjEsIm1heCI6MX0sInVwZGF0ZVN0cmF0ZWd5Ijp7InR5cGUiOiJSb2xsaW5nVXBkYXRlIiwicm9sbGluZ1VwZGF0ZSI6eyJtYXhVbmF2YWlsYWJsZSI6IjI1JSJ9fX1dLCJlZGdlcyI6W3siZnJvbSI6ImluIiwidG8iOiJjYXQiLCJjb25kaXRpb25zIjpudWxsfSx7ImZyb20iOiJjYXQiLCJ0byI6Im91dCIsImNvbmRpdGlvbnMiOm51bGx9XSwibGlmZWN5Y2xlIjp7fSwid2F0ZXJtYXJrIjp7fX0="),
         ];
@@ -355,6 +361,7 @@ mod tests {
 
         let expected_config = Settings {
             tid_header: "X-Numaflow-Id".into(),
+            pod_replica: "0".into(),
             app_listen_port: 8443,
             metrics_server_listen_port: 3001,
             upstream_addr: "localhost:8888".into(),
@@ -362,6 +369,8 @@ mod tests {
             store_type: StoreType::Nats,
             api_auth_token: None,
             js_callback_store: "test-kv-store".into(),
+            js_status_store: "test-kv-store".into(),
+            js_response_store: "test-kv-store".into(),
             nats_basic_auth: Some(("testuser".into(), "testpasswd".into())),
             js_message_stream: "serving-source-simple-pipeline".into(),
             jetstream_url: "nats://isbsvc-default-js-svc.default.svc:4222".into(),

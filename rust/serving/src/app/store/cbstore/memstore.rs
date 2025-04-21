@@ -45,10 +45,9 @@ impl super::CallbackStore for InMemoryCallbackStore {
         _request_type: RequestType,
     ) -> StoreResult<ReceiverStream<Arc<Callback>>> {
         let mut data = self.data.lock().await;
-        if data.contains_key(id) {
-            return Err(StoreError::DuplicateRequest(id.to_string()));
+        if !data.contains_key(id) {
+            data.insert(id.to_string(), Vec::new());
         }
-        data.insert(id.to_string(), Vec::new());
         let (tx, rx) = mpsc::channel(10);
         if let Some(callbacks) = data.get(id) {
             for callback in callbacks {

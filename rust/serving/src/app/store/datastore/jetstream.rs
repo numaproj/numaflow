@@ -20,6 +20,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
+use tokio::time::sleep;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tracing::{error, info, warn};
@@ -97,7 +98,7 @@ impl JetStreamDataStore {
             pod_replica_id.clone(),
             kv_store.clone(),
             Arc::clone(&responses_map),
-        );
+        ).await;
         info!(
             "Central watcher spawned for pod replica ID: {}",
             pod_replica_id
@@ -110,29 +111,29 @@ impl JetStreamDataStore {
     }
 
     /// Spawns the central task that watches response keys and manages data collection.
-    fn spawn_central_watcher(
+    async fn spawn_central_watcher(
         pod_replica_id: String,
         kv_store: Store,
         responses_map: Arc<Mutex<HashMap<String, ResponseMode>>>,
     ) -> JoinHandle<()> {
-        tokio::spawn(async move {
-            let watch_pattern = format!("{}.{}.*.*.*", RESPONSE_KEY_PREFIX, pod_replica_id);
-            info!(watch_pattern, "Starting central data watcher");
-            let mut latest_revision = 1;
+        let watch_pattern = format!("{}.{}.*.*.*", RESPONSE_KEY_PREFIX, pod_replica_id);
+        info!(?watch_pattern, "Starting central data watcher",);
+        let mut latest_revision = 1;
 
-            let mut watcher = loop {
-                match kv_store.watch(&watch_pattern).await {
-                    Ok(w) => {
-                        info!(watch_pattern, "Central watcher established");
-                        break w;
-                    }
-                    Err(e) => {
-                        error!(error = ?e, "Failed to establish initial watch for {}. Retrying...", watch_pattern);
-                        tokio::time::sleep(Duration::from_millis(100)).await;
-                    }
+        let mut watcher = loop {
+            match kv_store.watch(&watch_pattern).await {
+                Ok(w) => {
+                    info!(watch_pattern, "Central watcher established");
+                    break w;
                 }
-            };
+                Err(e) => {
+                    error!(error = ?e, "Failed to establish initial watch for {}. Retrying...", watch_pattern);
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+            }
+        };
 
+        tokio::spawn(async move {
             loop {
                 match watcher.next().await {
                     Some(Ok(entry)) => {
@@ -231,11 +232,7 @@ impl JetStreamDataStore {
         if key_suffix == START_PROCESSING_MARKER {
             let request_type = RequestType::try_from(entry.value.clone())
                 .map_err(|e| format!("Failed to convert request type: {:?}", e))?;
-            
-            if request_type == RequestType::Sse {
-                return Ok(())
-            }
-            
+
             let mut response_map = responses_map.lock().await;
             if response_map.contains_key(request_id) {
                 error!(
@@ -247,14 +244,24 @@ impl JetStreamDataStore {
                     request_id
                 ));
             }
+
             match request_type {
+                RequestType::Sse => {
+                    let (tx, rx) = mpsc::channel(10);
+                    response_map.insert(
+                        request_id.to_string(),
+                        ResponseMode::Sse {
+                            tx,
+                            rx: Some(ReceiverStream::new(rx)),
+                        },
+                    );
+                }
                 RequestType::Sync => {
                     response_map.insert(request_id.to_string(), ResponseMode::Sync(Vec::new()));
                 }
                 RequestType::Async => {
                     response_map.insert(request_id.to_string(), ResponseMode::Async(Vec::new()));
                 }
-                _ => {}
             }
         } else if key_suffix == DONE_PROCESSING_MARKER {
             let mut response_map = responses_map.lock().await;
@@ -277,7 +284,7 @@ impl JetStreamDataStore {
             let mut response_map = responses_map.lock().await;
             if let Some(response_mode) = response_map.get_mut(request_id) {
                 match response_mode {
-                    ResponseMode::Sse(tx) => {
+                    ResponseMode::Sse { tx, .. } => {
                         tx.send(Arc::new(entry.value.clone()))
                             .await
                             .map_err(|e| format!("Failed to send SSE response: {:?}", e))?;
@@ -291,6 +298,7 @@ impl JetStreamDataStore {
         Ok(())
     }
 
+
     async fn get_data_from_kv_store(&self, id: &str) -> StoreResult<Vec<Vec<u8>>> {
         let final_result_key = format!(
             "{}.{}.{}",
@@ -301,7 +309,9 @@ impl JetStreamDataStore {
             match self.kv_store.get(&final_result_key).await {
                 Ok(Some(result)) => {
                     return extract_bytes_list(&result)
-                        .map(|extracted| extracted.iter().map(|b| b.to_vec()).collect())
+                        .map(|extracted| extracted.iter().map(|b| {
+                            b.to_vec()
+                        }).collect())
                         .map_err(|e| {
                             StoreError::StoreRead(format!("Failed to extract bytes list: {e:?}"))
                         });
@@ -320,9 +330,11 @@ impl JetStreamDataStore {
     }
 }
 
-#[derive(Clone)]
 enum ResponseMode {
-    Sse(mpsc::Sender<Arc<Bytes>>),
+    Sse {
+        tx: mpsc::Sender<Arc<Bytes>>,
+        rx: Option<ReceiverStream<Arc<Bytes>>>,
+    },
     Sync(Vec<Bytes>),
     Async(Vec<Bytes>),
 }
@@ -336,16 +348,130 @@ impl DataStore for JetStreamDataStore {
 
     /// Stream the response from the store. The response is streamed as it is added to the store.
     async fn stream_data(&mut self, id: &str) -> StoreResult<ReceiverStream<Arc<Bytes>>> {
-        let (tx, rx) = mpsc::channel(10);
+        loop {
+            let mut response_map = self.responses_map.lock().await;
+            if let Some(ResponseMode::Sse { rx, .. }) = response_map.get_mut(id) {
+                if let Some(receiver_stream) = rx.take() {
+                    return Ok(receiver_stream);
+                }
+            }
 
-        // Update the in-memory map with the new tx
-        let mut response_map = self.responses_map.lock().await;
-        response_map.insert(id.to_string(), ResponseMode::Sse(tx));
-
-        Ok(ReceiverStream::new(rx))
+            sleep(Duration::from_millis(5)).await;
+        }
     }
 
     async fn ready(&mut self) -> bool {
         true
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use async_nats::jetstream;
+    use async_nats::jetstream::kv::Config;
+    use bytes::Bytes;
+    use chrono::Utc;
+    use tokio_stream::StreamExt;
+
+    use super::*;
+    use crate::app::store::datastore::DataStore;
+
+    // #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_retrieve_datum() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let datum_store_name = "test_retrieve_datum_store";
+        let pod_replica = "0";
+
+        let _ = context.delete_key_value(datum_store_name).await;
+
+        context
+            .create_key_value(Config {
+                bucket: datum_store_name.to_string(),
+                history: 5,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let mut store = JetStreamDataStore::new(context.clone(), datum_store_name, pod_replica.to_string())
+            .await
+            .unwrap();
+
+        let id = "test-id";
+        let start_key = format!("rs.{pod_replica}.{id}.start.processing");
+        let start_payload : Bytes = RequestType::Sync.try_into().unwrap();
+        store
+            .kv_store
+            .put(start_key, start_payload.clone())
+            .await
+            .unwrap();
+        
+        let key = format!("rs.{pod_replica}.{id}.sink.{}", Utc::now().timestamp());
+        store
+            .kv_store
+            .put(key, Bytes::from_static(b"test_payload"))
+            .await
+            .unwrap();
+
+        let done_key = format!("rs.{pod_replica}.{id}.done.processing");
+        store.kv_store.put(done_key, Bytes::new()).await.unwrap();
+
+        let result = store.retrieve_data(id).await.unwrap();
+        assert!(result.len() > 0);
+        assert_eq!(result[0], b"test_payload");
+
+        // delete store
+        context.delete_key_value(datum_store_name).await.unwrap();
+    }
+
+    // #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_stream_response() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let datum_store_name = "test_stream_response_store";
+        let pod_replica = "0";
+        let _ = context.delete_key_value(datum_store_name).await;
+        
+        context
+            .create_key_value(Config {
+                bucket: datum_store_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let mut store = JetStreamDataStore::new(context.clone(), datum_store_name, pod_replica.to_string())
+            .await
+            .unwrap();
+
+        let id = "test_stream_id";
+        let start_key = format!("rs.{pod_replica}.{id}.start.processing");
+        let start_payload: Bytes = RequestType::Sse.try_into().unwrap();
+        store
+            .kv_store
+            .put(start_key, start_payload.clone())
+            .await
+            .unwrap();
+        
+        // Simulate a response being added to the store
+        let key = format!("rs.{pod_replica}.{id}.0.1234");
+        let payload = Bytes::from_static(b"test_payload");
+        store.kv_store.put(key, payload.clone()).await.unwrap();
+        
+        let mut stream = store.stream_data(id).await.unwrap();
+
+        // Verify that the response is received
+        let received_response = stream.next().await.unwrap();
+        assert_eq!(received_response, Arc::new(payload));
+
+        // delete store
+        context.delete_key_value(datum_store_name).await.unwrap();
     }
 }

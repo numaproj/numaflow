@@ -76,7 +76,7 @@ impl JetStreamCallbackStore {
             pod_replica_id.clone(),
             callback_kv.clone(),
             Arc::clone(&callback_senders),
-        );
+        ).await;
 
         Ok(Self {
             pod_replica_id,
@@ -87,37 +87,36 @@ impl JetStreamCallbackStore {
         })
     }
 
-    fn spawn_central_watcher(
+    async fn spawn_central_watcher(
         pod_replica_id: String,
         kv_store: Store,
         senders: Arc<Mutex<HashMap<String, mpsc::Sender<Arc<Callback>>>>>,
     ) -> JoinHandle<()> {
         let span = tracing::info_span!("central_callback_watcher", replica_id = ?pod_replica_id);
         let mut latest_revision = 1;
+        // Watch key specific to this replica
+        let watch_key_pattern = format!("{}.{}.*.*.*", CALLBACK_KEY_PREFIX, pod_replica_id);
+        info!(watch_key_pattern, "Starting central callback watcher");
+        let mut watcher = loop {
+            // Use watch_any for robustness against missed updates if watcher restarts
+            match kv_store.watch(&watch_key_pattern).await {
+                Ok(w) => {
+                    info!(watch_key_pattern, "Central watcher established");
+                    break w;
+                },
+                Err(e) => {
+                    error!(error = ?e, "Failed to establish initial watch for {}. Retrying...", watch_key_pattern);
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+            };
+        };
 
         tokio::spawn(async move {
-            // Watch key specific to this replica
-            let watch_key_pattern = format!("{}.{}.*.*.*", CALLBACK_KEY_PREFIX, pod_replica_id);
-            info!(watch_key_pattern, "Starting central callback watcher");
-
-            let mut watcher = loop {
-                // Use watch_any for robustness against missed updates if watcher restarts
-                match kv_store.watch(&watch_key_pattern).await {
-                    Ok(w) => {
-                        info!(watch_key_pattern, "Central watcher established");
-                        break w;
-                    },
-                    Err(e) => {
-                        error!(error = ?e, "Failed to establish initial watch for {}. Retrying...", watch_key_pattern);
-                        tokio::time::sleep(Duration::from_millis(100)).await;
-                    }
-                };
-            };
-
             // Main watch loop
             loop {
                 match watcher.next().await {
                     Some(Ok(entry)) => {
+                        println!("entry = {:?}", entry);
                         let cb_process_time = Instant::now();
                         latest_revision = entry.revision;
                         debug!(key = ?entry.key, operation = ?entry.operation, revision = entry.revision, "Central watcher received entry");
@@ -145,7 +144,7 @@ impl JetStreamCallbackStore {
                             warn!(id = ?callback.id, "No active sender found for request id. Callback not sent.");
                             continue;
                         }
-                        info!("Time taken to process a callback={:?}", cb_process_time.elapsed().as_millis());
+                        debug!("Time taken to process a callback={:?}", cb_process_time.elapsed().as_millis());
                     }
                     Some(Err(e)) => {
                         error!(error = ?e, "Error from central watcher stream. Re-establishing watch...");
@@ -213,6 +212,7 @@ impl JetStreamCallbackStore {
         loop {
             match entries_stream.next().await {
                 Some(Ok(entry)) => {
+                    println!("entry = {:?}", entry);
                     latest_revision = entry.revision;
                     if entry.operation == async_nats::jetstream::kv::Operation::Delete {
                         return;
@@ -448,8 +448,7 @@ impl super::CallbackStore for JetStreamCallbackStore {
             .map_err(|e| {
                 StoreError::StoreWrite(format!("Failed to create response entry for {id}: {e:?}"))
             })?;
-
-        info!(
+        debug!(
             "Time taken to register={:?}",
             start_time.elapsed().as_millis()
         );
@@ -478,19 +477,53 @@ impl super::CallbackStore for JetStreamCallbackStore {
 mod tests {
     use async_nats::jetstream;
     use async_nats::jetstream::kv::Config;
-    use tokio_stream::StreamExt;
+    use bytes::Bytes;
+    use chrono::Utc;
+    use super::*;
+    use crate::app::store::cbstore::CallbackStore;
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
-    async fn test_watch_revision() {
+    async fn test_register() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let serving_store = "test_serving_store";
+
+        context
+            .create_key_value(Config {
+                bucket: serving_store.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let mut store = JetStreamCallbackStore::new(context.clone(), "0".to_string(), serving_store, serving_store, serving_store)
+            .await
+            .unwrap();
+
+        let id = "AFA7E0A1-3F0A-4C1B-AB94-BDA57694648D";
+        let result = store.register_and_watch(id, RequestType::Sse).await;
+        assert!(result.is_ok());
+
+        // delete store
+        context.delete_key_value(serving_store).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_watch_callbacks() {
         let js_url = "localhost:4222";
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
         let serving_store = "test_watch_callbacks";
+        let pod_replica = "0";
 
         // Delete bucket so that re-running the test won't fail
         let _ = context.delete_key_value(serving_store).await;
 
-        let store = context
+        context
             .create_key_value(Config {
                 bucket: serving_store.to_string(),
                 description: "test_description".to_string(),
@@ -500,76 +533,119 @@ mod tests {
             .await
             .unwrap();
 
-        // insert 10 dummy values to the store with keys "x.0" to "x.9"
-        for i in 0..10 {
-            let key = format!("x.{i}");
-            store.put(key, format!("value {i}").into()).await.unwrap();
-            let key = format!("y.{i}");
-            store.put(key, format!("value {i}").into()).await.unwrap();
-        }
-
-        for i in 0..10 {
-            let key = format!("y.{i}");
-            store.put(key, format!("value {i}").into()).await.unwrap();
-        }
-
-        let mut latest_revision = 1;
-        // watch for the 5 values, and create a new watch with revision and watch another 5
-        let mut watcher = store
-            .watch_from_revision("x.*", latest_revision)
+        let mut store = JetStreamCallbackStore::new(context.clone(), pod_replica.to_string(), serving_store, serving_store, serving_store)
             .await
             .unwrap();
-        let mut count = 0;
-        while let Some(entry) = watcher.next().await {
-            match entry {
-                Ok(entry) => {
-                    println!(
-                        "Key: {}, Value: {}, Revision: {}",
-                        entry.key,
-                        String::from_utf8_lossy(&entry.value),
-                        entry.revision
-                    );
-                    count += 1;
-                    latest_revision = entry.revision;
-                }
-                Err(e) => {
-                    println!("Error: {}", e);
-                }
-            }
-            if count == 5 {
-                break;
-            }
-        }
 
-        for i in 0..1000 {
-            let key = format!("z.{i}");
-            store.put(key, format!("value {i}").into()).await.unwrap();
-        }
+        let id = "test_watch_id_two";
+        let mut stream = store.register_and_watch(id, RequestType::Sync).await.unwrap();
 
-        // Create a new watch with revision
-        let mut watcher = store
-            .watch_from_revision("x.*", latest_revision + 1)
+        // Simulate a callback being added to the store
+        let callback = Callback {
+            id: id.to_string(),
+            vertex: "test_vertex".to_string(),
+            cb_time: 12345,
+            from_vertex: "test_from_vertex".to_string(),
+            responses: vec![],
+        };
+        let key = format!("cb.{pod_replica}.{id}.input.{}", Utc::now().timestamp());
+        store
+            .callback_kv
+            .put(key, Bytes::from(serde_json::to_vec(&callback).unwrap()))
             .await
             .unwrap();
-        count = 0;
-        while let Some(entry) = watcher.next().await {
-            match entry {
-                Ok(entry) => {
-                    println!(
-                        "Key: {}, Value: {}, Revision: {}",
-                        entry.key,
-                        String::from_utf8_lossy(&entry.value),
-                        entry.revision
-                    );
-                    count += 1;
-                }
-                Err(e) => {
-                    println!("Error: {}", e);
-                }
-            }
-            if count == 5 {
-                break;
-            }
-        }
+
+        // Verify that the callback is received
+        let received_callback = stream.next().await.unwrap();
+        assert_eq!(received_callback.id, callback.id);
+        assert_eq!(received_callback.vertex, callback.vertex);
+        assert_eq!(received_callback.cb_time, callback.cb_time);
+        assert_eq!(received_callback.from_vertex, callback.from_vertex);
+        assert_eq!(received_callback.responses.len(), callback.responses.len());
+
+        // delete store
+        context.delete_key_value(serving_store).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_deregister() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let serving_store = "test_deregister_store";
+
+        // Delete bucket so that re-running the test won't fail
+        let _ = context.delete_key_value(serving_store).await;
+
+        context
+            .create_key_value(Config {
+                bucket: serving_store.to_string(),
+                description: "test_description".to_string(),
+                history: 15,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let mut store = JetStreamCallbackStore::new(context.clone(), "0".to_string(), serving_store, serving_store, serving_store)
+            .await
+            .unwrap();
+
+        let id = "test_deregister_id";
+        let _ = store.register_and_watch(id, RequestType::Async).await.unwrap();
+
+        let sub_graph = "test_sub_graph";
+        let result = store.deregister(id, sub_graph).await;
+        assert!(result.is_ok());
+
+        // Verify that the status is marked as completed
+        let status = store.status(id).await.unwrap();
+        assert!(matches!(status, ProcessingStatus::Completed{ subgraph: _, replica_id: _ }));
+
+        // delete store
+        context.delete_key_value(serving_store).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_mark_as_failed() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let serving_store = "test_mark_as_failed_store";
+
+        // Delete bucket so that re-running the test won't fail
+        let _ = context.delete_key_value(serving_store).await;
+
+        context
+            .create_key_value(Config {
+                bucket: serving_store.to_string(),
+                description: "test_description".to_string(),
+                history: 15,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let mut store = JetStreamCallbackStore::new(context.clone(), "0".to_string(), serving_store, serving_store, serving_store)
+            .await
+            .unwrap();
+
+        assert!(store.ready().await);
+
+        let id = "test_mark_as_failed_id";
+        let _  = store.register_and_watch(id, RequestType::Sse).await.unwrap();
+
+        let error_message = "test_error_message";
+        let result = store.mark_as_failed(id, error_message).await;
+        assert!(result.is_ok());
+
+        // Verify that the status is marked as failed
+        let status = store.status(id).await.unwrap();
+        assert!(matches!(status, ProcessingStatus::Failed{error: _, replica_id: _ }));
+
+        // delete store
+        context.delete_key_value(serving_store).await.unwrap();
     }
 }
