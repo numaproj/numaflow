@@ -20,6 +20,8 @@ import (
 	"math"
 	"time"
 
+	"github.com/numaproj/numaflow/pkg/isb"
+
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
@@ -32,7 +34,7 @@ const (
 )
 
 // UpdateCount updates the count for a given timestamp in the queue.
-func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podReadCounts *PodReadCount) {
+func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, podReadCounts *PodMetricsCount) {
 	items := q.Items()
 
 	// find the element matching the input timestamp and update it
@@ -77,6 +79,33 @@ func CalculateRate(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSec
 		delta += calculatePodDelta(counts[i], counts[i+1])
 	}
 	return delta / float64(timeDiff)
+}
+
+// CalculatePending calculates the pending of a MonoVertex for a given lookback period.
+func CalculatePending(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64) int64 {
+	counts := q.Items()
+	if len(counts) <= 1 {
+		return isb.PendingNotAvailable
+	}
+	startIndex := findStartIndex(lookbackSeconds, counts)
+	// we consider the last element as the end index
+	endIndex := len(counts) - 1
+	if startIndex == indexNotFound {
+		return isb.PendingNotAvailable
+	}
+	delta := int64(0)
+	num := int64(0)
+	for i := startIndex; i <= endIndex; i++ {
+		currentPending := counts[i].PodCountSnapshot()
+		for _, pendingCount := range currentPending {
+			delta += int64(pendingCount)
+			num++
+		}
+	}
+	if num == 0 {
+		return isb.PendingNotAvailable
+	}
+	return delta / num
 }
 
 // findStartIndex finds the index of the first element in the queue that is within the lookback seconds

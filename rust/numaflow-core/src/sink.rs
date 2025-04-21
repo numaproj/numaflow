@@ -44,6 +44,8 @@ mod blackhole;
 /// [Log]: https://numaflow.numaproj.io/user-guide/sinks/log/
 mod log;
 
+mod serve;
+
 /// [User-Defined Sink] extends Numaflow to add custom sources supported outside the builtins.
 ///
 /// [User-Defined Sink]: https://numaflow.numaproj.io/user-guide/sinks/user-defined-sinks/
@@ -98,6 +100,7 @@ where
 pub(crate) enum SinkClientType {
     Log,
     Blackhole,
+    Serve,
     UserDefined(SinkClient<Channel>),
 }
 
@@ -269,6 +272,13 @@ impl SinkWriterBuilder {
                     actor.run().await;
                 });
             }
+            SinkClientType::Serve => {
+                let serve_sink = serve::ServeSink;
+                tokio::spawn(async {
+                    let actor = SinkActor::new(receiver, serve_sink);
+                    actor.run().await;
+                });
+            }
             SinkClientType::Blackhole => {
                 let blackhole_sink = blackhole::BlackholeSink;
                 tokio::spawn(async {
@@ -294,6 +304,13 @@ impl SinkWriterBuilder {
                     let log_sink = log::LogSink;
                     tokio::spawn(async {
                         let actor = SinkActor::new(fb_receiver, log_sink);
+                        actor.run().await;
+                    });
+                }
+                SinkClientType::Serve => {
+                    let serve_sink = serve::ServeSink;
+                    tokio::spawn(async {
+                        let actor = SinkActor::new(fb_receiver, serve_sink);
                         actor.run().await;
                     });
                 }

@@ -142,6 +142,10 @@ message AbstractSink {
   // UDSink sink is used to write the data to the user-defined sink.
   // +optional
   optional UDSink udsink = 4;
+
+  // Serve sink is used to return results when working with a ServingPipeline.
+  // +optional
+  optional ServeSink serve = 5;
 }
 
 message AbstractVertex {
@@ -206,11 +210,6 @@ message AbstractVertex {
   // +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
   // +optional
   optional UpdateStrategy updateStrategy = 16;
-
-  // TODO(spl): clean up
-  // Names of the serving store used in this vertex.
-  // +optional
-  optional string servingStoreName = 17;
 }
 
 // AccumulatorWindow describes a special kind of SessionWindow (similar to Global Window) where output should
@@ -1557,6 +1556,9 @@ message Scale {
   optional uint32 replicasPerScaleDown = 12;
 }
 
+message ServeSink {
+}
+
 // +genclient
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:shortName=spl
@@ -1606,7 +1608,7 @@ message ServingPipelineStatus {
   optional int64 observedGeneration = 11;
 }
 
-// ServingSource is the HTTP endpoint for Numaflow.
+// ServingSource is the source vertex for ServingPipeline and should be used only with ServingPipeline.
 message ServingSource {
 }
 
@@ -1627,6 +1629,14 @@ message ServingSpec {
 
   // +optional
   optional ServingStore store = 5;
+
+  // Container template for the serving container.
+  // +optional
+  optional ContainerTemplate containerTemplate = 6;
+
+  // Initial replicas of the serving server deployment.
+  // +optional
+  optional int32 replicas = 7;
 }
 
 // ServingStore defines information of a Serving Store used in a pipeline

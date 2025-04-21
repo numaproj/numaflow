@@ -32,12 +32,13 @@ import (
 
 // PodTracker tracks the active pods for each vertex in a pipeline.
 type PodTracker struct {
-	pipeline        *v1alpha1.Pipeline
-	log             *zap.SugaredLogger
-	httpClient      monitorHttpClient
-	activePodsCount map[string]int
-	activePodsMutex sync.RWMutex
-	refreshInterval time.Duration
+	pipeline            *v1alpha1.Pipeline
+	log                 *zap.SugaredLogger
+	httpClient          monitorHttpClient
+	activePodsCount     map[string]int
+	activePodsMutex     sync.RWMutex
+	refreshInterval     time.Duration
+	firstPodsUpdateChan chan struct{} // Channel to signal the first active pods update is done
 }
 
 // NewPodTracker creates a new pod tracker instance.
@@ -53,7 +54,8 @@ func NewPodTracker(ctx context.Context, pl *v1alpha1.Pipeline) *PodTracker {
 		},
 		activePodsCount: make(map[string]int),
 		// Default refresh interval for updating the active pod set
-		refreshInterval: 30 * time.Second,
+		refreshInterval:     30 * time.Second,
+		firstPodsUpdateChan: make(chan struct{}),
 	}
 	return pt
 }
@@ -68,6 +70,8 @@ func (pt *PodTracker) Start(ctx context.Context) error {
 func (pt *PodTracker) trackActivePods(ctx context.Context) {
 	// start updating active pods as soon as called and then after every refreshInterval
 	pt.updateActivePods()
+	// close the channel to signal first update
+	close(pt.firstPodsUpdateChan)
 	ticker := time.NewTicker(pt.refreshInterval)
 	defer ticker.Stop()
 	for {

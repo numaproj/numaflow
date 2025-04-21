@@ -24,6 +24,8 @@ pub struct AbstractSink {
     pub kafka: Option<Box<crate::models::KafkaSink>>,
     #[serde(rename = "log", skip_serializing_if = "Option::is_none")]
     pub log: Option<Box<crate::models::Log>>,
+    #[serde(rename = "serve", skip_serializing_if = "Option::is_none")]
+    pub serve: Option<Box<crate::models::ServeSink>>,
     #[serde(rename = "udsink", skip_serializing_if = "Option::is_none")]
     pub udsink: Option<Box<crate::models::UdSink>>,
 }
@@ -34,6 +36,7 @@ impl AbstractSink {
             blackhole: None,
             kafka: None,
             log: None,
+            serve: None,
             udsink: None,
         }
     }

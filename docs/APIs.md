@@ -514,6 +514,27 @@ UDSink sink is used to write the data to the user-defined sink.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>serve</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServeSink"> ServeSink </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Serve sink is used to return results when working with a
+ServingPipeline.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -855,25 +876,6 @@ Container template for the side inputs watcher container.
 <p>
 
 The strategy to use to replace existing pods with new ones.
-</p>
-
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
-<code>servingStoreName</code></br> <em> string </em>
-</td>
-
-<td>
-
-<em>(Optional)</em>
-<p>
-
-TODO(spl): clean up Names of the serving store used in this vertex.
 </p>
 
 </td>
@@ -1753,6 +1755,7 @@ ContainerTemplate
 <a href="#numaflow.numaproj.io/v1alpha1.JobTemplate">JobTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSpec">MonoVertexSpec</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.ServingSpec">ServingSpec</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.SideInputsManagerTemplate">SideInputsManagerTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.VertexTemplate">VertexTemplate</a>)
 </p>
@@ -10042,6 +10045,21 @@ too aggressive scaling down operations
 
 </table>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.ServeSink">
+
+ServeSink
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractSink">AbstractSink</a>)
+</p>
+
+<p>
+
+</p>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.ServingPipeline">
 
 ServingPipeline
@@ -10388,7 +10406,8 @@ ServingSource
 
 <p>
 
-ServingSource is the HTTP endpoint for Numaflow.
+ServingSource is the source vertex for ServingPipeline and should be
+used only with ServingPipeline.
 </p>
 
 </p>
@@ -10514,6 +10533,46 @@ Request timeout in seconds. Default value is 120 seconds.
 <td>
 
 <em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>containerTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
+ContainerTemplate </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Container template for the serving container.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>replicas</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Initial replicas of the serving server deployment.
+</p>
+
 </td>
 
 </tr>

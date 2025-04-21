@@ -29,9 +29,7 @@ spec:
         scale:
           min: 1
         sink:
-          udsink:
-            container:
-              image: quay.io/numaio/numaflow-go/sink-serve:stable
+          serve: {}
 
     edges:
       - from: serving-in

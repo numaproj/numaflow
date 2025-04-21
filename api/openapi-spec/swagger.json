@@ -19481,6 +19481,10 @@
           "description": "Log sink is used to write the data to the log.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log"
         },
+        "serve": {
+          "description": "Serve sink is used to return results when working with a ServingPipeline.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServeSink"
+        },
         "udsink": {
           "description": "UDSink sink is used to write the data to the user-defined sink.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSink"
@@ -19588,10 +19592,6 @@
         },
         "serviceAccountName": {
           "description": "ServiceAccountName applied to the pod",
-          "type": "string"
-        },
-        "servingStoreName": {
-          "description": "Names of the serving store used in this vertex.",
           "type": "string"
         },
         "sideInputs": {
@@ -21949,6 +21949,9 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.ServeSink": {
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.ServingPipeline": {
       "type": "object",
       "required": [
@@ -22039,7 +22042,7 @@
       }
     },
     "io.numaproj.numaflow.v1alpha1.ServingSource": {
-      "description": "ServingSource is the HTTP endpoint for Numaflow.",
+      "description": "ServingSource is the source vertex for ServingPipeline and should be used only with ServingPipeline.",
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.ServingSpec": {
@@ -22051,9 +22054,18 @@
         "auth": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Authorization"
         },
+        "containerTemplate": {
+          "description": "Container template for the serving container.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate"
+        },
         "msgIDHeaderKey": {
           "description": "The header key from which the message id will be extracted",
           "type": "string"
+        },
+        "replicas": {
+          "description": "Initial replicas of the serving server deployment.",
+          "type": "integer",
+          "format": "int32"
         },
         "requestTimeoutSeconds": {
           "description": "Request timeout in seconds. Default value is 120 seconds.",
@@ -22242,6 +22254,10 @@
         "retryStrategy": {
           "description": "RetryStrategy struct encapsulates the settings for retrying operations in the event of failures.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RetryStrategy"
+        },
+        "serve": {
+          "description": "Serve sink is used to return results when working with a ServingPipeline.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServeSink"
         },
         "udsink": {
           "description": "UDSink sink is used to write the data to the user-defined sink.",
@@ -22682,10 +22698,6 @@
         },
         "serviceAccountName": {
           "description": "ServiceAccountName applied to the pod",
-          "type": "string"
-        },
-        "servingStoreName": {
-          "description": "Names of the serving store used in this vertex.",
           "type": "string"
         },
         "sideInputs": {

@@ -569,10 +569,6 @@ type AbstractVertex struct {
 	// +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
 	// +optional
 	UpdateStrategy UpdateStrategy `json:"updateStrategy,omitempty" protobuf:"bytes,16,opt,name=updateStrategy"`
-	// TODO(spl): clean up
-	// Names of the serving store used in this vertex.
-	// +optional
-	ServingStoreName *string `json:"servingStoreName,omitempty" protobuf:"bytes,17,opt,name=servingStoreName"`
 }
 
 type VertexLifecycle struct {

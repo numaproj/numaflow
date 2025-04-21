@@ -40,9 +40,11 @@ nav:
       - quick-start.md
   - User Guide:
       - Core Concepts:
+          - Overview: "core-concepts/overview.md"
           - core-concepts/pipeline.md
-          - core-concepts/vertex.md
           - core-concepts/monovertex.md
+          - core-concepts/serving.md
+          - core-concepts/vertex.md
           - core-concepts/inter-step-buffer.md
           - core-concepts/inter-step-buffer-service.md
           - core-concepts/watermarks.md
@@ -86,6 +88,10 @@ nav:
                   - Sliding: "user-guide/user-defined-functions/reduce/windowing/sliding.md"
                   - Session: "user-guide/user-defined-functions/reduce/windowing/session.md"
               - Examples: "user-guide/user-defined-functions/reduce/examples.md"
+      - SDKs:
+          - Overview: user-guide/sdks/overview.md
+          - Compatibility: user-guide/sdks/compatibility.md
+          - Features: user-guide/sdks/features.md
       - Reference:
           - user-guide/reference/pipeline-tuning.md
           - user-guide/reference/autoscaling.md

@@ -1,0 +1,115 @@
+.date-range-label {
+  font-size: 1.1rem;
+  font-family: Avenir Next, sans-serif;
+  line-height: 1.4375em;
+  font-weight: 400;
+  display: block;
+  white-space: nowrap;
+  position: absolute;
+  top: -1rem;
+  left: 1rem;
+  color: rgba(0, 0, 0, 0.54);
+  transition: 0.2s ease all;
+  background-color: white;
+  padding: 0 5px;
+  z-index: 1;
+}
+
+.date-range-picker-container {
+  position: relative;
+  display: inline-block;
+}
+
+.date-input {
+  font-size: 1.2rem;
+  font-weight: 600;
+  font-family: Avenir Next, sans-serif;
+  color: #393a3d;
+  text-transform: uppercase;
+  line-height: 100%;
+  height: 5rem;
+  width: 36rem;
+  cursor: pointer;
+  outline: none;
+  border: 1px solid rgba(255, 255, 255, 0);
+  transition: border-color 0.3s;
+  padding: 1.65rem 3.2rem 1.65rem 1.4rem;
+}
+
+.date-input:hover {
+  border-color: #000000;
+}
+
+.date-input:focus {
+  border-color: #0077c5;
+  outline: none;
+  box-shadow: none;
+  border-width: 2px;
+}
+.caret {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-55%);
+  pointer-events: none;
+  color: rgba(0, 0, 0, 0.54);
+}
+
+.open {
+  transform: translateY(-45%) rotate(180deg);
+}
+
+.date-range-picker-container:focus-within .date-range-label {
+  color: #0077c5;
+}
+
+.daterangepicker {
+  margin-top: 0;
+  border: none !important;
+  border-radius: 0.4rem !important;
+  box-shadow: 0 5px 5px -3px rgba(0, 0, 0, 0.2),
+    0 8px 10px 1px rgba(0, 0, 0, 0.14), 0 3px 14px 2px rgba(0, 0, 0, 0.12) !important;
+}
+
+.daterangepicker:before {
+  content: none !important;
+}
+
+.daterangepicker:after {
+  content: none !important;
+}
+
+.daterangepicker .ranges ul {
+  font-family: Avenir Next, sans-serif;
+  padding-top: 0.8rem;
+  padding-bottom: 0.8rem;
+}
+
+.daterangepicker .ranges li {
+  display: flex !important;
+  align-items: center !important;
+  height: 3.15rem !important;
+  font-size: 1.3rem !important;
+  padding: 0.6rem 1.6rem !important;
+  color: rgba(0, 0, 0, 0.87) !important;
+}
+
+.active {
+  background-color: rgba(0, 119, 197, 0.08) !important;
+}
+
+.active:hover {
+  background-color: #e3f2fd !important;
+}
+
+.daterangepicker.show-ranges.ltr .drp-calendar.left {
+  font-family: Avenir Next, sans-serif;
+}
+
+.daterangepicker .drp-calendar.right {
+  font-family: Avenir Next, sans-serif;
+}
+
+.daterangepicker.show-calendar .drp-buttons {
+  font-family: Avenir Next, sans-serif;
+}

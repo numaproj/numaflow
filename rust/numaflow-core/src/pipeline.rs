@@ -13,7 +13,9 @@ use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::{PipelineConfig, ServingStoreType, SinkVtxConfig, SourceVtxConfig};
-use crate::metrics::{ComponentHealthChecks, LagReader, PipelineComponents};
+use crate::metrics::{
+    ComponentHealthChecks, LagReader, PendingReaderTasks, PendingReaderTasks_, PipelineComponents,
+};
 use crate::pipeline::forwarder::source_forwarder;
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
@@ -179,12 +181,17 @@ async fn start_source_forwarder(
     )
     .await?;
 
-    let pending_reader = shared::metrics::create_pending_reader(
-        &config.metrics_config,
-        LagReader::Source(source.clone()),
-    )
-    .await;
-    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
+    // only check the pending and lag for source for pod_id = 0
+    let _pending_reader_handle: Option<PendingReaderTasks> = if config.replica == 0 {
+        let pending_reader = shared::metrics::create_pending_reader(
+            &config.metrics_config,
+            LagReader::Source(source.clone()),
+        )
+        .await;
+        Some(pending_reader.start(is_mono_vertex()).await)
+    } else {
+        None
+    };
 
     start_metrics_server(
         config.metrics_config.clone(),

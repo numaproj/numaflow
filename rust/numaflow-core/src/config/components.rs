@@ -333,6 +333,7 @@ pub(crate) mod sink {
     pub(crate) enum SinkType {
         Log(LogConfig),
         Blackhole(BlackholeConfig),
+        Serve,
         UserDefined(UserDefinedConfig),
     }
 
@@ -355,6 +356,7 @@ pub(crate) mod sink {
                         .as_ref()
                         .map(|_| Ok(SinkType::Blackhole(BlackholeConfig::default())))
                 })
+                .or_else(|| sink.serve.as_ref().map(|_| Ok(SinkType::Serve)))
                 .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
         }
 
@@ -376,6 +378,7 @@ pub(crate) mod sink {
                             .as_ref()
                             .map(|_| Ok(SinkType::Blackhole(BlackholeConfig::default())))
                     })
+                    .or_else(|| sink.serve.as_ref().map(|_| Ok(SinkType::Serve)))
                     .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
             } else {
                 Err(Error::Config("Fallback sink not found".to_string()))
@@ -551,6 +554,9 @@ pub(crate) mod metrics {
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct MetricsConfig {
+        // TODO(lookback) - using new implementation for monovertex right now,
+        // remove extra fields from here once new corresponding pipeline changes
+        // in the daemon are done.
         pub metrics_server_listen_port: u16,
         pub lag_check_interval_in_secs: u16,
         pub lag_refresh_interval_in_secs: u16,

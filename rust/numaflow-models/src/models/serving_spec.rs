@@ -20,9 +20,14 @@ limitations under the License.
 pub struct ServingSpec {
     #[serde(rename = "auth", skip_serializing_if = "Option::is_none")]
     pub auth: Option<Box<crate::models::Authorization>>,
+    #[serde(rename = "containerTemplate", skip_serializing_if = "Option::is_none")]
+    pub container_template: Option<Box<crate::models::ContainerTemplate>>,
     /// The header key from which the message id will be extracted
     #[serde(rename = "msgIDHeaderKey")]
     pub msg_id_header_key: String,
+    /// Initial replicas of the serving server deployment.
+    #[serde(rename = "replicas", skip_serializing_if = "Option::is_none")]
+    pub replicas: Option<i32>,
     /// Request timeout in seconds. Default value is 120 seconds.
     #[serde(
         rename = "requestTimeoutSeconds",
@@ -40,7 +45,9 @@ impl ServingSpec {
     pub fn new(msg_id_header_key: String) -> ServingSpec {
         ServingSpec {
             auth: None,
+            container_template: None,
             msg_id_header_key,
+            replicas: None,
             request_timeout_seconds: None,
             service: None,
             store: None,

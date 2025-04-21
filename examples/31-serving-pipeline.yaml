@@ -6,72 +6,18 @@ spec:
   serving:
     service: true
     msgIDHeaderKey: "X-Numaflow-Id"
-    requestTimeoutSeconds: 900
   pipeline:
-#    interStepBufferServiceName: serving-pipeline
-    limits:
-      readBatchSize: 50
-      readTimeout: "10ms"
     vertices:
       - name: in
-        scale:
-          min: 1
-          max: 1
-        containerTemplate:
-          resources:
-            requests:
-              cpu: 1
-              memory: 200Mi
-            limits:
-              cpu: 1
-              memory: 200Mi
         source:
           serving: {}
       - name: cat
-        scale:
-          min: 1
-          max: 1
-        containerTemplate:
-          resources:
-            requests:
-              cpu: 1
-              memory: 200Mi
-            limits:
-              cpu: 1
-              memory: 200Mi
         udf:
           container:
             image: quay.io/numaio/numaflow-go/map-forward-message:stable
-            resources:
-              requests:
-                cpu: 1
-                memory: 200Mi
-              limits:
-                cpu: 1
-                memory: 200Mi
       - name: out
-        scale:
-          min: 1
-          max: 1
-        containerTemplate:
-          resources:
-            requests:
-              cpu: 1
-              memory: 200Mi
-            limits:
-              cpu: 1
-              memory: 200Mi
         sink:
-          udsink:
-            container:
-              image: quay.io/numaio/numaflow-go/sink-serve:stable
-              resources:
-                requests:
-                  cpu: 1
-                  memory: 200Mi
-                limits:
-                  cpu: 1
-                  memory: 200Mi
+          serve: {}
     edges:
       - from: in
         to: cat

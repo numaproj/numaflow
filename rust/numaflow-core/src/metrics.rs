@@ -72,8 +72,10 @@ const FALLBACK_SINK_WRITE_TOTAL: &str = "write";
 
 // pending as gauge for mvtx (these metric names are hardcoded in the auto-scaler)
 const PENDING: &str = "pending";
+const PENDING_RAW: &str = "pending_raw";
 // pending as gauge for pipeline
 const VERTEX_PENDING: &str = "pending_messages";
+const VERTEX_PENDING_RAW: &str = "pending_messages_raw";
 
 // processing times as timers
 const E2E_TIME: &str = "processing_time";
@@ -178,6 +180,10 @@ pub(crate) struct MonoVtxMetrics {
 
     // gauge
     pub(crate) pending: Family<Vec<(String, String)>, Gauge>,
+    // TODO(lookback) - using new implementation for monovertex right now,
+    // deprecate old metric and use only this as well once
+    // corresponding changes are completed.
+    pub(crate) pending_raw: Family<Vec<(String, String)>, Gauge>,
 
     // timers
     pub(crate) e2e_time: Family<Vec<(String, String)>, Histogram>,
@@ -195,6 +201,10 @@ pub(crate) struct PipelineMetrics {
     pub(crate) forwarder: PipelineForwarderMetrics,
     pub(crate) isb: PipelineISBMetrics,
     pub(crate) pending: Family<Vec<(String, String)>, Gauge>,
+    // TODO(lookback) - using new implementation only for monovertex right now,
+    // deprecate old metric and use only this as well once
+    // corresponding changes are completed.
+    pub(crate) pending_raw: Family<Vec<(String, String)>, Gauge>,
 }
 
 /// Family of metrics for the sink
@@ -261,6 +271,10 @@ impl MonoVtxMetrics {
             dropped_total: Family::<Vec<(String, String)>, Counter>::default(),
             // gauge
             pending: Family::<Vec<(String, String)>, Gauge>::default(),
+            // TODO(lookback) - using new implementation only for monovertex right now,
+            // deprecate old metric and use only this as well once
+            // corresponding changes are completed.
+            pending_raw: Family::<Vec<(String, String)>, Gauge>::default(),
             // timers
             // exponential buckets in the range 100 microseconds to 15 minutes
             e2e_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
@@ -321,6 +335,13 @@ impl MonoVtxMetrics {
             PENDING,
             "A Gauge to keep track of the total number of pending messages for the monovtx",
             metrics.pending.clone(),
+        );
+
+        // gauges
+        registry.register(
+            PENDING_RAW,
+            "A Gauge to keep track of the total number of source pending messages for the monovtx",
+            metrics.pending_raw.clone(),
         );
         // timers
         registry.register(
@@ -401,6 +422,10 @@ impl PipelineMetrics {
                     }),
             },
             pending: Family::<Vec<(String, String)>, Gauge>::default(),
+            // TODO(lookback) - using new implementation only for monovertex right now,
+            // deprecate old metric and use only this as well once
+            // corresponding changes are completed.
+            pending_raw: Family::<Vec<(String, String)>, Gauge>::default(),
         };
         let mut registry = global_registry().registry.lock();
 
@@ -457,6 +482,11 @@ impl PipelineMetrics {
             VERTEX_PENDING,
             "Total number of pending messages",
             metrics.pending.clone(),
+        );
+        vertex_registry.register(
+            VERTEX_PENDING_RAW,
+            "Total number of pending messages",
+            metrics.pending_raw.clone(),
         );
         metrics
     }
@@ -684,6 +714,10 @@ pub(crate) struct PendingReaderTasks {
     expose_handle: JoinHandle<()>,
 }
 
+pub(crate) struct PendingReaderTasks_ {
+    expose_handle: JoinHandle<()>,
+}
+
 /// PendingReaderBuilder is used to build a [LagReader] instance.
 pub(crate) struct PendingReaderBuilder {
     lag_reader: LagReader,
@@ -782,6 +816,26 @@ impl PendingReader {
             expose_handle,
         }
     }
+    // TODO(lookback) - using new implementation for monovertex right now,
+    // deprecate old implementation and use this for pipeline as well once
+    // corresponding changes are completed.
+
+    /// Starts the lag reader by spawning tasks to build up pending info and expose pending metrics.
+    ///
+    /// This method spawns two asynchronous tasks:
+    /// - One to periodically check the lag and update the pending stats.
+    /// - Another to periodically expose the pending metrics.
+    ///
+    /// Dropping the PendingReaderTasks will abort the background tasks.
+    pub async fn start_(&self, is_mono_vertex: bool) -> PendingReaderTasks_ {
+        let lag_checking_interval = self.lag_checking_interval;
+
+        let lag_reader = self.lag_reader.clone();
+        let expose_handle = tokio::spawn(async move {
+            expose_pending_metrics_(lag_reader, lag_checking_interval, is_mono_vertex).await;
+        });
+        PendingReaderTasks_ { expose_handle }
+    }
 }
 
 /// When the PendingReaderTasks is dropped, we need to clean up the pending exposer and the pending builder tasks.
@@ -790,6 +844,89 @@ impl Drop for PendingReaderTasks {
         self.expose_handle.abort();
         self.buildup_handle.abort();
         info!("Stopped the Lag-Reader Expose and Builder tasks");
+    }
+}
+
+// TODO(lookback) - using new implementation for monovertex right now,
+// deprecate old implementation and use this for pipeline as well once
+// corresponding changes are completed.
+/// When the PendingReaderTasks_ is dropped, we need to clean up the pending exposer and the pending builder tasks.
+impl Drop for PendingReaderTasks_ {
+    fn drop(&mut self) {
+        self.expose_handle.abort();
+        info!("Stopped the Lag-Reader Expose tasks");
+    }
+}
+
+// TODO(lookback) - using new implementation for monovertex right now,
+// deprecate old implementation and use this for pipeline as well once
+// corresponding changes are completed.
+
+// Periodically exposes the pending metrics by calculating the average pending messages over different intervals.
+async fn expose_pending_metrics_(
+    mut lag_reader: LagReader,
+    lag_checking_interval: Duration,
+    is_mono_vertex: bool,
+) {
+    let mut ticker = time::interval(lag_checking_interval);
+
+    loop {
+        ticker.tick().await;
+
+        match &mut lag_reader {
+            LagReader::Source(source) => match fetch_source_pending(source).await {
+                Ok(pending) => {
+                    if pending != -1 {
+                        info!("Pending messages {:?}", pending);
+                        if is_mono_vertex {
+                            let metric_labels = mvtx_forward_metric_labels().clone();
+                            monovertex_metrics()
+                                .pending_raw
+                                .get_or_create(&metric_labels)
+                                .set(pending);
+                        } else {
+                            let mut metric_labels =
+                                pipeline_forward_metric_labels("source").clone();
+                            metric_labels.push((
+                                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                                "source".to_string(),
+                            ));
+                            pipeline_metrics()
+                                .pending_raw
+                                .get_or_create(&metric_labels)
+                                .set(pending);
+                        }
+                    }
+                }
+                Err(err) => {
+                    error!("Failed to get pending messages: {:?}", err);
+                }
+            },
+            LagReader::ISB(readers) => {
+                for reader in readers {
+                    match fetch_isb_pending(reader).await {
+                        Ok(pending) => {
+                            if pending != -1 {
+                                info!("Pending messages {:?}", pending);
+                                let mut metric_labels =
+                                    pipeline_forward_metric_labels(reader.name()).clone();
+                                metric_labels.push((
+                                    PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                                    reader.name().to_string(),
+                                ));
+                                pipeline_metrics()
+                                    .pending
+                                    .get_or_create(&metric_labels)
+                                    .set(pending);
+                            }
+                        }
+                        Err(err) => {
+                            error!("Failed to get pending messages: {:?}", err);
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -7151,8 +7151,6 @@ spec:
                       type: object
                     serviceAccountName:
                       type: string
-                    servingStoreName:
-                      type: string
                     sideInputs:
                       items:
                         type: string
@@ -8353,6 +8351,8 @@ spec:
                               type: object
                             log:
                               type: object
+                            serve:
+                              type: object
                             udsink:
                               properties:
                                 container:
@@ -8937,6 +8937,8 @@ spec:
                             onFailure:
                               default: retry
                               type: string
+                          type: object
+                        serve:
                           type: object
                         udsink:
                           properties:

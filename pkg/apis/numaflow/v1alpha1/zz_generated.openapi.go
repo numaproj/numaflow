@@ -102,6 +102,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLOAuth":                        schema_pkg_apis_numaflow_v1alpha1_SASLOAuth(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASLPlain":                        schema_pkg_apis_numaflow_v1alpha1_SASLPlain(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale":                            schema_pkg_apis_numaflow_v1alpha1_Scale(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServeSink":                        schema_pkg_apis_numaflow_v1alpha1_ServeSink(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingPipeline":                  schema_pkg_apis_numaflow_v1alpha1_ServingPipeline(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingPipelineList":              schema_pkg_apis_numaflow_v1alpha1_ServingPipelineList(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingPipelineSpec":              schema_pkg_apis_numaflow_v1alpha1_ServingPipelineSpec(ref),
@@ -322,11 +323,17 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractSink(ref common.ReferenceCallback
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"),
 						},
 					},
+					"serve": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Serve sink is used to return results when working with a ServingPipeline.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServeSink"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServeSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"},
 	}
 }
 
@@ -599,13 +606,6 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref common.ReferenceCallba
 							Description: "The strategy to use to replace existing pods with new ones.",
 							Default:     map[string]interface{}{},
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy"),
-						},
-					},
-					"servingStoreName": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Names of the serving store used in this vertex.",
-							Type:        []string{"string"},
-							Format:      "",
 						},
 					},
 				},
@@ -4867,6 +4867,16 @@ func schema_pkg_apis_numaflow_v1alpha1_Scale(ref common.ReferenceCallback) commo
 	}
 }
 
+func schema_pkg_apis_numaflow_v1alpha1_ServeSink(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_numaflow_v1alpha1_ServingPipeline(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -5050,7 +5060,7 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingSource(ref common.ReferenceCallbac
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "ServingSource is the HTTP endpoint for Numaflow.",
+				Description: "ServingSource is the source vertex for ServingPipeline and should be used only with ServingPipeline.",
 				Type:        []string{"object"},
 			},
 		},
@@ -5095,12 +5105,25 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingSpec(ref common.ReferenceCallback)
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingStore"),
 						},
 					},
+					"containerTemplate": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Container template for the serving container.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
+						},
+					},
+					"replicas": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Initial replicas of the serving server deployment.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
 				},
 				Required: []string{"msgIDHeaderKey"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Authorization", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingStore"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Authorization", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingStore"},
 	}
 }
 
@@ -5417,6 +5440,12 @@ func schema_pkg_apis_numaflow_v1alpha1_Sink(ref common.ReferenceCallback) common
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"),
 						},
 					},
+					"serve": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Serve sink is used to return results when working with a ServingPipeline.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServeSink"),
+						},
+					},
 					"fallback": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Fallback sink can be imagined as DLQ for primary Sink. The writes to Fallback sink will only be initiated if the ud-sink response field sets it.",
@@ -5434,7 +5463,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Sink(ref common.ReferenceCallback) common
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RetryStrategy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RetryStrategy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServeSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"},
 	}
 }
 
@@ -6304,13 +6333,6 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 							Description: "The strategy to use to replace existing pods with new ones.",
 							Default:     map[string]interface{}{},
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy"),
-						},
-					},
-					"servingStoreName": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Names of the serving store used in this vertex.",
-							Type:        []string{"string"},
-							Format:      "",
 						},
 					},
 					"pipelineName": {
