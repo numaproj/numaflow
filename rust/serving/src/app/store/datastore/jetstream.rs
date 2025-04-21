@@ -77,7 +77,7 @@ fn extract_bytes_list(merged: &Bytes) -> Result<Vec<Bytes>, String> {
 #[derive(Clone)]
 pub(crate) struct JetStreamDataStore {
     kv_store: Store,
-    pod_replica_id: String,
+    pod_hash: String,
     responses_map: Arc<Mutex<HashMap<String, ResponseMode>>>,
 }
 
@@ -85,7 +85,7 @@ impl JetStreamDataStore {
     pub(crate) async fn new(
         js_context: Context,
         datum_store_name: &str,
-        pod_replica_id: String,
+        pod_hash: &str,
     ) -> StoreResult<Self> {
         let kv_store = js_context
             .get_key_value(datum_store_name)
@@ -95,29 +95,25 @@ impl JetStreamDataStore {
         let responses_map = Arc::new(Mutex::new(HashMap::new()));
         // start the central watcher
         Self::spawn_central_watcher(
-            pod_replica_id.clone(),
+            pod_hash.to_string(),
             kv_store.clone(),
             Arc::clone(&responses_map),
-        ).await;
-        info!(
-            "Central watcher spawned for pod replica ID: {}",
-            pod_replica_id
-        );
+        )
+        .await;
         Ok(Self {
             kv_store,
-            pod_replica_id,
+            pod_hash: pod_hash.to_string(),
             responses_map,
         })
     }
 
     /// Spawns the central task that watches response keys and manages data collection.
     async fn spawn_central_watcher(
-        pod_replica_id: String,
+        pod_hash: String,
         kv_store: Store,
         responses_map: Arc<Mutex<HashMap<String, ResponseMode>>>,
     ) -> JoinHandle<()> {
-        let watch_pattern = format!("{}.{}.*.*.*", RESPONSE_KEY_PREFIX, pod_replica_id);
-        info!(?watch_pattern, "Starting central data watcher",);
+        let watch_pattern = format!("{}.{}.*.*.*", RESPONSE_KEY_PREFIX, pod_hash);
         let mut latest_revision = 1;
 
         let mut watcher = loop {
@@ -147,8 +143,7 @@ impl JetStreamDataStore {
                         }
 
                         if let Err(e) =
-                            Self::process_entry(&entry, &responses_map, &pod_replica_id, &kv_store)
-                                .await
+                            Self::process_entry(&entry, &responses_map, &pod_hash, &kv_store).await
                         {
                             error!(error = ?e, "Failed to process entry");
                         }
@@ -218,11 +213,11 @@ impl JetStreamDataStore {
     async fn process_entry(
         entry: &async_nats::jetstream::kv::Entry,
         responses_map: &Arc<Mutex<HashMap<String, ResponseMode>>>,
-        pod_replica_id: &str,
+        pod_hash: &str,
         kv_store: &Store,
     ) -> Result<(), String> {
         let parts: Vec<&str> = entry.key.splitn(5, '.').collect();
-        if parts.len() < 5 || parts[0] != RESPONSE_KEY_PREFIX || parts[1] != pod_replica_id {
+        if parts.len() < 5 || parts[0] != RESPONSE_KEY_PREFIX || parts[1] != pod_hash {
             return Err(format!("Unexpected key format: {}", entry.key));
         }
 
@@ -272,7 +267,7 @@ impl JetStreamDataStore {
                     let merged_response = merge_bytes_list(&responses);
                     let final_result_key = format!(
                         "{}.{}.{}",
-                        RESPONSE_KEY_PREFIX, pod_replica_id, FINAL_RESULT_KEY_SUFFIX
+                        RESPONSE_KEY_PREFIX, pod_hash, FINAL_RESULT_KEY_SUFFIX
                     );
                     kv_store
                         .put(final_result_key, merged_response)
@@ -298,20 +293,17 @@ impl JetStreamDataStore {
         Ok(())
     }
 
-
     async fn get_data_from_kv_store(&self, id: &str) -> StoreResult<Vec<Vec<u8>>> {
         let final_result_key = format!(
             "{}.{}.{}",
-            RESPONSE_KEY_PREFIX, self.pod_replica_id, FINAL_RESULT_KEY_SUFFIX
+            RESPONSE_KEY_PREFIX, self.pod_hash, FINAL_RESULT_KEY_SUFFIX
         );
 
         loop {
             match self.kv_store.get(&final_result_key).await {
                 Ok(Some(result)) => {
                     return extract_bytes_list(&result)
-                        .map(|extracted| extracted.iter().map(|b| {
-                            b.to_vec()
-                        }).collect())
+                        .map(|extracted| extracted.iter().map(|b| b.to_vec()).collect())
                         .map_err(|e| {
                             StoreError::StoreRead(format!("Failed to extract bytes list: {e:?}"))
                         });
@@ -365,7 +357,6 @@ impl DataStore for JetStreamDataStore {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use async_nats::jetstream;
@@ -377,14 +368,14 @@ mod tests {
     use super::*;
     use crate::app::store::datastore::DataStore;
 
-    // #[cfg(feature = "nats-tests")]
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_retrieve_datum() {
         let js_url = "localhost:4222";
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
         let datum_store_name = "test_retrieve_datum_store";
-        let pod_replica = "0";
+        let pod_hash = "0";
 
         let _ = context.delete_key_value(datum_store_name).await;
 
@@ -397,27 +388,27 @@ mod tests {
             .await
             .unwrap();
 
-        let mut store = JetStreamDataStore::new(context.clone(), datum_store_name, pod_replica.to_string())
+        let mut store = JetStreamDataStore::new(context.clone(), datum_store_name, pod_hash)
             .await
             .unwrap();
 
         let id = "test-id";
-        let start_key = format!("rs.{pod_replica}.{id}.start.processing");
-        let start_payload : Bytes = RequestType::Sync.try_into().unwrap();
+        let start_key = format!("rs.{pod_hash}.{id}.start.processing");
+        let start_payload: Bytes = RequestType::Sync.try_into().unwrap();
         store
             .kv_store
             .put(start_key, start_payload.clone())
             .await
             .unwrap();
-        
-        let key = format!("rs.{pod_replica}.{id}.sink.{}", Utc::now().timestamp());
+
+        let key = format!("rs.{pod_hash}.{id}.sink.{}", Utc::now().timestamp());
         store
             .kv_store
             .put(key, Bytes::from_static(b"test_payload"))
             .await
             .unwrap();
 
-        let done_key = format!("rs.{pod_replica}.{id}.done.processing");
+        let done_key = format!("rs.{pod_hash}.{id}.done.processing");
         store.kv_store.put(done_key, Bytes::new()).await.unwrap();
 
         let result = store.retrieve_data(id).await.unwrap();
@@ -428,16 +419,16 @@ mod tests {
         context.delete_key_value(datum_store_name).await.unwrap();
     }
 
-    // #[cfg(feature = "nats-tests")]
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_stream_response() {
         let js_url = "localhost:4222";
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
         let datum_store_name = "test_stream_response_store";
-        let pod_replica = "0";
+        let pod_hash = "0";
         let _ = context.delete_key_value(datum_store_name).await;
-        
+
         context
             .create_key_value(Config {
                 bucket: datum_store_name.to_string(),
@@ -447,24 +438,24 @@ mod tests {
             .await
             .unwrap();
 
-        let mut store = JetStreamDataStore::new(context.clone(), datum_store_name, pod_replica.to_string())
+        let mut store = JetStreamDataStore::new(context.clone(), datum_store_name, pod_hash)
             .await
             .unwrap();
 
         let id = "test_stream_id";
-        let start_key = format!("rs.{pod_replica}.{id}.start.processing");
+        let start_key = format!("rs.{pod_hash}.{id}.start.processing");
         let start_payload: Bytes = RequestType::Sse.try_into().unwrap();
         store
             .kv_store
             .put(start_key, start_payload.clone())
             .await
             .unwrap();
-        
+
         // Simulate a response being added to the store
-        let key = format!("rs.{pod_replica}.{id}.0.1234");
+        let key = format!("rs.{pod_hash}.{id}.0.1234");
         let payload = Bytes::from_static(b"test_payload");
         store.kv_store.put(key, payload.clone()).await.unwrap();
-        
+
         let mut stream = store.stream_data(id).await.unwrap();
 
         // Verify that the response is received

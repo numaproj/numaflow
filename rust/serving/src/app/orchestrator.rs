@@ -107,6 +107,7 @@ where
             }
 
             if let Some(subgraph) = subgraph {
+                info!(?msg_id, ?subgraph, "Subgraph generated successfully");
                 cb_store
                     .deregister(&msg_id, &subgraph)
                     .await
@@ -148,7 +149,10 @@ where
         // check the status of the request, if its completed, then retrieve the data
         let status = self.callback_store.status(id).await?;
         match status {
-            ProcessingStatus::InProgress { .. } => Ok(None),
+            ProcessingStatus::InProgress { .. } => {
+                info!(?id, "Request is still in progress");
+                Ok(None)
+            }
             ProcessingStatus::Completed { .. } => {
                 let data = self.datum_store.retrieve_data(id).await?;
                 Ok(Some(data))
@@ -274,7 +278,7 @@ mod tests {
         let js_url = "localhost:4222";
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let pod_replica = "0";
+        let pod_hash = "0";
 
         let pipeline_spec: PipelineDCG = PIPELINE_SPEC_ENCODED.parse().unwrap();
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec).unwrap();
@@ -293,7 +297,7 @@ mod tests {
 
         let callback_store = JetStreamCallbackStore::new(
             context.clone(),
-            pod_replica.to_string(),
+            pod_hash,
             store_name,
             store_name,
             store_name,
@@ -301,7 +305,7 @@ mod tests {
         .await
         .expect("Failed to create callback store");
 
-        let datum_store = JetStreamDataStore::new(context.clone(), store_name, pod_replica.to_string())
+        let datum_store = JetStreamDataStore::new(context.clone(), store_name, pod_hash)
             .await
             .expect("Failed to create datum store");
 
@@ -362,17 +366,16 @@ mod tests {
         let request_id = id.clone();
         tokio::spawn(async move {
             // once the start processing rs is present then only write the response
-            let rs_key = format!("rs.{pod_replica}.{request_id}.start.processing");
+            let rs_key = format!("rs.{pod_hash}.{request_id}.start.processing");
             let start_time = Instant::now();
             loop {
-                if let Some(value) = kv_store.get(&rs_key).await.unwrap() {
+                if let Some(_) = kv_store.get(&rs_key).await.unwrap() {
                     break;
                 }
 
                 if start_time.elapsed().as_millis() > 1000 {
                     panic!("Timed out waiting for start processing key");
                 }
-
             }
             // put responses to datum store
             let responses = vec![
@@ -383,7 +386,11 @@ mod tests {
             for (i, response) in responses.iter().enumerate() {
                 kv_store
                     .put(
-                        format!("rs.{pod_replica}.{request_id}.{}.{}", i, Utc::now().timestamp()),
+                        format!(
+                            "rs.{pod_hash}.{request_id}.{}.{}",
+                            i,
+                            Utc::now().timestamp()
+                        ),
                         response.clone(),
                     )
                     .await
@@ -394,14 +401,17 @@ mod tests {
             for (i, cb) in cbs.drain(..).enumerate() {
                 kv_store
                     .put(
-                        format!("cb.{pod_replica}.{request_id}.{}.{}", i, Utc::now().timestamp_millis()),
+                        format!(
+                            "cb.{pod_hash}.{request_id}.{}.{}",
+                            i,
+                            Utc::now().timestamp_millis()
+                        ),
                         cb.try_into().unwrap(),
                     )
                     .await
                     .unwrap();
             }
         });
-
 
         // Test process_request
         let result = state.process_request(&id, RequestType::Sync).await.unwrap();
@@ -422,7 +432,7 @@ mod tests {
         let js_url = "localhost:4222";
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let pod_replica = "0";
+        let pod_hash = "0";
 
         let store_name = "test_stream_response";
         let _ = context.delete_key_value(store_name).await;
@@ -438,7 +448,7 @@ mod tests {
 
         let callback_store = JetStreamCallbackStore::new(
             context.clone(),
-            pod_replica.to_string(),
+            pod_hash,
             store_name,
             store_name,
             store_name,
@@ -446,7 +456,7 @@ mod tests {
         .await
         .expect("Failed to create callback store");
 
-        let datum_store = JetStreamDataStore::new(context.clone(), store_name, pod_replica.to_string())
+        let datum_store = JetStreamDataStore::new(context.clone(), store_name, pod_hash)
             .await
             .expect("Failed to create datum store");
 
@@ -510,17 +520,16 @@ mod tests {
         let request_id = id.clone();
         tokio::spawn(async move {
             // once the start processing rs is present then only write the response
-            let rs_key = format!("rs.{pod_replica}.{request_id}.start.processing");
+            let rs_key = format!("rs.{pod_hash}.{request_id}.start.processing");
             let start_time = Instant::now();
             loop {
-                if let Some(value) = kv_store.get(&rs_key).await.unwrap() {
+                if let Some(_) = kv_store.get(&rs_key).await.unwrap() {
                     break;
                 }
 
                 if start_time.elapsed().as_millis() > 1000 {
                     panic!("Timed out waiting for start processing key");
                 }
-
             }
             // put responses to datum store
             let responses = vec![
@@ -534,7 +543,11 @@ mod tests {
             for (i, response) in responses.iter().enumerate() {
                 kv_store
                     .put(
-                        format!("rs.{pod_replica}.{request_id}.{}.{}", i, Utc::now().timestamp()),
+                        format!(
+                            "rs.{pod_hash}.{request_id}.{}.{}",
+                            i,
+                            Utc::now().timestamp()
+                        ),
                         response.clone(),
                     )
                     .await
@@ -545,7 +558,11 @@ mod tests {
             for (i, cb) in cbs.drain(..).enumerate() {
                 kv_store
                     .put(
-                        format!("cb.{pod_replica}.{request_id}.{}.{}", i, Utc::now().timestamp_millis()),
+                        format!(
+                            "cb.{pod_hash}.{request_id}.{}.{}",
+                            i,
+                            Utc::now().timestamp_millis()
+                        ),
                         cb.try_into().unwrap(),
                     )
                     .await

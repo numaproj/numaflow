@@ -30,7 +30,7 @@ data:
   # maxmemory is set to 100mb to ensure enough storage for running a single e2e test suite.
   # a lower number can lead to redis sink write failure.
   redis-config:  |
-    maxmemory 500mb
+    maxmemory 100mb
     maxmemory-policy allkeys-lru
     protected-mode no
 ---

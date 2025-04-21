@@ -7,6 +7,7 @@ use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::sink_response;
 use numaflow_pb::clients::sink::Status::{Failure, Fallback, Serve, Success};
+use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
@@ -19,7 +20,6 @@ use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::{error, info, warn};
-use serving::{DEFAULT_ID_HEADER, DEFAULT_REPLICA_ID_HEADER};
 use user_defined::UserDefinedSink;
 
 use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
@@ -50,7 +50,6 @@ mod serve;
 ///
 /// [User-Defined Sink]: https://numaflow.numaproj.io/user-guide/sinks/user-defined-sinks/
 mod user_defined;
-
 
 /// Set of items to be implemented be a Numaflow Sink.
 ///
@@ -840,6 +839,7 @@ impl SinkWriter {
 
         let mut payloads = Vec::with_capacity(serving_msgs.len());
         for msg in serving_msgs {
+            info!("msg headers: {:?}", msg.headers);
             let id = msg
                 .headers
                 .get(DEFAULT_ID_HEADER)
@@ -847,7 +847,7 @@ impl SinkWriter {
                 .clone();
             let pod_replica = msg
                 .headers
-                .get(DEFAULT_REPLICA_ID_HEADER)
+                .get(DEFAULT_POD_HASH_KEY)
                 .ok_or(Error::Sink("Missing pod replica header".to_string()))?
                 .clone();
             payloads.push((id, pod_replica, msg.value.into()));

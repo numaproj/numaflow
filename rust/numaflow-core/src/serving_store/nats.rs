@@ -3,6 +3,7 @@ use async_nats::jetstream::kv::Store;
 use async_nats::jetstream::Context;
 use bytes::Bytes;
 use chrono::Utc;
+use tracing::info;
 
 /// Nats serving store to store the serving responses.
 #[derive(Clone)]
@@ -39,6 +40,8 @@ impl NatsServingStore {
                 origin,
                 Utc::now().timestamp_nanos_opt().unwrap()
             );
+
+            info!("Putting datum with id {} and payload {:?}", id, payload);
 
             let store = self.store.clone();
             let task = tokio::spawn(async move {

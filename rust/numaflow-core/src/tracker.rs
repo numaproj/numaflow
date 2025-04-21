@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use serving::callback::CallbackHandler;
-use serving::{DEFAULT_ID_HEADER, DEFAULT_REPLICA_ID_HEADER};
+use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
 use tokio::sync::{mpsc, oneshot};
 use tracing::error;
 
@@ -87,7 +87,7 @@ struct Tracker {
 #[derive(Debug)]
 struct ServingCallbackInfo {
     id: String,
-    pod_replica: String,
+    pod_hash: String,
     from_vertex: String,
     /// at the moment these are just tags.
     responses: Vec<Option<Vec<String>>>,
@@ -106,13 +106,13 @@ impl TryFrom<&Message> for ServingCallbackInfo {
                 ))
             })?
             .to_owned();
-        
-        let pod_replica = message
+
+        let pod_hash = message
             .headers
-            .get(DEFAULT_REPLICA_ID_HEADER)
+            .get(DEFAULT_POD_HASH_KEY)
             .ok_or_else(|| {
                 Error::Source(format!(
-                    "{DEFAULT_REPLICA_ID_HEADER} is not found in message headers",
+                    "{DEFAULT_POD_HASH_KEY} is not found in message headers",
                 ))
             })?
             .to_owned();
@@ -126,7 +126,7 @@ impl TryFrom<&Message> for ServingCallbackInfo {
 
         Ok(ServingCallbackInfo {
             id: uuid,
-            pod_replica,
+            pod_hash,
             from_vertex,
             responses: vec![None],
         })
@@ -341,7 +341,7 @@ impl Tracker {
         let result = callback_handler
             .callback(
                 callback_info.id,
-                callback_info.pod_replica,
+                callback_info.pod_hash,
                 callback_info.from_vertex,
                 callback_info.responses,
             )

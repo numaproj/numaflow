@@ -22,15 +22,15 @@ pub(crate) mod memstore;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub(crate) enum ProcessingStatus {
     InProgress {
-        replica_id: String,
+        pod_hash: String,
     },
     Completed {
         subgraph: String, // subgraph of the completed request
-        replica_id: String,
+        pod_hash: String,
     },
     Failed {
         error: String, // error message of the failed request
-        replica_id: String,
+        pod_hash: String,
     },
 }
 

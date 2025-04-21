@@ -22,6 +22,7 @@ pub(crate) enum Error {
     #[error("Request id {0} doesn't exist in store")]
     InvalidRequestId(String),
 
+    #[allow(dead_code)]
     #[error("Request id {0} already exists in the store")]
     DuplicateRequest(String),
 

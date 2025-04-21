@@ -13,7 +13,7 @@ use crate::app::store::cbstore::jetstreamstore::JetStreamCallbackStore;
 use crate::app::store::datastore::jetstream::JetStreamDataStore;
 use crate::app::store::datastore::user_defined::UserDefinedStore;
 use crate::app::tracker::MessageGraph;
-use crate::config::{generate_certs, get_pod_replica};
+use crate::config::generate_certs;
 use crate::config::StoreType;
 use crate::metrics::start_https_metrics_server;
 use app::orchestrator::OrchestratorState;
@@ -22,8 +22,8 @@ mod app;
 
 mod config;
 pub use {
-    config::Settings, config::DEFAULT_CALLBACK_URL_HEADER_KEY, config::DEFAULT_ID_HEADER, config::DEFAULT_REPLICA_ID_HEADER,
-    config::ENV_MIN_PIPELINE_SPEC,
+    config::Settings, config::DEFAULT_CALLBACK_URL_HEADER_KEY, config::DEFAULT_ID_HEADER,
+    config::DEFAULT_POD_HASH_KEY, config::ENV_MIN_PIPELINE_SPEC,
 };
 
 mod error;
@@ -111,7 +111,7 @@ async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
     // create a callback store for tracking
     let callback_store = JetStreamCallbackStore::new(
         js_context.clone(),
-        get_pod_replica().to_string(),
+        &settings.pod_hash,
         &settings.js_callback_store,
         &settings.js_status_store,
         &settings.js_response_store,
@@ -132,7 +132,7 @@ async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
             let nats_store = JetStreamDataStore::new(
                 js_context.clone(),
                 &settings.js_response_store,
-                get_pod_replica().to_string(),
+                &settings.pod_hash,
             )
             .await?;
             let callback_state = CallbackState::new(msg_graph, nats_store, callback_store).await?;
@@ -176,6 +176,7 @@ mod tests {
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
         let env_vars = [
+            ("NUMAFLOW_POD", "serving-serve-cbdf"),
             ("NUMAFLOW_SERVING_APP_LISTEN_PORT", "32443"),
             ("NUMAFLOW_SERVING_CALLBACK_STORE", "serving-test-run-kv-store"),
             ("NUMAFLOW_SERVING_RESPONSE_STORE", "serving-test-run-kv-store"),

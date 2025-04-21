@@ -5,7 +5,7 @@ use super::{FetchQueryParams, Tid};
 use crate::app::response::{ApiError, ServeResponse};
 use crate::app::store::cbstore::CallbackStore;
 use crate::app::store::datastore::Error as StoreError;
-use crate::config::{get_pod_replica, RequestType, DEFAULT_REPLICA_ID_HEADER};
+use crate::config::{RequestType, DEFAULT_POD_HASH_KEY};
 use crate::metrics::serving_metrics;
 use crate::Error;
 use async_nats::jetstream::Context;
@@ -32,7 +32,7 @@ struct ProxyState<T, U> {
     js_context: Context,
     stream: String,
     tid_header: String,
-    pod_replica: String,
+    pod_hash: String,
     orchestrator: orchestrator::OrchestratorState<T, U>,
 }
 
@@ -46,7 +46,7 @@ pub(crate) async fn jetstream_proxy<
         js_context: state.js_context.clone(),
         stream: state.settings.js_message_stream.clone(),
         tid_header: state.settings.tid_header.clone(),
-        pod_replica: state.settings.pod_replica.clone(),
+        pod_hash: state.settings.pod_hash.clone(),
         orchestrator: state.orchestrator_state.clone(),
     });
 
@@ -141,7 +141,7 @@ where
         );
     }
     msg_headers.insert(proxy_state.tid_header.clone(), id.clone());
-    msg_headers.insert(DEFAULT_REPLICA_ID_HEADER, proxy_state.pod_replica.clone());
+    msg_headers.insert(DEFAULT_POD_HASH_KEY, proxy_state.pod_hash.clone());
 
     let mut orchestrator_state = proxy_state.orchestrator.clone();
     let response_stream = orchestrator_state
@@ -200,7 +200,8 @@ async fn sync_publish<
         );
     }
     msg_headers.insert(proxy_state.tid_header.clone(), id.clone());
-    msg_headers.insert(DEFAULT_REPLICA_ID_HEADER, proxy_state.pod_replica.clone());
+    msg_headers.insert(DEFAULT_POD_HASH_KEY, proxy_state.pod_hash.clone());
+    info!("Message headers: {:?}", msg_headers);
 
     let processing_start = Instant::now();
     // Register the ID in the callback proxy state
@@ -353,7 +354,7 @@ async fn async_publish<
         );
     }
     msg_headers.insert(proxy_state.tid_header.clone(), id.clone());
-    msg_headers.insert(DEFAULT_REPLICA_ID_HEADER, proxy_state.pod_replica.clone());
+    msg_headers.insert(DEFAULT_POD_HASH_KEY, proxy_state.pod_hash.clone());
 
     let processing_start = Instant::now();
     // Register request in Redis
@@ -469,7 +470,6 @@ mod tests {
     use std::sync::Arc;
     use std::time::Instant;
     use tokio::net::TcpListener;
-    use tokio::time::sleep;
     use tower::ServiceExt;
 
     const PIPELINE_SPEC_ENCODED: &str = "eyJ2ZXJ0aWNlcyI6W3sibmFtZSI6ImluIiwic291cmNlIjp7InNlcnZpbmciOnsiYXV0aCI6bnVsbCwic2VydmljZSI6dHJ1ZSwibXNnSURIZWFkZXJLZXkiOiJYLU51bWFmbG93LUlkIiwic3RvcmUiOnsidXJsIjoicmVkaXM6Ly9yZWRpczo2Mzc5In19fSwiY29udGFpbmVyVGVtcGxhdGUiOnsicmVzb3VyY2VzIjp7fSwiaW1hZ2VQdWxsUG9saWN5IjoiTmV2ZXIiLCJlbnYiOlt7Im5hbWUiOiJSVVNUX0xPRyIsInZhbHVlIjoiZGVidWcifV19LCJzY2FsZSI6eyJtaW4iOjF9LCJ1cGRhdGVTdHJhdGVneSI6eyJ0eXBlIjoiUm9sbGluZ1VwZGF0ZSIsInJvbGxpbmdVcGRhdGUiOnsibWF4VW5hdmFpbGFibGUiOiIyNSUifX19LHsibmFtZSI6InBsYW5uZXIiLCJ1ZGYiOnsiY29udGFpbmVyIjp7ImltYWdlIjoiYXNjaWk6MC4xIiwiYXJncyI6WyJwbGFubmVyIl0sInJlc291cmNlcyI6e30sImltYWdlUHVsbFBvbGljeSI6Ik5ldmVyIn0sImJ1aWx0aW4iOm51bGwsImdyb3VwQnkiOm51bGx9LCJjb250YWluZXJUZW1wbGF0ZSI6eyJyZXNvdXJjZXMiOnt9LCJpbWFnZVB1bGxQb2xpY3kiOiJOZXZlciJ9LCJzY2FsZSI6eyJtaW4iOjF9LCJ1cGRhdGVTdHJhdGVneSI6eyJ0eXBlIjoiUm9sbGluZ1VwZGF0ZSIsInJvbGxpbmdVcGRhdGUiOnsibWF4VW5hdmFpbGFibGUiOiIyNSUifX19LHsibmFtZSI6InRpZ2VyIiwidWRmIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6ImFzY2lpOjAuMSIsImFyZ3MiOlsidGlnZXIiXSwicmVzb3VyY2VzIjp7fSwiaW1hZ2VQdWxsUG9saWN5IjoiTmV2ZXIifSwiYnVpbHRpbiI6bnVsbCwiZ3JvdXBCeSI6bnVsbH0sImNvbnRhaW5lclRlbXBsYXRlIjp7InJlc291cmNlcyI6e30sImltYWdlUHVsbFBvbGljeSI6Ik5ldmVyIn0sInNjYWxlIjp7Im1pbiI6MX0sInVwZGF0ZVN0cmF0ZWd5Ijp7InR5cGUiOiJSb2xsaW5nVXBkYXRlIiwicm9sbGluZ1VwZGF0ZSI6eyJtYXhVbmF2YWlsYWJsZSI6IjI1JSJ9fX0seyJuYW1lIjoiZG9nIiwidWRmIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6ImFzY2lpOjAuMSIsImFyZ3MiOlsiZG9nIl0sInJlc291cmNlcyI6e30sImltYWdlUHVsbFBvbGljeSI6Ik5ldmVyIn0sImJ1aWx0aW4iOm51bGwsImdyb3VwQnkiOm51bGx9LCJjb250YWluZXJUZW1wbGF0ZSI6eyJyZXNvdXJjZXMiOnt9LCJpbWFnZVB1bGxQb2xpY3kiOiJOZXZlciJ9LCJzY2FsZSI6eyJtaW4iOjF9LCJ1cGRhdGVTdHJhdGVneSI6eyJ0eXBlIjoiUm9sbGluZ1VwZGF0ZSIsInJvbGxpbmdVcGRhdGUiOnsibWF4VW5hdmFpbGFibGUiOiIyNSUifX19LHsibmFtZSI6ImVsZXBoYW50IiwidWRmIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6ImFzY2lpOjAuMSIsImFyZ3MiOlsiZWxlcGhhbnQiXSwicmVzb3VyY2VzIjp7fSwiaW1hZ2VQdWxsUG9saWN5IjoiTmV2ZXIifSwiYnVpbHRpbiI6bnVsbCwiZ3JvdXBCeSI6bnVsbH0sImNvbnRhaW5lclRlbXBsYXRlIjp7InJlc291cmNlcyI6e30sImltYWdlUHVsbFBvbGljeSI6Ik5ldmVyIn0sInNjYWxlIjp7Im1pbiI6MX0sInVwZGF0ZVN0cmF0ZWd5Ijp7InR5cGUiOiJSb2xsaW5nVXBkYXRlIiwicm9sbGluZ1VwZGF0ZSI6eyJtYXhVbmF2YWlsYWJsZSI6IjI1JSJ9fX0seyJuYW1lIjoiYXNjaWlhcnQiLCJ1ZGYiOnsiY29udGFpbmVyIjp7ImltYWdlIjoiYXNjaWk6MC4xIiwiYXJncyI6WyJhc2NpaWFydCJdLCJyZXNvdXJjZXMiOnt9LCJpbWFnZVB1bGxQb2xpY3kiOiJOZXZlciJ9LCJidWlsdGluIjpudWxsLCJncm91cEJ5IjpudWxsfSwiY29udGFpbmVyVGVtcGxhdGUiOnsicmVzb3VyY2VzIjp7fSwiaW1hZ2VQdWxsUG9saWN5IjoiTmV2ZXIifSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19fSx7Im5hbWUiOiJzZXJ2ZS1zaW5rIiwic2luayI6eyJ1ZHNpbmsiOnsiY29udGFpbmVyIjp7ImltYWdlIjoic2VydmVzaW5rOjAuMSIsImVudiI6W3sibmFtZSI6Ik5VTUFGTE9XX0NBTExCQUNLX1VSTF9LRVkiLCJ2YWx1ZSI6IlgtTnVtYWZsb3ctQ2FsbGJhY2stVXJsIn0seyJuYW1lIjoiTlVNQUZMT1dfTVNHX0lEX0hFQURFUl9LRVkiLCJ2YWx1ZSI6IlgtTnVtYWZsb3ctSWQifV0sInJlc291cmNlcyI6e30sImltYWdlUHVsbFBvbGljeSI6Ik5ldmVyIn19LCJyZXRyeVN0cmF0ZWd5Ijp7fX0sImNvbnRhaW5lclRlbXBsYXRlIjp7InJlc291cmNlcyI6e30sImltYWdlUHVsbFBvbGljeSI6Ik5ldmVyIn0sInNjYWxlIjp7Im1pbiI6MX0sInVwZGF0ZVN0cmF0ZWd5Ijp7InR5cGUiOiJSb2xsaW5nVXBkYXRlIiwicm9sbGluZ1VwZGF0ZSI6eyJtYXhVbmF2YWlsYWJsZSI6IjI1JSJ9fX0seyJuYW1lIjoiZXJyb3Itc2luayIsInNpbmsiOnsidWRzaW5rIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6InNlcnZlc2luazowLjEiLCJlbnYiOlt7Im5hbWUiOiJOVU1BRkxPV19DQUxMQkFDS19VUkxfS0VZIiwidmFsdWUiOiJYLU51bWFmbG93LUNhbGxiYWNrLVVybCJ9LHsibmFtZSI6Ik5VTUFGTE9XX01TR19JRF9IRUFERVJfS0VZIiwidmFsdWUiOiJYLU51bWFmbG93LUlkIn1dLCJyZXNvdXJjZXMiOnt9LCJpbWFnZVB1bGxQb2xpY3kiOiJOZXZlciJ9fSwicmV0cnlTdHJhdGVneSI6e319LCJjb250YWluZXJUZW1wbGF0ZSI6eyJyZXNvdXJjZXMiOnt9LCJpbWFnZVB1bGxQb2xpY3kiOiJOZXZlciJ9LCJzY2FsZSI6eyJtaW4iOjF9LCJ1cGRhdGVTdHJhdGVneSI6eyJ0eXBlIjoiUm9sbGluZ1VwZGF0ZSIsInJvbGxpbmdVcGRhdGUiOnsibWF4VW5hdmFpbGFibGUiOiIyNSUifX19XSwiZWRnZXMiOlt7ImZyb20iOiJpbiIsInRvIjoicGxhbm5lciIsImNvbmRpdGlvbnMiOm51bGx9LHsiZnJvbSI6InBsYW5uZXIiLCJ0byI6ImFzY2lpYXJ0IiwiY29uZGl0aW9ucyI6eyJ0YWdzIjp7Im9wZXJhdG9yIjoib3IiLCJ2YWx1ZXMiOlsiYXNjaWlhcnQiXX19fSx7ImZyb20iOiJwbGFubmVyIiwidG8iOiJ0aWdlciIsImNvbmRpdGlvbnMiOnsidGFncyI6eyJvcGVyYXRvciI6Im9yIiwidmFsdWVzIjpbInRpZ2VyIl19fX0seyJmcm9tIjoicGxhbm5lciIsInRvIjoiZG9nIiwiY29uZGl0aW9ucyI6eyJ0YWdzIjp7Im9wZXJhdG9yIjoib3IiLCJ2YWx1ZXMiOlsiZG9nIl19fX0seyJmcm9tIjoicGxhbm5lciIsInRvIjoiZWxlcGhhbnQiLCJjb25kaXRpb25zIjp7InRhZ3MiOnsib3BlcmF0b3IiOiJvciIsInZhbHVlcyI6WyJlbGVwaGFudCJdfX19LHsiZnJvbSI6InRpZ2VyIiwidG8iOiJzZXJ2ZS1zaW5rIiwiY29uZGl0aW9ucyI6bnVsbH0seyJmcm9tIjoiZG9nIiwidG8iOiJzZXJ2ZS1zaW5rIiwiY29uZGl0aW9ucyI6bnVsbH0seyJmcm9tIjoiZWxlcGhhbnQiLCJ0byI6InNlcnZlLXNpbmsiLCJjb25kaXRpb25zIjpudWxsfSx7ImZyb20iOiJhc2NpaWFydCIsInRvIjoic2VydmUtc2luayIsImNvbmRpdGlvbnMiOm51bGx9LHsiZnJvbSI6InBsYW5uZXIiLCJ0byI6ImVycm9yLXNpbmsiLCJjb25kaXRpb25zIjp7InRhZ3MiOnsib3BlcmF0b3IiOiJvciIsInZhbHVlcyI6WyJlcnJvciJdfX19XSwibGlmZWN5Y2xlIjp7fSwid2F0ZXJtYXJrIjp7fX0=";
@@ -512,17 +512,12 @@ mod tests {
             ..Default::default()
         };
 
-        let callback_store = JetStreamCallbackStore::new(
-            context.clone(),
-            "0".to_string(),
-            store_name,
-            store_name,
-            store_name,
-        )
-        .await
-        .expect("Failed to create callback store");
+        let callback_store =
+            JetStreamCallbackStore::new(context.clone(), "0", store_name, store_name, store_name)
+                .await
+                .expect("Failed to create callback store");
 
-        let datum_store = JetStreamDataStore::new(context.clone(), store_name, "0".to_string())
+        let datum_store = JetStreamDataStore::new(context.clone(), store_name, "0")
             .await
             .expect("Failed to create datum store");
 
@@ -609,9 +604,9 @@ mod tests {
     // #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_sync_publish() {
-        const ID_HEADER: &str = "X-Numaflow-ID";
+        const ID_HEADER: &str = "X-Numaflow-Id";
         const ID_VALUE: &str = "publish";
-        const POD_REPLICA: &str = "0";
+        const POD_HASH: &str = "0";
 
         let store_name = "test_sync_publish";
         let messages_stream_name = "test_sync_publish_messages";
@@ -638,7 +633,7 @@ mod tests {
 
         let settings = Settings {
             tid_header: ID_HEADER.into(),
-            pod_replica: POD_REPLICA.into(),
+            pod_hash: POD_HASH.into(),
             js_callback_store: store_name.to_string(),
             js_status_store: store_name.to_string(),
             js_response_store: store_name.to_string(),
@@ -648,7 +643,7 @@ mod tests {
 
         let callback_store = JetStreamCallbackStore::new(
             context.clone(),
-            POD_REPLICA.to_string(),
+            POD_HASH,
             store_name,
             store_name,
             store_name,
@@ -656,7 +651,7 @@ mod tests {
         .await
         .expect("Failed to create callback store");
 
-        let datum_store = JetStreamDataStore::new(context.clone(), store_name, POD_REPLICA.to_string())
+        let datum_store = JetStreamDataStore::new(context.clone(), store_name, POD_HASH)
             .await
             .expect("Failed to create datum store");
 
@@ -677,10 +672,10 @@ mod tests {
 
         tokio::spawn(async move {
             // once the start processing rs is present then only write the response
-            let rs_key = format!("rs.{POD_REPLICA}.{ID_VALUE}.start.processing");
+            let rs_key = format!("rs.{POD_HASH}.{ID_VALUE}.start.processing");
             let start_time = Instant::now();
             loop {
-                if let Some(value) = kv_store.get(&rs_key).await.unwrap() {
+                if let Some(_) = kv_store.get(&rs_key).await.unwrap() {
                     break;
                 }
 
@@ -688,15 +683,15 @@ mod tests {
                     panic!("Timed out waiting for start processing key");
                 }
             }
-            let rs_key = format!("rs.{POD_REPLICA}.{ID_VALUE}.temp.12345");
+            let rs_key = format!("rs.{POD_HASH}.{ID_VALUE}.temp.12345");
             kv_store
                 .put(&rs_key, Bytes::from("test-output"))
                 .await
                 .unwrap();
-            
+
             let cbs = create_default_callbacks(ID_VALUE);
             for cb in cbs {
-                let cb_key = format!("cb.{POD_REPLICA}.{ID_VALUE}.temp.{}", cb.cb_time);
+                let cb_key = format!("cb.{POD_HASH}.{ID_VALUE}.temp.{}", cb.cb_time);
                 kv_store.put(&cb_key, cb.try_into().unwrap()).await.unwrap();
             }
         });
@@ -722,7 +717,7 @@ mod tests {
     #[tokio::test]
     async fn test_sync_publish_serve() {
         const ID_VALUE: &str = "publish-serve";
-        const POD_REPLICA: &str = "1";
+        const POD_HASH: &str = "1";
 
         let store_name = "test_sync_publish_serve";
         let messages_stream_name = "test_sync_publish_serve_messages";
@@ -753,13 +748,13 @@ mod tests {
             js_status_store: store_name.to_string(),
             js_response_store: store_name.to_string(),
             js_message_stream: messages_stream_name.to_string(),
-            pod_replica: POD_REPLICA.into(),
+            pod_hash: POD_HASH.into(),
             ..Default::default()
         };
 
         let callback_store = JetStreamCallbackStore::new(
             context.clone(),
-            POD_REPLICA.to_string(),
+            POD_HASH,
             store_name,
             store_name,
             store_name,
@@ -767,7 +762,7 @@ mod tests {
         .await
         .expect("Failed to create callback store");
 
-        let datum_store = JetStreamDataStore::new(context.clone(), store_name, POD_REPLICA.to_string())
+        let datum_store = JetStreamDataStore::new(context.clone(), store_name, POD_HASH)
             .await
             .expect("Failed to create datum store");
 
@@ -790,10 +785,10 @@ mod tests {
         // spawn a tokio task which will insert the callback requests to the callback state
         tokio::spawn(async move {
             // once the start processing rs is present then only write the response
-            let rs_key = format!("rs.{POD_REPLICA}.{ID_VALUE}.start.processing");
+            let rs_key = format!("rs.{POD_HASH}.{ID_VALUE}.start.processing");
             let start_time = Instant::now();
             loop {
-                if let Some(value) = kv_store.get(&rs_key).await.unwrap() {
+                if let Some(_) = kv_store.get(&rs_key).await.unwrap() {
                     break;
                 }
 
@@ -802,12 +797,12 @@ mod tests {
                 }
             }
 
-            let rs_key_one = format!("rs.{POD_REPLICA}.{ID_VALUE}.temp.12345");
+            let rs_key_one = format!("rs.{POD_HASH}.{ID_VALUE}.temp.12345");
             kv_store
                 .put(&rs_key_one, Bytes::from("Test Message 1"))
                 .await
                 .unwrap();
-            let rs_key_two = format!("rs.{POD_REPLICA}.{ID_VALUE}.temp.12346");
+            let rs_key_two = format!("rs.{POD_HASH}.{ID_VALUE}.temp.12346");
             kv_store
                 .put(&rs_key_two, Bytes::from("Another Test Message 2"))
                 .await
@@ -815,7 +810,7 @@ mod tests {
 
             let cbs = create_default_callbacks(ID_VALUE);
             for cb in cbs {
-                let cb_key = format!("cb.{POD_REPLICA}.{ID_VALUE}.temp.{}", cb.cb_time);
+                let cb_key = format!("cb.{POD_HASH}.{ID_VALUE}.temp.{}", cb.cb_time);
                 kv_store.put(&cb_key, cb.try_into().unwrap()).await.unwrap();
             }
         });
@@ -865,7 +860,7 @@ mod tests {
     #[tokio::test]
     async fn test_sse_handler() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         const ID_HEADER: &str = "X-Numaflow-Id";
-        const POD_REPLICA: &str = "2";
+        const POD_HASH: &str = "2";
         const ID_VALUE: &str = "sse";
 
         let store_name = "test_sse_handler";
@@ -894,7 +889,7 @@ mod tests {
 
         let settings = Settings {
             tid_header: ID_HEADER.into(),
-            pod_replica: POD_REPLICA.into(),
+            pod_hash: POD_HASH.into(),
             js_callback_store: store_name.to_string(),
             js_response_store: store_name.to_string(),
             js_status_store: store_name.to_string(),
@@ -904,7 +899,7 @@ mod tests {
 
         let callback_store = JetStreamCallbackStore::new(
             context.clone(),
-            POD_REPLICA.to_string(),
+            POD_HASH,
             store_name,
             store_name,
             store_name,
@@ -912,7 +907,7 @@ mod tests {
         .await
         .expect("Failed to create callback store");
 
-        let datum_store = JetStreamDataStore::new(context.clone(), store_name, POD_REPLICA.to_string())
+        let datum_store = JetStreamDataStore::new(context.clone(), store_name, POD_HASH)
             .await
             .expect("Failed to create datum store");
 
@@ -945,10 +940,10 @@ mod tests {
         // spawn a tokio task which will insert the callback requests to the callback state
         tokio::spawn(async move {
             // once the start processing rs is present then only write the response
-            let rs_key = format!("rs.{POD_REPLICA}.{ID_VALUE}.start.processing");
+            let rs_key = format!("rs.{POD_HASH}.{ID_VALUE}.start.processing");
             let start_time = Instant::now();
             loop {
-                if let Some(value) = kv_store.get(&rs_key).await.unwrap() {
+                if let Some(_) = kv_store.get(&rs_key).await.unwrap() {
                     break;
                 }
 
@@ -957,12 +952,12 @@ mod tests {
                 }
             }
 
-            let rs_key_one = format!("rs.{POD_REPLICA}.{ID_VALUE}.test.12345");
+            let rs_key_one = format!("rs.{POD_HASH}.{ID_VALUE}.test.12345");
             kv_store
                 .put(&rs_key_one, Bytes::from("Test Message 1"))
                 .await
                 .unwrap();
-            let rs_key_two = format!("rs.{POD_REPLICA}.{ID_VALUE}.test.12346");
+            let rs_key_two = format!("rs.{POD_HASH}.{ID_VALUE}.test.12346");
             kv_store
                 .put(&rs_key_two, Bytes::from("Another Test Message 2"))
                 .await
@@ -970,7 +965,7 @@ mod tests {
 
             let cbs = create_default_callbacks(ID_VALUE);
             for cb in cbs {
-                let cb_key = format!("cb.{POD_REPLICA}.{ID_VALUE}.test.{}", cb.cb_time);
+                let cb_key = format!("cb.{POD_HASH}.{ID_VALUE}.test.{}", cb.cb_time);
                 kv_store.put(&cb_key, cb.try_into().unwrap()).await.unwrap();
             }
         });

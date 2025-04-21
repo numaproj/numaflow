@@ -82,7 +82,7 @@ impl CallbackHandler {
     pub async fn callback(
         &self,
         id: String,
-        pod_replica: String,
+        pod_hash: String,
         previous_vertex: String,
         responses: Vec<Option<Vec<String>>>,
     ) -> crate::Result<JoinHandle<()>> {
@@ -106,7 +106,7 @@ impl CallbackHandler {
         let store = self.store.clone();
         let handle = tokio::spawn(async move {
             let timestamp = Utc::now().timestamp_nanos_opt().unwrap();
-            let callbacks_key = format!("cb.{pod_replica}.{id}.{vertex_name}.{timestamp}");
+            let callbacks_key = format!("cb.{pod_hash}.{id}.{vertex_name}.{timestamp}");
             let interval = fixed::Interval::from_millis(1000).take(2);
 
             let _permit = permit;
@@ -179,7 +179,12 @@ mod tests {
             CallbackHandler::new("test_vertex".to_string(), context.clone(), store_name, 1).await;
 
         callback_handler
-            .callback(id.to_string(), "0".to_string(), "test_from_vertex".to_string(), vec![])
+            .callback(
+                id.to_string(),
+                "0".to_string(),
+                "test_from_vertex".to_string(),
+                vec![],
+            )
             .await
             .unwrap()
             .await

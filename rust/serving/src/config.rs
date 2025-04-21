@@ -1,7 +1,3 @@
-use std::collections::HashMap;
-use std::env;
-use std::fmt::Debug;
-use std::sync::OnceLock;
 use crate::{
     pipeline::PipelineDCG,
     Error::{self, ParseConfig},
@@ -11,11 +7,14 @@ use base64::Engine;
 use bytes::Bytes;
 use rcgen::{generate_simple_self_signed, Certificate, CertifiedKey, KeyPair};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fmt::Debug;
+use tracing::info;
 
 const ENV_NUMAFLOW_SERVING_APP_PORT: &str = "NUMAFLOW_SERVING_APP_LISTEN_PORT";
 pub const ENV_MIN_PIPELINE_SPEC: &str = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC";
 pub const DEFAULT_ID_HEADER: &str = "X-Numaflow-Id";
-pub const DEFAULT_REPLICA_ID_HEADER: &str = "X-Numaflow-Replica-Id";
+pub const DEFAULT_POD_HASH_KEY: &str = "X-Numaflow-Pod-Hash";
 pub const DEFAULT_CALLBACK_URL_HEADER_KEY: &str = "X-Numaflow-Callback-Url";
 const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
 const DEFAULT_SERVING_STORE_SOCKET: &str = "/var/run/numaflow/serving.sock";
@@ -25,23 +24,12 @@ const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM
 const ENV_NUMAFLOW_SERVING_CALLBACK_STORE: &str = "NUMAFLOW_SERVING_CALLBACK_STORE";
 const ENV_NUMAFLOW_SERVING_RESPONSE_STORE: &str = "NUMAFLOW_SERVING_RESPONSE_STORE";
 const ENV_NUMAFLOW_SERVING_STATUS_STORE: &str = "NUMAFLOW_SERVING_STATUS_STORE";
-const ENV_NUMAFLOW_REPLICA: &str = "NUMAFLOW_REPLICA";
+const ENV_NUMAFLOW_POD: &str = "NUMAFLOW_POD";
 
 pub fn generate_certs() -> Result<(Certificate, KeyPair), String> {
     let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
         .map_err(|e| format!("Failed to generate cert {:?}", e))?;
     Ok((cert, key_pair))
-}
-
-static POD_REPLICA: OnceLock<u16> = OnceLock::new();
-
-pub(crate) fn get_pod_replica() -> &'static u16 {
-    POD_REPLICA.get_or_init(|| {
-        env::var(ENV_NUMAFLOW_REPLICA)
-            .unwrap_or_default()
-            .parse()
-            .unwrap_or(0)
-    })
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -89,7 +77,7 @@ pub struct Settings {
     /// The HTTP header used to communicate to the client about the unique id assigned for a request in the store
     /// The client may also set the value of this header when sending the payload.
     pub tid_header: String,
-    pub pod_replica: String,
+    pub pod_hash: String,
     pub app_listen_port: u16,
     pub metrics_server_listen_port: u16,
     pub upstream_addr: String,
@@ -116,7 +104,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             tid_header: DEFAULT_ID_HEADER.to_owned(),
-            pod_replica: "0".to_owned(),
+            pod_hash: "0".to_owned(),
             app_listen_port: 3000,
             metrics_server_listen_port: 3001,
             upstream_addr: "localhost:8888".to_owned(),
@@ -292,7 +280,12 @@ impl TryFrom<HashMap<String, String>> for Settings {
         };
 
         settings.tid_header = serving_server_settings.msg_id_header_key;
-        settings.pod_replica = env::var(ENV_NUMAFLOW_REPLICA).unwrap_or_else(|_| "0".to_string());
+        settings.pod_hash = env_vars.get(ENV_NUMAFLOW_POD)
+            .unwrap()
+            .split('-')
+            .last()
+            .unwrap_or("0")
+            .to_string();
 
         settings.drain_timeout_secs = serving_server_settings
             .request_timeout_seconds
@@ -306,6 +299,7 @@ impl TryFrom<HashMap<String, String>> for Settings {
             settings.api_auth_token = Some(auth_token);
         }
 
+        info!("Settings {:?}", settings);
         Ok(settings)
     }
 }
@@ -329,7 +323,7 @@ mod tests {
         let settings = Settings::default();
 
         assert_eq!(settings.tid_header, "X-Numaflow-Id");
-        assert_eq!(settings.pod_replica, "0");
+        assert_eq!(settings.pod_hash, "0");
         assert_eq!(settings.app_listen_port, 3000);
         assert_eq!(settings.metrics_server_listen_port, 3001);
         assert_eq!(settings.upstream_addr, "localhost:8888");
@@ -342,6 +336,7 @@ mod tests {
         // Set up the environment variables
         let env_vars = [
             (ENV_NUMAFLOW_SERVING_APP_PORT, "8443"),
+            (ENV_NUMAFLOW_POD, "serving-server-kddc"),
             ("NUMAFLOW_ISBSVC_JETSTREAM_USER", "testuser"),
             ("NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD", "testpasswd"),
             ("NUMAFLOW_SERVING_CALLBACK_STORE", "test-kv-store"),
@@ -361,7 +356,7 @@ mod tests {
 
         let expected_config = Settings {
             tid_header: "X-Numaflow-Id".into(),
-            pod_replica: "0".into(),
+            pod_hash: "kddc".into(),
             app_listen_port: 8443,
             metrics_server_listen_port: 3001,
             upstream_addr: "localhost:8888".into(),

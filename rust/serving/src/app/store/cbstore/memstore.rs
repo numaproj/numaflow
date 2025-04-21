@@ -67,7 +67,7 @@ impl super::CallbackStore for InMemoryCallbackStore {
             return Err(StoreError::InvalidRequestId(_id.to_string()));
         }
         Ok(super::ProcessingStatus::InProgress {
-            replica_id: "replica_id".to_string(),
+            pod_hash: "replica_id".to_string(),
         })
     }
 

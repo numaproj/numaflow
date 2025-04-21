@@ -27,7 +27,7 @@ const DONE_PROCESSING_MARKER: &str = "done.processing";
 /// JetStream implementation of the callback store.
 #[derive(Clone)]
 pub(crate) struct JetStreamCallbackStore {
-    pod_replica_id: String,
+    pod_hash: String,
     callback_kv: Store,
     status_kv: Store,
     response_kv: Store,
@@ -37,13 +37,13 @@ pub(crate) struct JetStreamCallbackStore {
 impl JetStreamCallbackStore {
     pub(crate) async fn new(
         js_context: Context,
-        pod_replica_id: String,
+        pod_hash: &str,
         callback_bucket: &str,
         status_bucket: &str,
         response_bucket: &str,
     ) -> StoreResult<Self> {
         info!(
-            pod_replica_id,
+            pod_hash,
             callback_bucket, response_bucket, "Initializing JetStreamCallbackStore"
         );
 
@@ -73,13 +73,14 @@ impl JetStreamCallbackStore {
 
         let callback_senders = Arc::new(Mutex::new(HashMap::new()));
         Self::spawn_central_watcher(
-            pod_replica_id.clone(),
+            pod_hash.to_string(),
             callback_kv.clone(),
             Arc::clone(&callback_senders),
-        ).await;
+        )
+        .await;
 
         Ok(Self {
-            pod_replica_id,
+            pod_hash: pod_hash.to_string(),
             callback_kv,
             status_kv,
             response_kv,
@@ -88,22 +89,21 @@ impl JetStreamCallbackStore {
     }
 
     async fn spawn_central_watcher(
-        pod_replica_id: String,
+        pod_hash: String,
         kv_store: Store,
         senders: Arc<Mutex<HashMap<String, mpsc::Sender<Arc<Callback>>>>>,
     ) -> JoinHandle<()> {
-        let span = tracing::info_span!("central_callback_watcher", replica_id = ?pod_replica_id);
+        let span = tracing::info_span!("central_callback_watcher", replica_id = ?pod_hash);
         let mut latest_revision = 1;
         // Watch key specific to this replica
-        let watch_key_pattern = format!("{}.{}.*.*.*", CALLBACK_KEY_PREFIX, pod_replica_id);
-        info!(watch_key_pattern, "Starting central callback watcher");
+        let watch_key_pattern = format!("{}.{}.*.*.*", CALLBACK_KEY_PREFIX, pod_hash);
         let mut watcher = loop {
             // Use watch_any for robustness against missed updates if watcher restarts
             match kv_store.watch(&watch_key_pattern).await {
                 Ok(w) => {
                     info!(watch_key_pattern, "Central watcher established");
                     break w;
-                },
+                }
                 Err(e) => {
                     error!(error = ?e, "Failed to establish initial watch for {}. Retrying...", watch_key_pattern);
                     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -116,7 +116,6 @@ impl JetStreamCallbackStore {
             loop {
                 match watcher.next().await {
                     Some(Ok(entry)) => {
-                        println!("entry = {:?}", entry);
                         let cb_process_time = Instant::now();
                         latest_revision = entry.revision;
                         debug!(key = ?entry.key, operation = ?entry.operation, revision = entry.revision, "Central watcher received entry");
@@ -126,12 +125,12 @@ impl JetStreamCallbackStore {
                             continue;
                         }
 
-                        // Parse key: cb.{pod_replica_id}.{id}.{vertex_name}.{timestamp}
+                        // Parse key: cb.{pod_hash}.{id}.{vertex_name}.{timestamp}
                         let parts: Vec<&str> = entry.key.splitn(5, '.').collect();
-                        let pod_replica = parts[1];
+                        let pod_hash = parts[1];
                         let request_id = parts[2];
 
-                        if parts.len() < 5 || parts[0] != CALLBACK_KEY_PREFIX || pod_replica != pod_replica_id {
+                        if parts.len() < 5 || parts[0] != CALLBACK_KEY_PREFIX || pod_hash != pod_hash {
                             error!(key = ?entry.key, "Received unexpected key format in central watcher");
                             continue;
                         }
@@ -212,7 +211,6 @@ impl JetStreamCallbackStore {
         loop {
             match entries_stream.next().await {
                 Some(Ok(entry)) => {
-                    println!("entry = {:?}", entry);
                     latest_revision = entry.revision;
                     if entry.operation == async_nats::jetstream::kv::Operation::Delete {
                         return;
@@ -295,7 +293,7 @@ impl super::CallbackStore for JetStreamCallbackStore {
     async fn deregister(&mut self, id: &str, sub_graph: &str) -> StoreResult<()> {
         let completed_status = ProcessingStatus::Completed {
             subgraph: sub_graph.to_string(),
-            replica_id: self.pod_replica_id.clone(),
+            pod_hash: self.pod_hash.clone(),
         };
 
         self.update_status(id, completed_status).await?;
@@ -309,10 +307,10 @@ impl super::CallbackStore for JetStreamCallbackStore {
             }
         }
 
-        debug!(?id, replica_id = ?self.pod_replica_id, "De-registering request for data collection.");
+        debug!(?id, replica_id = ?self.pod_hash, "De-registering request for data collection.");
         let done_key = format!(
             "{}.{}.{}.{}",
-            RESPONSE_KEY_PREFIX, self.pod_replica_id, id, DONE_PROCESSING_MARKER
+            RESPONSE_KEY_PREFIX, self.pod_hash, id, DONE_PROCESSING_MARKER
         );
         match self.response_kv.put(done_key.clone(), Bytes::new()).await {
             Ok(_) => {
@@ -329,10 +327,10 @@ impl super::CallbackStore for JetStreamCallbackStore {
     }
 
     async fn mark_as_failed(&mut self, id: &str, error: &str) -> StoreResult<()> {
-        info!(id, replica_id = ?self.pod_replica_id, error, "Marking request as failed");
+        info!(id, replica_id = ?self.pod_hash, error, "Marking request as failed");
         let failed_status = ProcessingStatus::Failed {
             error: error.to_string(),
-            replica_id: self.pod_replica_id.clone(),
+            pod_hash: self.pod_hash.clone(),
         };
         self.update_status(id, failed_status).await?;
 
@@ -353,16 +351,16 @@ impl super::CallbackStore for JetStreamCallbackStore {
     ) -> StoreResult<ReceiverStream<Arc<Callback>>> {
         let start_time = Instant::now();
         let status_key = format!("{}.{}", STATUS_KEY_PREFIX, id);
-        debug!(id, replica_id = ?self.pod_replica_id, "Registering request");
+        debug!(id, replica_id = ?self.pod_hash, "Registering request");
 
         let initial_status = ProcessingStatus::InProgress {
-            replica_id: self.pod_replica_id.clone(),
+            pod_hash: self.pod_hash.clone(),
         };
         let status_bytes: Bytes = initial_status.clone().try_into().map_err(|e| {
             StoreError::StoreWrite(format!("Failed to serialize status for {id}: {e:?}"))
         })?;
 
-        let current_status = match self.callback_kv.create(&status_key, status_bytes).await {
+        let current_status = match self.status_kv.create(&status_key, status_bytes).await {
             Ok(_) => {
                 info!(id, status_key, "Request registered successfully.");
                 initial_status
@@ -396,10 +394,10 @@ impl super::CallbackStore for JetStreamCallbackStore {
         let (tx, rx) = mpsc::channel(10);
         match &current_status {
             ProcessingStatus::InProgress {
-                replica_id: processing_replica_id,
+                pod_hash: processing_replica_id,
             } => {
-                if processing_replica_id != &self.pod_replica_id {
-                    warn!(current_replica = ?self.pod_replica_id, previous_replica = ?processing_replica_id, "Fail over detected. Taking over request processing.");
+                if processing_replica_id != &self.pod_hash {
+                    warn!(current_replica = ?self.pod_hash, previous_replica = ?processing_replica_id, "Fail over detected. Taking over request processing.");
                     let callback_kv_clone = self.callback_kv.clone();
                     let id_clone = id.to_string();
                     let tx_clone = tx.clone();
@@ -435,7 +433,7 @@ impl super::CallbackStore for JetStreamCallbackStore {
 
         let response_key = format!(
             "{}.{}.{}.{}",
-            RESPONSE_KEY_PREFIX, self.pod_replica_id, id, START_PROCESSING_MARKER
+            RESPONSE_KEY_PREFIX, self.pod_hash, id, START_PROCESSING_MARKER
         );
 
         let request_type_bytes: Bytes = request_type.try_into().map_err(|e| {
@@ -457,7 +455,7 @@ impl super::CallbackStore for JetStreamCallbackStore {
 
     async fn status(&mut self, id: &str) -> StoreResult<ProcessingStatus> {
         let key = format!("{}.{}", STATUS_KEY_PREFIX, id);
-        let entry = self.callback_kv.get(&key).await.map_err(|e| {
+        let entry = self.status_kv.get(&key).await.map_err(|e| {
             StoreError::StoreRead(format!("Failed to get status for request id {id}: {e:?}"))
         })?;
         match entry {
@@ -475,12 +473,12 @@ impl super::CallbackStore for JetStreamCallbackStore {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::app::store::cbstore::CallbackStore;
     use async_nats::jetstream;
     use async_nats::jetstream::kv::Config;
     use bytes::Bytes;
     use chrono::Utc;
-    use super::*;
-    use crate::app::store::cbstore::CallbackStore;
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
@@ -499,9 +497,15 @@ mod tests {
             .await
             .unwrap();
 
-        let mut store = JetStreamCallbackStore::new(context.clone(), "0".to_string(), serving_store, serving_store, serving_store)
-            .await
-            .unwrap();
+        let mut store = JetStreamCallbackStore::new(
+            context.clone(),
+            "0",
+            serving_store,
+            serving_store,
+            serving_store,
+        )
+        .await
+        .unwrap();
 
         let id = "AFA7E0A1-3F0A-4C1B-AB94-BDA57694648D";
         let result = store.register_and_watch(id, RequestType::Sse).await;
@@ -518,7 +522,7 @@ mod tests {
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
         let serving_store = "test_watch_callbacks";
-        let pod_replica = "0";
+        let pod_hash = "0";
 
         // Delete bucket so that re-running the test won't fail
         let _ = context.delete_key_value(serving_store).await;
@@ -533,12 +537,21 @@ mod tests {
             .await
             .unwrap();
 
-        let mut store = JetStreamCallbackStore::new(context.clone(), pod_replica.to_string(), serving_store, serving_store, serving_store)
-            .await
-            .unwrap();
+        let mut store = JetStreamCallbackStore::new(
+            context.clone(),
+            pod_hash,
+            serving_store,
+            serving_store,
+            serving_store,
+        )
+        .await
+        .unwrap();
 
         let id = "test_watch_id_two";
-        let mut stream = store.register_and_watch(id, RequestType::Sync).await.unwrap();
+        let mut stream = store
+            .register_and_watch(id, RequestType::Sync)
+            .await
+            .unwrap();
 
         // Simulate a callback being added to the store
         let callback = Callback {
@@ -548,7 +561,7 @@ mod tests {
             from_vertex: "test_from_vertex".to_string(),
             responses: vec![],
         };
-        let key = format!("cb.{pod_replica}.{id}.input.{}", Utc::now().timestamp());
+        let key = format!("cb.{pod_hash}.{id}.input.{}", Utc::now().timestamp());
         store
             .callback_kv
             .put(key, Bytes::from(serde_json::to_vec(&callback).unwrap()))
@@ -588,12 +601,21 @@ mod tests {
             .await
             .unwrap();
 
-        let mut store = JetStreamCallbackStore::new(context.clone(), "0".to_string(), serving_store, serving_store, serving_store)
-            .await
-            .unwrap();
+        let mut store = JetStreamCallbackStore::new(
+            context.clone(),
+            "0",
+            serving_store,
+            serving_store,
+            serving_store,
+        )
+        .await
+        .unwrap();
 
         let id = "test_deregister_id";
-        let _ = store.register_and_watch(id, RequestType::Async).await.unwrap();
+        let _ = store
+            .register_and_watch(id, RequestType::Async)
+            .await
+            .unwrap();
 
         let sub_graph = "test_sub_graph";
         let result = store.deregister(id, sub_graph).await;
@@ -601,7 +623,13 @@ mod tests {
 
         // Verify that the status is marked as completed
         let status = store.status(id).await.unwrap();
-        assert!(matches!(status, ProcessingStatus::Completed{ subgraph: _, replica_id: _ }));
+        assert!(matches!(
+            status,
+            ProcessingStatus::Completed {
+                subgraph: _,
+                pod_hash: _
+            }
+        ));
 
         // delete store
         context.delete_key_value(serving_store).await.unwrap();
@@ -628,14 +656,23 @@ mod tests {
             .await
             .unwrap();
 
-        let mut store = JetStreamCallbackStore::new(context.clone(), "0".to_string(), serving_store, serving_store, serving_store)
-            .await
-            .unwrap();
+        let mut store = JetStreamCallbackStore::new(
+            context.clone(),
+            "0",
+            serving_store,
+            serving_store,
+            serving_store,
+        )
+        .await
+        .unwrap();
 
         assert!(store.ready().await);
 
         let id = "test_mark_as_failed_id";
-        let _  = store.register_and_watch(id, RequestType::Sse).await.unwrap();
+        let _ = store
+            .register_and_watch(id, RequestType::Sse)
+            .await
+            .unwrap();
 
         let error_message = "test_error_message";
         let result = store.mark_as_failed(id, error_message).await;
@@ -643,7 +680,13 @@ mod tests {
 
         // Verify that the status is marked as failed
         let status = store.status(id).await.unwrap();
-        assert!(matches!(status, ProcessingStatus::Failed{error: _, replica_id: _ }));
+        assert!(matches!(
+            status,
+            ProcessingStatus::Failed {
+                error: _,
+                pod_hash: _
+            }
+        ));
 
         // delete store
         context.delete_key_value(serving_store).await.unwrap();
