@@ -1317,6 +1317,7 @@ mod tests {
             .map(|i| {
                 let mut headers = HashMap::new();
                 headers.insert(DEFAULT_ID_HEADER.to_string(), format!("id_{}", i));
+                headers.insert(DEFAULT_POD_HASH_KEY.to_string(), "abcd".to_string());
                 Message {
                     typ: Default::default(),
                     keys: Arc::from(vec!["serve".to_string()]),

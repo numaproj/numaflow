@@ -529,7 +529,7 @@ mod tests {
         let callback_info: super::Result<ServingCallbackInfo> = TryFrom::try_from(&message);
         assert!(callback_info.is_err());
 
-        let headers = [(DEFAULT_ID_HEADER, "1234")]
+        let headers = [(DEFAULT_ID_HEADER, "1234"), (DEFAULT_POD_HASH_KEY, "abcd")]
             .into_iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect();
@@ -736,6 +736,10 @@ mod tests {
 
         let mut headers = HashMap::new();
         headers.insert(DEFAULT_ID_HEADER.to_string(), "1234".to_string());
+        headers.insert(
+            DEFAULT_POD_HASH_KEY.to_string(),
+            "abcd".to_string(),
+        );
 
         let offset = Offset::String(StringOffset::new("offset1".to_string(), 0));
         let message = Message {
