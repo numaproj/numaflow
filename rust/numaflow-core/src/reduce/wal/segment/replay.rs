@@ -97,24 +97,6 @@ impl ReplayWal {
 }
 
 fn sort_filenames(mut files: Vec<PathBuf>) -> Vec<PathBuf> {
-    // files.sort_by_key(|name| {
-    //     let parts: Vec<&str> = name
-    //         .to_str()
-    //         .expect("filename is valid")
-    //         .split('_')
-    //         .collect();
-    //     let index = parts
-    //         .get(1)
-    //         .and_then(|s| s.parse::<u32>().ok())
-    //         .unwrap_or(0);
-    //     let timestamp = parts
-    //         .get(2)
-    //         .and_then(|s| s.split('.').next()) // remove `.wal.frozen`
-    //         .and_then(|s| s.parse::<u64>().ok())
-    //         .unwrap_or(0);
-    //     (timestamp, index)
-    // });
-
     files.sort_by(|a, b| {
         let parse = |s: &str| {
             let parts: Vec<&str> = s.split('_').collect();
