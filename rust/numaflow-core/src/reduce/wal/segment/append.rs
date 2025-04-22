@@ -178,7 +178,9 @@ impl FileWriterActor {
     }
 }
 
-pub(crate) struct WAL {
+
+/// Creates an AppendOnly WAL.
+pub(crate) struct AppendOnlyWal {
     segment_prefix: &'static str,
     base_path: PathBuf,
     max_file_size_mb: u64,
@@ -186,7 +188,7 @@ pub(crate) struct WAL {
     channel_buffer_size: usize,
 }
 
-impl WAL {
+impl AppendOnlyWal {
     pub(crate) async fn new(
         segment_prefix: &'static str,
         base_path: PathBuf,
@@ -258,7 +260,7 @@ mod tests {
         let flush_interval_ms = 50;
         let channel_buffer = 10;
 
-        let wal_writer = WAL::new(
+        let wal_writer = AppendOnlyWal::new(
             "segment",
             base_path.clone(),
             max_file_size_mb,
@@ -417,7 +419,7 @@ mod tests {
         let flush_interval_ms = 50;
         let channel_buffer = 10;
 
-        let wal_writer = WAL::new(
+        let wal_writer = AppendOnlyWal::new(
             "segment",
             base_path.clone(),
             max_file_size_mb,
@@ -482,7 +484,7 @@ mod tests {
         let flush_interval_ms = 50;
         let channel_buffer = 10;
 
-        let wal_writer = WAL::new(
+        let wal_writer = AppendOnlyWal::new(
             "segment",
             base_path.clone(),
             max_file_size_mb,
