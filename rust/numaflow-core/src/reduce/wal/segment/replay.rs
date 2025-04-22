@@ -1,5 +1,6 @@
 use crate::reduce::wal::error::WalResult;
 use bytes::{Bytes, BytesMut};
+use std::cmp::Ordering;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
@@ -37,7 +38,7 @@ impl ReplayWal {
         self,
     ) -> WalResult<(ReceiverStream<SegmentEntry>, JoinHandle<WalResult<()>>)> {
         let mut files: Vec<PathBuf> = list_files(self.segment_prefix, self.base_path.clone());
-        files.sort();
+        files = sort_filenames(files);
 
         debug!(count = files.len(), "Found WAL segment files for replay");
 
@@ -54,8 +55,6 @@ impl ReplayWal {
 
         Ok((ReceiverStream::new(rx), handle))
     }
-
-    // TODO: sorting
 
     async fn read_segment_file(path: &PathBuf, tx: Sender<SegmentEntry>) -> WalResult<()> {
         let file = OpenOptions::new().read(true).open(path).await?;
@@ -95,6 +94,55 @@ impl ReplayWal {
 
         Ok(())
     }
+}
+
+fn sort_filenames(mut files: Vec<PathBuf>) -> Vec<PathBuf> {
+    // files.sort_by_key(|name| {
+    //     let parts: Vec<&str> = name
+    //         .to_str()
+    //         .expect("filename is valid")
+    //         .split('_')
+    //         .collect();
+    //     let index = parts
+    //         .get(1)
+    //         .and_then(|s| s.parse::<u32>().ok())
+    //         .unwrap_or(0);
+    //     let timestamp = parts
+    //         .get(2)
+    //         .and_then(|s| s.split('.').next()) // remove `.wal.frozen`
+    //         .and_then(|s| s.parse::<u64>().ok())
+    //         .unwrap_or(0);
+    //     (timestamp, index)
+    // });
+
+    files.sort_by(|a, b| {
+        let parse = |s: &str| {
+            let parts: Vec<&str> = s.split('_').collect();
+            let index = parts
+                .get(1)
+                .and_then(|s| s.parse::<u32>().ok())
+                .unwrap_or(0);
+            let ts_part = parts.get(2).unwrap_or(&"0");
+            let timestamp = ts_part
+                .split('.')
+                .next()
+                .unwrap_or("0")
+                .parse::<u64>()
+                .unwrap_or(0);
+            (timestamp, index)
+        };
+
+        let (ts_a, idx_a) = parse(a.to_str().expect("filename is valid"));
+        let (ts_b, idx_b) = parse(b.to_str().expect("filename is valid"));
+
+        // first sort on timestamp, if it matches, then sort on index
+        match ts_a.cmp(&ts_b) {
+            Ordering::Equal => idx_a.cmp(&idx_b),
+            v => v,
+        }
+    });
+
+    files
 }
 
 fn list_files(segment_prefix: &'static str, base_path: PathBuf) -> Vec<PathBuf> {
@@ -147,6 +195,48 @@ mod tests {
         assert_eq!(
             result_paths,
             vec!["test_segment_1.frozen", "test_segment_2.frozen"]
+        );
+    }
+
+    #[test]
+    fn test_sort_filenames() {
+        let temp_dir = tempdir().expect("Failed to create temp dir");
+        let base_path = temp_dir.path().to_path_buf();
+
+        // Create test files with the specified format
+        let _file1 = File::create(base_path.join("segment_000001_1000000000.wal"))
+            .expect("Failed to create file");
+        let _file2 = File::create(base_path.join("segment_000001_1000000001.wal"))
+            .expect("Failed to create file");
+        let _file3 = File::create(base_path.join("segment_000001_999999999.wal"))
+            .expect("Failed to create file");
+        let _file4 = File::create(base_path.join("segment_000002_999999999.wal"))
+            .expect("Failed to create file");
+
+        // Collect the file paths
+        let mut files: Vec<PathBuf> = fs::read_dir(&base_path)
+            .expect("Failed to read directory")
+            .map(|entry| entry.expect("Failed to read entry").path())
+            .collect();
+
+        // Sort the files using the function
+        files = sort_filenames(files);
+
+        // Verify the sorted order
+        let sorted_filenames: Vec<String> = files
+            .iter()
+            .map(|path| path.file_name().unwrap().to_str().unwrap().to_string())
+            .collect();
+
+        assert_eq!(
+            sorted_filenames,
+            vec![
+                "segment_000001_999999999.wal",
+                "segment_000002_999999999.wal",
+                "segment_000001_1000000000.wal",
+                "segment_000001_1000000001.wal",
+            ],
+            "File names are not sorted correctly"
         );
     }
 }
