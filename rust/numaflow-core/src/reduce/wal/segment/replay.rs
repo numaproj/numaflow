@@ -1,10 +1,19 @@
 use crate::reduce::wal::error::WalResult;
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use std::fs;
+use std::io;
 use std::path::PathBuf;
-use tokio::sync::mpsc::Sender;
+use tokio::{
+    fs::File,
+    io::{AsyncReadExt, BufReader},
+    sync::mpsc::{self, Sender},
+    task,
+};
+use tokio_stream::wrappers::ReceiverStream;
+use tracing::{debug, info, warn};
 
 /// Segment Entry as recorded in the WAL.
+#[derive(Debug)]
 pub(crate) enum SegmentEntry {
     Data { size: u64, data: Bytes },
 }
@@ -22,8 +31,46 @@ impl ReplayWal {
         }
     }
 
-    pub(crate) fn streaming_read(self) -> WalResult<Sender<SegmentEntry>> {
-        todo!()
+    pub(crate) fn streaming_read(self) -> WalResult<ReceiverStream<Bytes>> {
+        let mut files: Vec<PathBuf> = list_files(self.segment_prefix, self.base_path.clone());
+        files.sort();
+
+        debug!(count = files.len(), "Found WAL segment files for replay");
+
+        let (tx, rx) = mpsc::channel::<Bytes>(128);
+        task::spawn(async move {
+            info!("Starting WAL replay...");
+            for file_path in files {
+                Self::read_segment_file(&file_path, tx.clone()).await;
+            }
+            info!("Finished WAL replay task...");
+        });
+
+        Ok(ReceiverStream::new(rx))
+    }
+
+    async fn read_segment_file(path: &PathBuf, tx: Sender<Bytes>) {
+        let file = File::open(path).await.unwrap();
+        let mut reader = BufReader::new(file);
+
+        loop {
+            let data_len_result = reader.read_u64_le().await;
+            let data_len = match data_len_result {
+                Ok(len) => len,
+                Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => {
+                    break;
+                }
+                Err(e) => {
+                    break;
+                }
+            };
+
+            let mut buffer = BytesMut::with_capacity(data_len as usize);
+            if let Err(e) = reader.read_exact(&mut buffer).await {
+                break;
+            }
+            tx.send(buffer.freeze()).await.unwrap();
+        }
     }
 }
 

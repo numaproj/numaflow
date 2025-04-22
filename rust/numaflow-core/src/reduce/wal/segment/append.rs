@@ -164,7 +164,7 @@ impl FileWriterActor {
             &self.current_file_name,
             format!("{}.frozen", self.current_file_name),
         )
-            .await?;
+        .await?;
 
         self.file_index += 1;
         let (file_name, buf_file) =
@@ -177,7 +177,6 @@ impl FileWriterActor {
         Ok(())
     }
 }
-
 
 /// Creates an AppendOnly WAL.
 pub(crate) struct AppendOnlyWal {
@@ -267,8 +266,8 @@ mod tests {
             flush_interval_ms,
             channel_buffer,
         )
-            .await
-            .expect("WAL creation failed");
+        .await
+        .expect("WAL creation failed");
 
         let (wal_tx, wal_rx) = mpsc::channel::<FileWriterMessage>(channel_buffer);
         let (mut result_rx, writer_handle) = wal_writer
@@ -426,8 +425,8 @@ mod tests {
             flush_interval_ms,
             channel_buffer,
         )
-            .await
-            .expect("failed to create wal");
+        .await
+        .expect("failed to create wal");
 
         let (wal_tx, wal_rx) = mpsc::channel::<FileWriterMessage>(channel_buffer);
         let (mut result_rx, writer_handle) = wal_writer
@@ -491,8 +490,8 @@ mod tests {
             flush_interval_ms,
             channel_buffer,
         )
-            .await
-            .expect("failed to create wal");
+        .await
+        .expect("failed to create wal");
 
         let (wal_tx, wal_rx) = mpsc::channel::<FileWriterMessage>(channel_buffer);
         let (_result_rx, writer_handle) = wal_writer
