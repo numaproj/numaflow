@@ -23,6 +23,7 @@ use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
 const RESPONSE_KEY_PREFIX: &str = "rs";
@@ -86,6 +87,7 @@ impl JetStreamDataStore {
         js_context: Context,
         datum_store_name: &str,
         pod_hash: &str,
+        cln_token: CancellationToken,
     ) -> StoreResult<Self> {
         let kv_store = js_context
             .get_key_value(datum_store_name)
@@ -98,6 +100,7 @@ impl JetStreamDataStore {
             pod_hash.to_string(),
             kv_store.clone(),
             Arc::clone(&responses_map),
+            cln_token,
         )
         .await;
         Ok(Self {
@@ -112,73 +115,61 @@ impl JetStreamDataStore {
         pod_hash: String,
         kv_store: Store,
         responses_map: Arc<Mutex<HashMap<String, ResponseMode>>>,
+        cln_token: CancellationToken,
     ) -> JoinHandle<()> {
         let watch_pattern = format!("{}.{}.*.*.*", RESPONSE_KEY_PREFIX, pod_hash);
         let mut latest_revision = 1;
 
-        let mut watcher = loop {
-            match kv_store.watch(&watch_pattern).await {
-                Ok(w) => {
-                    info!(watch_pattern, "Central watcher established");
-                    break w;
-                }
-                Err(e) => {
-                    error!(error = ?e, "Failed to establish initial watch for {}. Retrying...", watch_pattern);
-                    tokio::time::sleep(Duration::from_millis(100)).await;
-                }
-            }
-        };
+        let mut watcher = Self::create_watcher(&kv_store, &watch_pattern, latest_revision)
+            .await
+            .expect("Failed to create central result watcher");
 
         tokio::spawn(async move {
             loop {
-                match watcher.next().await {
-                    Some(Ok(entry)) => {
-                        latest_revision = entry.revision;
-                        if entry.operation != async_nats::jetstream::kv::Operation::Put {
-                            continue;
-                        }
-
-                        if entry.key.contains(FINAL_RESULT_KEY_SUFFIX) {
-                            continue;
-                        }
-
-                        if let Err(e) =
-                            Self::process_entry(&entry, &responses_map, &pod_hash, &kv_store).await
-                        {
-                            error!(error = ?e, "Failed to process entry");
-                        }
+                tokio::select! {
+                    // Stop watching if the cancellation token is triggered
+                    _ = cln_token.cancelled() => {
+                        info!("Cancellation token triggered. Stopping central watcher.");
+                        break;
                     }
-                    Some(Err(e)) => {
-                        error!(error = ?e, "Error from watcher stream. Re-establishing...");
-                        watcher = match Self::create_watcher(
-                            &kv_store,
-                            &watch_pattern,
-                            latest_revision + 1,
-                        )
-                        .await
-                        {
-                            Ok(w) => w,
-                            Err(re_e) => {
-                                error!(error = ?re_e, "Failed to re-establish watcher. Exiting...");
-                                break;
+                    // Process the next entry from the watcher
+                    maybe_entry = watcher.next() => {
+                        match maybe_entry {
+                            Some(Ok(entry)) => {
+                                latest_revision = entry.revision;
+                                if entry.operation != async_nats::jetstream::kv::Operation::Put {
+                                    continue;
+                                }
+
+                                if entry.key.contains(FINAL_RESULT_KEY_SUFFIX) {
+                                    continue;
+                                }
+
+                                if let Err(e) = Self::process_entry(&entry, &responses_map, &pod_hash, &kv_store).await {
+                                    error!(error = ?e, "Failed to process entry");
+                                }
                             }
-                        };
-                    }
-                    None => {
-                        error!("Watcher stream ended unexpectedly. Re-establishing...");
-                        watcher = match Self::create_watcher(
-                            &kv_store,
-                            &watch_pattern,
-                            latest_revision + 1,
-                        )
-                        .await
-                        {
-                            Ok(w) => w,
-                            Err(re_e) => {
-                                error!(error = ?re_e, "Failed to re-establish watcher. Exiting...");
-                                break;
+                            Some(Err(e)) => {
+                                error!(error = ?e, "Error from watcher stream. Re-establishing...");
+                                watcher = match Self::create_watcher(&kv_store, &watch_pattern, latest_revision + 1).await {
+                                    Ok(w) => w,
+                                    Err(re_e) => {
+                                        error!(error = ?re_e, "Failed to re-establish watcher. Exiting...");
+                                        break;
+                                    }
+                                };
                             }
-                        };
+                            None => {
+                                error!("Watcher stream ended unexpectedly. Re-establishing...");
+                                watcher = match Self::create_watcher(&kv_store, &watch_pattern, latest_revision + 1).await {
+                                    Ok(w) => w,
+                                    Err(re_e) => {
+                                        error!(error = ?re_e, "Failed to re-establish watcher. Exiting...");
+                                        break;
+                                    }
+                                };
+                            }
+                        }
                     }
                 }
             }
@@ -260,20 +251,18 @@ impl JetStreamDataStore {
             }
         } else if key_suffix == DONE_PROCESSING_MARKER {
             let mut response_map = responses_map.lock().await;
-            if let Some(response_mode) = response_map.remove(request_id) {
-                if let ResponseMode::Sync(responses) | ResponseMode::Async(responses) =
-                    response_mode
-                {
-                    let merged_response = merge_bytes_list(&responses);
-                    let final_result_key = format!(
-                        "{}.{}.{}",
-                        RESPONSE_KEY_PREFIX, pod_hash, FINAL_RESULT_KEY_SUFFIX
-                    );
-                    kv_store
-                        .put(final_result_key, merged_response)
-                        .await
-                        .map_err(|e| format!("Failed to put final result: {:?}", e))?;
-                }
+            if let Some(ResponseMode::Sync(responses) | ResponseMode::Async(responses)) =
+                response_map.remove(request_id)
+            {
+                let merged_response = merge_bytes_list(&responses);
+                let final_result_key = format!(
+                    "{}.{}.{}",
+                    RESPONSE_KEY_PREFIX, pod_hash, FINAL_RESULT_KEY_SUFFIX
+                );
+                kv_store
+                    .put(final_result_key, merged_response)
+                    .await
+                    .map_err(|e| format!("Failed to put final result: {:?}", e))?;
             }
         } else {
             let mut response_map = responses_map.lock().await;
@@ -388,9 +377,14 @@ mod tests {
             .await
             .unwrap();
 
-        let mut store = JetStreamDataStore::new(context.clone(), datum_store_name, pod_hash)
-            .await
-            .unwrap();
+        let mut store = JetStreamDataStore::new(
+            context.clone(),
+            datum_store_name,
+            pod_hash,
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
 
         let id = "test-id";
         let start_key = format!("rs.{pod_hash}.{id}.start.processing");
@@ -438,9 +432,14 @@ mod tests {
             .await
             .unwrap();
 
-        let mut store = JetStreamDataStore::new(context.clone(), datum_store_name, pod_hash)
-            .await
-            .unwrap();
+        let mut store = JetStreamDataStore::new(
+            context.clone(),
+            datum_store_name,
+            pod_hash,
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
 
         let id = "test_stream_id";
         let start_key = format!("rs.{pod_hash}.{id}.start.processing");

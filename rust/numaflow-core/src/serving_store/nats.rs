@@ -38,7 +38,9 @@ impl NatsServingStore {
                 payload.1,
                 payload.0,
                 origin,
-                Utc::now().timestamp_nanos_opt().unwrap()
+                Utc::now()
+                    .timestamp_nanos_opt()
+                    .unwrap_or(Utc::now().timestamp_micros())
             );
 
             info!("Putting datum with id {} and payload {:?}", id, payload);

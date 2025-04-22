@@ -1,9 +1,11 @@
 use async_nats::jetstream::Context;
 use async_nats::{jetstream, ConnectOptions};
 use axum_server::tls_rustls::RustlsConfig;
+use std::ffi::c_long;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 pub use self::error::{Error, Result};
@@ -40,6 +42,7 @@ pub(crate) struct AppState<T, U> {
     pub(crate) js_context: Context,
     pub(crate) settings: Arc<Settings>,
     pub(crate) orchestrator_state: OrchestratorState<T, U>,
+    pub(crate) cancellation_token: CancellationToken,
 }
 
 /// Sets up and starts the main application server and the metrics server
@@ -47,6 +50,7 @@ pub(crate) struct AppState<T, U> {
 /// handles any errors that may occur during their execution.
 async fn serve<T, U>(
     app: AppState<T, U>,
+    cln_token: CancellationToken,
 ) -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync + 'static>>
 where
     T: Clone + Send + Sync + DataStore + 'static,
@@ -68,7 +72,7 @@ where
         tokio::spawn(start_https_metrics_server(metrics_addr, tls_config.clone()));
 
     // Start the main server, which serves the application.
-    let app_server_handle = tokio::spawn(start_main_server(app, tls_config));
+    let app_server_handle = tokio::spawn(start_main_server(app, tls_config, cln_token));
 
     // TODO: is try_join the best? we need to short-circuit at the first failure
     tokio::try_join!(flatten(app_server_handle), flatten(metrics_server_handle))?;
@@ -108,6 +112,8 @@ pub async fn run(config: Settings) -> Result<()> {
 
 /// Starts the serving code after setting up the callback store, message DCG processor, and data store.
 async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
+    let cancel_token = CancellationToken::new();
+
     // create a callback store for tracking
     let callback_store = JetStreamCallbackStore::new(
         js_context.clone(),
@@ -115,6 +121,7 @@ async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
         &settings.js_callback_store,
         &settings.js_status_store,
         &settings.js_response_store,
+        cancel_token.clone(),
     )
     .await?;
 
@@ -133,6 +140,7 @@ async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
                 js_context.clone(),
                 &settings.js_response_store,
                 &settings.pod_hash,
+                cancel_token.clone(),
             )
             .await?;
             let callback_state = CallbackState::new(msg_graph, nats_store, callback_store).await?;
@@ -140,9 +148,12 @@ async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
                 js_context,
                 settings,
                 orchestrator_state: callback_state,
+                cancellation_token: cancel_token.clone(),
             };
             info!("Starting app");
-            serve(app).await.map_err(|e| Error::Store(e.to_string()))?
+            serve(app, cancel_token.clone())
+                .await
+                .map_err(|e| Error::Store(e.to_string()))?
         }
         StoreType::UserDefined(ud_config) => {
             let ud_store = UserDefinedStore::new(ud_config.clone()).await?;
@@ -151,8 +162,11 @@ async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
                 js_context,
                 settings,
                 orchestrator_state: callback_state,
+                cancellation_token: cancel_token.clone(),
             };
-            serve(app).await.map_err(|e| Error::Store(e.to_string()))?
+            serve(app, cancel_token.clone())
+                .await
+                .map_err(|e| Error::Store(e.to_string()))?
         }
     }
 

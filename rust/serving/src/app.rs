@@ -13,6 +13,7 @@ use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
 use serde::Deserialize;
 use tokio::signal;
+use tokio_util::sync::CancellationToken;
 use tower::ServiceBuilder;
 use tower_http::classify::ServerErrorsFailureClass;
 use tower_http::timeout::TimeoutLayer;
@@ -46,6 +47,7 @@ pub(crate) mod tracker;
 pub(crate) async fn start_main_server<T, U>(
     app: AppState<T, U>,
     tls_config: RustlsConfig,
+    cancel_token: CancellationToken,
 ) -> crate::Result<()>
 where
     T: Clone + Send + Sync + DataStore + 'static,
@@ -60,6 +62,7 @@ where
     tokio::spawn(graceful_shutdown(
         handle.clone(),
         app.settings.drain_timeout_secs,
+        cancel_token.clone(),
     ));
 
     info!(?app_addr, "Starting application server");
@@ -166,7 +169,7 @@ where
 
 // Gracefully shutdown the server on receiving SIGINT or SIGTERM
 // by sending a shutdown signal to the server using the handle.
-async fn graceful_shutdown(handle: Handle, duration_secs: u64) {
+async fn graceful_shutdown(handle: Handle, duration_secs: u64, cancel_token: CancellationToken) {
     let ctrl_c = async {
         signal::ctrl_c()
             .await
@@ -189,6 +192,7 @@ async fn graceful_shutdown(handle: Handle, duration_secs: u64) {
 
     // Signal the server to shut down using Handle.
     handle.graceful_shutdown(Some(Duration::from_secs(duration_secs)));
+    cancel_token.cancel();
 }
 
 const PUBLISH_ENDPOINTS: [&str; 3] = ["/v1/process/sync", "/v1/process/async", "/v1/process/fetch"];
@@ -338,6 +342,7 @@ mod tests {
             js_context,
             settings,
             orchestrator_state: callback_state,
+            cancellation_token: CancellationToken::new(),
         };
 
         let router = setup_app(app).await.unwrap();
@@ -380,6 +385,7 @@ mod tests {
             js_context,
             settings: Arc::new(settings),
             orchestrator_state: callback_state,
+            cancellation_token: CancellationToken::new(),
         };
 
         let router = router_with_auth(app_state).await.unwrap();

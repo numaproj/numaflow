@@ -280,7 +280,8 @@ impl TryFrom<HashMap<String, String>> for Settings {
         };
 
         settings.tid_header = serving_server_settings.msg_id_header_key;
-        settings.pod_hash = env_vars.get(ENV_NUMAFLOW_POD)
+        settings.pod_hash = env_vars
+            .get(ENV_NUMAFLOW_POD)
             .unwrap()
             .split('-')
             .last()

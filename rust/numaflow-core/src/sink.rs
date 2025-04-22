@@ -869,7 +869,7 @@ impl SinkWriter {
                 .get(DEFAULT_POD_HASH_KEY)
                 .ok_or(Error::Sink("Missing pod replica header".to_string()))?
                 .clone();
-            payloads.push((id, pod_replica, msg.value.into()));
+            payloads.push((id, pod_replica, msg.value));
         }
 
         match serving_store {
