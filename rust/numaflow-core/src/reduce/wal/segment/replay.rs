@@ -7,7 +7,6 @@ use std::path::PathBuf;
 use tokio::fs::OpenOptions;
 use tokio::task::JoinHandle;
 use tokio::{
-    fs::File,
     io::{AsyncReadExt, BufReader},
     sync::mpsc::{self, Sender},
     task,
@@ -27,6 +26,7 @@ pub(crate) struct ReplayWal {
 }
 
 impl ReplayWal {
+    /// Creates a new Replayer for the WAL.
     pub(crate) fn new(segment_prefix: &'static str, base_path: PathBuf) -> Self {
         Self {
             segment_prefix,
@@ -34,6 +34,8 @@ impl ReplayWal {
         }
     }
 
+    /// Reads the WAL files and streams it via the stream. Stream will be closed once all the
+    /// entries are read.
     pub(crate) fn streaming_read(
         self,
     ) -> WalResult<(ReceiverStream<SegmentEntry>, JoinHandle<WalResult<()>>)> {
@@ -186,13 +188,13 @@ mod tests {
         let base_path = temp_dir.path().to_path_buf();
 
         // Create test files with the specified format
-        let _file1 = File::create(base_path.join("segment_000001_1000000000.wal"))
-            .expect("Failed to create file");
-        let _file2 = File::create(base_path.join("segment_000001_1000000001.wal"))
-            .expect("Failed to create file");
-        let _file3 = File::create(base_path.join("segment_000001_999999999.wal"))
+        let _file1 = File::create(base_path.join("segment_000001_1000000001.wal"))
             .expect("Failed to create file");
         let _file4 = File::create(base_path.join("segment_000002_999999999.wal"))
+            .expect("Failed to create file");
+        let _file2 = File::create(base_path.join("segment_000001_1000000000.wal"))
+            .expect("Failed to create file");
+        let _file3 = File::create(base_path.join("segment_000001_999999999.wal"))
             .expect("Failed to create file");
 
         // Collect the file paths

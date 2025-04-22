@@ -1,8 +1,8 @@
 use crate::message::{IntOffset, Message, MessageID, Offset};
 use crate::reduce::wal::segment::append::{AppendOnlyWal, FileWriterMessage};
-use crate::shared::grpc::prost_timestamp_from_utc;
+use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 use bytes::Bytes;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use numaflow_pb::objects::wal::GcEvent;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -38,6 +38,33 @@ pub(crate) mod error;
 //
 // NOTE: subsequent compactions should also consider already compacted files and order is very important
 // during compaction we should make sure the order of the messages does not change.
+
+/// An entry in the GC WAL about the GC action.
+pub(crate) struct GcEventEntry {
+    start_time: DateTime<Utc>,
+    end_time: DateTime<Utc>,
+    keys: Option<Vec<String>>,
+}
+
+impl From<GcEvent> for GcEventEntry {
+    fn from(value: GcEvent) -> Self {
+        Self {
+            start_time: utc_from_timestamp(value.start_time),
+            end_time: utc_from_timestamp(value.end_time),
+            keys: value.keys.into(),
+        }
+    }
+}
+
+impl From<GcEventEntry> for GcEvent {
+    fn from(value: GcEventEntry) -> Self {
+        Self {
+            start_time: Some(prost_timestamp_from_utc(value.start_time)),
+            end_time: Some(prost_timestamp_from_utc(value.end_time)),
+            keys: value.keys.unwrap_or(vec![]),
+        }
+    }
+}
 
 async fn simple_data_wal_writer() {
     let data_wal = AppendOnlyWal::new(

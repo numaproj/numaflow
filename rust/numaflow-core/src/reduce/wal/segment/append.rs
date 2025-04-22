@@ -105,7 +105,7 @@ impl FileWriterActor {
     }
 
     async fn write_data(&mut self, data: Bytes) -> WalResult<()> {
-        // TODO: we should add support to rotate based on time as well, gc event wals should be 
+        // TODO: we should add support to rotate based on time as well, gc event wals should be
         // rotated quickly
         if self.current_size > 0 && self.current_size + data.len() as u64 > self.max_file_size {
             self.rotate_file().await?;
