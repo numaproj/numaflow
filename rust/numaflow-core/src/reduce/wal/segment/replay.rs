@@ -3,6 +3,8 @@ use bytes::{Bytes, BytesMut};
 use std::fs;
 use std::io;
 use std::path::PathBuf;
+use tokio::fs::OpenOptions;
+use tokio::task::JoinHandle;
 use tokio::{
     fs::File,
     io::{AsyncReadExt, BufReader},
@@ -31,46 +33,67 @@ impl ReplayWal {
         }
     }
 
-    pub(crate) fn streaming_read(self) -> WalResult<ReceiverStream<Bytes>> {
+    pub(crate) fn streaming_read(
+        self,
+    ) -> WalResult<(ReceiverStream<SegmentEntry>, JoinHandle<WalResult<()>>)> {
         let mut files: Vec<PathBuf> = list_files(self.segment_prefix, self.base_path.clone());
         files.sort();
 
         debug!(count = files.len(), "Found WAL segment files for replay");
 
-        let (tx, rx) = mpsc::channel::<Bytes>(128);
-        task::spawn(async move {
+        let (tx, rx) = mpsc::channel::<SegmentEntry>(128);
+
+        let handle = task::spawn(async move {
             info!("Starting WAL replay...");
             for file_path in files {
-                Self::read_segment_file(&file_path, tx.clone()).await;
+                Self::read_segment_file(&file_path, tx.clone()).await?;
             }
             info!("Finished WAL replay task...");
+            Ok(())
         });
 
-        Ok(ReceiverStream::new(rx))
+        Ok((ReceiverStream::new(rx), handle))
     }
 
-    async fn read_segment_file(path: &PathBuf, tx: Sender<Bytes>) {
-        let file = File::open(path).await.unwrap();
+    // TODO: sorting
+
+    async fn read_segment_file(path: &PathBuf, tx: Sender<SegmentEntry>) -> WalResult<()> {
+        let file = OpenOptions::new().read(true).open(path).await?;
+
         let mut reader = BufReader::new(file);
 
+        // we read data_len first and then move our offset up till the len
+        // refresher: each entry in our file is <u64(data_len)><[u8;data_len]>
         loop {
+            // read len first
             let data_len_result = reader.read_u64_le().await;
             let data_len = match data_len_result {
                 Ok(len) => len,
-                Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => {
-                    break;
-                }
-                Err(e) => {
-                    break;
-                }
+                Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => break,
+                Err(e) => return Err(format!("expected to read_u64 but couldn't {}", e).into()),
             };
 
+            // make sure we have data for that len
             let mut buffer = BytesMut::with_capacity(data_len as usize);
+            // this is a critical error, we should be able to read data of len data_len
             if let Err(e) = reader.read_exact(&mut buffer).await {
-                break;
+                return Err(format!(
+                    "expected to read {}, but couldn't read_exact {}",
+                    data_len, e
+                )
+                .into());
             }
-            tx.send(buffer.freeze()).await.unwrap();
+
+            // send each line
+            tx.send(SegmentEntry::Data {
+                size: data_len,
+                data: buffer.freeze(),
+            })
+            .await
+            .expect("rx dropped while replaying");
         }
+
+        Ok(())
     }
 }
 
