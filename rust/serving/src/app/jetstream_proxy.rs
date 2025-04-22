@@ -201,7 +201,6 @@ async fn sync_publish<
     }
     msg_headers.insert(proxy_state.tid_header.clone(), id.clone());
     msg_headers.insert(DEFAULT_POD_HASH_KEY, proxy_state.pod_hash.clone());
-    info!("Message headers: {:?}", msg_headers);
 
     let processing_start = Instant::now();
     // Register the ID in the callback proxy state

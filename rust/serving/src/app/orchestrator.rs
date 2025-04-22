@@ -79,17 +79,9 @@ where
         let span = tracing::Span::current();
         let callback_watcher = async move {
             let mut callbacks = Vec::new();
-            let start_time = Instant::now();
             let mut count = 0;
             while let Some(cb) = callbacks_stream.next().await {
-                let current_time_in_millis = Utc::now().timestamp_millis() as u64;
                 debug!(?cb, ?msg_id, "Received callback");
-                info!(
-                    ?msg_id,
-                    "Received {count} callback at time diff={:?}, callback time diff={:?}",
-                    start_time.elapsed().as_millis(),
-                    current_time_in_millis - cb.cb_time
-                );
                 count += 1;
                 callbacks.push(cb);
                 subgraph = match sub_graph_generator
@@ -107,7 +99,7 @@ where
             }
 
             if let Some(subgraph) = subgraph {
-                info!(?msg_id, ?subgraph, "Subgraph generated successfully");
+                debug!(?msg_id, ?subgraph, "Subgraph generated successfully");
                 cb_store
                     .deregister(&msg_id, &subgraph)
                     .await
