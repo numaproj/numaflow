@@ -7,12 +7,12 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
-use tracing::{debug, error, info, Instrument};
+use tracing::{debug, error, info, warn, Instrument};
 
-use crate::app::store::cbstore::{CallbackStore, ProcessingStatus};
+use crate::app::store::cbstore::CallbackStore;
 use crate::app::store::datastore::DataStore;
-use crate::app::store::datastore::Error as StoreError;
-use crate::app::store::datastore::Result as StoreResult;
+use crate::app::store::status;
+use crate::app::store::status::{ProcessingStatus, StatusTracker};
 use crate::app::tracker::MessageGraph;
 use crate::config::RequestType;
 use crate::metrics::serving_metrics;
@@ -25,6 +25,8 @@ pub(crate) struct OrchestratorState<T, U> {
     // conn is to be used while reading and writing to redis.
     datum_store: T,
     callback_store: U,
+    status_tracker: StatusTracker,
+    pod_hash: String,
 }
 
 impl<T, U> OrchestratorState<T, U>
@@ -34,14 +36,18 @@ where
 {
     /// Create a new State to track connections and callback data
     pub(crate) async fn new(
+        pod_hash: &str,
         msg_graph: MessageGraph,
         datum_store: T,
         callback_store: U,
+        status_tracker: StatusTracker,
     ) -> crate::Result<Self> {
         Ok(Self {
             msg_graph_generator: Arc::new(msg_graph),
             datum_store,
             callback_store,
+            status_tracker,
+            pod_hash: pod_hash.to_string(),
         })
     }
 
@@ -52,27 +58,46 @@ where
         &mut self,
         id: &str,
         request_type: RequestType,
-    ) -> StoreResult<oneshot::Receiver<Result<String, Error>>> {
+    ) -> crate::Result<oneshot::Receiver<Result<String, Error>>> {
         let (tx, rx) = oneshot::channel();
         let sub_graph_generator = Arc::clone(&self.msg_graph_generator);
         let msg_id = id.to_string();
         let mut subgraph = None;
-        // start watching for callbacks
-        let mut callbacks_stream = match self
-            .callback_store
-            .register_and_watch(id, request_type)
-            .await
-        {
-            Ok(stream) => stream,
-            Err(e) => {
-                if let StoreError::DuplicateRequest(_) = e {
-                    serving_metrics().cb_store_register_duplicate_count.inc();
+
+        let pod_hash = if let Err(e) = self.status_tracker.register(id).await {
+            match e.clone() {
+                status::Error::Cancelled {
+                    err,
+                    previous_pod_hash,
+                } => {
+                    warn!(
+                        ?err,
+                        "Request was cancelled, fetching callbacks and responses again"
+                    );
+                    previous_pod_hash
                 }
-                serving_metrics().cb_store_register_fail_count.inc();
-                return Err(e);
+                status::Error::Duplicate(msg) => {
+                    warn!(error = ?msg, "Request already exists in the store");
+                    serving_metrics().cb_store_register_duplicate_count.inc();
+                    return Err(Error::Duplicate(msg));
+                }
+                _ => {
+                    error!(?e, "Failed to register request id in status store");
+                    serving_metrics().cb_store_register_fail_count.inc();
+                    return Err(e.into());
+                }
             }
+        } else {
+            self.pod_hash.clone()
         };
 
+        // start watching for callbacks
+        let mut callbacks_stream = self
+            .callback_store
+            .register_and_watch(id, request_type, &pod_hash)
+            .await?;
+
+        let mut status_tracker = self.status_tracker.clone();
         let mut cb_store = self.callback_store.clone();
         let span = tracing::Span::current();
         let callback_watcher = async move {
@@ -80,15 +105,9 @@ where
             while let Some(cb) = callbacks_stream.next().await {
                 debug!(?cb, ?msg_id, "Received callback");
                 callbacks.push(cb);
-                subgraph = match sub_graph_generator
+                subgraph = sub_graph_generator
                     .generate_subgraph_from_callbacks(msg_id.clone(), callbacks.clone())
-                {
-                    Ok(subgraph) => subgraph,
-                    Err(e) => {
-                        error!(?e, "Failed to generate subgraph");
-                        break;
-                    }
-                };
+                    .expect("Failed to generate subgraph");
                 if subgraph.is_some() {
                     break;
                 }
@@ -96,34 +115,23 @@ where
 
             if let Some(subgraph) = subgraph {
                 debug!(?msg_id, ?subgraph, "Subgraph generated successfully");
-                cb_store
+                status_tracker
                     .deregister(&msg_id, &subgraph)
                     .await
                     .expect("Failed to deregister");
-                tx.send(Ok(subgraph.clone()))
-                    .expect("Failed to send subgraph");
-            } else {
-                error!("Subgraph could not be generated for the given ID");
-                tx.send(Err(Error::SubGraphNotFound(
-                    "Subgraph could not be generated for the given ID",
-                )))
-                .inspect_err(|err| {
-                    error!(
-                        ?err,
-                        "Failed to send subgraph generation error to main task over channel"
-                    )
-                })
-                .expect("Failed to send subgraph");
                 cb_store
-                    .mark_as_failed(&msg_id, "Subgraph could not be generated")
+                    .deregister(&msg_id)
                     .await
-                    .inspect_err(|err| {
-                        error!(
-                            ?err,
-                            "Failed to mark subgraph generation failure in callback store"
-                        )
-                    })
-                    .expect("Failed to mark as failed");
+                    .expect("Failed to deregister");
+
+                // send can only fail if the request was cancelled by the client or the handler task
+                // was terminated
+                if tx.send(Ok(subgraph.clone())).is_err() {
+                    status_tracker
+                        .mark_as_failed(&msg_id, "Cancelled")
+                        .await
+                        .expect("Failed to mark the request as failed");
+                }
             }
         };
 
@@ -133,21 +141,28 @@ where
     }
 
     /// Retrieves the output of the processed request after checking whether the processing is complete.
-    pub(crate) async fn retrieve_saved(&mut self, id: &str) -> Result<Option<Vec<Vec<u8>>>, Error> {
+    pub(crate) async fn retrieve_saved(
+        &mut self,
+        id: &str,
+        request_type: RequestType,
+    ) -> Result<Option<Vec<Vec<u8>>>, Error> {
         // check the status of the request, if its completed, then retrieve the data
-        let status = self.callback_store.status(id).await?;
+        let status = self.status_tracker.status(id).await?;
         match status {
             ProcessingStatus::InProgress { .. } => {
                 info!(?id, "Request is still in progress");
                 Ok(None)
             }
-            ProcessingStatus::Completed { .. } => {
-                let data = self.datum_store.retrieve_data(id).await?;
+            ProcessingStatus::Completed { pod_hash, .. } => {
+                let data = self.datum_store.retrieve_data(id, &pod_hash).await?;
                 Ok(Some(data))
             }
-            ProcessingStatus::Failed { error, .. } => {
-                error!(?error, "Request failed");
-                Err(Error::Other(format!("Request failed: {}", error)))
+            ProcessingStatus::Failed { error, pod_hash } => {
+                warn!("Request was failed because of {error}, processing and fetching the responses again");
+                let notify = self.process_request(&id, request_type).await?;
+                notify.await.expect("sender was dropped")?;
+                // TODO: send old request boolean to retrieve data
+                Ok(Some(self.datum_store.retrieve_data(id, &pod_hash).await?))
             }
         }
     }
@@ -165,13 +180,41 @@ where
         let msg_id = id.to_string();
         let mut subgraph = None;
 
+        let pod_hash = if let Err(e) = self.status_tracker.register(id).await {
+            match e.clone() {
+                status::Error::Cancelled {
+                    err,
+                    previous_pod_hash,
+                } => {
+                    warn!(
+                        ?err,
+                        "Request was cancelled, fetching callbacks and responses again"
+                    );
+                    previous_pod_hash
+                }
+                status::Error::Duplicate(msg) => {
+                    warn!(error = ?msg, "Request already exists in the store");
+                    serving_metrics().cb_store_register_duplicate_count.inc();
+                    return Err(Error::Duplicate(msg));
+                }
+                _ => {
+                    error!(?e, "Failed to register request id in status store");
+                    serving_metrics().cb_store_register_fail_count.inc();
+                    return Err(e.into());
+                }
+            }
+        } else {
+            self.pod_hash.clone()
+        };
+
         // start watching for callbacks
         let mut callbacks_stream = self
             .callback_store
-            .register_and_watch(id, request_type)
+            .register_and_watch(id, request_type, &pod_hash)
             .await?;
 
         let mut cb_store = self.callback_store.clone();
+        let mut status_tracker = self.status_tracker.clone();
         tokio::spawn(async move {
             let mut callbacks = Vec::new();
             while let Some(cb) = callbacks_stream.next().await {
@@ -192,14 +235,17 @@ where
             }
 
             if let Some(subgraph) = subgraph {
-                cb_store
+                status_tracker
                     .deregister(&msg_id, &subgraph)
                     .await
-                    .expect("Failed to deregister");
+                    .expect("Failed to deregister in status tracker");
+                cb_store
+                    .deregister(&msg_id)
+                    .await
+                    .expect("Failed to deregister in callback store");
             } else {
                 error!("Subgraph could not be generated for the given ID");
-
-                cb_store
+                status_tracker
                     .mark_as_failed(&msg_id, "Subgraph could not be generated")
                     .await
                     .expect("Failed to mark as failed");
@@ -207,7 +253,7 @@ where
         });
 
         // watch for data stored in the datastore
-        let mut response_stream = self.datum_store.stream_data(id).await?;
+        let mut response_stream = self.datum_store.stream_data(id, &pod_hash).await?;
         tokio::spawn(async move {
             while let Some(response) = response_stream.next().await {
                 tx.send(response).await.expect("Failed to send response");
@@ -223,7 +269,7 @@ where
         &mut self,
         id: &str,
     ) -> Result<String, Error> {
-        let status = self.callback_store.status(id).await?;
+        let status = self.status_tracker.status(id).await?;
         match status {
             ProcessingStatus::InProgress { .. } => Ok("Request In Progress".to_string()),
             ProcessingStatus::Completed { subgraph, .. } => Ok(subgraph),
@@ -236,7 +282,7 @@ where
 
     /// marks the request as failed
     pub(crate) async fn mark_as_failed(&mut self, id: &str, error: &str) -> Result<(), Error> {
-        self.callback_store.mark_as_failed(id, error).await?;
+        self.status_tracker.mark_as_failed(id, error).await?;
         Ok(())
     }
 
@@ -289,7 +335,6 @@ mod tests {
             pod_hash,
             store_name,
             store_name,
-            store_name,
             CancellationToken::new(),
         )
         .await
@@ -304,9 +349,24 @@ mod tests {
         .await
         .expect("Failed to create datum store");
 
-        let mut state = OrchestratorState::new(msg_graph, datum_store, callback_store)
-            .await
-            .unwrap();
+        let status_tracker = StatusTracker::new(
+            context.clone(),
+            store_name,
+            pod_hash.to_string(),
+            Some(store_name.to_string()),
+        )
+        .await
+        .unwrap();
+
+        let mut state = OrchestratorState::new(
+            pod_hash,
+            msg_graph,
+            datum_store,
+            callback_store,
+            status_tracker,
+        )
+        .await
+        .unwrap();
 
         let id = "test_id".to_string();
 
@@ -415,7 +475,11 @@ mod tests {
         assert!(!subgraph.unwrap().is_empty());
 
         // test retrieve_saved
-        let result = state.retrieve_saved(&id).await.unwrap().unwrap();
+        let result = state
+            .retrieve_saved(&id, RequestType::Sync)
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(result.len(), 2);
         assert_eq!(result[0], b"response1");
         assert_eq!(result[1], b"response2");
@@ -446,7 +510,6 @@ mod tests {
             pod_hash,
             store_name,
             store_name,
-            store_name,
             CancellationToken::new(),
         )
         .await
@@ -461,13 +524,28 @@ mod tests {
         .await
         .expect("Failed to create datum store");
 
+        let status_tracker = StatusTracker::new(
+            context.clone(),
+            store_name,
+            pod_hash.to_string(),
+            Some(store_name.to_string()),
+        )
+        .await
+        .unwrap();
+
         let pipeline_spec: PipelineDCG = PIPELINE_SPEC_ENCODED.parse().unwrap();
 
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec).unwrap();
 
-        let mut state = OrchestratorState::new(msg_graph, datum_store, callback_store)
-            .await
-            .unwrap();
+        let mut state = OrchestratorState::new(
+            pod_hash,
+            msg_graph,
+            datum_store,
+            callback_store,
+            status_tracker,
+        )
+        .await
+        .unwrap();
 
         let id = "test_id".to_string();
 

@@ -4,7 +4,6 @@ use super::{orchestrator, store::datastore::DataStore, AppState};
 use super::{FetchQueryParams, Tid};
 use crate::app::response::{ApiError, ServeResponse};
 use crate::app::store::cbstore::CallbackStore;
-use crate::app::store::datastore::Error as StoreError;
 use crate::config::{RequestType, DEFAULT_POD_HASH_KEY};
 use crate::metrics::serving_metrics;
 use crate::Error;
@@ -70,7 +69,12 @@ async fn fetch<
     Query(FetchQueryParams { id }): Query<FetchQueryParams>,
 ) -> Response {
     let datum_retrieve_start = Instant::now();
-    let pipeline_result = match proxy_state.orchestrator.clone().retrieve_saved(&id).await {
+    let pipeline_result = match proxy_state
+        .orchestrator
+        .clone()
+        .retrieve_saved(&id, RequestType::Async)
+        .await
+    {
         Ok(result) => {
             serving_metrics()
                 .datum_retrive_duration
@@ -150,7 +154,7 @@ where
     let response_stream = orchestrator_state
         .stream_response(&id, RequestType::Sse)
         .await
-        .unwrap();
+        .map_err(|e| ApiError::InternalServerError(e.to_string()))?;
 
     let save_start = Instant::now();
     proxy_state
@@ -216,7 +220,7 @@ async fn sync_publish<
         Ok(result) => result,
         Err(e) => {
             error!(error = ?e, "Registering request in data store");
-            if let StoreError::DuplicateRequest(id) = e {
+            if let Error::Duplicate(id) = e {
                 return Err(ApiError::Conflict(format!(
                     "Specified request id {id} already exists in the store"
                 )));
@@ -289,7 +293,12 @@ async fn sync_publish<
     }
 
     let datum_retrieve_start = Instant::now();
-    let result = match proxy_state.orchestrator.clone().retrieve_saved(&id).await {
+    let result = match proxy_state
+        .orchestrator
+        .clone()
+        .retrieve_saved(&id, RequestType::Sync)
+        .await
+    {
         Ok(result) => {
             serving_metrics()
                 .datum_retrive_duration
@@ -369,7 +378,7 @@ async fn async_publish<
         Ok(result) => result,
         Err(e) => {
             error!(error = ?e, "Registering request in data store");
-            if let StoreError::DuplicateRequest(id) = e {
+            if let Error::Duplicate(id) = e {
                 return Err(ApiError::Conflict(format!(
                     "Specified request id {id} already exists in the store"
                 )));
@@ -387,28 +396,30 @@ async fn async_publish<
         let span = tracing::Span::current();
         let mut orchestrator = proxy_state.orchestrator.clone();
         let id = id.clone();
+        let cln_token = proxy_state.cancellation_token.clone();
         // A send operation happens at the sender end of the notify channel when all callbacks are received.
         // We keep the receiver alive to avoid send failure.
         let wait_for_callbacks = async move {
-            match notify.await {
-                Ok(val) => {
+            tokio::select! {
+                val = notify => {
+                    let val = val.expect("Failed to get callback notify that its done");
                     match val {
                         Ok(_) => {}
                         Err(e) => {
-                            _ = orchestrator
-                                .mark_as_failed(id.as_str(), e.to_string().as_str())
-                                .await
-                                .inspect_err(|e| error!(error=?e, "Failed to mark as failed"));
+                            error!(error = ?e, "Error while waiting for callback notify to exit");
                         }
                     }
                     serving_metrics()
                         .processing_time
                         .observe(processing_start.elapsed().as_micros() as f64);
                 }
-                Err(e) => {
-                    error!(error = ?e, "Waiting for the pipeline output");
+                _ = cln_token.cancelled() => {
+                        _ = orchestrator
+                                .mark_as_failed(id.as_str(), "Cancelled")
+                                .await
+                                .inspect_err(|e| error!(error=?e, "Failed to mark as failed"));
                 }
-            };
+            }
         };
         tokio::spawn(wait_for_callbacks.instrument(span));
     }
@@ -459,6 +470,7 @@ mod tests {
     use crate::app::router_with_auth;
     use crate::app::store::cbstore::jetstreamstore::JetStreamCallbackStore;
     use crate::app::store::datastore::jetstream::JetStreamDataStore;
+    use crate::app::store::status::StatusTracker;
     use crate::app::tracker::MessageGraph;
     use crate::callback::{Callback, Response};
     use crate::config::DEFAULT_ID_HEADER;
@@ -483,6 +495,7 @@ mod tests {
         const ID_HEADER: &str = "X-Numaflow-Id";
         const ID_VALUE: &str = "foobar";
 
+        let pod_hash = "0";
         let store_name = "test_async_publish";
         let message_stream_name = "test_async_publish_messages";
         let js_url = "localhost:4222";
@@ -519,8 +532,7 @@ mod tests {
 
         let callback_store = JetStreamCallbackStore::new(
             context.clone(),
-            "0",
-            store_name,
+            pod_hash,
             store_name,
             store_name,
             cancel_token.clone(),
@@ -529,14 +541,29 @@ mod tests {
         .expect("Failed to create callback store");
 
         let datum_store =
-            JetStreamDataStore::new(context.clone(), store_name, "0", cancel_token.clone())
+            JetStreamDataStore::new(context.clone(), store_name, pod_hash, cancel_token.clone())
                 .await
                 .expect("Failed to create datum store");
 
+        let status_tracker = StatusTracker::new(
+            context.clone(),
+            store_name,
+            pod_hash.to_string(),
+            Some(store_name.to_string()),
+        )
+        .await
+        .unwrap();
+
         let pipeline_spec = PIPELINE_SPEC_ENCODED.parse().unwrap();
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec)?;
-        let orchestrator_state =
-            OrchestratorState::new(msg_graph, datum_store, callback_store).await?;
+        let orchestrator_state = OrchestratorState::new(
+            pod_hash,
+            msg_graph,
+            datum_store,
+            callback_store,
+            status_tracker,
+        )
+        .await?;
 
         let app_state = AppState {
             js_context: context,
@@ -661,7 +688,6 @@ mod tests {
             POD_HASH,
             store_name,
             store_name,
-            store_name,
             cancel_token.clone(),
         )
         .await
@@ -674,10 +700,24 @@ mod tests {
 
         let pipeline_spec: PipelineDCG = PIPELINE_SPEC_ENCODED.parse().unwrap();
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec).unwrap();
+        let status_tracker = StatusTracker::new(
+            context.clone(),
+            store_name,
+            POD_HASH.to_string(),
+            Some(store_name.to_string()),
+        )
+        .await
+        .unwrap();
 
-        let orchestrator_state = OrchestratorState::new(msg_graph, datum_store, callback_store)
-            .await
-            .unwrap();
+        let orchestrator_state = OrchestratorState::new(
+            POD_HASH,
+            msg_graph,
+            datum_store,
+            callback_store,
+            status_tracker,
+        )
+        .await
+        .unwrap();
 
         let app_state = AppState {
             js_context: context,
@@ -731,7 +771,7 @@ mod tests {
         assert_eq!(result, Bytes::from_static(b"test-output"));
     }
 
-    // #[cfg(feature = "nats-tests")]
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_sync_publish_serve() {
         const ID_VALUE: &str = "publish-serve";
@@ -777,7 +817,6 @@ mod tests {
             POD_HASH,
             store_name,
             store_name,
-            store_name,
             cancel_token.clone(),
         )
         .await
@@ -790,10 +829,24 @@ mod tests {
 
         let pipeline_spec: PipelineDCG = PIPELINE_SPEC_ENCODED.parse().unwrap();
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec).unwrap();
+        let status_tracker = StatusTracker::new(
+            context.clone(),
+            store_name,
+            POD_HASH.to_string(),
+            Some(store_name.to_string()),
+        )
+        .await
+        .unwrap();
 
-        let orchestrator_state = OrchestratorState::new(msg_graph, datum_store, callback_store)
-            .await
-            .unwrap();
+        let orchestrator_state = OrchestratorState::new(
+            POD_HASH,
+            msg_graph,
+            datum_store,
+            callback_store,
+            status_tracker,
+        )
+        .await
+        .unwrap();
 
         let app_state = AppState {
             js_context: context,
@@ -927,7 +980,6 @@ mod tests {
             POD_HASH,
             store_name,
             store_name,
-            store_name,
             cancel_token.clone(),
         )
         .await
@@ -940,8 +992,23 @@ mod tests {
 
         let pipeline_spec = PIPELINE_SPEC_ENCODED.parse().unwrap();
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec)?;
-        let orchestrator_state =
-            OrchestratorState::new(msg_graph, datum_store, callback_store).await?;
+        let status_tracker = StatusTracker::new(
+            context.clone(),
+            store_name,
+            POD_HASH.to_string(),
+            Some(store_name.to_string()),
+        )
+        .await
+        .unwrap();
+
+        let orchestrator_state = OrchestratorState::new(
+            POD_HASH,
+            msg_graph,
+            datum_store,
+            callback_store,
+            status_tracker,
+        )
+        .await?;
 
         let app_state = AppState {
             js_context: context,

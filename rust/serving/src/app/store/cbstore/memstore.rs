@@ -27,7 +27,7 @@ impl InMemoryCallbackStore {
 impl super::CallbackStore for InMemoryCallbackStore {
     /// De-register a request id from the store. If the `id` does not exist in the store,
     /// `StoreError::InvalidRequestId` error is returned.
-    async fn deregister(&mut self, id: &str, _sub_graph: &str) -> StoreResult<()> {
+    async fn deregister(&mut self, id: &str) -> StoreResult<()> {
         let mut data = self.data.lock().await;
         if data.remove(id).is_none() {
             return Err(StoreError::InvalidRequestId(id.to_string()));
@@ -35,14 +35,11 @@ impl super::CallbackStore for InMemoryCallbackStore {
         Ok(())
     }
 
-    async fn mark_as_failed(&mut self, _id: &str, _error: &str) -> StoreResult<()> {
-        Ok(())
-    }
-
     async fn register_and_watch(
         &mut self,
         id: &str,
         _request_type: RequestType,
+        _pod_hash: &str,
     ) -> StoreResult<ReceiverStream<Arc<Callback>>> {
         let mut data = self.data.lock().await;
         if !data.contains_key(id) {
@@ -61,16 +58,6 @@ impl super::CallbackStore for InMemoryCallbackStore {
         Ok(ReceiverStream::new(rx))
     }
 
-    async fn status(&mut self, _id: &str) -> StoreResult<super::ProcessingStatus> {
-        let data = self.data.lock().await;
-        if data.get(_id).is_none() {
-            return Err(StoreError::InvalidRequestId(_id.to_string()));
-        }
-        Ok(super::ProcessingStatus::InProgress {
-            pod_hash: "replica_id".to_string(),
-        })
-    }
-
     async fn ready(&mut self) -> bool {
         true
     }
@@ -84,7 +71,7 @@ mod tests {
     use tokio_stream::StreamExt;
 
     use super::*;
-    use crate::app::store::cbstore::{CallbackStore, ProcessingStatus};
+    use crate::app::store::cbstore::CallbackStore;
     use crate::callback::Callback;
 
     fn create_test_store() -> InMemoryCallbackStore {
@@ -105,11 +92,11 @@ mod tests {
         let mut store = create_test_store();
         let id = "test_id";
 
-        let result = store.deregister(id, "sub_graph").await;
+        let result = store.deregister(id).await;
         assert!(result.is_ok());
 
         // Try to deregister the same id again, should return an error
-        let result = store.deregister(id, "sub_graph").await;
+        let result = store.deregister(id).await;
         assert!(matches!(result, Err(StoreError::InvalidRequestId(_))));
     }
 
@@ -119,7 +106,7 @@ mod tests {
         let id = "test_id";
 
         let mut rx = store
-            .register_and_watch(id, RequestType::Sync)
+            .register_and_watch(id, RequestType::Sync, "0")
             .await
             .unwrap();
         let received_callback = rx.next().await.unwrap();
@@ -127,14 +114,5 @@ mod tests {
         assert_eq!(received_callback.vertex, "vertex");
         assert_eq!(received_callback.cb_time, 12345);
         assert_eq!(received_callback.from_vertex, "from_vertex");
-    }
-
-    #[tokio::test]
-    async fn test_status() {
-        let mut store = create_test_store();
-        let id = "test_id";
-
-        let status = store.status(id).await.unwrap();
-        assert!(matches!(status, ProcessingStatus::InProgress { .. }));
     }
 }

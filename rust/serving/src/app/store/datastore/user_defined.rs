@@ -34,7 +34,7 @@ impl UserDefinedStore {
 
 impl DataStore for UserDefinedStore {
     // FIXME(serving): we need to return the origin details along with the payload
-    async fn retrieve_data(&mut self, id: &str) -> StoreResult<Vec<Vec<u8>>> {
+    async fn retrieve_data(&mut self, id: &str, _pod_hash: &str) -> StoreResult<Vec<Vec<u8>>> {
         let request = GetRequest { id: id.to_string() };
         let response = self
             .client
@@ -45,7 +45,11 @@ impl DataStore for UserDefinedStore {
         Ok(payloads.iter().map(|p| p.value.clone()).collect())
     }
 
-    async fn stream_data(&mut self, _id: &str) -> StoreResult<ReceiverStream<Arc<Bytes>>> {
+    async fn stream_data(
+        &mut self,
+        _id: &str,
+        _pod_hash: &str,
+    ) -> StoreResult<ReceiverStream<Arc<Bytes>>> {
         unimplemented!("stream_response is not supported for UserDefinedStore")
     }
 
@@ -141,7 +145,7 @@ mod tests {
             store: Arc::new(Mutex::new(HashMap::new())),
         };
         let id = "test_id".to_string();
-        let payload = vec![numaflow::serving_store::Payload {
+        let payload = vec![serving_store::Payload {
             origin: "test_origin".to_string(),
             value: vec![1, 2, 3],
         }];
@@ -173,7 +177,7 @@ mod tests {
         assert!(store.ready().await);
 
         // Test retrieve_data
-        let retrieved_data = store.retrieve_data(&id).await.unwrap();
+        let retrieved_data = store.retrieve_data(&id, "0").await.unwrap();
         assert_eq!(retrieved_data, vec![payload[0].value.clone()]);
 
         drop(store);

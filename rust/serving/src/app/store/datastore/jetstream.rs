@@ -18,6 +18,7 @@ use std::io::Cursor;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
+use tokio::sync::mpsc::Sender;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
@@ -118,9 +119,9 @@ impl JetStreamDataStore {
         cln_token: CancellationToken,
     ) -> JoinHandle<()> {
         let watch_pattern = format!("{}.{}.*.*.*", RESPONSE_KEY_PREFIX, pod_hash);
-        let mut latest_revision = 1;
+        let mut latest_revision = 0;
 
-        let mut watcher = Self::create_watcher(&kv_store, &watch_pattern, latest_revision)
+        let mut watcher = Self::create_watcher(&kv_store, &watch_pattern, latest_revision + 1)
             .await
             .expect("Failed to create central result watcher");
 
@@ -176,6 +177,7 @@ impl JetStreamDataStore {
         })
     }
 
+    /// Creates a new kv watcher for the store with the given watch pattern and revision.
     async fn create_watcher(
         kv_store: &Store,
         watch_pattern: &str,
@@ -208,16 +210,21 @@ impl JetStreamDataStore {
         kv_store: &Store,
     ) -> Result<(), String> {
         let parts: Vec<&str> = entry.key.splitn(5, '.').collect();
-        if parts.len() < 5 || parts[0] != RESPONSE_KEY_PREFIX || parts[1] != pod_hash {
-            return Err(format!("Unexpected key format: {}", entry.key));
-        }
-
+        let key_prefix = parts[0];
         let request_id = parts[2];
         let key_suffix = format!("{}.{}", parts[3], parts[4]);
 
+        // key format is rs.{pod_hash}.{request_id}.{key_suffix}, anything else is not valid
+        if parts.len() < 5 || key_prefix != RESPONSE_KEY_PREFIX || parts[1] != pod_hash {
+            return Err(format!("Unexpected key format: {}", entry.key));
+        }
+
+        // If it's start of the request, we need to add it to the map for tracking the responses
+        // for the given id. The value of start processing marker will be the type of the request
+        // based on that we can add the appropriate entry in the map.
         if key_suffix == START_PROCESSING_MARKER {
             let request_type = RequestType::try_from(entry.value.clone())
-                .map_err(|e| format!("Failed to convert request type: {:?}", e))?;
+                .expect("Failed to convert entry value to RequestType");
 
             let mut response_map = responses_map.lock().await;
             if response_map.contains_key(request_id) {
@@ -232,28 +239,35 @@ impl JetStreamDataStore {
             }
 
             match request_type {
+                // for sse we need to do streaming, so it will be a channel.
                 RequestType::Sse => {
                     let (tx, rx) = mpsc::channel(10);
                     response_map.insert(
                         request_id.to_string(),
-                        ResponseMode::Sse {
+                        ResponseMode::Stream {
                             tx,
                             rx: Some(ReceiverStream::new(rx)),
                         },
                     );
                 }
+                // for sync and async we need to store the responses in a list
                 RequestType::Sync => {
-                    response_map.insert(request_id.to_string(), ResponseMode::Sync(Vec::new()));
+                    response_map.insert(request_id.to_string(), ResponseMode::Unary(Vec::new()));
                 }
                 RequestType::Async => {
-                    response_map.insert(request_id.to_string(), ResponseMode::Async(Vec::new()));
+                    response_map.insert(request_id.to_string(), ResponseMode::Unary(Vec::new()));
                 }
             }
         } else if key_suffix == DONE_PROCESSING_MARKER {
+            // when we get the done processing marker, it means we won't get any more responses for
+            // this request id. So we need to merge the responses and put them in the kv store, so
+            // that it can be retrieved when needed. We only need to store the merged response for
+            // sync and async because for sse it will be streaming. Its safe to store for sync request
+            // because during failure of sync request it will be converted as an async request.
             let mut response_map = responses_map.lock().await;
-            if let Some(ResponseMode::Sync(responses) | ResponseMode::Async(responses)) =
-                response_map.remove(request_id)
-            {
+            if let Some(ResponseMode::Unary(responses)) = response_map.remove(request_id) {
+                // we use rs.{pod_hash}.{request_id}.final.result.processed as the key for the final result
+                // and the value will be the merged response.
                 let merged_response = merge_bytes_list(&responses);
                 let final_result_key = format!(
                     "{}.{}.{}",
@@ -265,15 +279,17 @@ impl JetStreamDataStore {
                     .map_err(|e| format!("Failed to put final result: {:?}", e))?;
             }
         } else {
+            // we can append the response for the list for sync and async, for sse we can write the
+            // response to the response channel
             let mut response_map = responses_map.lock().await;
             if let Some(response_mode) = response_map.get_mut(request_id) {
                 match response_mode {
-                    ResponseMode::Sse { tx, .. } => {
+                    ResponseMode::Stream { tx, .. } => {
                         tx.send(Arc::new(entry.value.clone()))
                             .await
                             .map_err(|e| format!("Failed to send SSE response: {:?}", e))?;
                     }
-                    ResponseMode::Sync(responses) | ResponseMode::Async(responses) => {
+                    ResponseMode::Unary(responses) => {
                         responses.push(entry.value.clone());
                     }
                 }
@@ -282,6 +298,8 @@ impl JetStreamDataStore {
         Ok(())
     }
 
+    /// Retrieves the final result from the KV store for a given request ID using the final key, it
+    /// keeps retrying until the final result is available.
     async fn get_data_from_kv_store(&self, id: &str) -> StoreResult<Vec<Vec<u8>>> {
         let final_result_key = format!(
             "{}.{}.{}",
@@ -309,35 +327,136 @@ impl JetStreamDataStore {
             }
         }
     }
+
+    pub(crate) async fn get_historic_response(
+        store: Store,
+        id: &str,
+        pod_hash: &str,
+    ) -> StoreResult<Vec<Vec<u8>>> {
+        let mut latest_revision = 0;
+        let watch_pattern = format!("{RESPONSE_KEY_PREFIX}.{pod_hash}.{id}.*");
+        let mut watcher = Self::create_watcher(&store, &watch_pattern, latest_revision + 1).await?;
+        let mut responses = vec![];
+        loop {
+            match watcher.next().await {
+                None => {
+                    error!(request_id = ?id, "Historical watcher stream ended unexpectedly. Recreating watcher...");
+                    watcher =
+                        Self::create_watcher(&store, &watch_pattern, latest_revision + 1).await?;
+                }
+                Some(Ok(entry)) => {
+                    latest_revision = entry.revision;
+                    if entry.key.contains(START_PROCESSING_MARKER) {
+                        continue;
+                    }
+
+                    if entry.key.contains(DONE_PROCESSING_MARKER) {
+                        break;
+                    }
+                    responses.push(entry.value.to_vec());
+                }
+                Some(Err(e)) => {
+                    error!(request_id = ?id, "Error while receiving response from watcher: {e:?}, Recreating watcher...");
+                    watcher =
+                        Self::create_watcher(&store, &watch_pattern, latest_revision + 1).await?;
+                }
+            }
+        }
+        Ok(responses)
+    }
+
+    pub(crate) async fn stream_historic_responses(
+        store: Store,
+        id: &str,
+        pod_hash: &str,
+        tx: Sender<Arc<Bytes>>,
+    ) {
+        let mut latest_revision = 0;
+        let watch_pattern = format!("{RESPONSE_KEY_PREFIX}.{pod_hash}.{id}.*");
+        let mut watcher = Self::create_watcher(&store, &watch_pattern, latest_revision + 1)
+            .await
+            .expect("Failed to create watcher");
+        loop {
+            match watcher.next().await {
+                None => {
+                    error!(request_id = ?id, "Historical watcher stream ended unexpectedly. Recreating watcher...");
+                    watcher = Self::create_watcher(&store, &watch_pattern, latest_revision + 1)
+                        .await
+                        .expect("Failed to create watcher");
+                }
+                Some(Ok(entry)) => {
+                    latest_revision = entry.revision;
+                    if entry.key.contains(START_PROCESSING_MARKER) {
+                        continue;
+                    }
+
+                    if entry.key.contains(DONE_PROCESSING_MARKER) {
+                        break;
+                    }
+                    tx.send(Arc::new(entry.value))
+                        .await
+                        .expect("Failed to send response");
+                }
+                Some(Err(e)) => {
+                    error!(request_id = ?id, "Error while receiving response from watcher: {e:?}, Recreating watcher...");
+                    watcher = Self::create_watcher(&store, &watch_pattern, latest_revision + 1)
+                        .await
+                        .expect("Failed to create watcher");
+                }
+            }
+        }
+    }
 }
 
+/// Represents the response mode for the request. For sse it will be stream and for sync and async
+/// it will be unary.
 enum ResponseMode {
-    Sse {
-        tx: mpsc::Sender<Arc<Bytes>>,
+    Stream {
+        tx: Sender<Arc<Bytes>>,
         rx: Option<ReceiverStream<Arc<Bytes>>>,
     },
-    Sync(Vec<Bytes>),
-    Async(Vec<Bytes>),
+    Unary(Vec<Bytes>),
 }
 
 impl DataStore for JetStreamDataStore {
     /// Retrieve a data from the store. If the datum is not found, `None` is returned.
-    async fn retrieve_data(&mut self, id: &str) -> StoreResult<Vec<Vec<u8>>> {
-        // Fallback to retrieving data from the KV store
-        self.get_data_from_kv_store(id).await
+    async fn retrieve_data(&mut self, id: &str, pod_hash: &str) -> StoreResult<Vec<Vec<u8>>> {
+        if pod_hash == self.pod_hash {
+            // Fallback to retrieving data from the KV store
+            self.get_data_from_kv_store(id).await
+        } else {
+            Self::get_historic_response(self.kv_store.clone(), id, pod_hash).await
+        }
     }
 
     /// Stream the response from the store. The response is streamed as it is added to the store.
-    async fn stream_data(&mut self, id: &str) -> StoreResult<ReceiverStream<Arc<Bytes>>> {
-        loop {
-            let mut response_map = self.responses_map.lock().await;
-            if let Some(ResponseMode::Sse { rx, .. }) = response_map.get_mut(id) {
-                if let Some(receiver_stream) = rx.take() {
-                    return Ok(receiver_stream);
+    async fn stream_data(
+        &mut self,
+        id: &str,
+        pod_hash: &str,
+    ) -> StoreResult<ReceiverStream<Arc<Bytes>>> {
+        // we need to wait for the start processing marker entry to be processed by the central watcher
+        if pod_hash == self.pod_hash {
+            loop {
+                let mut response_map = self.responses_map.lock().await;
+                if let Some(ResponseMode::Stream { rx, .. }) = response_map.get_mut(id) {
+                    if let Some(receiver_stream) = rx.take() {
+                        return Ok(receiver_stream);
+                    }
                 }
+                sleep(Duration::from_millis(5)).await;
             }
-
-            sleep(Duration::from_millis(5)).await;
+        } else {
+            let (tx, rx) = mpsc::channel(10);
+            tokio::spawn({
+                let kv_store = self.kv_store.clone();
+                let request_id = id.to_string();
+                let pod_hash = pod_hash.to_string();
+                async move {
+                    Self::stream_historic_responses(kv_store, &request_id, &pod_hash, tx).await;
+                }
+            });
+            Ok(ReceiverStream::new(rx))
         }
     }
 
@@ -405,7 +524,7 @@ mod tests {
         let done_key = format!("rs.{pod_hash}.{id}.done.processing");
         store.kv_store.put(done_key, Bytes::new()).await.unwrap();
 
-        let result = store.retrieve_data(id).await.unwrap();
+        let result = store.retrieve_data(id, pod_hash).await.unwrap();
         assert!(result.len() > 0);
         assert_eq!(result[0], b"test_payload");
 
@@ -455,7 +574,7 @@ mod tests {
         let payload = Bytes::from_static(b"test_payload");
         store.kv_store.put(key, payload.clone()).await.unwrap();
 
-        let mut stream = store.stream_data(id).await.unwrap();
+        let mut stream = store.stream_data(id, pod_hash).await.unwrap();
 
         // Verify that the response is received
         let received_response = stream.next().await.unwrap();

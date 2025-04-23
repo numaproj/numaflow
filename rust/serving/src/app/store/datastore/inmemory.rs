@@ -29,7 +29,7 @@ impl InMemoryDataStore {
 impl super::DataStore for InMemoryDataStore {
     /// Retrieves data for a given id from the `HashMap`.
     /// Each piece of data is deserialized from bytes into a `String`.
-    async fn retrieve_data(&mut self, id: &str) -> StoreResult<Vec<Vec<u8>>> {
+    async fn retrieve_data(&mut self, id: &str, _pod_hash: &str) -> StoreResult<Vec<Vec<u8>>> {
         let id = format!("{id}_{STORE_KEY_SUFFIX}");
         let data = self.data.lock().await;
         match data.get(&id) {
@@ -42,7 +42,11 @@ impl super::DataStore for InMemoryDataStore {
     }
 
     /// Streams the responses for a given id from the `HashMap`.
-    async fn stream_data(&mut self, id: &str) -> StoreResult<ReceiverStream<Arc<Bytes>>> {
+    async fn stream_data(
+        &mut self,
+        id: &str,
+        _pod_hash: &str,
+    ) -> StoreResult<ReceiverStream<Arc<Bytes>>> {
         let (tx, rx) = tokio::sync::mpsc::channel(10);
         let data = self.data.lock().await;
         if let Some(response) = data.get(id) {
@@ -81,7 +85,7 @@ mod tests {
     async fn test_retrieve_datum() {
         let mut store = create_test_store();
         let id = "test_id";
-        let result = store.retrieve_data(id).await.unwrap();
+        let result = store.retrieve_data(id, "0").await.unwrap();
         assert!(result.len() > 0);
         assert_eq!(result[0], b"test_payload");
     }
@@ -90,7 +94,7 @@ mod tests {
     async fn test_retrieve_datum_not_found() {
         let mut store = create_test_store();
         let id = "non_existent_id";
-        let result = store.retrieve_data(id).await;
+        let result = store.retrieve_data(id, "0").await;
         assert!(matches!(result, Err(StoreError::InvalidRequestId(_))));
     }
 
@@ -98,7 +102,7 @@ mod tests {
     async fn test_stream_response() {
         let mut store = create_test_store();
         let id = "test_id_saved";
-        let mut rx = store.stream_data(id).await.unwrap();
+        let mut rx = store.stream_data(id, "0").await.unwrap();
         let received_response = rx.next().await.unwrap();
         assert_eq!(
             received_response,

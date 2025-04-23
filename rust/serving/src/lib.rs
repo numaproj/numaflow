@@ -1,7 +1,6 @@
 use async_nats::jetstream::Context;
 use async_nats::{jetstream, ConnectOptions};
 use axum_server::tls_rustls::RustlsConfig;
-use std::ffi::c_long;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -34,6 +33,7 @@ mod pipeline;
 
 use crate::app::store::cbstore::CallbackStore;
 use crate::app::store::datastore::DataStore;
+use crate::app::store::status::StatusTracker;
 
 pub mod callback;
 
@@ -119,7 +119,6 @@ async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
         js_context.clone(),
         &settings.pod_hash,
         &settings.js_callback_store,
-        &settings.js_status_store,
         &settings.js_response_store,
         cancel_token.clone(),
     )
@@ -143,7 +142,21 @@ async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
                 cancel_token.clone(),
             )
             .await?;
-            let callback_state = CallbackState::new(msg_graph, nats_store, callback_store).await?;
+            let status_tracker = StatusTracker::new(
+                js_context.clone(),
+                &settings.js_status_store,
+                settings.pod_hash.clone(),
+                Some(settings.js_response_store.to_string()),
+            )
+            .await?;
+            let callback_state = CallbackState::new(
+                &settings.pod_hash,
+                msg_graph,
+                nats_store,
+                callback_store,
+                status_tracker,
+            )
+            .await?;
             let app = AppState {
                 js_context,
                 settings,
@@ -156,8 +169,22 @@ async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
                 .map_err(|e| Error::Store(e.to_string()))?
         }
         StoreType::UserDefined(ud_config) => {
+            let status_tracker = StatusTracker::new(
+                js_context.clone(),
+                &settings.js_status_store,
+                settings.pod_hash.clone(),
+                None,
+            )
+            .await?;
             let ud_store = UserDefinedStore::new(ud_config.clone()).await?;
-            let callback_state = CallbackState::new(msg_graph, ud_store, callback_store).await?;
+            let callback_state = CallbackState::new(
+                &settings.pod_hash,
+                msg_graph,
+                ud_store,
+                callback_store,
+                status_tracker,
+            )
+            .await?;
             let app = AppState {
                 js_context,
                 settings,
@@ -222,7 +249,7 @@ mod tests {
             .unwrap();
 
         context
-            .create_stream(async_nats::jetstream::stream::Config {
+            .create_stream(jetstream::stream::Config {
                 name: message_stream_name.into(),
                 ..Default::default()
             })
