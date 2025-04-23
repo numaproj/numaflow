@@ -46,29 +46,27 @@ type AbstractSink struct {
 	// UDSink sink is used to write the data to the user-defined sink.
 	// +optional
 	UDSink *UDSink `json:"udsink,omitempty" protobuf:"bytes,4,opt,name=udsink"`
+	// Serve sink is used to return results when working with a ServingPipeline.
+	// +optional
+	Serve *ServeSink `json:"serve,omitempty" protobuf:"bytes,5,opt,name=serve"`
 }
 
 func (s Sink) getContainers(req getContainerReq) ([]corev1.Container, []corev1.Container, error) {
 	containers := []corev1.Container{
 		s.getMainContainer(req),
 	}
-	sidecarContainers := []corev1.Container{}
+	monitorContainer := buildMonitorContainer(req)
+	sidecarContainers := []corev1.Container{monitorContainer}
 	if s.UDSink != nil {
 		sidecarContainers = append(sidecarContainers, s.getUDSinkContainer(req))
 	}
 	if s.Fallback != nil && s.Fallback.UDSink != nil {
 		sidecarContainers = append(sidecarContainers, s.getFallbackUDSinkContainer(req))
 	}
-	if req.servingStore != nil && req.servingStore.Container != nil {
-		sidecarContainers = append(sidecarContainers, req.servingStore.getUDStoreContainer(req))
-	}
 	return sidecarContainers, containers, nil
 }
 
 func (s Sink) getMainContainer(req getContainerReq) corev1.Container {
-	if req.executeRustBinary {
-		return containerBuilder{}.init(req).command(NumaflowRustBinary).args("processor", "--type="+string(VertexTypeSink), "--isbsvc-type="+string(req.isbSvcType), "--rust").build()
-	}
 	return containerBuilder{}.init(req).args("processor", "--type="+string(VertexTypeSink), "--isbsvc-type="+string(req.isbSvcType)).build()
 }
 

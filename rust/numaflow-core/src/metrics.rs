@@ -67,13 +67,18 @@ const READ_TOTAL: &str = "read";
 const READ_BYTES_TOTAL: &str = "read_bytes";
 const ACK_TOTAL: &str = "ack";
 const SINK_WRITE_TOTAL: &str = "write";
+const SINK_WRITE_ERRORS_TOTAL: &str = "write_errors";
+const SINK_DROPPED_TOTAL: &str = "dropped";
 const DROPPED_TOTAL: &str = "dropped";
 const FALLBACK_SINK_WRITE_TOTAL: &str = "write";
+const TRANSFORMER_DROPPED_TOTAL: &str = "dropped";
 
 // pending as gauge for mvtx (these metric names are hardcoded in the auto-scaler)
 const PENDING: &str = "pending";
+const PENDING_RAW: &str = "pending_raw";
 // pending as gauge for pipeline
 const VERTEX_PENDING: &str = "pending_messages";
+const VERTEX_PENDING_RAW: &str = "pending_messages_raw";
 
 // processing times as timers
 const E2E_TIME: &str = "processing_time";
@@ -82,6 +87,7 @@ const WRITE_TIME: &str = "write_time";
 const TRANSFORM_TIME: &str = "time";
 const ACK_TIME: &str = "ack_time";
 const SINK_TIME: &str = "time";
+const FALLBACK_SINK_TIME: &str = "time";
 
 const PIPELINE_FORWARDER_READ_TOTAL: &str = "data_read";
 
@@ -93,8 +99,8 @@ pub(crate) enum ComponentHealthChecks {
     Pipeline(PipelineComponents),
 }
 
-/// MonovertexComponents is used to store the all the components required for running mvtx. Transformer
-/// and Fallback Sink ism missing because they are internally referenced by Source and Sink.
+/// MonovertexComponents is used to store all the components required for running mvtx. Transformer
+/// and Fallback Sink is missing because they are internally referenced by Source and Sink.
 #[derive(Clone)]
 pub(crate) struct MonovertexComponents {
     pub(crate) source: Source,
@@ -178,6 +184,10 @@ pub(crate) struct MonoVtxMetrics {
 
     // gauge
     pub(crate) pending: Family<Vec<(String, String)>, Gauge>,
+    // TODO(lookback) - using new implementation for monovertex right now,
+    // deprecate old metric and use only this as well once
+    // corresponding changes are completed.
+    pub(crate) pending_raw: Family<Vec<(String, String)>, Gauge>,
 
     // timers
     pub(crate) e2e_time: Family<Vec<(String, String)>, Histogram>,
@@ -195,23 +205,31 @@ pub(crate) struct PipelineMetrics {
     pub(crate) forwarder: PipelineForwarderMetrics,
     pub(crate) isb: PipelineISBMetrics,
     pub(crate) pending: Family<Vec<(String, String)>, Gauge>,
+    // TODO(lookback) - using new implementation only for monovertex right now,
+    // deprecate old metric and use only this as well once
+    // corresponding changes are completed.
+    pub(crate) pending_raw: Family<Vec<(String, String)>, Gauge>,
 }
 
 /// Family of metrics for the sink
 pub(crate) struct SinkMetrics {
     pub(crate) write_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) dropped_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) write_errors_total: Family<Vec<(String, String)>, Counter>,
 }
 
 /// Family of metrics for the Fallback Sink
 pub(crate) struct FallbackSinkMetrics {
     pub(crate) write_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) time: Family<Vec<(String, String)>, Histogram>,
 }
 
 /// Family of metrics for the Transformer
 pub(crate) struct TransformerMetrics {
     /// Transformer latency
     pub(crate) time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) dropped_total: Family<Vec<(String, String)>, Counter>,
 }
 
 pub(crate) struct PipelineForwarderMetrics {
@@ -261,6 +279,10 @@ impl MonoVtxMetrics {
             dropped_total: Family::<Vec<(String, String)>, Counter>::default(),
             // gauge
             pending: Family::<Vec<(String, String)>, Gauge>::default(),
+            // TODO(lookback) - using new implementation only for monovertex right now,
+            // deprecate old metric and use only this as well once
+            // corresponding changes are completed.
+            pending_raw: Family::<Vec<(String, String)>, Gauge>::default(),
             // timers
             // exponential buckets in the range 100 microseconds to 15 minutes
             e2e_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
@@ -277,6 +299,7 @@ impl MonoVtxMetrics {
                 time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                     Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
                 }),
+                dropped_total: Family::<Vec<(String, String)>, Counter>::default(),
             },
 
             sink: SinkMetrics {
@@ -284,10 +307,15 @@ impl MonoVtxMetrics {
                 time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                     Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
                 }),
+                dropped_total: Family::<Vec<(String, String)>, Counter>::default(),
+                write_errors_total: Family::<Vec<(String, String)>, Counter>::default(),
             },
 
             fb_sink: FallbackSinkMetrics {
                 write_total: Family::<Vec<(String, String)>, Counter>::default(),
+                time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                    Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
+                }),
             },
         };
 
@@ -322,6 +350,13 @@ impl MonoVtxMetrics {
             "A Gauge to keep track of the total number of pending messages for the monovtx",
             metrics.pending.clone(),
         );
+
+        // gauges
+        registry.register(
+            PENDING_RAW,
+            "A Gauge to keep track of the total number of source pending messages for the monovtx",
+            metrics.pending_raw.clone(),
+        );
         // timers
         registry.register(
             E2E_TIME,
@@ -346,6 +381,11 @@ impl MonoVtxMetrics {
             "A Histogram to keep track of the total time taken to Transform, in microseconds",
             metrics.transformer.time.clone(),
         );
+        transformer_registry.register(
+            TRANSFORMER_DROPPED_TOTAL,
+            "A Counter to keep track of the total number of messages dropped by the transformer",
+            metrics.transformer.dropped_total.clone(),
+        );
 
         // Sink metrics
         let sink_registry = registry.sub_registry_with_prefix(SINK_REGISTRY_PREFIX);
@@ -359,6 +399,16 @@ impl MonoVtxMetrics {
             "A Histogram to keep track of the total time taken to Write to the Sink, in microseconds",
             metrics.sink.time.clone(),
         );
+        sink_registry.register(
+            SINK_WRITE_ERRORS_TOTAL,
+            "A counter to keep track of the total number of write errors for the sink",
+            metrics.sink.write_errors_total.clone(),
+        );
+        sink_registry.register(
+            SINK_DROPPED_TOTAL,
+            "A counter to keep track of the total number of messages dropped by sink",
+            metrics.sink.dropped_total.clone(),
+        );
 
         // Fallback Sink metrics
         let fb_sink_registry = registry.sub_registry_with_prefix(FALLBACK_SINK_REGISTRY_PREFIX);
@@ -368,6 +418,9 @@ impl MonoVtxMetrics {
             "A Counter to keep track of the total number of messages written to the fallback sink",
             metrics.fb_sink.write_total.clone(),
         );
+        fb_sink_registry.register(FALLBACK_SINK_TIME,
+            "A Histogram to keep track of the total time taken to Write to the fallback sink, in microseconds",
+            metrics.fb_sink.time.clone());
         metrics
     }
 }
@@ -401,6 +454,10 @@ impl PipelineMetrics {
                     }),
             },
             pending: Family::<Vec<(String, String)>, Gauge>::default(),
+            // TODO(lookback) - using new implementation only for monovertex right now,
+            // deprecate old metric and use only this as well once
+            // corresponding changes are completed.
+            pending_raw: Family::<Vec<(String, String)>, Gauge>::default(),
         };
         let mut registry = global_registry().registry.lock();
 
@@ -457,6 +514,11 @@ impl PipelineMetrics {
             VERTEX_PENDING,
             "Total number of pending messages",
             metrics.pending.clone(),
+        );
+        vertex_registry.register(
+            VERTEX_PENDING_RAW,
+            "Total number of pending messages",
+            metrics.pending_raw.clone(),
         );
         metrics
     }
@@ -619,31 +681,31 @@ async fn sidecar_livez(State(state): State<ComponentHealthChecks>) -> impl IntoR
     match state {
         ComponentHealthChecks::Monovertex(mut monovertex_state) => {
             // this call also check the health of transformer if it is configured in the Source.
-            if !monovertex_state.source.is_ready().await {
+            if !monovertex_state.source.ready().await {
                 error!("Monovertex source component is not ready");
                 return StatusCode::INTERNAL_SERVER_ERROR;
             }
-            if !monovertex_state.sink.is_ready().await {
+            if !monovertex_state.sink.ready().await {
                 error!("Monovertex sink client is not ready");
                 return StatusCode::INTERNAL_SERVER_ERROR;
             }
         }
         ComponentHealthChecks::Pipeline(pipeline_state) => match pipeline_state {
             PipelineComponents::Source(mut source) => {
-                if !source.is_ready().await {
+                if !source.ready().await {
                     error!("Pipeline source component is not ready");
                     return StatusCode::INTERNAL_SERVER_ERROR;
                 }
             }
-            PipelineComponents::Sink(sink) => {
+            PipelineComponents::Sink(mut sink) => {
                 // this call also check for fbsink if it is there
-                if !sink.is_ready().await {
+                if !sink.ready().await {
                     error!("Pipeline sink component is not ready");
                     return StatusCode::INTERNAL_SERVER_ERROR;
                 }
             }
             PipelineComponents::Map(mut map) => {
-                if !map.is_ready().await {
+                if !map.ready().await {
                     error!("Pipeline map component is not ready");
                     return StatusCode::INTERNAL_SERVER_ERROR;
                 }
@@ -681,6 +743,10 @@ pub(crate) struct PendingReader {
 
 pub(crate) struct PendingReaderTasks {
     buildup_handle: JoinHandle<()>,
+    expose_handle: JoinHandle<()>,
+}
+
+pub(crate) struct PendingReaderTasks_ {
     expose_handle: JoinHandle<()>,
 }
 
@@ -782,6 +848,26 @@ impl PendingReader {
             expose_handle,
         }
     }
+    // TODO(lookback) - using new implementation for monovertex right now,
+    // deprecate old implementation and use this for pipeline as well once
+    // corresponding changes are completed.
+
+    /// Starts the lag reader by spawning tasks to build up pending info and expose pending metrics.
+    ///
+    /// This method spawns two asynchronous tasks:
+    /// - One to periodically check the lag and update the pending stats.
+    /// - Another to periodically expose the pending metrics.
+    ///
+    /// Dropping the PendingReaderTasks will abort the background tasks.
+    pub async fn start_(&self, is_mono_vertex: bool) -> PendingReaderTasks_ {
+        let lag_checking_interval = self.lag_checking_interval;
+
+        let lag_reader = self.lag_reader.clone();
+        let expose_handle = tokio::spawn(async move {
+            expose_pending_metrics_(lag_reader, lag_checking_interval, is_mono_vertex).await;
+        });
+        PendingReaderTasks_ { expose_handle }
+    }
 }
 
 /// When the PendingReaderTasks is dropped, we need to clean up the pending exposer and the pending builder tasks.
@@ -790,6 +876,89 @@ impl Drop for PendingReaderTasks {
         self.expose_handle.abort();
         self.buildup_handle.abort();
         info!("Stopped the Lag-Reader Expose and Builder tasks");
+    }
+}
+
+// TODO(lookback) - using new implementation for monovertex right now,
+// deprecate old implementation and use this for pipeline as well once
+// corresponding changes are completed.
+/// When the PendingReaderTasks_ is dropped, we need to clean up the pending exposer and the pending builder tasks.
+impl Drop for PendingReaderTasks_ {
+    fn drop(&mut self) {
+        self.expose_handle.abort();
+        info!("Stopped the Lag-Reader Expose tasks");
+    }
+}
+
+// TODO(lookback) - using new implementation for monovertex right now,
+// deprecate old implementation and use this for pipeline as well once
+// corresponding changes are completed.
+
+// Periodically exposes the pending metrics by calculating the average pending messages over different intervals.
+async fn expose_pending_metrics_(
+    mut lag_reader: LagReader,
+    lag_checking_interval: Duration,
+    is_mono_vertex: bool,
+) {
+    let mut ticker = time::interval(lag_checking_interval);
+
+    loop {
+        ticker.tick().await;
+
+        match &mut lag_reader {
+            LagReader::Source(source) => match fetch_source_pending(source).await {
+                Ok(pending) => {
+                    if pending != -1 {
+                        info!("Pending messages {:?}", pending);
+                        if is_mono_vertex {
+                            let metric_labels = mvtx_forward_metric_labels().clone();
+                            monovertex_metrics()
+                                .pending_raw
+                                .get_or_create(&metric_labels)
+                                .set(pending);
+                        } else {
+                            let mut metric_labels =
+                                pipeline_forward_metric_labels("source").clone();
+                            metric_labels.push((
+                                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                                "source".to_string(),
+                            ));
+                            pipeline_metrics()
+                                .pending_raw
+                                .get_or_create(&metric_labels)
+                                .set(pending);
+                        }
+                    }
+                }
+                Err(err) => {
+                    error!("Failed to get pending messages: {:?}", err);
+                }
+            },
+            LagReader::ISB(readers) => {
+                for reader in readers {
+                    match fetch_isb_pending(reader).await {
+                        Ok(pending) => {
+                            if pending != -1 {
+                                info!("Pending messages {:?}", pending);
+                                let mut metric_labels =
+                                    pipeline_forward_metric_labels(reader.name()).clone();
+                                metric_labels.push((
+                                    PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                                    reader.name().to_string(),
+                                ));
+                                pipeline_metrics()
+                                    .pending
+                                    .get_or_create(&metric_labels)
+                                    .set(pending);
+                            }
+                        }
+                        Err(err) => {
+                            error!("Failed to get pending messages: {:?}", err);
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1396,8 +1565,23 @@ mod tests {
             .time
             .get_or_create(&common_labels)
             .observe(5.0);
+        metrics
+            .transformer
+            .dropped_total
+            .get_or_create(&common_labels)
+            .inc_by(2);
 
         metrics.sink.write_total.get_or_create(&common_labels).inc();
+        metrics
+            .sink
+            .write_errors_total
+            .get_or_create(&common_labels)
+            .inc_by(3);
+        metrics
+            .sink
+            .dropped_total
+            .get_or_create(&common_labels)
+            .inc_by(2);
         metrics.sink.time.get_or_create(&common_labels).observe(4.0);
 
         metrics
@@ -1405,6 +1589,11 @@ mod tests {
             .write_total
             .get_or_create(&common_labels)
             .inc();
+        metrics
+            .fb_sink
+            .time
+            .get_or_create(&common_labels)
+            .observe(5.0);
 
         // Validate the metric names
         let state = global_registry().registry.lock();
@@ -1430,11 +1619,17 @@ mod tests {
             r#"monovtx_transformer_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 5.0"#,
             r#"monovtx_transformer_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_transformer_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_transformer_dropped_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 2"#,
             r#"monovtx_sink_write_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_sink_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 4.0"#,
             r#"monovtx_sink_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_sink_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_sink_write_errors_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 3"#,
+            r#"monovtx_sink_dropped_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 2"#,
             r#"monovtx_fallback_sink_write_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_fallback_sink_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 5.0"#,
+            r#"monovtx_fallback_sink_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"monovtx_fallback_sink_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
         ];
 
         let got = buffer

@@ -43,7 +43,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.24"
       - name: Add bins to PATH
         run: |
           echo /home/runner/go/bin >> $GITHUB_PATH
@@ -82,7 +82,7 @@ jobs:
       - name: Set up Go 1.x
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.24"
         id: go
 
       - name: Check out code
@@ -146,7 +146,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.24"
       - name: Restore Go build cache
         uses: actions/cache@v4
         with:
@@ -172,25 +172,36 @@ jobs:
           echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
           echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
       - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.5
+        uses: mozilla-actions/sccache-action@v0.0.9
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - name: Print Protoc version
         run: protoc --version
       - name: Build binary
         run: RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target x86_64-unknown-linux-gnu
-      - name: Rename binary
-        run: cp -pv target/x86_64-unknown-linux-gnu/release/numaflow ./numaflow-rs-linux-amd64
-      - name: Verfiy binary is Statically Linked
+      - name: Rename binaries
         run: |
-          pwd && ls -al
+          cp -pv target/x86_64-unknown-linux-gnu/release/numaflow ./numaflow-rs-linux-amd64
+          cp -pv target/x86_64-unknown-linux-gnu/release/entrypoint ./entrypoint-linux-amd64
+      - name: Verify numaflow binary is Statically Linked
+        run: |
           file ./numaflow-rs-linux-amd64
           file ./numaflow-rs-linux-amd64 | grep -q 'static-pie linked'
+      - name: Verify entrypoint binary is Statically Linked
+        run: |
+          file ./entrypoint-linux-amd64
+          file ./entrypoint-linux-amd64 | grep -q 'static-pie linked'
       - name: Upload numaflow binary
         uses: actions/upload-artifact@v4
         with:
           name: numaflow-rs-linux-amd64
           path: rust/numaflow-rs-linux-amd64
+          if-no-files-found: error
+      - name: Upload entrypoint binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: entrypoint-linux-amd64
+          path: rust/entrypoint-linux-amd64
           if-no-files-found: error
 
   e2e-tests:
@@ -217,6 +228,7 @@ jobs:
             idle-source-e2e,
             monovertex-e2e,
             builtin-source-e2e,
+            serving-e2e,
           ]
         include:
           - driver: redis
@@ -237,7 +249,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.24"
       - name: Add bins to PATH
         run: |
           echo /home/runner/go/bin >> $GITHUB_PATH
@@ -255,6 +267,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: numaflow-rs-linux-amd64
+      - name: Download Entrypoint amd64 binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: entrypoint-linux-amd64
       - name: Install k3d
         run: curl -sfL https://raw.githubusercontent.com/rancher/k3d/main/install.sh | bash &
       - name: Create a cluster

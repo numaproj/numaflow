@@ -206,7 +206,7 @@ func TestMonoVertexGetPodSpec(t *testing.T) {
 		podSpec, err := testMvtx.GetPodSpec(req)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(podSpec.Containers))
-		assert.Equal(t, 3, len(podSpec.InitContainers))
+		assert.Equal(t, 4, len(podSpec.InitContainers))
 		assert.Equal(t, 2, len(podSpec.Volumes))
 		assert.Equal(t, "my-image", podSpec.Containers[0].Image)
 		assert.Equal(t, corev1.PullIfNotPresent, podSpec.Containers[0].ImagePullPolicy)
@@ -214,16 +214,21 @@ func TestMonoVertexGetPodSpec(t *testing.T) {
 		assert.Equal(t, "200m", podSpec.Containers[0].Resources.Limits.Cpu().String())
 		assert.Equal(t, "100Mi", podSpec.Containers[0].Resources.Requests.Memory().String())
 		assert.Equal(t, "200Mi", podSpec.Containers[0].Resources.Limits.Memory().String())
-		assert.Equal(t, "test-image1", podSpec.InitContainers[0].Image)
-		assert.Equal(t, "test-image2", podSpec.InitContainers[1].Image)
-		assert.Equal(t, "test-image3", podSpec.InitContainers[2].Image)
+		assert.Equal(t, CtrMonitor, podSpec.InitContainers[0].Name)
+		assert.Equal(t, "test-image1", podSpec.InitContainers[1].Image)
+		assert.Equal(t, "test-image2", podSpec.InitContainers[2].Image)
+		assert.Equal(t, "test-image3", podSpec.InitContainers[3].Image)
 		for i, c := range podSpec.Containers {
 			if i != 0 {
 				assert.Equal(t, 1, len(c.VolumeMounts))
 			}
 		}
-		for _, c := range podSpec.InitContainers {
-			assert.Equal(t, 1, len(c.VolumeMounts))
+		for i, c := range podSpec.InitContainers {
+			if i == 0 {
+				assert.Equal(t, 1, len(c.VolumeMounts)) // monitor container
+				continue
+			}
+			assert.Equal(t, 2, len(c.VolumeMounts))
 		}
 		envNames := []string{}
 		for _, env := range podSpec.Containers[0].Env {
@@ -419,7 +424,7 @@ func TestMonoVertex_GetServiceObj(t *testing.T) {
 	}
 
 	t.Run("non-headless service", func(t *testing.T) {
-		svc := mv.getServiceObj("test-service", false, 8080, "http")
+		svc := mv.getServiceObj("test-service", false, map[string]int32{"http": 8080})
 		assert.Equal(t, "test-service", svc.Name)
 		assert.Equal(t, "test-namespace", svc.Namespace)
 		assert.Equal(t, 1, len(svc.Spec.Ports))
@@ -429,7 +434,7 @@ func TestMonoVertex_GetServiceObj(t *testing.T) {
 	})
 
 	t.Run("headless service", func(t *testing.T) {
-		svc := mv.getServiceObj("test-headless-service", true, 9090, "grpc")
+		svc := mv.getServiceObj("test-headless-service", true, map[string]int32{"grpc": 9090})
 		assert.Equal(t, "test-headless-service", svc.Name)
 		assert.Equal(t, "test-namespace", svc.Namespace)
 		assert.Equal(t, 1, len(svc.Spec.Ports))
@@ -439,7 +444,7 @@ func TestMonoVertex_GetServiceObj(t *testing.T) {
 	})
 
 	t.Run("verify labels", func(t *testing.T) {
-		svc := mv.getServiceObj("test-label-service", false, 7070, "metrics")
+		svc := mv.getServiceObj("test-label-service", false, map[string]int32{"metrics": 7070})
 		expectedLabels := map[string]string{
 			KeyPartOf:         Project,
 			KeyManagedBy:      ControllerMonoVertex,
@@ -450,7 +455,7 @@ func TestMonoVertex_GetServiceObj(t *testing.T) {
 	})
 
 	t.Run("verify selector", func(t *testing.T) {
-		svc := mv.getServiceObj("test-selector-service", false, 6060, "admin")
+		svc := mv.getServiceObj("test-selector-service", false, map[string]int32{"admin": 6060})
 		expectedSelector := map[string]string{
 			KeyPartOf:         Project,
 			KeyManagedBy:      ControllerMonoVertex,
@@ -477,9 +482,20 @@ func TestMonoVertex_GetServiceObjs(t *testing.T) {
 		assert.Equal(t, mv.GetHeadlessServiceName(), headlessService.Name)
 		assert.Equal(t, "test-namespace", headlessService.Namespace)
 		assert.Equal(t, "None", headlessService.Spec.ClusterIP)
-		assert.Equal(t, 1, len(headlessService.Spec.Ports))
-		assert.Equal(t, int32(MonoVertexMetricsPort), headlessService.Spec.Ports[0].Port)
-		assert.Equal(t, MonoVertexMetricsPortName, headlessService.Spec.Ports[0].Name)
+		assert.Equal(t, 2, len(headlessService.Spec.Ports))
+
+		// Verify that the ports contain the expected values
+		expectedPorts := map[int32]string{
+			MonoVertexMetricsPort: MonoVertexMetricsPortName,
+			MonoVertexMonitorPort: MonoVertexMonitorPortName,
+		}
+		foundPorts := map[int32]string{}
+		for _, port := range headlessService.Spec.Ports {
+			foundPorts[port.Port] = port.Name
+		}
+		for port, name := range expectedPorts {
+			assert.Equal(t, name, foundPorts[port], "Port name mismatch for port %d", port)
+		}
 	})
 }
 

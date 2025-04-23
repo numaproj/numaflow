@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -99,15 +100,22 @@ func (pt *PodTracker) trackActivePods(ctx context.Context) {
 
 // updateActivePods checks the status of all pods and updates the activePods set accordingly.
 func (pt *PodTracker) updateActivePods() {
-	for i := 0; i < int(pt.monoVertex.Spec.Scale.GetMaxReplicas()); i++ {
-		podName := fmt.Sprintf("%s-mv-%d", pt.monoVertex.Name, i)
-		podKey := pt.getPodKey(i)
-		if pt.isActive(podName) {
-			pt.activePods.PushBack(podKey)
-		} else {
-			pt.activePods.Remove(podKey)
-		}
+	var wg sync.WaitGroup
+
+	for i := range int(pt.monoVertex.Spec.Scale.GetMaxReplicas()) {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			podName := fmt.Sprintf("%s-mv-%d", pt.monoVertex.Name, index)
+			podKey := pt.getPodKey(index)
+			if pt.isActive(podName) {
+				pt.activePods.PushBack(podKey)
+			} else {
+				pt.activePods.Remove(podKey)
+			}
+		}(i)
 	}
+	wg.Wait()
 	pt.log.Debugf("Finished updating the active pod set: %v", pt.activePods.ToString())
 }
 

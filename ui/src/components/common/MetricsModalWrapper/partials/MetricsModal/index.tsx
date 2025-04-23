@@ -10,6 +10,8 @@ import {
 } from "../../../SlidingSidebar/partials/VertexDetails";
 import { Pod } from "../../../../../types/declarations/pods";
 
+import "./style.css";
+
 const modalStyle = {
   position: "absolute",
   top: "50%",
@@ -17,9 +19,10 @@ const modalStyle = {
   transform: "translate(-50%, -50%)",
   height: "60%",
   width: "80%",
-  bgcolor: "background.paper",
+  backgroundColor: "background.paper",
   boxShadow: 24,
-  p: 4,
+  borderRadius: "1rem",
+  p: "3rem",
 };
 
 interface MetricsModalProps {
@@ -82,21 +85,13 @@ export function MetricsModal({
       aria-describedby="buffer-details-description"
     >
       <Box sx={modalStyle}>
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <Box sx={{ fontSize: "1.6rem", textTransform: "capitalize" }}>
-            {metricDisplayName}
-          </Box>
+        <Box className={"metrics-modal-title-container"}>
+          <Box className={"metrics-modal-title"}>{metricDisplayName}</Box>
           <IconButton onClick={handleCloseModal} aria-label="close">
             <CloseIcon fontSize="large" />
           </IconButton>
         </Box>
-        <Box>
+        <Box sx={{ height: "calc(100% - 3rem)" }}>
           <Metrics
             namespaceId={namespaceId}
             pipelineId={pipelineId}
@@ -109,17 +104,7 @@ export function MetricsModal({
           />
         </Box>
         {metricsFound && (
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "row-reverse",
-              textDecoration: "underline",
-              color: "#0077C5",
-              cursor: "pointer",
-              mt: "0.5rem",
-            }}
-            onClick={handleRedirect}
-          >
+          <Box className={"metrics-modal-redirect"} onClick={handleRedirect}>
             Click to see detailed view with additional filters
           </Box>
         )}

@@ -1,9 +1,10 @@
+use crate::config::{config, CustomResourceType};
+use bytes::Bytes;
 use tokio::signal;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
+use tonic::{Code, Status};
 use tracing::{error, info};
-
-use crate::config::{config, CustomResourceType};
 
 /// Custom Error handling.
 mod error;
@@ -65,6 +66,8 @@ mod serving_store;
 /// [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 mod watermark;
 
+use numaflow_monitor::runtime;
+
 pub async fn run() -> Result<()> {
     let cln_token = CancellationToken::new();
     let shutdown_cln_token = cln_token.clone();
@@ -83,9 +86,15 @@ pub async fn run() -> Result<()> {
             // Run the forwarder with cancellation token.
             if let Err(e) = monovertex::start_forwarder(cln_token, &config).await {
                 if let Error::Grpc(e) = e {
-                    error!(error=?e, "Monovertex failed because of UDF failure")
+                    error!(error=?e, "Monovertex failed because of UDF failure");
+                    runtime::persist_application_error(e);
                 } else {
                     error!(?e, "Error running monovertex");
+                    runtime::persist_application_error(Status::with_details(
+                        Code::Internal,
+                        "Error occurred while running MonoVertex".to_string(),
+                        Bytes::from(e.to_string()),
+                    ));
                 }
                 // abort the signal handler task since we have an error and we are shutting down
                 if !shutdown_handle.is_finished() {
@@ -97,9 +106,15 @@ pub async fn run() -> Result<()> {
             info!("Starting pipeline forwarder with config: {:#?}", config);
             if let Err(e) = pipeline::start_forwarder(cln_token, config).await {
                 if let Error::Grpc(e) = e {
-                    error!(error=?e, "Pipeline failed because of UDF failure")
+                    error!(error=?e, "Pipeline failed because of UDF failure");
+                    runtime::persist_application_error(e);
                 } else {
                     error!(?e, "Error running pipeline");
+                    runtime::persist_application_error(Status::with_details(
+                        Code::Internal,
+                        "Error occurred while running pipeline".to_string(),
+                        Bytes::from(e.to_string()),
+                    ));
                 }
                 // abort the signal handler task since we have an error and we are shutting down
                 if !shutdown_handle.is_finished() {

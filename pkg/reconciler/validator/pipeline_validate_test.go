@@ -464,6 +464,14 @@ func TestValidatePipeline(t *testing.T) {
 		assert.Contains(t, err.Error(), "pipeline has no sink")
 	})
 
+	t.Run("pipeline with serve sink", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices[2].Sink = &dfv1.Sink{AbstractSink: dfv1.AbstractSink{Serve: &dfv1.ServeSink{}}}
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "builtin 'serve' sink used in \"output\" vertex is only allowed with ServingPipeline")
+	})
+
 	t.Run("last vertex is not sink", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
 		testObj.Spec.Vertices = append(testObj.Spec.Vertices, dfv1.AbstractVertex{Name: "bad-output", UDF: &dfv1.UDF{Builtin: &dfv1.Function{Name: "cat"}}})
@@ -692,7 +700,7 @@ func TestValidateVertex(t *testing.T) {
 			Name: "my-vertex",
 			UpdateStrategy: dfv1.UpdateStrategy{
 				RollingUpdate: &dfv1.RollingUpdateStrategy{
-					MaxUnavailable: ptr.To[intstr.IntOrString](intstr.FromString("10%")),
+					MaxUnavailable: ptr.To(intstr.FromString("10%")),
 				},
 			},
 		}
@@ -705,7 +713,7 @@ func TestValidateVertex(t *testing.T) {
 			Name: "my-vertex",
 			UpdateStrategy: dfv1.UpdateStrategy{
 				RollingUpdate: &dfv1.RollingUpdateStrategy{
-					MaxUnavailable: ptr.To[intstr.IntOrString](intstr.FromInt(3)),
+					MaxUnavailable: ptr.To(intstr.FromInt(3)),
 				},
 			},
 		}

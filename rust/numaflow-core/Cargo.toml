@@ -16,6 +16,8 @@ workspace = true
 tokio.workspace = true
 tracing.workspace = true
 numaflow-pulsar.workspace = true
+numaflow-monitor.workspace = true
+numaflow-jetstream.workspace = true
 numaflow-sqs.workspace = true
 numaflow-models.workspace = true
 numaflow-pb.workspace = true
@@ -27,7 +29,10 @@ bytes.workspace = true
 serde.workspace = true
 rustls.workspace = true
 tower.workspace = true
-tonic = "0.12.3"
+reqwest.workspace = true
+hyper = "1.2.0"
+async-nats.workspace = true
+tonic = { version = "0.13.0"}
 thiserror = "2.0.3"
 tokio-util = "0.7.11"
 tokio-stream = "0.1.15"
@@ -47,11 +52,10 @@ kube = "0.95.0"
 futures = "0.3.30"
 pin-project = "1.1.5"
 rand = "0.8.5"
-async-nats = "0.39.0"
 
 [dev-dependencies]
 tempfile = "3.11.0"
-numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "4b37e79cc9c235fbffdc74e36a0f9d9363fc0dda" }
+numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "c6aa3a8d64a189357260f78131ef4692d387ba6c" }
 pulsar = { version = "6.3.0", default-features = false, features = [
     "tokio-rustls-runtime",
 ] }
@@ -62,5 +66,6 @@ aws-config = "1.5.11"
 aws-sdk-sqs = "1.51.0"
 reqwest = { workspace = true, features = ["json"] }
 aws-smithy-mocks-experimental = "0.2.1"
+k8s-openapi = { version = "0.23.0", features = ["v1_31"] }
 
 [build-dependencies]

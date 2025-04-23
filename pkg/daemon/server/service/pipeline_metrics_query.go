@@ -26,12 +26,14 @@ import (
 
 	"github.com/prometheus/common/expfmt"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	rater "github.com/numaproj/numaflow/pkg/daemon/server/service/rater"
+	runtimeinfo "github.com/numaproj/numaflow/pkg/daemon/server/service/runtime"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -47,12 +49,13 @@ type metricsHttpClient interface {
 // PipelineMetadataQuery has the metadata required for the pipeline queries
 type PipelineMetadataQuery struct {
 	daemon.UnimplementedDaemonServiceServer
-	isbSvcClient      isbsvc.ISBService
-	pipeline          *v1alpha1.Pipeline
-	httpClient        metricsHttpClient
-	watermarkFetchers map[v1alpha1.Edge][]fetch.HeadFetcher
-	rater             rater.Ratable
-	healthChecker     *HealthChecker
+	isbSvcClient         isbsvc.ISBService
+	pipeline             *v1alpha1.Pipeline
+	httpClient           metricsHttpClient
+	watermarkFetchers    map[v1alpha1.Edge][]fetch.HeadFetcher
+	rater                rater.Ratable
+	pipelineRuntimeCache runtimeinfo.PipelineRuntimeCache
+	healthChecker        *HealthChecker
 }
 
 // NewPipelineMetadataQuery returns a new instance of pipelineMetadataQuery
@@ -60,7 +63,8 @@ func NewPipelineMetadataQuery(
 	isbSvcClient isbsvc.ISBService,
 	pipeline *v1alpha1.Pipeline,
 	wmFetchers map[v1alpha1.Edge][]fetch.HeadFetcher,
-	rater rater.Ratable) (*PipelineMetadataQuery, error) {
+	rater rater.Ratable,
+	pipelineRuntimeCache runtimeinfo.PipelineRuntimeCache) (*PipelineMetadataQuery, error) {
 	ps := PipelineMetadataQuery{
 		isbSvcClient: isbSvcClient,
 		pipeline:     pipeline,
@@ -70,9 +74,10 @@ func NewPipelineMetadataQuery(
 			},
 			Timeout: time.Second * 3,
 		},
-		watermarkFetchers: wmFetchers,
-		rater:             rater,
-		healthChecker:     NewHealthChecker(pipeline, isbSvcClient),
+		watermarkFetchers:    wmFetchers,
+		rater:                rater,
+		healthChecker:        NewHealthChecker(pipeline, isbSvcClient),
+		pipelineRuntimeCache: pipelineRuntimeCache,
 	}
 	return &ps, nil
 }
@@ -226,6 +231,41 @@ func (ps *PipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *dae
 		Message: status.Message,
 		Code:    status.Code,
 	}
+	return resp, nil
+}
+
+// GetVertexErrors returns errors for a given vertex by accessing the local cache in the runtime service.
+// The errors are persisted in the local cache by the runtime service.
+// Errors are retrieved for all active replicas for a given vertex.
+// A list of replica errors for a given vertex is returned.
+func (ps *PipelineMetadataQuery) GetVertexErrors(ctx context.Context, req *daemon.GetVertexErrorsRequest) (*daemon.GetVertexErrorsResponse, error) {
+	pipeline, vertex := req.GetPipeline(), req.GetVertex()
+	cacheKey := fmt.Sprintf("%s-%s", pipeline, vertex)
+	resp := new(daemon.GetVertexErrorsResponse)
+	localCache := ps.pipelineRuntimeCache.GetLocalCache()
+
+	// If the errors are present in the local cache, return the errors.
+	if errors, ok := localCache[cacheKey]; ok {
+		replicaErrors := make([]*daemon.ReplicaErrors, len(errors))
+		for i, err := range errors {
+			containerErrors := make([]*daemon.ContainerError, len(err.ContainerErrors))
+			for j, containerError := range err.ContainerErrors {
+				containerErrors[j] = &daemon.ContainerError{
+					Container: containerError.Container,
+					Timestamp: timestamppb.New(time.Unix(containerError.Timestamp, 0)),
+					Code:      containerError.Code,
+					Message:   containerError.Message,
+					Details:   containerError.Details,
+				}
+			}
+			replicaErrors[i] = &daemon.ReplicaErrors{
+				Replica:         err.Replica,
+				ContainerErrors: containerErrors,
+			}
+		}
+		resp.Errors = replicaErrors
+	}
+
 	return resp, nil
 }
 

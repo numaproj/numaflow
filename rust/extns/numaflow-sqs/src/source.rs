@@ -109,7 +109,7 @@ pub async fn create_sqs_client(config: Option<SQSSourceConfig>) -> Result<Client
         .or_else(Region::new("us-west-2")); // Default region if none provided
 
     let mut config_builder =
-        aws_config::defaults(BehaviorVersion::v2024_03_28()).region(region_provider);
+        aws_config::defaults(BehaviorVersion::v2025_01_17()).region(region_provider);
 
     // Apply endpoint URL if configured
     if let Some(endpoint_url) = config.endpoint_url {

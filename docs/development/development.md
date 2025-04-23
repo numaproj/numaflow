@@ -4,11 +4,11 @@ This doc explains how to set up a development environment for Numaflow.
 
 ### Install required tools
 
-1. [`go`](https://golang.org/doc/install) 1.20+.
+1. [`go`](https://golang.org/doc/install) 1.24+.
 1. [`git`](https://help.github.com/articles/set-up-git/).
 1. [`kubectl`](https://kubernetes.io/docs/tasks/tools/install-kubectl/).
 1. [`protoc`](https://github.com/protocolbuffers/protobuf) 3.19 for compiling protocol buffers.
-1. [`pandoc`](https://pandoc.org/installing.html) 2.17 for generating API markdown.
+1. [`pandoc`](https://pandoc.org/installing.html) 3.2.1 for generating API markdown.
 1. [`Node.js®`](https://nodejs.org/en/) for running the UI.
 1. [`yarn`](https://classic.yarnpkg.com/en/).
 1. A local Kubernetes cluster for development usage, pick either one of [`k3d`](https://k3d.io/), [`kind`](https://kind.sigs.k8s.io/), or [`minikube`](https://minikube.sigs.k8s.io/docs/start/).
@@ -29,11 +29,11 @@ kind export kubeconfig
 #### Metrics Server
 
 Please install the metrics server if your local Kubernetes cluster does not bring it by default (e.g., Kind).
-Without the [metrics-server](https://github.com/kubernetes-sigs/metrics-server), we will not be able to see the pods in 
+Without the [metrics-server](https://github.com/kubernetes-sigs/metrics-server), we will not be able to see the pods in
 the UI.
 
 ```shell
-kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml 
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
 kubectl patch -n kube-system deployment metrics-server --type=json -p '[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
 ```
 

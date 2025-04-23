@@ -1,12 +1,9 @@
-use std::sync::Arc;
 use std::time::Duration;
 
-use async_nats::jetstream::Context;
 use numaflow_pb::clients::map::map_client::MapClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use serving::ServingSource;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::components::sink::{SinkConfig, SinkType};
@@ -22,6 +19,7 @@ use crate::shared::grpc;
 use crate::shared::server_info::{sdk_server_info, ContainerType};
 use crate::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
 use crate::source::generator::new_generator;
+use crate::source::jetstream::new_jetstream_source;
 use crate::source::pulsar::new_pulsar_source;
 use crate::source::sqs::new_sqs_source;
 use crate::source::user_defined::new_source;
@@ -52,6 +50,12 @@ pub(crate) async fn create_sink_writer(
             batch_size,
             read_timeout,
             SinkClientType::Blackhole,
+            tracker_handle,
+        ),
+        SinkType::Serve => SinkWriterBuilder::new(
+            batch_size,
+            read_timeout,
+            SinkClientType::Serve,
             tracker_handle,
         ),
         SinkType::UserDefined(ud_config) => {
@@ -92,6 +96,10 @@ pub(crate) async fn create_sink_writer(
         return match fb_sink.sink_type.clone() {
             SinkType::Log(_) => Ok(sink_writer_builder
                 .fb_sink_client(SinkClientType::Log)
+                .build()
+                .await?),
+            SinkType::Serve => Ok(sink_writer_builder
+                .fb_sink_client(SinkClientType::Serve)
                 .build()
                 .await?),
             SinkType::Blackhole(_) => Ok(sink_writer_builder
@@ -246,7 +254,6 @@ pub(crate) async fn create_mapper(
 /// Creates a source type based on the configuration
 #[allow(clippy::too_many_arguments)]
 pub async fn create_source(
-    js_context: Option<Context>,
     batch_size: usize,
     read_timeout: Duration,
     source_config: &SourceConfig,
@@ -329,7 +336,7 @@ pub async fn create_source(
                 read_timeout,
                 *get_vertex_replica(),
             )
-            .await?;
+                .await?;
             Ok(Source::new(
                 batch_size,
                 source::SourceType::SQS(sqs),
@@ -339,22 +346,14 @@ pub async fn create_source(
                 watermark_handle,
             ))
         }
-        // for serving we use batch size as 1 as we are not batching the messages
-        // and read ahead is enabled as it supports it.
-        SourceType::Serving(config) => {
-            let serving = ServingSource::new(
-                js_context.expect("Jetstream context is required for serving source"),
-                Arc::clone(config),
-                1,
-                read_timeout,
-                *get_vertex_replica(),
-            )
-            .await?;
+        SourceType::Jetstream(jetstream_config) => {
+            let jetstream =
+                new_jetstream_source(jetstream_config.clone(), batch_size, read_timeout).await?;
             Ok(Source::new(
-                1,
-                source::SourceType::Serving(serving),
+                batch_size,
+                source::SourceType::Jetstream(jetstream),
                 tracker_handle,
-                true,
+                source_config.read_ahead,
                 transformer,
                 watermark_handle,
             ))
@@ -362,10 +361,16 @@ pub async fn create_source(
     }
 }
 
+#[cfg(test)]
+const SECRET_BASE_PATH: &str = "/tmp/numaflow";
+
+#[cfg(not(test))]
+const SECRET_BASE_PATH: &str = "/var/numaflow/secrets";
+
 // Retrieve value from mounted secret volume
 // "/var/numaflow/secrets/${secretRef.name}/${secretRef.key}" is expected to be the file path
 pub(crate) fn get_secret_from_volume(name: &str, key: &str) -> Result<String, String> {
-    let path = format!("/var/numaflow/secrets/{name}/{key}");
+    let path = format!("{SECRET_BASE_PATH}/{name}/{key}");
     let val = std::fs::read_to_string(path.clone())
         .map_err(|e| format!("Reading secret from file {path}: {e:?}"))?;
     Ok(val.trim().into())

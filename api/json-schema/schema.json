@@ -19494,6 +19494,10 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log",
           "description": "Log sink is used to write the data to the log."
         },
+        "serve": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServeSink",
+          "description": "Serve sink is used to return results when working with a ServingPipeline."
+        },
         "udsink": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSink",
           "description": "UDSink sink is used to write the data to the user-defined sink."
@@ -19600,10 +19604,6 @@
           "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
-        "servingStoreName": {
-          "description": "Names of the serving store used in this vertex.",
-          "type": "string"
-        },
         "sideInputs": {
           "description": "Names of the side inputs used in this vertex.",
           "items": {
@@ -19654,6 +19654,16 @@
       "required": [
         "name"
       ],
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.AccumulatorWindow": {
+      "description": "AccumulatorWindow describes a special kind of SessionWindow (similar to Global Window) where output should always have monotonically increasing WM but it can be manipulated through event-time by reordering the messages. NOTE: Quite powerful, should not be abused; it can cause stalling of pipelines and leaks.",
+      "properties": {
+        "timeout": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
+          "description": "Timeout is the duration of inactivity after which the state of the accumulator is removed."
+        }
+      },
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.Authorization": {
@@ -20384,6 +20394,36 @@
         "ConfConfigMapName",
         "ScriptsConfigMapName",
         "HealthConfigMapName",
+        "DefaultResources"
+      ],
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.GetServingPipelineResourceReq": {
+      "properties": {
+        "DefaultResources": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
+        },
+        "Env": {
+          "items": {
+            "$ref": "#/definitions/io.k8s.api.core.v1.EnvVar"
+          },
+          "type": "array"
+        },
+        "ISBSvcConfig": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.BufferServiceConfig"
+        },
+        "Image": {
+          "type": "string"
+        },
+        "PullPolicy": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "ISBSvcConfig",
+        "Image",
+        "PullPolicy",
+        "Env",
         "DefaultResources"
       ],
       "type": "object"
@@ -21560,10 +21600,6 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PipelineLimits",
           "description": "Limits define the limitations such as buffer read batch size for all the vertices of a pipeline, they could be overridden by each vertex's settings"
         },
-        "servingStore": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingStore",
-          "description": "ServingStore defines the Serving Store for this pipeline."
-        },
         "sideInputs": {
           "description": "SideInputs defines the Side Inputs of a pipeline.",
           "items": {
@@ -21959,15 +21995,119 @@
       },
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.ServeSink": {
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.ServingPipeline": {
+      "properties": {
+        "apiVersion": {
+          "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+          "type": "string"
+        },
+        "kind": {
+          "description": "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"
+        },
+        "spec": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingPipelineSpec"
+        },
+        "status": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingPipelineStatus"
+        }
+      },
+      "required": [
+        "spec"
+      ],
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.ServingPipelineList": {
+      "properties": {
+        "apiVersion": {
+          "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Pipeline"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "description": "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.ListMeta"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.ServingPipelineSpec": {
+      "properties": {
+        "pipeline": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PipelineSpec"
+        },
+        "serving": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingSpec"
+        }
+      },
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.ServingPipelineStatus": {
+      "properties": {
+        "conditions": {
+          "description": "Conditions are the latest available observations of a resource's current state.",
+          "items": {
+            "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Condition"
+          },
+          "type": "array",
+          "x-kubernetes-patch-merge-key": "type",
+          "x-kubernetes-patch-strategy": "merge"
+        },
+        "lastUpdated": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Time"
+        },
+        "message": {
+          "type": "string"
+        },
+        "observedGeneration": {
+          "description": "The generation observed by the ServingPipeline controller.",
+          "format": "int64",
+          "type": "integer"
+        },
+        "phase": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.ServingSource": {
-      "description": "ServingSource is the HTTP endpoint for Numaflow.",
+      "description": "ServingSource is the source vertex for ServingPipeline and should be used only with ServingPipeline.",
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.ServingSpec": {
       "properties": {
         "auth": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Authorization"
         },
+        "containerTemplate": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ContainerTemplate",
+          "description": "Container template for the serving container."
+        },
         "msgIDHeaderKey": {
           "description": "The header key from which the message id will be extracted",
           "type": "string"
+        },
+        "replicas": {
+          "description": "Initial replicas of the serving server deployment.",
+          "format": "int32",
+          "type": "integer"
         },
         "requestTimeoutSeconds": {
           "description": "Request timeout in seconds. Default value is 120 seconds.",
@@ -21977,6 +22117,9 @@
         "service": {
           "description": "Whether to create a ClusterIP Service",
           "type": "boolean"
+        },
+        "store": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingStore"
         }
       },
       "required": [
@@ -21989,13 +22132,9 @@
       "properties": {
         "container": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Container"
-        },
-        "name": {
-          "type": "string"
         }
       },
       "required": [
-        "name",
         "container"
       ],
       "type": "object"
@@ -22160,6 +22299,10 @@
         "retryStrategy": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RetryStrategy",
           "description": "RetryStrategy struct encapsulates the settings for retrying operations in the event of failures."
+        },
+        "serve": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServeSink",
+          "description": "Serve sink is used to return results when working with a ServingPipeline."
         },
         "udsink": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSink",
@@ -22666,10 +22809,6 @@
           "description": "ServiceAccountName applied to the pod",
           "type": "string"
         },
-        "servingStoreName": {
-          "description": "Names of the serving store used in this vertex.",
-          "type": "string"
-        },
         "sideInputs": {
           "description": "Names of the side inputs used in this vertex.",
           "items": {
@@ -22907,6 +23046,9 @@
     "io.numaproj.numaflow.v1alpha1.Window": {
       "description": "Window describes windowing strategy",
       "properties": {
+        "accumulator": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.AccumulatorWindow"
+        },
         "fixed": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.FixedWindow"
         },
@@ -23084,9 +23226,6 @@
           },
           "type": "array"
         },
-        "executeRustBinary": {
-          "type": "boolean"
-        },
         "image": {
           "type": "string"
         },
@@ -23098,9 +23237,6 @@
         },
         "resources": {
           "$ref": "#/definitions/io.k8s.api.core.v1.ResourceRequirements"
-        },
-        "servingStore": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServingStore"
         },
         "volumeMounts": {
           "items": {
@@ -23115,9 +23251,7 @@
         "imagePullPolicy",
         "image",
         "volumeMounts",
-        "resources",
-        "executeRustBinary",
-        "servingStore"
+        "resources"
       ],
       "type": "object"
     }

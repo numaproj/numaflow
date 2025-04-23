@@ -4,7 +4,7 @@ use tracing::info;
 use crate::config::is_mono_vertex;
 use crate::config::monovertex::MonovertexConfig;
 use crate::error::{self};
-use crate::metrics::LagReader;
+use crate::metrics::{LagReader, PendingReaderTasks, PendingReaderTasks_};
 use crate::shared::create_components;
 use crate::sink::SinkWriter;
 use crate::source::Source;
@@ -34,7 +34,6 @@ pub(crate) async fn start_forwarder(
     .await?;
 
     let source = create_components::create_source(
-        None,
         config.batch_size,
         config.read_timeout,
         &config.source_config,
@@ -82,13 +81,23 @@ async fn start(
     sink: SinkWriter,
     cln_token: CancellationToken,
 ) -> error::Result<()> {
-    // start the pending reader to publish pending metrics
-    let pending_reader = shared::metrics::create_pending_reader(
-        &mvtx_config.metrics_config,
-        LagReader::Source(source.clone()),
-    )
-    .await;
-    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
+    // Store the pending reader handle outside, so it doesn't get dropped immediately.
+
+    // only check the pending and lag for source for pod_id = 0
+    let _pending_reader_handle: Option<PendingReaderTasks_> = if mvtx_config.replica == 0 {
+        // start the pending reader to publish pending metrics
+        let pending_reader = shared::metrics::create_pending_reader(
+            &mvtx_config.metrics_config,
+            LagReader::Source(source.clone()),
+        )
+        .await;
+        // TODO(lookback) - using new implementation for monovertex right now,
+        // deprecate old implementation and use this for pipeline as well once
+        // corresponding changes are completed.
+        Some(pending_reader.start_(is_mono_vertex()).await)
+    } else {
+        None
+    };
 
     let forwarder = forwarder::Forwarder::new(source, sink);
 

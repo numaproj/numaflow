@@ -77,11 +77,6 @@ impl source::SourceReader for SQSSource {
     async fn partitions(&mut self) -> crate::Result<Vec<u16>> {
         Ok(vec![*get_vertex_replica()])
     }
-
-    // FIXME(chichu): Implement this
-    async fn is_ready(&mut self) -> bool {
-        true
-    }
 }
 
 impl source::SourceAcker for SQSSource {

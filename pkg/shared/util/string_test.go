@@ -35,14 +35,6 @@ func TestRandomLowercaseString(t *testing.T) {
 	assert.Equal(t, str, strings.ToLower(str))
 }
 
-func TestStringSliceContains(t *testing.T) {
-	assert.False(t, StringSliceContains(nil, "b"))
-	assert.False(t, StringSliceContains([]string{}, "b"))
-	list := []string{"a", "b", "c"}
-	assert.True(t, StringSliceContains(list, "b"))
-	assert.False(t, StringSliceContains(list, "e"))
-}
-
 func TestCompareSlice(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -206,6 +198,37 @@ func TestDNS1035(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := DNS1035(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestHashcode(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected int
+	}{
+		{
+			name:     "a",
+			input:    "1",
+			expected: 2212294583,
+		},
+		{
+			name:     "b",
+			input:    "hello world",
+			expected: 222957957,
+		},
+		{
+			name:     "c",
+			input:    "This is a test",
+			expected: 3229261618,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := Hashcode(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

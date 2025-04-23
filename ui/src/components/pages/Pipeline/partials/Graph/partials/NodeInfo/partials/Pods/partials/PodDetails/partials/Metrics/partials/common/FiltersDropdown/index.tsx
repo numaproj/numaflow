@@ -5,14 +5,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
-import {
-  Button,
-  Popover,
-  MenuItem,
-  Typography,
-  Box,
-  IconButton,
-} from "@mui/material";
+import { Button, Popover, MenuItem, Box, IconButton } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
@@ -24,6 +17,8 @@ import { AppContextProps } from "../../../../../../../../../../../../../../../..
 import { AppContext } from "../../../../../../../../../../../../../../../../App";
 import { getBaseHref } from "../../../../../../../../../../../../../../../../utils";
 
+import "./style.css";
+
 export interface FiltersDropdownProps {
   items: any;
   namespaceId: string;
@@ -32,6 +27,8 @@ export interface FiltersDropdownProps {
   vertexId?: string;
   setFilters: any;
   selectedPodName?: string;
+  isFilterFocused: boolean;
+  setFilterFocused: any;
   metric: any;
 }
 
@@ -50,6 +47,8 @@ const FiltersDropdown = ({
   vertexId,
   setFilters,
   selectedPodName,
+  isFilterFocused,
+  setFilterFocused,
   metric,
 }: FiltersDropdownProps) => {
   const { host } = useContext<AppContextProps>(AppContext);
@@ -100,6 +99,7 @@ const FiltersDropdown = ({
                       ...(pod?.spec?.initContainers
                         ?.filter(
                           (initContainer: any) =>
+                            initContainer?.name !== "monitor" &&
                             initContainer?.restartPolicy === "Always"
                         )
                         ?.map((ele: any) => ele.name) || []),
@@ -139,7 +139,7 @@ const FiltersDropdown = ({
         case "pod":
           return podsData;
         case "period":
-          return periodData;
+          return periodData?.filter((p) => p?.name !== "default");
         default:
           return null;
       }
@@ -204,31 +204,20 @@ const FiltersDropdown = ({
       }
       return rest;
     });
+    setFilterFocused(false);
   };
 
   // Render the dynamic filter menu levels
   const renderMenuItems = (filters: any, level: number) => {
     return filters.map((filter: any, index: number) => (
       <MenuItem
+        className={"filter-menu-item"}
         key={index}
         onClick={() => handleFilterSelect(filter, level)}
-        sx={{
-          width: "fit-content",
-          minWidth: "15rem",
-          fontSize: "1.6rem",
-          display: "flex",
-          justifyContent: "space-between",
-        }}
       >
-        <Box sx={{ textOverflow: "ellipsis" }}>{filter?.name}</Box>
+        <Box className={"filter-menu-item-name"}>{filter?.name}</Box>
         {level === 0 && (
-          <ArrowForwardIcon
-            sx={{
-              height: "2.4rem",
-              width: "2.4rem",
-              color: "#0077C5",
-            }}
-          />
+          <ArrowForwardIcon className={"filter-menu-item-forward-icon"} />
         )}
       </MenuItem>
     ));
@@ -236,40 +225,36 @@ const FiltersDropdown = ({
 
   return (
     <Box
+      className={"filters-dropdown-container"}
       sx={{
-        display: "flex",
-        alignItems: "center",
-        width: "100%",
-        border: "0.1rem solid black",
-        borderRadius: "0.5rem",
-        height: "4rem",
-        p: "1rem",
+        border: isFilterFocused ? "0.2rem solid #0077c5" : "0.1rem solid black",
       }}
+      onFocus={() => setFilterFocused(true)}
+      onBlur={() => setFilterFocused(false)}
     >
       {selectedFilters.map((filter, index) => (
         <Box
+          className={"filters-dropdown-selected-filters-container"}
           key={index}
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            p: "0.5rem 1rem",
-            backgroundColor: "#f0f0f0",
-            borderRadius: "0.4rem",
-            mr: "1rem",
-          }}
         >
-          <Typography variant="body1">{filter}</Typography>
+          <Box className={"filters-dropdown-selected-filter-value"}>
+            {filter}
+          </Box>
           <IconButton
             size="small"
             onClick={() => handleRemoveFilter(filter, metric)}
-            sx={{ marginLeft: "0.5rem" }}
           >
             <CloseIcon fontSize="small" />
           </IconButton>
         </Box>
       ))}
 
-      <Button variant="outlined" startIcon={<AddIcon />} onClick={handleClick}>
+      <Button
+        variant="outlined"
+        startIcon={<AddIcon sx={{ color: "#0077C5" }} />}
+        onClick={handleClick}
+        className={"filters-dropdown-add-filter-button"}
+      >
         Add Filter
       </Button>
 
@@ -291,9 +276,12 @@ const FiltersDropdown = ({
           {/* Render the first level */}
           <Box>{renderMenuItems(getNestedFilterList, 0)}</Box>
 
-          {/* Render sublevels dynamically based on activeFilters */}
+          {/* Render sub levels dynamically based on activeFilters */}
           {activeFilters.map((filter: any, index) => (
-            <Box key={index}>
+            <Box
+              className={"filters-dropdown-active-filters-options"}
+              key={index}
+            >
               {renderMenuItems(filter?.subfilters, index + 1)}
             </Box>
           ))}

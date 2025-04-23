@@ -26,7 +26,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.24"
 
       - name: Build binaries
         run: |
@@ -57,18 +57,26 @@ jobs:
           echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
           echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
       - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.5
+        uses: mozilla-actions/sccache-action@v0.0.9
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - name: Build binary
         run: RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target x86_64-unknown-linux-gnu
       - name: Rename binary
-        run: cp -pv target/x86_64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-amd64
+        run: |
+          cp -pv target/x86_64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-amd64
+          cp -pv target/x86_64-unknown-linux-gnu/release/entrypoint entrypoint-linux-amd64
       - name: Upload numaflow binary
         uses: actions/upload-artifact@v4
         with:
           name: numaflow-rs-linux-amd64
           path: rust/numaflow-rs-linux-amd64
+      - name: Upload entrypoint binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: entrypoint-linux-amd64
+          path: rust/entrypoint-linux-amd64
+          if-no-files-found: error
 
   build-rust-arm64:
     runs-on: ubuntu-24.04
@@ -90,18 +98,25 @@ jobs:
           echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
           echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
       - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.5
+        uses: mozilla-actions/sccache-action@v0.0.9
       - name: Install dependenices
         run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu protobuf-compiler
       - name: Build binary
         run: RUSTFLAGS='-C target-feature=+crt-static -C linker=aarch64-linux-gnu-gcc' cargo build --release --target aarch64-unknown-linux-gnu
       - name: Rename binary
-        run: cp -pv target/aarch64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-arm64
+        run: |
+          cp -pv target/aarch64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-arm64
+          cp -pv target/aarch64-unknown-linux-gnu/release/entrypoint entrypoint-linux-arm64
       - name: Upload numaflow binary
         uses: actions/upload-artifact@v4
         with:
           name: numaflow-rs-linux-arm64
           path: rust/numaflow-rs-linux-arm64
+      - name: Upload entrypoint binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: entrypoint-linux-arm64
+          path: rust/entrypoint-linux-arm64
 
   build-push-linux-multi:
     name: Build & push linux/amd64 and linux/arm64
@@ -138,10 +153,22 @@ jobs:
           name: numaflow-rs-linux-amd64
           path: dist/
 
+      - name: Download Entrypoint amd64 binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: entrypoint-linux-amd64
+          path: dist/
+
       - name: Download Rust arm64 binaries
         uses: actions/download-artifact@v4
         with:
           name: numaflow-rs-linux-arm64
+          path: dist/
+
+      - name: Download Entrypoint arm64 binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: entrypoint-linux-arm64
           path: dist/
 
       - name: Registry Login

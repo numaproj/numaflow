@@ -67,7 +67,7 @@ func NewISBSvcValidateCommand() *cobra.Command {
 					return fmt.Errorf("failed to get an in-cluster nats connection, %w", err)
 				}
 				defer client.Close()
-				isbsClient, err = isbsvc.NewISBJetStreamSvc(pipelineName, client)
+				isbsClient, err = isbsvc.NewISBJetStreamSvc(client)
 				if err != nil {
 					logger.Errorw("Failed to get an ISB Service client.", zap.Error(err))
 					return err
@@ -95,7 +95,7 @@ func NewISBSvcValidateCommand() *cobra.Command {
 	command.Flags().StringSliceVar(&buffers, "buffers", []string{}, "Buffers to validate") // --buffers=a,b, --buffers=c
 	command.Flags().StringSliceVar(&buckets, "buckets", []string{}, "Buckets to validate") // --buckets=xxa,xxb --buckets=xxc
 	command.Flags().StringVar(&sideInputsStore, "side-inputs-store", "", "Name of the side inputs store")
-	command.Flags().StringVar(&servingSourceStore, "serving-source-store", "", "Serving source store to validate") // --serving-source-store=a
+	command.Flags().StringVar(&servingSourceStore, "serving-store", "", "Serving source store to validate") // --serving-store=a
 
 	return command
 }

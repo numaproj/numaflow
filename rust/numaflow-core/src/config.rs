@@ -12,6 +12,8 @@ const ENV_VERTEX_OBJ: &str = "NUMAFLOW_VERTEX_OBJECT";
 
 const ENV_CALLBACK_ENABLED: &str = "NUMAFLOW_CALLBACK_ENABLED";
 const ENV_CALLBACK_CONCURRENCY: &str = "NUMAFLOW_CALLBACK_CONCURRENCY";
+const ENV_NUMAFLOW_SERVING_SOURCE_SETTINGS: &str = "NUMAFLOW_SERVING_SOURCE_SETTINGS";
+const ENV_NUMAFLOW_SERVING_KV_STORE: &str = "NUMAFLOW_SERVING_KV_STORE";
 const DEFAULT_CALLBACK_CONCURRENCY: usize = 100;
 
 /// Building blocks (Source, Sink, Transformer, FallBack, Metrics, etc.) to build a Pipeline or a
@@ -22,11 +24,12 @@ pub(crate) mod monovertex;
 /// Pipeline specific configs.
 pub(crate) mod pipeline;
 
-pub const NUMAFLOW_MONO_VERTEX_NAME: &str = "NUMAFLOW_MONO_VERTEX_NAME";
+pub(crate) const NUMAFLOW_MONO_VERTEX_NAME: &str = "NUMAFLOW_MONO_VERTEX_NAME";
 const NUMAFLOW_VERTEX_NAME: &str = "NUMAFLOW_VERTEX_NAME";
 const NUMAFLOW_REPLICA: &str = "NUMAFLOW_REPLICA";
 const NUMAFLOW_PIPELINE_NAME: &str = "NUMAFLOW_PIPELINE_NAME";
 const NUMAFLOW_NAMESPACE: &str = "NUMAFLOW_NAMESPACE";
+
 static VERTEX_NAME: OnceLock<String> = OnceLock::new();
 
 /// fetch the vertex name from the environment variable

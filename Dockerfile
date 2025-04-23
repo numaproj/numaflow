@@ -15,6 +15,10 @@ COPY dist/numaflow-rs-linux-${ARCH} /bin/numaflow-rs
 RUN chmod +x /bin/numaflow
 RUN chmod +x /bin/numaflow-rs
 
+# TODO: remove this when we are ported everything to Rust
+COPY dist/entrypoint-linux-${ARCH} /bin/entrypoint
+RUN chmod +x /bin/entrypoint
+
 ####################################################################################################
 # Rust binary
 ####################################################################################################
@@ -54,7 +58,8 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     *) echo "Unsupported platform: ${TARGETPLATFORM}" && exit 1 ;; \
     esac && \
     RUSTFLAGS='-C target-feature=+crt-static' cargo build --workspace --all --release --target ${TARGET} && \
-    cp -pv target/${TARGET}/release/numaflow /root/numaflow
+    cp -pv target/${TARGET}/release/numaflow /root/numaflow && \
+    cp -pv target/${TARGET}/release/entrypoint /root/entrypoint
 
 ####################################################################################################
 # numaflow
@@ -69,7 +74,9 @@ COPY --from=base /bin/numaflow /bin/numaflow
 COPY --from=base /bin/numaflow-rs /bin/numaflow-rs
 COPY ui/build /ui/build
 
-ENTRYPOINT [ "/bin/numaflow" ]
+# TODO: remove this when we are ported everything to Rust
+COPY --from=base /bin/entrypoint /bin/entrypoint
+ENTRYPOINT ["/bin/entrypoint"]
 
 ####################################################################################################
 # testbase

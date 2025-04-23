@@ -30,7 +30,7 @@ export function PodDetail({
   type,
   containerName,
   pod,
-  vertexId
+  vertexId,
 }: PodDetailProps) {
   if (!pod) return null;
 

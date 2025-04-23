@@ -1,9 +1,11 @@
+use bytes::Bytes;
+use numaflow_monitor::runtime;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::{Handshake, SinkRequest, SinkResponse, TransmissionStatus};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
-use tonic::{Request, Streaming};
+use tonic::{Code, Request, Status, Streaming};
 use tracing::error;
 
 use crate::message::Message;
@@ -16,7 +18,6 @@ const DEFAULT_CHANNEL_SIZE: usize = 1000;
 
 /// User-Defined Sink code writes messages to a custom [SinkWriter].
 pub struct UserDefinedSink {
-    sink_rpc_client: SinkClient<Channel>,
     sink_tx: mpsc::Sender<SinkRequest>,
     resp_stream: Streaming<SinkResponse>,
 }
@@ -78,7 +79,6 @@ impl UserDefinedSink {
         }
 
         Ok(Self {
-            sink_rpc_client: client,
             sink_tx,
             resp_stream,
         })
@@ -127,6 +127,16 @@ impl Sink for UserDefinedSink {
             if response.status.is_some_and(|s| s.eot) {
                 if responses.len() != num_requests {
                     error!("received EOT message before all responses are received, we will wait indefinitely for the remaining responses");
+                    // persist the error for debugging
+                    runtime::persist_application_error(Status::with_details(
+                        Code::Internal,
+                        "UDF_PARTIAL_RESPONSE(udsink)",
+                        Bytes::from_static(
+                            b"received End-Of-Transmission (EOT) before all responses are received from the ud-sink,\
+                            we will wait indefinitely for the remaining responses. This indicates that there is a bug\
+                            in the user-code. Please check whether you are accidentally skipping the messages.",
+                        ),
+                    ));
                 } else {
                     break;
                 }
@@ -140,15 +150,7 @@ impl Sink for UserDefinedSink {
                     .collect::<Vec<ResponseFromSink>>(),
             );
         }
-
         Ok(responses)
-    }
-
-    async fn is_ready(&mut self) -> bool {
-        match self.sink_rpc_client.is_ready(Request::new(())).await {
-            Ok(response) => response.into_inner().ready,
-            Err(_) => false,
-        }
     }
 }
 

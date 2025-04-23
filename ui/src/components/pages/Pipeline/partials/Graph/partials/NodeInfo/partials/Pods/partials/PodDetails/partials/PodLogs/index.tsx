@@ -49,8 +49,10 @@ const parsePodLogs = (
   const rawLogs = value.split("\n").filter((s) => s.trim().length);
   return rawLogs.map((raw: string) => {
     // 30 characters for RFC 3339 timestamp
-    const timestamp = raw.length >= 31 && !isErrorMessage ? raw.substring(0, 30) : "";
-    const logWithoutTimestamp = raw.length >= 31 && !isErrorMessage ? raw.substring(31) : raw;
+    const timestamp =
+      raw.length >= 31 && !isErrorMessage ? raw.substring(0, 30) : "";
+    const logWithoutTimestamp =
+      raw.length >= 31 && !isErrorMessage ? raw.substring(31) : raw;
 
     let msg = enableTimestamp ? `${timestamp} ` : "";
 
@@ -150,7 +152,7 @@ export function PodLogs({
             if (value) {
               // Check if the value is an error response
               let isErrorMessage = false;
-              try{
+              try {
                 const jsonResponse = JSON.parse(value);
                 if (jsonResponse?.errMsg) {
                   // If there's an error message, set value to errMsg
@@ -209,7 +211,7 @@ export function PodLogs({
               if (value) {
                 // Check if the value is an error response
                 let isErrorMessage = false;
-                try{
+                try {
                   const jsonResponse = JSON.parse(value);
                   if (jsonResponse?.errMsg) {
                     // If there's an error message, set value to errMsg
@@ -255,9 +257,9 @@ export function PodLogs({
 
   useEffect(() => {
     if (!search) {
-      if(showPreviousLogs){
+      if (showPreviousLogs) {
         setFilteredLogs(previousLogs);
-      }else{
+      } else {
         setFilteredLogs(logs);
       }
       return;
@@ -266,13 +268,13 @@ export function PodLogs({
     const filtered = (showPreviousLogs ? previousLogs : logs)?.filter((log) =>
       negateSearch
         ? !log.toLowerCase().includes(searchLowerCase)
-        : log.toLowerCase().includes(searchLowerCase));
-    
+        : log.toLowerCase().includes(searchLowerCase)
+    );
+
     if (!filtered.length) {
       filtered.push("No logs matching search.");
     }
     setFilteredLogs(filtered);
-    
   }, [showPreviousLogs, previousLogs, logs, search, negateSearch]);
 
   const handleSearchChange = useCallback(
@@ -363,6 +365,7 @@ export function PodLogs({
         sx={{
           display: "flex",
           height: "4.8rem",
+          overflow: "scroll",
         }}
       >
         <Paper
@@ -565,42 +568,38 @@ export function PodLogs({
             }}
           >
             {logsOrder === "asc" &&
-               filteredLogs.map(
-                (l: string, idx) => (
-                  <Box
-                    key={`${idx}-${podName}-logs`}
-                    component="span"
-                    sx={{
-                      whiteSpace: wrapLines ? "normal" : "nowrap",
-                      height: wrapLines ? "auto" : "1.6rem",
-                      lineHeight: "1.6rem",
+              filteredLogs.map((l: string, idx) => (
+                <Box
+                  key={`${idx}-${podName}-logs`}
+                  component="span"
+                  sx={{
+                    whiteSpace: wrapLines ? "normal" : "nowrap",
+                    height: wrapLines ? "auto" : "1.6rem",
+                    lineHeight: "1.6rem",
+                  }}
+                >
+                  <Highlighter
+                    searchWords={[search]}
+                    autoEscape={true}
+                    textToHighlight={l}
+                    style={{
+                      color: colorMode === "light" ? "black" : "white",
+                      fontFamily: "Consolas,Liberation Mono,Courier,monospace",
+                      fontWeight: "normal",
+                      background: colorMode === "light" ? "#E6E6E6" : "#333333",
+                      fontSize: "1.4rem",
+                      textWrap: wrapLines ? "wrap" : "nowrap",
+                      border: "1px solid #cacaca",
                     }}
-                  >
-                    <Highlighter
-                      searchWords={[search]}
-                      autoEscape={true}
-                      textToHighlight={l}
-                      style={{
-                        color: colorMode === "light" ? "black" : "white",
-                        fontFamily:
-                          "Consolas,Liberation Mono,Courier,monospace",
-                        fontWeight: "normal",
-                        background:
-                          colorMode === "light" ? "#E6E6E6" : "#333333",
-                        fontSize: "1.4rem",
-                        textWrap: wrapLines ? "wrap" : "nowrap",
-                        border: "1px solid #cacaca",
-                      }}
-                      highlightStyle={{
-                        color: `${colorMode === "light" ? "white" : "black"}`,
-                        backgroundColor: `${
-                          colorMode === "light" ? "black" : "white"
-                        }`,
-                      }}
-                    />
-                  </Box>
-                )
-              )}
+                    highlightStyle={{
+                      color: `${colorMode === "light" ? "white" : "black"}`,
+                      backgroundColor: `${
+                        colorMode === "light" ? "black" : "white"
+                      }`,
+                    }}
+                  />
+                </Box>
+              ))}
             {logsOrder === "desc" &&
               filteredLogs
                 .slice()

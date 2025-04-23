@@ -4,16 +4,20 @@
 //! is stored in [crate::app::store::cbstore].
 use std::sync::Arc;
 
-use crate::app::store::cbstore::{CallbackStore, ProcessingStatus};
-use crate::app::store::datastore::DataStore;
-use crate::app::store::datastore::Result as StoreResult;
-use crate::app::tracker::MessageGraph;
-use crate::Error;
 use bytes::Bytes;
 use tokio::sync::{mpsc, oneshot};
+use tokio::time::Instant;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
-use tracing::{error, info};
+use tracing::{error, info, Instrument};
+
+use crate::app::store::cbstore::{CallbackStore, ProcessingStatus};
+use crate::app::store::datastore::DataStore;
+use crate::app::store::datastore::Error as StoreError;
+use crate::app::store::datastore::Result as StoreResult;
+use crate::app::tracker::MessageGraph;
+use crate::metrics::serving_metrics;
+use crate::Error;
 
 #[derive(Clone)]
 pub(crate) struct OrchestratorState<T, U> {
@@ -54,14 +58,27 @@ where
         let msg_id = id.to_string();
         let mut subgraph = None;
 
+        let start = Instant::now();
         // register the request in the store
-        self.callback_store.register(id).await?;
+        if let Err(e) = self.callback_store.register(id).await {
+            if let StoreError::DuplicateRequest(_) = e {
+                serving_metrics().cb_store_register_duplicate_count.inc();
+            }
+            serving_metrics().cb_store_register_fail_count.inc();
+            return Err(e);
+        }
+        serving_metrics()
+            .cb_store_register_duration
+            .observe(start.elapsed().as_micros() as f64);
 
         // start watching for callbacks
         let (mut callbacks_stream, watch_handle) = self.callback_store.watch_callbacks(id).await?;
 
         let mut cb_store = self.callback_store.clone();
-        tokio::spawn(async move {
+
+        let span = tracing::Span::current();
+
+        let callback_watcher = async move {
             let _handle = watch_handle;
             let mut callbacks = Vec::new();
 
@@ -94,14 +111,29 @@ where
                 tx.send(Err(Error::SubGraphNotFound(
                     "Subgraph could not be generated for the given ID",
                 )))
+                .inspect_err(|err| {
+                    tracing::error!(
+                        ?err,
+                        "Failed to send subgraph generation error to main task over channel"
+                    )
+                })
                 .expect("Failed to send subgraph");
 
                 cb_store
                     .mark_as_failed(&msg_id, "Subgraph could not be generated")
                     .await
+                    .inspect_err(|err| {
+                        tracing::error!(
+                            ?err,
+                            "Failed to mark subgraph generation failure in callback store"
+                        )
+                    })
                     .expect("Failed to mark as failed");
             }
-        });
+        };
+
+        // https://github.com/tokio-rs/tracing/blob/b4868674ba73f3963b125ec38b57efaadc714d90/examples/examples/tokio-spawny-thing.rs#L25
+        tokio::spawn(callback_watcher.instrument(span));
 
         Ok(rx)
     }
@@ -207,7 +239,8 @@ where
         }
     }
 
-    /// marks the request as failed
+    /// marks the request as failed, FIXME: invoke this when the subgraph generation fails/critical errors
+    #[allow(dead_code)]
     pub(crate) async fn mark_as_failed(&mut self, id: &str, error: &str) -> Result<(), Error> {
         self.callback_store.mark_as_failed(id, error).await?;
         Ok(())

@@ -3,18 +3,15 @@ pub(crate) mod source {
     const DEFAULT_SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
     const DEFAULT_SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
 
-    use std::collections::HashMap;
-    use std::env;
-    use std::sync::Arc;
     use std::{fmt::Debug, time::Duration};
 
     use bytes::Bytes;
+    use numaflow_jetstream::{JetstreamSourceConfig, NatsAuth, TlsClientAuthCerts, TlsConfig};
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source, SqsSource};
     use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
     use numaflow_sqs::source::{SQSSourceConfig};
     use tracing::warn;
 
-    use crate::config::{get_namespace, get_pipeline_name};
     use crate::error::Error;
     use crate::Result;
 
@@ -40,10 +37,8 @@ pub(crate) mod source {
         Generator(GeneratorConfig),
         UserDefined(UserDefinedConfig),
         Pulsar(PulsarSourceConfig),
+        Jetstream(JetstreamSourceConfig),
         Sqs(SQSSourceConfig),
-        // Serving source starts an Axum HTTP server in the background.
-        // The settings will be used as application state which gets cloned in each handler on each request.
-        Serving(Arc<serving::Settings>),
     }
 
     impl From<Box<GeneratorSource>> for SourceType {
@@ -85,7 +80,7 @@ pub(crate) mod source {
             let auth: Option<PulsarAuth> = match value.auth {
                 Some(auth) => 'out: {
                     let Some(token) = auth.token else {
-                        warn!("JWT Token authentication is specified, but token is empty");
+                        tracing::warn!("JWT Token authentication is specified, but token is empty");
                         break 'out None;
                     };
                     let secret = crate::shared::create_components::get_secret_from_volume(
@@ -118,7 +113,7 @@ pub(crate) mod source {
                     "AWS region is required for SQS source".to_string(),
                 ));
             }
-            
+
             let sqs_source_config = SQSSourceConfig {
                 queue_name: value.queue_name,
                 region: value.aws_region,
@@ -134,39 +129,137 @@ pub(crate) mod source {
         }
     }
 
-    impl TryFrom<Box<numaflow_models::models::ServingSource>> for SourceType {
+
+    impl TryFrom<Box<numaflow_models::models::JetStreamSource>> for SourceType {
         type Error = Error;
-        // FIXME: Currently, the same settings comes from user-defined settings and env variables.
-        // We parse both, with user-defined values having higher precedence.
-        // There should be only one option (user-defined) to define the settings.
-        fn try_from(cfg: Box<numaflow_models::models::ServingSource>) -> Result<Self> {
-            let env_vars = env::vars().collect::<HashMap<String, String>>();
-            let mut settings: serving::Settings = env_vars.try_into()?;
+        fn try_from(
+            value: Box<numaflow_models::models::JetStreamSource>,
+        ) -> std::result::Result<Self, Self::Error> {
+            let auth: Option<NatsAuth> = match value.auth {
+                Some(auth) => {
+                    if let Some(basic_auth) = auth.basic {
+                        let user_secret_selector = &basic_auth.user.ok_or_else(|| {
+                            Error::Config("Username can not be empty for basic auth".into())
+                        })?;
+                        let username = crate::shared::create_components::get_secret_from_volume(
+                            &user_secret_selector.name,
+                            &user_secret_selector.key,
+                        )
+                        .map_err(|e| {
+                            Error::Config(format!("Failed to get username secret: {e:?}"))
+                        })?;
 
-            settings.tid_header = cfg.msg_id_header_key;
+                        let password_secret_selector = &basic_auth.password.ok_or_else(|| {
+                            Error::Config("Password can not be empty for basic auth".into())
+                        })?;
+                        let password = crate::shared::create_components::get_secret_from_volume(
+                            &password_secret_selector.name,
+                            &password_secret_selector.key,
+                        )
+                        .map_err(|e| {
+                            Error::Config(format!("Failed to get password secret: {e:?}"))
+                        })?;
+                        Some(NatsAuth::Basic { username, password })
+                    } else if let Some(nkey_auth) = auth.nkey {
+                        let nkey = crate::shared::create_components::get_secret_from_volume(
+                            &nkey_auth.name,
+                            &nkey_auth.key,
+                        )
+                        .map_err(|e| Error::Config(format!("Failed to get nkey secret: {e:?}")))?;
+                        Some(NatsAuth::NKey(nkey))
+                    } else if let Some(token_auth) = auth.token {
+                        let token = crate::shared::create_components::get_secret_from_volume(
+                            &token_auth.name,
+                            &token_auth.key,
+                        )
+                        .map_err(|e| Error::Config(format!("Failed to get token secret: {e:?}")))?;
+                        Some(NatsAuth::Token(token))
+                    } else {
+                        return Err(Error::Config(
+                            "Authentication is specified, but auth setting is empty".into(),
+                        ));
+                    }
+                }
+                None => None,
+            };
 
-            if let Some(auth) = cfg.auth {
-                if let Some(token) = auth.token {
-                    let secret = crate::shared::create_components::get_secret_from_volume(
-                        &token.name,
-                        &token.key,
-                    )
-                    .map_err(|e| Error::Config(format!("Reading API auth token secret: {e:?}")))?;
-                    settings.api_auth_token = Some(secret);
+            let tls = if let Some(tls_config) = value.tls {
+                let tls_skip_verify = tls_config.insecure_skip_verify.unwrap_or(false);
+                if tls_skip_verify {
+                    Some(TlsConfig {
+                        insecure_skip_verify: true,
+                        ca_cert: None,
+                        client_auth: None,
+                    })
                 } else {
-                    warn!("Authentication token for Serving API is specified, but the secret is empty");
-                };
-            }
+                    let ca_cert = tls_config
+                        .ca_cert_secret
+                        .map(|ca_cert_secret| {
+                            match crate::shared::create_components::get_secret_from_volume(
+                                &ca_cert_secret.name,
+                                &ca_cert_secret.key,
+                            ) {
+                                Ok(secret) => Ok(secret),
+                                Err(e) => Err(Error::Config(format!(
+                                    "Failed to get CA cert secret: {e:?}"
+                                ))),
+                            }
+                        })
+                        .transpose()?;
 
-            settings.js_store = format!(
-                "{}-{}_SERVING_KV_STORE",
-                get_namespace(),
-                get_pipeline_name(),
-            );
+                    let tls_client_auth_certs = match tls_config.cert_secret {
+                        Some(client_cert_secret) => {
+                            let client_cert =
+                                crate::shared::create_components::get_secret_from_volume(
+                                    &client_cert_secret.name,
+                                    &client_cert_secret.key,
+                                )
+                                .map_err(|e| {
+                                    Error::Config(format!(
+                                        "Failed to get client cert secret: {e:?}"
+                                    ))
+                                })?;
 
-            settings.drain_timeout_secs = cfg.request_timeout_seconds.unwrap_or(120).max(1) as u64; // Ensure timeout is atleast 1 second
+                            let Some(private_key_secret) = tls_config.key_secret else {
+                                return Err(Error::Config("Client cert is specified for TLS authentication, but private key is not specified".into()));
+                            };
 
-            Ok(SourceType::Serving(Arc::new(settings)))
+                            let client_cert_private_key =
+                                crate::shared::create_components::get_secret_from_volume(
+                                    &private_key_secret.name,
+                                    &private_key_secret.key,
+                                )
+                                .map_err(|e| {
+                                    Error::Config(format!(
+                                        "Failed to get client cert private key secret: {e:?}"
+                                    ))
+                                })?;
+                            Some(TlsClientAuthCerts {
+                                client_cert,
+                                client_cert_private_key,
+                            })
+                        }
+                        None => None,
+                    };
+
+                    Some(TlsConfig {
+                        insecure_skip_verify: tls_config.insecure_skip_verify.unwrap_or(false),
+                        ca_cert,
+                        client_auth: tls_client_auth_certs,
+                    })
+                }
+            } else {
+                None
+            };
+
+            let js_config = JetstreamSourceConfig {
+                addr: value.url,
+                consumer: value.stream.clone(),
+                stream: value.stream,
+                auth,
+                tls,
+            };
+            Ok(SourceType::Jetstream(js_config))
         }
     }
 
@@ -190,8 +283,12 @@ pub(crate) mod source {
                 return sqs.try_into();
             }
 
-            if let Some(serving) = source.serving.take() {
-                return serving.try_into();
+            if let Some(_serving) = source.serving.take() {
+                panic!("Serving source is invalid");
+            }
+
+            if let Some(jetstream) = source.jetstream.take() {
+                return jetstream.try_into();
             }
 
             Err(Error::Config(format!("Invalid source type: {source:?}")))
@@ -268,6 +365,7 @@ pub(crate) mod sink {
     pub(crate) enum SinkType {
         Log(LogConfig),
         Blackhole(BlackholeConfig),
+        Serve,
         UserDefined(UserDefinedConfig),
     }
 
@@ -290,6 +388,7 @@ pub(crate) mod sink {
                         .as_ref()
                         .map(|_| Ok(SinkType::Blackhole(BlackholeConfig::default())))
                 })
+                .or_else(|| sink.serve.as_ref().map(|_| Ok(SinkType::Serve)))
                 .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
         }
 
@@ -311,6 +410,7 @@ pub(crate) mod sink {
                             .as_ref()
                             .map(|_| Ok(SinkType::Blackhole(BlackholeConfig::default())))
                     })
+                    .or_else(|| sink.serve.as_ref().map(|_| Ok(SinkType::Serve)))
                     .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
             } else {
                 Err(Error::Config("Fallback sink not found".to_string()))
@@ -486,6 +586,9 @@ pub(crate) mod metrics {
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct MetricsConfig {
+        // TODO(lookback) - using new implementation for monovertex right now,
+        // remove extra fields from here once new corresponding pipeline changes
+        // in the daemon are done.
         pub metrics_server_listen_port: u16,
         pub lag_check_interval_in_secs: u16,
         pub lag_refresh_interval_in_secs: u16,
@@ -719,5 +822,155 @@ mod transformer_tests {
         } else {
             panic!("Expected TransformerType::UserDefined");
         }
+    }
+}
+
+#[cfg(test)]
+mod jetstream_tests {
+    use super::source::SourceType;
+    use k8s_openapi::api::core::v1::SecretKeySelector;
+    use numaflow_jetstream::NatsAuth;
+    use numaflow_models::models::BasicAuth;
+    use numaflow_models::models::{JetStreamSource, Tls};
+    use std::fs;
+    use std::path::Path;
+
+    const SECRET_BASE_PATH: &str = "/tmp/numaflow";
+
+    fn setup_secret(name: &str, key: &str, value: &str) {
+        let path = format!("{SECRET_BASE_PATH}/{name}");
+        fs::create_dir_all(&path).unwrap();
+        fs::write(format!("{path}/{key}"), value).unwrap();
+    }
+
+    fn cleanup_secret(name: &str) {
+        let path = format!("{SECRET_BASE_PATH}/{name}");
+        if Path::new(&path).exists() {
+            fs::remove_dir_all(&path).unwrap();
+        }
+    }
+
+    #[test]
+    fn test_try_from_jetstream_source_with_basic_auth() {
+        let secret_name = "basic-auth-secret";
+        let user_key = "username";
+        let pass_key = "password";
+        setup_secret(secret_name, user_key, "test-user");
+        setup_secret(secret_name, pass_key, "test-pass");
+
+        let jetstream_source = JetStreamSource {
+            auth: Some(Box::new(numaflow_models::models::NatsAuth {
+                basic: Some(Box::new(BasicAuth {
+                    user: Some(SecretKeySelector {
+                        name: secret_name.to_string(),
+                        key: user_key.to_string(),
+                        ..Default::default()
+                    }),
+                    password: Some(SecretKeySelector {
+                        name: secret_name.to_string(),
+                        key: pass_key.to_string(),
+                        ..Default::default()
+                    }),
+                })),
+                nkey: None,
+                token: None,
+            })),
+            stream: "test-stream".to_string(),
+            tls: None,
+            url: "nats://localhost:4222".to_string(),
+        };
+
+        let source_type = SourceType::try_from(Box::new(jetstream_source)).unwrap();
+        if let SourceType::Jetstream(config) = source_type {
+            let NatsAuth::Basic { username, password } = config.auth.unwrap() else {
+                panic!("Basic auth creds must be set");
+            };
+            assert_eq!(username, "test-user");
+            assert_eq!(password, "test-pass");
+            assert_eq!(config.consumer, "test-stream");
+            assert_eq!(config.addr, "nats://localhost:4222");
+        } else {
+            panic!("Expected SourceType::Jetstream");
+        }
+
+        cleanup_secret(secret_name);
+    }
+
+    #[test]
+    fn test_try_from_jetstream_source_with_tls() {
+        let ca_cert_name = "tls-ca-cert";
+        let cert_name = "tls-cert";
+        let key_name = "tls-key";
+        setup_secret(ca_cert_name, "ca", "test-ca-cert");
+        setup_secret(cert_name, "cert", "test-cert");
+        setup_secret(key_name, "key", "test-key");
+
+        let jetstream_source = JetStreamSource {
+            auth: None,
+            stream: "test-stream".to_string(),
+            tls: Some(Box::new(Tls {
+                ca_cert_secret: Some(SecretKeySelector {
+                    name: ca_cert_name.to_string(),
+                    key: "ca".to_string(),
+                    ..Default::default()
+                }),
+                cert_secret: Some(SecretKeySelector {
+                    name: cert_name.to_string(),
+                    key: "cert".to_string(),
+                    ..Default::default()
+                }),
+                key_secret: Some(SecretKeySelector {
+                    name: key_name.to_string(),
+                    key: "key".to_string(),
+                    ..Default::default()
+                }),
+                insecure_skip_verify: Some(false),
+            })),
+            url: "nats://localhost:4222".to_string(),
+        };
+
+        let source_type = SourceType::try_from(Box::new(jetstream_source)).unwrap();
+        if let SourceType::Jetstream(config) = source_type {
+            let tls_config = config.tls.unwrap();
+            assert_eq!(tls_config.ca_cert.unwrap(), "test-ca-cert");
+            assert_eq!(
+                tls_config.client_auth.as_ref().unwrap().client_cert,
+                "test-cert"
+            );
+            assert_eq!(
+                tls_config.client_auth.unwrap().client_cert_private_key,
+                "test-key"
+            );
+            assert_eq!(config.consumer, "test-stream");
+            assert_eq!(config.addr, "nats://localhost:4222");
+        } else {
+            panic!("Expected SourceType::Jetstream");
+        }
+
+        cleanup_secret(ca_cert_name);
+        cleanup_secret(cert_name);
+        cleanup_secret(key_name);
+    }
+
+    #[test]
+    fn test_try_from_jetstream_source_with_invalid_auth() {
+        let jetstream_source = JetStreamSource {
+            auth: Some(Box::new(numaflow_models::models::NatsAuth {
+                basic: None,
+                nkey: None,
+                token: None,
+            })),
+            stream: "test-stream".to_string(),
+            tls: None,
+            url: "nats://localhost:4222".to_string(),
+        };
+
+        let result = SourceType::try_from(Box::new(jetstream_source));
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Config Error - Authentication is specified, but auth setting is empty"
+        );
     }
 }

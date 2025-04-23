@@ -1,9 +1,12 @@
-use std::sync::Arc;
-
+use bytes::Bytes;
+use numaflow_monitor::runtime;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot, Semaphore};
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
+use tonic::{Code, Status};
+use tracing::error;
 
 use crate::error::Error;
 use crate::message::Message;
@@ -17,24 +20,23 @@ use crate::Result;
 /// [User-Defined Transformer]: https://numaflow.numaproj.io/user-guide/sources/transformer/overview/#build-your-own-transformer
 pub(crate) mod user_defined;
 
-pub enum ActorMessage {
-    Transform {
-        message: Message,
-        respond_to: oneshot::Sender<Result<Vec<Message>>>,
-    },
-    IsReady {
-        respond_to: oneshot::Sender<bool>,
-    },
+/// TransformerActorMessage is the message that is sent to the transformer actor.
+struct TransformerActorMessage {
+    message: Message,
+    respond_to: oneshot::Sender<Result<Vec<Message>>>,
 }
 
 /// TransformerActor, handles the transformation of messages.
 struct TransformerActor {
-    receiver: mpsc::Receiver<ActorMessage>,
+    receiver: mpsc::Receiver<TransformerActorMessage>,
     transformer: UserDefinedTransformer,
 }
 
 impl TransformerActor {
-    fn new(receiver: mpsc::Receiver<ActorMessage>, transformer: UserDefinedTransformer) -> Self {
+    fn new(
+        receiver: mpsc::Receiver<TransformerActorMessage>,
+        transformer: UserDefinedTransformer,
+    ) -> Self {
         Self {
             receiver,
             transformer,
@@ -44,16 +46,10 @@ impl TransformerActor {
     /// Handles the incoming message, unlike standard actor pattern the downstream call is not blocking
     /// and the response is sent back to the caller using oneshot in this actor, this is because the
     /// downstream can handle multiple messages at once.
-    async fn handle_message(&mut self, msg: ActorMessage) {
-        match msg {
-            ActorMessage::Transform {
-                message,
-                respond_to,
-            } => self.transformer.transform(message, respond_to).await,
-            ActorMessage::IsReady { respond_to } => {
-                let _ = respond_to.send(self.transformer.ready().await);
-            }
-        }
+    async fn handle_message(&mut self, msg: TransformerActorMessage) {
+        self.transformer
+            .transform(msg.message, msg.respond_to)
+            .await;
     }
 
     async fn run(mut self) {
@@ -66,9 +62,10 @@ impl TransformerActor {
 /// Transformer, transforms messages in a streaming fashion.
 #[derive(Clone)]
 pub(crate) struct Transformer {
-    sender: mpsc::Sender<ActorMessage>,
+    sender: mpsc::Sender<TransformerActorMessage>,
     concurrency: usize,
     tracker_handle: TrackerHandle,
+    health_checker: Option<SourceTransformClient<Channel>>,
 }
 
 impl Transformer {
@@ -81,7 +78,7 @@ impl Transformer {
         let (sender, receiver) = mpsc::channel(batch_size);
         let transformer_actor = TransformerActor::new(
             receiver,
-            UserDefinedTransformer::new(batch_size, client).await?,
+            UserDefinedTransformer::new(batch_size, client.clone()).await?,
         );
 
         tokio::spawn(async move {
@@ -92,20 +89,21 @@ impl Transformer {
             concurrency,
             sender,
             tracker_handle,
+            health_checker: Some(client),
         })
     }
 
     /// Applies the transformation on the message and sends it to the next stage, it blocks if the
     /// concurrency limit is reached.
     async fn transform(
-        transform_handle: mpsc::Sender<ActorMessage>,
+        transform_handle: mpsc::Sender<TransformerActorMessage>,
         read_msg: Message,
         cln_token: CancellationToken,
     ) -> Result<Vec<Message>> {
         let start_time = tokio::time::Instant::now();
 
         let (sender, receiver) = oneshot::channel();
-        let msg = ActorMessage::Transform {
+        let msg = TransformerActorMessage {
             message: read_msg,
             respond_to: sender,
         };
@@ -114,17 +112,32 @@ impl Transformer {
         transform_handle
             .send(msg)
             .await
-            .map_err(|e| Error::Transformer(format!("failed to send message: {}", e)))?;
+            .map_err(|e| Error::Transformer(format!("failed to send message to server: {}", e)))?;
 
         // wait for the response
         let response = tokio::select! {
             _ = cln_token.cancelled() => {
-                return Err(Error::Transformer("cancelled".to_string()));
+                return Err(Error::Transformer("cancellation token cancelled".to_string()));
             }
             response = receiver => {
-                response.map_err(|e| Error::Transformer(format!("failed to receive response: {}", e)))??
+                response.map_err(|e| Error::Transformer(format!("failed to receive response from server: {}", e)))??
             }
         };
+
+        if response.is_empty() {
+            error!("received empty response from server (transformer), we will wait indefinitely");
+            // persist the error for debugging
+            runtime::persist_application_error(Status::with_details(
+                Code::Internal,
+                "UDF_PARTIAL_RESPONSE(transformer)",
+                Bytes::from_static(
+                    b"received End-Of-Transmission (EOT) before all responses are received from the transformer,\
+                            we will wait indefinitely for the remaining responses. This indicates that there is a bug\
+                            in the user-code. Please check whether you are accidentally skipping the messages.",
+                ),
+            ));
+            futures::future::pending::<()>().await;
+        }
 
         monovertex_metrics()
             .transformer
@@ -191,15 +204,33 @@ impl Transformer {
                 Err(e) => return Err(Error::Transformer(format!("task join failed: {}", e))),
             }
         }
+        let dropped_messages_count = transformed_messages
+            .iter()
+            .filter(|message| message.dropped())
+            .count();
+        if dropped_messages_count > 0 {
+            monovertex_metrics()
+                .transformer
+                .dropped_total
+                .get_or_create(mvtx_forward_metric_labels())
+                .inc_by(dropped_messages_count as u64);
+        }
         Ok(transformed_messages)
     }
 
-    pub(crate) async fn is_ready(&mut self) -> bool {
-        let (sender, receiver) = oneshot::channel();
-        let msg = ActorMessage::IsReady { respond_to: sender };
-
-        self.sender.send(msg).await.expect("failed to send message");
-        receiver.await.is_ok()
+    pub(crate) async fn ready(&mut self) -> bool {
+        if let Some(client) = &mut self.health_checker {
+            let request = tonic::Request::new(());
+            match client.is_ready(request).await {
+                Ok(response) => response.into_inner().ready,
+                Err(e) => {
+                    error!("Transformer is not ready: {:?}", e);
+                    false
+                }
+            }
+        } else {
+            true
+        }
     }
 }
 
