@@ -720,4 +720,90 @@ mod tests {
         // delete store
         context.delete_key_value(serving_store).await.unwrap();
     }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_watch_historical_callbacks() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let serving_store = "test_watch_historical_callbacks";
+        let current_pod_hash = "xxba";
+        let previous_pod_hash = "xbzb";
+
+        // Delete bucket so that re-running the test won't fail
+        let _ = context.delete_key_value(serving_store).await;
+
+        context
+            .create_key_value(Config {
+                bucket: serving_store.to_string(),
+                description: "test_description".to_string(),
+                history: 15,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let mut store = JetStreamCallbackStore::new(
+            context.clone(),
+            current_pod_hash,
+            serving_store,
+            serving_store,
+            serving_store,
+            CancellationToken::new(),
+        )
+            .await
+            .unwrap();
+
+        let id = "test_historical_id";
+
+        // Simulate a status entry with InProgress for a different pod hash
+        let status_key = format!("status.{}", id);
+        let in_progress_status = ProcessingStatus::InProgress {
+            pod_hash: previous_pod_hash.to_string(),
+        };
+        let status_bytes: Bytes = in_progress_status.try_into().unwrap();
+        store
+            .status_kv
+            .put(status_key, status_bytes)
+            .await
+            .unwrap();
+
+        // Simulate historical callbacks in the KV store
+        let callback = Callback {
+            id: id.to_string(),
+            vertex: "test_vertex".to_string(),
+            cb_time: 12345,
+            from_vertex: "test_from_vertex".to_string(),
+            responses: vec![],
+        };
+        let callback_key = format!(
+            "cb.{}.{}.input.{}",
+            previous_pod_hash,
+            id,
+            Utc::now().timestamp()
+        );
+        store
+            .callback_kv
+            .put(callback_key, Bytes::from(serde_json::to_vec(&callback).unwrap()))
+            .await
+            .unwrap();
+
+        // Register and watch the callbacks
+        let mut stream = store
+            .register_and_watch(id, RequestType::Sync)
+            .await
+            .unwrap();
+
+        // Verify that the historical callback is received
+        let received_callback = stream.next().await.unwrap();
+        assert_eq!(received_callback.id, callback.id);
+        assert_eq!(received_callback.vertex, callback.vertex);
+        assert_eq!(received_callback.cb_time, callback.cb_time);
+        assert_eq!(received_callback.from_vertex, callback.from_vertex);
+        assert_eq!(received_callback.responses.len(), callback.responses.len());
+
+        // Clean up the KV store
+        context.delete_key_value(serving_store).await.unwrap();
+    }
 }
