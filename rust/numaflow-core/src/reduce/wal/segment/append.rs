@@ -19,6 +19,7 @@ pub(crate) enum FileWriterMessage {
     WriteData {
         /// Unique ID of the payload. Useful to detect write failures.
         id: String,
+        // TODO: add Option<event-time>
         /// Data to be written on do the WAL.
         data: Bytes,
     },
@@ -241,6 +242,7 @@ impl AppendOnlyWal {
         });
 
         info!("FileWriterActor spawned and running.");
+
         Ok((ReceiverStream::new(result_rx), handle))
     }
 }

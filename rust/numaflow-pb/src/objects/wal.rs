@@ -12,3 +12,9 @@ pub struct GcEvent {
     #[prost(string, repeated, tag = "3")]
     pub keys: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct Footer {
+    /// the latest event time in the current Segment
+    #[prost(message, optional, tag = "1")]
+    pub latest_event_time: ::core::option::Option<::prost_types::Timestamp>,
+}

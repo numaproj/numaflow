@@ -58,6 +58,10 @@ impl ReplayWal {
         Ok((ReceiverStream::new(rx), handle))
     }
 
+    async fn get_all_files_and_footer() {
+        todo!()
+    }
+
     async fn read_segment_file(path: &PathBuf, tx: Sender<SegmentEntry>) -> WalResult<()> {
         let file = OpenOptions::new().read(true).open(path).await?;
 

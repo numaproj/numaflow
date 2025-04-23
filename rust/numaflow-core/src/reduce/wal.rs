@@ -17,6 +17,9 @@ pub(crate) mod compactor;
 /// All the errors WAL could face.
 pub(crate) mod error;
 
+// GC - RO, Segment - RO, Compact - RO,WA
+//
+
 // GC Event - (start, end, optional keys)
 //
 // GC Events WAL contract is that any GC event that is written means all the messages < the window
@@ -38,6 +41,22 @@ pub(crate) mod error;
 //
 // NOTE: subsequent compactions should also consider already compacted files and order is very important
 // during compaction we should make sure the order of the messages does not change.
+
+/// WAL is made of two parts, the Segment and GC WAL.
+pub(crate) enum WalType {
+    /// Segment WAL contains the data.
+    Segment,
+    /// GC WAL contains the
+    Gc,
+}
+
+impl WalType {
+    fn has_footer() {}
+
+    fn segment_prefix() {}
+
+    fn segment_suffix() {}
+}
 
 /// An entry in the GC WAL about the GC action.
 pub(crate) struct GcEventEntry {

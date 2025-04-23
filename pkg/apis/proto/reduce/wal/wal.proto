@@ -13,3 +13,8 @@ message GCEvent {
   // keys of the window, it will be empty for aligned windows
   repeated string keys = 3;
 }
+
+message Footer {
+  // the latest event time in the current Segment
+  google.protobuf.Timestamp latest_event_time = 1;
+}
