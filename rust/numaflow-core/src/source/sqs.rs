@@ -116,7 +116,7 @@ pub mod tests {
     use aws_smithy_mocks_experimental::{mock, MockResponseInterceptor, Rule, RuleMode};
     use bytes::Bytes;
     use chrono::Utc;
-    use numaflow_sqs::source::{AWSCredentials, SQSAuth, SqsSourceBuilder, SQS_DEFAULT_REGION};
+    use numaflow_sqs::source::{SqsSourceBuilder, SQS_DEFAULT_REGION};
     use tokio::task::JoinHandle;
     use tokio_util::sync::CancellationToken;
 
@@ -175,10 +175,6 @@ pub mod tests {
         let sqs_source = SqsSourceBuilder::new(SQSSourceConfig {
             region: SQS_DEFAULT_REGION.to_string(),
             queue_name: "test-q".to_string(),
-            auth: SQSAuth::Credentials(AWSCredentials {
-                access_key_id: "test-key".to_string(),
-                secret_access_key: "test-secret".to_string(),
-            }),
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,

@@ -11,7 +11,7 @@ pub(crate) mod source {
     use bytes::Bytes;
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source, SqsSource};
     use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
-    use numaflow_sqs::source::{AWSCredentials, SQSAuth, SQSSourceConfig};
+    use numaflow_sqs::source::{SQSSourceConfig};
     use tracing::warn;
 
     use crate::config::{get_namespace, get_pipeline_name};
@@ -118,33 +118,7 @@ pub(crate) mod source {
                     "AWS region is required for SQS source".to_string(),
                 ));
             }
-
-            let auth = if value.auth.role_arn.is_some() {
-                SQSAuth::RoleArn(value.auth.role_arn.unwrap())
-            } else if value.auth.credentials.is_some() {
-                let creds = value.auth.credentials.unwrap();
-                let access_key_id = crate::shared::create_components::get_secret_from_volume(
-                    &creds.access_key_id.name,
-                    &creds.access_key_id.key,
-                )
-                .unwrap();
-
-                let secret_access_key = crate::shared::create_components::get_secret_from_volume(
-                    &creds.secret_access_key.name,
-                    &creds.secret_access_key.key,
-                )
-                .unwrap();
-
-                SQSAuth::Credentials(AWSCredentials {
-                    access_key_id,
-                    secret_access_key,
-                })
-            } else {
-                return Err(Error::Config(
-                    "No authentication method provided for SQS source".to_string(),
-                ));
-            };
-
+            
             let sqs_source_config = SQSSourceConfig {
                 queue_name: value.queue_name,
                 region: value.aws_region,
@@ -153,7 +127,6 @@ pub(crate) mod source {
                 max_number_of_messages: Some(value.max_number_of_messages.unwrap_or(10)),
                 wait_time_seconds: Some(value.wait_time_seconds.unwrap_or(0)),
                 visibility_timeout: Some(value.visibility_timeout.unwrap_or(30)),
-                auth,
                 endpoint_url: value.endpoint_url,
             };
 

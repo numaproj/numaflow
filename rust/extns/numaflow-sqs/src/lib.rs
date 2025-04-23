@@ -6,7 +6,6 @@
 //! - Actor-based concurrency model for thread safety
 //! - Clean abstraction of SQS operations
 use tokio::sync::oneshot;
-mod client;
 pub mod source;
 
 /// Custom error types for the SQS client library.
