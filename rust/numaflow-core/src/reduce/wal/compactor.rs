@@ -71,7 +71,7 @@ impl Compactor {
 
         while let Some(entry) = rx.next().await {
             match entry {
-                SegmentEntry::Data { data, .. } => {
+                SegmentEntry::DataEntry { data, .. } => {
                     let gc: GcEvent = prost::Message::decode(data)
                         .map_err(|e| format!("prost decoding failed, {e}"))?;
 
@@ -81,6 +81,8 @@ impl Compactor {
                         oldest_time = gc.end_time
                     }
                 }
+                SegmentEntry::DataFooter { .. } => {}
+                SegmentEntry::CmdFileSwitch { .. } => {}
             }
         }
 
@@ -100,7 +102,7 @@ impl Compactor {
 
         while let Some(entry) = rx.next().await {
             match entry {
-                SegmentEntry::Data { data, .. } => {
+                SegmentEntry::DataEntry { data, .. } => {
                     let gc: GcEvent = prost::Message::decode(data)
                         .map_err(|e| format!("prost decoding failed, {e}"))?;
 
@@ -117,6 +119,8 @@ impl Compactor {
                         })
                         .or_insert(gc.end_time);
                 }
+                SegmentEntry::DataFooter { .. } => {}
+                SegmentEntry::CmdFileSwitch { .. } => {}
             }
         }
 

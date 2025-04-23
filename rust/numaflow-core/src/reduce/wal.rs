@@ -42,14 +42,14 @@ pub(crate) mod error;
 // NOTE: subsequent compactions should also consider already compacted files and order is very important
 // during compaction we should make sure the order of the messages does not change.
 
-/// WAL is made of three parts, the Segment, GC WAL and Compaction WAL.
+/// WAL is made of three parts, the Segment, GC WAL, and Compaction WAL.
 #[derive(Debug, Clone)]
 pub(crate) enum WalType {
     /// Segment WAL contains the data.
     Segment,
     /// GC WAL contains the completed-processing events.
     Gc,
-    /// Compaction WAL is a Segment WAL but it has the compacted Segment data.
+    /// Compaction WAL is a Segment WAL, but it has the compacted Segment data.
     Compaction,
 }
 
@@ -70,19 +70,22 @@ impl WalType {
             "segment" => WalType::Segment,
             "compaction" => WalType::Compaction,
             _ => {
-                unimplemented!()
+                unimplemented!("supported types are 'segment', 'gc', 'compaction'")
             }
         }
     }
 
+    /// Some WALs have footers and some does not. It is mostly for optimizations.
     fn has_footer(&self) -> bool {
+        // TODO: set footer to true for Segment and Compaction for optimizations.
         match self {
             WalType::Segment => false,
             WalType::Gc => false,
-            WalType::Compaction => true,
+            WalType::Compaction => false,
         }
     }
 
+    /// Prefix of the WAL Segment as stored in the disk.
     fn segment_prefix(&self) -> String {
         match self {
             WalType::Segment => "segment".to_string(),
@@ -91,11 +94,13 @@ impl WalType {
         }
     }
 
+    /// Suffix of the WAL Segment as stored in the disk. Not all WAL Segments have prefix,
+    /// it is used to filter our work-in-progress WAL Segments that are derived from other WALs.
     fn segment_suffix(&self) -> String {
         match self {
             WalType::Segment => "".to_string(),
             WalType::Gc => "".to_string(),
-            WalType::Compaction => "wip".to_string(),
+            WalType::Compaction => ".wip".to_string(),
         }
     }
 }

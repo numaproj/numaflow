@@ -18,7 +18,12 @@ use tracing::{debug, info, warn};
 /// Segment Entry as recorded in the WAL.
 #[derive(Debug)]
 pub(crate) enum SegmentEntry {
-    Data { size: u64, data: Bytes },
+    /// Data footer in the Segment
+    DataFooter { size: u64, data: Bytes },
+    /// Data entry in the Segment
+    DataEntry { size: u64, data: Bytes },
+    /// The file has been switched
+    CmdFileSwitch { filename: String },
 }
 
 pub(crate) struct ReplayWal {
@@ -50,9 +55,20 @@ impl ReplayWal {
         let handle = task::spawn(async move {
             info!("Starting WAL replay...");
             for file_path in files {
-                Self::read_segment_file(&file_path, tx.clone()).await?;
+                info!(file = %file_path.display(), "Replaying");
+                Self::read_segment(&file_path, tx.clone()).await?;
+
+                tx.send(SegmentEntry::CmdFileSwitch {
+                    filename: file_path
+                        .to_str()
+                        .expect("filename should exist")
+                        .to_string(),
+                })
+                .await
+                .expect("rx dropped")
             }
             info!("Finished WAL replay task...");
+
             Ok(())
         });
 
@@ -63,7 +79,7 @@ impl ReplayWal {
         todo!()
     }
 
-    async fn read_segment_file(path: &PathBuf, tx: Sender<SegmentEntry>) -> WalResult<()> {
+    async fn read_segment(path: &PathBuf, tx: Sender<SegmentEntry>) -> WalResult<()> {
         let file = OpenOptions::new().read(true).open(path).await?;
 
         let mut reader = BufReader::new(file);
@@ -91,7 +107,7 @@ impl ReplayWal {
             }
 
             // send each line
-            tx.send(SegmentEntry::Data {
+            tx.send(SegmentEntry::DataEntry {
                 size: data_len,
                 data: buffer.freeze(),
             })

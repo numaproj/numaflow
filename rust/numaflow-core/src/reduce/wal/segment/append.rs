@@ -129,7 +129,7 @@ impl FileWriterActor {
         Ok(())
     }
 
-    async fn open_file(
+    async fn open_segment(
         wal_type: &WalType,
         base_path: &PathBuf,
         idx: usize,
@@ -139,10 +139,11 @@ impl FileWriterActor {
             .unwrap_or(Utc::now().timestamp_micros());
 
         let filename = format!(
-            "{}_{}_{}.wal",
+            "{}_{}_{}.wal{}",
             wal_type.segment_prefix(),
             idx,
-            timestamp_nanos
+            timestamp_nanos,
+            wal_type.segment_suffix()
         );
 
         let new_path = base_path.join(filename.clone());
@@ -168,16 +169,20 @@ impl FileWriterActor {
         );
         self.flush().await?;
 
-        // rename the current file before we start a new one.
-        tokio::fs::rename(
-            &self.current_file_name,
-            format!("{}.frozen", self.current_file_name),
-        )
-        .await?;
+        // rename the current file before we start a new one. Remove the suffix before freezing.
+        let to_file_name = if self.wal_type.segment_suffix().is_empty() {
+            format!("{}.frozen", self.current_file_name)
+        } else {
+            let to_file_name = self
+                .current_file_name
+                .trim_end_matches(&self.wal_type.segment_suffix());
+            format!("{}.frozen", to_file_name)
+        };
+        tokio::fs::rename(&self.current_file_name, to_file_name).await?;
 
         self.file_index += 1;
         let (file_name, buf_file) =
-            Self::open_file(&self.wal_type, &self.base_path, self.file_index).await?;
+            Self::open_segment(&self.wal_type, &self.base_path, self.file_index).await?;
 
         self.current_file_name = file_name;
         self.current_file = buf_file;
@@ -221,7 +226,7 @@ impl AppendOnlyWal {
         stream: ReceiverStream<FileWriterMessage>,
     ) -> WalResult<(ReceiverStream<String>, JoinHandle<WalResult<()>>)> {
         let (file_name, initial_file) =
-            FileWriterActor::open_file(&self.wal_type, &self.base_path, 0).await?;
+            FileWriterActor::open_segment(&self.wal_type, &self.base_path, 0).await?;
 
         let (result_tx, result_rx) = mpsc::channel::<String>(self.channel_buffer_size);
 
