@@ -13,8 +13,8 @@ use std::path::PathBuf;
 use std::time::UNIX_EPOCH;
 use tokio_stream::StreamExt;
 
-/// WALs can represent two Kinds and data is different for each Kind.
-pub(crate) enum Kind {
+/// WALs can represent two Kinds of Windows and data is different for each Kind.
+pub(crate) enum WindowKind {
     /// Aligned represents Fixed and Sliding Windows.
     Aligned,
     /// Unaligned represents Session Windows and Accumulators (almost like Global Windows).
@@ -22,18 +22,18 @@ pub(crate) enum Kind {
 }
 
 /// A Compactor that compacts based on the GC and Segment WAL files in the given path. It can
-/// compact both [Kind] of WALs.
+/// compact both [WindowKind] of WALs.
 pub(crate) struct Compactor {
     gc: WalType,
     segment: ReplayWal,
     path: PathBuf,
-    kind: Kind,
+    kind: WindowKind,
 }
 
 const WAL_KEY_SEPERATOR: &'static str = ":";
 
 impl Compactor {
-    pub(crate) fn new(gc: WalType, segment: WalType, path: PathBuf, kind: Kind) -> Self {
+    pub(crate) fn new(gc: WalType, segment: WalType, path: PathBuf, kind: WindowKind) -> Self {
         let segment = ReplayWal::new(segment, path.clone());
 
         Self {
@@ -52,6 +52,16 @@ impl Compactor {
 
     // FIXME: BEFORE we implement this, we need to add footer.
 
+    /// Compacts Aligned Segments.
+    /// ## Logic
+    /// - Get the oldest time by calling Build Aligned Compaction
+    /// - Get all the Segment files
+    /// - Open Append WAL for Compaction
+    /// - For each Segment file, deserialize data to [crate::message::Message]
+    /// - Compare the "event_time" of the Message with the oldest time
+    /// - If event_time is <= oldest_time, skip it, otherwise write it into the Compaction Append WAL.
+    /// - Send the Rotate message to the Compaction Append WAL after each Segment file has been processed.
+    /// - Delete the Segment File after the Rotate is complete.
     async fn compact_aligned(&self) -> WalResult<()> {
         todo!()
     }
@@ -62,8 +72,13 @@ impl Compactor {
 
     /// Builds the oldest time below which all data has been processed. For Aligned WAL, all we need
     /// to track is the oldest timestamp. We do not have to worry about the keys.
-    async fn build_aligned_compaction(&self) -> WalResult<DateTime<Utc>> {
+    /// It returns the list of GC files scanned.
+    async fn build_aligned_compaction(&self) -> WalResult<(DateTime<Utc>, Vec<PathBuf>)> {
+        // the oldest time across all GC Segments.
         let mut oldest_time = DateTime::from(UNIX_EPOCH);
+
+        // list of GC Segments scanned
+        let mut scanned_files = vec![];
 
         let gc = ReplayWal::new(self.gc.clone(), self.path.clone());
 
@@ -81,20 +96,30 @@ impl Compactor {
                         oldest_time = gc.end_time
                     }
                 }
-                SegmentEntry::DataFooter { .. } => {}
-                SegmentEntry::CmdFileSwitch { .. } => {}
+                SegmentEntry::DataFooter { .. } => {
+                    unimplemented!()
+                }
+                SegmentEntry::CmdFileSwitch { filename } => {
+                    scanned_files.push(filename);
+                }
             }
         }
 
         handle.await.map_err(|e| format!("Join Failed, {e}"))??;
 
-        Ok(oldest_time)
+        Ok((oldest_time, scanned_files))
     }
 
     /// Builds the oldest time below which all data has been processed. For Unaligned WAL, we need
     /// to track is the oldest timestamp for the given keys.
-    async fn build_unaligned_compaction(&self) -> WalResult<HashMap<String, DateTime<Utc>>> {
+    /// It returns the list of GC files scanned.
+    async fn build_unaligned_compaction(
+        &self,
+    ) -> WalResult<(HashMap<String, DateTime<Utc>>, Vec<PathBuf>)> {
+        // list of keys to oldest time mapping
         let mut oldest_time_map = HashMap::new();
+        // list of GC Segments scanned
+        let mut scanned_files = vec![];
 
         let gc = ReplayWal::new(self.gc.clone(), self.path.clone());
 
@@ -119,13 +144,17 @@ impl Compactor {
                         })
                         .or_insert(gc.end_time);
                 }
-                SegmentEntry::DataFooter { .. } => {}
-                SegmentEntry::CmdFileSwitch { .. } => {}
+                SegmentEntry::DataFooter { .. } => {
+                    unimplemented!()
+                }
+                SegmentEntry::CmdFileSwitch { filename } => {
+                    scanned_files.push(filename);
+                }
             }
         }
 
         handle.await.map_err(|e| format!("Join Failed, {e}"))??;
 
-        Ok(oldest_time_map)
+        Ok((oldest_time_map, scanned_files))
     }
 }

@@ -24,8 +24,7 @@ pub(crate) enum FileWriterMessage {
         /// Data to be written on do the WAL.
         data: Bytes,
     },
-    /// Rotates a file on demand. We do not have use-case for this in the normal code path.
-    #[cfg(test)]
+    /// Rotates a file on demand.
     Rotate,
 }
 
@@ -98,7 +97,6 @@ impl FileWriterActor {
                 self.write_data(data).await?;
                 self.result_tx.send(id).await.unwrap();
             }
-            #[cfg(test)]
             FileWriterMessage::Rotate => {
                 self.rotate_file().await?;
             }
@@ -178,8 +176,10 @@ impl FileWriterActor {
                 .trim_end_matches(&self.wal_type.segment_suffix());
             format!("{}.frozen", to_file_name)
         };
-        tokio::fs::rename(&self.current_file_name, to_file_name).await?;
+        tokio::fs::rename(&self.current_file_name, &to_file_name).await?;
+        info!(?self.current_file, ?to_file_name, "rename successful");
 
+        // open new segment
         self.file_index += 1;
         let (file_name, buf_file) =
             Self::open_segment(&self.wal_type, &self.base_path, self.file_index).await?;

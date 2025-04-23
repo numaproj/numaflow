@@ -23,7 +23,7 @@ pub(crate) enum SegmentEntry {
     /// Data entry in the Segment
     DataEntry { size: u64, data: Bytes },
     /// The file has been switched
-    CmdFileSwitch { filename: String },
+    CmdFileSwitch { filename: PathBuf },
 }
 
 pub(crate) struct ReplayWal {
@@ -59,10 +59,7 @@ impl ReplayWal {
                 Self::read_segment(&file_path, tx.clone()).await?;
 
                 tx.send(SegmentEntry::CmdFileSwitch {
-                    filename: file_path
-                        .to_str()
-                        .expect("filename should exist")
-                        .to_string(),
+                    filename: file_path,
                 })
                 .await
                 .expect("rx dropped")
