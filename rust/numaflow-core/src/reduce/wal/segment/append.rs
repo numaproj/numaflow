@@ -1,4 +1,5 @@
 use crate::reduce::wal::error::WalResult;
+use crate::reduce::wal::WalType;
 use bytes::Bytes;
 use chrono::Utc;
 use futures::StreamExt;
@@ -29,7 +30,7 @@ pub(crate) enum FileWriterMessage {
 }
 
 struct FileWriterActor {
-    segment_prefix: &'static str,
+    wal_type: WalType,
     base_path: PathBuf,
     current_file_name: String,
     current_file: BufWriter<File>,
@@ -49,7 +50,7 @@ impl Drop for FileWriterActor {
 
 impl FileWriterActor {
     fn new(
-        segment_prefix: &'static str,
+        wal_type: WalType,
         base_path: PathBuf,
         current_file_name: String,
         current_file: BufWriter<File>,
@@ -59,7 +60,7 @@ impl FileWriterActor {
         in_rx: ReceiverStream<FileWriterMessage>,
     ) -> Self {
         Self {
-            segment_prefix,
+            wal_type,
             base_path,
             current_file_name,
             current_file,
@@ -129,7 +130,7 @@ impl FileWriterActor {
     }
 
     async fn open_file(
-        segment_prefix: &'static str,
+        wal_type: &WalType,
         base_path: &PathBuf,
         idx: usize,
     ) -> WalResult<(String, BufWriter<File>)> {
@@ -137,7 +138,12 @@ impl FileWriterActor {
             .timestamp_nanos_opt()
             .unwrap_or(Utc::now().timestamp_micros());
 
-        let filename = format!("{}_{:06}_{}.wal", segment_prefix, idx, timestamp_nanos);
+        let filename = format!(
+            "{}_{}_{}.wal",
+            wal_type.segment_prefix(),
+            idx,
+            timestamp_nanos
+        );
 
         let new_path = base_path.join(filename.clone());
 
@@ -171,7 +177,7 @@ impl FileWriterActor {
 
         self.file_index += 1;
         let (file_name, buf_file) =
-            Self::open_file(self.segment_prefix, &self.base_path, self.file_index).await?;
+            Self::open_file(&self.wal_type, &self.base_path, self.file_index).await?;
 
         self.current_file_name = file_name;
         self.current_file = buf_file;
@@ -183,7 +189,7 @@ impl FileWriterActor {
 
 /// Creates an AppendOnly WAL.
 pub(crate) struct AppendOnlyWal {
-    segment_prefix: &'static str,
+    wal_type: WalType,
     base_path: PathBuf,
     max_file_size_mb: u64,
     flush_interval_ms: u64,
@@ -192,7 +198,7 @@ pub(crate) struct AppendOnlyWal {
 
 impl AppendOnlyWal {
     pub(crate) async fn new(
-        segment_prefix: &'static str,
+        wal_type: WalType,
         base_path: PathBuf,
         max_file_size_mb: u64,
         flush_interval_ms: u64,
@@ -200,7 +206,7 @@ impl AppendOnlyWal {
     ) -> Result<Self, io::Error> {
         tokio::fs::create_dir_all(&base_path).await?;
         Ok(Self {
-            segment_prefix,
+            wal_type,
             base_path,
             max_file_size_mb,
             flush_interval_ms,
@@ -215,7 +221,7 @@ impl AppendOnlyWal {
         stream: ReceiverStream<FileWriterMessage>,
     ) -> WalResult<(ReceiverStream<String>, JoinHandle<WalResult<()>>)> {
         let (file_name, initial_file) =
-            FileWriterActor::open_file(self.segment_prefix, &self.base_path, 0).await?;
+            FileWriterActor::open_file(&self.wal_type, &self.base_path, 0).await?;
 
         let (result_tx, result_rx) = mpsc::channel::<String>(self.channel_buffer_size);
 
@@ -223,7 +229,7 @@ impl AppendOnlyWal {
         let flush_duration = Duration::from_millis(self.flush_interval_ms);
 
         let mut actor = FileWriterActor::new(
-            self.segment_prefix,
+            self.wal_type,
             self.base_path,
             file_name,
             initial_file,
@@ -264,7 +270,7 @@ mod tests {
         let channel_buffer = 10;
 
         let wal_writer = AppendOnlyWal::new(
-            "segment",
+            WalType::new("segment"),
             base_path.clone(),
             max_file_size_mb,
             flush_interval_ms,
@@ -423,7 +429,7 @@ mod tests {
         let channel_buffer = 10;
 
         let wal_writer = AppendOnlyWal::new(
-            "segment",
+            WalType::new("segment"),
             base_path.clone(),
             max_file_size_mb,
             flush_interval_ms,
@@ -488,7 +494,7 @@ mod tests {
         let channel_buffer = 10;
 
         let wal_writer = AppendOnlyWal::new(
-            "segment",
+            WalType::new("segment"),
             base_path.clone(),
             max_file_size_mb,
             flush_interval_ms,

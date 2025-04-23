@@ -1,4 +1,5 @@
 use crate::reduce::wal::error::WalResult;
+use crate::reduce::wal::WalType;
 use bytes::{Bytes, BytesMut};
 use std::cmp::Ordering;
 use std::fs;
@@ -21,15 +22,15 @@ pub(crate) enum SegmentEntry {
 }
 
 pub(crate) struct ReplayWal {
-    segment_prefix: &'static str,
+    wal_type: WalType,
     base_path: PathBuf,
 }
 
 impl ReplayWal {
     /// Creates a new Replayer for the WAL.
-    pub(crate) fn new(segment_prefix: &'static str, base_path: PathBuf) -> Self {
+    pub(crate) fn new(wal_type: WalType, base_path: PathBuf) -> Self {
         Self {
-            segment_prefix,
+            wal_type,
             base_path,
         }
     }
@@ -39,7 +40,7 @@ impl ReplayWal {
     pub(crate) fn streaming_read(
         self,
     ) -> WalResult<(ReceiverStream<SegmentEntry>, JoinHandle<WalResult<()>>)> {
-        let mut files: Vec<PathBuf> = list_files(self.segment_prefix, self.base_path.clone());
+        let mut files: Vec<PathBuf> = list_files(&self.wal_type, self.base_path.clone());
         files = sort_filenames(files);
 
         debug!(count = files.len(), "Found WAL segment files for replay");
@@ -133,7 +134,7 @@ fn sort_filenames(mut files: Vec<PathBuf>) -> Vec<PathBuf> {
     files
 }
 
-fn list_files(segment_prefix: &'static str, base_path: PathBuf) -> Vec<PathBuf> {
+fn list_files(wal_type: &WalType, base_path: PathBuf) -> Vec<PathBuf> {
     fs::read_dir(&base_path)
         .expect(&format!("directory {} to be present", base_path.display()))
         .map(|entry| entry.expect("expect dirEntry to be good").path())
@@ -143,7 +144,7 @@ fn list_files(segment_prefix: &'static str, base_path: PathBuf) -> Vec<PathBuf> 
                 .expect("filename expected")
                 .to_str()
                 .expect("conversion should work")
-                .starts_with(segment_prefix)
+                .starts_with(&wal_type.segment_prefix())
         })
         .filter(|path| path.extension().map_or(false, |ext| ext == "frozen"))
         .collect::<Vec<_>>()
@@ -162,16 +163,15 @@ mod tests {
 
         // Create some test files
         let _file1 =
-            File::create(base_path.join("test_segment_1.frozen")).expect("Failed to create file");
+            File::create(base_path.join("segment_1.frozen")).expect("Failed to create file");
         let _file2 =
-            File::create(base_path.join("test_segment_2.frozen")).expect("Failed to create file");
-        let _file3 =
-            File::create(base_path.join("test_segment_3.txt")).expect("Failed to create file");
+            File::create(base_path.join("segment_2.frozen")).expect("Failed to create file");
+        let _file3 = File::create(base_path.join("segment_3.txt")).expect("Failed to create file");
         let _file4 =
             File::create(base_path.join("other_file.frozen")).expect("Failed to create file");
 
         // Call the function
-        let result = list_files("test_segment", base_path);
+        let result = list_files(&WalType::new("segment"), base_path);
 
         // Verify the result
         let mut result_paths: Vec<String> = result
@@ -180,10 +180,7 @@ mod tests {
             .collect();
         result_paths.sort();
 
-        assert_eq!(
-            result_paths,
-            vec!["test_segment_1.frozen", "test_segment_2.frozen"]
-        );
+        assert_eq!(result_paths, vec!["segment_1.frozen", "segment_2.frozen"]);
     }
 
     #[test]

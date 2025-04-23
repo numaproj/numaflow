@@ -42,20 +42,62 @@ pub(crate) mod error;
 // NOTE: subsequent compactions should also consider already compacted files and order is very important
 // during compaction we should make sure the order of the messages does not change.
 
-/// WAL is made of two parts, the Segment and GC WAL.
+/// WAL is made of three parts, the Segment, GC WAL and Compaction WAL.
+#[derive(Debug, Clone)]
 pub(crate) enum WalType {
     /// Segment WAL contains the data.
     Segment,
-    /// GC WAL contains the
+    /// GC WAL contains the completed-processing events.
     Gc,
+    /// Compaction WAL is a Segment WAL but it has the compacted Segment data.
+    Compaction,
+}
+
+impl std::fmt::Display for WalType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WalType::Segment => write!(f, "Segment"),
+            WalType::Gc => write!(f, "GC"),
+            WalType::Compaction => write!(f, "Compaction"),
+        }
+    }
 }
 
 impl WalType {
-    fn has_footer() {}
+    fn new(segment: &'static str) -> Self {
+        match segment {
+            "gc" => WalType::Gc,
+            "segment" => WalType::Segment,
+            "compaction" => WalType::Compaction,
+            _ => {
+                unimplemented!()
+            }
+        }
+    }
 
-    fn segment_prefix() {}
+    fn has_footer(&self) -> bool {
+        match self {
+            WalType::Segment => false,
+            WalType::Gc => false,
+            WalType::Compaction => true,
+        }
+    }
 
-    fn segment_suffix() {}
+    fn segment_prefix(&self) -> String {
+        match self {
+            WalType::Segment => "segment".to_string(),
+            WalType::Gc => "gc".to_string(),
+            WalType::Compaction => "compaction".to_string(),
+        }
+    }
+
+    fn segment_suffix(&self) -> String {
+        match self {
+            WalType::Segment => "".to_string(),
+            WalType::Gc => "".to_string(),
+            WalType::Compaction => "wip".to_string(),
+        }
+    }
 }
 
 /// An entry in the GC WAL about the GC action.
@@ -87,7 +129,7 @@ impl From<GcEventEntry> for GcEvent {
 
 async fn simple_data_wal_writer() {
     let data_wal = AppendOnlyWal::new(
-        "segment",
+        WalType::new("segment"),
         "var/run/numaflow".into(),
         20 * 1024 * 1024,
         1000,
@@ -132,9 +174,15 @@ async fn simple_data_wal_writer() {
             .await;
     }
 
-    let gc_wal = AppendOnlyWal::new("gc", "var/run/numaflow".into(), 1 * 1024 * 1024, 1000, 500)
-        .await
-        .unwrap();
+    let gc_wal = AppendOnlyWal::new(
+        WalType::new("gc"),
+        "var/run/numaflow".into(),
+        1 * 1024 * 1024,
+        1000,
+        500,
+    )
+    .await
+    .unwrap();
     let gc_event = GcEvent {
         start_time: Some(prost_timestamp_from_utc(Utc::now())),
         end_time: Some(prost_timestamp_from_utc(Utc::now())),

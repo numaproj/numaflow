@@ -5,6 +5,7 @@
 use crate::reduce::wal::error::WalResult;
 use crate::reduce::wal::segment::replay::{ReplayWal, SegmentEntry};
 use crate::reduce::wal::GcEventEntry;
+use crate::reduce::wal::WalType;
 use chrono::{DateTime, Utc};
 use numaflow_pb::objects::wal::GcEvent;
 use std::collections::HashMap;
@@ -23,7 +24,7 @@ pub(crate) enum Kind {
 /// A Compactor that compacts based on the GC and Segment WAL files in the given path. It can
 /// compact both [Kind] of WALs.
 pub(crate) struct Compactor {
-    gc: &'static str,
+    gc: WalType,
     segment: ReplayWal,
     path: PathBuf,
     kind: Kind,
@@ -32,7 +33,7 @@ pub(crate) struct Compactor {
 const WAL_KEY_SEPERATOR: &'static str = ":";
 
 impl Compactor {
-    pub(crate) fn new(gc: &'static str, segment: &'static str, path: PathBuf, kind: Kind) -> Self {
+    pub(crate) fn new(gc: WalType, segment: WalType, path: PathBuf, kind: Kind) -> Self {
         let segment = ReplayWal::new(segment, path.clone());
 
         Self {
@@ -64,7 +65,7 @@ impl Compactor {
     async fn build_aligned_compaction(&self) -> WalResult<DateTime<Utc>> {
         let mut oldest_time = DateTime::from(UNIX_EPOCH);
 
-        let gc = ReplayWal::new(self.gc, self.path.clone());
+        let gc = ReplayWal::new(self.gc.clone(), self.path.clone());
 
         let (mut rx, handle) = gc.streaming_read()?;
 
@@ -93,7 +94,7 @@ impl Compactor {
     async fn build_unaligned_compaction(&self) -> WalResult<HashMap<String, DateTime<Utc>>> {
         let mut oldest_time_map = HashMap::new();
 
-        let gc = ReplayWal::new(self.gc, self.path.clone());
+        let gc = ReplayWal::new(self.gc.clone(), self.path.clone());
 
         let (mut rx, handle) = gc.streaming_read()?;
 
