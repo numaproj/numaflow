@@ -390,7 +390,7 @@ mod tests {
 
         let datum_store = InMemoryDataStore::new(None);
         let callback_store = InMemoryCallbackStore::new(None);
-        let store_name = "test_health_check_endpoints";
+        let store_name = "test_auth_middleware";
         let js_url = "localhost:4222";
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
