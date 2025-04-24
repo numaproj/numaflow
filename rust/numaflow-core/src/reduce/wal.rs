@@ -153,12 +153,12 @@ mod tests {
             1000, // 1s flush interval
             500,  // channel buffer
         )
-        .await
-        .unwrap();
+            .await
+            .unwrap();
 
         // Create and write GC events
         let gc_start = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 5).unwrap();
-        let gc_end = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 6).unwrap();
+        let gc_end = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 10).unwrap();
 
         let gc_event = GcEvent {
             start_time: Some(prost_timestamp_from_utc(gc_start)),
@@ -176,8 +176,8 @@ mod tests {
             id: Some("gc".to_string()),
             data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event)),
         })
-        .await
-        .unwrap();
+            .await
+            .unwrap();
 
         // Send rotate command to GC WAL
         tx.send(FileWriterMessage::Rotate { on_size: false })
@@ -194,8 +194,8 @@ mod tests {
             1000, // 1s flush interval
             500,  // channel buffer
         )
-        .await
-        .unwrap();
+            .await
+            .unwrap();
 
         // Write 100 segment entries
         let (tx, rx) = tokio::sync::mpsc::channel(100);
@@ -205,9 +205,9 @@ mod tests {
             .unwrap();
 
         let start_time = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 0).unwrap();
-        let time_increment = chrono::Duration::seconds(36); // (3600s / 100 entries)
+        let time_increment = chrono::Duration::seconds(1); // (3600s / 100 entries)
 
-        for i in 0..100 {
+        for i in 1..=100 {
             let mut message = Message::default();
             message.event_time = start_time + (time_increment * i);
             message.keys = Arc::from(vec!["test-key".to_string()]);
@@ -223,8 +223,8 @@ mod tests {
                 id: Some(format!("msg-{}", i)),
                 data: proto_message,
             })
-            .await
-            .unwrap();
+                .await
+                .unwrap();
         }
 
         // Send rotate command to segment WAL
@@ -236,11 +236,14 @@ mod tests {
 
         // Create and run compactor
         let compactor = Compactor::new(
-            WalType::new("gc"),
-            WalType::new("segment"),
             test_path.clone(),
             WindowKind::Aligned,
-        );
+            1,    // 20MB
+            1000, // 1s flush interval
+            500,  // channel buffer
+        )
+            .await
+            .unwrap();
 
         compactor.compact().await.unwrap();
 
@@ -248,6 +251,7 @@ mod tests {
         let compaction_wal = ReplayWal::new(WalType::new("compaction"), test_path);
         let (mut rx, handle) = compaction_wal.streaming_read().unwrap();
 
+        let mut remaining_message_count = 0;
         while let Some(entry) = rx.next().await {
             if let SegmentEntry::DataEntry { data, .. } = entry {
                 let msg: numaflow_pb::objects::isb::Message = prost::Message::decode(data).unwrap();
@@ -260,8 +264,16 @@ mod tests {
                         );
                     }
                 }
+                remaining_message_count += 1
             }
         }
         handle.await.unwrap().unwrap();
+
+        // we send 100 messages out of which 10 messages have event times less than the window end
+        // time so the remaining message cound should be 90
+        assert_eq!(
+            remaining_message_count, 90,
+            "Expected 90 messages to remain after compaction"
+        );
     }
 }

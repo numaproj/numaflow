@@ -13,9 +13,11 @@ use numaflow_pb::objects::isb;
 use numaflow_pb::objects::wal::GcEvent;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::time::UNIX_EPOCH;
+use std::time::{Duration, UNIX_EPOCH};
 use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
 use tokio_stream::{wrappers::ReceiverStream, StreamExt};
+use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 /// WALs can represent two Kinds of Windows and data is different for each Kind.
@@ -29,9 +31,10 @@ pub(crate) enum WindowKind {
 /// A Compactor that compacts based on the GC and Segment WAL files in the given path. It can
 /// compact both [WindowKind] of WALs.
 pub(crate) struct Compactor {
-    // TODO: remove gc and segment
-    gc: WalType,
-    segment: ReplayWal,
+    gc_wal: ReplayWal,
+    segment_wal: ReplayWal,
+    compaction_ro_wal: ReplayWal,
+    compaction_ao_wal: AppendOnlyWal,
     path: PathBuf,
     kind: WindowKind,
 }
@@ -39,15 +42,56 @@ pub(crate) struct Compactor {
 const WAL_KEY_SEPERATOR: &'static str = ":";
 
 impl Compactor {
-    pub(crate) fn new(gc: WalType, segment: WalType, path: PathBuf, kind: WindowKind) -> Self {
-        let segment = ReplayWal::new(segment, path.clone());
+    pub(crate) async fn new(
+        path: PathBuf,
+        kind: WindowKind,
+        max_file_size_mb: u64,
+        flush_interval_ms: u64,
+        channel_buffer_size: usize,
+    ) -> WalResult<Self> {
+        let segment_wal = ReplayWal::new(WalType::Segment, path.clone());
+        let gc_wal = ReplayWal::new(WalType::Gc, path.clone());
+        let compaction_ro_wal = ReplayWal::new(WalType::Compaction, path.clone());
+        let compaction_ao_wal = AppendOnlyWal::new(
+            WalType::Compaction,
+            path.clone(),
+            max_file_size_mb,
+            flush_interval_ms,
+            channel_buffer_size,
+        )
+        .await?;
 
-        Self {
-            gc,
-            segment,
+        Ok(Self {
+            gc_wal,
+            segment_wal,
+            compaction_ro_wal,
+            compaction_ao_wal,
             path,
             kind,
-        }
+        })
+    }
+
+    /// Starts the compaction process every `interval_ms` milliseconds.
+    pub(crate) async fn start_compaction(
+        self,
+        duration: Duration,
+        cln_token: CancellationToken,
+    ) -> WalResult<JoinHandle<WalResult<()>>> {
+        let mut tick = tokio::time::interval(duration);
+        let result: JoinHandle<WalResult<()>> = tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                _ = tick.tick() => {
+                        self.compact().await?;
+                     }
+                _ = cln_token.cancelled() => {
+                        break;
+                    }
+                }
+            }
+            Ok(())
+        });
+        Ok(result)
     }
 
     /// Compact first needs to get all the GC files and build a compaction map. This map will have
@@ -63,7 +107,6 @@ impl Compactor {
     }
 
     // FIXME: BEFORE we implement this, we need to add footer.
-
     /// Compacts Aligned Segments.
     /// ## Logic
     /// - Get the oldest time by calling Build Aligned Compaction
@@ -78,45 +121,46 @@ impl Compactor {
         // Get the oldest time and scanned GC files
         let (oldest_time, gc_files) = self.build_aligned_compaction().await?;
 
-        // Get a streaming reader for the segment WAL
-        let (mut rx, handle) = self.segment.clone().streaming_read()?;
+        // Compact the compaction_ro_wal
+        self.process_wal_stream(&self.compaction_ro_wal, oldest_time)
+            .await?;
 
-        // Create a compaction WAL writer
-        let compaction_wal = AppendOnlyWal::new(
-            WalType::Compaction,
-            self.path.clone(),
-            // FIXME: this size has to be same for both Segment and Compaction. Else we might rotate
-            //   early and end-up with duplicate records.
-            100,  // 100 max file size
-            1000, // 1 second flush interval
-            100,  // channel buffer size
-        )
-        .await
-        .map_err(|e| format!("Failed to create compaction WAL: {}", e))?;
+        // Compact the segment_wal
+        self.process_wal_stream(&self.segment_wal, oldest_time)
+            .await?;
+
+        // Delete the GC files
+        for gc_file in gc_files {
+            info!(gc_file = %gc_file.display(), "removing segment file");
+            tokio::fs::remove_file(gc_file).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn process_wal_stream(
+        &self,
+        wal: &ReplayWal,
+        oldest_time: DateTime<Utc>,
+    ) -> WalResult<()> {
+        // Get a streaming reader for the WAL
+        let (mut rx, handle) = wal.clone().streaming_read()?;
 
         let (wal_tx, wal_rx) = mpsc::channel(100);
-        let (_result_rx, writer_handle) = compaction_wal
+        let (_result_rx, writer_handle) = self
+            .compaction_ao_wal
+            .clone()
             .streaming_write(ReceiverStream::new(wal_rx))
             .await
             .map_err(|e| format!("Failed to start compaction WAL writer: {}", e))?;
 
-        // process each segment entry
+        // Process each WAL entry
         while let Some(entry) = rx.next().await {
             match entry {
                 SegmentEntry::DataEntry { data, .. } => {
-                    // deserialize the message
-                    let msg: isb::Message = prost::Message::decode(data.clone()).unwrap();
-                    // get the event-time
-                    let event_time = msg
-                        .header
-                        .expect("header cannot be empty")
-                        .message_info
-                        .expect("message-info cannot be empty")
-                        .event_time;
-                    let event_time = utc_from_timestamp(event_time);
-
-                    // if event_time > oldest_time, write to compaction WAL
-                    if event_time > oldest_time {
+                    // Check if the message should be retained
+                    if Self::should_retain_message(&data, oldest_time)? {
+                        // Send the data to the compaction WAL
                         wal_tx
                             .send(FileWriterMessage::WriteData { id: None, data })
                             .await
@@ -131,134 +175,152 @@ impl Compactor {
                 SegmentEntry::CmdFileSwitch { filename } => {
                     // Send rotate message after processing each file
                     wal_tx
-                        .send(FileWriterMessage::Rotate { on_size: true })
+                        .send(FileWriterMessage::Rotate { on_size: false })
                         .await
                         .map_err(|e| format!("Failed to send rotate command: {}", e))?;
 
                     // Delete the processed segment file
-                    tokio::fs::remove_file(filename.clone())
-                        .await
-                        .map_err(|e| {
-                            format!(
-                                "Failed to delete segment file {}: {}",
-                                filename.display(),
-                                e
-                            )
-                        })?;
+                    tokio::fs::remove_file(&filename).await.map_err(|e| {
+                        format!(
+                            "Failed to delete segment file {}: {}",
+                            filename.display(),
+                            e
+                        )
+                    })?;
                     info!(filename = %filename.display(), "removing segment file");
                 }
             }
         }
 
-        // wait for segment reader to complete
+        // Wait for the WAL reader to complete
         handle
             .await
-            .map_err(|e| format!("Segment reader failed: {}", e))??;
+            .map_err(|e| format!("WAL reader failed: {}", e))??;
 
-        // drop the sender to close the channel
+        // Drop the sender to close the channel
         drop(wal_tx);
 
-        // Wait for writer to complete
+        // Wait for the writer to complete
         writer_handle
             .await
             .map_err(|e| format!("Compaction writer failed: {}", e))??;
 
-        // delete the gc files
-        for gc_file in gc_files {
-            info!(gc_file = %gc_file.display(), "removing segment file");
-            tokio::fs::remove_file(gc_file).await?;
-        }
-
         Ok(())
     }
 
+    /// Determines whether a message should be retained based on its event time.
+    fn should_retain_message(data: &[u8], oldest_time: DateTime<Utc>) -> WalResult<bool> {
+        // Deserialize the message
+        let msg: isb::Message =
+            prost::Message::decode(data).map_err(|e| format!("Failed to decode message: {}", e))?;
+
+        // Extract the event time from the message
+        let event_time = msg
+            .header
+            .as_ref()
+            .and_then(|header| header.message_info.as_ref())
+            .map(|info| utc_from_timestamp(info.event_time))
+            .expect("Failed to extract event time from message");
+
+        // Retain the message if its event time is greater than the oldest time
+        Ok(event_time > oldest_time)
+    }
+
     async fn compact_unaligned(&self) -> WalResult<()> {
-        todo!()
+        unimplemented!()
     }
 
     /// Builds the oldest time below which all data has been processed. For Aligned WAL, all we need
     /// to track is the oldest timestamp. We do not have to worry about the keys.
     /// It returns the list of GC files scanned.
     async fn build_aligned_compaction(&self) -> WalResult<(DateTime<Utc>, Vec<PathBuf>)> {
-        // the oldest time across all GC Segments.
+        // The oldest time across all GC Segments.
         let mut oldest_time = DateTime::from(UNIX_EPOCH);
 
         // list of GC Segments scanned
         let mut scanned_files = vec![];
 
-        let gc = ReplayWal::new(self.gc.clone(), self.path.clone());
+        // Get a streaming reader for the GC WAL.
+        let (mut rx, handle) = self.gc_wal.clone().streaming_read()?;
 
-        let (mut rx, handle) = gc.streaming_read()?;
         while let Some(entry) = rx.next().await {
             match entry {
                 SegmentEntry::DataEntry { data, .. } => {
+                    // Decode the GC event.
                     let gc: GcEvent = prost::Message::decode(data)
-                        .map_err(|e| format!("prost decoding failed, {e}"))?;
-
+                        .map_err(|e| format!("Failed to decode GC event: {e}"))?;
                     let gc: GcEventEntry = gc.into();
 
-                    if gc.end_time > oldest_time {
-                        oldest_time = gc.end_time
+                    // Update the oldest time if the current GC event's end time is newer.
+                    oldest_time = oldest_time.max(gc.end_time);
+                }
+                SegmentEntry::DataFooter { .. } => {
+                    unimplemented!()
+                }
+                SegmentEntry::CmdFileSwitch { filename } => {
+                    // Add the scanned file to the list.
+                    scanned_files.push(filename);
+                }
+            }
+        }
+
+        // Wait for the WAL reader to complete.
+        handle
+            .await
+            .map_err(|e| format!("WAL reader failed: {e}"))??;
+
+        Ok((oldest_time, scanned_files))
+    }
+
+    /// Builds the oldest time below which all data has been processed. For Unaligned WAL, we need
+    /// to track the oldest timestamp for the given keys.
+    /// It returns the list of GC files scanned.
+    async fn build_unaligned_compaction(
+        &self,
+    ) -> WalResult<(HashMap<String, DateTime<Utc>>, Vec<PathBuf>)> {
+        // Map of keys to their oldest time
+        let mut oldest_time_map = HashMap::new();
+        // List of GC segment files scanned
+        let mut scanned_files = Vec::new();
+
+        // Get a streaming reader for the GC WAL
+        let (mut rx, handle) = self.gc_wal.clone().streaming_read()?;
+
+        while let Some(entry) = rx.next().await {
+            match entry {
+                SegmentEntry::DataEntry { data, .. } => {
+                    // Decode the GC event
+                    let gc: GcEvent = prost::Message::decode(data)
+                        .map_err(|e| format!("Failed to decode GC event: {e}"))?;
+                    let gc: GcEventEntry = gc.into();
+
+                    // Update the oldest time map for the given keys
+                    if let Some(keys) = gc.keys {
+                        let key = keys.join(WAL_KEY_SEPERATOR);
+                        oldest_time_map
+                            .entry(key)
+                            .and_modify(|dt| {
+                                if gc.end_time > *dt {
+                                    *dt = gc.end_time;
+                                }
+                            })
+                            .or_insert(gc.end_time);
                     }
                 }
                 SegmentEntry::DataFooter { .. } => {
                     unimplemented!()
                 }
                 SegmentEntry::CmdFileSwitch { filename } => {
+                    // Add the scanned file to the list
                     scanned_files.push(filename);
                 }
             }
         }
 
-        handle.await.map_err(|e| format!("Join Failed, {e}"))??;
-
-        Ok((oldest_time, scanned_files))
-    }
-
-    /// Builds the oldest time below which all data has been processed. For Unaligned WAL, we need
-    /// to track is the oldest timestamp for the given keys.
-    /// It returns the list of GC files scanned.
-    async fn build_unaligned_compaction(
-        &self,
-    ) -> WalResult<(HashMap<String, DateTime<Utc>>, Vec<PathBuf>)> {
-        // list of keys to oldest time mapping
-        let mut oldest_time_map = HashMap::new();
-        // list of GC Segments scanned
-        let mut scanned_files = vec![];
-
-        let gc = ReplayWal::new(self.gc.clone(), self.path.clone());
-
-        let (mut rx, handle) = gc.streaming_read()?;
-
-        while let Some(entry) = rx.next().await {
-            match entry {
-                SegmentEntry::DataEntry { data, .. } => {
-                    let gc: GcEvent = prost::Message::decode(data)
-                        .map_err(|e| format!("prost decoding failed, {e}"))?;
-
-                    let gc: GcEventEntry = gc.into();
-
-                    // insert only if the gc entry has higher end time and if entry does not exist,
-                    // insert the entry.
-                    oldest_time_map
-                        .entry(gc.keys.unwrap_or(vec![]).join(WAL_KEY_SEPERATOR))
-                        .and_modify(|dt| {
-                            if &gc.end_time > dt {
-                                *dt = gc.end_time
-                            }
-                        })
-                        .or_insert(gc.end_time);
-                }
-                SegmentEntry::DataFooter { .. } => {
-                    unimplemented!()
-                }
-                SegmentEntry::CmdFileSwitch { filename } => {
-                    scanned_files.push(filename);
-                }
-            }
-        }
-
-        handle.await.map_err(|e| format!("Join Failed, {e}"))??;
+        // Wait for the WAL reader to complete
+        handle
+            .await
+            .map_err(|e| format!("WAL reader failed: {e}"))??;
 
         Ok((oldest_time_map, scanned_files))
     }

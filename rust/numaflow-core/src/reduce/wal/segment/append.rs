@@ -104,8 +104,16 @@ impl FileWriterActor {
                 }
             }
             FileWriterMessage::Rotate { on_size } => {
-                // TODO: on_size
-                self.rotate_file().await?;
+                // Rotate if forced (`on_size` is false) OR if size threshold is met
+                if !on_size || self.current_size >= self.max_file_size {
+                    self.rotate_file().await?;
+                } else {
+                    debug!(
+                        current_size = self.current_size,
+                        max_size = self.max_file_size,
+                        "Skipping rotation: size threshold not met and not forced."
+                    );
+                }
             }
         }
         Ok(())
@@ -201,6 +209,7 @@ impl FileWriterActor {
 }
 
 /// Creates an AppendOnly WAL.
+#[derive(Clone)]
 pub(crate) struct AppendOnlyWal {
     wal_type: WalType,
     base_path: PathBuf,
