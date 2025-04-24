@@ -7,7 +7,6 @@ use std::time::Duration;
 
 use crate::app::store::datastore::{Error as StoreError, Result as StoreResult};
 use crate::callback::Callback;
-use crate::config::RequestType;
 use async_nats::jetstream::kv::{Store, Watch};
 use async_nats::jetstream::Context;
 use tokio::sync::{mpsc, Mutex};
@@ -239,7 +238,7 @@ impl JetStreamCallbackStore {
         info!(?id, "Finished streaming historical callbacks.");
     }
 
-    /// creates a kv watcher for the given key pattern and revision and it keeps retrying until it's
+    /// creates a kv watcher for the given key pattern and revision, and it keeps retrying until it's
     /// successful.
     async fn create_watcher(
         callback_kv: &Store,
@@ -278,11 +277,10 @@ impl super::CallbackStore for JetStreamCallbackStore {
     async fn register_and_watch(
         &mut self,
         id: &str,
-        request_type: RequestType,
         pod_hash: &str,
     ) -> StoreResult<ReceiverStream<Arc<Callback>>> {
         let (tx, rx) = mpsc::channel(10);
-        if pod_hash != &self.pod_hash {
+        if pod_hash != self.pod_hash {
             let callback_kv_clone = self.callback_kv.clone();
             let id_clone = id.to_string();
             let tx_clone = tx.clone();
@@ -350,7 +348,7 @@ mod tests {
         .unwrap();
 
         let id = "AFA7E0A1-3F0A-4C1B-AB94-BDA57694648D";
-        let result = store.register_and_watch(id, RequestType::Sse, "xbac").await;
+        let result = store.register_and_watch(id,"xbac").await;
         assert!(result.is_ok());
 
         // delete store
@@ -390,7 +388,7 @@ mod tests {
 
         let id = "test_watch_id_two";
         let mut stream = store
-            .register_and_watch(id, RequestType::Sync, pod_hash)
+            .register_and_watch(id, pod_hash)
             .await
             .unwrap();
 
@@ -480,7 +478,7 @@ mod tests {
 
         // Register and watch the callbacks
         let mut stream = store
-            .register_and_watch(id, RequestType::Sync, previous_pod_hash)
+            .register_and_watch(id, previous_pod_hash)
             .await
             .unwrap();
 

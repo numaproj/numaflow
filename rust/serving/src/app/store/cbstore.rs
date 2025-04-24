@@ -7,7 +7,6 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use crate::app::store::datastore::Result as StoreResult;
 use crate::callback::Callback;
-use crate::config::RequestType;
 
 /// JetStream based callback store
 pub(crate) mod jetstreamstore;
@@ -26,7 +25,6 @@ pub(crate) trait LocalCallbackStore {
     async fn register_and_watch(
         &mut self,
         id: &str,
-        request_type: RequestType,
         pod_hash: &str,
     ) -> StoreResult<ReceiverStream<Arc<Callback>>>;
     /// check if the store is ready

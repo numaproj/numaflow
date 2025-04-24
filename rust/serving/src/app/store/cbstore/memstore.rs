@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use crate::app::store::datastore::{Error as StoreError, Result as StoreResult};
 use crate::callback::Callback;
-use crate::config::RequestType;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use tokio_stream::wrappers::ReceiverStream;
@@ -38,7 +37,6 @@ impl super::CallbackStore for InMemoryCallbackStore {
     async fn register_and_watch(
         &mut self,
         id: &str,
-        _request_type: RequestType,
         _pod_hash: &str,
     ) -> StoreResult<ReceiverStream<Arc<Callback>>> {
         let mut data = self.data.lock().await;
@@ -106,7 +104,7 @@ mod tests {
         let id = "test_id";
 
         let mut rx = store
-            .register_and_watch(id, RequestType::Sync, "0")
+            .register_and_watch(id, "0")
             .await
             .unwrap();
         let received_callback = rx.next().await.unwrap();

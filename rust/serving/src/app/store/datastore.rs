@@ -28,9 +28,6 @@ pub(crate) enum Error {
 
     #[error("Reading from the store: {0}")]
     StoreRead(String),
-
-    #[error("Writing payload to the store: {0}")]
-    StoreWrite(String),
 }
 
 impl From<Error> for crate::Error {

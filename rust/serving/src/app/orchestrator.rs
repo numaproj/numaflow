@@ -94,7 +94,7 @@ where
         // start watching for callbacks
         let mut callbacks_stream = self
             .callback_store
-            .register_and_watch(id, request_type, &pod_hash)
+            .register_and_watch(id, &pod_hash)
             .await?;
 
         let mut status_tracker = self.status_tracker.clone();
@@ -156,7 +156,7 @@ where
             }
             ProcessingStatus::Failed { error, pod_hash } => {
                 warn!("Request was failed because of {error}, processing and fetching the responses again");
-                let notify = self.process_request(&id, request_type).await?;
+                let notify = self.process_request(id, request_type).await?;
                 notify.await.expect("sender was dropped")?;
                 // TODO: send old request boolean to retrieve data
                 Ok(Some(self.datum_store.retrieve_data(id, &pod_hash).await?))
@@ -206,7 +206,7 @@ where
         // start watching for callbacks
         let mut callbacks_stream = self
             .callback_store
-            .register_and_watch(id, request_type, &pod_hash)
+            .register_and_watch(id, &pod_hash)
             .await?;
 
         let mut cb_store = self.callback_store.clone();
