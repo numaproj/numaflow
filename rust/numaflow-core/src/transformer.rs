@@ -208,6 +208,7 @@ impl Transformer {
             .iter()
             .filter(|message| message.dropped())
             .count();
+
         if dropped_messages_count > 0 {
             monovertex_metrics()
                 .transformer

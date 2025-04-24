@@ -292,7 +292,6 @@ impl StatusTracker {
                 }
             }
         };
-
         Ok(())
     }
 

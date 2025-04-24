@@ -348,7 +348,7 @@ mod tests {
         .unwrap();
 
         let id = "AFA7E0A1-3F0A-4C1B-AB94-BDA57694648D";
-        let result = store.register_and_watch(id,"xbac").await;
+        let result = store.register_and_watch(id, "xbac").await;
         assert!(result.is_ok());
 
         // delete store
@@ -387,10 +387,7 @@ mod tests {
         .unwrap();
 
         let id = "test_watch_id_two";
-        let mut stream = store
-            .register_and_watch(id, pod_hash)
-            .await
-            .unwrap();
+        let mut stream = store.register_and_watch(id, pod_hash).await.unwrap();
 
         // Simulate a callback being added to the store
         let callback = Callback {

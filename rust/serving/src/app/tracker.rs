@@ -8,6 +8,8 @@ use crate::callback::Callback;
 use crate::pipeline::{Edge, OperatorType, PipelineDCG};
 use crate::Error;
 
+const DROP: &str = "U+005C__DROP__";
+
 fn compare_slice(operator: &OperatorType, a: &[String], b: &[String]) -> bool {
     match operator {
         OperatorType::And => a.iter().all(|val| b.contains(val)),
@@ -188,7 +190,19 @@ impl MessageGraph {
             cb_time: current_callback.cb_time,
         });
 
-        // if there are no responses, means the message is dropped, we can return true
+        // if there are no responses or if any of the response contains drop tag means the message
+        // was dropped we can return true.
+        if current_callback.responses.is_empty()
+            || current_callback.responses.iter().any(|response| {
+                response
+                    .tags
+                    .as_ref()
+                    .map_or(false, |tags| tags.contains(&DROP.to_string()))
+            })
+        {
+            return true;
+        }
+
         if current_callback.responses.is_empty() {
             return true;
         }

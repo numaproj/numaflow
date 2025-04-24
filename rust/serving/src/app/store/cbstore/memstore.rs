@@ -103,10 +103,7 @@ mod tests {
         let mut store = create_test_store();
         let id = "test_id";
 
-        let mut rx = store
-            .register_and_watch(id, "0")
-            .await
-            .unwrap();
+        let mut rx = store.register_and_watch(id, "0").await.unwrap();
         let received_callback = rx.next().await.unwrap();
         assert_eq!(received_callback.id, "test_id");
         assert_eq!(received_callback.vertex, "vertex");
