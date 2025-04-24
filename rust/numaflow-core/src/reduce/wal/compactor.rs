@@ -29,6 +29,7 @@ pub(crate) enum WindowKind {
 /// A Compactor that compacts based on the GC and Segment WAL files in the given path. It can
 /// compact both [WindowKind] of WALs.
 pub(crate) struct Compactor {
+    // TODO: remove gc and segment
     gc: WalType,
     segment: ReplayWal,
     path: PathBuf,
@@ -75,7 +76,7 @@ impl Compactor {
     /// - Delete the Segment File after the Rotate is complete.
     async fn compact_aligned(&self) -> WalResult<()> {
         // Get the oldest time and scanned GC files
-        let (oldest_time, _gc_files) = self.build_aligned_compaction().await?;
+        let (oldest_time, gc_files) = self.build_aligned_compaction().await?;
 
         // Get a streaming reader for the segment WAL
         let (mut rx, handle) = self.segment.clone().streaming_read()?;
@@ -129,9 +130,8 @@ impl Compactor {
                 }
                 SegmentEntry::CmdFileSwitch { filename } => {
                     // Send rotate message after processing each file
-
                     wal_tx
-                        .send(FileWriterMessage::Rotate)
+                        .send(FileWriterMessage::Rotate { on_size: true })
                         .await
                         .map_err(|e| format!("Failed to send rotate command: {}", e))?;
 
@@ -162,6 +162,12 @@ impl Compactor {
         writer_handle
             .await
             .map_err(|e| format!("Compaction writer failed: {}", e))??;
+
+        // delete the gc files
+        for gc_file in gc_files {
+            info!(gc_file = %gc_file.display(), "removing segment file");
+            tokio::fs::remove_file(gc_file).await?;
+        }
 
         Ok(())
     }

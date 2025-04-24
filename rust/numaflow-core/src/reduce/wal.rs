@@ -100,7 +100,7 @@ impl WalType {
         match self {
             WalType::Segment => "".to_string(),
             WalType::Gc => "".to_string(),
-            WalType::Compaction => ".wip".to_string(),
+            WalType::Compaction => "".to_string(),
         }
     }
 }
@@ -132,83 +132,12 @@ impl From<GcEventEntry> for GcEvent {
     }
 }
 
-async fn simple_data_wal_writer() {
-    let data_wal = AppendOnlyWal::new(
-        WalType::new("segment"),
-        "var/run/numaflow".into(),
-        20 * 1024 * 1024,
-        1000,
-        500,
-    )
-    .await
-    .unwrap();
-    let messages: Vec<Message> = (0..10)
-        .map(|i| {
-            let headers = HashMap::new();
-            Message {
-                typ: Default::default(),
-                keys: Arc::from(vec!["serve".to_string()]),
-                tags: None,
-                value: vec![1, 2, 3].into(),
-                offset: Offset::Int(IntOffset::new(i, 0)),
-                event_time: Default::default(),
-                watermark: None,
-                id: MessageID {
-                    vertex_name: "vertex".to_string().into(),
-                    offset: "123".to_string().into(),
-                    index: i as i32,
-                },
-                headers,
-                metadata: None,
-            }
-        })
-        .collect();
-
-    let (tx, rx) = tokio::sync::mpsc::channel(10);
-    let (offset_stream, handle) = data_wal
-        .streaming_write(ReceiverStream::new(rx))
-        .await
-        .unwrap();
-    // write messages
-    for message in messages {
-        let _ = tx
-            .send(FileWriterMessage::WriteData {
-                id: Some(message.id.to_string()),
-                data: message.try_into().unwrap(), // impl from for bytes
-            })
-            .await;
-    }
-
-    let gc_wal = AppendOnlyWal::new(WalType::new("gc"), "var/run/numaflow".into(), 1, 1000, 500)
-        .await
-        .unwrap();
-    let gc_event = GcEvent {
-        start_time: Some(prost_timestamp_from_utc(Utc::now())),
-        end_time: Some(prost_timestamp_from_utc(Utc::now())),
-        keys: vec![],
-    };
-
-    let (tx, rx) = tokio::sync::mpsc::channel(10);
-    let (offset_stream, handle) = gc_wal
-        .streaming_write(ReceiverStream::new(rx))
-        .await
-        .unwrap();
-    // write gc event
-    let _ = tx
-        .send(FileWriterMessage::WriteData {
-            id: Some("gc".to_string()),
-            data: Bytes::from(prost::Message::encode_to_vec(&gc_event)), // impl from for bytes
-        })
-        .await;
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::reduce::wal::compactor::{Compactor, WindowKind};
     use crate::reduce::wal::segment::replay::{ReplayWal, SegmentEntry};
     use chrono::{TimeZone, Utc};
-    use std::path::PathBuf;
     use tokio_stream::wrappers::ReceiverStream;
     use tokio_stream::StreamExt;
 
@@ -251,7 +180,9 @@ mod tests {
         .unwrap();
 
         // Send rotate command to GC WAL
-        tx.send(FileWriterMessage::Rotate).await.unwrap();
+        tx.send(FileWriterMessage::Rotate { on_size: false })
+            .await
+            .unwrap();
         drop(tx);
         handle.await.unwrap().unwrap();
 
@@ -297,7 +228,9 @@ mod tests {
         }
 
         // Send rotate command to segment WAL
-        tx.send(FileWriterMessage::Rotate).await.unwrap();
+        tx.send(FileWriterMessage::Rotate { on_size: false })
+            .await
+            .unwrap();
         drop(tx);
         handle.await.unwrap().unwrap();
 

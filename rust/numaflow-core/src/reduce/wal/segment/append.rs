@@ -25,7 +25,10 @@ pub(crate) enum FileWriterMessage {
         data: Bytes,
     },
     /// Rotates a file on demand.
-    Rotate,
+    Rotate {
+        /// When "true" Rotate only if the size is >= the size
+        on_size: bool,
+    },
 }
 
 struct FileWriterActor {
@@ -100,7 +103,8 @@ impl FileWriterActor {
                     self.result_tx.send(id).await.unwrap();
                 }
             }
-            FileWriterMessage::Rotate => {
+            FileWriterMessage::Rotate { on_size } => {
+                // TODO: on_size
                 self.rotate_file().await?;
             }
         }
@@ -174,6 +178,7 @@ impl FileWriterActor {
         let to_file_name = if self.wal_type.segment_suffix().is_empty() {
             format!("{}.frozen", self.current_file_name)
         } else {
+            // trim the suffix if suffix exists
             let to_file_name = self
                 .current_file_name
                 .trim_end_matches(&self.wal_type.segment_suffix());
@@ -533,7 +538,10 @@ mod tests {
             .unwrap();
 
         // Send the Rotate command
-        wal_tx.send(FileWriterMessage::Rotate).await.unwrap();
+        wal_tx
+            .send(FileWriterMessage::Rotate { on_size: false })
+            .await
+            .unwrap();
 
         // Send more data after rotation
         let id2 = Some("msg-002".to_string());
