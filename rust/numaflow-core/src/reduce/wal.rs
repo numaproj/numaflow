@@ -1,5 +1,5 @@
 use crate::message::{IntOffset, Message, MessageID, Offset};
-use crate::reduce::wal::segment::append::{AppendOnlyWal, FileWriterMessage};
+use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
@@ -153,8 +153,8 @@ mod tests {
             1000, // 1s flush interval
             500,  // channel buffer
         )
-            .await
-            .unwrap();
+        .await
+        .unwrap();
 
         // Create and write GC events
         let gc_start = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 5).unwrap();
@@ -172,15 +172,15 @@ mod tests {
             .await
             .unwrap();
 
-        tx.send(FileWriterMessage::WriteData {
+        tx.send(SegmentWriteMessage::WriteData {
             id: Some("gc".to_string()),
             data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event)),
         })
-            .await
-            .unwrap();
+        .await
+        .unwrap();
 
         // Send rotate command to GC WAL
-        tx.send(FileWriterMessage::Rotate { on_size: false })
+        tx.send(SegmentWriteMessage::Rotate { on_size: false })
             .await
             .unwrap();
         drop(tx);
@@ -194,8 +194,8 @@ mod tests {
             1000, // 1s flush interval
             500,  // channel buffer
         )
-            .await
-            .unwrap();
+        .await
+        .unwrap();
 
         // Write 100 segment entries
         let (tx, rx) = tokio::sync::mpsc::channel(100);
@@ -205,7 +205,7 @@ mod tests {
             .unwrap();
 
         let start_time = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 0).unwrap();
-        let time_increment = chrono::Duration::seconds(1); // (3600s / 100 entries)
+        let time_increment = chrono::Duration::seconds(1);
 
         for i in 1..=100 {
             let mut message = Message::default();
@@ -219,16 +219,16 @@ mod tests {
             };
 
             let proto_message: Bytes = message.try_into().unwrap();
-            tx.send(FileWriterMessage::WriteData {
+            tx.send(SegmentWriteMessage::WriteData {
                 id: Some(format!("msg-{}", i)),
                 data: proto_message,
             })
-                .await
-                .unwrap();
+            .await
+            .unwrap();
         }
 
         // Send rotate command to segment WAL
-        tx.send(FileWriterMessage::Rotate { on_size: false })
+        tx.send(SegmentWriteMessage::Rotate { on_size: false })
             .await
             .unwrap();
         drop(tx);
@@ -242,8 +242,8 @@ mod tests {
             1000, // 1s flush interval
             500,  // channel buffer
         )
-            .await
-            .unwrap();
+        .await
+        .unwrap();
 
         compactor.compact().await.unwrap();
 

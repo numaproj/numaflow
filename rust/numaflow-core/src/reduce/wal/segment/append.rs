@@ -1,8 +1,8 @@
 use crate::reduce::wal::error::WalResult;
 use crate::reduce::wal::WalType;
 use bytes::Bytes;
-use chrono::Utc;
-use futures::StreamExt;
+use chrono::{DateTime, Utc};
+use std::ops::Sub;
 use std::{io, path::PathBuf};
 use tokio::io::BufWriter;
 use tokio::task::JoinHandle;
@@ -13,9 +13,12 @@ use tokio::{
     time::{interval, Duration},
 };
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::StreamExt;
 use tracing::{debug, info};
 
-pub(crate) enum FileWriterMessage {
+const ROTATE_IF_STALE: chrono::Duration = chrono::Duration::seconds(30);
+
+pub(crate) enum SegmentWriteMessage {
     /// Writes the given payload to the WAL.
     WriteData {
         /// Unique ID of the payload. Useful to detect write failures.
@@ -31,59 +34,73 @@ pub(crate) enum FileWriterMessage {
     },
 }
 
-struct FileWriterActor {
+struct SegmentWriteActor {
     wal_type: WalType,
     base_path: PathBuf,
     current_file_name: String,
+    /// Time when the segment was created.
+    create_time: DateTime<Utc>,
     current_file: BufWriter<File>,
     current_size: u64,
     file_index: usize,
     flush_interval: Duration,
     max_file_size: u64,
     result_tx: Sender<String>,
-    in_rx: ReceiverStream<FileWriterMessage>,
 }
 
-impl Drop for FileWriterActor {
+impl Drop for SegmentWriteActor {
     fn drop(&mut self) {
         // TODO: do drop on shutdown on error path
     }
 }
 
-impl FileWriterActor {
+impl SegmentWriteActor {
     fn new(
         wal_type: WalType,
         base_path: PathBuf,
         current_file_name: String,
+        create_time: DateTime<Utc>,
         current_file: BufWriter<File>,
         max_file_size: u64,
         flush_interval: Duration,
         result_tx: Sender<String>,
-        in_rx: ReceiverStream<FileWriterMessage>,
     ) -> Self {
         Self {
             wal_type,
             base_path,
             current_file_name,
+            create_time,
             current_file,
             current_size: 0,
             file_index: 0,
             max_file_size,
             flush_interval,
             result_tx,
-            in_rx,
         }
     }
 
-    async fn start_processing(mut self) -> WalResult<()> {
+    async fn start_processing(
+        mut self,
+        in_rx: ReceiverStream<SegmentWriteMessage>,
+    ) -> WalResult<()> {
         let mut flush_timer = interval(self.flush_interval);
+        let in_rx = in_rx.timeout(Duration::from_secs(15));
+        tokio::pin!(in_rx);
         loop {
             tokio::select! {
-                maybe_msg = self.in_rx.next() => {
+                maybe_msg = in_rx.next() => {
                     let Some(msg) = maybe_msg else {
                         break;
                     };
-                    self.handle_message(msg).await?;
+                    match msg {
+                        Ok(msg) => {
+                            self.handle_message(msg).await?;
+                        }
+                        Err(_) => {
+                            debug!("calling flush and possible rotate on timeout");
+                            self.flush_and_rotate().await?;
+                        }
+                    }
                 }
                 _ = flush_timer.tick() => {
                     self.flush().await?;
@@ -94,16 +111,16 @@ impl FileWriterActor {
     }
 
     // handle message should only return critical errors
-    async fn handle_message(&mut self, msg: FileWriterMessage) -> WalResult<()> {
+    async fn handle_message(&mut self, msg: SegmentWriteMessage) -> WalResult<()> {
         match msg {
-            FileWriterMessage::WriteData { id, data } => {
+            SegmentWriteMessage::WriteData { id, data } => {
                 self.write_data(data).await?;
                 // we need to respond only if ID is provided
                 if let Some(id) = id {
                     self.result_tx.send(id).await.unwrap();
                 }
             }
-            FileWriterMessage::Rotate { on_size } => {
+            SegmentWriteMessage::Rotate { on_size } => {
                 // Rotate if forced (`on_size` is false) OR if size threshold is met
                 if !on_size || self.current_size >= self.max_file_size {
                     self.rotate_file().await?;
@@ -174,6 +191,17 @@ impl FileWriterActor {
         Ok((new_path.display().to_string(), BufWriter::new(file)))
     }
 
+    /// Flush and possibly rotate since there are no new writes to the file.
+    async fn flush_and_rotate(&mut self) -> WalResult<()> {
+        // if the file has not been rotated in these many seconds, let's rotate
+        if Utc::now().signed_duration_since(self.create_time) > ROTATE_IF_STALE {
+            debug!(?ROTATE_IF_STALE, "Rotating file is stale, no entries for a while");
+            self.rotate_file().await
+        } else {
+            self.flush().await
+        }
+    }
+
     async fn rotate_file(&mut self) -> WalResult<()> {
         info!(
             current_size = ?self.current_size,
@@ -202,6 +230,7 @@ impl FileWriterActor {
 
         self.current_file_name = file_name;
         self.current_file = buf_file;
+        self.create_time = Utc::now();
         self.current_size = 0;
 
         Ok(())
@@ -240,32 +269,32 @@ impl AppendOnlyWal {
     /// CANCEL SAFETY: This is not cancel safe. This is because our writes are buffered.
     pub(crate) async fn streaming_write(
         self,
-        stream: ReceiverStream<FileWriterMessage>,
+        stream: ReceiverStream<SegmentWriteMessage>,
     ) -> WalResult<(ReceiverStream<String>, JoinHandle<WalResult<()>>)> {
-        let (file_name, initial_file) =
-            FileWriterActor::open_segment(&self.wal_type, &self.base_path, 0).await?;
+        let (file_name, file_buf) =
+            SegmentWriteActor::open_segment(&self.wal_type, &self.base_path, 0).await?;
 
         let (result_tx, result_rx) = mpsc::channel::<String>(self.channel_buffer_size);
 
         let max_file_size_bytes = self.max_file_size_mb * 1024 * 1024;
         let flush_duration = Duration::from_millis(self.flush_interval_ms);
 
-        let mut actor = FileWriterActor::new(
+        let mut actor = SegmentWriteActor::new(
             self.wal_type,
             self.base_path,
             file_name,
-            initial_file,
+            Utc::now(),
+            file_buf,
             max_file_size_bytes,
             flush_duration,
             result_tx,
-            stream,
         );
 
         actor.current_size = 0;
         actor.file_index = 0;
 
         let handle = tokio::spawn(async move {
-            actor.start_processing().await?;
+            actor.start_processing(stream).await?;
             Ok(())
         });
 
@@ -301,7 +330,7 @@ mod tests {
         .await
         .expect("WAL creation failed");
 
-        let (wal_tx, wal_rx) = mpsc::channel::<FileWriterMessage>(channel_buffer);
+        let (wal_tx, wal_rx) = mpsc::channel::<SegmentWriteMessage>(channel_buffer);
         let (mut result_rx, writer_handle) = wal_writer
             .streaming_write(ReceiverStream::new(wal_rx))
             .await
@@ -314,7 +343,7 @@ mod tests {
         let data1 = Bytes::from("some initial data");
         expected_ids.push(id1.clone());
         wal_tx
-            .send(FileWriterMessage::WriteData {
+            .send(SegmentWriteMessage::WriteData {
                 id: Some(id1),
                 data: data1.clone(),
             })
@@ -325,7 +354,7 @@ mod tests {
         let data2 = Bytes::from(" more data here");
         expected_ids.push(id2.clone());
         wal_tx
-            .send(FileWriterMessage::WriteData {
+            .send(SegmentWriteMessage::WriteData {
                 id: Some(id2),
                 data: data2.clone(),
             })
@@ -337,7 +366,7 @@ mod tests {
         let id3 = "msg-large-1".to_string();
         expected_ids.push(id3.clone());
         wal_tx
-            .send(FileWriterMessage::WriteData {
+            .send(SegmentWriteMessage::WriteData {
                 id: Some(id3),
                 data: large_data1.clone(),
             })
@@ -348,7 +377,7 @@ mod tests {
         let id4 = "msg-large-2".to_string();
         expected_ids.push(id4.clone());
         wal_tx
-            .send(FileWriterMessage::WriteData {
+            .send(SegmentWriteMessage::WriteData {
                 id: Some(id4),
                 data: large_data2.clone(),
             })
@@ -359,7 +388,7 @@ mod tests {
         let data5 = Bytes::from("data after rotation");
         expected_ids.push(id5.clone());
         wal_tx
-            .send(FileWriterMessage::WriteData {
+            .send(SegmentWriteMessage::WriteData {
                 id: Some(id5),
                 data: data5.clone(),
             })
@@ -370,7 +399,7 @@ mod tests {
         let data6 = Bytes::from(" more data after rotation");
         expected_ids.push(id6.clone());
         wal_tx
-            .send(FileWriterMessage::WriteData {
+            .send(SegmentWriteMessage::WriteData {
                 id: Some(id6),
                 data: data6.clone(),
             })
@@ -460,7 +489,7 @@ mod tests {
         .await
         .expect("failed to create wal");
 
-        let (wal_tx, wal_rx) = mpsc::channel::<FileWriterMessage>(channel_buffer);
+        let (wal_tx, wal_rx) = mpsc::channel::<SegmentWriteMessage>(channel_buffer);
         let (mut result_rx, writer_handle) = wal_writer
             .streaming_write(ReceiverStream::new(wal_rx))
             .await
@@ -469,7 +498,7 @@ mod tests {
         let id1 = Some("flush-test-1".to_string());
         let data1 = Bytes::from("Data to be flushed");
         wal_tx
-            .send(FileWriterMessage::WriteData {
+            .send(SegmentWriteMessage::WriteData {
                 id: id1.clone(),
                 data: data1.clone(),
             })
@@ -529,7 +558,7 @@ mod tests {
         .await
         .expect("failed to create wal");
 
-        let (wal_tx, wal_rx) = mpsc::channel::<FileWriterMessage>(channel_buffer);
+        let (wal_tx, wal_rx) = mpsc::channel::<SegmentWriteMessage>(channel_buffer);
         let (_result_rx, writer_handle) = wal_writer
             .streaming_write(ReceiverStream::new(wal_rx))
             .await
@@ -539,7 +568,7 @@ mod tests {
         let id1 = Some("msg-001".to_string());
         let data1 = Bytes::from("data before rotation");
         wal_tx
-            .send(FileWriterMessage::WriteData {
+            .send(SegmentWriteMessage::WriteData {
                 id: id1.clone(),
                 data: data1.clone(),
             })
@@ -548,7 +577,7 @@ mod tests {
 
         // Send the Rotate command
         wal_tx
-            .send(FileWriterMessage::Rotate { on_size: false })
+            .send(SegmentWriteMessage::Rotate { on_size: false })
             .await
             .unwrap();
 
@@ -556,7 +585,7 @@ mod tests {
         let id2 = Some("msg-002".to_string());
         let data2 = Bytes::from("data after rotation");
         wal_tx
-            .send(FileWriterMessage::WriteData {
+            .send(SegmentWriteMessage::WriteData {
                 id: id2.clone(),
                 data: data2.clone(),
             })

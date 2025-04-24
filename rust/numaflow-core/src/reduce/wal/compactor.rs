@@ -3,7 +3,7 @@
 //! multiple WAL types (data, gc, etc.) and it decides how to purge (aka compact).
 
 use crate::reduce::wal::error::WalResult;
-use crate::reduce::wal::segment::append::{AppendOnlyWal, FileWriterMessage};
+use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use crate::reduce::wal::segment::replay::{ReplayWal, SegmentEntry};
 use crate::reduce::wal::GcEventEntry;
 use crate::reduce::wal::WalType;
@@ -162,7 +162,7 @@ impl Compactor {
                     if Self::should_retain_message(&data, oldest_time)? {
                         // Send the data to the compaction WAL
                         wal_tx
-                            .send(FileWriterMessage::WriteData { id: None, data })
+                            .send(SegmentWriteMessage::WriteData { id: None, data })
                             .await
                             .map_err(|e| {
                                 format!("Failed to send message to compaction WAL: {}", e)
@@ -175,7 +175,7 @@ impl Compactor {
                 SegmentEntry::CmdFileSwitch { filename } => {
                     // Send rotate message after processing each file
                     wal_tx
-                        .send(FileWriterMessage::Rotate { on_size: false })
+                        .send(SegmentWriteMessage::Rotate { on_size: false })
                         .await
                         .map_err(|e| format!("Failed to send rotate command: {}", e))?;
 
