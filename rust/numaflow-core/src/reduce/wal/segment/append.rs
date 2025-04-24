@@ -19,7 +19,7 @@ pub(crate) enum FileWriterMessage {
     /// Writes the given payload to the WAL.
     WriteData {
         /// Unique ID of the payload. Useful to detect write failures.
-        id: String,
+        id: Option<String>,
         // TODO: add Option<event-time>
         /// Data to be written on do the WAL.
         data: Bytes,
@@ -95,7 +95,10 @@ impl FileWriterActor {
         match msg {
             FileWriterMessage::WriteData { id, data } => {
                 self.write_data(data).await?;
-                self.result_tx.send(id).await.unwrap();
+                // we need to respond only if ID is provided
+                if let Some(id) = id {
+                    self.result_tx.send(id).await.unwrap();
+                }
             }
             FileWriterMessage::Rotate => {
                 self.rotate_file().await?;
@@ -298,7 +301,7 @@ mod tests {
         expected_ids.push(id1.clone());
         wal_tx
             .send(FileWriterMessage::WriteData {
-                id: id1,
+                id: Some(id1),
                 data: data1.clone(),
             })
             .await
@@ -309,7 +312,7 @@ mod tests {
         expected_ids.push(id2.clone());
         wal_tx
             .send(FileWriterMessage::WriteData {
-                id: id2,
+                id: Some(id2),
                 data: data2.clone(),
             })
             .await
@@ -321,7 +324,7 @@ mod tests {
         expected_ids.push(id3.clone());
         wal_tx
             .send(FileWriterMessage::WriteData {
-                id: id3,
+                id: Some(id3),
                 data: large_data1.clone(),
             })
             .await
@@ -332,7 +335,7 @@ mod tests {
         expected_ids.push(id4.clone());
         wal_tx
             .send(FileWriterMessage::WriteData {
-                id: id4,
+                id: Some(id4),
                 data: large_data2.clone(),
             })
             .await
@@ -343,7 +346,7 @@ mod tests {
         expected_ids.push(id5.clone());
         wal_tx
             .send(FileWriterMessage::WriteData {
-                id: id5,
+                id: Some(id5),
                 data: data5.clone(),
             })
             .await
@@ -354,7 +357,7 @@ mod tests {
         expected_ids.push(id6.clone());
         wal_tx
             .send(FileWriterMessage::WriteData {
-                id: id6,
+                id: Some(id6),
                 data: data6.clone(),
             })
             .await
@@ -449,7 +452,7 @@ mod tests {
             .await
             .expect("Failed to start WAL service");
 
-        let id1 = "flush-test-1".to_string();
+        let id1 = Some("flush-test-1".to_string());
         let data1 = Bytes::from("Data to be flushed");
         wal_tx
             .send(FileWriterMessage::WriteData {
@@ -481,7 +484,11 @@ mod tests {
         );
 
         let result = result_rx.next().await.expect("Should receive a result");
-        assert_eq!(result, id1, "Should have received the correct ID back");
+        assert_eq!(
+            result,
+            id1.unwrap(),
+            "Should have received the correct ID back"
+        );
 
         // FIXME: why does this hang?
         // writer_handle
@@ -515,7 +522,7 @@ mod tests {
             .expect("Failed to start WAL service");
 
         // Send some data to the WAL
-        let id1 = "msg-001".to_string();
+        let id1 = Some("msg-001".to_string());
         let data1 = Bytes::from("data before rotation");
         wal_tx
             .send(FileWriterMessage::WriteData {
@@ -529,7 +536,7 @@ mod tests {
         wal_tx.send(FileWriterMessage::Rotate).await.unwrap();
 
         // Send more data after rotation
-        let id2 = "msg-002".to_string();
+        let id2 = Some("msg-002".to_string());
         let data2 = Bytes::from("data after rotation");
         wal_tx
             .send(FileWriterMessage::WriteData {

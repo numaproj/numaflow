@@ -26,6 +26,7 @@ pub(crate) enum SegmentEntry {
     CmdFileSwitch { filename: PathBuf },
 }
 
+#[derive(Debug, Clone)]
 pub(crate) struct ReplayWal {
     wal_type: WalType,
     base_path: PathBuf,
@@ -93,7 +94,8 @@ impl ReplayWal {
             };
 
             // make sure we have data for that len
-            let mut buffer = BytesMut::with_capacity(data_len as usize);
+            let mut buffer = vec![0; data_len as usize];
+
             // this is a critical error, we should be able to read data of len data_len
             if let Err(e) = reader.read_exact(&mut buffer).await {
                 return Err(format!(
@@ -106,7 +108,7 @@ impl ReplayWal {
             // send each line
             tx.send(SegmentEntry::DataEntry {
                 size: data_len,
-                data: buffer.freeze(),
+                data: Bytes::from(buffer),
             })
             .await
             .expect("rx dropped while replaying");

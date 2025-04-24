@@ -173,21 +173,15 @@ async fn simple_data_wal_writer() {
     for message in messages {
         let _ = tx
             .send(FileWriterMessage::WriteData {
-                id: message.id.to_string(),
+                id: Some(message.id.to_string()),
                 data: message.try_into().unwrap(), // impl from for bytes
             })
             .await;
     }
 
-    let gc_wal = AppendOnlyWal::new(
-        WalType::new("gc"),
-        "var/run/numaflow".into(),
-        1 * 1024 * 1024,
-        1000,
-        500,
-    )
-    .await
-    .unwrap();
+    let gc_wal = AppendOnlyWal::new(WalType::new("gc"), "var/run/numaflow".into(), 1, 1000, 500)
+        .await
+        .unwrap();
     let gc_event = GcEvent {
         start_time: Some(prost_timestamp_from_utc(Utc::now())),
         end_time: Some(prost_timestamp_from_utc(Utc::now())),
@@ -202,8 +196,139 @@ async fn simple_data_wal_writer() {
     // write gc event
     let _ = tx
         .send(FileWriterMessage::WriteData {
-            id: "gc".to_string(),
+            id: Some("gc".to_string()),
             data: Bytes::from(prost::Message::encode_to_vec(&gc_event)), // impl from for bytes
         })
         .await;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::reduce::wal::compactor::{Compactor, WindowKind};
+    use crate::reduce::wal::segment::replay::{ReplayWal, SegmentEntry};
+    use chrono::{TimeZone, Utc};
+    use std::path::PathBuf;
+    use tokio_stream::wrappers::ReceiverStream;
+    use tokio_stream::StreamExt;
+
+    #[tokio::test]
+    async fn test_gc_wal_and_compaction() {
+        let test_path = tempfile::tempdir().unwrap().into_path();
+
+        // Create GC WAL
+        let gc_wal = AppendOnlyWal::new(
+            WalType::new("gc"),
+            test_path.clone(),
+            1,    // 1MB
+            1000, // 1s flush interval
+            500,  // channel buffer
+        )
+        .await
+        .unwrap();
+
+        // Create and write GC events
+        let gc_start = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 5).unwrap();
+        let gc_end = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 6).unwrap();
+
+        let gc_event = GcEvent {
+            start_time: Some(prost_timestamp_from_utc(gc_start)),
+            end_time: Some(prost_timestamp_from_utc(gc_end)),
+            keys: vec![],
+        };
+
+        let (tx, rx) = tokio::sync::mpsc::channel(10);
+        let (_offset_stream, handle) = gc_wal
+            .streaming_write(ReceiverStream::new(rx))
+            .await
+            .unwrap();
+
+        tx.send(FileWriterMessage::WriteData {
+            id: Some("gc".to_string()),
+            data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event)),
+        })
+        .await
+        .unwrap();
+
+        // Send rotate command to GC WAL
+        tx.send(FileWriterMessage::Rotate).await.unwrap();
+        drop(tx);
+        handle.await.unwrap().unwrap();
+
+        // Create segment WAL
+        let segment_wal = AppendOnlyWal::new(
+            WalType::new("segment"),
+            test_path.clone(),
+            1,    // 20MB
+            1000, // 1s flush interval
+            500,  // channel buffer
+        )
+        .await
+        .unwrap();
+
+        // Write 100 segment entries
+        let (tx, rx) = tokio::sync::mpsc::channel(100);
+        let (_offset_stream, handle) = segment_wal
+            .streaming_write(ReceiverStream::new(rx))
+            .await
+            .unwrap();
+
+        let start_time = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 0).unwrap();
+        let time_increment = chrono::Duration::seconds(36); // (3600s / 100 entries)
+
+        for i in 0..100 {
+            let mut message = Message::default();
+            message.event_time = start_time + (time_increment * i);
+            message.keys = Arc::from(vec!["test-key".to_string()]);
+            message.value = bytes::Bytes::from(vec![1, 2, 3]);
+            message.id = MessageID {
+                vertex_name: "test-vertex".to_string().into(),
+                offset: i.to_string().into(),
+                index: 0,
+            };
+
+            let proto_message: Bytes = message.try_into().unwrap();
+            tx.send(FileWriterMessage::WriteData {
+                id: Some(format!("msg-{}", i)),
+                data: proto_message,
+            })
+            .await
+            .unwrap();
+        }
+
+        // Send rotate command to segment WAL
+        tx.send(FileWriterMessage::Rotate).await.unwrap();
+        drop(tx);
+        handle.await.unwrap().unwrap();
+
+        // Create and run compactor
+        let compactor = Compactor::new(
+            WalType::new("gc"),
+            WalType::new("segment"),
+            test_path.clone(),
+            WindowKind::Aligned,
+        );
+
+        compactor.compact().await.unwrap();
+
+        // Verify compacted data
+        let compaction_wal = ReplayWal::new(WalType::new("compaction"), test_path);
+        let (mut rx, handle) = compaction_wal.streaming_read().unwrap();
+
+        while let Some(entry) = rx.next().await {
+            if let SegmentEntry::DataEntry { data, .. } = entry {
+                let msg: numaflow_pb::objects::isb::Message = prost::Message::decode(data).unwrap();
+                if let Some(header) = msg.header {
+                    if let Some(message_info) = header.message_info {
+                        let event_time = utc_from_timestamp(message_info.event_time);
+                        assert!(
+                            event_time > gc_end,
+                            "Found message with event_time <= gc_end"
+                        );
+                    }
+                }
+            }
+        }
+        handle.await.unwrap().unwrap();
+    }
 }
