@@ -31,6 +31,7 @@ pub enum ApiError {
     InternalServerError(String),
     BadGateway(String),
     Conflict(String),
+    TooManyRequests(String),
 }
 
 impl IntoResponse for ApiError {
@@ -47,6 +48,7 @@ impl IntoResponse for ApiError {
             ApiError::InternalServerError(message) => (StatusCode::INTERNAL_SERVER_ERROR, message),
             ApiError::BadGateway(message) => (StatusCode::BAD_GATEWAY, message),
             ApiError::Conflict(message) => (StatusCode::CONFLICT, message),
+            ApiError::TooManyRequests(message) => (StatusCode::TOO_MANY_REQUESTS, message),
         };
 
         (

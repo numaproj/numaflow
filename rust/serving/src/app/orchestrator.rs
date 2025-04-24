@@ -62,9 +62,9 @@ where
         let (tx, rx) = oneshot::channel();
         let sub_graph_generator = Arc::clone(&self.msg_graph_generator);
         let msg_id = id.to_string();
-        let mut subgraph = None;
 
-        let pod_hash = if let Err(e) = self.status_tracker.register(id).await {
+        let pod_hash = if let Err(e) = self.status_tracker.register(id, request_type.clone()).await
+        {
             match e.clone() {
                 status::Error::Cancelled {
                     err,
@@ -105,32 +105,29 @@ where
             while let Some(cb) = callbacks_stream.next().await {
                 debug!(?cb, ?msg_id, "Received callback");
                 callbacks.push(cb);
-                subgraph = sub_graph_generator
+                let subgraph = sub_graph_generator
                     .generate_subgraph_from_callbacks(msg_id.clone(), callbacks.clone())
                     .expect("Failed to generate subgraph");
-                if subgraph.is_some() {
-                    break;
-                }
-            }
 
-            if let Some(subgraph) = subgraph {
-                debug!(?msg_id, ?subgraph, "Subgraph generated successfully");
-                status_tracker
-                    .deregister(&msg_id, &subgraph)
-                    .await
-                    .expect("Failed to deregister");
-                cb_store
-                    .deregister(&msg_id)
-                    .await
-                    .expect("Failed to deregister");
-
-                // send can only fail if the request was cancelled by the client or the handler task
-                // was terminated
-                if tx.send(Ok(subgraph.clone())).is_err() {
+                if let Some(graph) = subgraph {
                     status_tracker
-                        .mark_as_failed(&msg_id, "Cancelled")
+                        .deregister(&msg_id, &graph)
                         .await
-                        .expect("Failed to mark the request as failed");
+                        .expect("Failed to deregister");
+                    cb_store
+                        .deregister(&msg_id)
+                        .await
+                        .expect("Failed to deregister");
+
+                    // send can only fail if the request was cancelled by the client or the handler task
+                    // was terminated
+                    if tx.send(Ok(graph)).is_err() {
+                        status_tracker
+                            .mark_as_failed(&msg_id, "Cancelled")
+                            .await
+                            .expect("Failed to mark the request as failed");
+                    }
+                    break;
                 }
             }
         };
@@ -178,9 +175,8 @@ where
         let (tx, rx) = mpsc::channel(10);
         let sub_graph_generator = Arc::clone(&self.msg_graph_generator);
         let msg_id = id.to_string();
-        let mut subgraph = None;
-
-        let pod_hash = if let Err(e) = self.status_tracker.register(id).await {
+        let pod_hash = if let Err(e) = self.status_tracker.register(id, request_type.clone()).await
+        {
             match e.clone() {
                 status::Error::Cancelled {
                     err,
@@ -214,12 +210,12 @@ where
             .await?;
 
         let mut cb_store = self.callback_store.clone();
-        let mut status_tracker = self.status_tracker.clone();
+        let status_tracker = self.status_tracker.clone();
         tokio::spawn(async move {
             let mut callbacks = Vec::new();
             while let Some(cb) = callbacks_stream.next().await {
                 callbacks.push(cb);
-                subgraph = match sub_graph_generator
+                let subgraph = match sub_graph_generator
                     .generate_subgraph_from_callbacks(msg_id.clone(), callbacks.clone())
                 {
                     Ok(subgraph) => subgraph,
@@ -229,34 +225,33 @@ where
                     }
                 };
 
-                if subgraph.is_some() {
+                if let Some(graph) = subgraph {
+                    status_tracker
+                        .deregister(&msg_id, &graph)
+                        .await
+                        .expect("Failed to deregister in status tracker");
+                    cb_store
+                        .deregister(&msg_id)
+                        .await
+                        .expect("Failed to deregister in callback store");
                     break;
                 }
-            }
-
-            if let Some(subgraph) = subgraph {
-                status_tracker
-                    .deregister(&msg_id, &subgraph)
-                    .await
-                    .expect("Failed to deregister in status tracker");
-                cb_store
-                    .deregister(&msg_id)
-                    .await
-                    .expect("Failed to deregister in callback store");
-            } else {
-                error!("Subgraph could not be generated for the given ID");
-                status_tracker
-                    .mark_as_failed(&msg_id, "Subgraph could not be generated")
-                    .await
-                    .expect("Failed to mark as failed");
             }
         });
 
         // watch for data stored in the datastore
+        let request_id = id.to_string();
+        let mut status_tracker = self.status_tracker.clone();
         let mut response_stream = self.datum_store.stream_data(id, &pod_hash).await?;
         tokio::spawn(async move {
             while let Some(response) = response_stream.next().await {
-                tx.send(response).await.expect("Failed to send response");
+                if tx.send(response).await.is_err() {
+                    error!("Failed to send response");
+                    status_tracker
+                        .mark_as_failed(&request_id, "Cancelled")
+                        .await
+                        .expect("Failed to mark the request has failed");
+                }
             }
         });
 
@@ -283,6 +278,14 @@ where
     /// marks the request as failed
     pub(crate) async fn mark_as_failed(&mut self, id: &str, error: &str) -> Result<(), Error> {
         self.status_tracker.mark_as_failed(id, error).await?;
+        Ok(())
+    }
+
+    /// discards the request from the status tracker and callback store. This is used when the
+    /// request has not been accepted due to back pressure.
+    pub(crate) async fn discard(&mut self, id: &str) -> Result<(), Error> {
+        self.status_tracker.discard(id).await?;
+        self.callback_store.deregister(id).await?;
         Ok(())
     }
 
@@ -333,7 +336,6 @@ mod tests {
         let callback_store = JetStreamCallbackStore::new(
             context.clone(),
             pod_hash,
-            store_name,
             store_name,
             CancellationToken::new(),
         )
@@ -485,7 +487,7 @@ mod tests {
         assert_eq!(result[1], b"response2");
     }
 
-    // #[cfg(feature = "nats-tests")]
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_stream_response() {
         let js_url = "localhost:4222";
@@ -508,7 +510,6 @@ mod tests {
         let callback_store = JetStreamCallbackStore::new(
             context.clone(),
             pod_hash,
-            store_name,
             store_name,
             CancellationToken::new(),
         )

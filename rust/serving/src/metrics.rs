@@ -13,12 +13,14 @@ use axum::{
     Router,
 };
 use axum_server::tls_rustls::RustlsConfig;
+use axum_server::Handle;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
 use prometheus_client::registry::Registry;
-use tracing::debug;
+use tokio_util::sync::CancellationToken;
+use tracing::{debug, info};
 
 use crate::Error::MetricsServer;
 
@@ -163,15 +165,24 @@ pub(crate) fn serving_metrics() -> &'static ServingMetrics {
 pub(crate) async fn start_https_metrics_server(
     addr: SocketAddr,
     tls_config: RustlsConfig,
+    cln_token: CancellationToken,
 ) -> crate::Result<()> {
     let metrics_app = Router::new().route("/metrics", get(metrics_handler));
 
-    tracing::info!(?addr, "Starting metrics server");
+    let handle = Handle::new();
+    let shutdown_handle = handle.clone();
+    tokio::spawn(async move {
+        cln_token.cancelled().await;
+        shutdown_handle.shutdown();
+    });
+
     axum_server::bind_rustls(addr, tls_config)
+        .handle(handle)
         .serve(metrics_app.into_make_service())
         .await
         .map_err(|e| MetricsServer(format!("Starting web server for metrics: {}", e)))?;
 
+    info!(?addr, "Metrics server stopped");
     Ok(())
 }
 
@@ -254,7 +265,8 @@ mod tests {
 
         let addr = SocketAddr::from(([127, 0, 0, 1], 0));
         let server = tokio::spawn(async move {
-            let result = start_https_metrics_server(addr, tls_config).await;
+            let result =
+                start_https_metrics_server(addr, tls_config, CancellationToken::new()).await;
             assert!(result.is_ok())
         });
 

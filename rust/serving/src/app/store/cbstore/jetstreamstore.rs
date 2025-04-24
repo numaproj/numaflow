@@ -10,7 +10,6 @@ use crate::callback::Callback;
 use crate::config::RequestType;
 use async_nats::jetstream::kv::{Store, Watch};
 use async_nats::jetstream::Context;
-use bytes::Bytes;
 use tokio::sync::{mpsc, Mutex};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
@@ -18,15 +17,12 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn, Instrument};
 
 const CALLBACK_KEY_PREFIX: &str = "cb";
-const RESPONSE_KEY_PREFIX: &str = "rs";
-const START_PROCESSING_MARKER: &str = "start.processing";
 
 /// JetStream implementation of the callback store.
 #[derive(Clone)]
 pub(crate) struct JetStreamCallbackStore {
     pod_hash: String,
     callback_kv: Store,
-    response_kv: Store,
     callback_senders: Arc<Mutex<HashMap<String, mpsc::Sender<Arc<Callback>>>>>,
 }
 
@@ -35,12 +31,11 @@ impl JetStreamCallbackStore {
         js_context: Context,
         pod_hash: &str,
         callback_bucket: &str,
-        response_bucket: &str,
         cln_token: CancellationToken,
     ) -> StoreResult<Self> {
         info!(
             pod_hash,
-            callback_bucket, response_bucket, "Initializing JetStreamCallbackStore"
+            callback_bucket, "Initializing JetStreamCallbackStore"
         );
 
         let callback_kv = js_context
@@ -49,15 +44,6 @@ impl JetStreamCallbackStore {
             .map_err(|e| {
                 StoreError::Connection(format!(
                     "Failed to get callback kv store '{callback_bucket}': {e:?}"
-                ))
-            })?;
-
-        let response_kv = js_context
-            .get_key_value(response_bucket)
-            .await
-            .map_err(|e| {
-                StoreError::Connection(format!(
-                    "Failed to get response kv store '{response_bucket}': {e:?}"
                 ))
             })?;
 
@@ -73,7 +59,6 @@ impl JetStreamCallbackStore {
         Ok(Self {
             pod_hash: pod_hash.to_string(),
             callback_kv,
-            response_kv,
             callback_senders,
         })
     }
@@ -111,7 +96,7 @@ impl JetStreamCallbackStore {
                     match maybe_entry {
                         Some(Ok(entry)) => {
                             latest_revision = entry.revision;
-                            debug!(key = ?entry.key, operation = ?entry.operation, revision = entry.revision, "Central watcher received entry");
+                            debug!(key = ?entry.key, operation = ?entry.operation, revision = entry.revision, "Callback central watcher received entry");
 
                             // Skip deletions/purges, only process Put operations for new callbacks
                             if entry.operation != async_nats::jetstream::kv::Operation::Put {
@@ -129,7 +114,6 @@ impl JetStreamCallbackStore {
                             }
 
                             let callback: Arc<Callback> = Arc::new(entry.value.try_into().expect("Failed to deserialize callback"));
-
                             // we need to send the callback to appropriate sender based on the id
                             let senders_guard = senders.lock().await;
                             if let Some(cb_sender) = senders_guard.get(request_id) {
@@ -284,7 +268,7 @@ impl super::CallbackStore for JetStreamCallbackStore {
     /// deregister the request and remove the callback sender from the map.
     async fn deregister(&mut self, id: &str) -> StoreResult<()> {
         let mut senders_guard = self.callback_senders.lock().await;
-        if senders_guard.remove(id).is_some() {
+        if senders_guard.remove(id).is_none() {
             error!(?id, "No active sender found during deregistration");
         }
         Ok(())
@@ -321,21 +305,6 @@ impl super::CallbackStore for JetStreamCallbackStore {
             let mut senders_guard = self.callback_senders.lock().await;
             senders_guard.insert(id.to_string(), tx);
         }
-
-        let response_key = format!(
-            "{}.{}.{}.{}",
-            RESPONSE_KEY_PREFIX, self.pod_hash, id, START_PROCESSING_MARKER
-        );
-
-        let request_type_bytes: Bytes = request_type
-            .try_into()
-            .expect("Failed to convert request type");
-        self.response_kv
-            .put(&response_key, request_type_bytes)
-            .await
-            .map_err(|e| {
-                StoreError::StoreWrite(format!("Failed to create response entry for {id}: {e:?}"))
-            })?;
 
         Ok(ReceiverStream::new(rx))
     }
@@ -375,7 +344,6 @@ mod tests {
             context.clone(),
             "0",
             serving_store,
-            serving_store,
             CancellationToken::new(),
         )
         .await
@@ -414,7 +382,6 @@ mod tests {
         let mut store = JetStreamCallbackStore::new(
             context.clone(),
             pod_hash,
-            serving_store,
             serving_store,
             CancellationToken::new(),
         )
@@ -480,7 +447,6 @@ mod tests {
         let mut store = JetStreamCallbackStore::new(
             context.clone(),
             current_pod_hash,
-            serving_store,
             serving_store,
             CancellationToken::new(),
         )

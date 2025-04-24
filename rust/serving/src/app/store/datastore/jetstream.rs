@@ -5,7 +5,7 @@
 //!
 //! **JetStream Response Entry Format**
 //!
-//! Response Key - rs.{id}.{vertex_name}.{timestamp}
+//! Response Key - rs.{pod_hash}.{id}.{vertex_name}.{timestamp}
 //!
 //! Response Value - response_payload
 use crate::app::store::datastore::{DataStore, Error as StoreError, Result as StoreResult};
@@ -25,7 +25,7 @@ use tokio::time::sleep;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 const RESPONSE_KEY_PREFIX: &str = "rs";
 const FINAL_RESULT_KEY_SUFFIX: &str = "final.result.processed";
@@ -137,6 +137,7 @@ impl JetStreamDataStore {
                     maybe_entry = watcher.next() => {
                         match maybe_entry {
                             Some(Ok(entry)) => {
+                                debug!(key = ?entry.key, operation = ?entry.operation, revision = entry.revision, "Response central watcher received entry");
                                 latest_revision = entry.revision;
                                 if entry.operation != async_nats::jetstream::kv::Operation::Put {
                                     continue;
@@ -328,6 +329,9 @@ impl JetStreamDataStore {
         }
     }
 
+    /// Retrieves the historic response for a given request ID and pod hash. It uses a watcher to
+    /// stream the responses from the KV store. The responses are collected until the done processing
+    /// marker is received.
     pub(crate) async fn get_historic_response(
         store: Store,
         id: &str,
@@ -365,6 +369,9 @@ impl JetStreamDataStore {
         Ok(responses)
     }
 
+    /// Streams the historic responses for a given request ID and pod hash. It uses a watcher to
+    /// stream the responses from the KV store. The responses are sent to the provided channel
+    /// until the done processing marker is received.
     pub(crate) async fn stream_historic_responses(
         store: Store,
         id: &str,
@@ -435,13 +442,17 @@ impl DataStore for JetStreamDataStore {
         id: &str,
         pod_hash: &str,
     ) -> StoreResult<ReceiverStream<Arc<Bytes>>> {
-        // we need to wait for the start processing marker entry to be processed by the central watcher
+        // if the pod_hash is same as the current pod hash then we can rely on the central watcher for
+        // responses else we will have to create a new watcher for the old pod hash.
         if pod_hash == self.pod_hash {
+            // we need to wait for the start processing marker entry to be processed by the central watcher
             loop {
-                let mut response_map = self.responses_map.lock().await;
-                if let Some(ResponseMode::Stream { rx, .. }) = response_map.get_mut(id) {
-                    if let Some(receiver_stream) = rx.take() {
-                        return Ok(receiver_stream);
+                {
+                    let mut response_map = self.responses_map.lock().await;
+                    if let Some(ResponseMode::Stream { rx, .. }) = response_map.get_mut(id) {
+                        if let Some(receiver_stream) = rx.take() {
+                            return Ok(receiver_stream);
+                        }
                     }
                 }
                 sleep(Duration::from_millis(5)).await;

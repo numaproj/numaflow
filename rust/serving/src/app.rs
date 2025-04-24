@@ -75,6 +75,7 @@ where
         .await
         .map_err(|e| InitError(format!("Starting web server for metrics: {}", e)))?;
 
+    info!(?app_addr, "Server stopped");
     Ok(())
 }
 
@@ -167,8 +168,8 @@ where
     Ok(setup_app(app).await?.layer(layers))
 }
 
-// Gracefully shutdown the server on receiving SIGINT or SIGTERM
-// by sending a shutdown signal to the server using the handle.
+/// Gracefully shutdown the server on receiving SIGINT or SIGTERM
+/// by sending a shutdown signal to the server using the handle.
 async fn graceful_shutdown(handle: Handle, duration_secs: u64, cancel_token: CancellationToken) {
     let ctrl_c = async {
         signal::ctrl_c()
@@ -188,8 +189,7 @@ async fn graceful_shutdown(handle: Handle, duration_secs: u64, cancel_token: Can
         _ = terminate => {},
     }
 
-    info!("sending graceful shutdown signal");
-
+    info!("Got terminate signal, gracefully shutting down the server");
     // Signal the server to shut down using Handle.
     handle.graceful_shutdown(Some(Duration::from_secs(duration_secs)));
     cancel_token.cancel();

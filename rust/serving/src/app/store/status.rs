@@ -1,3 +1,4 @@
+use crate::config::RequestType;
 use async_nats::jetstream::kv::{CreateErrorKind, Store};
 use async_nats::jetstream::Context;
 use bytes::Bytes;
@@ -8,6 +9,7 @@ use tracing::{debug, error, info, warn};
 
 const STATUS_KEY_PREFIX: &str = "status";
 const RESPONSE_KEY_PREFIX: &str = "rs";
+const START_PROCESSING_MARKER: &str = "start.processing";
 const DONE_PROCESSING_MARKER: &str = "done.processing";
 
 #[derive(Error, Debug, Clone)]
@@ -65,6 +67,7 @@ impl TryFrom<ProcessingStatus> for Bytes {
     }
 }
 
+/// StatusTracker is responsible for tracking the status of requests in the KV store.
 #[derive(Clone)]
 pub(crate) struct StatusTracker {
     pod_hash: String,
@@ -85,6 +88,8 @@ impl StatusTracker {
             ))
         })?;
 
+        // we need to optional response kv store to write start and done processing marker for the
+        // response.
         let response_kv = match &response_bucket {
             None => None,
             Some(bucket_name) => {
@@ -105,7 +110,7 @@ impl StatusTracker {
     }
 
     /// register a request id in the status kv store.
-    pub(crate) async fn register(&self, id: &str) -> Result<()> {
+    pub(crate) async fn register(&self, id: &str, request_type: RequestType) -> Result<()> {
         let status_key = format!("{}.{}", STATUS_KEY_PREFIX, id);
         let initial_status = ProcessingStatus::InProgress {
             pod_hash: self.pod_hash.clone(),
@@ -123,7 +128,24 @@ impl StatusTracker {
             .await
         {
             Ok(_) => {
-                info!(id, status_key, "Request registered successfully.");
+                // if the request is registered successfully, we need to write the start processing marker
+                // to signal the response watcher to wait for the responses. We need to do it here, since
+                // only the status tracker will know the lifecycle of the request.
+                if let Some(response_kv) = &self.response_kv {
+                    let response_key = format!(
+                        "{}.{}.{}.{}",
+                        RESPONSE_KEY_PREFIX, self.pod_hash, id, START_PROCESSING_MARKER
+                    );
+                    let request_type_bytes: Bytes = request_type
+                        .try_into()
+                        .expect("Failed to convert request type");
+                    response_kv
+                        .put(&response_key, request_type_bytes)
+                        .await
+                        .map_err(|e| {
+                            Error::Other(format!("Failed to create response entry for {id}: {e:?}"))
+                        })?;
+                }
                 Ok(())
             }
             Err(e) if e.kind() == CreateErrorKind::AlreadyExists => {
@@ -155,7 +177,15 @@ impl StatusTracker {
         })
     }
 
-    /// Handle the case where the status already exists.
+    /// Handles scenarios where the status for a request ID already exists in the KV store.
+    ///
+    /// * [ProcessingStatus::Completed]: Indicates the request has already been processed. In this
+    ///   case, a duplicate error is returned.
+    /// * [ProcessingStatus::InProgress]: If the request is currently being processed and the pod
+    ///   hash matches the current pod, it is treated as a duplicate, and a duplicate error is
+    ///   returned.
+    /// * [ProcessingStatus::Failed]: Indicates the request failed due to client cancellation or a
+    ///   failure in the processing pod. In this case, the request can be retried.
     fn handle_existing_status(
         &self,
         id: &str,
@@ -163,12 +193,21 @@ impl StatusTracker {
         existing_status: ProcessingStatus,
     ) -> Result<()> {
         match existing_status {
-            ProcessingStatus::InProgress { pod_hash } if pod_hash == self.pod_hash => {
-                warn!(
-                    id,
-                    status_key, "Request already exists with the same pod hash."
-                );
-                Err(Error::Duplicate(status_key.to_string()))
+            ProcessingStatus::InProgress { pod_hash } => {
+                if pod_hash == self.pod_hash {
+                    warn!(id, status_key, "Request is getting processed");
+                    Err(Error::Duplicate(status_key.to_string()))
+                } else {
+                    // TODO: There can be a case where the pod terminates without updating the error
+                    // status(SIGKILL).
+                    warn!(
+                        id,
+                        status_key, "Request is getting processed in another pod"
+                    );
+                    Err(Error::Other(
+                        "Request is getting processed in another pod".to_string(),
+                    ))
+                }
             }
             ProcessingStatus::Completed { .. } => {
                 warn!(
@@ -183,12 +222,6 @@ impl StatusTracker {
                     err: error,
                     previous_pod_hash: pod_hash,
                 })
-            }
-            _ => {
-                error!(id, status_key, "Unexpected status encountered.");
-                Err(Error::Other(format!(
-                    "Unexpected status for {status_key}: {existing_status:?}"
-                )))
             }
         }
     }
@@ -205,8 +238,7 @@ impl StatusTracker {
         }
     }
 
-    /// Mark the request as failed and remove the callback sender from the map, will be invoked
-    /// when the request fails.
+    /// Mark the request as failed in the status kv store.
     pub(crate) async fn mark_as_failed(&mut self, id: &str, error: &str) -> Result<()> {
         info!(id, replica_id = ?self.pod_hash, error, "Marking request as failed");
         let failed_status = ProcessingStatus::Failed {
@@ -229,7 +261,8 @@ impl StatusTracker {
         Ok(())
     }
 
-    /// Deregister the request id from the status kv store, sets the status as completed.
+    /// Deregister marks the request as completed in the status kv store, it also writes a done
+    /// processing marker to the response kv store(if nats is used) to signal the response watcher.
     pub(crate) async fn deregister(&self, id: &str, subgraph: &str) -> Result<()> {
         let completed_status = ProcessingStatus::Completed {
             subgraph: subgraph.to_string(),
@@ -238,13 +271,15 @@ impl StatusTracker {
 
         self.update_status(id, completed_status).await?;
 
-        // we need to give a done signal for response watcher
-        let done_key = format!(
-            "{}.{}.{}.{}",
-            RESPONSE_KEY_PREFIX, self.pod_hash, id, DONE_PROCESSING_MARKER
-        );
-
+        // if nats is used, we need to write the done processing marker to the response kv store to
+        // let the response watcher know that the processing is done. Since only tracker knows the
+        // lifecycle of the request, we need to do it here.
         if let Some(response_kv) = &self.response_kv {
+            // we need to give a done signal for response watcher
+            let done_key = format!(
+                "{}.{}.{}.{}",
+                RESPONSE_KEY_PREFIX, self.pod_hash, id, DONE_PROCESSING_MARKER
+            );
             match response_kv.put(done_key.clone(), Bytes::new()).await {
                 Ok(_) => {
                     debug!(?id, ?done_key, "Successfully wrote done processing marker.");
@@ -259,5 +294,272 @@ impl StatusTracker {
         };
 
         Ok(())
+    }
+
+    /// Discard the request from the status kv store. This is used when the request is not accepted
+    /// because of back pressure.
+    pub(crate) async fn discard(&self, id: &str) -> Result<()> {
+        let key = format!("{}.{}", STATUS_KEY_PREFIX, id);
+        self.status_kv
+            .delete(&key)
+            .await
+            .map_err(|e| Error::Other(format!("Failed to delete status for {id}: {e:?}")))?;
+
+        if let Some(response_kv) = &self.response_kv {
+            let done_key = format!(
+                "{}.{}.{}.{}",
+                RESPONSE_KEY_PREFIX, self.pod_hash, id, DONE_PROCESSING_MARKER
+            );
+            match response_kv.put(done_key.clone(), Bytes::new()).await {
+                Ok(_) => {
+                    debug!(?id, ?done_key, "Successfully wrote done processing marker.");
+                }
+                Err(e) => {
+                    error!(?id, ?done_key, error = ?e, "Failed to write done processing marker.");
+                    return Err(Error::Other(format!(
+                        "Failed to write done marker {done_key}: {e:?}"
+                    )));
+                }
+            }
+        };
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_nats::jetstream;
+    use async_nats::jetstream::kv::Config;
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_register_request() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let status_bucket = "test_register_status";
+        let response_bucket = "test_register_response";
+
+        // Clean up buckets
+        let _ = context.delete_key_value(status_bucket).await;
+        let _ = context.delete_key_value(response_bucket).await;
+
+        // Create buckets
+        context
+            .create_key_value(Config {
+                bucket: status_bucket.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        context
+            .create_key_value(Config {
+                bucket: response_bucket.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let mut tracker = StatusTracker::new(
+            context.clone(),
+            status_bucket,
+            "test_pod".to_string(),
+            Some(response_bucket.to_string()),
+        )
+        .await
+        .unwrap();
+
+        let request_id = "test_request";
+        tracker
+            .register(request_id, RequestType::Sync)
+            .await
+            .expect("Failed to register request");
+
+        // Verify status
+        let status = tracker.status(request_id).await.unwrap();
+        assert_eq!(
+            status,
+            ProcessingStatus::InProgress {
+                pod_hash: "test_pod".to_string()
+            }
+        );
+
+        // Verify start processing marker
+        let response_kv = context.get_key_value(response_bucket).await.unwrap();
+        let start_key = format!(
+            "{}.{}.{}.{}",
+            RESPONSE_KEY_PREFIX, "test_pod", request_id, START_PROCESSING_MARKER
+        );
+        let start_marker = response_kv.get(&start_key).await.unwrap();
+        assert!(start_marker.is_some());
+
+        // Clean up
+        context.delete_key_value(status_bucket).await.unwrap();
+        context.delete_key_value(response_bucket).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_handle_existing_status() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let status_bucket = "test_existing_status";
+
+        // Clean up bucket
+        let _ = context.delete_key_value(status_bucket).await;
+
+        // Create bucket
+        context
+            .create_key_value(Config {
+                bucket: status_bucket.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let tracker =
+            StatusTracker::new(context.clone(), status_bucket, "test_pod".to_string(), None)
+                .await
+                .unwrap();
+
+        let request_id = "test_request";
+        tracker
+            .register(request_id, RequestType::Sync)
+            .await
+            .expect("Failed to register request");
+
+        // Attempt to register the same request again
+        let result = tracker.register(request_id, RequestType::Sync).await;
+        assert!(matches!(result, Err(Error::Duplicate(_))));
+
+        // Clean up
+        context.delete_key_value(status_bucket).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_mark_as_failed() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let status_bucket = "test_mark_failed";
+
+        // Clean up bucket
+        let _ = context.delete_key_value(status_bucket).await;
+
+        // Create bucket
+        context
+            .create_key_value(Config {
+                bucket: status_bucket.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let mut tracker =
+            StatusTracker::new(context.clone(), status_bucket, "test_pod".to_string(), None)
+                .await
+                .unwrap();
+
+        let request_id = "test_request";
+        tracker
+            .register(request_id, RequestType::Sync)
+            .await
+            .expect("Failed to register request");
+
+        tracker
+            .mark_as_failed(request_id, "Test error")
+            .await
+            .expect("Failed to mark request as failed");
+
+        // Verify status
+        let status = tracker.status(request_id).await.unwrap();
+        assert_eq!(
+            status,
+            ProcessingStatus::Failed {
+                error: "Test error".to_string(),
+                pod_hash: "test_pod".to_string()
+            }
+        );
+
+        // Clean up
+        context.delete_key_value(status_bucket).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_deregister_request() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let status_bucket = "test_deregister_status";
+        let response_bucket = "test_deregister_response";
+
+        // Clean up buckets
+        let _ = context.delete_key_value(status_bucket).await;
+        let _ = context.delete_key_value(response_bucket).await;
+
+        // Create buckets
+        context
+            .create_key_value(Config {
+                bucket: status_bucket.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        context
+            .create_key_value(Config {
+                bucket: response_bucket.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let mut tracker = StatusTracker::new(
+            context.clone(),
+            status_bucket,
+            "test_pod".to_string(),
+            Some(response_bucket.to_string()),
+        )
+        .await
+        .unwrap();
+
+        let request_id = "test_request";
+        tracker
+            .register(request_id, RequestType::Sync)
+            .await
+            .expect("Failed to register request");
+
+        tracker
+            .deregister(request_id, "test_subgraph")
+            .await
+            .expect("Failed to deregister request");
+
+        // Verify status
+        let status = tracker.status(request_id).await;
+        assert!(matches!(status, Ok(ProcessingStatus::Completed { .. })));
+
+        // Verify done processing marker
+        let response_kv = context.get_key_value(response_bucket).await.unwrap();
+        let done_key = format!(
+            "{}.{}.{}.{}",
+            RESPONSE_KEY_PREFIX, "test_pod", request_id, DONE_PROCESSING_MARKER
+        );
+        let done_marker = response_kv.get(&done_key).await.unwrap();
+        assert!(done_marker.is_some());
+
+        // Clean up
+        context.delete_key_value(status_bucket).await.unwrap();
+        context.delete_key_value(response_bucket).await.unwrap();
     }
 }

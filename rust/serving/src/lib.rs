@@ -68,8 +68,11 @@ where
     let metrics_addr: SocketAddr =
         format!("0.0.0.0:{}", &app.settings.metrics_server_listen_port).parse()?;
 
-    let metrics_server_handle =
-        tokio::spawn(start_https_metrics_server(metrics_addr, tls_config.clone()));
+    let metrics_server_handle = tokio::spawn(start_https_metrics_server(
+        metrics_addr,
+        tls_config.clone(),
+        cln_token.clone(),
+    ));
 
     // Start the main server, which serves the application.
     let app_server_handle = tokio::spawn(start_main_server(app, tls_config, cln_token));
@@ -106,7 +109,6 @@ pub async fn run(config: Settings) -> Result<()> {
     start(js_context, Arc::new(config))
         .await
         .map_err(|e| Error::Source(e.to_string()))?;
-
     Ok(())
 }
 
@@ -119,7 +121,6 @@ async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
         js_context.clone(),
         &settings.pod_hash,
         &settings.js_callback_store,
-        &settings.js_response_store,
         cancel_token.clone(),
     )
     .await?;
@@ -196,7 +197,7 @@ async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
                 .map_err(|e| Error::Store(e.to_string()))?
         }
     }
-
+    info!("Done app");
     Ok(())
 }
 

@@ -156,38 +156,79 @@ where
         .await
         .map_err(|e| ApiError::InternalServerError(e.to_string()))?;
 
-    let save_start = Instant::now();
-    proxy_state
-        .js_context
-        .publish_with_headers(proxy_state.stream.clone(), msg_headers, body)
-        .await
-        .inspect_err(|err| {
-            error!(
-                ?err,
-                id,
-                stream = proxy_state.stream,
-                "Saving message to Jetstream"
-            )
-        })
-        .map_err(|_| ApiError::BadGateway("Failed to write message to Jetstream".to_string()))?
-        .await
-        .inspect_err(|err| {
-            error!(
-                ?err,
-                id,
-                stream = proxy_state.stream,
-                "Waiting for message save confirmation from Jetstream"
-            )
-        })
-        .map_err(|_| ApiError::BadGateway("Failed to write message to Jetstream".to_string()))?;
-    serving_metrics()
-        .payload_save_duration
-        .observe(save_start.elapsed().as_micros() as f64);
+    // if the write to jetstream fails before returning we have to discard the state that we have
+    // stored in the tracker because it's not published to the pipeline otherwise when the users
+    // retry again we will show them its duplicate.
+    if let Err(err) = publish_to_jetstream(
+        proxy_state.js_context.clone(),
+        &proxy_state.stream,
+        &id,
+        msg_headers,
+        body,
+    )
+    .await
+    {
+        proxy_state
+            .orchestrator
+            .clone()
+            .discard(&id)
+            .await
+            .expect("Failed to discard");
+        return Err(err);
+    }
 
     let stream = response_stream
         .map(|response| Ok(Event::default().data(String::from_utf8_lossy(&response))));
 
     Ok(Sse::new(stream))
+}
+
+/// publishes the message to jetstream, if we are not able to publish we will return 429(too many
+/// requests) error so that the users can retry.
+async fn publish_to_jetstream(
+    js_context: Context,
+    stream: &str,
+    id: &str,
+    msg_headers: async_nats::HeaderMap,
+    body: Bytes,
+) -> Result<(), ApiError> {
+    let save_start = Instant::now();
+
+    // Publish the message to JetStream
+    let publish_result = js_context
+        .publish_with_headers(stream.to_string(), msg_headers, body)
+        .await
+        .inspect_err(|err| error!(?err, id, stream, "Saving message to JetStream"));
+
+    if let Err(err) = publish_result {
+        error!(?err, id, "Publish to JetStream failed, invoking discard");
+        return Err(ApiError::TooManyRequests(
+            "Failed to write message to JetStream".to_string(),
+        ));
+    }
+
+    // Wait for confirmation from JetStream
+    let confirmation_result = publish_result.unwrap().await.inspect_err(|err| {
+        error!(
+            ?err,
+            id, stream, "Waiting for message save confirmation from JetStream"
+        )
+    });
+
+    if let Err(err) = confirmation_result {
+        error!(
+            ?err,
+            id, "Message save confirmation failed, invoking discard"
+        );
+        return Err(ApiError::TooManyRequests(
+            "Failed to write message to JetStream".to_string(),
+        ));
+    }
+
+    serving_metrics()
+        .payload_save_duration
+        .observe(save_start.elapsed().as_micros() as f64);
+    Ok(())
 }
 
 async fn sync_publish<
@@ -231,37 +272,26 @@ async fn sync_publish<
         }
     };
 
-    let save_start = Instant::now();
-    proxy_state
-        .js_context
-        .publish_with_headers(proxy_state.stream.clone(), msg_headers, body)
-        .await
-        .inspect_err(|err| {
-            error!(
-                ?err,
-                id,
-                stream = proxy_state.stream,
-                "Saving message to JetStream"
-            )
-        })
-        .map_err(|_| ApiError::BadGateway("Failed to write message to JetStream".to_string()))?
-        .await
-        .inspect_err(|err| {
-            error!(
-                ?err,
-                id,
-                stream = proxy_state.stream,
-                "Waiting for message save confirmation from JetStream"
-            )
-        })
-        .map_err(|_| ApiError::BadGateway("Failed to write message to JetStream".to_string()))?;
-    debug!(
-        "Time taken to save message to JetStream={:?}",
-        save_start.elapsed().as_millis()
-    );
-    serving_metrics()
-        .payload_save_duration
-        .observe(save_start.elapsed().as_micros() as f64);
+    // if the write to jetstream fails before returning we have to discard the state that we have
+    // stored in the tracker because it's not published to the pipeline otherwise when the users
+    // retry again we will show them its duplicate.
+    if let Err(err) = publish_to_jetstream(
+        proxy_state.js_context.clone(),
+        &proxy_state.stream,
+        &id,
+        msg_headers,
+        body,
+    )
+    .await
+    {
+        proxy_state
+            .orchestrator
+            .clone()
+            .discard(&id)
+            .await
+            .expect("Failed to discard");
+        return Err(err);
+    }
 
     let processing_result = match notify.await {
         Ok(processing_result) => {
@@ -424,37 +454,26 @@ async fn async_publish<
         tokio::spawn(wait_for_callbacks.instrument(span));
     }
 
-    let save_start = Instant::now();
-    proxy_state
-        .js_context
-        .publish_with_headers(proxy_state.stream.clone(), msg_headers, body)
-        .await
-        .inspect_err(|err| {
-            error!(
-                ?err,
-                id,
-                stream = proxy_state.stream,
-                "Saving message to Jetstream"
-            )
-        })
-        .map_err(|_| ApiError::BadGateway("Failed to write message to Jetstream".to_string()))?
-        .await
-        .inspect_err(|err| {
-            error!(
-                ?err,
-                id,
-                stream = proxy_state.stream,
-                "Waiting for message save confirmation from Jetstream"
-            )
-        })
-        .map_err(|_| ApiError::BadGateway("Failed to write message to Jetstream".to_string()))?;
-    serving_metrics()
-        .payload_save_duration
-        .observe(save_start.elapsed().as_micros() as f64);
-    debug!(
-        "Time taken to save message to Jetstream={:?}",
-        save_start.elapsed().as_millis()
-    );
+    // if the write to jetstream fails before returning we have to discard the state that we have
+    // stored in the tracker because it's not published to the pipeline otherwise when the users
+    // retry again we will show them its duplicate.
+    if let Err(err) = publish_to_jetstream(
+        proxy_state.js_context.clone(),
+        &proxy_state.stream,
+        &id,
+        msg_headers,
+        body,
+    )
+    .await
+    {
+        proxy_state
+            .orchestrator
+            .clone()
+            .discard(&id)
+            .await
+            .expect("Failed to discard");
+        return Err(err);
+    }
 
     Ok(Json(ServeResponse::new(
         "Successfully published message".to_string(),
@@ -533,7 +552,6 @@ mod tests {
         let callback_store = JetStreamCallbackStore::new(
             context.clone(),
             pod_hash,
-            store_name,
             store_name,
             cancel_token.clone(),
         )
@@ -687,7 +705,6 @@ mod tests {
             context.clone(),
             POD_HASH,
             store_name,
-            store_name,
             cancel_token.clone(),
         )
         .await
@@ -815,7 +832,6 @@ mod tests {
         let callback_store = JetStreamCallbackStore::new(
             context.clone(),
             POD_HASH,
-            store_name,
             store_name,
             cancel_token.clone(),
         )
@@ -978,7 +994,6 @@ mod tests {
         let callback_store = JetStreamCallbackStore::new(
             context.clone(),
             POD_HASH,
-            store_name,
             store_name,
             cancel_token.clone(),
         )
