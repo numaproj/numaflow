@@ -31,6 +31,7 @@ pub struct SQSSourceConfig {
     // Required fields
     pub region: String,
     pub queue_name: String,
+    pub queue_owner_aws_account_id: String,
 
     // Optional fields
     pub visibility_timeout: Option<i32>,
@@ -55,7 +56,7 @@ impl SQSSourceConfig {
 
         // Validate optional fields if present
         if let Some(timeout) = self.visibility_timeout {
-            if timeout < 0 || timeout > 43200 {
+            if !(0..=43200).contains(&timeout) {
                 return Err(Error::InvalidConfig(format!(
                     "visibility_timeout must be between 0 and 43200, got {}",
                     timeout
@@ -64,7 +65,7 @@ impl SQSSourceConfig {
         }
 
         if let Some(max_msgs) = self.max_number_of_messages {
-            if max_msgs < 1 || max_msgs > 10 {
+            if !(1..=10).contains(&max_msgs) {
                 return Err(Error::InvalidConfig(format!(
                     "max_number_of_messages must be between 1 and 10, got {}",
                     max_msgs
@@ -73,7 +74,7 @@ impl SQSSourceConfig {
         }
 
         if let Some(wait_time) = self.wait_time_seconds {
-            if wait_time < 0 || wait_time > 20 {
+            if !(0..=20).contains(&wait_time) {
                 return Err(Error::InvalidConfig(format!(
                     "wait_time_seconds must be between 0 and 20, got {}",
                     wait_time
@@ -98,10 +99,13 @@ pub async fn create_sqs_client(config: Option<SQSSourceConfig>) -> Result<Client
 
     // Validate configuration before proceeding
     config.validate()?;
+    
+    
 
     tracing::info!(
+        "Creating SQS client for queue {queue_name} in region {region}",
         region = config.region.clone(),
-        "Creating SQS client in region"
+        queue_name = config.queue_name.clone()
     );
 
     let region_provider = RegionProviderChain::first_try(Region::new(config.region.clone()))
@@ -465,6 +469,7 @@ impl Default for SqsSourceBuilder {
         Self::new(SQSSourceConfig {
             region: SQS_DEFAULT_REGION.to_string(),
             queue_name: "".to_string(),
+            queue_owner_aws_account_id: "".to_string(),
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,
@@ -527,12 +532,14 @@ impl SqsSourceBuilder {
             Some(client) => client,
             None => create_sqs_client(Some(self.config.clone())).await?,
         };
-
+        
         let queue_name = self.config.queue_name.clone();
+        let queue_owner_aws_account_id = self.config.queue_owner_aws_account_id.clone();
 
         let get_queue_url_output = sqs_client
             .get_queue_url()
             .queue_name(queue_name)
+            .queue_owner_aws_account_id(queue_owner_aws_account_id)
             .send()
             .await
             .map_err(|err| Error::Sqs(err.into()))?;
@@ -638,6 +645,7 @@ mod tests {
         let config = SQSSourceConfig {
             region: "us-west-2".to_string(),
             queue_name: "test-queue".to_string(),
+            queue_owner_aws_account_id: "123456789012".to_string(),
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,
@@ -655,6 +663,7 @@ mod tests {
         let mut config = SQSSourceConfig {
             region: "us-west-2".to_string(),
             queue_name: "test-queue".to_string(),
+            queue_owner_aws_account_id: "123456789012".to_string(),
             visibility_timeout: Some(30),
             max_number_of_messages: Some(5),
             wait_time_seconds: Some(10),
@@ -682,6 +691,7 @@ mod tests {
         let config = SQSSourceConfig {
             region: "".to_string(),
             queue_name: "test-queue".to_string(),
+            queue_owner_aws_account_id: "123456789012".to_string(),
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,
@@ -698,6 +708,7 @@ mod tests {
         let config = SQSSourceConfig {
             region: "us-west-2".to_string(),
             queue_name: "test-queue".to_string(),
+            queue_owner_aws_account_id: "123456789012".to_string(),
             visibility_timeout: Some(50000),  // Invalid: > 43200
             max_number_of_messages: Some(20), // Invalid: > 10
             wait_time_seconds: Some(30),      // Invalid: > 20
@@ -727,6 +738,7 @@ mod tests {
         let source = SqsSourceBuilder::new(SQSSourceConfig {
             region: SQS_DEFAULT_REGION.to_string(),
             queue_name: "test-q".to_string(),
+            queue_owner_aws_account_id: "123456789012".to_string(),
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,
@@ -773,6 +785,7 @@ mod tests {
         let source = SqsSourceBuilder::new(SQSSourceConfig {
             region: SQS_DEFAULT_REGION.to_string(),
             queue_name: "test-q".to_string(),
+            queue_owner_aws_account_id: "123456789012".to_string(),
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,
@@ -809,6 +822,7 @@ mod tests {
         let source = SqsSourceBuilder::new(SQSSourceConfig {
             region: SQS_DEFAULT_REGION.to_string(),
             queue_name: "test-q".to_string(),
+            queue_owner_aws_account_id: "123456789012".to_string(),
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,
@@ -840,6 +854,7 @@ mod tests {
         let source = SqsSourceBuilder::new(SQSSourceConfig {
             region: SQS_DEFAULT_REGION.to_string(),
             queue_name: "test-q".to_string(),
+            queue_owner_aws_account_id: "123456789012".to_string(),
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,

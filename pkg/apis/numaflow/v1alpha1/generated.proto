@@ -31,15 +31,6 @@ import "k8s.io/apimachinery/pkg/util/intstr/generated.proto";
 // Package-wide variables from generator "generated".
 option go_package = "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1";
 
-// AWSCredentials contains AWS credentials information
-message AWSCredentials {
-  // AccessKeyID is the AWS access key ID
-  optional .k8s.io.api.core.v1.SecretKeySelector accessKeyId = 1;
-
-  // SecretAccessKey is the AWS secret access key
-  optional .k8s.io.api.core.v1.SecretKeySelector secretAccessKey = 2;
-}
-
 // AbstractPodTemplate provides a template for pod customization in vertices, daemon deployments and so on.
 message AbstractPodTemplate {
   // Metadata sets the pods's metadata, i.e. annotations and labels
@@ -1503,17 +1494,6 @@ message SASLPlain {
   optional bool handshake = 3;
 }
 
-// SQSAuth defines how to authenticate with AWS SQS
-message SQSAuth {
-  // AWS Credentials
-  // +optional
-  optional AWSCredentials credentials = 1;
-
-  // Role ARN to assume
-  // +optional
-  optional string roleARN = 2;
-}
-
 // Scale defines the parameters for autoscaling.
 message Scale {
   // Whether to disable autoscaling.
@@ -1767,15 +1747,14 @@ message Source {
 
 // SqsSource represents the configuration of an AWS SQS source
 message SqsSource {
-  // AWS Region where the SQS queue is located
+  // AWSRegion is the AWS Region where the SQS queue is located
   optional string awsRegion = 1;
 
-  // Name of the SQS queue
+  // QueueName is the name of the SQS queue
   optional string queueName = 2;
 
-  // Authentication configuration for AWS SQS
-  // Either credentials or role ARN must be provided
-  optional SQSAuth auth = 3;
+  // QueueOwnerAWSAccountID is the queue owner aws account id
+  optional string queueOwnerAWSAccountID = 3;
 
   // VisibilityTimeout is the duration (in seconds) that the received messages are hidden from subsequent
   // retrieve requests after being retrieved by a ReceiveMessage request.

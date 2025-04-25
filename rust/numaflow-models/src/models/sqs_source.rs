@@ -23,9 +23,7 @@ pub struct SqsSource {
     /// AttributeNames is a list of attributes that need to be returned along with each message. Valid values: All | Policy | VisibilityTimeout | MaximumMessageSize | MessageRetentionPeriod | ApproximateNumberOfMessages | ApproximateNumberOfMessagesNotVisible | CreatedTimestamp | LastModifiedTimestamp | QueueArn | ApproximateNumberOfMessagesDelayed | DelaySeconds | ReceiveMessageWaitTimeSeconds | RedrivePolicy | FifoQueue | ContentBasedDeduplication | KmsMasterKeyId | KmsDataKeyReusePeriodSeconds | DeduplicationScope | FifoThroughputLimit | RedriveAllowPolicy | SqsManagedSseEnabled
     #[serde(rename = "attributeNames", skip_serializing_if = "Option::is_none")]
     pub attribute_names: Option<Vec<String>>,
-    #[serde(rename = "auth")]
-    pub auth: Box<crate::models::SqsAuth>,
-    /// AWS Region where the SQS queue is located
+    /// AWSRegion is the AWS Region where the SQS queue is located
     #[serde(rename = "awsRegion")]
     pub aws_region: String,
     /// EndpointURL is the custom endpoint URL for the AWS SQS API. This is useful for testing with localstack or when using VPC endpoints.
@@ -43,9 +41,12 @@ pub struct SqsSource {
         skip_serializing_if = "Option::is_none"
     )]
     pub message_attribute_names: Option<Vec<String>>,
-    /// Name of the SQS queue
+    /// QueueName is the name of the SQS queue
     #[serde(rename = "queueName")]
     pub queue_name: String,
+    /// QueueOwnerAWSAccountID is the queue owner aws account id
+    #[serde(rename = "queueOwnerAWSAccountID")]
+    pub queue_owner_aws_account_id: String,
     /// VisibilityTimeout is the duration (in seconds) that the received messages are hidden from subsequent retrieve requests after being retrieved by a ReceiveMessage request. Valid values: 0-43200 (12 hours)
     #[serde(rename = "visibilityTimeout", skip_serializing_if = "Option::is_none")]
     pub visibility_timeout: Option<i32>,
@@ -56,15 +57,19 @@ pub struct SqsSource {
 
 impl SqsSource {
     /// SqsSource represents the configuration of an AWS SQS source
-    pub fn new(auth: crate::models::SqsAuth, aws_region: String, queue_name: String) -> SqsSource {
+    pub fn new(
+        aws_region: String,
+        queue_name: String,
+        queue_owner_aws_account_id: String,
+    ) -> SqsSource {
         SqsSource {
             attribute_names: None,
-            auth: Box::new(auth),
             aws_region,
             endpoint_url: None,
             max_number_of_messages: None,
             message_attribute_names: None,
             queue_name,
+            queue_owner_aws_account_id,
             visibility_timeout: None,
             wait_time_seconds: None,
         }

@@ -34,14 +34,6 @@ spec:
         sqs:
           queueName: "your-queue-name"        # Required: Name of your SQS queue
           awsRegion: "your-aws-region"        # Required: AWS region where queue is located
-          auth:
-            credentials:
-                accessKeyId:
-                    name: aws-secret
-                    key: access-key-id
-                secretAccessKey:
-                    name: aws-secret
-                    key: secret-access-key
           # Optional configurations
           maxNumberOfMessages: 10             # Max messages per poll (1-10)
           visibilityTimeout: 30              # Visibility timeout in seconds
@@ -70,18 +62,12 @@ metadata:
 spec:
   vertices:
     - name: in
+      scale:
+        min: 1
       source:
         sqs:
           queueName: "queue-name"
           awsRegion: "us-west-2"
-          auth:
-            credentials:
-                accessKeyId:
-                    name: aws-secret
-                    key: access-key-id
-                secretAccessKey:
-                    name: aws-secret
-                    key: secret-access-key
           # Optional configurations
           maxNumberOfMessages: 10            # Max messages per poll (1-10)
           visibilityTimeout: 30              # Visibility timeout in seconds
@@ -91,6 +77,8 @@ spec:
           messageAttributeNames:             # Message attributes to retrieve
             - All
     - name: out
+      scale:
+        min: 1
       sink:
         log: {}
   edges:

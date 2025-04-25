@@ -10,7 +10,7 @@ pub(crate) mod source {
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source, SqsSource};
     use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
     use numaflow_sqs::source::{SQSSourceConfig};
-    use tracing::warn;
+    use tracing::{info, warn};
 
     use crate::error::Error;
     use crate::Result;
@@ -108,6 +108,8 @@ pub(crate) mod source {
         type Error = Error;
 
         fn try_from(value: Box<SqsSource>) -> Result<Self> {
+            
+            info!("Sqs source: {value:?}");
             if value.aws_region.is_empty() {
                 return Err(Error::Config(
                     "AWS region is required for SQS source".to_string(),
@@ -117,6 +119,7 @@ pub(crate) mod source {
             let sqs_source_config = SQSSourceConfig {
                 queue_name: value.queue_name,
                 region: value.aws_region,
+                queue_owner_aws_account_id: value.queue_owner_aws_account_id,
                 attribute_names: value.attribute_names.unwrap_or_default(),
                 message_attribute_names: value.message_attribute_names.unwrap_or_default(),
                 max_number_of_messages: Some(value.max_number_of_messages.unwrap_or(10)),
@@ -124,6 +127,8 @@ pub(crate) mod source {
                 visibility_timeout: Some(value.visibility_timeout.unwrap_or(30)),
                 endpoint_url: value.endpoint_url,
             };
+
+            info!("parsed SQS source config: {sqs_source_config:?}");
 
             Ok(SourceType::Sqs(sqs_source_config))
         }

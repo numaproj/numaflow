@@ -19383,24 +19383,6 @@
       },
       "type": "object"
     },
-    "io.numaproj.numaflow.v1alpha1.AWSCredentials": {
-      "description": "AWSCredentials contains AWS credentials information",
-      "properties": {
-        "accessKeyId": {
-          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
-          "description": "AccessKeyID is the AWS access key ID"
-        },
-        "secretAccessKey": {
-          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
-          "description": "SecretAccessKey is the AWS secret access key"
-        }
-      },
-      "required": [
-        "accessKeyId",
-        "secretAccessKey"
-      ],
-      "type": "object"
-    },
     "io.numaproj.numaflow.v1alpha1.AbstractPodTemplate": {
       "description": "AbstractPodTemplate provides a template for pod customization in vertices, daemon deployments and so on.",
       "properties": {
@@ -21916,20 +21898,6 @@
       ],
       "type": "object"
     },
-    "io.numaproj.numaflow.v1alpha1.SQSAuth": {
-      "description": "SQSAuth defines how to authenticate with AWS SQS",
-      "properties": {
-        "credentials": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.AWSCredentials",
-          "description": "AWS Credentials"
-        },
-        "roleARN": {
-          "description": "Role ARN to assume",
-          "type": "string"
-        }
-      },
-      "type": "object"
-    },
     "io.numaproj.numaflow.v1alpha1.Scale": {
       "description": "Scale defines the parameters for autoscaling.",
       "properties": {
@@ -22374,12 +22342,8 @@
           },
           "type": "array"
         },
-        "auth": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SQSAuth",
-          "description": "Authentication configuration for AWS SQS Either credentials or role ARN must be provided"
-        },
         "awsRegion": {
-          "description": "AWS Region where the SQS queue is located",
+          "description": "AWSRegion is the AWS Region where the SQS queue is located",
           "type": "string"
         },
         "endpointUrl": {
@@ -22399,7 +22363,11 @@
           "type": "array"
         },
         "queueName": {
-          "description": "Name of the SQS queue",
+          "description": "QueueName is the name of the SQS queue",
+          "type": "string"
+        },
+        "queueOwnerAWSAccountID": {
+          "description": "QueueOwnerAWSAccountID is the queue owner aws account id",
           "type": "string"
         },
         "visibilityTimeout": {
@@ -22416,7 +22384,7 @@
       "required": [
         "awsRegion",
         "queueName",
-        "auth"
+        "queueOwnerAWSAccountID"
       ],
       "type": "object"
     },

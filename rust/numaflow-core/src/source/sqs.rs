@@ -170,6 +170,7 @@ pub mod tests {
         let sqs_source = SqsSourceBuilder::new(SQSSourceConfig {
             region: SQS_DEFAULT_REGION.to_string(),
             queue_name: "test-q".to_string(),
+            queue_owner_aws_account_id: "12345678912".to_string(),
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,

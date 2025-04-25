@@ -26,92 +26,6 @@ Resource Types:
 
 </ul>
 
-<h3 id="numaflow.numaproj.io/v1alpha1.AWSCredentials">
-
-AWSCredentials
-</h3>
-
-<p>
-
-(<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.SQSAuth">SQSAuth</a>)
-</p>
-
-<p>
-
-<p>
-
-AWSCredentials contains AWS credentials information
-</p>
-
-</p>
-
-<table>
-
-<thead>
-
-<tr>
-
-<th>
-
-Field
-</th>
-
-<th>
-
-Description
-</th>
-
-</tr>
-
-</thead>
-
-<tbody>
-
-<tr>
-
-<td>
-
-<code>accessKeyId</code></br> <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
-Kubernetes core/v1.SecretKeySelector </a> </em>
-</td>
-
-<td>
-
-<p>
-
-AccessKeyID is the AWS access key ID
-</p>
-
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
-<code>secretAccessKey</code></br> <em>
-<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
-Kubernetes core/v1.SecretKeySelector </a> </em>
-</td>
-
-<td>
-
-<p>
-
-SecretAccessKey is the AWS secret access key
-</p>
-
-</td>
-
-</tr>
-
-</tbody>
-
-</table>
-
 <h3 id="numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
 
 AbstractPodTemplate
@@ -9834,92 +9748,6 @@ SASLType describes the SASL type
 
 </p>
 
-<h3 id="numaflow.numaproj.io/v1alpha1.SQSAuth">
-
-SQSAuth
-</h3>
-
-<p>
-
-(<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.SqsSource">SqsSource</a>)
-</p>
-
-<p>
-
-<p>
-
-SQSAuth defines how to authenticate with AWS SQS
-</p>
-
-</p>
-
-<table>
-
-<thead>
-
-<tr>
-
-<th>
-
-Field
-</th>
-
-<th>
-
-Description
-</th>
-
-</tr>
-
-</thead>
-
-<tbody>
-
-<tr>
-
-<td>
-
-<code>credentials</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.AWSCredentials"> AWSCredentials
-</a> </em>
-</td>
-
-<td>
-
-<em>(Optional)</em>
-<p>
-
-AWS Credentials
-</p>
-
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
-<code>roleARN</code></br> <em> string </em>
-</td>
-
-<td>
-
-<em>(Optional)</em>
-<p>
-
-Role ARN to assume
-</p>
-
-</td>
-
-</tr>
-
-</tbody>
-
-</table>
-
 <h3 id="numaflow.numaproj.io/v1alpha1.Scale">
 
 Scale
@@ -11630,7 +11458,7 @@ Description
 
 <p>
 
-AWS Region where the SQS queue is located
+AWSRegion is the AWS Region where the SQS queue is located
 </p>
 
 </td>
@@ -11648,7 +11476,7 @@ AWS Region where the SQS queue is located
 
 <p>
 
-Name of the SQS queue
+QueueName is the name of the SQS queue
 </p>
 
 </td>
@@ -11659,16 +11487,14 @@ Name of the SQS queue
 
 <td>
 
-<code>auth</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.SQSAuth"> SQSAuth </a> </em>
+<code>queueOwnerAWSAccountID</code></br> <em> string </em>
 </td>
 
 <td>
 
 <p>
 
-Authentication configuration for AWS SQS Either credentials or role ARN
-must be provided
+QueueOwnerAWSAccountID is the queue owner aws account id
 </p>
 
 </td>

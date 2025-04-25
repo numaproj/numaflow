@@ -18,15 +18,14 @@ package v1alpha1
 
 // SqsSource represents the configuration of an AWS SQS source
 type SqsSource struct {
-	// AWS Region where the SQS queue is located
+	// AWSRegion is the AWS Region where the SQS queue is located
 	AWSRegion string `json:"awsRegion" protobuf:"bytes,1,name=awsRegion"`
 
-	// Name of the SQS queue
+	// QueueName is the name of the SQS queue
 	QueueName string `json:"queueName" protobuf:"bytes,2,name=queueName"`
 
-	// Authentication configuration for AWS SQS
-	// Either credentials or role ARN must be provided
-	Auth *SQSAuth `json:"auth" protobuf:"bytes,3,name=auth"`
+	// QueueOwnerAWSAccountID is the queue owner aws account id
+	QueueOwnerAWSAccountID string `json:"queueOwnerAWSAccountID" protobuf:"bytes,3,name=queueOwnerAWSAccountID"`
 
 	// VisibilityTimeout is the duration (in seconds) that the received messages are hidden from subsequent
 	// retrieve requests after being retrieved by a ReceiveMessage request.

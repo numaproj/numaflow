@@ -9828,43 +9828,6 @@ spec:
                               items:
                                 type: string
                               type: array
-                            auth:
-                              properties:
-                                credentials:
-                                  properties:
-                                    accessKeyId:
-                                      properties:
-                                        key:
-                                          type: string
-                                        name:
-                                          default: ""
-                                          type: string
-                                        optional:
-                                          type: boolean
-                                      required:
-                                      - key
-                                      type: object
-                                      x-kubernetes-map-type: atomic
-                                    secretAccessKey:
-                                      properties:
-                                        key:
-                                          type: string
-                                        name:
-                                          default: ""
-                                          type: string
-                                        optional:
-                                          type: boolean
-                                      required:
-                                      - key
-                                      type: object
-                                      x-kubernetes-map-type: atomic
-                                  required:
-                                  - accessKeyId
-                                  - secretAccessKey
-                                  type: object
-                                roleARN:
-                                  type: string
-                              type: object
                             awsRegion:
                               type: string
                             endpointUrl:
@@ -9878,6 +9841,8 @@ spec:
                               type: array
                             queueName:
                               type: string
+                            queueOwnerAWSAccountID:
+                              type: string
                             visibilityTimeout:
                               format: int32
                               type: integer
@@ -9885,9 +9850,9 @@ spec:
                               format: int32
                               type: integer
                           required:
-                          - auth
                           - awsRegion
                           - queueName
+                          - queueOwnerAWSAccountID
                           type: object
                         transformer:
                           properties:
