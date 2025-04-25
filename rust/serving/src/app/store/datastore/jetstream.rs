@@ -336,8 +336,7 @@ impl JetStreamDataStore {
         pod_hash: &str,
     ) -> StoreResult<Vec<Vec<u8>>> {
         let mut latest_revision = 0;
-        let watch_pattern = format!("{RESPONSE_KEY_PREFIX}.{pod_hash}.{id}.*");
-        info!("Watching for {}", watch_pattern);
+        let watch_pattern = format!("{RESPONSE_KEY_PREFIX}.{pod_hash}.{id}.*.*");
         let mut watcher = Self::create_watcher(&store, &watch_pattern, latest_revision + 1).await?;
         let mut responses = vec![];
         loop {
@@ -348,7 +347,6 @@ impl JetStreamDataStore {
                         Self::create_watcher(&store, &watch_pattern, latest_revision + 1).await?;
                 }
                 Some(Ok(entry)) => {
-                    info!("Entry {:?}", entry);
                     latest_revision = entry.revision;
                     if entry.key.contains(START_PROCESSING_MARKER) {
                         continue;
@@ -379,7 +377,7 @@ impl JetStreamDataStore {
         tx: Sender<Arc<Bytes>>,
     ) {
         let mut latest_revision = 0;
-        let watch_pattern = format!("{RESPONSE_KEY_PREFIX}.{pod_hash}.{id}.*");
+        let watch_pattern = format!("{RESPONSE_KEY_PREFIX}.{pod_hash}.{id}.*.*");
         let mut watcher = Self::create_watcher(&store, &watch_pattern, latest_revision + 1)
             .await
             .expect("Failed to create watcher");
@@ -481,14 +479,13 @@ impl DataStore for JetStreamDataStore {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::app::store::datastore::DataStore;
     use async_nats::jetstream;
     use async_nats::jetstream::kv::Config;
     use bytes::Bytes;
     use chrono::Utc;
     use tokio_stream::StreamExt;
-    use tracing_subscriber::util::SubscriberInitExt;
-    use super::*;
-    use crate::app::store::datastore::DataStore;
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
@@ -598,11 +595,9 @@ mod tests {
         context.delete_key_value(datum_store_name).await.unwrap();
     }
 
-    // #[cfg(feature = "nats-tests")]
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_retrieve_data_with_different_pod_hash() {
-        let subscriber = tracing_subscriber::fmt().finish();
-        subscriber.init();
         let js_url = "localhost:4222";
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
@@ -627,10 +622,10 @@ mod tests {
             current_pod_hash,
             CancellationToken::new(),
         )
-            .await
-            .unwrap();
+        .await
+        .unwrap();
 
-        let id = "test-id";
+        let id = "test-unary-id";
         let start_key = format!("rs.{other_pod_hash}.{id}.start.processing");
         let start_payload: Bytes = RequestType::Sync.try_into().unwrap();
         store
@@ -664,8 +659,8 @@ mod tests {
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
         let datum_store_name = "test_stream_data_different_pod_hash_store";
-        let current_pod_hash = "current_pod";
-        let other_pod_hash = "other_pod";
+        let current_pod_hash = "hjck";
+        let other_pod_hash = "kclm";
 
         let _ = context.delete_key_value(datum_store_name).await;
 
@@ -684,8 +679,8 @@ mod tests {
             current_pod_hash,
             CancellationToken::new(),
         )
-            .await
-            .unwrap();
+        .await
+        .unwrap();
 
         let id = "test-stream-id";
         let start_key = format!("rs.{other_pod_hash}.{id}.start.processing");
@@ -705,18 +700,13 @@ mod tests {
         let done_key = format!("rs.{other_pod_hash}.{id}.done.processing");
         store.kv_store.put(done_key, Bytes::new()).await.unwrap();
 
-        let (tx, mut rx) = mpsc::channel(10);
-        tokio::spawn({
-            let kv_store = store.kv_store.clone();
-            let request_id = id.to_string();
-            let pod_hash = other_pod_hash.to_string();
-            async move {
-                JetStreamDataStore::stream_historic_responses(kv_store, &request_id, &pod_hash, tx).await;
-            }
-        });
+        let mut stream = store.stream_data(id, other_pod_hash).await.unwrap();
 
-        let received_response = rx.recv().await.unwrap();
-        assert_eq!(received_response, Arc::new(Bytes::from_static(b"test_payload")));
+        let received_response = stream.next().await.unwrap();
+        assert_eq!(
+            received_response,
+            Arc::new(Bytes::from_static(b"test_payload"))
+        );
 
         // delete store
         context.delete_key_value(datum_store_name).await.unwrap();

@@ -561,4 +561,147 @@ mod tests {
         context.delete_key_value(status_bucket).await.unwrap();
         context.delete_key_value(response_bucket).await.unwrap();
     }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_discard_request() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let status_bucket = "test_discard_status";
+        let response_bucket = "test_discard_response";
+
+        // Clean up buckets
+        let _ = context.delete_key_value(status_bucket).await;
+        let _ = context.delete_key_value(response_bucket).await;
+
+        // Create buckets
+        context
+            .create_key_value(Config {
+                bucket: status_bucket.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        context
+            .create_key_value(Config {
+                bucket: response_bucket.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let mut tracker = StatusTracker::new(
+            context.clone(),
+            status_bucket,
+            "test_pod".to_string(),
+            Some(response_bucket.to_string()),
+        )
+        .await
+        .unwrap();
+
+        let request_id = "test_request";
+        tracker
+            .register(request_id, RequestType::Sync)
+            .await
+            .expect("Failed to register request");
+
+        tracker
+            .discard(request_id)
+            .await
+            .expect("Failed to discard request");
+
+        // Verify status is removed
+        let status = tracker.status(request_id).await;
+        assert!(status.is_err());
+
+        // Verify done processing marker is sent so that response watcher can clean up
+        let response_kv = context.get_key_value(response_bucket).await.unwrap();
+        let done_key = format!(
+            "{}.{}.{}.{}",
+            RESPONSE_KEY_PREFIX, "test_pod", request_id, DONE_PROCESSING_MARKER
+        );
+        let done_marker = response_kv.get(&done_key).await.unwrap();
+        assert!(done_marker.is_some());
+
+        // Clean up
+        context.delete_key_value(status_bucket).await.unwrap();
+        context.delete_key_value(response_bucket).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_handle_existing_status_cases() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let status_bucket = "test_handle_existing_status_cases";
+
+        // Clean up bucket
+        let _ = context.delete_key_value(status_bucket).await;
+
+        // Create bucket
+        context
+            .create_key_value(Config {
+                bucket: status_bucket.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let tracker =
+            StatusTracker::new(context.clone(), status_bucket, "test_pod".to_string(), None)
+                .await
+                .unwrap();
+
+        let request_id = "test_request";
+
+        // Case 1: InProgress (different pod)
+        tracker
+            .update_status(
+                request_id,
+                ProcessingStatus::InProgress {
+                    pod_hash: "other_pod".to_string(),
+                },
+            )
+            .await
+            .unwrap();
+        let result = tracker.register(request_id, RequestType::Sync).await;
+        assert!(matches!(result, Err(Error::Other(_))));
+
+        // Case 2: Completed
+        tracker
+            .update_status(
+                request_id,
+                ProcessingStatus::Completed {
+                    subgraph: "test_subgraph".to_string(),
+                    pod_hash: "test_pod".to_string(),
+                },
+            )
+            .await
+            .unwrap();
+        let result = tracker.register(request_id, RequestType::Sync).await;
+        assert!(matches!(result, Err(Error::Duplicate(_))));
+
+        // Case 3: Failed
+        tracker
+            .update_status(
+                request_id,
+                ProcessingStatus::Failed {
+                    error: "Test error".to_string(),
+                    pod_hash: "test_pod".to_string(),
+                },
+            )
+            .await
+            .unwrap();
+        let result = tracker.register(request_id, RequestType::Sync).await;
+        assert!(matches!(result, Err(Error::Cancelled { .. })));
+
+        // Clean up
+        context.delete_key_value(status_bucket).await.unwrap();
+    }
 }
