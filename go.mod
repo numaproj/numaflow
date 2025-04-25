@@ -17,6 +17,7 @@ require (
 	github.com/gin-contrib/cors v1.7.1
 	github.com/gin-contrib/static v0.0.2-0.20220606235426-ae09b2ea7e39
 	github.com/gin-gonic/gin v1.9.1
+	github.com/go-logr/zapr v1.3.0
 	github.com/go-openapi/inflect v0.21.0
 	github.com/go-swagger/go-swagger v0.31.0
 	github.com/goccy/go-json v0.10.2
@@ -100,7 +101,6 @@ require (
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.0.5 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
-	github.com/go-logr/zapr v1.3.0 // indirect
 	github.com/go-openapi/analysis v0.23.0 // indirect
 	github.com/go-openapi/errors v0.22.0 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
