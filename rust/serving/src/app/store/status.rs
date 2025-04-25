@@ -196,9 +196,9 @@ impl StatusTracker {
             ProcessingStatus::InProgress { pod_hash } => {
                 if pod_hash == self.pod_hash {
                     warn!(id, status_key, "Request is getting processed");
-                    Err(Error::Duplicate(status_key.to_string()))
+                    Err(Error::Duplicate(id.to_string()))
                 } else {
-                    // TODO: There can be a case where the pod terminates without updating the error
+                    // TODO: There can be a case where the pod terminates without updating the request
                     // status(SIGKILL).
                     warn!(
                         id,
@@ -214,7 +214,7 @@ impl StatusTracker {
                     id,
                     status_key, "Request already completed, returning as duplicate."
                 );
-                Err(Error::Duplicate(status_key.to_string()))
+                Err(Error::Duplicate(id.to_string()))
             }
             ProcessingStatus::Failed { error, pod_hash } => {
                 warn!(id, status_key, error = ?error, "Request had failed, retrying...");

@@ -500,9 +500,11 @@ mod tests {
     use axum::extract::Request;
     use axum::http::header::{CONTENT_LENGTH, CONTENT_TYPE};
     use serde_json::{json, Value};
+    use std::process::exit;
     use std::sync::Arc;
-    use std::time::Instant;
+    use std::time::{Duration, Instant};
     use tokio::net::TcpListener;
+    use tokio::time::sleep;
     use tokio_util::sync::CancellationToken;
     use tower::ServiceExt;
 
@@ -659,7 +661,7 @@ mod tests {
         ]
     }
 
-    // #[cfg(feature = "nats-tests")]
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_sync_publish() {
         const ID_HEADER: &str = "X-Numaflow-Id";
@@ -948,7 +950,7 @@ mod tests {
         );
     }
 
-    // #[cfg(feature = "nats-tests")]
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_sse_handler() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         const ID_HEADER: &str = "X-Numaflow-Id";
@@ -1046,6 +1048,15 @@ mod tests {
         // Returns address (e.g. http://127.0.0.1{random_port})
         let listening_url = format!("http://{}:{}", host, port);
 
+        let mut event_stream = reqwest::Client::new()
+            .get(format!("{}/v1/process/sse", listening_url))
+            .header("Content-Type", "text/plain")
+            .header(DEFAULT_ID_HEADER, ID_VALUE)
+            .send()
+            .await
+            .unwrap()
+            .bytes_stream();
+
         // pipeline is in -> cat -> out, so we will have 3 callback requests
         // spawn a tokio task which will insert the callback requests to the callback state
         tokio::spawn(async move {
@@ -1080,15 +1091,6 @@ mod tests {
             }
         });
 
-        let mut event_stream = reqwest::Client::new()
-            .get(format!("{}/v1/process/sse", listening_url))
-            .header("Content-Type", "text/plain")
-            .header(DEFAULT_ID_HEADER, ID_VALUE)
-            .send()
-            .await
-            .unwrap()
-            .bytes_stream();
-
         let mut event_data: Vec<Bytes> = vec![];
         while let Some(event) = event_stream.next().await {
             match event {
@@ -1107,6 +1109,7 @@ mod tests {
             event_data[1],
             Bytes::from("data: Another Test Message 2\n\n")
         );
+
         Ok(())
     }
 }

@@ -8,11 +8,13 @@
 //! Response Key - rs.{pod_hash}.{id}.{vertex_name}.{timestamp}
 //!
 //! Response Value - response_payload
+
 use crate::app::store::datastore::{DataStore, Error as StoreError, Result as StoreResult};
 use crate::config::RequestType;
 use async_nats::jetstream::kv::{Store, Watch};
 use async_nats::jetstream::Context;
 use bytes::{Buf, BufMut, Bytes};
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::Arc;
@@ -228,7 +230,24 @@ impl JetStreamDataStore {
                 .expect("Failed to convert entry value to RequestType");
 
             let mut response_map = responses_map.lock().await;
-            if response_map.contains_key(request_id) {
+            // Attempt to insert directly and check if the key already exists
+            let entry = response_map.entry(request_id.to_string());
+            if let Entry::Vacant(vacant_entry) = entry {
+                match request_type {
+                    // For SSE, create a channel and insert it
+                    RequestType::Sse => {
+                        let (tx, rx) = mpsc::channel(10);
+                        vacant_entry.insert(ResponseMode::Stream {
+                            tx,
+                            rx: Some(ReceiverStream::new(rx)),
+                        });
+                    }
+                    // For Sync and Async, insert an empty list
+                    RequestType::Sync | RequestType::Async => {
+                        vacant_entry.insert(ResponseMode::Unary(Vec::new()));
+                    }
+                }
+            } else {
                 error!(
                     ?request_id,
                     "Start processing marker already exists for this request ID"
@@ -237,27 +256,6 @@ impl JetStreamDataStore {
                     "Start processing marker already exists for request ID: {}",
                     request_id
                 ));
-            }
-
-            match request_type {
-                // for sse we need to do streaming, so it will be a channel.
-                RequestType::Sse => {
-                    let (tx, rx) = mpsc::channel(10);
-                    response_map.insert(
-                        request_id.to_string(),
-                        ResponseMode::Stream {
-                            tx,
-                            rx: Some(ReceiverStream::new(rx)),
-                        },
-                    );
-                }
-                // for sync and async we need to store the responses in a list
-                RequestType::Sync => {
-                    response_map.insert(request_id.to_string(), ResponseMode::Unary(Vec::new()));
-                }
-                RequestType::Async => {
-                    response_map.insert(request_id.to_string(), ResponseMode::Unary(Vec::new()));
-                }
             }
         } else if key_suffix == DONE_PROCESSING_MARKER {
             // when we get the done processing marker, it means we won't get any more responses for
@@ -339,6 +337,7 @@ impl JetStreamDataStore {
     ) -> StoreResult<Vec<Vec<u8>>> {
         let mut latest_revision = 0;
         let watch_pattern = format!("{RESPONSE_KEY_PREFIX}.{pod_hash}.{id}.*");
+        info!("Watching for {}", watch_pattern);
         let mut watcher = Self::create_watcher(&store, &watch_pattern, latest_revision + 1).await?;
         let mut responses = vec![];
         loop {
@@ -349,6 +348,7 @@ impl JetStreamDataStore {
                         Self::create_watcher(&store, &watch_pattern, latest_revision + 1).await?;
                 }
                 Some(Ok(entry)) => {
+                    info!("Entry {:?}", entry);
                     latest_revision = entry.revision;
                     if entry.key.contains(START_PROCESSING_MARKER) {
                         continue;
@@ -428,10 +428,13 @@ enum ResponseMode {
 impl DataStore for JetStreamDataStore {
     /// Retrieve a data from the store. If the datum is not found, `None` is returned.
     async fn retrieve_data(&mut self, id: &str, pod_hash: &str) -> StoreResult<Vec<Vec<u8>>> {
+        info!("Retrieving data for {}", id);
         if pod_hash == self.pod_hash {
+            info!("Pod {} already exists", pod_hash);
             // Fallback to retrieving data from the KV store
             self.get_data_from_kv_store(id).await
         } else {
+            info!("Pod {} exists", pod_hash);
             Self::get_historic_response(self.kv_store.clone(), id, pod_hash).await
         }
     }
@@ -483,7 +486,7 @@ mod tests {
     use bytes::Bytes;
     use chrono::Utc;
     use tokio_stream::StreamExt;
-
+    use tracing_subscriber::util::SubscriberInitExt;
     use super::*;
     use crate::app::store::datastore::DataStore;
 
@@ -590,6 +593,130 @@ mod tests {
         // Verify that the response is received
         let received_response = stream.next().await.unwrap();
         assert_eq!(received_response, Arc::new(payload));
+
+        // delete store
+        context.delete_key_value(datum_store_name).await.unwrap();
+    }
+
+    // #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_retrieve_data_with_different_pod_hash() {
+        let subscriber = tracing_subscriber::fmt().finish();
+        subscriber.init();
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let datum_store_name = "test_retrieve_data_different_pod_hash_store";
+        let current_pod_hash = "abcd";
+        let other_pod_hash = "efgh";
+
+        let _ = context.delete_key_value(datum_store_name).await;
+
+        context
+            .create_key_value(Config {
+                bucket: datum_store_name.to_string(),
+                history: 5,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let mut store = JetStreamDataStore::new(
+            context.clone(),
+            datum_store_name,
+            current_pod_hash,
+            CancellationToken::new(),
+        )
+            .await
+            .unwrap();
+
+        let id = "test-id";
+        let start_key = format!("rs.{other_pod_hash}.{id}.start.processing");
+        let start_payload: Bytes = RequestType::Sync.try_into().unwrap();
+        store
+            .kv_store
+            .put(start_key, start_payload.clone())
+            .await
+            .unwrap();
+
+        let key = format!("rs.{other_pod_hash}.{id}.sink.1234");
+        store
+            .kv_store
+            .put(key, Bytes::from_static(b"test_payload"))
+            .await
+            .unwrap();
+
+        let done_key = format!("rs.{other_pod_hash}.{id}.done.processing");
+        store.kv_store.put(done_key, Bytes::new()).await.unwrap();
+
+        let result = store.retrieve_data(id, other_pod_hash).await.unwrap();
+        assert!(result.len() > 0);
+        assert_eq!(result[0], b"test_payload");
+
+        // delete store
+        context.delete_key_value(datum_store_name).await.unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_stream_data_with_different_pod_hash() {
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let datum_store_name = "test_stream_data_different_pod_hash_store";
+        let current_pod_hash = "current_pod";
+        let other_pod_hash = "other_pod";
+
+        let _ = context.delete_key_value(datum_store_name).await;
+
+        context
+            .create_key_value(Config {
+                bucket: datum_store_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let mut store = JetStreamDataStore::new(
+            context.clone(),
+            datum_store_name,
+            current_pod_hash,
+            CancellationToken::new(),
+        )
+            .await
+            .unwrap();
+
+        let id = "test-stream-id";
+        let start_key = format!("rs.{other_pod_hash}.{id}.start.processing");
+        let start_payload: Bytes = RequestType::Sse.try_into().unwrap();
+        store
+            .kv_store
+            .put(start_key, start_payload.clone())
+            .await
+            .unwrap();
+        let key = format!("rs.{other_pod_hash}.{id}.sink.1234");
+        store
+            .kv_store
+            .put(key, Bytes::from_static(b"test_payload"))
+            .await
+            .unwrap();
+
+        let done_key = format!("rs.{other_pod_hash}.{id}.done.processing");
+        store.kv_store.put(done_key, Bytes::new()).await.unwrap();
+
+        let (tx, mut rx) = mpsc::channel(10);
+        tokio::spawn({
+            let kv_store = store.kv_store.clone();
+            let request_id = id.to_string();
+            let pod_hash = other_pod_hash.to_string();
+            async move {
+                JetStreamDataStore::stream_historic_responses(kv_store, &request_id, &pod_hash, tx).await;
+            }
+        });
+
+        let received_response = rx.recv().await.unwrap();
+        assert_eq!(received_response, Arc::new(Bytes::from_static(b"test_payload")));
 
         // delete store
         context.delete_key_value(datum_store_name).await.unwrap();
