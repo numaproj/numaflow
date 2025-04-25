@@ -141,7 +141,7 @@ mod tests {
     use tokio_stream::StreamExt;
 
     #[tokio::test]
-    async fn test_gc_wal_and_compaction() {
+    async fn test_gc_wal_and_aligned_compaction() {
         let test_path = tempfile::tempdir().unwrap().into_path();
 
         // Create GC WAL
@@ -266,5 +266,174 @@ mod tests {
             remaining_message_count, 90,
             "Expected 90 messages to remain after compaction"
         );
+    }
+
+    #[tokio::test]
+    async fn test_gc_wal_and_unaligned_compaction() {
+        let test_path = tempfile::tempdir().unwrap().into_path();
+
+        // Create GC WAL
+        let gc_wal = AppendOnlyWal::new(
+            Wal::new(WalType::Gc),
+            test_path.clone(),
+            1,    // 1MB
+            1000, // 1s flush interval
+            500,  // channel buffer
+        )
+        .await
+        .unwrap();
+
+        // Create and write GC events with different keys
+        let gc_start = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 0).unwrap();
+        let gc_end_key1 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 10).unwrap();
+        let gc_end_key2 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 15).unwrap();
+
+        let gc_event1 = GcEvent {
+            start_time: Some(prost_timestamp_from_utc(gc_start)),
+            end_time: Some(prost_timestamp_from_utc(gc_end_key1)),
+            keys: vec!["key1".to_string()],
+        };
+
+        let gc_event2 = GcEvent {
+            start_time: Some(prost_timestamp_from_utc(gc_start)),
+            end_time: Some(prost_timestamp_from_utc(gc_end_key2)),
+            keys: vec!["key2".to_string()],
+        };
+
+        let (tx, rx) = tokio::sync::mpsc::channel(10);
+        let (_offset_stream, handle) = gc_wal
+            .streaming_write(ReceiverStream::new(rx))
+            .await
+            .unwrap();
+
+        // Send both GC events
+        tx.send(SegmentWriteMessage::WriteData {
+            id: Some("gc1".to_string()),
+            data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event1)),
+        })
+        .await
+        .unwrap();
+
+        tx.send(SegmentWriteMessage::WriteData {
+            id: Some("gc2".to_string()),
+            data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event2)),
+        })
+        .await
+        .unwrap();
+
+        drop(tx);
+        handle.await.unwrap().unwrap();
+
+        // Create segment WAL
+        let segment_wal = AppendOnlyWal::new(
+            Wal::new(WalType::Data),
+            test_path.clone(),
+            1,    // 20MB
+            1000, // 1s flush interval
+            500,  // channel buffer
+        )
+        .await
+        .unwrap();
+
+        // Write segment entries with different keys
+        let (tx, rx) = tokio::sync::mpsc::channel(100);
+        let (_offset_stream, handle) = segment_wal
+            .streaming_write(ReceiverStream::new(rx))
+            .await
+            .unwrap();
+
+        let start_time = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 0).unwrap();
+        let time_increment = chrono::Duration::seconds(1);
+
+        // Create 50 messages with key1 and 50 messages with key2
+        for i in 1..=100 {
+            let mut message = Message::default();
+            message.event_time = start_time + (time_increment * i);
+
+            // Alternate between key1 and key2
+            let key = if i % 2 == 0 { "key1" } else { "key2" };
+            message.keys = Arc::from(vec![key.to_string()]);
+
+            message.value = bytes::Bytes::from(vec![1, 2, 3]);
+            message.id = MessageID {
+                vertex_name: "test-vertex".to_string().into(),
+                offset: i.to_string().into(),
+                index: 0,
+            };
+
+            let proto_message: Bytes = message.try_into().unwrap();
+            tx.send(SegmentWriteMessage::WriteData {
+                id: Some(format!("msg-{}", i)),
+                data: proto_message,
+            })
+            .await
+            .unwrap();
+        }
+
+        drop(tx);
+        handle.await.unwrap().unwrap();
+
+        // Create and run compactor with unaligned window kind
+        let compactor = Compactor::new(
+            test_path.clone(),
+            WindowKind::Unaligned,
+            1,    // 20MB
+            1000, // 1s flush interval
+            500,  // channel buffer
+        )
+        .await
+        .unwrap();
+
+        compactor.compact().await.unwrap();
+
+        // Verify compacted data
+        let compaction_wal = ReplayWal::new(Wal::new(WalType::Compact), test_path);
+        let (mut rx, handle) = compaction_wal.streaming_read().unwrap();
+
+        let mut remaining_message_count = 0;
+        let mut key1_count = 0;
+        let mut key2_count = 0;
+
+        while let Some(entry) = rx.next().await {
+            if let SegmentEntry::DataEntry { data, .. } = entry {
+                let msg: numaflow_pb::objects::isb::Message = prost::Message::decode(data).unwrap();
+                if let Some(header) = msg.header {
+                    // Check event time based on key
+                    if let (Some(message_info), keys) = (header.message_info.as_ref(), header.keys)
+                    {
+                        let event_time = utc_from_timestamp(message_info.event_time);
+
+                        if keys.contains(&"key1".to_string()) {
+                            key1_count += 1;
+                            assert!(
+                                event_time > gc_end_key1,
+                                "Found key1 message with event_time <= gc_end_key1"
+                            );
+                        } else if keys.contains(&"key2".to_string()) {
+                            key2_count += 1;
+                            assert!(
+                                event_time > gc_end_key2,
+                                "Found key2 message with event_time <= gc_end_key2"
+                            );
+                        }
+                    }
+                }
+                remaining_message_count += 1
+            }
+        }
+        handle.await.unwrap().unwrap();
+
+        // For key1, we should have removed messages with event time <= 10s (10 messages)
+        // For key2, we should have removed messages with event time <= 15s (15 messages)
+        // Total messages: 100 - (5 key1 messages + 8 key2 messages) = 87
+        // Note: Since we alternate keys and start from 1, key1 is at odd indices and key2 at even indices
+        assert_eq!(
+            remaining_message_count, 87,
+            "Expected 87 messages to remain after compaction"
+        );
+
+        // We expect 45 key1 messages (50 - 5) and 40 key2 messages (50 - 8)
+        assert_eq!(key1_count, 45, "Expected 45 key1 messages to remain");
+        assert_eq!(key2_count, 42, "Expected 42 key2 messages to remain");
     }
 }

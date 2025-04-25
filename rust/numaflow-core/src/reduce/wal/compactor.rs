@@ -333,7 +333,6 @@ impl Compactor {
             .header
             .as_ref()
             .and_then(|header| Some(header.keys.clone()))
-            .map(|keys| keys.clone())
             .unwrap_or_default();
 
         // Join the keys with the separator
