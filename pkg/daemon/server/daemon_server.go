@@ -157,10 +157,10 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 		}
 	}()
 
-	// Start the pipelineRuntimeCache
+	// Start the pipeline runtime cache refresher
 	go func() {
 		if err := pipelineRuntimeCache.StartCacheRefresher(ctx); err != nil {
-			log.Panic(fmt.Errorf("failed to start the pipelineRuntimeCache: %w", err))
+			log.Panic(fmt.Errorf("failed to start the pipeline runtime cache refresher: %w", err))
 		}
 	}()
 

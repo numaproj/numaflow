@@ -22,6 +22,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/go-logr/zapr"
 	"go.uber.org/zap"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -32,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -53,6 +55,8 @@ import (
 
 func Start(namespaced bool, managedNamespace string) {
 	logger := logging.NewLogger().Named("controller-manager")
+	log.SetLogger(zapr.NewLogger(logger.Desugar()))
+
 	config, err := reconciler.LoadConfig(func(err error) {
 		logger.Errorw("Failed to reload global configuration file", zap.Error(err))
 	})

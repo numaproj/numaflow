@@ -1,8 +1,10 @@
 use crate::config::{config, CustomResourceType};
+use bytes::Bytes;
 use numaflow_monitor::runtime;
 use tokio::signal;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
+use tonic::{Code, Status};
 use tracing::{error, info};
 
 /// Custom Error handling.
@@ -93,6 +95,11 @@ pub async fn run() -> Result<()> {
                     runtime::persist_application_error(e);
                 } else {
                     error!(?e, "Error running monovertex");
+                    runtime::persist_application_error(Status::with_details(
+                        Code::Internal,
+                        "Error occurred while running MonoVertex".to_string(),
+                        Bytes::from(e.to_string()),
+                    ));
                 }
                 // abort the signal handler task since we have an error and we are shutting down
                 if !shutdown_handle.is_finished() {
@@ -108,6 +115,11 @@ pub async fn run() -> Result<()> {
                     runtime::persist_application_error(e);
                 } else {
                     error!(?e, "Error running pipeline");
+                    runtime::persist_application_error(Status::with_details(
+                        Code::Internal,
+                        "Error occurred while running pipeline".to_string(),
+                        Bytes::from(e.to_string()),
+                    ));
                 }
                 // abort the signal handler task since we have an error and we are shutting down
                 if !shutdown_handle.is_finished() {

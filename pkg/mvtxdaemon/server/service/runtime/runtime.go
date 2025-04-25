@@ -103,21 +103,19 @@ func NewRuntime(ctx context.Context, mv *v1alpha1.MonoVertex) MonoVertexRuntimeC
 
 // StartCacheRefresher starts the cache refresher to update the local cache periodically with the runtime errors.
 func (r *monoVertexRuntimeCache) StartCacheRefresher(ctx context.Context) (err error) {
-	r.log.Infof("Starting runtime server...")
-
+	r.log.Infof("Starting runtime cache refresher...")
 	ctx, cancel := context.WithCancel(logging.WithLogger(ctx, r.log))
-
 	go func() {
 		err := r.podTracker.Start(ctx)
 		if err != nil {
-			r.log.Errorw("Failed to start pod tracker for runtime server", zap.Error(err))
+			r.log.Errorw("Failed to start pod tracker for runtime cache refresher", zap.Error(err))
 			cancel()
 		}
 	}()
-
+	// wait for first active pods update for MonoVertex
+	<-r.podTracker.firstPodsUpdateChan
 	// start persisting errors into the local cache
 	go r.persistRuntimeErrors(ctx)
-
 	return nil
 }
 

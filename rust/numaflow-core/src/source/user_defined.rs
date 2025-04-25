@@ -122,11 +122,26 @@ impl TryFrom<read_response::Result> for Message {
 
     fn try_from(result: read_response::Result) -> Result<Self> {
         let source_offset = match result.offset {
-            Some(o) => Offset::String(StringOffset {
+            Some(o) if !o.offset.is_empty() => Offset::String(StringOffset {
                 offset: BASE64_STANDARD.encode(o.offset).into(),
                 partition_idx: o.partition_id as u16,
             }),
-            None => return Err(Error::Source("Offset not found".to_string())),
+
+            Some(_) => {
+                return Err(Error::Source(
+                    "Invalid offset found in response. \
+                    This is user code error. Please make sure that offset is not empty in response."
+                        .to_string(),
+                ));
+            }
+
+            None => {
+                return Err(Error::Source(
+                    "Offset not found. This is user code error. \
+                    Please make sure that offset is present in response."
+                        .to_string(),
+                ));
+            }
         };
 
         Ok(Message {
@@ -195,7 +210,7 @@ impl SourceReader for UserDefinedSourceRead {
 
             let result = response
                 .result
-                .ok_or_else(|| Error::Source("Empty message".to_string()))?;
+                .ok_or_else(|| Error::Source("Empty message in response".to_string()))?;
 
             messages.push(result.try_into()?);
         }

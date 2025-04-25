@@ -112,15 +112,15 @@ impl Transformer {
         transform_handle
             .send(msg)
             .await
-            .map_err(|e| Error::Transformer(format!("failed to send message: {}", e)))?;
+            .map_err(|e| Error::Transformer(format!("failed to send message to server: {}", e)))?;
 
         // wait for the response
         let response = tokio::select! {
             _ = cln_token.cancelled() => {
-                return Err(Error::Transformer("cancelled".to_string()));
+                return Err(Error::Transformer("cancellation token cancelled".to_string()));
             }
             response = receiver => {
-                response.map_err(|e| Error::Transformer(format!("failed to receive response: {}", e)))??
+                response.map_err(|e| Error::Transformer(format!("failed to receive response from server: {}", e)))??
             }
         };
 
@@ -203,6 +203,17 @@ impl Transformer {
                 Ok(Err(e)) => return Err(e),
                 Err(e) => return Err(Error::Transformer(format!("task join failed: {}", e))),
             }
+        }
+        let dropped_messages_count = transformed_messages
+            .iter()
+            .filter(|message| message.dropped())
+            .count();
+        if dropped_messages_count > 0 {
+            monovertex_metrics()
+                .transformer
+                .dropped_total
+                .get_or_create(mvtx_forward_metric_labels())
+                .inc_by(dropped_messages_count as u64);
         }
         Ok(transformed_messages)
     }

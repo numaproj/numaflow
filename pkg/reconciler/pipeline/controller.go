@@ -78,7 +78,7 @@ func (r *pipelineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	pl := &dfv1.Pipeline{}
 	if err := r.client.Get(ctx, req.NamespacedName, pl); err != nil {
 		if apierrors.IsNotFound(err) {
-			return reconcile.Result{}, nil
+			return ctrl.Result{}, nil
 		}
 		r.logger.Errorw("Unable to get pipeline", zap.Any("request", req), zap.Error(err))
 		return ctrl.Result{}, err
@@ -102,8 +102,20 @@ func (r *pipelineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return result, err
 		}
 	}
-	if err := r.client.Status().Update(ctx, plCopy); err != nil {
-		return result, err
+	if !equality.Semantic.DeepEqual(pl.Status, plCopy.Status) {
+		// Use Server Side Apply
+		statusPatch := &dfv1.Pipeline{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:          pl.Name,
+				Namespace:     pl.Namespace,
+				ManagedFields: nil,
+			},
+			TypeMeta: pl.TypeMeta,
+			Status:   plCopy.Status,
+		}
+		if err := r.client.Status().Patch(ctx, statusPatch, client.Apply, client.ForceOwnership, client.FieldOwner(dfv1.Project)); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 	return result, reconcileErr
 }
@@ -140,6 +152,8 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 			controllerutil.RemoveFinalizer(pl, deprecatedFinalizerName)
 			// Clean up metrics
 			_ = reconciler.PipelineHealth.DeleteLabelValues(pl.Namespace, pl.Name)
+			_ = reconciler.PipelineDesiredPhase.DeleteLabelValues(pl.Namespace, pl.Name)
+			_ = reconciler.PipelineCurrentPhase.DeleteLabelValues(pl.Namespace, pl.Name)
 			// Delete corresponding vertex metrics
 			_ = reconciler.VertexDesiredReplicas.DeletePartialMatch(map[string]string{metrics.LabelNamespace: pl.Namespace, metrics.LabelPipeline: pl.Name})
 			_ = reconciler.VertexCurrentReplicas.DeletePartialMatch(map[string]string{metrics.LabelNamespace: pl.Namespace, metrics.LabelPipeline: pl.Name})
@@ -155,6 +169,8 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 		} else {
 			reconciler.PipelineHealth.WithLabelValues(pl.Namespace, pl.Name).Set(0)
 		}
+		reconciler.PipelineDesiredPhase.WithLabelValues(pl.Namespace, pl.Name).Set(float64(pl.GetDesiredPhase().Code()))
+		reconciler.PipelineCurrentPhase.WithLabelValues(pl.Namespace, pl.Name).Set(float64(pl.Status.Phase.Code()))
 	}()
 
 	pl.Status.InitConditions()

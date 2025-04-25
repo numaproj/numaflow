@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"time"
 
 	appv1 "k8s.io/api/apps/v1"
@@ -49,6 +50,21 @@ const (
 	// MonoVertexPodsHealthy has the status True when the pods of the mono vertex are healthy
 	MonoVertexPodsHealthy ConditionType = "PodsHealthy"
 )
+
+func (mvp MonoVertexPhase) Code() int {
+	switch mvp {
+	case MonoVertexPhaseUnknown:
+		return 0
+	case MonoVertexPhaseRunning:
+		return 1
+	case MonoVertexPhasePaused:
+		return 2
+	case MonoVertexPhaseFailed:
+		return 3
+	default:
+		return 0
+	}
+}
 
 // +genclient
 // +kubebuilder:object:root=true
@@ -115,7 +131,14 @@ func (mv MonoVertex) GetServiceObjs() []*corev1.Service {
 
 func (mv MonoVertex) getServiceObj(name string, headless bool, ports map[string]int32) *corev1.Service {
 	var servicePorts []corev1.ServicePort
-	for name, port := range ports {
+	portNames := make([]string, 0, len(ports))
+	for k := range ports {
+		portNames = append(portNames, k)
+	}
+	// Sort by name instead of iterating the map directly to make sure the genereated spec is consistent
+	sort.Strings(portNames)
+	for _, name := range portNames {
+		port := ports[name]
 		servicePorts = append(servicePorts, corev1.ServicePort{
 			Port:       port,
 			TargetPort: intstr.FromInt32(port),
