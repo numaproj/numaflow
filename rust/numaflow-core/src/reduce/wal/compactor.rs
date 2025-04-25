@@ -53,6 +53,13 @@ pub(crate) struct Compactor {
 
 const WAL_KEY_SEPERATOR: &'static str = ":";
 
+/// Compaction map can be used for two types, Aligned and Unaligned.
+// FIXME: this is a hack because i am lazy :)
+enum CompactionMap<'a> {
+    Aligned(DateTime<Utc>),
+    UnAligned(&'a HashMap<String, DateTime<Utc>>),
+}
+
 impl Compactor {
     pub(crate) async fn new(
         path: PathBuf,
@@ -111,14 +118,11 @@ impl Compactor {
     pub(crate) async fn compact(&self) -> WalResult<()> {
         match self.kind {
             WindowKind::Aligned => self.compact_aligned().await?,
-            WindowKind::Unaligned => {
-                unimplemented!()
-            }
+            WindowKind::Unaligned => self.compact_unaligned().await?,
         }
         Ok(())
     }
 
-    // FIXME: BEFORE we implement this, we need to add footer.
     /// Compacts Aligned Segments.
     /// ## Logic
     /// - Get the oldest time by calling Build Aligned Compaction
@@ -134,11 +138,14 @@ impl Compactor {
         let (oldest_time, gc_files) = self.build_aligned_compaction().await?;
 
         // Compact the compaction_ro_wal
-        self.process_wal_stream(&self.compaction_ro_wal, oldest_time)
-            .await?;
+        self.process_wal_stream(
+            &self.compaction_ro_wal,
+            &CompactionMap::Aligned(oldest_time),
+        )
+        .await?;
 
         // Compact the segment_wal
-        self.process_wal_stream(&self.segment_wal, oldest_time)
+        self.process_wal_stream(&self.segment_wal, &CompactionMap::Aligned(oldest_time))
             .await?;
 
         // Delete the GC files
@@ -150,10 +157,48 @@ impl Compactor {
         Ok(())
     }
 
-    async fn process_wal_stream(
+    /// Compacts Unaligned Segments.
+    /// ## Logic
+    /// - Get the oldest time by calling Build Unaligned Compaction
+    /// - Get all the Segment files
+    /// - Open Append WAL for Compaction
+    /// - For each Segment file, deserialize data to [crate::message::Message]
+    /// - Compare the "event_time" of the Message with the compaction hashmap. The key is the joined keys
+    ///   are the key from the Message::Header.
+    /// - If event_time is <= oldest_time, skip it, otherwise write it into the Compaction Append WAL.
+    /// - Send the Rotate message to the Compaction Append WAL after each Segment file has been processed.
+    /// - Delete the Segment File after the Rotate is complete.
+    async fn compact_unaligned(&self) -> WalResult<()> {
+        // Get the oldest time map and scanned GC files
+        let (oldest_time_map, gc_files) = self.build_unaligned_compaction().await?;
+
+        // Compact the compaction_ro_wal
+        self.process_wal_stream(
+            &self.compaction_ro_wal,
+            &CompactionMap::UnAligned(&oldest_time_map),
+        )
+        .await?;
+
+        // Compact the segment_wal
+        self.process_wal_stream(
+            &self.segment_wal,
+            &CompactionMap::UnAligned(&oldest_time_map),
+        )
+        .await?;
+
+        // Delete the GC files
+        for gc_file in gc_files {
+            info!(gc_file = %gc_file.display(), "removing segment file");
+            tokio::fs::remove_file(gc_file).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn process_wal_stream<'a>(
         &self,
         wal: &ReplayWal,
-        oldest_time: DateTime<Utc>,
+        compaction_map: &CompactionMap<'a>,
     ) -> WalResult<()> {
         // Get a streaming reader for the WAL
         let (mut rx, handle) = wal.clone().streaming_read()?;
@@ -170,15 +215,30 @@ impl Compactor {
         while let Some(entry) = rx.next().await {
             match entry {
                 SegmentEntry::DataEntry { data, .. } => {
-                    // Check if the message should be retained
-                    if Self::should_retain_message(&data, oldest_time)? {
-                        // Send the data to the compaction WAL
-                        wal_tx
-                            .send(SegmentWriteMessage::WriteData { id: None, data })
-                            .await
-                            .map_err(|e| {
-                                format!("Failed to send message to compaction WAL: {}", e)
-                            })?;
+                    match self.kind {
+                        WindowKind::Aligned => {
+                            // Check if the message should be retained
+                            if Self::should_retain_message(&data, &compaction_map)? {
+                                // Send the data to the compaction WAL
+                                wal_tx
+                                    .send(SegmentWriteMessage::WriteData { id: None, data })
+                                    .await
+                                    .map_err(|e| {
+                                        format!("Failed to send message to compaction WAL: {}", e)
+                                    })?;
+                            }
+                        }
+                        WindowKind::Unaligned => {
+                            if Self::should_retain_unaligned_message(&data, &compaction_map)? {
+                                // Send the data to the compaction WAL
+                                wal_tx
+                                    .send(SegmentWriteMessage::WriteData { id: None, data })
+                                    .await
+                                    .map_err(|e| {
+                                        format!("Failed to send message to compaction WAL: {}", e)
+                                    })?;
+                            }
+                        }
                     }
                 }
                 SegmentEntry::DataFooter { .. } => {
@@ -199,6 +259,7 @@ impl Compactor {
                             e
                         )
                     })?;
+
                     info!(filename = %filename.display(), "removing segment file");
                 }
             }
@@ -221,7 +282,14 @@ impl Compactor {
     }
 
     /// Determines whether a message should be retained based on its event time.
-    fn should_retain_message(data: &[u8], oldest_time: DateTime<Utc>) -> WalResult<bool> {
+    fn should_retain_message(data: &[u8], oldest_time: &CompactionMap<'_>) -> WalResult<bool> {
+        let oldest_time = match oldest_time {
+            CompactionMap::Aligned(t) => t,
+            CompactionMap::UnAligned(_) => {
+                unimplemented!()
+            }
+        };
+
         // Deserialize the message
         let msg: isb::Message =
             prost::Message::decode(data).map_err(|e| format!("Failed to decode message: {}", e))?;
@@ -235,11 +303,50 @@ impl Compactor {
             .expect("Failed to extract event time from message");
 
         // Retain the message if its event time is greater than the oldest time
-        Ok(event_time > oldest_time)
+        Ok(event_time > *oldest_time)
     }
 
-    async fn compact_unaligned(&self) -> WalResult<()> {
-        unimplemented!()
+    /// Determines whether an unaligned message should be retained based on its event time and keys.
+    fn should_retain_unaligned_message(
+        data: &[u8],
+        oldest_time_map: &CompactionMap<'_>,
+    ) -> WalResult<bool> {
+        let oldest_time_map = match oldest_time_map {
+            CompactionMap::Aligned(_) => unimplemented!(),
+            CompactionMap::UnAligned(t) => t,
+        };
+
+        // Deserialize the message
+        let msg: isb::Message =
+            prost::Message::decode(data).map_err(|e| format!("Failed to decode message: {}", e))?;
+
+        // Extract the event time from the message
+        let event_time = msg
+            .header
+            .as_ref()
+            .and_then(|header| header.message_info.as_ref())
+            .map(|info| utc_from_timestamp(info.event_time))
+            .expect("Failed to extract event time from message");
+
+        // Extract the keys from the message
+        let keys = msg
+            .header
+            .as_ref()
+            .and_then(|header| Some(header.keys.clone()))
+            .map(|keys| keys.clone())
+            .unwrap_or_default();
+
+        // Join the keys with the separator
+        let key = keys.join(WAL_KEY_SEPERATOR);
+
+        // Check if the key exists in the map
+        if let Some(oldest_time) = oldest_time_map.get(&key) {
+            // Retain the message if its event time is greater than the oldest time for this key
+            return Ok(event_time > *oldest_time);
+        }
+
+        // If the key is not in the map, retain the message
+        Ok(true)
     }
 
     /// Builds the oldest time below which all data has been processed. For Aligned WAL, all we need
