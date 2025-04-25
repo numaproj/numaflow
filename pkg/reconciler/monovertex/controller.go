@@ -70,7 +70,7 @@ func (mr *monoVertexReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		if apierrors.IsNotFound(err) {
 			// Clean up metrics here, since there's no finalizer defined for MonoVertex objects, best effort
 			cleanupMetrics(req.NamespacedName.Namespace, req.NamespacedName.Name)
-			return reconcile.Result{}, nil
+			return ctrl.Result{}, nil
 		}
 		mr.logger.Errorw("Unable to get MonoVertex", zap.Any("request", req), zap.Error(err))
 		return ctrl.Result{}, err
@@ -88,8 +88,18 @@ func (mr *monoVertexReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 	monoVtxCopy.Status.LastUpdated = metav1.Now()
 	if !equality.Semantic.DeepEqual(monoVtx.Status, monoVtxCopy.Status) {
-		if err := mr.client.Status().Update(ctx, monoVtxCopy); err != nil {
-			return reconcile.Result{}, err
+		// Use Server Side Apply
+		statusPatch := &dfv1.MonoVertex{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:          monoVtx.Name,
+				Namespace:     monoVtx.Namespace,
+				ManagedFields: nil,
+			},
+			TypeMeta: monoVtx.TypeMeta,
+			Status:   monoVtxCopy.Status,
+		}
+		if err := mr.client.Status().Patch(ctx, statusPatch, client.Apply, client.ForceOwnership, client.FieldOwner(dfv1.Project)); err != nil {
+			return ctrl.Result{}, err
 		}
 	}
 	return result, err

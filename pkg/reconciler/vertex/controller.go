@@ -84,8 +84,18 @@ func (r *vertexReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	if !equality.Semantic.DeepEqual(vertex.Status, vertexCopy.Status) {
-		if err := r.client.Status().Update(ctx, vertexCopy); err != nil {
-			return reconcile.Result{}, err
+		// Use Server Side Apply
+		statusPatch := &dfv1.Vertex{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:          vertex.Name,
+				Namespace:     vertex.Namespace,
+				ManagedFields: nil,
+			},
+			TypeMeta: vertex.TypeMeta,
+			Status:   vertexCopy.Status,
+		}
+		if err := r.client.Status().Patch(ctx, statusPatch, client.Apply, client.ForceOwnership, client.FieldOwner(dfv1.Project)); err != nil {
+			return ctrl.Result{}, err
 		}
 	}
 	return result, err
