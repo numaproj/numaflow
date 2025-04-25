@@ -17,8 +17,8 @@
 use crate::reduce::wal::error::WalResult;
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use crate::reduce::wal::segment::replay::{ReplayWal, SegmentEntry};
-use crate::reduce::wal::GcEventEntry;
 use crate::reduce::wal::WalType;
+use crate::reduce::wal::{GcEventEntry, Wal};
 use crate::shared::grpc::utc_from_timestamp;
 use chrono::{DateTime, Utc};
 use numaflow_pb::objects::isb;
@@ -61,11 +61,11 @@ impl Compactor {
         flush_interval_ms: u64,
         channel_buffer_size: usize,
     ) -> WalResult<Self> {
-        let segment_wal = ReplayWal::new(WalType::Data, path.clone());
-        let gc_wal = ReplayWal::new(WalType::Gc, path.clone());
-        let compaction_ro_wal = ReplayWal::new(WalType::Compact, path.clone());
+        let segment_wal = ReplayWal::new(Wal::new(WalType::Data), path.clone());
+        let gc_wal = ReplayWal::new(Wal::new(WalType::Gc), path.clone());
+        let compaction_ro_wal = ReplayWal::new(Wal::new(WalType::Compact), path.clone());
         let compaction_ao_wal = AppendOnlyWal::new(
-            WalType::Compact,
+            Wal::new(WalType::Compact),
             path.clone(),
             max_file_size_mb,
             flush_interval_ms,

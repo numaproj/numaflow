@@ -1,5 +1,5 @@
 use crate::reduce::wal::error::WalResult;
-use crate::reduce::wal::WalType;
+use crate::reduce::wal::Wal;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use std::{io, path::PathBuf};
@@ -37,7 +37,7 @@ pub(crate) enum SegmentWriteMessage {
 /// Append only Segment writer that manages and rotates the WAL Segment.
 struct SegmentWriteActor {
     /// Kind of WAL
-    wal_type: WalType,
+    wal_type: Wal,
     /// Path where the WALs are persisted.
     base_path: PathBuf,
     /// Name of the current WAL Segment.
@@ -67,7 +67,7 @@ impl Drop for SegmentWriteActor {
 impl SegmentWriteActor {
     /// Creates a new SegmentWriteActor.
     fn new(
-        wal_type: WalType,
+        wal_type: Wal,
         base_path: PathBuf,
         current_file_name: String,
         create_time: DateTime<Utc>,
@@ -181,7 +181,7 @@ impl SegmentWriteActor {
 
     /// Open a segment for Appending. The file will be truncated if it exists (it shouldn't!).
     async fn open_segment(
-        wal_type: &WalType,
+        wal_type: &Wal,
         base_path: &PathBuf,
         idx: usize,
     ) -> WalResult<(String, BufWriter<File>)> {
@@ -263,7 +263,7 @@ impl SegmentWriteActor {
 /// Append Only WAL.
 #[derive(Clone)]
 pub(crate) struct AppendOnlyWal {
-    wal_type: WalType,
+    wal_type: Wal,
     base_path: PathBuf,
     max_file_size_mb: u64,
     flush_interval_ms: u64,
@@ -273,7 +273,7 @@ pub(crate) struct AppendOnlyWal {
 impl AppendOnlyWal {
     /// Creates an [AppendOnlyWal]
     pub(crate) async fn new(
-        wal_type: WalType,
+        wal_type: Wal,
         base_path: PathBuf,
         max_file_size_mb: u64,
         flush_interval_ms: u64,
@@ -331,6 +331,7 @@ impl AppendOnlyWal {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::reduce::wal::WalType;
     use bytes::{Bytes, BytesMut};
     use futures::stream::StreamExt;
     use std::fs;
@@ -345,7 +346,7 @@ mod tests {
         let channel_buffer = 10;
 
         let wal_writer = AppendOnlyWal::new(
-            WalType::new("data"),
+            Wal::new(WalType::Data),
             base_path.clone(),
             max_file_size_mb,
             flush_interval_ms,
@@ -504,7 +505,7 @@ mod tests {
         let channel_buffer = 10;
 
         let wal_writer = AppendOnlyWal::new(
-            WalType::new("data"),
+            Wal::new(WalType::Data),
             base_path.clone(),
             max_file_size_mb,
             flush_interval_ms,
@@ -573,7 +574,7 @@ mod tests {
         let channel_buffer = 10;
 
         let wal_writer = AppendOnlyWal::new(
-            WalType::new("data"),
+            Wal::new(WalType::Data),
             base_path.clone(),
             max_file_size_mb,
             flush_interval_ms,
