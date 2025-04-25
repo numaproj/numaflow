@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -148,7 +149,14 @@ func (v Vertex) GetServiceObjs() []*corev1.Service {
 
 func (v Vertex) getServiceObj(name string, headless bool, ports map[string]int32) *corev1.Service {
 	var servicePorts []corev1.ServicePort
-	for name, port := range ports {
+	portNames := make([]string, 0, len(ports))
+	for k := range ports {
+		portNames = append(portNames, k)
+	}
+	// Sort by name instead of iterating the map directly to make sure the genereated spec is consistent
+	sort.Strings(portNames)
+	for _, name := range portNames {
+		port := ports[name]
 		servicePorts = append(servicePorts, corev1.ServicePort{
 			Port:       port,
 			TargetPort: intstr.FromInt32(port),
