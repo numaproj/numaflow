@@ -1,6 +1,18 @@
 //! Compactor has business logic. It knows what kind of WALs have been created and will
 //! compact based on the type. WAL inherently is agnostic to data. The compactor will be given
 //! multiple WAL types (data, gc, etc.) and it decides how to purge (aka compact).
+//!
+//! Compaction is done by combing the [WalType::Gc] + [WalType::Data] + [WalType::Compact]
+//!
+//! ### Compaction Logic
+//! #### Aligned kind
+//! 1. Replay all the GC events and store the max end time
+//! 2. Replay all the data events and only retain the messages with event time > max end time
+//!
+//! #### Unaligned kind
+//! 1. Replay all the GC events and store the max end time for every key combination(map[key] = max end time)
+//! 2. Replay all the data events and only retain the messages with event time > max end time for that key
+//!
 
 use crate::reduce::wal::error::WalResult;
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
@@ -49,11 +61,11 @@ impl Compactor {
         flush_interval_ms: u64,
         channel_buffer_size: usize,
     ) -> WalResult<Self> {
-        let segment_wal = ReplayWal::new(WalType::Segment, path.clone());
+        let segment_wal = ReplayWal::new(WalType::Data, path.clone());
         let gc_wal = ReplayWal::new(WalType::Gc, path.clone());
-        let compaction_ro_wal = ReplayWal::new(WalType::Compaction, path.clone());
+        let compaction_ro_wal = ReplayWal::new(WalType::Compact, path.clone());
         let compaction_ao_wal = AppendOnlyWal::new(
-            WalType::Compaction,
+            WalType::Compact,
             path.clone(),
             max_file_size_mb,
             flush_interval_ms,

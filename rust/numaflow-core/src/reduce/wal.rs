@@ -1,12 +1,28 @@
-use crate::message::{IntOffset, Message, MessageID, Offset};
-use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
+//! Write Ahead Log for both Aligned and Unaligned Reduce Operation. The WAL is to persist the data
+//! we read from the ISB and store it until the processing is complete. There are three types of data
+//! that goes into the WAL.
+//!
+//! ### Data
+//! The Data WAL contains the raw data [crate::message::Message] that is streamed from the ISB.
+//!
+//! ### GC Events
+//! The GC Events contract is that any GC event that is written means all the messages < the window
+//! end time can be deleted from the segment WAL(if keys are present only the messages with same
+//! keys will be deleted).
+//! E.g., of GC Events,
+//! Fixed window of 60s duration GC Events - (60, 120), (120, 180), (180, 240)
+//! Sliding window of 60s length and slide 10s GC Events - (60, 70), (70, 80), (80, 90)
+//! Session window with 10s timeout GC Events - (60, 100, `[key1, key2]`), (120, 1000, `[key3]`)
+//!
+//! ### Compaction
+//! While compacting, a new data segment is created called Compaction Segments. These contain the
+//! data elements that cannot be deleted because the reduction is not complete yet.
+//! Subsequent compactions should also consider already compacted files and order is very important
+//! during compaction we should make sure the order of the messages does not change.
+
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
-use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use numaflow_pb::objects::wal::GcEvent;
-use std::collections::HashMap;
-use std::sync::Arc;
-use tokio_stream::wrappers::ReceiverStream;
 
 /// A WAL Segment.
 pub(crate) mod segment;
@@ -17,48 +33,23 @@ pub(crate) mod compactor;
 /// All the errors WAL could face.
 pub(crate) mod error;
 
-// GC - RO, Segment - RO, Compact - RO,WA
-//
-
-// GC Event - (start, end, optional keys)
-//
-// GC Events WAL contract is that any GC event that is written means all the messages < the window
-// end time can be deleted from the segment WAL(if keys are present only the messages with same
-// keys will be deleted)
-//
-// Fixed window of 60s duration GC Events - (60, 120), (120, 180), (180, 240)
-// Sliding window of 60s length and slide 10s GC Events - (60, 70), (70, 80), (80, 90)
-// Session window with 10s timeout GC Events - (60, 100, [key1, key2]), (120, 1000, [key3])
-//
-//
-// Compaction logic for Aligned kind
-// 1. Replay all the GC events and store the max end time
-// 2. Replay all the data events and only retain the messages with event time > max end time
-//
-// Compaction logic for Unaligned kind
-// 1. Replay all the GC events and store the max end time for every key combination(map[key] = max end time)
-// 2. Replay all the data events and only retain the messages with event time > max end time for that key
-//
-// NOTE: subsequent compactions should also consider already compacted files and order is very important
-// during compaction we should make sure the order of the messages does not change.
-
-/// WAL is made of three parts, the Segment, GC WAL, and Compaction WAL.
+/// WAL is made of three types, the Data, GC, and Compaction WAL.
 #[derive(Debug, Clone)]
 pub(crate) enum WalType {
-    /// Segment WAL contains the data.
-    Segment,
+    /// Data WAL contains the raw data.
+    Data,
     /// GC WAL contains the completed-processing events.
     Gc,
-    /// Compaction WAL is a Segment WAL, but it has the compacted Segment data.
-    Compaction,
+    /// Compaction WAL is a Data WAL, but it has the compacted data after purging based on GC Events.
+    Compact,
 }
 
 impl std::fmt::Display for WalType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            WalType::Segment => write!(f, "Segment"),
+            WalType::Data => write!(f, "Data"),
             WalType::Gc => write!(f, "GC"),
-            WalType::Compaction => write!(f, "Compaction"),
+            WalType::Compact => write!(f, "Compact"),
         }
     }
 }
@@ -67,10 +58,10 @@ impl WalType {
     fn new(segment: &'static str) -> Self {
         match segment {
             "gc" => WalType::Gc,
-            "segment" => WalType::Segment,
-            "compaction" => WalType::Compaction,
+            "data" => WalType::Data,
+            "compact" => WalType::Compact,
             _ => {
-                unimplemented!("supported types are 'segment', 'gc', 'compaction'")
+                unimplemented!("supported types are 'data', 'gc', 'compact'")
             }
         }
     }
@@ -79,18 +70,18 @@ impl WalType {
     fn has_footer(&self) -> bool {
         // TODO: set footer to true for Segment and Compaction for optimizations.
         match self {
-            WalType::Segment => false,
+            WalType::Data => false,
             WalType::Gc => false,
-            WalType::Compaction => false,
+            WalType::Compact => false,
         }
     }
 
     /// Prefix of the WAL Segment as stored in the disk.
     fn segment_prefix(&self) -> String {
         match self {
-            WalType::Segment => "segment".to_string(),
+            WalType::Data => "data".to_string(),
             WalType::Gc => "gc".to_string(),
-            WalType::Compaction => "compaction".to_string(),
+            WalType::Compact => "compaction".to_string(),
         }
     }
 
@@ -98,17 +89,21 @@ impl WalType {
     /// it is used to filter our work-in-progress WAL Segments that are derived from other WALs.
     fn segment_suffix(&self) -> String {
         match self {
-            WalType::Segment => "".to_string(),
+            WalType::Data => "".to_string(),
             WalType::Gc => "".to_string(),
-            WalType::Compaction => "".to_string(),
+            WalType::Compact => "".to_string(),
         }
     }
 }
 
 /// An entry in the GC WAL about the GC action.
 pub(crate) struct GcEventEntry {
+    /// Start time of the Window
     start_time: DateTime<Utc>,
+    /// The end time of the Window. Anything after this timestamp has not been processed.
     end_time: DateTime<Utc>,
+    /// Keys are used only for Unaligned window since sessions are defined not purely on [crate::watermark]
+    /// but also on Keys.
     keys: Option<Vec<String>>,
 }
 
@@ -135,9 +130,13 @@ impl From<GcEventEntry> for GcEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::message::{Message, MessageID};
     use crate::reduce::wal::compactor::{Compactor, WindowKind};
+    use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
     use crate::reduce::wal::segment::replay::{ReplayWal, SegmentEntry};
+    use bytes::Bytes;
     use chrono::{TimeZone, Utc};
+    use std::sync::Arc;
     use tokio_stream::wrappers::ReceiverStream;
     use tokio_stream::StreamExt;
 
@@ -188,7 +187,7 @@ mod tests {
 
         // Create segment WAL
         let segment_wal = AppendOnlyWal::new(
-            WalType::new("segment"),
+            WalType::new("data"),
             test_path.clone(),
             1,    // 20MB
             1000, // 1s flush interval
@@ -248,7 +247,7 @@ mod tests {
         compactor.compact().await.unwrap();
 
         // Verify compacted data
-        let compaction_wal = ReplayWal::new(WalType::new("compaction"), test_path);
+        let compaction_wal = ReplayWal::new(WalType::new("compact"), test_path);
         let (mut rx, handle) = compaction_wal.streaming_read().unwrap();
 
         let mut remaining_message_count = 0;

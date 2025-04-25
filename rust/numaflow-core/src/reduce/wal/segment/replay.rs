@@ -1,6 +1,6 @@
 use crate::reduce::wal::error::WalResult;
 use crate::reduce::wal::WalType;
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use std::cmp::Ordering;
 use std::fs;
 use std::io;
@@ -13,19 +13,22 @@ use tokio::{
     task,
 };
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 /// Segment Entry as recorded in the WAL.
 #[derive(Debug)]
 pub(crate) enum SegmentEntry {
-    /// Data footer in the Segment
-    DataFooter { size: u64, data: Bytes },
     /// Data entry in the Segment
     DataEntry { size: u64, data: Bytes },
     /// The file has been switched
     CmdFileSwitch { filename: PathBuf },
+    /// Data footer in the Segment.
+    /// TODO: This is for optimization which is yet to be implemented
+    #[allow(dead_code)]
+    DataFooter { size: u64, data: Bytes },
 }
 
+/// Replay the WAL in-order.
 #[derive(Debug, Clone)]
 pub(crate) struct ReplayWal {
     wal_type: WalType,
@@ -73,10 +76,7 @@ impl ReplayWal {
         Ok((ReceiverStream::new(rx), handle))
     }
 
-    async fn get_all_files_and_footer() {
-        todo!()
-    }
-
+    /// Read the segment file in-order and write to the channel.
     async fn read_segment(path: &PathBuf, tx: Sender<SegmentEntry>) -> WalResult<()> {
         let file = OpenOptions::new().read(true).open(path).await?;
 
@@ -118,6 +118,8 @@ impl ReplayWal {
     }
 }
 
+/// Sort the filenames based on the file name. It is first sorted based on the timestamp and on
+/// conflict sorted on the file-index.
 fn sort_filenames(mut files: Vec<PathBuf>) -> Vec<PathBuf> {
     files.sort_by(|a, b| {
         let parse = |s: &str| {
@@ -149,6 +151,7 @@ fn sort_filenames(mut files: Vec<PathBuf>) -> Vec<PathBuf> {
     files
 }
 
+/// List all the files for the given [WalType].
 fn list_files(wal_type: &WalType, base_path: PathBuf) -> Vec<PathBuf> {
     fs::read_dir(&base_path)
         .expect(&format!("directory {} to be present", base_path.display()))
@@ -177,16 +180,14 @@ mod tests {
         let base_path = temp_dir.path().to_path_buf();
 
         // Create some test files
-        let _file1 =
-            File::create(base_path.join("segment_1.frozen")).expect("Failed to create file");
-        let _file2 =
-            File::create(base_path.join("segment_2.frozen")).expect("Failed to create file");
-        let _file3 = File::create(base_path.join("segment_3.txt")).expect("Failed to create file");
+        let _file1 = File::create(base_path.join("data_1.frozen")).expect("Failed to create file");
+        let _file2 = File::create(base_path.join("data_2.frozen")).expect("Failed to create file");
+        let _file3 = File::create(base_path.join("data_3.txt")).expect("Failed to create file");
         let _file4 =
             File::create(base_path.join("other_file.frozen")).expect("Failed to create file");
 
         // Call the function
-        let result = list_files(&WalType::new("segment"), base_path);
+        let result = list_files(&WalType::new("data"), base_path);
 
         // Verify the result
         let mut result_paths: Vec<String> = result
@@ -195,7 +196,7 @@ mod tests {
             .collect();
         result_paths.sort();
 
-        assert_eq!(result_paths, vec!["segment_1.frozen", "segment_2.frozen"]);
+        assert_eq!(result_paths, vec!["data_1.frozen", "data_2.frozen"]);
     }
 
     #[test]

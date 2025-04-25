@@ -2,7 +2,6 @@ use crate::reduce::wal::error::WalResult;
 use crate::reduce::wal::WalType;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
-use std::ops::Sub;
 use std::{io, path::PathBuf};
 use tokio::io::BufWriter;
 use tokio::task::JoinHandle;
@@ -16,35 +15,46 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tracing::{debug, info};
 
-const ROTATE_IF_STALE: chrono::Duration = chrono::Duration::seconds(30);
+/// Duration after which the WAL Segment is considered stale.
+const ROTATE_IF_STALE_DURATION: chrono::Duration = chrono::Duration::seconds(30);
 
+/// The Command that has to be operated on the Segment.
 pub(crate) enum SegmentWriteMessage {
     /// Writes the given payload to the WAL.
     WriteData {
         /// Unique ID of the payload. Useful to detect write failures.
         id: Option<String>,
-        // TODO: add Option<event-time>
         /// Data to be written on do the WAL.
         data: Bytes,
     },
-    /// Rotates a file on demand.
+    /// Rotates the file on demand.
     Rotate {
         /// When "true" Rotate only if the size is >= the size
         on_size: bool,
     },
 }
 
+/// Append only Segment writer that manages and rotates the WAL Segment.
 struct SegmentWriteActor {
+    /// Kind of WAL
     wal_type: WalType,
+    /// Path where the WALs are persisted.
     base_path: PathBuf,
+    /// Name of the current WAL Segment.
     current_file_name: String,
     /// Time when the segment was created.
     create_time: DateTime<Utc>,
-    current_file: BufWriter<File>,
+    /// The current segment writer exposed via a buffer.
+    current_file_buf: BufWriter<File>,
+    /// Size of the current segment.
     current_size: u64,
+    /// The file index since the last restart.
     file_index: usize,
+    /// The interval at which the files have to be flushed.
     flush_interval: Duration,
+    /// Maximum file size per segment.
     max_file_size: u64,
+    /// The result of [SegmentWriteMessage] operation.
     result_tx: Sender<String>,
 }
 
@@ -55,6 +65,7 @@ impl Drop for SegmentWriteActor {
 }
 
 impl SegmentWriteActor {
+    /// Creates a new SegmentWriteActor.
     fn new(
         wal_type: WalType,
         base_path: PathBuf,
@@ -70,7 +81,7 @@ impl SegmentWriteActor {
             base_path,
             current_file_name,
             create_time,
-            current_file,
+            current_file_buf: current_file,
             current_size: 0,
             file_index: 0,
             max_file_size,
@@ -79,13 +90,16 @@ impl SegmentWriteActor {
         }
     }
 
+    /// Starts processing the [SegmentWriteMessage] operation.
     async fn start_processing(
         mut self,
         in_rx: ReceiverStream<SegmentWriteMessage>,
     ) -> WalResult<()> {
         let mut flush_timer = interval(self.flush_interval);
+
         let in_rx = in_rx.timeout(Duration::from_secs(15));
         tokio::pin!(in_rx);
+
         loop {
             tokio::select! {
                 maybe_msg = in_rx.next() => {
@@ -107,10 +121,12 @@ impl SegmentWriteActor {
                 }
             }
         }
+
         self.flush().await
     }
 
-    // handle message should only return critical errors
+    /// Processes each [SegmentWriteMessage] operation. This should only return critical errors, and
+    /// we should exit upon errors.
     async fn handle_message(&mut self, msg: SegmentWriteMessage) -> WalResult<()> {
         match msg {
             SegmentWriteMessage::WriteData { id, data } => {
@@ -136,9 +152,12 @@ impl SegmentWriteActor {
         Ok(())
     }
 
+    /// Writes the data to the Segment.
+    /// The writes are in this format `<u64(data_len)><[u8;data_len]>`.
+    /// ### CANCEL SAFETY:
+    /// This is not Cancel Safe. We can make it cancel safe by removing the buffering and instead of
+    /// `write_all`, we should use `write`.
     async fn write_data(&mut self, data: Bytes) -> WalResult<()> {
-        // TODO: we should add support to rotate based on time as well, gc event wals should be
-        // rotated quickly
         if self.current_size > 0 && self.current_size + data.len() as u64 > self.max_file_size {
             self.rotate_file().await?;
         }
@@ -146,19 +165,21 @@ impl SegmentWriteActor {
         let data_len = data.len() as u64;
 
         // TODO: this will have data loss if disk is full, we need to fix this late to be CANCEL SAFE.
-        self.current_file.write_u64_le(data_len).await?;
-        self.current_file.write_all(&data).await?;
+        self.current_file_buf.write_u64_le(data_len).await?;
+        self.current_file_buf.write_all(&data).await?;
 
         self.current_size += data_len;
 
         Ok(())
     }
 
+    /// Flush the buffer to the underlying Segment file.
     async fn flush(&mut self) -> WalResult<()> {
-        self.current_file.flush().await?;
+        self.current_file_buf.flush().await?;
         Ok(())
     }
 
+    /// Open a segment for Appending. The file will be truncated if it exists (it shouldn't!).
     async fn open_segment(
         wal_type: &WalType,
         base_path: &PathBuf,
@@ -168,6 +189,7 @@ impl SegmentWriteActor {
             .timestamp_nanos_opt()
             .unwrap_or(Utc::now().timestamp_micros());
 
+        // the name is important. sorting is based on the timestamp and then on file-index.
         let filename = format!(
             "{}_{}_{}.wal{}",
             wal_type.segment_prefix(),
@@ -194,14 +216,15 @@ impl SegmentWriteActor {
     /// Flush and possibly rotate since there are no new writes to the file.
     async fn flush_and_rotate(&mut self) -> WalResult<()> {
         // if the file has not been rotated in these many seconds, let's rotate
-        if Utc::now().signed_duration_since(self.create_time) > ROTATE_IF_STALE {
-            debug!(?ROTATE_IF_STALE, "Rotating file is stale, no entries for a while");
+        if Utc::now().signed_duration_since(self.create_time) > ROTATE_IF_STALE_DURATION {
+            debug!(duration = ?ROTATE_IF_STALE_DURATION, "Rotating stale file, no entries for a while");
             self.rotate_file().await
         } else {
             self.flush().await
         }
     }
 
+    /// Rotates the file. It renames the file on rotation and resets the internal fields.
     async fn rotate_file(&mut self) -> WalResult<()> {
         info!(
             current_size = ?self.current_size,
@@ -221,7 +244,7 @@ impl SegmentWriteActor {
             format!("{}.frozen", to_file_name)
         };
         tokio::fs::rename(&self.current_file_name, &to_file_name).await?;
-        info!(?self.current_file, ?to_file_name, "rename successful");
+        info!(?self.current_file_buf, ?to_file_name, "rename successful");
 
         // open new segment
         self.file_index += 1;
@@ -229,7 +252,7 @@ impl SegmentWriteActor {
             Self::open_segment(&self.wal_type, &self.base_path, self.file_index).await?;
 
         self.current_file_name = file_name;
-        self.current_file = buf_file;
+        self.current_file_buf = buf_file;
         self.create_time = Utc::now();
         self.current_size = 0;
 
@@ -237,7 +260,7 @@ impl SegmentWriteActor {
     }
 }
 
-/// Creates an AppendOnly WAL.
+/// Append Only WAL.
 #[derive(Clone)]
 pub(crate) struct AppendOnlyWal {
     wal_type: WalType,
@@ -248,6 +271,7 @@ pub(crate) struct AppendOnlyWal {
 }
 
 impl AppendOnlyWal {
+    /// Creates an [AppendOnlyWal]
     pub(crate) async fn new(
         wal_type: WalType,
         base_path: PathBuf,
@@ -321,7 +345,7 @@ mod tests {
         let channel_buffer = 10;
 
         let wal_writer = AppendOnlyWal::new(
-            WalType::new("segment"),
+            WalType::new("data"),
             base_path.clone(),
             max_file_size_mb,
             flush_interval_ms,
@@ -480,7 +504,7 @@ mod tests {
         let channel_buffer = 10;
 
         let wal_writer = AppendOnlyWal::new(
-            WalType::new("segment"),
+            WalType::new("data"),
             base_path.clone(),
             max_file_size_mb,
             flush_interval_ms,
@@ -549,7 +573,7 @@ mod tests {
         let channel_buffer = 10;
 
         let wal_writer = AppendOnlyWal::new(
-            WalType::new("segment"),
+            WalType::new("data"),
             base_path.clone(),
             max_file_size_mb,
             flush_interval_ms,

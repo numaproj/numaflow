@@ -1,17 +1,21 @@
 use std::fmt::{Display, Formatter};
 use std::io;
-use thiserror::Error;
 
+/// The result of any operation on the WAL.
 pub(crate) type WalResult<T> = Result<T, Error>;
 
 #[derive(Debug)]
 pub(crate) enum Error {
-    /// Error while writing a particular WAL entry
+    /// Error while writing a particular WAL entry.
     WriteEntry {
+        /// The unique message ID. This can be used for NACK if needed.
         id: String,
+        /// Reason of the error.
         err: String,
     },
+    /// IO Errors.
     Io(io::Error),
+    /// Other errors.
     Other(String),
 }
 
