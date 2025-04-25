@@ -19,9 +19,9 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 
-	v1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	numaflowv1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	scheme "github.com/numaproj/numaflow/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -37,33 +37,34 @@ type PipelinesGetter interface {
 
 // PipelineInterface has methods to work with Pipeline resources.
 type PipelineInterface interface {
-	Create(ctx context.Context, pipeline *v1alpha1.Pipeline, opts v1.CreateOptions) (*v1alpha1.Pipeline, error)
-	Update(ctx context.Context, pipeline *v1alpha1.Pipeline, opts v1.UpdateOptions) (*v1alpha1.Pipeline, error)
+	Create(ctx context.Context, pipeline *numaflowv1alpha1.Pipeline, opts v1.CreateOptions) (*numaflowv1alpha1.Pipeline, error)
+	Update(ctx context.Context, pipeline *numaflowv1alpha1.Pipeline, opts v1.UpdateOptions) (*numaflowv1alpha1.Pipeline, error)
 	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-	UpdateStatus(ctx context.Context, pipeline *v1alpha1.Pipeline, opts v1.UpdateOptions) (*v1alpha1.Pipeline, error)
+	UpdateStatus(ctx context.Context, pipeline *numaflowv1alpha1.Pipeline, opts v1.UpdateOptions) (*numaflowv1alpha1.Pipeline, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.Pipeline, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.PipelineList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*numaflowv1alpha1.Pipeline, error)
+	List(ctx context.Context, opts v1.ListOptions) (*numaflowv1alpha1.PipelineList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.Pipeline, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *numaflowv1alpha1.Pipeline, err error)
 	PipelineExpansion
 }
 
 // pipelines implements PipelineInterface
 type pipelines struct {
-	*gentype.ClientWithList[*v1alpha1.Pipeline, *v1alpha1.PipelineList]
+	*gentype.ClientWithList[*numaflowv1alpha1.Pipeline, *numaflowv1alpha1.PipelineList]
 }
 
 // newPipelines returns a Pipelines
 func newPipelines(c *NumaflowV1alpha1Client, namespace string) *pipelines {
 	return &pipelines{
-		gentype.NewClientWithList[*v1alpha1.Pipeline, *v1alpha1.PipelineList](
+		gentype.NewClientWithList[*numaflowv1alpha1.Pipeline, *numaflowv1alpha1.PipelineList](
 			"pipelines",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			namespace,
-			func() *v1alpha1.Pipeline { return &v1alpha1.Pipeline{} },
-			func() *v1alpha1.PipelineList { return &v1alpha1.PipelineList{} }),
+			func() *numaflowv1alpha1.Pipeline { return &numaflowv1alpha1.Pipeline{} },
+			func() *numaflowv1alpha1.PipelineList { return &numaflowv1alpha1.PipelineList{} },
+		),
 	}
 }

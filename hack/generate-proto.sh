@@ -11,7 +11,7 @@ ensure_vendor
 
 make_fake_paths
 # This overrides the existing trap
-trap 'cd "${FAKE_GOPATH}" && go clean -modcache && cd /tmp && rm -rf "${FAKE_GOPATH}"' EXIT
+trap 'cd "${FAKE_GOPATH}" && go clean -modcache && rm -rf "${FAKE_GOPATH}"' EXIT
 export GOPATH="${FAKE_GOPATH}"
 export PATH="${GOPATH}/bin:${PATH}"
 cd "${FAKE_REPOPATH}"
