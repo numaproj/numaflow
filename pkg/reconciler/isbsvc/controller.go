@@ -23,6 +23,7 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
@@ -88,8 +89,20 @@ func (r *interStepBufferServiceReconciler) Reconcile(ctx context.Context, req ct
 			return ctrl.Result{}, err
 		}
 	}
-	if err := r.client.Status().Update(ctx, isbSvcCopy); err != nil {
-		return ctrl.Result{}, err
+	if !equality.Semantic.DeepEqual(isbSvc.Status, isbSvcCopy.Status) {
+		// Use Server Side Apply
+		statusPatch := &dfv1.InterStepBufferService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:          isbSvc.Name,
+				Namespace:     isbSvc.Namespace,
+				ManagedFields: nil,
+			},
+			TypeMeta: isbSvc.TypeMeta,
+			Status:   isbSvcCopy.Status,
+		}
+		if err := r.client.Status().Patch(ctx, statusPatch, client.Apply, client.ForceOwnership, client.FieldOwner(dfv1.Project)); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 	return ctrl.Result{}, reconcileErr
 }

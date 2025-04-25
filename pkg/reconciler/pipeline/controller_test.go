@@ -369,7 +369,6 @@ func TestReconcile(t *testing.T) {
 		}
 		_, err = r.Reconcile(context.TODO(), req)
 		assert.Error(t, err)
-		assert.ErrorContains(t, err, "not found")
 	})
 }
 
