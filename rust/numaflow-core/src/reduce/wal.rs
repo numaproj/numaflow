@@ -96,6 +96,7 @@ impl Wal {
 }
 
 /// An entry in the GC WAL about the GC action.
+#[derive(Debug)]
 pub(crate) struct GcEventEntry {
     /// Start time of the Window
     start_time: DateTime<Utc>,
@@ -177,10 +178,6 @@ mod tests {
         .await
         .unwrap();
 
-        // Send rotate command to GC WAL
-        tx.send(SegmentWriteMessage::Rotate { on_size: false })
-            .await
-            .unwrap();
         drop(tx);
         handle.await.unwrap().unwrap();
 
@@ -225,10 +222,6 @@ mod tests {
             .unwrap();
         }
 
-        // Send rotate command to segment WAL
-        tx.send(SegmentWriteMessage::Rotate { on_size: false })
-            .await
-            .unwrap();
         drop(tx);
         handle.await.unwrap().unwrap();
 

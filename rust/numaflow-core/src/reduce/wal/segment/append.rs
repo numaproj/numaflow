@@ -122,7 +122,8 @@ impl SegmentWriteActor {
             }
         }
 
-        self.flush().await
+        info!(?self.wal_type, "Stopping, doing a final flush and rotate!");
+        self.rotate_file(false).await
     }
 
     /// Processes each [SegmentWriteMessage] operation. This should only return critical errors, and
@@ -139,7 +140,7 @@ impl SegmentWriteActor {
             SegmentWriteMessage::Rotate { on_size } => {
                 // Rotate if forced (`on_size` is false) OR if size threshold is met
                 if !on_size || self.current_size >= self.max_file_size {
-                    self.rotate_file().await?;
+                    self.rotate_file(true).await?;
                 } else {
                     debug!(
                         current_size = self.current_size,
@@ -159,7 +160,7 @@ impl SegmentWriteActor {
     /// `write_all`, we should use `write`.
     async fn write_data(&mut self, data: Bytes) -> WalResult<()> {
         if self.current_size > 0 && self.current_size + data.len() as u64 > self.max_file_size {
-            self.rotate_file().await?;
+            self.rotate_file(true).await?;
         }
 
         let data_len = data.len() as u64;
@@ -218,14 +219,15 @@ impl SegmentWriteActor {
         // if the file has not been rotated in these many seconds, let's rotate
         if Utc::now().signed_duration_since(self.create_time) > ROTATE_IF_STALE_DURATION {
             debug!(duration = ?ROTATE_IF_STALE_DURATION, "Rotating stale file, no entries for a while");
-            self.rotate_file().await
+            self.rotate_file(true).await
         } else {
             self.flush().await
         }
     }
 
-    /// Rotates the file. It renames the file on rotation and resets the internal fields.
-    async fn rotate_file(&mut self) -> WalResult<()> {
+    /// Rotates the file and opens a new one if `open_new` is `true`. It renames the file on rotation
+    /// and resets the internal fields.
+    async fn rotate_file(&mut self, open_new: bool) -> WalResult<()> {
         info!(
             current_size = ?self.current_size,
             file_name = ?self.current_file_name,
@@ -244,17 +246,19 @@ impl SegmentWriteActor {
             format!("{}.frozen", to_file_name)
         };
         tokio::fs::rename(&self.current_file_name, &to_file_name).await?;
-        info!(?self.current_file_buf, ?to_file_name, "rename successful");
+        info!(?self.current_file_name, ?to_file_name, "rename successful");
 
-        // open new segment
-        self.file_index += 1;
-        let (file_name, buf_file) =
-            Self::open_segment(&self.wal_type, &self.base_path, self.file_index).await?;
+        if open_new {
+            // open new segment
+            self.file_index += 1;
+            let (file_name, buf_file) =
+                Self::open_segment(&self.wal_type, &self.base_path, self.file_index).await?;
 
-        self.current_file_name = file_name;
-        self.current_file_buf = buf_file;
-        self.create_time = Utc::now();
-        self.current_size = 0;
+            self.current_file_name = file_name;
+            self.current_file_buf = buf_file;
+            self.create_time = Utc::now();
+            self.current_size = 0;
+        }
 
         Ok(())
     }
@@ -626,18 +630,11 @@ mod tests {
         let mut files: Vec<_> = fs::read_dir(&base_path)
             .unwrap()
             .map(|entry| entry.unwrap().path())
-            .filter(|path| {
-                path.extension()
-                    .map_or(false, |ext| ext == "wal" || ext == "frozen")
-            })
+            .filter(|path| path.extension().map_or(false, |ext| ext == "frozen"))
             .collect();
         files.sort();
 
-        assert_eq!(
-            files.len(),
-            2,
-            "There should be 2 WAL segment files (one rotated and one active)"
-        );
+        assert_eq!(files.len(), 2, "There should be 2 WAL segment files");
 
         // Verify the rotated file is renamed correctly
         assert!(files[0]

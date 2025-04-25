@@ -337,3 +337,208 @@ impl Compactor {
         Ok((oldest_time_map, scanned_files))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::Bytes;
+    use chrono::TimeZone;
+    use prost_types;
+    use std::fs;
+    use tempfile::tempdir;
+    use tokio::sync::mpsc;
+    use tokio_stream::wrappers::ReceiverStream;
+
+    #[tokio::test]
+    async fn test_build_aligned_compaction() -> WalResult<()> {
+        // Create a temporary directory for the test
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+
+        // Create WAL directories
+        fs::create_dir_all(path.join(WalType::Gc.to_string())).unwrap();
+        fs::create_dir_all(path.join(WalType::Data.to_string())).unwrap();
+        fs::create_dir_all(path.join(WalType::Compact.to_string())).unwrap();
+
+        // Create a compactor with default test values
+        let compactor = Compactor::new(
+            path.clone(),
+            WindowKind::Aligned,
+            100,  // max_file_size_mb
+            1000, // flush_interval_ms
+            1000, // channel_buffer_size
+        )
+        .await?;
+
+        // Create some test GC events with different timestamps
+        let gc_events = vec![
+            GcEvent {
+                end_time: Some(prost_types::Timestamp {
+                    seconds: 1000,
+                    nanos: 0,
+                }),
+                ..Default::default()
+            },
+            GcEvent {
+                end_time: Some(prost_types::Timestamp {
+                    seconds: 2000,
+                    nanos: 0,
+                }),
+                ..Default::default()
+            },
+        ];
+
+        // Create a WAL writer for GC events
+        let gc_writer = AppendOnlyWal::new(
+            Wal::new(WalType::Gc),
+            path.clone(),
+            100,  // max_file_size_mb
+            1000, // flush_interval_ms
+            100,  // channel_buffer_size
+        )
+        .await?;
+
+        // Set up streaming write for the GC WAL
+        let (tx, rx) = mpsc::channel(100);
+        let (_result_rx, writer_handle) =
+            gc_writer.streaming_write(ReceiverStream::new(rx)).await?;
+
+        // Write GC events to the WAL
+        for event in gc_events {
+            let mut buf = Vec::new();
+            prost::Message::encode(&event, &mut buf)
+                .map_err(|e| format!("Failed to encode GC event: {e}"))?;
+            tx.send(SegmentWriteMessage::WriteData {
+                id: None,
+                data: Bytes::from(buf),
+            })
+            .await
+            .map_err(|e| format!("Failed to send data: {e}"))?;
+        }
+
+        // Drop the sender to close the channel
+        drop(tx);
+
+        // Wait for the writer to complete
+        writer_handle
+            .await
+            .map_err(|e| format!("Writer failed: {e}"))??;
+
+        // Run build_aligned_compaction
+        let (oldest_time, scanned_files) = compactor.build_aligned_compaction().await?;
+
+        // Verify the results
+        assert_eq!(oldest_time, Utc.timestamp_opt(2000, 0).unwrap());
+        assert!(!scanned_files.is_empty());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_build_unaligned_compaction() -> WalResult<()> {
+        // Create a temporary directory for the test
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+
+        // Create WAL directories
+        fs::create_dir_all(path.join(WalType::Gc.to_string())).unwrap();
+        fs::create_dir_all(path.join(WalType::Data.to_string())).unwrap();
+        fs::create_dir_all(path.join(WalType::Compact.to_string())).unwrap();
+
+        // Create a compactor with default test values
+        let compactor = Compactor::new(
+            path.clone(),
+            WindowKind::Unaligned,
+            100,  // max_file_size_mb
+            1000, // flush_interval_ms
+            1000, // channel_buffer_size
+        )
+        .await?;
+
+        // Create some test GC events with different timestamps and keys
+        let gc_events = vec![
+            GcEvent {
+                end_time: Some(prost_types::Timestamp {
+                    seconds: 1000,
+                    nanos: 0,
+                }),
+                keys: vec!["key1".to_string(), "key2".to_string()],
+                ..Default::default()
+            },
+            GcEvent {
+                end_time: Some(prost_types::Timestamp {
+                    seconds: 2000,
+                    nanos: 0,
+                }),
+                keys: vec!["key1".to_string(), "key2".to_string()],
+                ..Default::default()
+            },
+            GcEvent {
+                end_time: Some(prost_types::Timestamp {
+                    seconds: 1500,
+                    nanos: 0,
+                }),
+                keys: vec!["key3".to_string(), "key4".to_string()],
+                ..Default::default()
+            },
+        ];
+
+        // Create a WAL writer for GC events
+        let gc_writer = AppendOnlyWal::new(
+            Wal::new(WalType::Gc),
+            path.clone(),
+            100,  // max_file_size_mb
+            1000, // flush_interval_ms
+            100,  // channel_buffer_size
+        )
+        .await?;
+
+        // Set up streaming write for the GC WAL
+        let (tx, rx) = mpsc::channel(100);
+        let (_result_rx, writer_handle) =
+            gc_writer.streaming_write(ReceiverStream::new(rx)).await?;
+
+        // Write GC events to the WAL
+        for event in gc_events {
+            let mut buf = Vec::new();
+            prost::Message::encode(&event, &mut buf)
+                .map_err(|e| format!("Failed to encode GC event: {e}"))?;
+            tx.send(SegmentWriteMessage::WriteData {
+                id: None,
+                data: Bytes::from(buf),
+            })
+            .await
+            .map_err(|e| format!("Failed to send data: {e}"))?;
+        }
+
+        // Drop the sender to close the channel
+        drop(tx);
+
+        // Wait for the writer to complete
+        writer_handle
+            .await
+            .map_err(|e| format!("Writer failed: {e}"))??;
+
+        // Run build_unaligned_compaction
+        let (oldest_time_map, scanned_files) = compactor.build_unaligned_compaction().await?;
+
+        // Verify the results
+        assert!(!scanned_files.is_empty());
+        assert_eq!(oldest_time_map.len(), 2); // We expect two different key combinations
+
+        // Check the timestamps for each key combination
+        let key1_2 = "key1:key2".to_string();
+        let key3_4 = "key3:key4".to_string();
+
+        assert_eq!(
+            oldest_time_map.get(&key1_2),
+            Some(&Utc.timestamp_opt(2000, 0).unwrap())
+        );
+        assert_eq!(
+            oldest_time_map.get(&key3_4),
+            Some(&Utc.timestamp_opt(1500, 0).unwrap())
+        );
+
+        Ok(())
+    }
+}
