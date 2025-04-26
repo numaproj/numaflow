@@ -3,7 +3,8 @@ use crate::serving_store::StoreEntry;
 use async_nats::jetstream::kv::Store;
 use async_nats::jetstream::Context;
 use chrono::Utc;
-use tracing::info;
+use tokio::task::JoinSet;
+use tracing::{info, trace};
 
 /// Nats serving store to store the serving responses.
 #[derive(Clone)]
@@ -30,7 +31,7 @@ impl NatsServingStore {
         origin: &str,
         payloads: Vec<StoreEntry>,
     ) -> crate::Result<()> {
-        let mut tasks = Vec::new();
+        let mut jhset = JoinSet::new();
 
         for payload in payloads {
             let id = format!(
@@ -43,23 +44,19 @@ impl NatsServingStore {
                     .unwrap_or(Utc::now().timestamp_micros())
             );
 
-            info!("Putting datum with id {} and payload {:?}", id, payload);
+            trace!(?id, length = ?payload.value.len(), "Putting datum");
 
             let store = self.store.clone();
-            let task = tokio::spawn(async move {
+            jhset.spawn(async move {
                 store
                     .put(id, payload.value)
                     .await
                     .map_err(|e| crate::Error::Sink(format!("Failed to put datum: {e:?}")))
             });
-
-            tasks.push(task);
         }
 
-        for task in tasks {
-            let result = task
-                .await
-                .map_err(|e| crate::Error::Sink(format!("Task failed: {e:?}")))?;
+        while let Some(task) = jhset.join_next().await {
+            let result = task.map_err(|e| crate::Error::Sink(format!("Task failed: {e:?}")))?;
             result?; // Propagate the first error, if any
         }
         Ok(())

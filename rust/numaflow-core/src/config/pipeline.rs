@@ -208,6 +208,7 @@ pub(crate) struct UserDefinedStoreConfig {
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub(crate) struct NatsStoreConfig {
+    /// Response (or result) Store Name.
     pub(crate) rs_store_name: String,
 }
 

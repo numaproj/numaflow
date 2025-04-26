@@ -16,7 +16,13 @@ pub(crate) enum ServingStore {
 /// Entry in the serving store.
 #[derive(Clone, Debug)]
 pub(crate) struct StoreEntry {
+    /// Pod Hash is for filtering the stream by each request originating pod while listening for
+    /// "put" onto the KV store. This is used only on ISB KV store and this enables SSE (converse is
+    /// that SSE is not supported on user defined store).
     pub(crate) pod_hash: String,
+    /// Unique ID Of the request to which the result belongs. There could be multiple results for
+    /// the same request.
     pub(crate) id: String,
+    /// The result of the computation.
     pub(crate) value: Bytes,
 }

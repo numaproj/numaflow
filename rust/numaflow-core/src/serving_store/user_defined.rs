@@ -1,5 +1,6 @@
 use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
 use numaflow_pb::clients::serving::{Payload, PutRequest};
+use tokio::task::JoinSet;
 use tonic::transport::Channel;
 
 use crate::config::pipeline::UserDefinedStoreConfig;
@@ -26,13 +27,13 @@ impl UserDefinedStore {
         origin: &str,
         payloads: Vec<StoreEntry>,
     ) -> crate::Result<()> {
-        let mut tasks = Vec::new();
+        let mut jhset = JoinSet::new();
 
         for payload in payloads {
             let origin = origin.to_string();
             let mut client = self.client.clone();
 
-            let task = tokio::spawn(async move {
+            jhset.spawn(async move {
                 let request = PutRequest {
                     id: payload.id,
                     payloads: vec![Payload {
@@ -44,14 +45,10 @@ impl UserDefinedStore {
                     crate::Error::Sink(format!("gRPC Put request failed on serving store: {e:?}"))
                 })
             });
-
-            tasks.push(task);
         }
 
-        for task in tasks {
-            let result = task
-                .await
-                .map_err(|e| crate::Error::Sink(format!("Task failed: {e:?}")))?;
+        while let Some(task) = jhset.join_next().await {
+            let result = task.map_err(|e| crate::Error::Sink(format!("Task failed: {e:?}")))?;
             result?; // Propagate the first error, if any
         }
 

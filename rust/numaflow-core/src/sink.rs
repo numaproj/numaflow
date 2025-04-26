@@ -413,7 +413,7 @@ impl SinkWriter {
                             break;
                         }
                     };
-                    info!(len = ?batch.len(), "Received batch of messages");
+
                     // we are in shutting down mode, we will not be writing to the sink
                     // tell tracker to nack the messages.
                     if self.shutting_down {
@@ -856,6 +856,7 @@ impl SinkWriter {
             ));
         };
 
+        // convert Message to StoreEntry
         let mut payloads = Vec::with_capacity(serving_msgs.len());
         for msg in serving_msgs {
             let id = msg
@@ -875,6 +876,7 @@ impl SinkWriter {
             });
         }
 
+        // push to corresponding store
         match serving_store {
             ServingStore::UserDefined(ud_store) => {
                 ud_store.put_datum(get_vertex_name(), payloads).await?;
@@ -883,6 +885,7 @@ impl SinkWriter {
                 nats_store.put_datum(get_vertex_name(), payloads).await?;
             }
         }
+
         Ok(())
     }
 
