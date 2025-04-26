@@ -17,8 +17,8 @@
 use crate::reduce::wal::error::WalResult;
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use crate::reduce::wal::segment::replay::{ReplayWal, SegmentEntry};
-use crate::reduce::wal::GcEventEntry;
-use crate::reduce::wal::WalType;
+use crate::reduce::wal::segment::GcEventEntry;
+use crate::reduce::wal::segment::WalType;
 use crate::shared::grpc::utc_from_timestamp;
 use chrono::{DateTime, Utc};
 use numaflow_pb::objects::isb;

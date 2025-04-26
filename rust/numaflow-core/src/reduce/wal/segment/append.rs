@@ -1,5 +1,5 @@
 use crate::reduce::wal::error::WalResult;
-use crate::reduce::wal::WalType;
+use crate::reduce::wal::segment::WalType;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use std::path::Path;
@@ -336,7 +336,7 @@ impl AppendOnlyWal {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::reduce::wal::WalType;
+    use crate::reduce::wal::segment::WalType;
     use bytes::{Bytes, BytesMut};
     use futures::stream::StreamExt;
     use std::fs;
