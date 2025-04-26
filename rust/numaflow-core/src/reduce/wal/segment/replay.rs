@@ -1,5 +1,5 @@
 use crate::reduce::wal::error::WalResult;
-use crate::reduce::wal::Wal;
+use crate::reduce::wal::WalType;
 use bytes::Bytes;
 use std::cmp::Ordering;
 use std::fs;
@@ -31,13 +31,13 @@ pub(crate) enum SegmentEntry {
 /// Replay the WAL in-order.
 #[derive(Debug, Clone)]
 pub(crate) struct ReplayWal {
-    wal_type: Wal,
+    wal_type: WalType,
     base_path: PathBuf,
 }
 
 impl ReplayWal {
     /// Creates a new Replayer for the WAL.
-    pub(crate) fn new(wal_type: Wal, base_path: PathBuf) -> Self {
+    pub(crate) fn new(wal_type: WalType, base_path: PathBuf) -> Self {
         Self {
             wal_type,
             base_path,
@@ -152,9 +152,9 @@ fn sort_filenames(mut files: Vec<PathBuf>) -> Vec<PathBuf> {
 }
 
 /// List all the files for the given [WalType].
-fn list_files(wal_type: &Wal, base_path: PathBuf) -> Vec<PathBuf> {
+fn list_files(wal_type: &WalType, base_path: PathBuf) -> Vec<PathBuf> {
     fs::read_dir(&base_path)
-        .expect(&format!("directory {} to be present", base_path.display()))
+        .unwrap_or_else(|_| panic!("directory {} to be present", base_path.display()))
         .map(|entry| entry.expect("expect dirEntry to be good").path())
         .filter(|path| path.is_file())
         .filter(|path| {
@@ -162,9 +162,9 @@ fn list_files(wal_type: &Wal, base_path: PathBuf) -> Vec<PathBuf> {
                 .expect("filename expected")
                 .to_str()
                 .expect("conversion should work")
-                .starts_with(&wal_type.segment_prefix())
+                .starts_with(wal_type.segment_prefix())
         })
-        .filter(|path| path.extension().map_or(false, |ext| ext == "frozen"))
+        .filter(|path| path.extension().is_some_and(|ext| ext == "frozen"))
         .collect::<Vec<_>>()
 }
 
@@ -188,7 +188,7 @@ mod tests {
             File::create(base_path.join("other_file.frozen")).expect("Failed to create file");
 
         // Call the function
-        let result = list_files(&Wal::new(WalType::Data), base_path);
+        let result = list_files(&WalType::Data, base_path);
 
         // Verify the result
         let mut result_paths: Vec<String> = result

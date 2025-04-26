@@ -1,7 +1,8 @@
 use crate::reduce::wal::error::WalResult;
-use crate::reduce::wal::Wal;
+use crate::reduce::wal::WalType;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
+use std::path::Path;
 use std::{io, path::PathBuf};
 use tokio::io::BufWriter;
 use tokio::task::JoinHandle;
@@ -37,7 +38,7 @@ pub(crate) enum SegmentWriteMessage {
 /// Append only Segment writer that manages and rotates the WAL Segment.
 struct SegmentWriteActor {
     /// Kind of WAL
-    wal_type: Wal,
+    wal_type: WalType,
     /// Path where the WALs are persisted.
     base_path: PathBuf,
     /// Name of the current WAL Segment.
@@ -67,7 +68,7 @@ impl Drop for SegmentWriteActor {
 impl SegmentWriteActor {
     /// Creates a new SegmentWriteActor.
     fn new(
-        wal_type: Wal,
+        wal_type: WalType,
         base_path: PathBuf,
         current_file_name: String,
         create_time: DateTime<Utc>,
@@ -182,8 +183,8 @@ impl SegmentWriteActor {
 
     /// Open a segment for Appending. The file will be truncated if it exists (it shouldn't!).
     async fn open_segment(
-        wal_type: &Wal,
-        base_path: &PathBuf,
+        wal_type: &WalType,
+        base_path: &Path,
         idx: usize,
     ) -> WalResult<(String, BufWriter<File>)> {
         let timestamp_nanos = Utc::now()
@@ -267,7 +268,7 @@ impl SegmentWriteActor {
 /// Append Only WAL.
 #[derive(Clone)]
 pub(crate) struct AppendOnlyWal {
-    wal_type: Wal,
+    wal_type: WalType,
     base_path: PathBuf,
     max_file_size_mb: u64,
     flush_interval_ms: u64,
@@ -277,7 +278,7 @@ pub(crate) struct AppendOnlyWal {
 impl AppendOnlyWal {
     /// Creates an [AppendOnlyWal]
     pub(crate) async fn new(
-        wal_type: Wal,
+        wal_type: WalType,
         base_path: PathBuf,
         max_file_size_mb: u64,
         flush_interval_ms: u64,
@@ -350,7 +351,7 @@ mod tests {
         let channel_buffer = 10;
 
         let wal_writer = AppendOnlyWal::new(
-            Wal::new(WalType::Data),
+            WalType::Data,
             base_path.clone(),
             max_file_size_mb,
             flush_interval_ms,
@@ -360,7 +361,7 @@ mod tests {
         .expect("WAL creation failed");
 
         let (wal_tx, wal_rx) = mpsc::channel::<SegmentWriteMessage>(channel_buffer);
-        let (mut result_rx, writer_handle) = wal_writer
+        let (mut result_rx, _writer_handle) = wal_writer
             .streaming_write(ReceiverStream::new(wal_rx))
             .await
             .expect("Failed to start WAL service");
@@ -509,7 +510,7 @@ mod tests {
         let channel_buffer = 10;
 
         let wal_writer = AppendOnlyWal::new(
-            Wal::new(WalType::Data),
+            WalType::Data,
             base_path.clone(),
             max_file_size_mb,
             flush_interval_ms,
@@ -519,7 +520,7 @@ mod tests {
         .expect("failed to create wal");
 
         let (wal_tx, wal_rx) = mpsc::channel::<SegmentWriteMessage>(channel_buffer);
-        let (mut result_rx, writer_handle) = wal_writer
+        let (mut result_rx, _writer_handle) = wal_writer
             .streaming_write(ReceiverStream::new(wal_rx))
             .await
             .expect("Failed to start WAL service");
@@ -578,7 +579,7 @@ mod tests {
         let channel_buffer = 10;
 
         let wal_writer = AppendOnlyWal::new(
-            Wal::new(WalType::Data),
+            WalType::Data,
             base_path.clone(),
             max_file_size_mb,
             flush_interval_ms,
@@ -588,7 +589,7 @@ mod tests {
         .expect("failed to create wal");
 
         let (wal_tx, wal_rx) = mpsc::channel::<SegmentWriteMessage>(channel_buffer);
-        let (_result_rx, writer_handle) = wal_writer
+        let (_result_rx, _writer_handle) = wal_writer
             .streaming_write(ReceiverStream::new(wal_rx))
             .await
             .expect("Failed to start WAL service");

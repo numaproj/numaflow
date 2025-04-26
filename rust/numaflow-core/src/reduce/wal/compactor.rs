@@ -17,8 +17,8 @@
 use crate::reduce::wal::error::WalResult;
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use crate::reduce::wal::segment::replay::{ReplayWal, SegmentEntry};
+use crate::reduce::wal::GcEventEntry;
 use crate::reduce::wal::WalType;
-use crate::reduce::wal::{GcEventEntry, Wal};
 use crate::shared::grpc::utc_from_timestamp;
 use chrono::{DateTime, Utc};
 use numaflow_pb::objects::isb;
@@ -68,11 +68,11 @@ impl Compactor {
         flush_interval_ms: u64,
         channel_buffer_size: usize,
     ) -> WalResult<Self> {
-        let segment_wal = ReplayWal::new(Wal::new(WalType::Data), path.clone());
-        let gc_wal = ReplayWal::new(Wal::new(WalType::Gc), path.clone());
-        let compaction_ro_wal = ReplayWal::new(Wal::new(WalType::Compact), path.clone());
+        let segment_wal = ReplayWal::new(WalType::Data, path.clone());
+        let gc_wal = ReplayWal::new(WalType::Gc, path.clone());
+        let compaction_ro_wal = ReplayWal::new(WalType::Compact, path.clone());
         let compaction_ao_wal = AppendOnlyWal::new(
-            Wal::new(WalType::Compact),
+            WalType::Compact,
             path.clone(),
             max_file_size_mb,
             flush_interval_ms,
@@ -218,7 +218,7 @@ impl Compactor {
                     match self.kind {
                         WindowKind::Aligned => {
                             // Check if the message should be retained
-                            if Self::should_retain_message(&data, &compaction_map)? {
+                            if Self::should_retain_message(&data, compaction_map)? {
                                 // Send the data to the compaction WAL
                                 wal_tx
                                     .send(SegmentWriteMessage::WriteData { id: None, data })
@@ -229,7 +229,7 @@ impl Compactor {
                             }
                         }
                         WindowKind::Unaligned => {
-                            if Self::should_retain_unaligned_message(&data, &compaction_map)? {
+                            if Self::should_retain_unaligned_message(&data, compaction_map)? {
                                 // Send the data to the compaction WAL
                                 wal_tx
                                     .send(SegmentWriteMessage::WriteData { id: None, data })
@@ -332,7 +332,7 @@ impl Compactor {
         let keys = msg
             .header
             .as_ref()
-            .and_then(|header| Some(header.keys.clone()))
+            .map(|header| header.keys.clone())
             .unwrap_or_default();
 
         // Join the keys with the separator
@@ -447,10 +447,13 @@ impl Compactor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::message::{Message, MessageID};
+    use crate::shared::grpc::prost_timestamp_from_utc;
     use bytes::Bytes;
     use chrono::TimeZone;
     use prost_types;
     use std::fs;
+    use std::sync::Arc;
     use tempfile::tempdir;
     use tokio::sync::mpsc;
     use tokio_stream::wrappers::ReceiverStream;
@@ -496,7 +499,7 @@ mod tests {
 
         // Create a WAL writer for GC events
         let gc_writer = AppendOnlyWal::new(
-            Wal::new(WalType::Gc),
+            WalType::Gc,
             path.clone(),
             100,  // max_file_size_mb
             1000, // flush_interval_ms
@@ -591,7 +594,7 @@ mod tests {
 
         // Create a WAL writer for GC events
         let gc_writer = AppendOnlyWal::new(
-            Wal::new(WalType::Gc),
+            WalType::Gc,
             path.clone(),
             100,  // max_file_size_mb
             1000, // flush_interval_ms
@@ -646,5 +649,159 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    // FIXME
+    #[tokio::test]
+    #[ignore]
+    async fn test_gc_wal_and_compaction_with_multiple_files() {
+        let test_path = tempfile::tempdir().unwrap().into_path();
+
+        // Create GC WAL
+        let gc_wal = AppendOnlyWal::new(
+            WalType::Gc,
+            test_path.clone(),
+            1,    // 1MB
+            1000, // 1s flush interval
+            500,  // channel buffer
+        )
+        .await
+        .unwrap();
+
+        // Create and write 2 GC events
+        let gc_start_1 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 5).unwrap();
+        let gc_end_1 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 10).unwrap();
+        let gc_event_1 = GcEvent {
+            start_time: Some(prost_timestamp_from_utc(gc_start_1)),
+            end_time: Some(prost_timestamp_from_utc(gc_end_1)),
+            keys: vec![],
+        };
+
+        let gc_start_2 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 15).unwrap();
+        let gc_end_2 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 20).unwrap();
+        let gc_event_2 = GcEvent {
+            start_time: Some(prost_timestamp_from_utc(gc_start_2)),
+            end_time: Some(prost_timestamp_from_utc(gc_end_2)),
+            keys: vec![],
+        };
+
+        let (tx, rx) = tokio::sync::mpsc::channel(10);
+        let (_offset_stream, handle) = gc_wal
+            .streaming_write(ReceiverStream::new(rx))
+            .await
+            .unwrap();
+
+        tx.send(SegmentWriteMessage::WriteData {
+            id: Some("gc1".to_string()),
+            data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event_1)),
+        })
+        .await
+        .unwrap();
+
+        tx.send(SegmentWriteMessage::WriteData {
+            id: Some("gc2".to_string()),
+            data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event_2)),
+        })
+        .await
+        .unwrap();
+
+        // Send rotate command to GC WAL
+        tx.send(SegmentWriteMessage::Rotate { on_size: false })
+            .await
+            .unwrap();
+        drop(tx);
+        handle.await.unwrap().unwrap();
+
+        // Create segment WAL
+        let segment_wal = AppendOnlyWal::new(
+            WalType::Data,
+            test_path.clone(),
+            1,    // 1MB
+            1000, // 1s flush interval
+            500,  // channel buffer
+        )
+        .await
+        .unwrap();
+
+        // Write 1000 segment entries across 10 files
+        let (tx, rx) = tokio::sync::mpsc::channel(100);
+        let (_offset_stream, handle) = segment_wal
+            .streaming_write(ReceiverStream::new(rx))
+            .await
+            .unwrap();
+
+        let start_time = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 0).unwrap();
+        let time_increment = chrono::Duration::seconds(1);
+
+        for i in 1..=1000 {
+            let mut message = Message::default();
+            message.event_time = start_time + (time_increment * i);
+            message.keys = Arc::from(vec!["test-key".to_string()]);
+            message.value = bytes::Bytes::from(vec![1, 2, 3]);
+            message.id = MessageID {
+                vertex_name: "test-vertex".to_string().into(),
+                offset: i.to_string().into(),
+                index: 0,
+            };
+
+            let proto_message: Bytes = message.try_into().unwrap();
+            tx.send(SegmentWriteMessage::WriteData {
+                id: Some(format!("msg-{}", i)),
+                data: proto_message,
+            })
+            .await
+            .unwrap();
+
+            // Rotate every 100 messages to create 10 files
+            if i % 100 == 0 {
+                tx.send(SegmentWriteMessage::Rotate { on_size: false })
+                    .await
+                    .unwrap();
+            }
+        }
+        drop(tx);
+        handle.await.unwrap().unwrap();
+
+        // Create and run compactor
+        let compactor = Compactor::new(
+            test_path.clone(),
+            WindowKind::Aligned,
+            1,    // 1MB
+            1000, // 1s flush interval
+            500,  // channel buffer
+        )
+        .await
+        .unwrap();
+
+        compactor.compact().await.unwrap();
+
+        // Verify compacted data
+        let compaction_wal = ReplayWal::new(WalType::Compact, test_path);
+        let (mut rx, handle) = compaction_wal.streaming_read().unwrap();
+
+        let mut remaining_message_count = 0;
+        while let Some(entry) = rx.next().await {
+            if let SegmentEntry::DataEntry { data, .. } = entry {
+                let msg: numaflow_pb::objects::isb::Message = prost::Message::decode(data).unwrap();
+                if let Some(header) = msg.header {
+                    if let Some(message_info) = header.message_info {
+                        let event_time = utc_from_timestamp(message_info.event_time);
+                        assert!(
+                            event_time > gc_end_2,
+                            "Found message with event_time <= gc_end_2"
+                        );
+                    }
+                }
+                remaining_message_count += 1;
+            }
+        }
+        handle.await.unwrap().unwrap();
+
+        // Verify the number of remaining messages
+        // Messages with event_time <= gc_end_2 should be removed
+        assert_eq!(
+            remaining_message_count, 980,
+            "Expected 980 messages to remain after compaction"
+        );
     }
 }

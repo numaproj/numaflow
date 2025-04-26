@@ -33,12 +33,6 @@ pub(crate) mod compactor;
 /// All the errors WAL could face.
 pub(crate) mod error;
 
-/// Wal defines a new Write Ahead Log.
-#[derive(Debug, Clone)]
-pub(crate) struct Wal {
-    typ: WalType,
-}
-
 /// WAL is made of three types, the Data, GC, and Compaction WAL.
 #[derive(Debug, Clone)]
 pub(crate) enum WalType {
@@ -50,25 +44,11 @@ pub(crate) enum WalType {
     Compact,
 }
 
-impl std::fmt::Display for WalType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            WalType::Data => write!(f, "Data"),
-            WalType::Gc => write!(f, "GC"),
-            WalType::Compact => write!(f, "Compact"),
-        }
-    }
-}
-
-impl Wal {
-    fn new(typ: WalType) -> Self {
-        Self { typ }
-    }
-
+impl WalType {
     /// Some WALs have footers and some does not. It is mostly for optimizations.
-    fn has_footer(&self) -> bool {
-        // TODO: set footer to true for Segment and Compaction for optimizations.
-        match self.typ {
+    pub(crate) fn has_footer(&self) -> bool {
+        // TODO: Set footer to true for Segment and Compaction for optimizations if needed.
+        match self {
             WalType::Data => false,
             WalType::Gc => false,
             WalType::Compact => false,
@@ -76,21 +56,31 @@ impl Wal {
     }
 
     /// Prefix of the WAL Segment as stored in the disk.
-    fn segment_prefix(&self) -> String {
-        match self.typ {
-            WalType::Data => "data".to_string(),
-            WalType::Gc => "gc".to_string(),
-            WalType::Compact => "compaction".to_string(),
+    pub(crate) fn segment_prefix(&self) -> &'static str {
+        match self {
+            WalType::Data => "data",
+            WalType::Gc => "gc",
+            WalType::Compact => "compaction",
         }
     }
 
     /// Suffix of the WAL Segment as stored in the disk. Not all WAL Segments have prefix,
     /// it is used to filter our work-in-progress WAL Segments that are derived from other WALs.
-    fn segment_suffix(&self) -> String {
-        match self.typ {
-            WalType::Data => "".to_string(),
-            WalType::Gc => "".to_string(),
-            WalType::Compact => "".to_string(),
+    pub(crate) fn segment_suffix(&self) -> &'static str {
+        match self {
+            WalType::Data => "",
+            WalType::Gc => "",
+            WalType::Compact => "",
+        }
+    }
+}
+
+impl std::fmt::Display for WalType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WalType::Data => write!(f, "Data"),
+            WalType::Gc => write!(f, "GC"),
+            WalType::Compact => write!(f, "Compact"),
         }
     }
 }
@@ -122,7 +112,7 @@ impl From<GcEventEntry> for GcEvent {
         Self {
             start_time: Some(prost_timestamp_from_utc(value.start_time)),
             end_time: Some(prost_timestamp_from_utc(value.end_time)),
-            keys: value.keys.unwrap_or(vec![]),
+            keys: value.keys.unwrap_or_default(),
         }
     }
 }
@@ -146,7 +136,7 @@ mod tests {
 
         // Create GC WAL
         let gc_wal = AppendOnlyWal::new(
-            Wal::new(WalType::Gc),
+            WalType::Gc,
             test_path.clone(),
             1,    // 1MB
             1000, // 1s flush interval
@@ -183,7 +173,7 @@ mod tests {
 
         // Create segment WAL
         let segment_wal = AppendOnlyWal::new(
-            Wal::new(WalType::Data),
+            WalType::Data,
             test_path.clone(),
             1,    // 20MB
             1000, // 1s flush interval
@@ -239,7 +229,7 @@ mod tests {
         compactor.compact().await.unwrap();
 
         // Verify compacted data
-        let compaction_wal = ReplayWal::new(Wal::new(WalType::Compact), test_path);
+        let compaction_wal = ReplayWal::new(WalType::Compact, test_path);
         let (mut rx, handle) = compaction_wal.streaming_read().unwrap();
 
         let mut remaining_message_count = 0;
@@ -274,7 +264,7 @@ mod tests {
 
         // Create GC WAL
         let gc_wal = AppendOnlyWal::new(
-            Wal::new(WalType::Gc),
+            WalType::Gc,
             test_path.clone(),
             1,    // 1MB
             1000, // 1s flush interval
@@ -326,7 +316,7 @@ mod tests {
 
         // Create segment WAL
         let segment_wal = AppendOnlyWal::new(
-            Wal::new(WalType::Data),
+            WalType::Data,
             test_path.clone(),
             1,    // 20MB
             1000, // 1s flush interval
@@ -387,7 +377,7 @@ mod tests {
         compactor.compact().await.unwrap();
 
         // Verify compacted data
-        let compaction_wal = ReplayWal::new(Wal::new(WalType::Compact), test_path);
+        let compaction_wal = ReplayWal::new(WalType::Compact, test_path);
         let (mut rx, handle) = compaction_wal.streaming_read().unwrap();
 
         let mut remaining_message_count = 0;
