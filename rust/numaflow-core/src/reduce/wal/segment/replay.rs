@@ -1,5 +1,5 @@
 use crate::reduce::wal::error::WalResult;
-use crate::reduce::wal::WalType;
+use crate::reduce::wal::segment::WalType;
 use bytes::Bytes;
 use std::cmp::Ordering;
 use std::fs;
@@ -171,7 +171,7 @@ fn list_files(wal_type: &WalType, base_path: PathBuf) -> Vec<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::reduce::wal::WalType;
+    use crate::reduce::wal::segment::WalType;
     use std::fs::File;
     use tempfile::tempdir;
 
