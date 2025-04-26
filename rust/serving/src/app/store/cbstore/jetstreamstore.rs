@@ -1,6 +1,12 @@
-//! Stores the callback and status information in JetStream KV stores.
-//! A central watcher task per instance monitors callbacks for that instance.
-//! Status includes the processing replica ID and is stored as a serialized enum.
+//! Stores the watches the callbacks published for the request when it travels through the vertices
+//! A central watcher task per pod monitors callbacks for that pod and sends them to the appropriate
+//! sender.
+//!
+//! **JetStream Callback Entry Format**
+//!
+//! Callback key - cb.{pod-hash}.{id}.{vertex_name}.{timestamp}
+//!
+//! Callback value - JSON serialized Callback struct
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -23,6 +29,7 @@ pub(crate) struct JetStreamCallbackStore {
     pod_hash: String,
     callback_kv: Store,
     callback_senders: Arc<Mutex<HashMap<String, mpsc::Sender<Arc<Callback>>>>>,
+    cln_token: CancellationToken,
 }
 
 impl JetStreamCallbackStore {
@@ -47,11 +54,13 @@ impl JetStreamCallbackStore {
             })?;
 
         let callback_senders = Arc::new(Mutex::new(HashMap::new()));
+
+        // start the central watcher for this pod
         Self::spawn_central_watcher(
             pod_hash.to_string(),
             callback_kv.clone(),
             Arc::clone(&callback_senders),
-            cln_token,
+            cln_token.clone(),
         )
         .await;
 
@@ -59,6 +68,7 @@ impl JetStreamCallbackStore {
             pod_hash: pod_hash.to_string(),
             callback_kv,
             callback_senders,
+            cln_token,
         })
     }
 
@@ -77,19 +87,26 @@ impl JetStreamCallbackStore {
         // callback key format is cb.{pod_hash}.{request_id}.{vertex_name}.{timestamp}, so we should
         // watch for all the callbacks with prefix cb.{pod_hash}.*
         let watch_key_pattern = format!("{CALLBACK_KEY_PREFIX}.{pod_hash}.*.*.*");
-        let mut watcher = Self::create_watcher(&kv_store, &watch_key_pattern, latest_revision + 1)
-            .await
-            .expect("Failed to create central watcher");
+        let mut watcher = Self::create_watcher(
+            &kv_store,
+            &watch_key_pattern,
+            latest_revision + 1,
+            cln_token.clone(),
+        )
+        .await
+        .expect("Failed to create central watcher");
 
         tokio::spawn(async move {
             // Main watch loop
             loop {
                 tokio::select! {
-                // Stop watching if the cancellation token is triggered
+                // Stop watching if the cancellation token is triggered, its the callee's responsibility
+                // to cancel the token after all the inflight messages are processed (after server shutdown)
                 _ = cln_token.cancelled() => {
                     info!("Cancellation token triggered. Stopping central watcher.");
                     break;
                 }
+
                 // Process the next entry from the watcher
                 maybe_entry = watcher.next() => {
                     match maybe_entry {
@@ -127,7 +144,7 @@ impl JetStreamCallbackStore {
                             // when we are recreating the watcher we should start watching from the latest revision+1
                             // because we would have successfully read till latest revision, duplicate callbacks
                             // will result in tracker not able to decide if the request has been completed.
-                            watcher = match Self::create_watcher(&kv_store, &watch_key_pattern, latest_revision + 1).await {
+                            watcher = match Self::create_watcher(&kv_store, &watch_key_pattern, latest_revision + 1, cln_token.clone()).await {
                                 Ok(stream) => stream,
                                 Err(e) => {
                                     error!(error = ?e, "Failed to recreate watcher. Stopping scan.");
@@ -140,7 +157,7 @@ impl JetStreamCallbackStore {
                             // when we are recreating the watcher we should start watching from the latest revision+1
                             // because we would have successfully read till latest revision, duplicate callbacks
                             // will result in tracker not able to decide if the request has been completed.
-                            watcher = match Self::create_watcher(&kv_store, &watch_key_pattern, latest_revision + 1).await {
+                            watcher = match Self::create_watcher(&kv_store, &watch_key_pattern, latest_revision + 1, cln_token.clone()).await {
                                 Ok(stream) => stream,
                                 Err(e) => {
                                     error!(?e, "Failed to recreate watcher. Stopping scan.");
@@ -155,12 +172,13 @@ impl JetStreamCallbackStore {
         }.instrument(span));
     }
 
-    // Watch for all the callbacks for a given request id that are created by the different pod.
+    // Watch for all the callbacks for a given request id that was getting processed by a different pod.
     async fn watch_historical_callbacks(
         callback_kv: Store,
         previous_pod_hash: String,
         id: String,
         tx: mpsc::Sender<Arc<Callback>>,
+        cln_token: CancellationToken,
     ) {
         let key_pattern = format!("{}.{}.{}.*.*", CALLBACK_KEY_PREFIX, previous_pod_hash, id);
         let mut latest_revision = 0;
@@ -171,6 +189,7 @@ impl JetStreamCallbackStore {
             &callback_kv,
             &key_pattern,
             latest_revision + 1,
+            cln_token.clone(),
         )
         .await
         {
@@ -207,6 +226,7 @@ impl JetStreamCallbackStore {
                         &callback_kv,
                         &key_pattern,
                         latest_revision + 1,
+                        cln_token.clone(),
                     )
                     .await
                     {
@@ -223,6 +243,7 @@ impl JetStreamCallbackStore {
                         &callback_kv,
                         &key_pattern,
                         latest_revision + 1,
+                        cln_token.clone(),
                     )
                     .await
                     {
@@ -244,6 +265,7 @@ impl JetStreamCallbackStore {
         callback_kv: &Store,
         key_pattern: &str,
         start_revision: u64,
+        cln_token: CancellationToken,
     ) -> StoreResult<Watch> {
         loop {
             match callback_kv
@@ -259,20 +281,17 @@ impl JetStreamCallbackStore {
                     tokio::time::sleep(Duration::from_millis(100)).await;
                 }
             }
+            if cln_token.is_cancelled() {
+                error!("Cancellation token triggered, exiting watcher creation retry loop.");
+                return Err(StoreError::Connection(
+                    "Cancellation token triggered".to_string(),
+                ));
+            }
         }
     }
 }
 
 impl super::CallbackStore for JetStreamCallbackStore {
-    /// deregister the request and remove the callback sender from the map.
-    async fn deregister(&mut self, id: &str) -> StoreResult<()> {
-        let mut senders_guard = self.callback_senders.lock().await;
-        if senders_guard.remove(id).is_none() {
-            error!(?id, "No active sender found during deregistration");
-        }
-        Ok(())
-    }
-
     /// Register the request and watch for callbacks.
     async fn register_and_watch(
         &mut self,
@@ -280,11 +299,20 @@ impl super::CallbackStore for JetStreamCallbackStore {
         pod_hash: &str,
     ) -> StoreResult<ReceiverStream<Arc<Callback>>> {
         let (tx, rx) = mpsc::channel(10);
-        if pod_hash != self.pod_hash {
+
+        // if the pod_hash is same as the current pod, we can directly register the sender because
+        // central watcher is already watching the callbacks for this pod. If not we will have to
+        // create a new watcher for watching callbacks of the different pod.
+        if pod_hash.eq(&self.pod_hash) {
+            let mut senders_guard = self.callback_senders.lock().await;
+            senders_guard.insert(id.to_string(), tx);
+            Ok(ReceiverStream::new(rx))
+        } else {
             let callback_kv_clone = self.callback_kv.clone();
             let id_clone = id.to_string();
             let tx_clone = tx.clone();
             let previous_pod_hash = pod_hash.to_string();
+            let cln_token = self.cln_token.clone();
 
             // Spawn a separate task for historical callbacks
             tokio::spawn(async move {
@@ -293,18 +321,21 @@ impl super::CallbackStore for JetStreamCallbackStore {
                     previous_pod_hash,
                     id_clone,
                     tx_clone,
+                    cln_token,
                 )
                 .await;
             });
-            return Ok(ReceiverStream::new(rx));
+            Ok(ReceiverStream::new(rx))
         }
+    }
 
-        {
-            let mut senders_guard = self.callback_senders.lock().await;
-            senders_guard.insert(id.to_string(), tx);
+    /// deregister the request and remove the callback sender from the map.
+    async fn deregister(&mut self, id: &str) -> StoreResult<()> {
+        let mut senders_guard = self.callback_senders.lock().await;
+        if senders_guard.remove(id).is_none() {
+            error!(?id, "No active sender found during deregistration");
         }
-
-        Ok(ReceiverStream::new(rx))
+        Ok(())
     }
 
     async fn ready(&mut self) -> bool {

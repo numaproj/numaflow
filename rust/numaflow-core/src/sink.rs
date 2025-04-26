@@ -30,7 +30,7 @@ use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_forward_metric_labels,
     pipeline_metrics,
 };
-use crate::serving_store::ServingStore;
+use crate::serving_store::{ServingStore, StoreEntry};
 use crate::tracker::TrackerHandle;
 use crate::Result;
 
@@ -858,18 +858,21 @@ impl SinkWriter {
 
         let mut payloads = Vec::with_capacity(serving_msgs.len());
         for msg in serving_msgs {
-            info!("msg headers: {:?}", msg.headers);
             let id = msg
                 .headers
                 .get(DEFAULT_ID_HEADER)
                 .ok_or(Error::Sink("Missing numaflow id header".to_string()))?
                 .clone();
-            let pod_replica = msg
+            let pod_hash = msg
                 .headers
                 .get(DEFAULT_POD_HASH_KEY)
                 .ok_or(Error::Sink("Missing pod replica header".to_string()))?
                 .clone();
-            payloads.push((id, pod_replica, msg.value));
+            payloads.push(StoreEntry {
+                pod_hash,
+                id,
+                value: msg.value.clone(),
+            });
         }
 
         match serving_store {

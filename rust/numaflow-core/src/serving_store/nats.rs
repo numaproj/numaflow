@@ -1,7 +1,7 @@
 use crate::config::pipeline::NatsStoreConfig;
+use crate::serving_store::StoreEntry;
 use async_nats::jetstream::kv::Store;
 use async_nats::jetstream::Context;
-use bytes::Bytes;
 use chrono::Utc;
 use tracing::info;
 
@@ -28,15 +28,15 @@ impl NatsServingStore {
     pub(crate) async fn put_datum(
         &mut self,
         origin: &str,
-        payloads: Vec<(String, String, Bytes)>,
+        payloads: Vec<StoreEntry>,
     ) -> crate::Result<()> {
         let mut tasks = Vec::new();
 
         for payload in payloads {
             let id = format!(
                 "rs.{}.{}.{}.{}",
-                payload.1,
-                payload.0,
+                payload.pod_hash,
+                payload.id,
                 origin,
                 Utc::now()
                     .timestamp_nanos_opt()
@@ -48,7 +48,7 @@ impl NatsServingStore {
             let store = self.store.clone();
             let task = tokio::spawn(async move {
                 store
-                    .put(id, payload.2)
+                    .put(id, payload.value)
                     .await
                     .map_err(|e| crate::Error::Sink(format!("Failed to put datum: {e:?}")))
             });

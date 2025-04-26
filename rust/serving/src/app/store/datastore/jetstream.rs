@@ -83,6 +83,7 @@ pub(crate) struct JetStreamDataStore {
     kv_store: Store,
     pod_hash: String,
     responses_map: Arc<Mutex<HashMap<String, ResponseMode>>>,
+    cln_token: CancellationToken,
 }
 
 impl JetStreamDataStore {
@@ -103,13 +104,14 @@ impl JetStreamDataStore {
             pod_hash.to_string(),
             kv_store.clone(),
             Arc::clone(&responses_map),
-            cln_token,
+            cln_token.clone(),
         )
         .await;
         Ok(Self {
             kv_store,
             pod_hash: pod_hash.to_string(),
             responses_map,
+            cln_token,
         })
     }
 
@@ -123,9 +125,14 @@ impl JetStreamDataStore {
         let watch_pattern = format!("{}.{}.*.*.*", RESPONSE_KEY_PREFIX, pod_hash);
         let mut latest_revision = 0;
 
-        let mut watcher = Self::create_watcher(&kv_store, &watch_pattern, latest_revision + 1)
-            .await
-            .expect("Failed to create central result watcher");
+        let mut watcher = Self::create_watcher(
+            &kv_store,
+            &watch_pattern,
+            latest_revision + 1,
+            cln_token.clone(),
+        )
+        .await
+        .expect("Failed to create central result watcher");
 
         tokio::spawn(async move {
             loop {
@@ -155,7 +162,7 @@ impl JetStreamDataStore {
                             }
                             Some(Err(e)) => {
                                 error!(error = ?e, "Error from watcher stream. Re-establishing...");
-                                watcher = match Self::create_watcher(&kv_store, &watch_pattern, latest_revision + 1).await {
+                                watcher = match Self::create_watcher(&kv_store, &watch_pattern, latest_revision + 1, cln_token.clone()).await {
                                     Ok(w) => w,
                                     Err(re_e) => {
                                         error!(error = ?re_e, "Failed to re-establish watcher. Exiting...");
@@ -165,7 +172,7 @@ impl JetStreamDataStore {
                             }
                             None => {
                                 error!("Watcher stream ended unexpectedly. Re-establishing...");
-                                watcher = match Self::create_watcher(&kv_store, &watch_pattern, latest_revision + 1).await {
+                                watcher = match Self::create_watcher(&kv_store, &watch_pattern, latest_revision + 1, cln_token.clone()).await {
                                     Ok(w) => w,
                                     Err(re_e) => {
                                         error!(error = ?re_e, "Failed to re-establish watcher. Exiting...");
@@ -185,6 +192,7 @@ impl JetStreamDataStore {
         kv_store: &Store,
         watch_pattern: &str,
         start_revision: u64,
+        cln_token: CancellationToken,
     ) -> StoreResult<Watch> {
         loop {
             match kv_store
@@ -202,6 +210,12 @@ impl JetStreamDataStore {
                     error!(error = ?e, "Failed to create watcher. Retrying...");
                     tokio::time::sleep(Duration::from_millis(100)).await;
                 }
+            }
+            if cln_token.is_cancelled() {
+                info!("Cancellation token triggered, exiting response watcher creation retry loop");
+                return Err(StoreError::Connection(
+                    "Cancellation token triggered".to_string(),
+                ));
             }
         }
     }
@@ -230,7 +244,6 @@ impl JetStreamDataStore {
                 .expect("Failed to convert entry value to RequestType");
 
             let mut response_map = responses_map.lock().await;
-            // Attempt to insert directly and check if the key already exists
             let entry = response_map.entry(request_id.to_string());
             if let Entry::Vacant(vacant_entry) = entry {
                 match request_type {
@@ -261,7 +274,7 @@ impl JetStreamDataStore {
             // when we get the done processing marker, it means we won't get any more responses for
             // this request id. So we need to merge the responses and put them in the kv store, so
             // that it can be retrieved when needed. We only need to store the merged response for
-            // sync and async because for sse it will be streaming. Its safe to store for sync request
+            // sync and async because for sse it will be streaming. It's safe to store for sync request
             // because during failure of sync request it will be converted as an async request.
             let mut response_map = responses_map.lock().await;
             if let Some(ResponseMode::Unary(responses)) = response_map.remove(request_id) {
@@ -334,17 +347,29 @@ impl JetStreamDataStore {
         store: Store,
         id: &str,
         pod_hash: &str,
+        cln_token: CancellationToken,
     ) -> StoreResult<Vec<Vec<u8>>> {
         let mut latest_revision = 0;
         let watch_pattern = format!("{RESPONSE_KEY_PREFIX}.{pod_hash}.{id}.*.*");
-        let mut watcher = Self::create_watcher(&store, &watch_pattern, latest_revision + 1).await?;
+        let mut watcher = Self::create_watcher(
+            &store,
+            &watch_pattern,
+            latest_revision + 1,
+            cln_token.clone(),
+        )
+        .await?;
         let mut responses = vec![];
         loop {
             match watcher.next().await {
                 None => {
                     error!(request_id = ?id, "Historical watcher stream ended unexpectedly. Recreating watcher...");
-                    watcher =
-                        Self::create_watcher(&store, &watch_pattern, latest_revision + 1).await?;
+                    watcher = Self::create_watcher(
+                        &store,
+                        &watch_pattern,
+                        latest_revision + 1,
+                        cln_token.clone(),
+                    )
+                    .await?;
                 }
                 Some(Ok(entry)) => {
                     latest_revision = entry.revision;
@@ -359,8 +384,13 @@ impl JetStreamDataStore {
                 }
                 Some(Err(e)) => {
                     error!(request_id = ?id, "Error while receiving response from watcher: {e:?}, Recreating watcher...");
-                    watcher =
-                        Self::create_watcher(&store, &watch_pattern, latest_revision + 1).await?;
+                    watcher = Self::create_watcher(
+                        &store,
+                        &watch_pattern,
+                        latest_revision + 1,
+                        cln_token.clone(),
+                    )
+                    .await?;
                 }
             }
         }
@@ -375,19 +405,30 @@ impl JetStreamDataStore {
         id: &str,
         pod_hash: &str,
         tx: Sender<Arc<Bytes>>,
+        cln_token: CancellationToken,
     ) {
         let mut latest_revision = 0;
         let watch_pattern = format!("{RESPONSE_KEY_PREFIX}.{pod_hash}.{id}.*.*");
-        let mut watcher = Self::create_watcher(&store, &watch_pattern, latest_revision + 1)
-            .await
-            .expect("Failed to create watcher");
+        let mut watcher = Self::create_watcher(
+            &store,
+            &watch_pattern,
+            latest_revision + 1,
+            cln_token.clone(),
+        )
+        .await
+        .expect("Failed to create watcher");
         loop {
             match watcher.next().await {
                 None => {
                     error!(request_id = ?id, "Historical watcher stream ended unexpectedly. Recreating watcher...");
-                    watcher = Self::create_watcher(&store, &watch_pattern, latest_revision + 1)
-                        .await
-                        .expect("Failed to create watcher");
+                    watcher = Self::create_watcher(
+                        &store,
+                        &watch_pattern,
+                        latest_revision + 1,
+                        cln_token.clone(),
+                    )
+                    .await
+                    .expect("Failed to create watcher");
                 }
                 Some(Ok(entry)) => {
                     latest_revision = entry.revision;
@@ -404,9 +445,14 @@ impl JetStreamDataStore {
                 }
                 Some(Err(e)) => {
                     error!(request_id = ?id, "Error while receiving response from watcher: {e:?}, Recreating watcher...");
-                    watcher = Self::create_watcher(&store, &watch_pattern, latest_revision + 1)
-                        .await
-                        .expect("Failed to create watcher");
+                    watcher = Self::create_watcher(
+                        &store,
+                        &watch_pattern,
+                        latest_revision + 1,
+                        cln_token.clone(),
+                    )
+                    .await
+                    .expect("Failed to create watcher");
                 }
             }
         }
@@ -426,14 +472,14 @@ enum ResponseMode {
 impl DataStore for JetStreamDataStore {
     /// Retrieve a data from the store. If the datum is not found, `None` is returned.
     async fn retrieve_data(&mut self, id: &str, pod_hash: &str) -> StoreResult<Vec<Vec<u8>>> {
-        info!("Retrieving data for {}", id);
-        if pod_hash == self.pod_hash {
-            info!("Pod {} already exists", pod_hash);
-            // Fallback to retrieving data from the KV store
+        // if the pod_hash is same as the current pod hash then we can rely on the central watcher for
+        // responses else we will have to create a new watcher for the old pod hash to get all the
+        // responses.
+        if pod_hash.eq(&self.pod_hash) {
             self.get_data_from_kv_store(id).await
         } else {
-            info!("Pod {} exists", pod_hash);
-            Self::get_historic_response(self.kv_store.clone(), id, pod_hash).await
+            Self::get_historic_response(self.kv_store.clone(), id, pod_hash, self.cln_token.clone())
+                .await
         }
     }
 
@@ -445,7 +491,7 @@ impl DataStore for JetStreamDataStore {
     ) -> StoreResult<ReceiverStream<Arc<Bytes>>> {
         // if the pod_hash is same as the current pod hash then we can rely on the central watcher for
         // responses else we will have to create a new watcher for the old pod hash.
-        if pod_hash == self.pod_hash {
+        if pod_hash.eq(&self.pod_hash) {
             // we need to wait for the start processing marker entry to be processed by the central watcher
             loop {
                 {
@@ -464,8 +510,16 @@ impl DataStore for JetStreamDataStore {
                 let kv_store = self.kv_store.clone();
                 let request_id = id.to_string();
                 let pod_hash = pod_hash.to_string();
+                let cln_token = self.cln_token.clone();
                 async move {
-                    Self::stream_historic_responses(kv_store, &request_id, &pod_hash, tx).await;
+                    Self::stream_historic_responses(
+                        kv_store,
+                        &request_id,
+                        &pod_hash,
+                        tx,
+                        cln_token,
+                    )
+                    .await;
                 }
             });
             Ok(ReceiverStream::new(rx))

@@ -63,9 +63,13 @@ where
         let sub_graph_generator = Arc::clone(&self.msg_graph_generator);
         let msg_id = id.to_string();
 
-        let pod_hash = if let Err(e) = self.status_tracker.register(id, request_type.clone()).await
-        {
-            match e.clone() {
+        // register the request id in the status tracker, if the request is already processed
+        // or if its getting processed the tracker will return duplicate error. If the request
+        // was cancelled before sending the response then the previous pod hash will be returned
+        // with cancelled error, and we will fetch the callbacks and responses again.
+        let pod_hash = match self.status_tracker.register(id, request_type).await {
+            Ok(_) => self.pod_hash.clone(),
+            Err(e) => match e {
                 status::Error::Cancelled {
                     err,
                     previous_pod_hash,
@@ -78,17 +82,15 @@ where
                 }
                 status::Error::Duplicate(msg) => {
                     warn!(error = ?msg, "Request already exists in the store");
-                    serving_metrics().cb_store_register_duplicate_count.inc();
+                    serving_metrics().request_register_duplicate_count.inc();
                     return Err(Error::Duplicate(msg));
                 }
                 _ => {
                     error!(?e, "Failed to register request id in status store");
-                    serving_metrics().cb_store_register_fail_count.inc();
+                    serving_metrics().request_register_fail_count.inc();
                     return Err(e.into());
                 }
-            }
-        } else {
-            self.pod_hash.clone()
+            },
         };
 
         // start watching for callbacks
@@ -120,7 +122,7 @@ where
                         .expect("Failed to deregister");
 
                     // send can only fail if the request was cancelled by the client or the handler task
-                    // was terminated
+                    // was terminated.
                     if tx.send(Ok(graph)).is_err() {
                         status_tracker
                             .mark_as_failed(&msg_id, "Cancelled")
@@ -158,7 +160,6 @@ where
                 warn!("Request was failed because of {error}, processing and fetching the responses again");
                 let notify = self.process_request(id, request_type).await?;
                 notify.await.expect("sender was dropped")?;
-                // TODO: send old request boolean to retrieve data
                 Ok(Some(self.datum_store.retrieve_data(id, &pod_hash).await?))
             }
         }
@@ -175,9 +176,14 @@ where
         let (tx, rx) = mpsc::channel(10);
         let sub_graph_generator = Arc::clone(&self.msg_graph_generator);
         let msg_id = id.to_string();
-        let pod_hash = if let Err(e) = self.status_tracker.register(id, request_type.clone()).await
-        {
-            match e.clone() {
+
+        // register the request id in the status tracker, if the request is already processed
+        // or if its getting processed the tracker will return duplicate error. If the request
+        // was cancelled before sending the response then the previous pod hash will be returned
+        // with cancelled error, and we will fetch the callbacks and responses again.
+        let pod_hash = match self.status_tracker.register(id, request_type).await {
+            Ok(_) => self.pod_hash.clone(),
+            Err(e) => match e {
                 status::Error::Cancelled {
                     err,
                     previous_pod_hash,
@@ -189,18 +195,16 @@ where
                     previous_pod_hash
                 }
                 status::Error::Duplicate(msg) => {
-                    warn!(error = ?msg, "Request already exists in the store");
-                    serving_metrics().cb_store_register_duplicate_count.inc();
+                    warn!(error = ?msg, "Request already exists in the tracker");
+                    serving_metrics().request_register_duplicate_count.inc();
                     return Err(Error::Duplicate(msg));
                 }
                 _ => {
-                    error!(?e, "Failed to register request id in status store");
-                    serving_metrics().cb_store_register_fail_count.inc();
+                    error!(?e, "Failed to register request id in status tracker");
+                    serving_metrics().request_register_fail_count.inc();
                     return Err(e.into());
                 }
-            }
-        } else {
-            self.pod_hash.clone()
+            },
         };
 
         // start watching for callbacks

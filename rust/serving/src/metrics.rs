@@ -56,10 +56,10 @@ pub(crate) struct ServingMetrics {
     pub(crate) http_requests_count: Family<Vec<(String, String)>, Counter>,
     pub(crate) http_requests_duration: Family<Vec<(String, String)>, Histogram>,
 
-    pub(crate) cb_store_register_count: Counter,
-    pub(crate) cb_store_register_fail_count: Counter,
-    pub(crate) cb_store_register_duplicate_count: Counter,
-    pub(crate) cb_store_register_duration: Histogram,
+    pub(crate) request_register_count: Counter,
+    pub(crate) request_register_fail_count: Counter,
+    pub(crate) request_register_duplicate_count: Counter,
+    pub(crate) request_register_duration: Histogram,
 
     pub(crate) payload_save_duration: Histogram,
     pub(crate) datum_retrive_duration: Histogram,
@@ -88,10 +88,10 @@ impl ServingMetrics {
         let metrics = Self {
             http_requests_count: http_requests_total,
             http_requests_duration,
-            cb_store_register_count,
-            cb_store_register_fail_count,
-            cb_store_register_duplicate_count,
-            cb_store_register_duration,
+            request_register_count: cb_store_register_count,
+            request_register_fail_count: cb_store_register_fail_count,
+            request_register_duplicate_count: cb_store_register_duplicate_count,
+            request_register_duration: cb_store_register_duration,
             payload_save_duration,
             datum_retrive_duration,
             processing_time,
@@ -111,27 +111,27 @@ impl ServingMetrics {
         );
 
         registry.register(
-            "CALLBACK_STORE_REGISTER",
-            "A Counter to keep track of the number of callback store register requests",
-            metrics.cb_store_register_count.clone(),
+            "REQUEST_REGISTER",
+            "A Counter to keep track of the number of register requests",
+            metrics.request_register_count.clone(),
         );
 
         registry.register(
-            "CALLBACK_STORE_REGISTER_FAIL",
-            "A Counter to keep track of the number of failed callback store register requests",
-            metrics.cb_store_register_fail_count.clone(),
+            "REQUEST_REGISTER_FAIL",
+            "A Counter to keep track of the number of failed register requests",
+            metrics.request_register_fail_count.clone(),
         );
 
         registry.register(
-            "CALLBACK_STORE_REGISTER_DUPLICATES",
-            "A Counter to keep track of the number of failed callback store register requests due to duplicate request id",
-            metrics.cb_store_register_fail_count.clone(),
+            "REQUEST_REGISTER_DUPLICATES",
+            "A Counter to keep track of the number of failed register requests due to duplicate request id",
+            metrics.request_register_fail_count.clone(),
         );
 
         registry.register(
-            "CALLBACK_STORE_REGISTER_DURATION",
-            "A Histogram to keep track of the duration of the successful callback store register requests",
-            metrics.cb_store_register_duration.clone(),
+            "REQUEST_REGISTER_DURATION",
+            "A Histogram to keep track of the duration of the successful register of requests",
+            metrics.request_register_duration.clone(),
         );
 
         registry.register(

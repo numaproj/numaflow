@@ -18,15 +18,15 @@ pub(crate) mod memstore;
 #[trait_variant::make(CallbackStore: Send)]
 #[allow(dead_code)]
 pub(crate) trait LocalCallbackStore {
-    /// This method will be called when processing is completed for a request id.
-    async fn deregister(&mut self, id: &str) -> StoreResult<()>;
-    /// watch the callback payloads for a given request id to determine whether the
-    /// request is complete.
+    /// register and watch the callbacks for a given request id to determine whether the request is
+    /// complete.
     async fn register_and_watch(
         &mut self,
         id: &str,
         pod_hash: &str,
     ) -> StoreResult<ReceiverStream<Arc<Callback>>>;
+    /// This method will be called when processing is completed for a request id.
+    async fn deregister(&mut self, id: &str) -> StoreResult<()>;
     /// check if the store is ready
     async fn ready(&mut self) -> bool;
 }

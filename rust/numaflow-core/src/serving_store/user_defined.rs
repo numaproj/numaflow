@@ -1,9 +1,9 @@
-use bytes::Bytes;
 use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
 use numaflow_pb::clients::serving::{Payload, PutRequest};
 use tonic::transport::Channel;
 
 use crate::config::pipeline::UserDefinedStoreConfig;
+use crate::serving_store::StoreEntry;
 use crate::shared;
 
 /// User defined serving store to store the serving responses.
@@ -24,21 +24,20 @@ impl UserDefinedStore {
     pub(crate) async fn put_datum(
         &mut self,
         origin: &str,
-        payloads: Vec<(String, String, Bytes)>,
+        payloads: Vec<StoreEntry>,
     ) -> crate::Result<()> {
         let mut tasks = Vec::new();
 
         for payload in payloads {
-            let id = payload.0.to_string();
             let origin = origin.to_string();
             let mut client = self.client.clone();
 
             let task = tokio::spawn(async move {
                 let request = PutRequest {
-                    id: id.clone(),
+                    id: payload.id,
                     payloads: vec![Payload {
                         origin: origin.clone(),
-                        value: payload.2.to_vec(),
+                        value: payload.value.to_vec(),
                     }],
                 };
                 client.put(request).await.map_err(|e| {
@@ -68,6 +67,7 @@ impl UserDefinedStore {
 mod tests {
     use super::*;
     use crate::config::pipeline::UserDefinedStoreConfig;
+    use bytes::Bytes;
     use numaflow::serving_store;
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
@@ -124,7 +124,11 @@ mod tests {
         let mut store = UserDefinedStore::new(config).await.unwrap();
         let id = "test_id";
         let origin = "test_origin";
-        let payloads = vec![(id.to_string(), "0".to_string(), Bytes::from("test_payload"))];
+        let payloads = vec![StoreEntry {
+            pod_hash: "test_pod_hash".to_string(),
+            id: id.to_string(),
+            value: Bytes::from("test_value"),
+        }];
         let result = store.put_datum(origin, payloads).await;
         assert!(result.is_ok());
 

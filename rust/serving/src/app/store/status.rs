@@ -1,3 +1,10 @@
+//! Status tracking for requests using jetstream key-value store.
+//!
+//! **JetStream Status Entry Format**
+//!
+//! Status key - status.{id}
+//!
+//! Status value - JSON serialized ProcessingStatus
 use crate::config::RequestType;
 use async_nats::jetstream::kv::{CreateErrorKind, Store};
 use async_nats::jetstream::Context;
@@ -35,17 +42,20 @@ impl From<Error> for crate::Error {
     }
 }
 
-/// Represents the current processing status of a request id in the `Store`.
-// Redefined ProcessingStatus - Merged Status and Replica Info
+/// Represents the current processing status of a request id in the `Store`. Also has the information
+/// about the pod hash which accepted the request.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub(crate) enum ProcessingStatus {
+    // InProgress indicates that the request is currently being processed.
     InProgress {
         pod_hash: String,
     },
+    // Completed indicates that the request has been completed successfully.
     Completed {
         subgraph: String, // subgraph of the completed request
         pod_hash: String,
     },
+    // Failed indicates that the request has failed.
     Failed {
         error: String, // error message of the failed request
         pod_hash: String,
@@ -225,6 +235,7 @@ impl StatusTracker {
             }
         }
     }
+
     /// returns the status of the request by checking the status kv store.
     pub(crate) async fn status(&mut self, id: &str) -> Result<ProcessingStatus> {
         let key = format!("{}.{}", STATUS_KEY_PREFIX, id);
@@ -271,27 +282,25 @@ impl StatusTracker {
 
         self.update_status(id, completed_status).await?;
 
+        let Some(response_kv) = &self.response_kv else {
+            return Ok(());
+        };
+
         // if nats is used, we need to write the done processing marker to the response kv store to
         // let the response watcher know that the processing is done. Since only tracker knows the
         // lifecycle of the request, we need to do it here.
-        if let Some(response_kv) = &self.response_kv {
-            // we need to give a done signal for response watcher
-            let done_key = format!(
-                "{}.{}.{}.{}",
-                RESPONSE_KEY_PREFIX, self.pod_hash, id, DONE_PROCESSING_MARKER
-            );
-            match response_kv.put(done_key.clone(), Bytes::new()).await {
-                Ok(_) => {
-                    debug!(?id, ?done_key, "Successfully wrote done processing marker.");
-                }
-                Err(e) => {
-                    error!(?id, ?done_key, error = ?e, "Failed to write done processing marker.");
-                    return Err(Error::Other(format!(
-                        "Failed to write done marker {done_key}: {e:?}"
-                    )));
-                }
-            }
-        };
+        let done_key = format!(
+            "{}.{}.{}.{}",
+            RESPONSE_KEY_PREFIX, self.pod_hash, id, DONE_PROCESSING_MARKER
+        );
+        response_kv
+            .put(done_key.clone(), Bytes::new())
+            .await
+            .map_err(|e| {
+                Error::Other(format!(
+                    "Failed to write done processing marker {done_key}: {e:?}"
+                ))
+            })?;
         Ok(())
     }
 
@@ -304,23 +313,21 @@ impl StatusTracker {
             .await
             .map_err(|e| Error::Other(format!("Failed to delete status for {id}: {e:?}")))?;
 
-        if let Some(response_kv) = &self.response_kv {
-            let done_key = format!(
-                "{}.{}.{}.{}",
-                RESPONSE_KEY_PREFIX, self.pod_hash, id, DONE_PROCESSING_MARKER
-            );
-            match response_kv.put(done_key.clone(), Bytes::new()).await {
-                Ok(_) => {
-                    debug!(?id, ?done_key, "Successfully wrote done processing marker.");
-                }
-                Err(e) => {
-                    error!(?id, ?done_key, error = ?e, "Failed to write done processing marker.");
-                    return Err(Error::Other(format!(
-                        "Failed to write done marker {done_key}: {e:?}"
-                    )));
-                }
-            }
+        let Some(response_kv) = &self.response_kv else {
+            return Ok(());
         };
+        let done_key = format!(
+            "{}.{}.{}.{}",
+            RESPONSE_KEY_PREFIX, self.pod_hash, id, DONE_PROCESSING_MARKER
+        );
+        response_kv
+            .put(done_key.clone(), Bytes::new())
+            .await
+            .map_err(|e| {
+                Error::Other(format!(
+                    "Failed to write done processing marker {done_key}: {e:?}"
+                ))
+            })?;
         Ok(())
     }
 }
