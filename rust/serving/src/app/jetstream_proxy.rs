@@ -500,11 +500,9 @@ mod tests {
     use axum::extract::Request;
     use axum::http::header::{CONTENT_LENGTH, CONTENT_TYPE};
     use serde_json::{json, Value};
-    use std::process::exit;
     use std::sync::Arc;
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
     use tokio::net::TcpListener;
-    use tokio::time::sleep;
     use tokio_util::sync::CancellationToken;
     use tower::ServiceExt;
 

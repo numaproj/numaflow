@@ -12,7 +12,7 @@ use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::result;
 use thiserror::Error;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 
 const STATUS_KEY_PREFIX: &str = "status";
 const RESPONSE_KEY_PREFIX: &str = "rs";

@@ -197,7 +197,7 @@ impl MessageGraph {
                 response
                     .tags
                     .as_ref()
-                    .map_or(false, |tags| tags.contains(&DROP.to_string()))
+                    .is_some_and(|tags| tags.contains(&DROP.to_string()))
             })
         {
             return true;
