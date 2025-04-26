@@ -92,8 +92,20 @@ func (r *servingPipelineReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			return result, err
 		}
 	}
-	if err := r.client.Status().Update(ctx, splCopy); err != nil {
-		return result, err
+	if !equality.Semantic.DeepEqual(spl.Status, splCopy.Status) {
+		// Use Server Side Apply
+		statusPatch := &dfv1.ServingPipeline{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:          spl.Name,
+				Namespace:     spl.Namespace,
+				ManagedFields: nil,
+			},
+			TypeMeta: spl.TypeMeta,
+			Status:   splCopy.Status,
+		}
+		if err := r.client.Status().Patch(ctx, statusPatch, client.Apply, client.ForceOwnership, client.FieldOwner(dfv1.Project)); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 	return result, reconcileErr
 }

@@ -512,5 +512,5 @@ func (pls *ServingPipelineStatus) IsHealthy() bool {
 type ServingPipelineList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
-	Items           []Pipeline `json:"items" protobuf:"bytes,2,rep,name=items"`
+	Items           []ServingPipeline `json:"items" protobuf:"bytes,2,rep,name=items"`
 }

@@ -19,10 +19,10 @@ limitations under the License.
 package v1alpha1
 
 import (
-	v1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	numaflowv1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // MonoVertexLister helps list MonoVertices.
@@ -30,7 +30,7 @@ import (
 type MonoVertexLister interface {
 	// List lists all MonoVertices in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.MonoVertex, err error)
+	List(selector labels.Selector) (ret []*numaflowv1alpha1.MonoVertex, err error)
 	// MonoVertices returns an object that can list and get MonoVertices.
 	MonoVertices(namespace string) MonoVertexNamespaceLister
 	MonoVertexListerExpansion
@@ -38,17 +38,17 @@ type MonoVertexLister interface {
 
 // monoVertexLister implements the MonoVertexLister interface.
 type monoVertexLister struct {
-	listers.ResourceIndexer[*v1alpha1.MonoVertex]
+	listers.ResourceIndexer[*numaflowv1alpha1.MonoVertex]
 }
 
 // NewMonoVertexLister returns a new MonoVertexLister.
 func NewMonoVertexLister(indexer cache.Indexer) MonoVertexLister {
-	return &monoVertexLister{listers.New[*v1alpha1.MonoVertex](indexer, v1alpha1.Resource("monovertex"))}
+	return &monoVertexLister{listers.New[*numaflowv1alpha1.MonoVertex](indexer, numaflowv1alpha1.Resource("monovertex"))}
 }
 
 // MonoVertices returns an object that can list and get MonoVertices.
 func (s *monoVertexLister) MonoVertices(namespace string) MonoVertexNamespaceLister {
-	return monoVertexNamespaceLister{listers.NewNamespaced[*v1alpha1.MonoVertex](s.ResourceIndexer, namespace)}
+	return monoVertexNamespaceLister{listers.NewNamespaced[*numaflowv1alpha1.MonoVertex](s.ResourceIndexer, namespace)}
 }
 
 // MonoVertexNamespaceLister helps list and get MonoVertices.
@@ -56,15 +56,15 @@ func (s *monoVertexLister) MonoVertices(namespace string) MonoVertexNamespaceLis
 type MonoVertexNamespaceLister interface {
 	// List lists all MonoVertices in the indexer for a given namespace.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.MonoVertex, err error)
+	List(selector labels.Selector) (ret []*numaflowv1alpha1.MonoVertex, err error)
 	// Get retrieves the MonoVertex from the indexer for a given namespace and name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1alpha1.MonoVertex, error)
+	Get(name string) (*numaflowv1alpha1.MonoVertex, error)
 	MonoVertexNamespaceListerExpansion
 }
 
 // monoVertexNamespaceLister implements the MonoVertexNamespaceLister
 // interface.
 type monoVertexNamespaceLister struct {
-	listers.ResourceIndexer[*v1alpha1.MonoVertex]
+	listers.ResourceIndexer[*numaflowv1alpha1.MonoVertex]
 }

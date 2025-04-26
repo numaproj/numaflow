@@ -19,129 +19,32 @@ limitations under the License.
 package fake
 
 import (
-	"context"
-
 	v1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	types "k8s.io/apimachinery/pkg/types"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	numaflowv1alpha1 "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeMonoVertices implements MonoVertexInterface
-type FakeMonoVertices struct {
+// fakeMonoVertices implements MonoVertexInterface
+type fakeMonoVertices struct {
+	*gentype.FakeClientWithList[*v1alpha1.MonoVertex, *v1alpha1.MonoVertexList]
 	Fake *FakeNumaflowV1alpha1
-	ns   string
 }
 
-var monoverticesResource = v1alpha1.SchemeGroupVersion.WithResource("monovertices")
-
-var monoverticesKind = v1alpha1.SchemeGroupVersion.WithKind("MonoVertex")
-
-// Get takes name of the monoVertex, and returns the corresponding monoVertex object, and an error if there is any.
-func (c *FakeMonoVertices) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.MonoVertex, err error) {
-	emptyResult := &v1alpha1.MonoVertex{}
-	obj, err := c.Fake.
-		Invokes(testing.NewGetActionWithOptions(monoverticesResource, c.ns, name, options), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
+func newFakeMonoVertices(fake *FakeNumaflowV1alpha1, namespace string) numaflowv1alpha1.MonoVertexInterface {
+	return &fakeMonoVertices{
+		gentype.NewFakeClientWithList[*v1alpha1.MonoVertex, *v1alpha1.MonoVertexList](
+			fake.Fake,
+			namespace,
+			v1alpha1.SchemeGroupVersion.WithResource("monovertices"),
+			v1alpha1.SchemeGroupVersion.WithKind("MonoVertex"),
+			func() *v1alpha1.MonoVertex { return &v1alpha1.MonoVertex{} },
+			func() *v1alpha1.MonoVertexList { return &v1alpha1.MonoVertexList{} },
+			func(dst, src *v1alpha1.MonoVertexList) { dst.ListMeta = src.ListMeta },
+			func(list *v1alpha1.MonoVertexList) []*v1alpha1.MonoVertex { return gentype.ToPointerSlice(list.Items) },
+			func(list *v1alpha1.MonoVertexList, items []*v1alpha1.MonoVertex) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1alpha1.MonoVertex), err
-}
-
-// List takes label and field selectors, and returns the list of MonoVertices that match those selectors.
-func (c *FakeMonoVertices) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.MonoVertexList, err error) {
-	emptyResult := &v1alpha1.MonoVertexList{}
-	obj, err := c.Fake.
-		Invokes(testing.NewListActionWithOptions(monoverticesResource, monoverticesKind, c.ns, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1alpha1.MonoVertexList{ListMeta: obj.(*v1alpha1.MonoVertexList).ListMeta}
-	for _, item := range obj.(*v1alpha1.MonoVertexList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested monoVertices.
-func (c *FakeMonoVertices) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewWatchActionWithOptions(monoverticesResource, c.ns, opts))
-
-}
-
-// Create takes the representation of a monoVertex and creates it.  Returns the server's representation of the monoVertex, and an error, if there is any.
-func (c *FakeMonoVertices) Create(ctx context.Context, monoVertex *v1alpha1.MonoVertex, opts v1.CreateOptions) (result *v1alpha1.MonoVertex, err error) {
-	emptyResult := &v1alpha1.MonoVertex{}
-	obj, err := c.Fake.
-		Invokes(testing.NewCreateActionWithOptions(monoverticesResource, c.ns, monoVertex, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.MonoVertex), err
-}
-
-// Update takes the representation of a monoVertex and updates it. Returns the server's representation of the monoVertex, and an error, if there is any.
-func (c *FakeMonoVertices) Update(ctx context.Context, monoVertex *v1alpha1.MonoVertex, opts v1.UpdateOptions) (result *v1alpha1.MonoVertex, err error) {
-	emptyResult := &v1alpha1.MonoVertex{}
-	obj, err := c.Fake.
-		Invokes(testing.NewUpdateActionWithOptions(monoverticesResource, c.ns, monoVertex, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.MonoVertex), err
-}
-
-// UpdateStatus was generated because the type contains a Status member.
-// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeMonoVertices) UpdateStatus(ctx context.Context, monoVertex *v1alpha1.MonoVertex, opts v1.UpdateOptions) (result *v1alpha1.MonoVertex, err error) {
-	emptyResult := &v1alpha1.MonoVertex{}
-	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceActionWithOptions(monoverticesResource, "status", c.ns, monoVertex, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.MonoVertex), err
-}
-
-// Delete takes name of the monoVertex and deletes it. Returns an error if one occurs.
-func (c *FakeMonoVertices) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	_, err := c.Fake.
-		Invokes(testing.NewDeleteActionWithOptions(monoverticesResource, c.ns, name, opts), &v1alpha1.MonoVertex{})
-
-	return err
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *FakeMonoVertices) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewDeleteCollectionActionWithOptions(monoverticesResource, c.ns, opts, listOpts)
-
-	_, err := c.Fake.Invokes(action, &v1alpha1.MonoVertexList{})
-	return err
-}
-
-// Patch applies the patch and returns the patched monoVertex.
-func (c *FakeMonoVertices) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.MonoVertex, err error) {
-	emptyResult := &v1alpha1.MonoVertex{}
-	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceActionWithOptions(monoverticesResource, c.ns, name, pt, data, opts, subresources...), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.MonoVertex), err
 }

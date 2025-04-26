@@ -19,9 +19,9 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 
-	v1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	numaflowv1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	scheme "github.com/numaproj/numaflow/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -37,33 +37,34 @@ type VerticesGetter interface {
 
 // VertexInterface has methods to work with Vertex resources.
 type VertexInterface interface {
-	Create(ctx context.Context, vertex *v1alpha1.Vertex, opts v1.CreateOptions) (*v1alpha1.Vertex, error)
-	Update(ctx context.Context, vertex *v1alpha1.Vertex, opts v1.UpdateOptions) (*v1alpha1.Vertex, error)
+	Create(ctx context.Context, vertex *numaflowv1alpha1.Vertex, opts v1.CreateOptions) (*numaflowv1alpha1.Vertex, error)
+	Update(ctx context.Context, vertex *numaflowv1alpha1.Vertex, opts v1.UpdateOptions) (*numaflowv1alpha1.Vertex, error)
 	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-	UpdateStatus(ctx context.Context, vertex *v1alpha1.Vertex, opts v1.UpdateOptions) (*v1alpha1.Vertex, error)
+	UpdateStatus(ctx context.Context, vertex *numaflowv1alpha1.Vertex, opts v1.UpdateOptions) (*numaflowv1alpha1.Vertex, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.Vertex, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.VertexList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*numaflowv1alpha1.Vertex, error)
+	List(ctx context.Context, opts v1.ListOptions) (*numaflowv1alpha1.VertexList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.Vertex, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *numaflowv1alpha1.Vertex, err error)
 	VertexExpansion
 }
 
 // vertices implements VertexInterface
 type vertices struct {
-	*gentype.ClientWithList[*v1alpha1.Vertex, *v1alpha1.VertexList]
+	*gentype.ClientWithList[*numaflowv1alpha1.Vertex, *numaflowv1alpha1.VertexList]
 }
 
 // newVertices returns a Vertices
 func newVertices(c *NumaflowV1alpha1Client, namespace string) *vertices {
 	return &vertices{
-		gentype.NewClientWithList[*v1alpha1.Vertex, *v1alpha1.VertexList](
+		gentype.NewClientWithList[*numaflowv1alpha1.Vertex, *numaflowv1alpha1.VertexList](
 			"vertices",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			namespace,
-			func() *v1alpha1.Vertex { return &v1alpha1.Vertex{} },
-			func() *v1alpha1.VertexList { return &v1alpha1.VertexList{} }),
+			func() *numaflowv1alpha1.Vertex { return &numaflowv1alpha1.Vertex{} },
+			func() *numaflowv1alpha1.VertexList { return &numaflowv1alpha1.VertexList{} },
+		),
 	}
 }

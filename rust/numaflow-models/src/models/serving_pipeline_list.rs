@@ -22,7 +22,7 @@ pub struct ServingPipelineList {
     #[serde(rename = "apiVersion", skip_serializing_if = "Option::is_none")]
     pub api_version: Option<String>,
     #[serde(rename = "items")]
-    pub items: Vec<crate::models::Pipeline>,
+    pub items: Vec<crate::models::ServingPipeline>,
     /// Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
     #[serde(rename = "kind", skip_serializing_if = "Option::is_none")]
     pub kind: Option<String>,
@@ -31,7 +31,7 @@ pub struct ServingPipelineList {
 }
 
 impl ServingPipelineList {
-    pub fn new(items: Vec<crate::models::Pipeline>) -> ServingPipelineList {
+    pub fn new(items: Vec<crate::models::ServingPipeline>) -> ServingPipelineList {
         ServingPipelineList {
             api_version: None,
             items,
