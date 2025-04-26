@@ -653,7 +653,6 @@ mod tests {
 
     // FIXME
     #[tokio::test]
-    #[ignore]
     async fn test_gc_wal_and_compaction_with_multiple_files() {
         let test_path = tempfile::tempdir().unwrap().into_path();
 
@@ -705,10 +704,6 @@ mod tests {
         .await
         .unwrap();
 
-        // Send rotate command to GC WAL
-        tx.send(SegmentWriteMessage::Rotate { on_size: false })
-            .await
-            .unwrap();
         drop(tx);
         handle.await.unwrap().unwrap();
 
@@ -724,11 +719,19 @@ mod tests {
         .unwrap();
 
         // Write 1000 segment entries across 10 files
-        let (tx, rx) = tokio::sync::mpsc::channel(100);
-        let (_offset_stream, handle) = segment_wal
+        let (tx, rx) = mpsc::channel(100);
+        let (mut offset_stream, handle) = segment_wal
             .streaming_write(ReceiverStream::new(rx))
             .await
             .unwrap();
+
+        let write_result_cnt = tokio::spawn(async move {
+            let mut counter = 0;
+            while let Some(msg) = offset_stream.next().await {
+                counter += 1;
+            }
+            return counter;
+        });
 
         let start_time = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 0).unwrap();
         let time_increment = chrono::Duration::seconds(1);
@@ -761,6 +764,8 @@ mod tests {
         }
         drop(tx);
         handle.await.unwrap().unwrap();
+
+        assert_eq!(write_result_cnt.await.unwrap(), 1000);
 
         // Create and run compactor
         let compactor = Compactor::new(
