@@ -19,9 +19,9 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 
-	v1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	numaflowv1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	scheme "github.com/numaproj/numaflow/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -37,33 +37,36 @@ type InterStepBufferServicesGetter interface {
 
 // InterStepBufferServiceInterface has methods to work with InterStepBufferService resources.
 type InterStepBufferServiceInterface interface {
-	Create(ctx context.Context, interStepBufferService *v1alpha1.InterStepBufferService, opts v1.CreateOptions) (*v1alpha1.InterStepBufferService, error)
-	Update(ctx context.Context, interStepBufferService *v1alpha1.InterStepBufferService, opts v1.UpdateOptions) (*v1alpha1.InterStepBufferService, error)
+	Create(ctx context.Context, interStepBufferService *numaflowv1alpha1.InterStepBufferService, opts v1.CreateOptions) (*numaflowv1alpha1.InterStepBufferService, error)
+	Update(ctx context.Context, interStepBufferService *numaflowv1alpha1.InterStepBufferService, opts v1.UpdateOptions) (*numaflowv1alpha1.InterStepBufferService, error)
 	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-	UpdateStatus(ctx context.Context, interStepBufferService *v1alpha1.InterStepBufferService, opts v1.UpdateOptions) (*v1alpha1.InterStepBufferService, error)
+	UpdateStatus(ctx context.Context, interStepBufferService *numaflowv1alpha1.InterStepBufferService, opts v1.UpdateOptions) (*numaflowv1alpha1.InterStepBufferService, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.InterStepBufferService, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.InterStepBufferServiceList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*numaflowv1alpha1.InterStepBufferService, error)
+	List(ctx context.Context, opts v1.ListOptions) (*numaflowv1alpha1.InterStepBufferServiceList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.InterStepBufferService, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *numaflowv1alpha1.InterStepBufferService, err error)
 	InterStepBufferServiceExpansion
 }
 
 // interStepBufferServices implements InterStepBufferServiceInterface
 type interStepBufferServices struct {
-	*gentype.ClientWithList[*v1alpha1.InterStepBufferService, *v1alpha1.InterStepBufferServiceList]
+	*gentype.ClientWithList[*numaflowv1alpha1.InterStepBufferService, *numaflowv1alpha1.InterStepBufferServiceList]
 }
 
 // newInterStepBufferServices returns a InterStepBufferServices
 func newInterStepBufferServices(c *NumaflowV1alpha1Client, namespace string) *interStepBufferServices {
 	return &interStepBufferServices{
-		gentype.NewClientWithList[*v1alpha1.InterStepBufferService, *v1alpha1.InterStepBufferServiceList](
+		gentype.NewClientWithList[*numaflowv1alpha1.InterStepBufferService, *numaflowv1alpha1.InterStepBufferServiceList](
 			"interstepbufferservices",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			namespace,
-			func() *v1alpha1.InterStepBufferService { return &v1alpha1.InterStepBufferService{} },
-			func() *v1alpha1.InterStepBufferServiceList { return &v1alpha1.InterStepBufferServiceList{} }),
+			func() *numaflowv1alpha1.InterStepBufferService { return &numaflowv1alpha1.InterStepBufferService{} },
+			func() *numaflowv1alpha1.InterStepBufferServiceList {
+				return &numaflowv1alpha1.InterStepBufferServiceList{}
+			},
+		),
 	}
 }

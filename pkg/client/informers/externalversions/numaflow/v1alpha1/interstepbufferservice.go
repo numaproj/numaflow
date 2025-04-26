@@ -19,13 +19,13 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	numaflowv1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	apisnumaflowv1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	versioned "github.com/numaproj/numaflow/pkg/client/clientset/versioned"
 	internalinterfaces "github.com/numaproj/numaflow/pkg/client/informers/externalversions/internalinterfaces"
-	v1alpha1 "github.com/numaproj/numaflow/pkg/client/listers/numaflow/v1alpha1"
+	numaflowv1alpha1 "github.com/numaproj/numaflow/pkg/client/listers/numaflow/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -36,7 +36,7 @@ import (
 // InterStepBufferServices.
 type InterStepBufferServiceInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha1.InterStepBufferServiceLister
+	Lister() numaflowv1alpha1.InterStepBufferServiceLister
 }
 
 type interStepBufferServiceInformer struct {
@@ -71,7 +71,7 @@ func NewFilteredInterStepBufferServiceInformer(client versioned.Interface, names
 				return client.NumaflowV1alpha1().InterStepBufferServices(namespace).Watch(context.TODO(), options)
 			},
 		},
-		&numaflowv1alpha1.InterStepBufferService{},
+		&apisnumaflowv1alpha1.InterStepBufferService{},
 		resyncPeriod,
 		indexers,
 	)
@@ -82,9 +82,9 @@ func (f *interStepBufferServiceInformer) defaultInformer(client versioned.Interf
 }
 
 func (f *interStepBufferServiceInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&numaflowv1alpha1.InterStepBufferService{}, f.defaultInformer)
+	return f.factory.InformerFor(&apisnumaflowv1alpha1.InterStepBufferService{}, f.defaultInformer)
 }
 
-func (f *interStepBufferServiceInformer) Lister() v1alpha1.InterStepBufferServiceLister {
-	return v1alpha1.NewInterStepBufferServiceLister(f.Informer().GetIndexer())
+func (f *interStepBufferServiceInformer) Lister() numaflowv1alpha1.InterStepBufferServiceLister {
+	return numaflowv1alpha1.NewInterStepBufferServiceLister(f.Informer().GetIndexer())
 }

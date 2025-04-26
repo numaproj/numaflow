@@ -19,10 +19,10 @@ limitations under the License.
 package v1alpha1
 
 import (
-	v1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	numaflowv1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // InterStepBufferServiceLister helps list InterStepBufferServices.
@@ -30,7 +30,7 @@ import (
 type InterStepBufferServiceLister interface {
 	// List lists all InterStepBufferServices in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.InterStepBufferService, err error)
+	List(selector labels.Selector) (ret []*numaflowv1alpha1.InterStepBufferService, err error)
 	// InterStepBufferServices returns an object that can list and get InterStepBufferServices.
 	InterStepBufferServices(namespace string) InterStepBufferServiceNamespaceLister
 	InterStepBufferServiceListerExpansion
@@ -38,17 +38,17 @@ type InterStepBufferServiceLister interface {
 
 // interStepBufferServiceLister implements the InterStepBufferServiceLister interface.
 type interStepBufferServiceLister struct {
-	listers.ResourceIndexer[*v1alpha1.InterStepBufferService]
+	listers.ResourceIndexer[*numaflowv1alpha1.InterStepBufferService]
 }
 
 // NewInterStepBufferServiceLister returns a new InterStepBufferServiceLister.
 func NewInterStepBufferServiceLister(indexer cache.Indexer) InterStepBufferServiceLister {
-	return &interStepBufferServiceLister{listers.New[*v1alpha1.InterStepBufferService](indexer, v1alpha1.Resource("interstepbufferservice"))}
+	return &interStepBufferServiceLister{listers.New[*numaflowv1alpha1.InterStepBufferService](indexer, numaflowv1alpha1.Resource("interstepbufferservice"))}
 }
 
 // InterStepBufferServices returns an object that can list and get InterStepBufferServices.
 func (s *interStepBufferServiceLister) InterStepBufferServices(namespace string) InterStepBufferServiceNamespaceLister {
-	return interStepBufferServiceNamespaceLister{listers.NewNamespaced[*v1alpha1.InterStepBufferService](s.ResourceIndexer, namespace)}
+	return interStepBufferServiceNamespaceLister{listers.NewNamespaced[*numaflowv1alpha1.InterStepBufferService](s.ResourceIndexer, namespace)}
 }
 
 // InterStepBufferServiceNamespaceLister helps list and get InterStepBufferServices.
@@ -56,15 +56,15 @@ func (s *interStepBufferServiceLister) InterStepBufferServices(namespace string)
 type InterStepBufferServiceNamespaceLister interface {
 	// List lists all InterStepBufferServices in the indexer for a given namespace.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.InterStepBufferService, err error)
+	List(selector labels.Selector) (ret []*numaflowv1alpha1.InterStepBufferService, err error)
 	// Get retrieves the InterStepBufferService from the indexer for a given namespace and name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1alpha1.InterStepBufferService, error)
+	Get(name string) (*numaflowv1alpha1.InterStepBufferService, error)
 	InterStepBufferServiceNamespaceListerExpansion
 }
 
 // interStepBufferServiceNamespaceLister implements the InterStepBufferServiceNamespaceLister
 // interface.
 type interStepBufferServiceNamespaceLister struct {
-	listers.ResourceIndexer[*v1alpha1.InterStepBufferService]
+	listers.ResourceIndexer[*numaflowv1alpha1.InterStepBufferService]
 }

@@ -2434,7 +2434,7 @@ func (in *ServingPipelineList) DeepCopyInto(out *ServingPipelineList) {
 	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
-		*out = make([]Pipeline, len(*in))
+		*out = make([]ServingPipeline, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}

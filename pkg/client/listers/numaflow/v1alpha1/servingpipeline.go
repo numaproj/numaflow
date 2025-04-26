@@ -19,10 +19,10 @@ limitations under the License.
 package v1alpha1
 
 import (
-	v1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	numaflowv1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // ServingPipelineLister helps list ServingPipelines.
@@ -30,7 +30,7 @@ import (
 type ServingPipelineLister interface {
 	// List lists all ServingPipelines in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.ServingPipeline, err error)
+	List(selector labels.Selector) (ret []*numaflowv1alpha1.ServingPipeline, err error)
 	// ServingPipelines returns an object that can list and get ServingPipelines.
 	ServingPipelines(namespace string) ServingPipelineNamespaceLister
 	ServingPipelineListerExpansion
@@ -38,17 +38,17 @@ type ServingPipelineLister interface {
 
 // servingPipelineLister implements the ServingPipelineLister interface.
 type servingPipelineLister struct {
-	listers.ResourceIndexer[*v1alpha1.ServingPipeline]
+	listers.ResourceIndexer[*numaflowv1alpha1.ServingPipeline]
 }
 
 // NewServingPipelineLister returns a new ServingPipelineLister.
 func NewServingPipelineLister(indexer cache.Indexer) ServingPipelineLister {
-	return &servingPipelineLister{listers.New[*v1alpha1.ServingPipeline](indexer, v1alpha1.Resource("servingpipeline"))}
+	return &servingPipelineLister{listers.New[*numaflowv1alpha1.ServingPipeline](indexer, numaflowv1alpha1.Resource("servingpipeline"))}
 }
 
 // ServingPipelines returns an object that can list and get ServingPipelines.
 func (s *servingPipelineLister) ServingPipelines(namespace string) ServingPipelineNamespaceLister {
-	return servingPipelineNamespaceLister{listers.NewNamespaced[*v1alpha1.ServingPipeline](s.ResourceIndexer, namespace)}
+	return servingPipelineNamespaceLister{listers.NewNamespaced[*numaflowv1alpha1.ServingPipeline](s.ResourceIndexer, namespace)}
 }
 
 // ServingPipelineNamespaceLister helps list and get ServingPipelines.
@@ -56,15 +56,15 @@ func (s *servingPipelineLister) ServingPipelines(namespace string) ServingPipeli
 type ServingPipelineNamespaceLister interface {
 	// List lists all ServingPipelines in the indexer for a given namespace.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.ServingPipeline, err error)
+	List(selector labels.Selector) (ret []*numaflowv1alpha1.ServingPipeline, err error)
 	// Get retrieves the ServingPipeline from the indexer for a given namespace and name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1alpha1.ServingPipeline, error)
+	Get(name string) (*numaflowv1alpha1.ServingPipeline, error)
 	ServingPipelineNamespaceListerExpansion
 }
 
 // servingPipelineNamespaceLister implements the ServingPipelineNamespaceLister
 // interface.
 type servingPipelineNamespaceLister struct {
-	listers.ResourceIndexer[*v1alpha1.ServingPipeline]
+	listers.ResourceIndexer[*numaflowv1alpha1.ServingPipeline]
 }

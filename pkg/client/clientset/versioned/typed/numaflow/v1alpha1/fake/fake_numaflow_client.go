@@ -29,23 +29,23 @@ type FakeNumaflowV1alpha1 struct {
 }
 
 func (c *FakeNumaflowV1alpha1) InterStepBufferServices(namespace string) v1alpha1.InterStepBufferServiceInterface {
-	return &FakeInterStepBufferServices{c, namespace}
+	return newFakeInterStepBufferServices(c, namespace)
 }
 
 func (c *FakeNumaflowV1alpha1) MonoVertices(namespace string) v1alpha1.MonoVertexInterface {
-	return &FakeMonoVertices{c, namespace}
+	return newFakeMonoVertices(c, namespace)
 }
 
 func (c *FakeNumaflowV1alpha1) Pipelines(namespace string) v1alpha1.PipelineInterface {
-	return &FakePipelines{c, namespace}
+	return newFakePipelines(c, namespace)
 }
 
 func (c *FakeNumaflowV1alpha1) ServingPipelines(namespace string) v1alpha1.ServingPipelineInterface {
-	return &FakeServingPipelines{c, namespace}
+	return newFakeServingPipelines(c, namespace)
 }
 
 func (c *FakeNumaflowV1alpha1) Vertices(namespace string) v1alpha1.VertexInterface {
-	return &FakeVertices{c, namespace}
+	return newFakeVertices(c, namespace)
 }
 
 // RESTClient returns a RESTClient that is used to communicate

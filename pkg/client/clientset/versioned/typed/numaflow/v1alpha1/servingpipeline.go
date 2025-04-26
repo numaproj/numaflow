@@ -19,9 +19,9 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 
-	v1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	numaflowv1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	scheme "github.com/numaproj/numaflow/pkg/client/clientset/versioned/scheme"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	types "k8s.io/apimachinery/pkg/types"
@@ -37,33 +37,34 @@ type ServingPipelinesGetter interface {
 
 // ServingPipelineInterface has methods to work with ServingPipeline resources.
 type ServingPipelineInterface interface {
-	Create(ctx context.Context, servingPipeline *v1alpha1.ServingPipeline, opts v1.CreateOptions) (*v1alpha1.ServingPipeline, error)
-	Update(ctx context.Context, servingPipeline *v1alpha1.ServingPipeline, opts v1.UpdateOptions) (*v1alpha1.ServingPipeline, error)
+	Create(ctx context.Context, servingPipeline *numaflowv1alpha1.ServingPipeline, opts v1.CreateOptions) (*numaflowv1alpha1.ServingPipeline, error)
+	Update(ctx context.Context, servingPipeline *numaflowv1alpha1.ServingPipeline, opts v1.UpdateOptions) (*numaflowv1alpha1.ServingPipeline, error)
 	// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-	UpdateStatus(ctx context.Context, servingPipeline *v1alpha1.ServingPipeline, opts v1.UpdateOptions) (*v1alpha1.ServingPipeline, error)
+	UpdateStatus(ctx context.Context, servingPipeline *numaflowv1alpha1.ServingPipeline, opts v1.UpdateOptions) (*numaflowv1alpha1.ServingPipeline, error)
 	Delete(ctx context.Context, name string, opts v1.DeleteOptions) error
 	DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error
-	Get(ctx context.Context, name string, opts v1.GetOptions) (*v1alpha1.ServingPipeline, error)
-	List(ctx context.Context, opts v1.ListOptions) (*v1alpha1.ServingPipelineList, error)
+	Get(ctx context.Context, name string, opts v1.GetOptions) (*numaflowv1alpha1.ServingPipeline, error)
+	List(ctx context.Context, opts v1.ListOptions) (*numaflowv1alpha1.ServingPipelineList, error)
 	Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error)
-	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ServingPipeline, err error)
+	Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *numaflowv1alpha1.ServingPipeline, err error)
 	ServingPipelineExpansion
 }
 
 // servingPipelines implements ServingPipelineInterface
 type servingPipelines struct {
-	*gentype.ClientWithList[*v1alpha1.ServingPipeline, *v1alpha1.ServingPipelineList]
+	*gentype.ClientWithList[*numaflowv1alpha1.ServingPipeline, *numaflowv1alpha1.ServingPipelineList]
 }
 
 // newServingPipelines returns a ServingPipelines
 func newServingPipelines(c *NumaflowV1alpha1Client, namespace string) *servingPipelines {
 	return &servingPipelines{
-		gentype.NewClientWithList[*v1alpha1.ServingPipeline, *v1alpha1.ServingPipelineList](
+		gentype.NewClientWithList[*numaflowv1alpha1.ServingPipeline, *numaflowv1alpha1.ServingPipelineList](
 			"servingpipelines",
 			c.RESTClient(),
 			scheme.ParameterCodec,
 			namespace,
-			func() *v1alpha1.ServingPipeline { return &v1alpha1.ServingPipeline{} },
-			func() *v1alpha1.ServingPipelineList { return &v1alpha1.ServingPipelineList{} }),
+			func() *numaflowv1alpha1.ServingPipeline { return &numaflowv1alpha1.ServingPipeline{} },
+			func() *numaflowv1alpha1.ServingPipelineList { return &numaflowv1alpha1.ServingPipelineList{} },
+		),
 	}
 }

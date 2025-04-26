@@ -19,129 +19,32 @@ limitations under the License.
 package fake
 
 import (
-	"context"
-
 	v1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	types "k8s.io/apimachinery/pkg/types"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	numaflowv1alpha1 "github.com/numaproj/numaflow/pkg/client/clientset/versioned/typed/numaflow/v1alpha1"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakePipelines implements PipelineInterface
-type FakePipelines struct {
+// fakePipelines implements PipelineInterface
+type fakePipelines struct {
+	*gentype.FakeClientWithList[*v1alpha1.Pipeline, *v1alpha1.PipelineList]
 	Fake *FakeNumaflowV1alpha1
-	ns   string
 }
 
-var pipelinesResource = v1alpha1.SchemeGroupVersion.WithResource("pipelines")
-
-var pipelinesKind = v1alpha1.SchemeGroupVersion.WithKind("Pipeline")
-
-// Get takes name of the pipeline, and returns the corresponding pipeline object, and an error if there is any.
-func (c *FakePipelines) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.Pipeline, err error) {
-	emptyResult := &v1alpha1.Pipeline{}
-	obj, err := c.Fake.
-		Invokes(testing.NewGetActionWithOptions(pipelinesResource, c.ns, name, options), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
+func newFakePipelines(fake *FakeNumaflowV1alpha1, namespace string) numaflowv1alpha1.PipelineInterface {
+	return &fakePipelines{
+		gentype.NewFakeClientWithList[*v1alpha1.Pipeline, *v1alpha1.PipelineList](
+			fake.Fake,
+			namespace,
+			v1alpha1.SchemeGroupVersion.WithResource("pipelines"),
+			v1alpha1.SchemeGroupVersion.WithKind("Pipeline"),
+			func() *v1alpha1.Pipeline { return &v1alpha1.Pipeline{} },
+			func() *v1alpha1.PipelineList { return &v1alpha1.PipelineList{} },
+			func(dst, src *v1alpha1.PipelineList) { dst.ListMeta = src.ListMeta },
+			func(list *v1alpha1.PipelineList) []*v1alpha1.Pipeline { return gentype.ToPointerSlice(list.Items) },
+			func(list *v1alpha1.PipelineList, items []*v1alpha1.Pipeline) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1alpha1.Pipeline), err
-}
-
-// List takes label and field selectors, and returns the list of Pipelines that match those selectors.
-func (c *FakePipelines) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.PipelineList, err error) {
-	emptyResult := &v1alpha1.PipelineList{}
-	obj, err := c.Fake.
-		Invokes(testing.NewListActionWithOptions(pipelinesResource, pipelinesKind, c.ns, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1alpha1.PipelineList{ListMeta: obj.(*v1alpha1.PipelineList).ListMeta}
-	for _, item := range obj.(*v1alpha1.PipelineList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested pipelines.
-func (c *FakePipelines) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewWatchActionWithOptions(pipelinesResource, c.ns, opts))
-
-}
-
-// Create takes the representation of a pipeline and creates it.  Returns the server's representation of the pipeline, and an error, if there is any.
-func (c *FakePipelines) Create(ctx context.Context, pipeline *v1alpha1.Pipeline, opts v1.CreateOptions) (result *v1alpha1.Pipeline, err error) {
-	emptyResult := &v1alpha1.Pipeline{}
-	obj, err := c.Fake.
-		Invokes(testing.NewCreateActionWithOptions(pipelinesResource, c.ns, pipeline, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.Pipeline), err
-}
-
-// Update takes the representation of a pipeline and updates it. Returns the server's representation of the pipeline, and an error, if there is any.
-func (c *FakePipelines) Update(ctx context.Context, pipeline *v1alpha1.Pipeline, opts v1.UpdateOptions) (result *v1alpha1.Pipeline, err error) {
-	emptyResult := &v1alpha1.Pipeline{}
-	obj, err := c.Fake.
-		Invokes(testing.NewUpdateActionWithOptions(pipelinesResource, c.ns, pipeline, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.Pipeline), err
-}
-
-// UpdateStatus was generated because the type contains a Status member.
-// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakePipelines) UpdateStatus(ctx context.Context, pipeline *v1alpha1.Pipeline, opts v1.UpdateOptions) (result *v1alpha1.Pipeline, err error) {
-	emptyResult := &v1alpha1.Pipeline{}
-	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceActionWithOptions(pipelinesResource, "status", c.ns, pipeline, opts), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.Pipeline), err
-}
-
-// Delete takes name of the pipeline and deletes it. Returns an error if one occurs.
-func (c *FakePipelines) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	_, err := c.Fake.
-		Invokes(testing.NewDeleteActionWithOptions(pipelinesResource, c.ns, name, opts), &v1alpha1.Pipeline{})
-
-	return err
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *FakePipelines) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewDeleteCollectionActionWithOptions(pipelinesResource, c.ns, opts, listOpts)
-
-	_, err := c.Fake.Invokes(action, &v1alpha1.PipelineList{})
-	return err
-}
-
-// Patch applies the patch and returns the patched pipeline.
-func (c *FakePipelines) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.Pipeline, err error) {
-	emptyResult := &v1alpha1.Pipeline{}
-	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceActionWithOptions(pipelinesResource, c.ns, name, pt, data, opts, subresources...), emptyResult)
-
-	if obj == nil {
-		return emptyResult, err
-	}
-	return obj.(*v1alpha1.Pipeline), err
 }
