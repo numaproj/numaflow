@@ -242,6 +242,15 @@ impl fmt::Display for MessageID {
     }
 }
 
+impl TryFrom<Message> for Bytes {
+    type Error = Error;
+
+    fn try_from(value: Message) -> Result<Self, Self::Error> {
+        let b: BytesMut = value.try_into()?;
+        Ok(b.freeze())
+    }
+}
+
 impl TryFrom<Message> for BytesMut {
     type Error = Error;
 

@@ -34,7 +34,7 @@ fn build_objects() {
         .compile_protos(
             &[
                 "proto/isb/message.proto",
-                "proto/reduce/wal/aligned/segment.proto",
+                "proto/reduce/wal/wal.proto",
                 "proto/watermark/watermark.proto",
             ],
             &["proto"],
