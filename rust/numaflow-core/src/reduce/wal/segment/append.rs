@@ -160,7 +160,7 @@ impl SegmentWriteActor {
     /// This is not Cancel Safe. We can make it cancel safe by removing the buffering and instead of
     /// `write_all`, we should use `write`.
     async fn write_data(&mut self, data: Bytes) -> WalResult<()> {
-        if self.current_size > 0 && self.current_size + data.len() as u64 > self.max_file_size {
+        if self.current_size > 0 && self.current_size + data.len() as u64 >= self.max_file_size {
             self.rotate_file(true).await?;
         }
 
@@ -229,6 +229,10 @@ impl SegmentWriteActor {
     /// Rotates the file and opens a new one if `open_new` is `true`. It renames the file on rotation
     /// and resets the internal fields.
     async fn rotate_file(&mut self, open_new: bool) -> WalResult<()> {
+        if self.current_size == 0 {
+            return Ok(());
+        }
+
         info!(
             current_size = ?self.current_size,
             file_name = ?self.current_file_name,

@@ -47,7 +47,6 @@ pub(crate) struct Compactor {
     segment_wal: ReplayWal,
     compaction_ro_wal: ReplayWal,
     compaction_ao_wal: AppendOnlyWal,
-    path: PathBuf,
     kind: WindowKind,
 }
 
@@ -78,7 +77,6 @@ impl Compactor {
             segment_wal,
             compaction_ro_wal,
             compaction_ao_wal,
-            path,
             kind,
         })
     }
@@ -205,30 +203,14 @@ impl Compactor {
                     let msg: isb::Message = prost::Message::decode(data.clone())
                         .map_err(|e| format!("Failed to decode message: {}", e))?;
 
-                    match self.kind {
-                        WindowKind::Aligned => {
-                            // Check if the message should be retained
-                            if should_retain.should_retain_message(&msg)? {
-                                // Send the data to the compaction WAL
-                                wal_tx
-                                    .send(SegmentWriteMessage::WriteData { id: None, data })
-                                    .await
-                                    .map_err(|e| {
-                                        format!("Failed to send message to compaction WAL: {}", e)
-                                    })?;
-                            }
-                        }
-                        WindowKind::Unaligned => {
-                            if should_retain.should_retain_message(&msg)? {
-                                // Send the data to the compaction WAL
-                                wal_tx
-                                    .send(SegmentWriteMessage::WriteData { id: None, data })
-                                    .await
-                                    .map_err(|e| {
-                                        format!("Failed to send message to compaction WAL: {}", e)
-                                    })?;
-                            }
-                        }
+                    if should_retain.should_retain_message(&msg)? {
+                        // Send the message to the compaction WAL
+                        wal_tx
+                            .send(SegmentWriteMessage::WriteData { id: None, data })
+                            .await
+                            .map_err(|e| {
+                                format!("Failed to send message to compaction WAL: {}", e)
+                            })?;
                     }
                 }
                 SegmentEntry::DataFooter { .. } => {
@@ -382,18 +364,6 @@ struct AlignedCompaction(DateTime<Utc>);
 struct UnalignedCompaction(HashMap<String, DateTime<Utc>>);
 
 impl ShouldRetain for AlignedCompaction {
-    fn should_retain_message(&self, msg: &isb::Message) -> WalResult<bool> {
-        self.should_retain_message(msg)
-    }
-}
-
-impl ShouldRetain for UnalignedCompaction {
-    fn should_retain_message(&self, msg: &isb::Message) -> WalResult<bool> {
-        self.should_retain_message(msg)
-    }
-}
-
-impl AlignedCompaction {
     /// Determines whether a message should be retained based on its event time.
     fn should_retain_message(&self, msg: &isb::Message) -> WalResult<bool> {
         // Extract the event time from the message
@@ -409,7 +379,7 @@ impl AlignedCompaction {
     }
 }
 
-impl UnalignedCompaction {
+impl ShouldRetain for UnalignedCompaction {
     /// Determines whether an unaligned message should be retained based on its event time and keys.
     fn should_retain_message(&self, msg: &isb::Message) -> WalResult<bool> {
         // Extract the event time from the message
