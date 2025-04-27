@@ -43,16 +43,22 @@ pub(crate) enum WindowKind {
 /// A Compactor that compacts based on the GC and Segment WAL files in the given path. It can
 /// compact both [WindowKind] of WALs.
 pub(crate) struct Compactor {
+    /// GC WAL
     gc_wal: ReplayWal,
+    /// Segment WAL
     segment_wal: ReplayWal,
+    /// Compaction WAL for Read Only
     compaction_ro_wal: ReplayWal,
+    /// New Compaction WAL for writing compacted data
     compaction_ao_wal: AppendOnlyWal,
+    /// Kind of Window, Aligned or Unaligned
     kind: WindowKind,
 }
 
 const WAL_KEY_SEPERATOR: &'static str = ":";
 
 impl Compactor {
+    /// Creates a new Compactor.
     pub(crate) async fn new(
         path: PathBuf,
         kind: WindowKind,
@@ -179,6 +185,9 @@ impl Compactor {
         Ok(())
     }
 
+    /// Process the WAL stream (Readonly) and write the compacted data to the compaction WAL.
+    /// Every message is checked against the should_retain function and if it returns true, it is
+    /// written to the compaction WAL.
     async fn process_wal_stream<T: ShouldRetain>(
         &self,
         wal: &ReplayWal,
