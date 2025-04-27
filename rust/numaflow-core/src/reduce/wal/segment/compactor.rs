@@ -43,17 +43,22 @@ pub(crate) enum WindowKind {
 /// A Compactor that compacts based on the GC and Segment WAL files in the given path. It can
 /// compact both [WindowKind] of WALs.
 pub(crate) struct Compactor {
+    /// GC WAL
     gc_wal: ReplayWal,
+    /// Segment WAL
     segment_wal: ReplayWal,
+    /// Compaction WAL for Read Only
     compaction_ro_wal: ReplayWal,
+    /// New Compaction WAL for writing compacted data
     compaction_ao_wal: AppendOnlyWal,
-    path: PathBuf,
+    /// Kind of Window, Aligned or Unaligned
     kind: WindowKind,
 }
 
 const WAL_KEY_SEPERATOR: &'static str = ":";
 
 impl Compactor {
+    /// Creates a new Compactor.
     pub(crate) async fn new(
         path: PathBuf,
         kind: WindowKind,
@@ -78,7 +83,6 @@ impl Compactor {
             segment_wal,
             compaction_ro_wal,
             compaction_ao_wal,
-            path,
             kind,
         })
     }
@@ -181,6 +185,9 @@ impl Compactor {
         Ok(())
     }
 
+    /// Process the WAL stream (Readonly) and write the compacted data to the compaction WAL.
+    /// Every message is checked against the should_retain function and if it returns true, it is
+    /// written to the compaction WAL.
     async fn process_wal_stream<T: ShouldRetain>(
         &self,
         wal: &ReplayWal,
@@ -205,30 +212,14 @@ impl Compactor {
                     let msg: isb::Message = prost::Message::decode(data.clone())
                         .map_err(|e| format!("Failed to decode message: {}", e))?;
 
-                    match self.kind {
-                        WindowKind::Aligned => {
-                            // Check if the message should be retained
-                            if should_retain.should_retain_message(&msg)? {
-                                // Send the data to the compaction WAL
-                                wal_tx
-                                    .send(SegmentWriteMessage::WriteData { id: None, data })
-                                    .await
-                                    .map_err(|e| {
-                                        format!("Failed to send message to compaction WAL: {}", e)
-                                    })?;
-                            }
-                        }
-                        WindowKind::Unaligned => {
-                            if should_retain.should_retain_message(&msg)? {
-                                // Send the data to the compaction WAL
-                                wal_tx
-                                    .send(SegmentWriteMessage::WriteData { id: None, data })
-                                    .await
-                                    .map_err(|e| {
-                                        format!("Failed to send message to compaction WAL: {}", e)
-                                    })?;
-                            }
-                        }
+                    if should_retain.should_retain_message(&msg)? {
+                        // Send the message to the compaction WAL
+                        wal_tx
+                            .send(SegmentWriteMessage::WriteData { id: None, data })
+                            .await
+                            .map_err(|e| {
+                                format!("Failed to send message to compaction WAL: {}", e)
+                            })?;
                     }
                 }
                 SegmentEntry::DataFooter { .. } => {
@@ -382,18 +373,6 @@ struct AlignedCompaction(DateTime<Utc>);
 struct UnalignedCompaction(HashMap<String, DateTime<Utc>>);
 
 impl ShouldRetain for AlignedCompaction {
-    fn should_retain_message(&self, msg: &isb::Message) -> WalResult<bool> {
-        self.should_retain_message(msg)
-    }
-}
-
-impl ShouldRetain for UnalignedCompaction {
-    fn should_retain_message(&self, msg: &isb::Message) -> WalResult<bool> {
-        self.should_retain_message(msg)
-    }
-}
-
-impl AlignedCompaction {
     /// Determines whether a message should be retained based on its event time.
     fn should_retain_message(&self, msg: &isb::Message) -> WalResult<bool> {
         // Extract the event time from the message
@@ -409,7 +388,7 @@ impl AlignedCompaction {
     }
 }
 
-impl UnalignedCompaction {
+impl ShouldRetain for UnalignedCompaction {
     /// Determines whether an unaligned message should be retained based on its event time and keys.
     fn should_retain_message(&self, msg: &isb::Message) -> WalResult<bool> {
         // Extract the event time from the message
