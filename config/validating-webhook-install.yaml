@@ -57,6 +57,7 @@ rules:
   resources:
   - interstepbufferservices
   - pipelines
+  - servingpipelines
   verbs:
   - get
   - list
