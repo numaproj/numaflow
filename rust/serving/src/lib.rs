@@ -10,7 +10,7 @@ use tracing::info;
 pub use self::error::{Error, Result};
 use crate::app::orchestrator::OrchestratorState as CallbackState;
 use crate::app::start_main_server;
-use crate::app::store::cbstore::jetstreamstore::JetStreamCallbackStore;
+use crate::app::store::cbstore::jetstream_store::JetStreamCallbackStore;
 use crate::app::store::datastore::jetstream::JetStreamDataStore;
 use crate::app::store::datastore::user_defined::UserDefinedStore;
 use crate::app::tracker::MessageGraph;

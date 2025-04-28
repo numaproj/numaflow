@@ -9,7 +9,7 @@ use crate::app::store::datastore::Result as StoreResult;
 use crate::callback::Callback;
 
 /// JetStream based callback store
-pub(crate) mod jetstreamstore;
+pub(crate) mod jetstream_store;
 
 /// In-memory based callback store
 pub(crate) mod memstore;

@@ -1,7 +1,7 @@
 //! To process a message in Serving, we need to track the progress of the processing state of the message
 //! and then fetch the messages once the results of the processing is stored in [crate::app::store::datastore] by
-//! different Sink. This subtly means that we even support streaming the results. The processing state
-//! is stored in [crate::app::store::cbstore].
+//! different Sink. The processing state is stored in [crate::app::store::cbstore].
+
 use bytes::Bytes;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
@@ -51,7 +51,7 @@ where
         })
     }
 
-    /// register a new connection and spwans a watcher to watch on the callback stream. An oneshot rx is
+    /// register a new connection and spawns a watcher to watch on the callback stream. An oneshot rx is
     /// returned. This oneshot rx will be notified when all callbacks for this connection is received
     /// from the numaflow pipeline.
     pub(crate) async fn process_request(
@@ -302,7 +302,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::store::cbstore::jetstreamstore::JetStreamCallbackStore;
+    use crate::app::store::cbstore::jetstream_store::JetStreamCallbackStore;
     use crate::app::store::datastore::jetstream::JetStreamDataStore;
     use crate::callback::{Callback, Response};
     use crate::pipeline::PipelineDCG;

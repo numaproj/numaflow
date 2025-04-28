@@ -22,7 +22,7 @@ use tracing::{info, info_span, Span};
 use uuid::Uuid;
 
 use self::{
-    direct_proxy::direct_proxy, jetstream_proxy::jetstream_proxy, message_path::get_message_path,
+    direct_proxy::direct_proxy, jetstream_proxy::serving_proxy, message_path::get_message_path,
 };
 use crate::app::store::cbstore::CallbackStore;
 use crate::app::store::datastore::DataStore;
@@ -297,7 +297,7 @@ async fn routes<
     app_state: AppState<T, U>,
 ) -> crate::Result<Router> {
     let state = app_state.orchestrator_state.clone();
-    let jetstream_proxy = jetstream_proxy(app_state.clone()).await?;
+    let jetstream_proxy = serving_proxy(app_state.clone()).await?;
 
     let message_path_handler = get_message_path(state);
     Ok(jetstream_proxy.merge(message_path_handler))

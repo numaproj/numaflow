@@ -1,3 +1,6 @@
+//! Serving proxy receives the serving request and writes the request to the ISB so the pipeline can
+//! process the request.
+
 use std::{str::FromStr, sync::Arc};
 
 use super::{orchestrator, store::datastore::DataStore, AppState};
@@ -37,7 +40,8 @@ struct ProxyState<T, U> {
     cancellation_token: CancellationToken,
 }
 
-pub(crate) async fn jetstream_proxy<
+/// Expose a router for the serving proxy and its endpoints.
+pub(crate) async fn serving_proxy<
     T: Clone + Send + Sync + DataStore + 'static,
     U: Clone + Send + Sync + CallbackStore + 'static,
 >(
@@ -487,7 +491,7 @@ mod tests {
     use super::*;
     use crate::app::orchestrator::OrchestratorState;
     use crate::app::router_with_auth;
-    use crate::app::store::cbstore::jetstreamstore::JetStreamCallbackStore;
+    use crate::app::store::cbstore::jetstream_store::JetStreamCallbackStore;
     use crate::app::store::datastore::jetstream::JetStreamDataStore;
     use crate::app::store::status::StatusTracker;
     use crate::app::tracker::MessageGraph;
@@ -590,7 +594,7 @@ mod tests {
             cancellation_token: cancel_token.clone(),
         };
 
-        let app = jetstream_proxy(app_state).await?;
+        let app = serving_proxy(app_state).await?;
         let mut req = Request::builder()
             .method("POST")
             .uri("/async")
@@ -743,7 +747,7 @@ mod tests {
             cancellation_token: cancel_token.clone(),
         };
 
-        let app = jetstream_proxy(app_state).await.unwrap();
+        let app = serving_proxy(app_state).await.unwrap();
 
         tokio::spawn(async move {
             // once the start processing rs is present then only write the response
@@ -871,7 +875,7 @@ mod tests {
             cancellation_token: cancel_token.clone(),
         };
 
-        let app = jetstream_proxy(app_state).await.unwrap();
+        let app = serving_proxy(app_state).await.unwrap();
 
         // pipeline is in -> cat -> out, so we will have 3 callback requests
         // spawn a tokio task which will insert the callback requests to the callback state
