@@ -4,9 +4,9 @@
 //! [Sink]: https://numaflow.numaproj.io/user-guide/sinks/overview/
 
 use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
+use numaflow_pb::clients::sink::Status::{Failure, Fallback, Serve, Success};
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::sink_response;
-use numaflow_pb::clients::sink::Status::{Failure, Fallback, Serve, Success};
 use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -15,13 +15,14 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tokio::{pin, time};
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::{error, info, warn};
 use user_defined::UserDefinedSink;
 
+use crate::Result;
 use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
@@ -32,7 +33,6 @@ use crate::metrics::{
 };
 use crate::serving_store::{ServingStore, StoreEntry};
 use crate::tracker::TrackerHandle;
-use crate::Result;
 
 /// A [Blackhole] sink which reads but never writes to anywhere, semantic equivalent of `/dev/null`.
 ///

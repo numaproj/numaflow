@@ -126,7 +126,9 @@ pub(crate) async fn sdk_server_info(
     let numaflow_version = &version_info.version;
 
     if min_numaflow_version.is_empty() {
-        warn!("Failed to get the minimum numaflow version, skipping numaflow version compatibility check");
+        warn!(
+            "Failed to get the minimum numaflow version, skipping numaflow version compatibility check"
+        );
     } else if !numaflow_version.contains("latest")
         && !numaflow_version.contains(&version_info.git_commit)
     {
@@ -211,7 +213,8 @@ fn check_sdk_compatibility(
             if !specifiers.contains(&sdk_version_pep440) {
                 return Err(Error::ServerInfo(format!(
                     "Python SDK version {} must be upgraded to at least {}, in order to work with the current numaflow version",
-                    sdk_version_pep440, human_readable(sdk_required_version)
+                    sdk_version_pep440,
+                    human_readable(sdk_required_version)
                 )));
             }
         } else {

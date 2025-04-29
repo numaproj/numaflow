@@ -69,8 +69,9 @@ mod tests {
     use tokio::task::JoinHandle;
     use tokio_util::sync::CancellationToken;
 
-    use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
+    use crate::Result;
     use crate::config::pipeline::ToVertexConfig;
+    use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
     use crate::pipeline::forwarder::source_forwarder::SourceForwarder;
     use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
     use crate::shared::grpc::create_rpc_channel;
@@ -78,7 +79,6 @@ mod tests {
     use crate::source::{Source, SourceType};
     use crate::tracker::TrackerHandle;
     use crate::transformer::Transformer;
-    use crate::Result;
 
     struct SimpleSource {
         num: usize,

@@ -4,9 +4,9 @@ use std::sync::OnceLock;
 
 use monovertex::MonovertexConfig;
 
-use crate::config::pipeline::PipelineConfig;
 use crate::Error;
 use crate::Result;
+use crate::config::pipeline::PipelineConfig;
 
 const ENV_MONO_VERTEX_OBJ: &str = "NUMAFLOW_MONO_VERTEX_OBJECT";
 const ENV_VERTEX_OBJ: &str = "NUMAFLOW_VERTEX_OBJECT";
@@ -128,12 +128,12 @@ mod tests {
     use std::collections::HashMap;
     use std::env;
 
-    use base64::prelude::BASE64_STANDARD;
     use base64::Engine;
+    use base64::prelude::BASE64_STANDARD;
     use serde_json::json;
 
     use crate::config::components::sink::OnFailureStrategy;
-    use crate::config::{CustomResourceType, Settings, ENV_MONO_VERTEX_OBJ};
+    use crate::config::{CustomResourceType, ENV_MONO_VERTEX_OBJ, Settings};
 
     #[test]
     fn test_settings_load_combined() {
@@ -193,7 +193,6 @@ mod tests {
                 settings.custom_resource_type,
                 CustomResourceType::MonoVertex(_)
             ));
-            env::remove_var(ENV_MONO_VERTEX_OBJ);
         }
 
         {
@@ -264,7 +263,6 @@ mod tests {
                     .sink_retry_interval_in_ms,
                 1000
             );
-            env::remove_var(ENV_MONO_VERTEX_OBJ);
         }
 
         {
@@ -346,7 +344,6 @@ mod tests {
                     .sink_retry_interval_in_ms,
                 1000
             );
-            env::remove_var(ENV_MONO_VERTEX_OBJ);
         }
         {
             // Test Invalid on failure strategy to use default
@@ -426,7 +423,6 @@ mod tests {
                     .sink_retry_interval_in_ms,
                 1000
             );
-            env::remove_var(ENV_MONO_VERTEX_OBJ);
         }
     }
 }

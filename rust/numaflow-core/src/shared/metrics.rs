@@ -6,8 +6,8 @@ use tracing::error;
 
 use crate::config::components::metrics::MetricsConfig;
 use crate::metrics::{
-    start_metrics_https_server, ComponentHealthChecks, LagReader, PendingReader,
-    PendingReaderBuilder,
+    ComponentHealthChecks, LagReader, PendingReader, PendingReaderBuilder,
+    start_metrics_https_server,
 };
 
 /// Starts the metrics server

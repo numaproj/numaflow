@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use async_nats::jetstream::kv::Store;
 use async_nats::jetstream::Context;
+use async_nats::jetstream::kv::Store;
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use bytes::Bytes;

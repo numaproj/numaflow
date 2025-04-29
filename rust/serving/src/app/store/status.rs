@@ -4,8 +4,8 @@
 //! - Status value - JSON serialized [ProcessingStatus]
 
 use crate::config::RequestType;
-use async_nats::jetstream::kv::{CreateErrorKind, Store};
 use async_nats::jetstream::Context;
+use async_nats::jetstream::kv::{CreateErrorKind, Store};
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::result;

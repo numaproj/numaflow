@@ -6,7 +6,7 @@ use numaflow_jetstream::{JetstreamSource, JetstreamSourceConfig};
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::message::{IntOffset, MessageID, Metadata, Offset};
 use crate::source::SourceReader;
-use crate::{message::Message, Error, Result};
+use crate::{Error, Result, message::Message};
 
 use super::SourceAcker;
 

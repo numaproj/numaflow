@@ -6,18 +6,18 @@ use axum::body::Body;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::{
+    Router,
     extract::{MatchedPath, Request},
     middleware::Next,
     response::Response,
     routing::get,
-    Router,
 };
-use axum_server::tls_rustls::RustlsConfig;
 use axum_server::Handle;
+use axum_server::tls_rustls::RustlsConfig;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
-use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
+use prometheus_client::metrics::histogram::{Histogram, exponential_buckets};
 use prometheus_client::registry::Registry;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};

@@ -15,10 +15,10 @@
 //!
 
 use crate::reduce::wal::error::WalResult;
-use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
-use crate::reduce::wal::segment::replay::{ReplayWal, SegmentEntry};
 use crate::reduce::wal::segment::GcEventEntry;
 use crate::reduce::wal::segment::WalType;
+use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
+use crate::reduce::wal::segment::replay::{ReplayWal, SegmentEntry};
 use crate::shared::grpc::utc_from_timestamp;
 use chrono::{DateTime, Utc};
 use numaflow_pb::objects::isb;
@@ -28,7 +28,7 @@ use std::path::PathBuf;
 use std::time::{Duration, UNIX_EPOCH};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
-use tokio_stream::{wrappers::ReceiverStream, StreamExt};
+use tokio_stream::{StreamExt, wrappers::ReceiverStream};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 

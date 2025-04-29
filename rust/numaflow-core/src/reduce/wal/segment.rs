@@ -119,15 +119,15 @@ impl From<GcEventEntry> for GcEvent {
 mod tests {
     use super::*;
     use crate::message::{Message, MessageID};
+    use crate::reduce::wal::segment::WalType;
     use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
     use crate::reduce::wal::segment::compactor::{Compactor, WindowKind};
     use crate::reduce::wal::segment::replay::{ReplayWal, SegmentEntry};
-    use crate::reduce::wal::segment::WalType;
     use bytes::Bytes;
     use chrono::{TimeZone, Utc};
     use std::sync::Arc;
-    use tokio_stream::wrappers::ReceiverStream;
     use tokio_stream::StreamExt;
+    use tokio_stream::wrappers::ReceiverStream;
 
     #[tokio::test]
     async fn test_gc_wal_and_aligned_compaction() {

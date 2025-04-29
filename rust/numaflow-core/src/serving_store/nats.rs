@@ -1,7 +1,7 @@
 use crate::config::pipeline::NatsStoreConfig;
 use crate::serving_store::StoreEntry;
-use async_nats::jetstream::kv::Store;
 use async_nats::jetstream::Context;
+use async_nats::jetstream::kv::Store;
 use chrono::Utc;
 use tokio::task::JoinSet;
 use tracing::trace;

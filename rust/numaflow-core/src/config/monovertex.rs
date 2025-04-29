@@ -1,16 +1,17 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use numaflow_models::models::MonoVertex;
 use serde_json::from_slice;
 
 use super::pipeline::ServingCallbackConfig;
 use super::{
-    get_namespace, get_pipeline_name, DEFAULT_CALLBACK_CONCURRENCY, ENV_CALLBACK_CONCURRENCY,
-    ENV_CALLBACK_ENABLED, ENV_MONO_VERTEX_OBJ,
+    DEFAULT_CALLBACK_CONCURRENCY, ENV_CALLBACK_CONCURRENCY, ENV_CALLBACK_ENABLED,
+    ENV_MONO_VERTEX_OBJ, get_namespace, get_pipeline_name,
 };
+use crate::Result;
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::source::{GeneratorConfig, SourceConfig};
@@ -21,7 +22,6 @@ use crate::config::components::{sink, source};
 use crate::config::get_vertex_replica;
 use crate::config::monovertex::sink::SinkType;
 use crate::error::Error;
-use crate::Result;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
@@ -196,14 +196,14 @@ impl MonovertexConfig {
 mod tests {
     use std::collections::HashMap;
 
-    use base64::prelude::BASE64_STANDARD;
     use base64::Engine;
+    use base64::prelude::BASE64_STANDARD;
 
+    use crate::config::ENV_MONO_VERTEX_OBJ;
     use crate::config::components::sink::SinkType;
     use crate::config::components::source::SourceType;
     use crate::config::components::transformer::TransformerType;
     use crate::config::monovertex::MonovertexConfig;
-    use crate::config::ENV_MONO_VERTEX_OBJ;
     use crate::error::Error;
 
     #[test]

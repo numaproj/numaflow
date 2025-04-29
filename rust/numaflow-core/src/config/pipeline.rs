@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::env;
 use std::time::Duration;
 
-use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use numaflow_models::models::{ForwardConditions, Vertex, Watermark};
 use serde::Deserialize;
 use serde_json::from_slice;
@@ -13,6 +13,9 @@ use super::{
     DEFAULT_CALLBACK_CONCURRENCY, ENV_CALLBACK_CONCURRENCY, ENV_CALLBACK_ENABLED,
     ENV_NUMAFLOW_SERVING_RESPONSE_STORE,
 };
+use crate::Result;
+use crate::config::ENV_NUMAFLOW_SERVING_CALLBACK_STORE;
+use crate::config::ENV_NUMAFLOW_SERVING_SOURCE_SETTINGS;
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::sink::SinkType;
@@ -25,10 +28,7 @@ use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::watermark::{BucketConfig, EdgeWatermarkConfig};
 use crate::config::pipeline::watermark::{IdleConfig, SourceWatermarkConfig};
-use crate::config::ENV_NUMAFLOW_SERVING_CALLBACK_STORE;
-use crate::config::ENV_NUMAFLOW_SERVING_SOURCE_SETTINGS;
 use crate::error::Error;
-use crate::Result;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
@@ -720,7 +720,10 @@ mod tests {
 
         let env_vars = [
             ("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222"),
-            ("NUMAFLOW_SERVING_SOURCE_SETTINGS", "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQifQ=="),
+            (
+                "NUMAFLOW_SERVING_SOURCE_SETTINGS",
+                "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQifQ==",
+            ),
             ("NUMAFLOW_SERVING_CALLBACK_STORE", "test-kv-store"),
             ("NUMAFLOW_SERVING_RESPONSE_STORE", "test-kv-store"),
         ];

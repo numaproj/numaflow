@@ -56,7 +56,9 @@ impl OffsetTimeline {
                 element_node.offset = node.offset;
             }
             (Ordering::Equal, _) => {
-                debug!("Watermark the same but input offset smaller than the existing offset - skipping");
+                debug!(
+                    "Watermark the same but input offset smaller than the existing offset - skipping"
+                );
             }
             (Ordering::Greater, Ordering::Greater) => {
                 watermarks.push_front(node);
