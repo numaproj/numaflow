@@ -4,8 +4,8 @@ use tokio::task::JoinSet;
 use tonic::transport::Channel;
 
 use crate::config::pipeline::UserDefinedStoreConfig;
-use crate::serving_store::StoreEntry;
 use crate::shared;
+use crate::sink::serve::StoreEntry;
 
 /// User defined serving store to store the serving responses.
 #[derive(Clone)]
