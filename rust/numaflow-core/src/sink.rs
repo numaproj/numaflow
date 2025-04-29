@@ -31,7 +31,7 @@ use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_forward_metric_labels,
     pipeline_metrics,
 };
-use crate::serving_store::{ServingStore, StoreEntry};
+use crate::sink::serving_store::{ServingStore, StoreEntry};
 use crate::tracker::TrackerHandle;
 
 /// A [Blackhole] sink which reads but never writes to anywhere, semantic equivalent of `/dev/null`.
@@ -46,6 +46,8 @@ mod log;
 
 mod serve;
 
+/// Serving store to store the result of the serving pipeline.
+pub mod serving_store;
 /// [User-Defined Sink] extends Numaflow to add custom sources supported outside the builtins.
 ///
 /// [User-Defined Sink]: https://numaflow.numaproj.io/user-guide/sinks/user-defined-sinks/
@@ -956,14 +958,9 @@ impl Drop for SinkWriter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::pipeline::NatsStoreConfig;
     use crate::message::{IntOffset, Message, MessageID, Offset, ReadAck};
-    use crate::serving_store::nats::NatsServingStore;
     use crate::shared::grpc::create_rpc_channel;
-    use async_nats::jetstream;
-    use async_nats::jetstream::kv::Config;
     use chrono::{TimeZone, Utc};
-    use futures::StreamExt;
     use numaflow::sink;
     use numaflow_pb::clients::sink::{SinkRequest, SinkResponse};
     use std::sync::Arc;
