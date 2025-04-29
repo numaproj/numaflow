@@ -157,7 +157,9 @@ const (
 	EnvK8sServerVersion                 = "K8S_SERVER_VERSION"
 	EnvNumaflowRuntime                  = "NUMAFLOW_RUNTIME"
 	EnvServingSettings                  = "NUMAFLOW_SERVING_SOURCE_SETTINGS"
-	EnvServingStore                     = "NUMAFLOW_SERVING_KV_STORE"
+	EnvServingCallbackStore             = "NUMAFLOW_SERVING_CALLBACK_STORE"
+	EnvServingResponseStore             = "NUMAFLOW_SERVING_RESPONSE_STORE"
+	EnvServingStatusStore               = "NUMAFLOW_SERVING_STATUS_STORE"
 
 	NumaflowRustBinary          = "/bin/numaflow-rs"
 	PathVarRun                  = "/var/run/numaflow"

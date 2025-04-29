@@ -13,9 +13,7 @@ use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::{PipelineConfig, ServingStoreType, SinkVtxConfig, SourceVtxConfig};
-use crate::metrics::{
-    ComponentHealthChecks, LagReader, PendingReaderTasks, PendingReaderTasks_, PipelineComponents,
-};
+use crate::metrics::{ComponentHealthChecks, LagReader, PendingReaderTasks, PipelineComponents};
 use crate::pipeline::forwarder::source_forwarder;
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;

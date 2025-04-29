@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use serving::callback::CallbackHandler;
-use serving::DEFAULT_ID_HEADER;
+use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
 use tokio::sync::{mpsc, oneshot};
 use tracing::error;
 
@@ -87,6 +87,7 @@ struct Tracker {
 #[derive(Debug)]
 struct ServingCallbackInfo {
     id: String,
+    pod_hash: String,
     from_vertex: String,
     /// at the moment these are just tags.
     responses: Vec<Option<Vec<String>>>,
@@ -106,6 +107,16 @@ impl TryFrom<&Message> for ServingCallbackInfo {
             })?
             .to_owned();
 
+        let pod_hash = message
+            .headers
+            .get(DEFAULT_POD_HASH_KEY)
+            .ok_or_else(|| {
+                Error::Source(format!(
+                    "{DEFAULT_POD_HASH_KEY} is not found in message headers",
+                ))
+            })?
+            .to_owned();
+
         let from_vertex = message
             .metadata
             .as_ref()
@@ -115,6 +126,7 @@ impl TryFrom<&Message> for ServingCallbackInfo {
 
         Ok(ServingCallbackInfo {
             id: uuid,
+            pod_hash,
             from_vertex,
             responses: vec![None],
         })
@@ -329,6 +341,7 @@ impl Tracker {
         let result = callback_handler
             .callback(
                 callback_info.id,
+                callback_info.pod_hash,
                 callback_info.from_vertex,
                 callback_info.responses,
             )
@@ -516,7 +529,7 @@ mod tests {
         let callback_info: super::Result<ServingCallbackInfo> = TryFrom::try_from(&message);
         assert!(callback_info.is_err());
 
-        let headers = [(DEFAULT_ID_HEADER, "1234")]
+        let headers = [(DEFAULT_ID_HEADER, "1234"), (DEFAULT_POD_HASH_KEY, "abcd")]
             .into_iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect();
@@ -723,6 +736,7 @@ mod tests {
 
         let mut headers = HashMap::new();
         headers.insert(DEFAULT_ID_HEADER.to_string(), "1234".to_string());
+        headers.insert(DEFAULT_POD_HASH_KEY.to_string(), "abcd".to_string());
 
         let offset = Offset::String(StringOffset::new("offset1".to_string(), 0));
         let message = Message {

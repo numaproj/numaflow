@@ -4,7 +4,7 @@ use tracing::info;
 use crate::config::is_mono_vertex;
 use crate::config::monovertex::MonovertexConfig;
 use crate::error::{self};
-use crate::metrics::{LagReader, PendingReaderTasks, PendingReaderTasks_};
+use crate::metrics::{LagReader, PendingReaderTasks_};
 use crate::shared::create_components;
 use crate::sink::SinkWriter;
 use crate::source::Source;
