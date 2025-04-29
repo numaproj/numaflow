@@ -226,6 +226,7 @@ impl JetStreamDataStore {
         }
     }
 
+    /// process every entry from the response store central watcher.
     async fn process_entry(
         entry: &async_nats::jetstream::kv::Entry,
         responses_map: &Arc<Mutex<HashMap<String, ResponseMode>>>,
@@ -238,7 +239,7 @@ impl JetStreamDataStore {
         let key_suffix = format!("{}.{}", parts[3], parts[4]);
 
         // key format is rs.{pod_hash}.{request_id}.{key_suffix}, anything else is not valid
-        if parts.len() < 5 || key_prefix != RESPONSE_KEY_PREFIX || parts[1] != pod_hash {
+        if parts.len() != 5 || key_prefix != RESPONSE_KEY_PREFIX || parts[1] != pod_hash {
             return Err(format!("Unexpected key format: {}", entry.key));
         }
 
@@ -251,6 +252,8 @@ impl JetStreamDataStore {
 
             let mut response_map = responses_map.lock().await;
             let entry = response_map.entry(request_id.to_string());
+            // If the entry is vacant, we can insert the appropriate entry
+            // else (if map contains the entry) we need to return an error
             if let Entry::Vacant(vacant_entry) = entry {
                 match request_type {
                     // For SSE, create a channel and insert it
@@ -278,7 +281,7 @@ impl JetStreamDataStore {
             }
         } else if key_suffix == DONE_PROCESSING_MARKER {
             // when we get the done processing marker, it means we won't get any more responses for
-            // this request id. So we need to merge the responses and put them in the kv store, so
+            // this request id. So we need to merge the responses and put them in the response store, so
             // that it can be retrieved when needed. We only need to store the merged response for
             // sync and async because for sse it will be streaming. It's safe to store for sync request
             // because during failure of sync request it will be converted as an async request.
@@ -318,7 +321,7 @@ impl JetStreamDataStore {
 
     /// Retrieves the final result from the KV store for a given request ID using the final key, it
     /// keeps retrying until the final result is available.
-    async fn get_data_from_kv_store(&self, id: &str) -> StoreResult<Vec<Vec<u8>>> {
+    async fn get_data_from_response_store(&self, id: &str) -> StoreResult<Vec<Vec<u8>>> {
         let final_result_key = format!(
             "{}.{}.{}",
             RESPONSE_KEY_PREFIX, self.pod_hash, FINAL_RESULT_KEY_SUFFIX
@@ -349,6 +352,8 @@ impl JetStreamDataStore {
     /// Retrieves the historic response for a given request ID and pod hash. It uses a watcher to
     /// stream the responses from the KV store. The responses are collected until the done processing
     /// marker is received.
+    /// This is used during a failover case (pod processing the request is different the one that
+    /// originated the request).
     pub(crate) async fn get_historic_response(
         store: Store,
         id: &str,
@@ -406,6 +411,7 @@ impl JetStreamDataStore {
     /// Streams the historic responses for a given request ID and pod hash. It uses a watcher to
     /// stream the responses from the KV store. The responses are sent to the provided channel
     /// until the done processing marker is received.
+    /// This is like [get_historic_response] except that this is for SSE.
     pub(crate) async fn stream_historic_responses(
         store: Store,
         id: &str,
@@ -465,7 +471,7 @@ impl JetStreamDataStore {
     }
 }
 
-/// Represents the response mode for the request. For sse it will be stream and for sync and async
+/// Represents the response mode for the request. For sse it will be streaming but for sync and async
 /// it will be unary.
 enum ResponseMode {
     Stream {
@@ -482,7 +488,7 @@ impl DataStore for JetStreamDataStore {
         // responses else we will have to create a new watcher for the old pod hash to get all the
         // responses.
         if pod_hash.eq(&self.pod_hash) {
-            self.get_data_from_kv_store(id).await
+            self.get_data_from_response_store(id).await
         } else {
             Self::get_historic_response(self.kv_store.clone(), id, pod_hash, self.cln_token.clone())
                 .await

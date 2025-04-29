@@ -78,6 +78,8 @@ impl TryFrom<ProcessingStatus> for Bytes {
 pub(crate) struct StatusTracker {
     pod_hash: String,
     status_kv: Store,
+    /// Optional response kv store to write start and done processing marker. For user defined store,
+    /// this is not used.
     response_kv: Option<Store>,
 }
 

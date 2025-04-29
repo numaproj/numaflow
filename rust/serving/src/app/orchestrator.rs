@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
-use tracing::{debug, error, info, warn, Instrument};
+use tracing::{debug, error, info, trace, warn, Instrument};
 
 use crate::app::store::cbstore::CallbackStore;
 use crate::app::store::datastore::DataStore;
@@ -20,9 +20,7 @@ use crate::Error;
 
 #[derive(Clone)]
 pub(crate) struct OrchestratorState<T, U> {
-    // generator to generate subgraph
     msg_graph_generator: Arc<MessageGraph>,
-    // conn is to be used while reading and writing to redis.
     datum_store: T,
     callback_store: U,
     status_tracker: StatusTracker,
@@ -105,7 +103,7 @@ where
         let callback_watcher = async move {
             let mut callbacks = Vec::new();
             while let Some(cb) = callbacks_stream.next().await {
-                debug!(?cb, ?msg_id, "Received callback");
+                trace!(?cb, ?msg_id, "Received callback");
                 callbacks.push(cb);
                 let subgraph = sub_graph_generator
                     .generate_subgraph_from_callbacks(msg_id.clone(), callbacks.clone())

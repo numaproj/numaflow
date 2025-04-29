@@ -42,7 +42,8 @@ pub(crate) type Result<T> = std::result::Result<T, Error>;
 #[trait_variant::make(DataStore: Send)]
 #[allow(dead_code)]
 pub(crate) trait LocalDataStore {
-    /// retrieve the data from the store
+    /// retrieve the data from the store.
+    /// FIXME: make pod_hash optional
     async fn retrieve_data(&mut self, id: &str, pod_hash: &str) -> Result<Vec<Vec<u8>>>;
     /// streams the data from the store
     async fn stream_data(&mut self, id: &str, pod_hash: &str)

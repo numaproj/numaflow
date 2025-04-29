@@ -2,11 +2,9 @@
 //! A central watcher task per pod monitors callbacks for that pod and sends them to the appropriate
 //! sender.
 //!
-//! **JetStream Callback Entry Format**
-//!
-//! Callback key - cb.{pod-hash}.{id}.{vertex_name}.{timestamp}
-//!
-//! Callback value - JSON serialized Callback struct
+//! JetStream Callback Entry Format is as follows:
+//!  - Callback key - `cb.{pod-hash}.{id}.{vertex_name}.{timestamp}`
+//!  - Callback value - JSON serialized Callback struct
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -72,6 +70,8 @@ impl JetStreamCallbackStore {
         })
     }
 
+    /// spawns the central task that watches callback keys and manages callback collection for this
+    /// pod.
     async fn spawn_central_watcher(
         pod_hash: String,
         kv_store: Store,
@@ -172,7 +172,7 @@ impl JetStreamCallbackStore {
         }.instrument(span));
     }
 
-    // Watch for all the callbacks for a given request id that was getting processed by a different pod.
+    /// Watch for all the callbacks for a given request id that was getting processed by a different pod.
     async fn watch_historical_callbacks(
         callback_kv: Store,
         previous_pod_hash: String,
