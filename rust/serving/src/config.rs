@@ -76,21 +76,21 @@ impl Default for UserDefinedStoreConfig {
 pub struct Settings {
     /// The HTTP header used to communicate to the client about the unique id assigned for a request in the store
     /// The client may also set the value of this header when sending the payload.
-    pub tid_header: String,
-    pub pod_hash: String,
+    pub tid_header: &'static str,
+    pub pod_hash: &'static str,
     pub app_listen_port: u16,
     pub metrics_server_listen_port: u16,
-    pub upstream_addr: String,
+    pub upstream_addr: &'static str,
     pub drain_timeout_secs: u64,
     pub store_type: StoreType,
-    pub js_callback_store: String,
-    pub js_response_store: String,
-    pub js_status_store: String,
+    pub js_callback_store: &'static str,
+    pub js_response_store: &'static str,
+    pub js_status_store: &'static str,
     pub api_auth_token: Option<String>,
     pub pipeline_spec: PipelineDCG,
     pub nats_basic_auth: Option<(String, String)>,
-    pub js_message_stream: String,
-    pub jetstream_url: String,
+    pub js_message_stream: &'static str,
+    pub jetstream_url: &'static str,
 }
 
 #[derive(Default, Debug, Deserialize, Clone, PartialEq)]
@@ -103,21 +103,21 @@ pub enum StoreType {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            tid_header: DEFAULT_ID_HEADER.to_owned(),
-            pod_hash: "0".to_owned(),
+            tid_header: DEFAULT_ID_HEADER,
+            pod_hash: "0",
             app_listen_port: 3000,
             metrics_server_listen_port: 3001,
-            upstream_addr: "localhost:8888".to_owned(),
+            upstream_addr: "localhost:8888",
             drain_timeout_secs: 600,
             store_type: StoreType::default(),
-            js_callback_store: "callback-kv".to_owned(),
-            js_response_store: "response-kv".to_owned(),
-            js_status_store: "status-kv".to_owned(),
+            js_callback_store: "callback-kv",
+            js_response_store: "response-kv",
+            js_status_store: "status-kv",
             api_auth_token: None,
             pipeline_spec: Default::default(),
             nats_basic_auth: None,
-            js_message_stream: "test-stream".into(),
-            jetstream_url: "localhost:4222".into(),
+            js_message_stream: "test-stream",
+            jetstream_url: "localhost:4222",
         }
     }
 }
@@ -238,12 +238,12 @@ impl TryFrom<HashMap<String, String>> for Settings {
 
         let mut settings = Settings {
             pipeline_spec,
-            js_callback_store: js_cb_store.into(),
+            js_callback_store: Box::leak(js_cb_store.clone().into_boxed_str()),
             nats_basic_auth,
-            js_message_stream: js_source_spec.stream,
-            jetstream_url: js_source_spec.url,
-            js_response_store: js_response_store.into(),
-            js_status_store: js_status_store.into(),
+            js_message_stream: Box::leak(js_source_spec.stream.into_boxed_str()),
+            jetstream_url: Box::leak(js_source_spec.url.into_boxed_str()),
+            js_response_store: Box::leak(js_response_store.to_string().into_boxed_str()),
+            js_status_store: Box::leak(js_status_store.to_string().into_boxed_str()),
             ..Default::default()
         };
 
@@ -279,14 +279,17 @@ impl TryFrom<HashMap<String, String>> for Settings {
             StoreType::Nats
         };
 
-        settings.tid_header = serving_server_settings.msg_id_header_key;
-        settings.pod_hash = env_vars
-            .get(ENV_NUMAFLOW_POD)
-            .unwrap()
-            .split('-')
-            .last()
-            .unwrap_or("0")
-            .to_string();
+        settings.tid_header = Box::leak(serving_server_settings.msg_id_header_key.into_boxed_str());
+        settings.pod_hash = Box::leak(
+            env_vars
+                .get(ENV_NUMAFLOW_POD)
+                .unwrap()
+                .split('-')
+                .last()
+                .unwrap_or("0")
+                .to_string()
+                .into_boxed_str(),
+        );
 
         settings.drain_timeout_secs = serving_server_settings
             .request_timeout_seconds

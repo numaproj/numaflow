@@ -119,8 +119,8 @@ async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
     // create a callback store for tracking
     let callback_store = JetStreamCallbackStore::new(
         js_context.clone(),
-        &settings.pod_hash,
-        &settings.js_callback_store,
+        settings.pod_hash,
+        settings.js_callback_store,
         cancel_token.clone(),
     )
     .await?;
@@ -138,20 +138,20 @@ async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
         StoreType::Nats => {
             let nats_store = JetStreamDataStore::new(
                 js_context.clone(),
-                &settings.js_response_store,
-                &settings.pod_hash,
+                settings.js_response_store,
+                settings.pod_hash,
                 cancel_token.clone(),
             )
             .await?;
             let status_tracker = StatusTracker::new(
                 js_context.clone(),
-                &settings.js_status_store,
-                settings.pod_hash.clone(),
+                settings.js_status_store,
+                settings.pod_hash,
                 Some(settings.js_response_store.to_string()),
             )
             .await?;
             let callback_state = CallbackState::new(
-                &settings.pod_hash,
+                settings.pod_hash,
                 msg_graph,
                 nats_store,
                 callback_store,
@@ -172,14 +172,14 @@ async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
         StoreType::UserDefined(ud_config) => {
             let status_tracker = StatusTracker::new(
                 js_context.clone(),
-                &settings.js_status_store,
-                settings.pod_hash.clone(),
+                settings.js_status_store,
+                settings.pod_hash,
                 None,
             )
             .await?;
             let ud_store = UserDefinedStore::new(ud_config.clone()).await?;
             let callback_state = CallbackState::new(
-                &settings.pod_hash,
+                settings.pod_hash,
                 msg_graph,
                 ud_store,
                 callback_store,

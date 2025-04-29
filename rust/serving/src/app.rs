@@ -262,7 +262,7 @@ async fn setup_app<
     let app = parent
         .nest(
             "/v1/direct",
-            direct_proxy(client, app.settings.upstream_addr.clone()),
+            direct_proxy(client, app.settings.upstream_addr.into()),
         )
         .nest("/v1/process", routes(app).await?);
 
@@ -346,7 +346,7 @@ mod tests {
             .await
             .unwrap();
 
-        let status_tracker = StatusTracker::new(context.clone(), store_name, "0".to_string(), None)
+        let status_tracker = StatusTracker::new(context.clone(), store_name, "0", None)
             .await
             .unwrap();
         let msg_graph = MessageGraph::from_pipeline(&settings.pipeline_spec)?;
@@ -405,7 +405,7 @@ mod tests {
             .await
             .unwrap();
 
-        let status_tracker = StatusTracker::new(context.clone(), store_name, "0".to_string(), None)
+        let status_tracker = StatusTracker::new(context.clone(), store_name, "0", None)
             .await
             .unwrap();
 

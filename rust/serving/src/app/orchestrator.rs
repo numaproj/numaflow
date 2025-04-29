@@ -5,11 +5,10 @@
 use bytes::Bytes;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
-use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
-use tracing::{Instrument, error, info, trace, warn};
+use tokio_stream::StreamExt;
+use tracing::{error, info, trace, warn, Instrument};
 
-use crate::Error;
 use crate::app::store::cbstore::CallbackStore;
 use crate::app::store::datastore::DataStore;
 use crate::app::store::status;
@@ -17,6 +16,7 @@ use crate::app::store::status::{ProcessingStatus, StatusTracker};
 use crate::app::tracker::MessageGraph;
 use crate::config::RequestType;
 use crate::metrics::serving_metrics;
+use crate::Error;
 
 #[derive(Clone)]
 pub(crate) struct OrchestratorState<T, U> {
@@ -360,7 +360,7 @@ mod tests {
         let status_tracker = StatusTracker::new(
             context.clone(),
             store_name,
-            pod_hash.to_string(),
+            pod_hash,
             Some(store_name.to_string()),
         )
         .await
@@ -534,7 +534,7 @@ mod tests {
         let status_tracker = StatusTracker::new(
             context.clone(),
             store_name,
-            pod_hash.to_string(),
+            pod_hash,
             Some(store_name.to_string()),
         )
         .await

@@ -85,7 +85,7 @@ fn extract_bytes_list(merged: &Bytes) -> Result<Vec<Bytes>, String> {
 #[derive(Clone)]
 pub(crate) struct JetStreamDataStore {
     kv_store: Store,
-    pod_hash: String,
+    pod_hash: &'static str,
     responses_map: Arc<Mutex<HashMap<String, ResponseMode>>>,
     cln_token: CancellationToken,
 }
@@ -93,8 +93,8 @@ pub(crate) struct JetStreamDataStore {
 impl JetStreamDataStore {
     pub(crate) async fn new(
         js_context: Context,
-        datum_store_name: &str,
-        pod_hash: &str,
+        datum_store_name: &'static str,
+        pod_hash: &'static str,
         cln_token: CancellationToken,
     ) -> StoreResult<Self> {
         let kv_store = js_context
@@ -113,7 +113,7 @@ impl JetStreamDataStore {
         .await;
         Ok(Self {
             kv_store,
-            pod_hash: pod_hash.to_string(),
+            pod_hash,
             responses_map,
             cln_token,
         })
@@ -503,7 +503,7 @@ impl DataStore for JetStreamDataStore {
     ) -> StoreResult<ReceiverStream<Arc<Bytes>>> {
         // if the pod_hash is same as the current pod hash then we can rely on the central watcher for
         // responses else we will have to create a new watcher for the old pod hash.
-        if pod_hash.eq(&self.pod_hash) {
+        if pod_hash.eq(self.pod_hash) {
             // we need to wait for the start processing marker entry to be processed by the central watcher
             loop {
                 {

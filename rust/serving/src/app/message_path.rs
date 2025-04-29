@@ -80,10 +80,9 @@ mod tests {
             .await
             .unwrap();
 
-        let status_tracker =
-            StatusTracker::new(context.clone(), store_name, "xgda".to_string(), None)
-                .await
-                .unwrap();
+        let status_tracker = StatusTracker::new(context.clone(), store_name, "xgda", None)
+            .await
+            .unwrap();
 
         let pipeline_spec: PipelineDCG = PIPELINE_SPEC_ENCODED.parse().unwrap();
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec).unwrap();
