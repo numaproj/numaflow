@@ -34,7 +34,11 @@ impl UserDefinedStore {
 
 impl DataStore for UserDefinedStore {
     // FIXME(serving): we need to return the origin details along with the payload
-    async fn retrieve_data(&mut self, id: &str, _pod_hash: &str) -> StoreResult<Vec<Vec<u8>>> {
+    async fn retrieve_data(
+        &mut self,
+        id: &str,
+        _pod_hash: Option<&str>,
+    ) -> StoreResult<Vec<Vec<u8>>> {
         let request = GetRequest { id: id.to_string() };
         let response = self
             .client
@@ -177,7 +181,7 @@ mod tests {
         assert!(store.ready().await);
 
         // Test retrieve_data
-        let retrieved_data = store.retrieve_data(&id, "0").await.unwrap();
+        let retrieved_data = store.retrieve_data(&id, None).await.unwrap();
         assert_eq!(retrieved_data, vec![payload[0].value.clone()]);
 
         drop(store);

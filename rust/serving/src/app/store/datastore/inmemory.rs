@@ -29,7 +29,11 @@ impl InMemoryDataStore {
 impl super::DataStore for InMemoryDataStore {
     /// Retrieves data for a given id from the `HashMap`.
     /// Each piece of data is deserialized from bytes into a `String`.
-    async fn retrieve_data(&mut self, id: &str, _pod_hash: &str) -> StoreResult<Vec<Vec<u8>>> {
+    async fn retrieve_data(
+        &mut self,
+        id: &str,
+        _pod_hash: Option<&str>,
+    ) -> StoreResult<Vec<Vec<u8>>> {
         let id = format!("{id}_{STORE_KEY_SUFFIX}");
         let data = self.data.lock().await;
         match data.get(&id) {
@@ -85,7 +89,7 @@ mod tests {
     async fn test_retrieve_datum() {
         let mut store = create_test_store();
         let id = "test_id";
-        let result = store.retrieve_data(id, "0").await.unwrap();
+        let result = store.retrieve_data(id, None).await.unwrap();
         assert!(result.len() > 0);
         assert_eq!(result[0], b"test_payload");
     }
@@ -94,7 +98,7 @@ mod tests {
     async fn test_retrieve_datum_not_found() {
         let mut store = create_test_store();
         let id = "non_existent_id";
-        let result = store.retrieve_data(id, "0").await;
+        let result = store.retrieve_data(id, None).await;
         assert!(matches!(result, Err(StoreError::InvalidRequestId(_))));
     }
 

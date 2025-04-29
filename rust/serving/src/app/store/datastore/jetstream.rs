@@ -158,10 +158,6 @@ impl JetStreamDataStore {
                                     continue;
                                 }
 
-                                if entry.key.contains(FINAL_RESULT_KEY_SUFFIX) {
-                                    continue;
-                                }
-
                                 if let Err(e) = Self::process_entry(&entry, &responses_map, &pod_hash, &kv_store).await {
                                     error!(error = ?e, "Failed to process entry");
                                 }
@@ -290,10 +286,8 @@ impl JetStreamDataStore {
                 // we use rs.{pod_hash}.{request_id}.final.result.processed as the key for the final result
                 // and the value will be the merged response.
                 let merged_response = merge_bytes_list(&responses);
-                let final_result_key = format!(
-                    "{}.{}.{}",
-                    RESPONSE_KEY_PREFIX, pod_hash, FINAL_RESULT_KEY_SUFFIX
-                );
+                let final_result_key =
+                    format!("{}.{}", RESPONSE_KEY_PREFIX, FINAL_RESULT_KEY_SUFFIX);
                 kv_store
                     .put(final_result_key, merged_response)
                     .await
@@ -322,10 +316,7 @@ impl JetStreamDataStore {
     /// Retrieves the final result from the KV store for a given request ID using the final key, it
     /// keeps retrying until the final result is available.
     async fn get_data_from_response_store(&self, id: &str) -> StoreResult<Vec<Vec<u8>>> {
-        let final_result_key = format!(
-            "{}.{}.{}",
-            RESPONSE_KEY_PREFIX, self.pod_hash, FINAL_RESULT_KEY_SUFFIX
-        );
+        let final_result_key = format!("{}.{}", RESPONSE_KEY_PREFIX, FINAL_RESULT_KEY_SUFFIX);
 
         loop {
             match self.kv_store.get(&final_result_key).await {
@@ -483,15 +474,24 @@ enum ResponseMode {
 
 impl DataStore for JetStreamDataStore {
     /// Retrieve a data from the store. If the datum is not found, `None` is returned.
-    async fn retrieve_data(&mut self, id: &str, pod_hash: &str) -> StoreResult<Vec<Vec<u8>>> {
+    async fn retrieve_data(
+        &mut self,
+        id: &str,
+        pod_hash: Option<&str>,
+    ) -> StoreResult<Vec<Vec<u8>>> {
         // if the pod_hash is same as the current pod hash then we can rely on the central watcher for
         // responses else we will have to create a new watcher for the old pod hash to get all the
         // responses.
-        if pod_hash.eq(&self.pod_hash) {
-            self.get_data_from_response_store(id).await
+        if let Some(pod_hash_value) = pod_hash {
+            Self::get_historic_response(
+                self.kv_store.clone(),
+                id,
+                pod_hash_value,
+                self.cln_token.clone(),
+            )
+            .await
         } else {
-            Self::get_historic_response(self.kv_store.clone(), id, pod_hash, self.cln_token.clone())
-                .await
+            self.get_data_from_response_store(id).await
         }
     }
 
@@ -601,7 +601,7 @@ mod tests {
         let done_key = format!("rs.{pod_hash}.{id}.done.processing");
         store.kv_store.put(done_key, Bytes::new()).await.unwrap();
 
-        let result = store.retrieve_data(id, pod_hash).await.unwrap();
+        let result = store.retrieve_data(id, None).await.unwrap();
         assert!(result.len() > 0);
         assert_eq!(result[0], b"test_payload");
 
@@ -710,7 +710,7 @@ mod tests {
         let done_key = format!("rs.{other_pod_hash}.{id}.done.processing");
         store.kv_store.put(done_key, Bytes::new()).await.unwrap();
 
-        let result = store.retrieve_data(id, other_pod_hash).await.unwrap();
+        let result = store.retrieve_data(id, Some(other_pod_hash)).await.unwrap();
         assert!(result.len() > 0);
         assert_eq!(result[0], b"test_payload");
 

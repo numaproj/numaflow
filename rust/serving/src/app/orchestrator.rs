@@ -150,15 +150,17 @@ where
                 info!(?id, "Request is still in progress");
                 Ok(None)
             }
-            ProcessingStatus::Completed { pod_hash, .. } => {
-                let data = self.datum_store.retrieve_data(id, &pod_hash).await?;
+            ProcessingStatus::Completed { .. } => {
+                let data = self.datum_store.retrieve_data(id, None).await?;
                 Ok(Some(data))
             }
             ProcessingStatus::Failed { error, pod_hash } => {
                 warn!("Request was failed because of {error}, processing and fetching the responses again");
                 let notify = self.process_request(id, request_type).await?;
                 notify.await.expect("sender was dropped")?;
-                Ok(Some(self.datum_store.retrieve_data(id, &pod_hash).await?))
+                Ok(Some(
+                    self.datum_store.retrieve_data(id, Some(&pod_hash)).await?,
+                ))
             }
         }
     }
