@@ -103,13 +103,13 @@ impl source::LagReader for SQSSource {
 pub mod tests {
     use std::collections::HashMap;
 
+    use aws_sdk_sqs::Config;
     use aws_sdk_sqs::config::BehaviorVersion;
     use aws_sdk_sqs::types::MessageSystemAttributeName;
-    use aws_sdk_sqs::Config;
-    use aws_smithy_mocks_experimental::{mock, MockResponseInterceptor, Rule, RuleMode};
+    use aws_smithy_mocks_experimental::{MockResponseInterceptor, Rule, RuleMode, mock};
     use bytes::Bytes;
     use chrono::Utc;
-    use numaflow_sqs::source::{SqsSourceBuilder, SQS_DEFAULT_REGION};
+    use numaflow_sqs::source::{SQS_DEFAULT_REGION, SqsSourceBuilder};
     use tokio::task::JoinHandle;
     use tokio_util::sync::CancellationToken;
 

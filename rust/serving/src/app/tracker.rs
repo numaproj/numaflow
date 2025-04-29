@@ -4,9 +4,9 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
+use crate::Error;
 use crate::callback::Callback;
 use crate::pipeline::{Edge, OperatorType, PipelineDCG};
-use crate::Error;
 
 const DROP: &str = "U+005C__DROP__";
 

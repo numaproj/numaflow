@@ -47,7 +47,7 @@ pub(crate) trait LocalDataStore {
     async fn retrieve_data(&mut self, id: &str, pod_hash: Option<&str>) -> Result<Vec<Vec<u8>>>;
     /// streams the data from the store
     async fn stream_data(&mut self, id: &str, pod_hash: &str)
-        -> Result<ReceiverStream<Arc<Bytes>>>;
+    -> Result<ReceiverStream<Arc<Bytes>>>;
     /// check if the store is ready
     async fn ready(&mut self) -> bool;
 }

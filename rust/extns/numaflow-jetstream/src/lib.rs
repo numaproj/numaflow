@@ -3,11 +3,11 @@ use std::{collections::HashMap, time::Duration};
 
 use async_nats::jetstream::{AckKind, Message as JetstreamMessage};
 use async_nats::{
-    jetstream::consumer::{
-        pull::{Config, Stream},
-        Consumer, PullConsumer,
-    },
     ConnectOptions,
+    jetstream::consumer::{
+        Consumer, PullConsumer,
+        pull::{Config, Stream},
+    },
 };
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
@@ -185,7 +185,9 @@ impl JetstreamActor {
         tls_config: TlsConfig,
     ) -> Result<ConnectOptions> {
         if tls_config.insecure_skip_verify {
-            tracing::warn!("'insecureSkipVerify' is set to true, certificate validation will not be performed when connecting to NATS server");
+            tracing::warn!(
+                "'insecureSkipVerify' is set to true, certificate validation will not be performed when connecting to NATS server"
+            );
             let tls_client_config = rustls::ClientConfig::builder()
                 .dangerous()
                 .with_custom_certificate_verifier(Arc::new(NoVerifier))
@@ -447,7 +449,7 @@ impl MessageProcessingTracker {
         let nack_retry_interval =
             fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
 
-        let ack_msg = || async {
+        let ack_msg = async || {
             if let Err(err) = msg.ack().await {
                 tracing::error!(?err, "Failed to Ack message");
                 return Err(format!("Acknowledging Jetstream message: {:?}", err));
@@ -457,14 +459,14 @@ impl MessageProcessingTracker {
 
         let ack_with_retry = Retry::retry(ack_retry_interval, ack_msg, |_: &String| true);
 
-        let ack_in_progress = || async {
+        let ack_in_progress = async || {
             let ack_result = msg.ack_with(AckKind::Progress).await;
             if let Err(e) = ack_result {
                 tracing::error!(?e, "Failed to send InProgress Ack to Jetstream for message");
             }
         };
 
-        let nack_msg = || async {
+        let nack_msg = async || {
             let ack_result = msg.ack_with(AckKind::Nak(None)).await;
             if let Err(e) = ack_result {
                 tracing::error!(?e, "Failed to send InProgress Ack to Jetstream for message");
@@ -660,8 +662,8 @@ XdvExDsAdjbkBG7ynn9pmMgIJg==
         assert!(result.is_ok());
     }
 
-    use async_nats::jetstream::stream::Config as StreamConfig;
     use async_nats::jetstream::Context;
+    use async_nats::jetstream::stream::Config as StreamConfig;
     use tokio::time::Duration;
 
     async fn setup_jetstream() -> (Context, String) {

@@ -11,13 +11,13 @@ use std::time::Duration;
 
 use crate::app::store::datastore::{Error as StoreError, Result as StoreResult};
 use crate::callback::Callback;
-use async_nats::jetstream::kv::{Store, Watch};
 use async_nats::jetstream::Context;
-use tokio::sync::{mpsc, Mutex};
-use tokio_stream::wrappers::ReceiverStream;
+use async_nats::jetstream::kv::{Store, Watch};
+use tokio::sync::{Mutex, mpsc};
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, warn, Instrument};
+use tracing::{Instrument, debug, error, info, warn};
 
 const CALLBACK_KEY_PREFIX: &str = "cb";
 

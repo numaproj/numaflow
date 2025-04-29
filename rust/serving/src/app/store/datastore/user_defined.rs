@@ -5,8 +5,8 @@ use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use bytes::Bytes;
 use http::Uri;
-use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
 use numaflow_pb::clients::serving::GetRequest;
+use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
 use tokio::net::UnixStream;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::{Channel, Endpoint};
@@ -72,16 +72,14 @@ pub(crate) async fn create_rpc_channel(socket_path: PathBuf) -> StoreResult<Chan
     let interval = fixed::Interval::from_millis(RECONNECT_INTERVAL).take(MAX_RECONNECT_ATTEMPTS);
     let channel = Retry::retry(
         interval,
-        || async {
-            match connect_with_uds(socket_path.clone()).await {
-                Ok(channel) => Ok(channel),
-                Err(e) => {
-                    warn!(?e, ?socket_path, "Failed to connect to UDS socket");
-                    Err(StoreError::Connection(format!(
-                        "Failed to connect to uds socket {socket_path:?}: {:?}",
-                        e
-                    )))
-                }
+        async || match connect_with_uds(socket_path.clone()).await {
+            Ok(channel) => Ok(channel),
+            Err(e) => {
+                warn!(?e, ?socket_path, "Failed to connect to UDS socket");
+                Err(StoreError::Connection(format!(
+                    "Failed to connect to uds socket {socket_path:?}: {:?}",
+                    e
+                )))
             }
         },
         |_: &StoreError| true,

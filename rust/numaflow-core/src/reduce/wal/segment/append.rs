@@ -10,10 +10,10 @@ use tokio::{
     fs::{File, OpenOptions},
     io::AsyncWriteExt,
     sync::mpsc::{self, Sender},
-    time::{interval, Duration},
+    time::{Duration, interval},
 };
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
 use tracing::{debug, info};
 
 /// Duration after which the WAL Segment is considered stale.
@@ -642,12 +642,14 @@ mod tests {
         assert_eq!(files.len(), 2, "There should be 2 WAL segment files");
 
         // Verify the rotated file is renamed correctly
-        assert!(files[0]
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .ends_with(".frozen"));
+        assert!(
+            files[0]
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .ends_with(".frozen")
+        );
 
         // Verify the content of the rotated file
         let rotated_file_content = fs::read(&files[0]).unwrap();

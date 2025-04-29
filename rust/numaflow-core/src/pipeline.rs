@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use async_nats::jetstream::Context;
-use async_nats::{jetstream, ConnectOptions};
+use async_nats::{ConnectOptions, jetstream};
 use futures::future::try_join_all;
 use serving::callback::CallbackHandler;
 use tokio_util::sync::CancellationToken;
@@ -18,16 +18,16 @@ use crate::pipeline::forwarder::source_forwarder;
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::pipeline::pipeline::isb::BufferReaderConfig;
+use crate::serving_store::ServingStore;
 use crate::serving_store::nats::NatsServingStore;
 use crate::serving_store::user_defined::UserDefinedStore;
-use crate::serving_store::ServingStore;
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
 use crate::tracker::TrackerHandle;
+use crate::watermark::WatermarkHandle;
 use crate::watermark::isb::ISBWatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
-use crate::watermark::WatermarkHandle;
-use crate::{error, shared, Result};
+use crate::{Result, error, shared};
 
 mod forwarder;
 pub(crate) mod isb;
@@ -515,12 +515,12 @@ mod tests {
     use crate::config::components::source::GeneratorConfig;
     use crate::config::components::source::SourceConfig;
     use crate::config::components::source::SourceType;
-    use crate::config::pipeline::map::{MapType, UserDefinedConfig};
     use crate::config::pipeline::PipelineConfig;
+    use crate::config::pipeline::map::{MapType, UserDefinedConfig};
+    use crate::pipeline::pipeline::VertexType;
     use crate::pipeline::pipeline::isb;
     use crate::pipeline::pipeline::isb::{BufferReaderConfig, BufferWriterConfig};
     use crate::pipeline::pipeline::map::MapMode;
-    use crate::pipeline::pipeline::VertexType;
     use crate::pipeline::pipeline::{FromVertexConfig, ToVertexConfig};
     use crate::pipeline::pipeline::{SinkVtxConfig, SourceVtxConfig};
     use crate::pipeline::tests::isb::BufferFullStrategy::RetryUntilSuccess;

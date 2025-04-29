@@ -10,21 +10,21 @@
 
 use crate::app::store::datastore::{DataStore, Error as StoreError, Result as StoreResult};
 use crate::config::RequestType;
-use async_nats::jetstream::kv::{Store, Watch};
 use async_nats::jetstream::Context;
+use async_nats::jetstream::kv::{Store, Watch};
 use bytes::{Buf, BufMut, Bytes};
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::io::Cursor;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
-use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 

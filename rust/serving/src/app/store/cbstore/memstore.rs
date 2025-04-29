@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use crate::app::store::datastore::{Error as StoreError, Result as StoreResult};
 use crate::callback::Callback;
-use tokio::sync::mpsc;
 use tokio::sync::Mutex;
+use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
 /// An in-memory implementation of the callback store. Only used for testing.
