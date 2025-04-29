@@ -1,10 +1,8 @@
 //! Status tracking for requests using jetstream key-value store.
-//!
-//! **JetStream Status Entry Format**
-//!
-//! Status key - status.{id}
-//!
-//! Status value - JSON serialized ProcessingStatus
+//!JetStream Status Entry uses the below format:
+//! - Status key - `status.{id}`
+//! - Status value - JSON serialized [ProcessingStatus]
+
 use crate::config::RequestType;
 use async_nats::jetstream::kv::{CreateErrorKind, Store};
 use async_nats::jetstream::Context;
@@ -42,20 +40,18 @@ impl From<Error> for crate::Error {
     }
 }
 
-/// Represents the current processing status of a request id in the `Store`. Also has the information
-/// about the pod hash which accepted the request.
+/// Represents the current processing status of a request id in the Jetstream KV Store. It also has the
+/// information about the pod hash which has accepted the request.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub(crate) enum ProcessingStatus {
-    // InProgress indicates that the request is currently being processed.
-    InProgress {
-        pod_hash: String,
-    },
-    // Completed indicates that the request has been completed successfully.
+    /// InProgress indicates that the request is currently being processed.
+    InProgress { pod_hash: String },
+    /// Completed indicates that the request has been completed successfully.
     Completed {
         subgraph: String, // subgraph of the completed request
         pod_hash: String,
     },
-    // Failed indicates that the request has failed.
+    /// Failed indicates that the request has failed.
     Failed {
         error: String, // error message of the failed request
         pod_hash: String,
@@ -141,6 +137,7 @@ impl StatusTracker {
                 // if the request is registered successfully, we need to write the start processing marker
                 // to signal the response watcher to wait for the responses. We need to do it here, since
                 // only the status tracker will know the lifecycle of the request.
+                // TODO: This makes `discard` method trickier.
                 if let Some(response_kv) = &self.response_kv {
                     let response_key = format!(
                         "{}.{}.{}.{}",
@@ -193,9 +190,11 @@ impl StatusTracker {
     ///   case, a duplicate error is returned.
     /// * [ProcessingStatus::InProgress]: If the request is currently being processed and the pod
     ///   hash matches the current pod, it is treated as a duplicate, and a duplicate error is
-    ///   returned.
+    ///   returned. If the pod hash does not match, it means that pod crashed before sending the
+    ///   response. A 500 status code is returned and the request cannot be retried.
     /// * [ProcessingStatus::Failed]: Indicates the request failed due to client cancellation or a
-    ///   failure in the processing pod. In this case, the request can be retried.
+    ///   failure in the serving pod (pod that accepted the request). In this case, the request can
+    ///   be retried.
     fn handle_existing_status(
         &self,
         id: &str,
@@ -209,7 +208,7 @@ impl StatusTracker {
                     Err(Error::Duplicate(id.to_string()))
                 } else {
                     // TODO: There can be a case where the pod terminates without updating the request
-                    // status(SIGKILL).
+                    //  status(SIGKILL). Return with a body asking for retrying with a different ID.
                     warn!(
                         id,
                         status_key, "Request is getting processed in another pod"
@@ -272,8 +271,9 @@ impl StatusTracker {
         Ok(())
     }
 
-    /// Deregister marks the request as completed in the status kv store, it also writes a done
-    /// processing marker to the response kv store(if nats is used) to signal the response watcher.
+    /// Deregister marks the request as completed in the status kv store, it also (unlike registed)
+    /// writes a done processing marker to the response kv store (if nats is used) to signal the
+    /// response watcher.
     pub(crate) async fn deregister(&self, id: &str, subgraph: &str) -> Result<()> {
         let completed_status = ProcessingStatus::Completed {
             subgraph: subgraph.to_string(),
@@ -306,6 +306,9 @@ impl StatusTracker {
 
     /// Discard the request from the status kv store. This is used when the request is not accepted
     /// because of back pressure.
+    /// It deletes the entry from the status kv store (so ID is removed and can be retried) and also
+    /// sends a done processing marker to the response kv store (if nats is used) to signal the end.
+    /// This is because we just start processing marker in the register before inserting into the pipeline.
     pub(crate) async fn discard(&self, id: &str) -> Result<()> {
         let key = format!("{}.{}", STATUS_KEY_PREFIX, id);
         self.status_kv
@@ -320,6 +323,7 @@ impl StatusTracker {
             "{}.{}.{}.{}",
             RESPONSE_KEY_PREFIX, self.pod_hash, id, DONE_PROCESSING_MARKER
         );
+
         response_kv
             .put(done_key.clone(), Bytes::new())
             .await

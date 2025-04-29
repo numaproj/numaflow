@@ -1,13 +1,12 @@
 //! Stores the response from the processing in a JetStream key-value store. Each response is stored
 //! as a new key-value pair in the store, so that no responses are lost. We cannot use the same key
 //! and overwrite the value, since the history of the kv store is not per key, but for the entire
-//! store.
+//! store. Store is capable of storing multiple results for the same request so it is stored in a
+//! concatenated format (length-prefixed format).
 //!
-//! **JetStream Response Entry Format**
-//!
-//! Response Key - rs.{pod_hash}.{id}.{vertex_name}.{timestamp}
-//!
-//! Response Value - response_payload
+//! JetStream Response Entry Format is as follows:
+//!  - Response Key - rs.{pod_hash}.{id}.{vertex_name}.{timestamp}
+//!  - Response Value - Actual response payload as Bytes
 
 use crate::app::store::datastore::{DataStore, Error as StoreError, Result as StoreResult};
 use crate::config::RequestType;
@@ -34,12 +33,12 @@ const FINAL_RESULT_KEY_SUFFIX: &str = "final.result.processed";
 const START_PROCESSING_MARKER: &str = "start.processing";
 const DONE_PROCESSING_MARKER: &str = "done.processing";
 
-/// Merges a list of Bytes using u64 length prefixing (Big Endian).
+/// Merges a list of Bytes using u64 length prefixing.
 fn merge_bytes_list(list: &[Bytes]) -> Bytes {
     let mut accumulator = Vec::new();
     for b in list {
         let len = b.len() as u64;
-        accumulator.put_u64(len);
+        accumulator.put_u64_le(len);
         accumulator.put_slice(b);
     }
     Bytes::from(accumulator)
@@ -51,6 +50,7 @@ fn extract_bytes_list(merged: &Bytes) -> Result<Vec<Bytes>, String> {
     let mut cursor = Cursor::new(merged);
 
     while cursor.has_remaining() {
+        // get size/length first
         if cursor.remaining() < size_of::<u64>() {
             if cursor.remaining() == 0 {
                 break;
@@ -61,7 +61,8 @@ fn extract_bytes_list(merged: &Bytes) -> Result<Vec<Bytes>, String> {
                 ));
             }
         }
-        let len = cursor.get_u64();
+        // get the data for the given len
+        let len = cursor.get_u64_le();
         if cursor.remaining() < len as usize {
             return Err(format!(
                 "Truncated data: declared payload length {} exceeds remaining bytes {}",
@@ -69,11 +70,14 @@ fn extract_bytes_list(merged: &Bytes) -> Result<Vec<Bytes>, String> {
                 cursor.remaining()
             ));
         }
+        // extract the data
         let current_pos = cursor.position() as usize;
         let end_pos = current_pos + (len as usize);
         extracted.push(merged.slice(current_pos..end_pos));
+
         cursor.advance(len as usize);
     }
+
     Ok(extracted)
 }
 
@@ -122,7 +126,9 @@ impl JetStreamDataStore {
         responses_map: Arc<Mutex<HashMap<String, ResponseMode>>>,
         cln_token: CancellationToken,
     ) -> JoinHandle<()> {
+        // watch for all the responses with prefix rs.{pod_hash}.* (ie, this pod)
         let watch_pattern = format!("{}.{}.*.*.*", RESPONSE_KEY_PREFIX, pod_hash);
+        // monotonic revision which is reset when pod is restarted
         let mut latest_revision = 0;
 
         let mut watcher = Self::create_watcher(
