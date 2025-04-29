@@ -420,13 +420,11 @@ impl ProcessorManager {
 
         Retry::retry(
             interval,
-            || async {
-                match bucket.watch_all().await {
-                    Ok(w) => Ok(w),
-                    Err(e) => {
-                        error!(?e, "Failed to create watcher");
-                        Err(Error::Watermark(format!("Failed to create watcher: {}", e)))
-                    }
+            async || match bucket.watch_all().await {
+                Ok(w) => Ok(w),
+                Err(e) => {
+                    error!(?e, "Failed to create watcher");
+                    Err(Error::Watermark(format!("Failed to create watcher: {}", e)))
                 }
             },
             |_: &Error| true,

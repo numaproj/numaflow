@@ -449,7 +449,7 @@ impl MessageProcessingTracker {
         let nack_retry_interval =
             fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
 
-        let ack_msg = || async {
+        let ack_msg = async || {
             if let Err(err) = msg.ack().await {
                 tracing::error!(?err, "Failed to Ack message");
                 return Err(format!("Acknowledging Jetstream message: {:?}", err));
@@ -459,14 +459,14 @@ impl MessageProcessingTracker {
 
         let ack_with_retry = Retry::retry(ack_retry_interval, ack_msg, |_: &String| true);
 
-        let ack_in_progress = || async {
+        let ack_in_progress = async || {
             let ack_result = msg.ack_with(AckKind::Progress).await;
             if let Err(e) = ack_result {
                 tracing::error!(?e, "Failed to send InProgress Ack to Jetstream for message");
             }
         };
 
-        let nack_msg = || async {
+        let nack_msg = async || {
             let ack_result = msg.ack_with(AckKind::Nak(None)).await;
             if let Err(e) = ack_result {
                 tracing::error!(?e, "Failed to send InProgress Ack to Jetstream for message");

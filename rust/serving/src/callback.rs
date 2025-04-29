@@ -113,16 +113,14 @@ impl CallbackHandler {
             let value = serde_json::to_string(&callback_payload).expect("Failed to serialize");
             let result = Retry::retry(
                 interval,
-                || async {
-                    match store.put(&callbacks_key, Bytes::from(value.clone())).await {
-                        Ok(resp) => Ok(resp),
-                        Err(e) => {
-                            warn!(?e, "Failed to write callback to store, retrying..");
-                            Err(Error::Other(format!(
-                                "Failed to write callback to store: {}",
-                                e
-                            )))
-                        }
+                async || match store.put(&callbacks_key, Bytes::from(value.clone())).await {
+                    Ok(resp) => Ok(resp),
+                    Err(e) => {
+                        warn!(?e, "Failed to write callback to store, retrying..");
+                        Err(Error::Other(format!(
+                            "Failed to write callback to store: {}",
+                            e
+                        )))
                     }
                 },
                 |_: &Error| true,
