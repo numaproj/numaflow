@@ -958,8 +958,12 @@ impl Drop for SinkWriter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::pipeline::NatsStoreConfig;
     use crate::message::{IntOffset, Message, MessageID, Offset, ReadAck};
     use crate::shared::grpc::create_rpc_channel;
+    use crate::sink::serve::nats::NatsServingStore;
+    use async_nats::jetstream;
+    use async_nats::jetstream::kv::Config;
     use chrono::{TimeZone, Utc};
     use numaflow::sink;
     use numaflow_pb::clients::sink::{SinkRequest, SinkResponse};
@@ -1272,9 +1276,12 @@ mod tests {
 
         let tracker_handle = TrackerHandle::new(None, None);
         let serving_store = ServingStore::Nats(
-            NatsServingStore::new(context.clone(), NatsStoreConfig {
-                rs_store_name: serving_store.to_string(),
-            })
+            NatsServingStore::new(
+                context.clone(),
+                NatsStoreConfig {
+                    rs_store_name: serving_store.to_string(),
+                },
+            )
             .await
             .unwrap(),
         );
