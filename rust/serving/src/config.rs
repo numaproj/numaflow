@@ -285,7 +285,7 @@ impl TryFrom<HashMap<String, String>> for Settings {
                 .get(ENV_NUMAFLOW_POD)
                 .unwrap()
                 .split('-')
-                .last()
+                .next_back()
                 .unwrap_or("0")
                 .to_string()
                 .into_boxed_str(),

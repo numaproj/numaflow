@@ -104,7 +104,7 @@ impl UserDefinedSourceRead {
                     "failed to receive handshake response".to_string(),
                 ))?;
         // handshake cannot to None during the initial phase, and it has to set `sot` to true.
-        if handshake_response.handshake.map_or(true, |h| !h.sot) {
+        if handshake_response.handshake.is_none_or(|h| !h.sot) {
             return Err(Error::Source("invalid handshake response".to_string()));
         }
 
@@ -275,7 +275,7 @@ impl UserDefinedSourceAck {
                 "failed to receive ack handshake response".to_string(),
             ))?;
         // handshake cannot to None during the initial phase, and it has to set `sot` to true.
-        if ack_handshake_response.handshake.map_or(true, |h| !h.sot) {
+        if ack_handshake_response.handshake.is_none_or(|h| !h.sot) {
             return Err(Error::Source("invalid ack handshake response".to_string()));
         }
 

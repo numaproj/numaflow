@@ -228,7 +228,7 @@ impl MessageGraph {
                         // If there are no conditions or tags, default to true (i.e., proceed with the edge)
                         // If there are tags, compare the tags with the current callback's tags and the operator
                         // to decide if we should proceed with the edge.
-                        .map_or(true, |tags| {
+                        .is_none_or(|tags| {
                             response
                                 .tags
                                 .as_ref()

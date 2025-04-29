@@ -89,7 +89,7 @@ impl UserDefinedTransformer {
                     "failed to receive handshake response".to_string(),
                 ))?;
 
-        if handshake_response.handshake.map_or(true, |h| !h.sot) {
+        if handshake_response.handshake.is_none_or(|h| !h.sot) {
             return Err(Error::Transformer("invalid handshake response".to_string()));
         }
 

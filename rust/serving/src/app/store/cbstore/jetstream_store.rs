@@ -136,7 +136,6 @@ impl JetStreamCallbackStore {
                                 cb_sender.send(callback).await.expect("Failed to send callback");
                             } else {
                                 error!(id = ?callback.id, "No active sender found for request id. Callback not sent.");
-                                continue;
                             }
                         }
                         Some(Err(e)) => {

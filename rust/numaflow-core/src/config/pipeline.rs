@@ -481,7 +481,7 @@ impl PipelineConfig {
             .spec
             .watermark
             .clone()
-            .map_or(true, |w| !w.disabled.unwrap_or(false))
+            .is_none_or(|w| !w.disabled.unwrap_or(false))
         {
             Self::create_watermark_config(
                 vertex_obj.spec.watermark.clone(),
