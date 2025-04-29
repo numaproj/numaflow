@@ -16,7 +16,7 @@ use crate::error::Error;
 use crate::mapper::map::MapHandle;
 use crate::shared::grpc;
 use crate::shared::server_info::{ContainerType, sdk_server_info};
-use crate::sink::serving_store::ServingStore;
+use crate::sink::serve::ServingStore;
 use crate::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
 use crate::source::Source;
 use crate::source::generator::new_generator;

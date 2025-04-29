@@ -5,7 +5,7 @@ use tonic::transport::Channel;
 
 use crate::config::pipeline::UserDefinedStoreConfig;
 use crate::shared;
-use crate::sink::serving_store::StoreEntry;
+use crate::sink::serve::StoreEntry;
 
 /// User defined serving store to store the serving responses.
 #[derive(Clone)]

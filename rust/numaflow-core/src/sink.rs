@@ -31,7 +31,7 @@ use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_forward_metric_labels,
     pipeline_metrics,
 };
-use crate::sink::serving_store::{ServingStore, StoreEntry};
+use crate::sink::serve::{ServingStore, StoreEntry};
 use crate::tracker::TrackerHandle;
 
 /// A [Blackhole] sink which reads but never writes to anywhere, semantic equivalent of `/dev/null`.
@@ -44,10 +44,10 @@ mod blackhole;
 /// [Log]: https://numaflow.numaproj.io/user-guide/sinks/log/
 mod log;
 
-mod serve;
+/// Serving [ServingStore] to store the result of the serving pipeline. It also contains the builtin [serve::ServeSink]
+/// to write to the serving store.
+pub mod serve;
 
-/// Serving store to store the result of the serving pipeline.
-pub mod serving_store;
 /// [User-Defined Sink] extends Numaflow to add custom sources supported outside the builtins.
 ///
 /// [User-Defined Sink]: https://numaflow.numaproj.io/user-guide/sinks/user-defined-sinks/
@@ -1272,12 +1272,9 @@ mod tests {
 
         let tracker_handle = TrackerHandle::new(None, None);
         let serving_store = ServingStore::Nats(
-            NatsServingStore::new(
-                context.clone(),
-                NatsStoreConfig {
-                    rs_store_name: serving_store.to_string(),
-                },
-            )
+            NatsServingStore::new(context.clone(), NatsStoreConfig {
+                rs_store_name: serving_store.to_string(),
+            })
             .await
             .unwrap(),
         );
