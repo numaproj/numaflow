@@ -1,9 +1,10 @@
+use crate::config::pipeline::NatsStoreConfig;
+use crate::serving_store::StoreEntry;
 use async_nats::jetstream::kv::Store;
 use async_nats::jetstream::Context;
-use bytes::Bytes;
 use chrono::Utc;
-
-use crate::config::pipeline::NatsStoreConfig;
+use tokio::task::JoinSet;
+use tracing::{info, trace};
 
 /// Nats serving store to store the serving responses.
 #[derive(Clone)]
@@ -18,29 +19,46 @@ impl NatsServingStore {
         nats_store_config: NatsStoreConfig,
     ) -> crate::Result<Self> {
         let store = js_context
-            .get_key_value(nats_store_config.name.as_str())
+            .get_key_value(nats_store_config.rs_store_name.as_str())
             .await
             .map_err(|e| crate::Error::Connection(format!("Failed to get kv store: {e:?}")))?;
         Ok(Self { store })
     }
 
-    /// Puts a datum into the serving store.
+    /// Puts multiple data items into the serving store concurrently.
     pub(crate) async fn put_datum(
         &mut self,
-        id: &str,
         origin: &str,
-        payload: Vec<u8>,
+        payloads: Vec<StoreEntry>,
     ) -> crate::Result<()> {
-        let id = format!(
-            "rs.{id}.{}.{}",
-            origin,
-            Utc::now().timestamp_nanos_opt().unwrap()
-        );
+        let mut jhset = JoinSet::new();
 
-        self.store
-            .put(id, Bytes::from(payload))
-            .await
-            .map_err(|e| crate::Error::Sink(format!("Failed to put datum: {e:?}")))?;
+        for payload in payloads {
+            let id = format!(
+                "rs.{}.{}.{}.{}",
+                payload.pod_hash,
+                payload.id,
+                origin,
+                Utc::now()
+                    .timestamp_nanos_opt()
+                    .unwrap_or(Utc::now().timestamp_micros())
+            );
+
+            trace!(?id, length = ?payload.value.len(), "Putting datum");
+
+            let store = self.store.clone();
+            jhset.spawn(async move {
+                store
+                    .put(id, payload.value)
+                    .await
+                    .map_err(|e| crate::Error::Sink(format!("Failed to put datum: {e:?}")))
+            });
+        }
+
+        while let Some(task) = jhset.join_next().await {
+            let result = task.map_err(|e| crate::Error::Sink(format!("Task failed: {e:?}")))?;
+            result?; // Propagate the first error, if any
+        }
         Ok(())
     }
 }

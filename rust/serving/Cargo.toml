@@ -36,9 +36,10 @@ prometheus-client = "0.23.1"
 thiserror = "2.0.12"
 reqwest = { workspace = true, features = ["rustls-tls", "json", "stream"] }
 http = "1.2.0"
-async-nats = "0.39.0"
+async-nats = "0.40.0"
 tokio-stream = "0.1.17"
 tonic = "0.13.0"
+tokio-util = "0.7.14"
 
 [dev-dependencies]
 reqwest = { workspace = true, features = ["json"] }

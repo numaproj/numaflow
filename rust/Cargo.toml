@@ -66,7 +66,7 @@ numaflow-sqs = { path = "extns/numaflow-sqs" }
 tokio = { version = "1.44.2", features = ["macros", "rt-multi-thread"] }
 bytes = "1.9.0"
 tracing = "0.1.41"
-async-nats = "0.39.0"
+async-nats = "0.40.0"
 thiserror = "2.0.3"
 axum = { version = "0.8.3", default-features = false, features = [
     "http1",

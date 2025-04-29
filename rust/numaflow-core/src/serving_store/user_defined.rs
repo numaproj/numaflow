@@ -1,8 +1,10 @@
 use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
 use numaflow_pb::clients::serving::{Payload, PutRequest};
+use tokio::task::JoinSet;
 use tonic::transport::Channel;
 
 use crate::config::pipeline::UserDefinedStoreConfig;
+use crate::serving_store::StoreEntry;
 use crate::shared;
 
 /// User defined serving store to store the serving responses.
@@ -22,20 +24,34 @@ impl UserDefinedStore {
     /// Puts a datum into the serving store.
     pub(crate) async fn put_datum(
         &mut self,
-        id: &str,
         origin: &str,
-        payload: Vec<u8>,
+        payloads: Vec<StoreEntry>,
     ) -> crate::Result<()> {
-        let request = PutRequest {
-            id: id.to_string(),
-            payloads: vec![Payload {
-                origin: origin.to_string(),
-                value: payload.to_vec(),
-            }],
-        };
-        self.client.put(request).await.map_err(|e| {
-            crate::Error::Sink(format!("gRPC Put request failed on serving store: {e:?}"))
-        })?;
+        let mut jhset = JoinSet::new();
+
+        for payload in payloads {
+            let origin = origin.to_string();
+            let mut client = self.client.clone();
+
+            jhset.spawn(async move {
+                let request = PutRequest {
+                    id: payload.id,
+                    payloads: vec![Payload {
+                        origin: origin.clone(),
+                        value: payload.value.to_vec(),
+                    }],
+                };
+                client.put(request).await.map_err(|e| {
+                    crate::Error::Sink(format!("gRPC Put request failed on serving store: {e:?}"))
+                })
+            });
+        }
+
+        while let Some(task) = jhset.join_next().await {
+            let result = task.map_err(|e| crate::Error::Sink(format!("Task failed: {e:?}")))?;
+            result?; // Propagate the first error, if any
+        }
+
         Ok(())
     }
 
@@ -48,6 +64,7 @@ impl UserDefinedStore {
 mod tests {
     use super::*;
     use crate::config::pipeline::UserDefinedStoreConfig;
+    use bytes::Bytes;
     use numaflow::serving_store;
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
@@ -104,8 +121,12 @@ mod tests {
         let mut store = UserDefinedStore::new(config).await.unwrap();
         let id = "test_id";
         let origin = "test_origin";
-        let payload = vec![1, 2, 3];
-        let result = store.put_datum(id, origin, payload).await;
+        let payloads = vec![StoreEntry {
+            pod_hash: "test_pod_hash".to_string(),
+            id: id.to_string(),
+            value: Bytes::from("test_value"),
+        }];
+        let result = store.put_datum(origin, payloads).await;
         assert!(result.is_ok());
 
         drop(store);

@@ -1,3 +1,5 @@
+//! A simple direct reverse-proxy that forwards the request returns the response as-is from the container.
+
 use axum::{
     body::Body,
     extract::{Request, State},
@@ -13,8 +15,6 @@ use tracing::error;
 use crate::app::response::ApiError;
 
 pub(crate) type Client = hyper_util::client::legacy::Client<HttpConnector, Body>;
-
-/// A simple direct reverse-proxy that forwards the request returns the response as-is from the container.
 
 // TODO
 // - [ ] fallbacks for better errors https://docs.rs/axum/latest/axum/struct.Router.html#fallbacks

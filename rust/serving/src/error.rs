@@ -23,6 +23,9 @@ pub enum Error {
     // Store operation errors
     Store(String),
 
+    #[error("Status - {0}")]
+    Status(String),
+
     #[error("SubGraphNotFound Error - {0}")]
     // Sub Graph Not Found Error
     SubGraphNotFound(&'static str),
@@ -46,6 +49,9 @@ pub enum Error {
 
     #[error("Serving source error - {0}")]
     Source(String),
+
+    #[error("Duplicate request - {0}")]
+    Duplicate(String),
 
     #[error("Other Error - {0}")]
     // catch-all variant for now
