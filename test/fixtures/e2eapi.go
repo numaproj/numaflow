@@ -72,7 +72,8 @@ func InvokeE2EAPIPOST(format string, body string, args ...interface{}) string {
 		if err == nil && resp.StatusCode < 300 {
 			return true, nil
 		}
-		fmt.Printf("Got error %v, response %v, retrying.\n", err, *resp)
+		body, _ := io.ReadAll(resp.Body)
+		log.Printf("Got error %v, response_text: %s,response: %+v, retrying.\n", err, body, *resp)
 		return false, nil
 	})
 
@@ -84,16 +85,17 @@ func InvokeE2EAPIPOST(format string, body string, args ...interface{}) string {
 		_ = Body.Close()
 	}(resp.Body)
 
+	var respBody string
 	for s := bufio.NewScanner(resp.Body); s.Scan(); {
 		x := s.Text()
 		if strings.Contains(x, "ERROR") { // hacky way to return an error from an octet-stream
 			panic(errors.New(x))
 		}
 		log.Printf("> %s\n", x)
-		body += x
+		respBody += x
 	}
 	if resp.StatusCode >= 300 {
 		panic(errors.New(resp.Status))
 	}
-	return body
+	return respBody
 }

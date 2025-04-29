@@ -40,9 +40,11 @@ nav:
       - quick-start.md
   - User Guide:
       - Core Concepts:
+          - Overview: "core-concepts/overview.md"
           - core-concepts/pipeline.md
-          - core-concepts/vertex.md
           - core-concepts/monovertex.md
+          - core-concepts/serving.md
+          - core-concepts/vertex.md
           - core-concepts/inter-step-buffer.md
           - core-concepts/inter-step-buffer-service.md
           - core-concepts/watermarks.md
@@ -86,15 +88,20 @@ nav:
                   - Sliding: "user-guide/user-defined-functions/reduce/windowing/sliding.md"
                   - Session: "user-guide/user-defined-functions/reduce/windowing/session.md"
               - Examples: "user-guide/user-defined-functions/reduce/examples.md"
+      - SDKs:
+          - Overview: user-guide/sdks/overview.md
+          - Compatibility: user-guide/sdks/compatibility.md
+          - Features: user-guide/sdks/features.md
       - Reference:
           - user-guide/reference/pipeline-tuning.md
-          - user-guide/reference/edge-tuning.md
           - user-guide/reference/autoscaling.md
           - user-guide/reference/conditional-forwarding.md
           - user-guide/reference/pipeline-operations.md
           - user-guide/reference/join-vertex.md
           - user-guide/reference/multi-partition.md
           - user-guide/reference/side-inputs.md
+          - user-guide/reference/mvtx-tuning.md
+          - user-guide/reference/mvtx-operations.md
           - Configuration:
               - user-guide/reference/configuration/pod-specifications.md
               - user-guide/reference/configuration/container-resources.md
@@ -105,6 +112,7 @@ nav:
               - user-guide/reference/configuration/sidecar-containers.md
               - user-guide/reference/configuration/liveness-and-readiness.md
               - user-guide/reference/configuration/pipeline-customization.md
+              - user-guide/reference/configuration/dra.md
               - user-guide/reference/configuration/istio.md
               - user-guide/reference/configuration/max-message-size.md
               - user-guide/reference/configuration/update-strategy.md

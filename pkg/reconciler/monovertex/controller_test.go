@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap/zaptest"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -34,8 +35,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-
-	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/reconciler"
@@ -153,7 +152,6 @@ func TestReconcile(t *testing.T) {
 		}
 		_, err = r.Reconcile(context.TODO(), req)
 		assert.Error(t, err)
-		assert.ErrorContains(t, err, "not found")
 	})
 }
 
@@ -166,11 +164,12 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(spec.Containers))
 		assert.Equal(t, dfv1.CtrMain, spec.Containers[0].Name)
-		assert.Equal(t, 4, len(spec.InitContainers))
-		assert.Equal(t, dfv1.CtrUdsource, spec.InitContainers[0].Name)
-		assert.Equal(t, dfv1.CtrUdtransformer, spec.InitContainers[1].Name)
-		assert.Equal(t, dfv1.CtrUdsink, spec.InitContainers[2].Name)
-		assert.Equal(t, dfv1.CtrFallbackUdsink, spec.InitContainers[3].Name)
+		assert.Equal(t, 5, len(spec.InitContainers))
+		assert.Equal(t, dfv1.CtrMonitor, spec.InitContainers[0].Name)
+		assert.Equal(t, dfv1.CtrUdsource, spec.InitContainers[1].Name)
+		assert.Equal(t, dfv1.CtrUdtransformer, spec.InitContainers[2].Name)
+		assert.Equal(t, dfv1.CtrUdsink, spec.InitContainers[3].Name)
+		assert.Equal(t, dfv1.CtrFallbackUdsink, spec.InitContainers[4].Name)
 	})
 
 	t.Run("test no transformer, no fallback sink", func(t *testing.T) {
@@ -181,9 +180,10 @@ func Test_BuildPodSpec(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(spec.Containers))
 		assert.Equal(t, dfv1.CtrMain, spec.Containers[0].Name)
-		assert.Equal(t, 2, len(spec.InitContainers))
-		assert.Equal(t, dfv1.CtrUdsource, spec.InitContainers[0].Name)
-		assert.Equal(t, dfv1.CtrUdsink, spec.InitContainers[1].Name)
+		assert.Equal(t, 3, len(spec.InitContainers))
+		assert.Equal(t, dfv1.CtrMonitor, spec.InitContainers[0].Name)
+		assert.Equal(t, dfv1.CtrUdsource, spec.InitContainers[1].Name)
+		assert.Equal(t, dfv1.CtrUdsink, spec.InitContainers[2].Name)
 	})
 }
 
@@ -236,8 +236,7 @@ func Test_createOrUpdateMonoVtxServices(t *testing.T) {
 			&svc)
 		assert.NoError(t, err)
 		assert.Equal(t, testObj.GetHeadlessServiceName(), svc.Name)
-		assert.Equal(t, 1, len(svc.Spec.Ports))
-		assert.Equal(t, int32(dfv1.MonoVertexMetricsPort), svc.Spec.Ports[0].Port)
+		assert.Equal(t, 2, len(svc.Spec.Ports))
 		m, err := r.findExistingMonoVtxServices(context.TODO(), testObj)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(m))

@@ -10,6 +10,8 @@ header "generating proto files"
 ensure_vendor
 
 make_fake_paths
+# This overrides the existing trap
+trap 'cd "${FAKE_GOPATH}" && go clean -modcache && rm -rf "${FAKE_GOPATH}"' EXIT
 export GOPATH="${FAKE_GOPATH}"
 export PATH="${GOPATH}/bin:${PATH}"
 cd "${FAKE_REPOPATH}"
@@ -61,5 +63,5 @@ gen-protoc pkg/apis/proto/mvtxdaemon/mvtxdaemon.proto
 
 gen-protoc pkg/apis/proto/isb/message.proto
 
-gen-protoc pkg/apis/proto/wmb/wmb.proto
+gen-protoc pkg/apis/proto/watermark/watermark.proto
 

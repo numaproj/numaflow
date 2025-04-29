@@ -23,13 +23,14 @@ package publish
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"sync"
 	"time"
 
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
 
+	wmbpb "github.com/numaproj/numaflow/pkg/apis/proto/watermark"
 	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/kvs"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
@@ -273,7 +274,14 @@ func (p *publish) publishHeartbeat() {
 		case <-p.ctx.Done():
 			return
 		case <-ticker.C:
-			err := p.heartbeatStore.PutKV(p.ctx, p.entity.GetName(), []byte(fmt.Sprintf("%d", time.Now().Unix())))
+			hbValue, err := proto.Marshal(&wmbpb.Heartbeat{
+				Heartbeat: time.Now().Unix(),
+			})
+			if err != nil {
+				p.log.Errorw("Unable to marshal heartbeat", zap.Error(err))
+				continue
+			}
+			err = p.heartbeatStore.PutKV(p.ctx, p.entity.GetName(), hbValue)
 			if err != nil {
 				p.log.Errorw("put to bucket failed", zap.String("bucket", p.heartbeatStore.GetStoreName()), zap.Error(err))
 			}

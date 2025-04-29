@@ -41,6 +41,7 @@ import (
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service"
 	rateServer "github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service/rater"
+	runtimeinfo "github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service/runtime"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 )
@@ -64,6 +65,8 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	)
 	// rater is used to calculate the processing rate of the mono vertex
 	rater := rateServer.NewRater(ctx, ds.monoVtx)
+	// monoVertexRuntimeCache is used to cache and retrieve the runtime errors
+	monoVertexRuntimeCache := runtimeinfo.NewRuntime(ctx, ds.monoVtx)
 
 	// Start listener
 	var conn net.Listener
@@ -79,8 +82,8 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 		return fmt.Errorf("failed to generate cert: %w", err)
 	}
 
-	tlsConfig := &tls.Config{Certificates: []tls.Certificate{*cer}, MinVersion: tls.VersionTLS12}
-	grpcServer, err := ds.newGRPCServer(rater)
+	tlsConfig := &tls.Config{Certificates: []tls.Certificate{*cer}, MinVersion: tls.VersionTLS12, NextProtos: []string{"http/1.1", "h2"}}
+	grpcServer, err := ds.newGRPCServer(rater, monoVertexRuntimeCache)
 	if err != nil {
 		return fmt.Errorf("failed to create grpc server: %w", err)
 	}
@@ -108,6 +111,13 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 		}
 	}()
 
+	// Start the MonoVertex Runtime Cache Refresher
+	go func() {
+		if err := monoVertexRuntimeCache.StartCacheRefresher(ctx); err != nil {
+			log.Panic(fmt.Errorf("failed to start the MonoVertex runtime cache refresher: %w", err))
+		}
+	}()
+
 	version := numaflow.GetVersion()
 	// Todo: clean it up in v1.6
 	deprecatedMonoVertexInfo.WithLabelValues(version.Version, version.Platform, ds.monoVtx.Name).Set(1)
@@ -118,7 +128,7 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	return nil
 }
 
-func (ds *daemonServer) newGRPCServer(rater rateServer.MonoVtxRatable) (*grpc.Server, error) {
+func (ds *daemonServer) newGRPCServer(rater rateServer.MonoVtxRatable, monoVertexRuntimeCache runtimeinfo.MonoVertexRuntimeCache) (*grpc.Server, error) {
 	// "Prometheus histograms are a great way to measure latency distributions of your RPCs.
 	// However, since it is a bad practice to have metrics of high cardinality the latency monitoring metrics are disabled by default.
 	// To enable them please call the following in your server initialization code:"
@@ -132,7 +142,7 @@ func (ds *daemonServer) newGRPCServer(rater rateServer.MonoVtxRatable) (*grpc.Se
 	}
 	grpcServer := grpc.NewServer(sOpts...)
 	grpc_prometheus.Register(grpcServer)
-	mvtxService, err := service.NewMoveVertexService(ds.monoVtx, rater)
+	mvtxService, err := service.NewMoveVertexService(ds.monoVtx, rater, monoVertexRuntimeCache)
 	if err != nil {
 		return nil, err
 	}
@@ -163,6 +173,7 @@ func (ds *daemonServer) newHTTPServer(ctx context.Context, port int, tlsConfig *
 	if err := mvtxdaemon.RegisterMonoVertexDaemonServiceHandlerFromEndpoint(ctx, gwmux, endpoint, dialOpts); err != nil {
 		log.Errorw("Failed to register daemon handler on HTTP Server", zap.Error(err))
 	}
+
 	mux := http.NewServeMux()
 	httpServer := http.Server{
 		Addr:      endpoint,

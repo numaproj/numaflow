@@ -1,39 +1,42 @@
-use std::sync::Arc;
-
+use bytes::Bytes;
+use numaflow_monitor::runtime;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
-use tokio::task::JoinHandle;
-use tokio_stream::wrappers::ReceiverStream;
-use tokio_stream::StreamExt;
+use std::sync::Arc;
+use tokio::sync::{Semaphore, mpsc, oneshot};
+use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
+use tonic::{Code, Status};
+use tracing::error;
 
+use crate::Result;
 use crate::error::Error;
 use crate::message::Message;
 use crate::metrics::{monovertex_metrics, mvtx_forward_metric_labels};
 use crate::tracker::TrackerHandle;
 use crate::transformer::user_defined::UserDefinedTransformer;
-use crate::Result;
 
 /// User-Defined Transformer is a custom transformer that can be built by the user.
 ///
 /// [User-Defined Transformer]: https://numaflow.numaproj.io/user-guide/sources/transformer/overview/#build-your-own-transformer
 pub(crate) mod user_defined;
 
-pub enum ActorMessage {
-    Transform {
-        message: Message,
-        respond_to: oneshot::Sender<Result<Vec<Message>>>,
-    },
+/// TransformerActorMessage is the message that is sent to the transformer actor.
+struct TransformerActorMessage {
+    message: Message,
+    respond_to: oneshot::Sender<Result<Vec<Message>>>,
 }
 
 /// TransformerActor, handles the transformation of messages.
 struct TransformerActor {
-    receiver: mpsc::Receiver<ActorMessage>,
+    receiver: mpsc::Receiver<TransformerActorMessage>,
     transformer: UserDefinedTransformer,
 }
 
 impl TransformerActor {
-    fn new(receiver: mpsc::Receiver<ActorMessage>, transformer: UserDefinedTransformer) -> Self {
+    fn new(
+        receiver: mpsc::Receiver<TransformerActorMessage>,
+        transformer: UserDefinedTransformer,
+    ) -> Self {
         Self {
             receiver,
             transformer,
@@ -43,13 +46,10 @@ impl TransformerActor {
     /// Handles the incoming message, unlike standard actor pattern the downstream call is not blocking
     /// and the response is sent back to the caller using oneshot in this actor, this is because the
     /// downstream can handle multiple messages at once.
-    async fn handle_message(&mut self, msg: ActorMessage) {
-        match msg {
-            ActorMessage::Transform {
-                message,
-                respond_to,
-            } => self.transformer.transform(message, respond_to).await,
-        }
+    async fn handle_message(&mut self, msg: TransformerActorMessage) {
+        self.transformer
+            .transform(msg.message, msg.respond_to)
+            .await;
     }
 
     async fn run(mut self) {
@@ -60,19 +60,12 @@ impl TransformerActor {
 }
 
 /// Transformer, transforms messages in a streaming fashion.
+#[derive(Clone)]
 pub(crate) struct Transformer {
-    batch_size: usize,
-    sender: mpsc::Sender<ActorMessage>,
+    sender: mpsc::Sender<TransformerActorMessage>,
     concurrency: usize,
     tracker_handle: TrackerHandle,
-    task_handle: JoinHandle<()>,
-}
-
-/// Aborts the actor task when the transformer is dropped.
-impl Drop for Transformer {
-    fn drop(&mut self) {
-        self.task_handle.abort();
-    }
+    health_checker: Option<SourceTransformClient<Channel>>,
 }
 
 impl Transformer {
@@ -85,157 +78,169 @@ impl Transformer {
         let (sender, receiver) = mpsc::channel(batch_size);
         let transformer_actor = TransformerActor::new(
             receiver,
-            UserDefinedTransformer::new(batch_size, client).await?,
+            UserDefinedTransformer::new(batch_size, client.clone()).await?,
         );
 
-        let task_handle = tokio::spawn(async move {
+        tokio::spawn(async move {
             transformer_actor.run().await;
         });
 
         Ok(Self {
-            batch_size,
             concurrency,
             sender,
             tracker_handle,
-            task_handle,
+            health_checker: Some(client),
         })
     }
 
     /// Applies the transformation on the message and sends it to the next stage, it blocks if the
     /// concurrency limit is reached.
     async fn transform(
-        transform_handle: mpsc::Sender<ActorMessage>,
-        permit: OwnedSemaphorePermit,
+        transform_handle: mpsc::Sender<TransformerActorMessage>,
         read_msg: Message,
-        output_tx: mpsc::Sender<Message>,
-        tracker_handle: TrackerHandle,
-        error_tx: mpsc::Sender<Error>,
-    ) {
-        // only if we have tasks < max_concurrency
-        let output_tx = output_tx.clone();
+        cln_token: CancellationToken,
+    ) -> Result<Vec<Message>> {
+        let start_time = tokio::time::Instant::now();
 
-        // invoke transformer and then wait for the one-shot
-        // short-lived tokio spawns we don't need structured concurrency here
-        tokio::spawn(async move {
-            let start_time = tokio::time::Instant::now();
-            let _permit = permit;
+        let (sender, receiver) = oneshot::channel();
+        let msg = TransformerActorMessage {
+            message: read_msg,
+            respond_to: sender,
+        };
 
-            let (sender, receiver) = oneshot::channel();
-            let msg = ActorMessage::Transform {
-                message: read_msg.clone(),
-                respond_to: sender,
-            };
+        // invoke transformer
+        transform_handle
+            .send(msg)
+            .await
+            .map_err(|e| Error::Transformer(format!("failed to send message to server: {}", e)))?;
 
-            // invoke trf
-            if let Err(e) = transform_handle.send(msg).await {
-                let _ = error_tx
-                    .send(Error::Transformer(format!("failed to send message: {}", e)))
-                    .await;
-                return;
+        // wait for the response
+        let response = tokio::select! {
+            _ = cln_token.cancelled() => {
+                return Err(Error::Transformer("cancellation token cancelled".to_string()));
             }
-
-            // wait for one-shot
-            match receiver.await {
-                Ok(Ok(mut transformed_messages)) => {
-                    if let Err(e) = tracker_handle
-                        .update(
-                            read_msg.id.offset.clone(),
-                            transformed_messages.len() as u32,
-                            true,
-                        )
-                        .await
-                    {
-                        let _ = error_tx.send(e).await;
-                        return;
-                    }
-                    for transformed_message in transformed_messages.drain(..) {
-                        let _ = output_tx.send(transformed_message).await;
-                    }
-                }
-                Ok(Err(e)) => {
-                    let _ = error_tx.send(e).await;
-                }
-                Err(e) => {
-                    let _ = error_tx
-                        .send(Error::Transformer(format!(
-                            "failed to receive message: {}",
-                            e
-                        )))
-                        .await;
-                }
+            response = receiver => {
+                response.map_err(|e| Error::Transformer(format!("failed to receive response from server: {}", e)))??
             }
-            monovertex_metrics()
-                .transformer
-                .time
-                .get_or_create(mvtx_forward_metric_labels())
-                .observe(start_time.elapsed().as_micros() as f64);
-        });
+        };
+
+        if response.is_empty() {
+            error!("received empty response from server (transformer), we will wait indefinitely");
+            // persist the error for debugging
+            runtime::persist_application_error(Status::with_details(
+                Code::Internal,
+                "UDF_PARTIAL_RESPONSE(transformer)",
+                Bytes::from_static(
+                    b"received End-Of-Transmission (EOT) before all responses are received from the transformer,\
+                            we will wait indefinitely for the remaining responses. This indicates that there is a bug\
+                            in the user-code. Please check whether you are accidentally skipping the messages.",
+                ),
+            ));
+            futures::future::pending::<()>().await;
+        }
+
+        monovertex_metrics()
+            .transformer
+            .time
+            .get_or_create(mvtx_forward_metric_labels())
+            .observe(start_time.elapsed().as_micros() as f64);
+
+        Ok(response)
     }
 
-    /// Starts the transformation of the stream of messages and returns the transformed stream.
-    pub(crate) fn transform_stream(
+    /// Transforms a batch of messages concurrently.
+    pub(crate) async fn transform_batch(
         &self,
-        input_stream: ReceiverStream<Message>,
-    ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
-        let (output_tx, output_rx) = mpsc::channel(self.batch_size);
-
-        // channel to transmit errors from the transformer tasks to the main task
-        let (error_tx, mut error_rx) = mpsc::channel(1);
-
+        messages: Vec<Message>,
+        cln_token: CancellationToken,
+    ) -> Result<Vec<Message>> {
         let transform_handle = self.sender.clone();
         let tracker_handle = self.tracker_handle.clone();
         let semaphore = Arc::new(Semaphore::new(self.concurrency));
 
-        let handle = tokio::spawn(async move {
-            let mut input_stream = input_stream;
+        let tasks: Vec<_> = messages
+            .into_iter()
+            .map(|read_msg| {
+                let permit_fut = Arc::clone(&semaphore).acquire_owned();
+                let transform_handle = transform_handle.clone();
+                let tracker_handle = tracker_handle.clone();
+                let cln_token = cln_token.clone();
 
-            // we do a tokio::select! loop to handle the input stream and the error channel
-            // in case of any errors in the transformer tasks we need to shut down the mapper
-            // and discard all the messages in the tracker.
-            loop {
-                tokio::select! {
-                    x = input_stream.next() => {
-                        if let Some(read_msg) = x {
-                            let permit = Arc::clone(&semaphore)
-                                .acquire_owned()
-                                .await
-                                .map_err(|e| Error::Transformer(format!("failed to acquire semaphore: {}", e)))?;
+                tokio::spawn(async move {
+                    let permit = permit_fut.await.map_err(|e| {
+                        Error::Transformer(format!("failed to acquire semaphore: {}", e))
+                    })?;
+                    let _permit = permit;
 
-                            let error_tx = error_tx.clone();
-                            Self::transform(
-                                transform_handle.clone(),
-                                permit,
-                                read_msg,
-                                output_tx.clone(),
-                                tracker_handle.clone(),
-                                error_tx,
-                            ).await;
-                        } else {
-                            break;
-                        }
-                    },
-                    Some(error) = error_rx.recv() => {
-                        // discard all the messages in the tracker since it's a critical error, and
-                        // we are shutting down
-                        tracker_handle.discard_all().await?;
-                        return Err(error);
-                    },
+                    let transformed_messages = Transformer::transform(
+                        transform_handle,
+                        read_msg.clone(),
+                        cln_token.clone(),
+                    )
+                    .await?;
+
+                    // update the tracker with the number of responses for each message
+                    tracker_handle
+                        .update(
+                            read_msg.offset.clone(),
+                            transformed_messages
+                                .iter()
+                                .map(|m| m.tags.clone())
+                                .collect(),
+                        )
+                        .await?;
+                    tracker_handle.eof(read_msg.offset.clone()).await?;
+
+                    Ok::<Vec<Message>, Error>(transformed_messages)
+                })
+            })
+            .collect();
+
+        let mut transformed_messages = Vec::new();
+        for task in tasks {
+            match task.await {
+                Ok(Ok(mut msgs)) => transformed_messages.append(&mut msgs),
+                Ok(Err(e)) => return Err(e),
+                Err(e) => return Err(Error::Transformer(format!("task join failed: {}", e))),
+            }
+        }
+        let dropped_messages_count = transformed_messages
+            .iter()
+            .filter(|message| message.dropped())
+            .count();
+
+        if dropped_messages_count > 0 {
+            monovertex_metrics()
+                .transformer
+                .dropped_total
+                .get_or_create(mvtx_forward_metric_labels())
+                .inc_by(dropped_messages_count as u64);
+        }
+        Ok(transformed_messages)
+    }
+
+    pub(crate) async fn ready(&mut self) -> bool {
+        if let Some(client) = &mut self.health_checker {
+            let request = tonic::Request::new(());
+            match client.is_ready(request).await {
+                Ok(response) => response.into_inner().ready,
+                Err(e) => {
+                    error!("Transformer is not ready: {:?}", e);
+                    false
                 }
             }
-
-            Ok(())
-        });
-
-        Ok((ReceiverStream::new(output_rx), handle))
+        } else {
+            true
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
+    use chrono::Utc;
     use numaflow::sourcetransform;
     use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+    use std::time::Duration;
     use tempfile::TempDir;
     use tokio::sync::oneshot;
 
@@ -252,8 +257,8 @@ mod tests {
             &self,
             input: sourcetransform::SourceTransformRequest,
         ) -> Vec<sourcetransform::Message> {
-            let message = sourcetransform::Message::new(input.value, chrono::offset::Utc::now())
-                .keys(input.keys);
+            let message =
+                sourcetransform::Message::new(input.value, Utc::now()).with_keys(input.keys);
             vec![message]
         }
     }
@@ -278,45 +283,39 @@ mod tests {
 
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None, None);
 
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
         let transformer = Transformer::new(500, 10, client, tracker_handle.clone()).await?;
 
         let message = Message {
+            typ: Default::default(),
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
-            offset: Some(Offset::String(StringOffset::new("0".to_string(), 0))),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: chrono::Utc::now(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),
                 index: 0,
             },
             headers: Default::default(),
+            metadata: None,
         };
 
-        let (output_tx, mut output_rx) = mpsc::channel(10);
-
-        let semaphore = Arc::new(Semaphore::new(10));
-        let permit = semaphore.acquire_owned().await.unwrap();
-        let (error_tx, mut error_rx) = mpsc::channel(1);
-        Transformer::transform(
+        let transformed_messages = Transformer::transform(
             transformer.sender.clone(),
-            permit,
             message,
-            output_tx,
-            tracker_handle,
-            error_tx,
+            CancellationToken::new(),
         )
         .await;
 
-        // check for errors
-        assert!(error_rx.recv().await.is_none());
-
-        let transformed_message = output_rx.recv().await.unwrap();
-        assert_eq!(transformed_message.value, "hello");
+        assert!(transformed_messages.is_ok());
+        let transformed_messages = transformed_messages?;
+        assert_eq!(transformed_messages.len(), 1);
+        assert_eq!(transformed_messages[0].value, "hello");
 
         // we need to drop the transformer, because if there are any in-flight requests
         // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
@@ -354,37 +353,36 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None, None);
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
         let transformer = Transformer::new(500, 10, client, tracker_handle.clone()).await?;
 
-        let (input_tx, input_rx) = mpsc::channel(10);
-        let input_stream = ReceiverStream::new(input_rx);
-
+        let mut messages = vec![];
         for i in 0..5 {
             let message = Message {
+                typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("value_{}", i).into(),
-                offset: Some(Offset::String(StringOffset::new(i.to_string(), 0))),
+                offset: Offset::String(StringOffset::new(i.to_string(), 0)),
                 event_time: chrono::Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex_name".to_string().into(),
                     offset: i.to_string().into(),
                     index: i,
                 },
                 headers: Default::default(),
+                metadata: None,
             };
-            input_tx.send(message).await.unwrap();
+            messages.push(message);
         }
-        drop(input_tx);
 
-        let (output_stream, transform_handle) = transformer.transform_stream(input_stream)?;
+        let transformed_messages = transformer
+            .transform_batch(messages, CancellationToken::new())
+            .await?;
 
-        let mut output_rx = output_stream.into_inner();
-
-        for i in 0..5 {
-            let transformed_message = output_rx.recv().await.unwrap();
+        for (i, transformed_message) in transformed_messages.iter().enumerate() {
             assert_eq!(transformed_message.value, format!("value_{}", i));
         }
 
@@ -399,10 +397,6 @@ mod tests {
         assert!(
             handle.is_finished(),
             "Expected gRPC server to have shut down"
-        );
-        assert!(
-            transform_handle.is_finished(),
-            "Expected transformer to have shut down"
         );
         Ok(())
     }
@@ -439,33 +433,30 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None, None);
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
         let transformer = Transformer::new(500, 10, client, tracker_handle.clone()).await?;
 
-        let (input_tx, input_rx) = mpsc::channel(10);
-        let input_stream = ReceiverStream::new(input_rx);
-
         let message = Message {
+            typ: Default::default(),
             keys: Arc::from(vec!["first".into()]),
             tags: None,
             value: "hello".into(),
-            offset: Some(Offset::String(StringOffset::new("0".to_string(), 0))),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
             event_time: chrono::Utc::now(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "0".to_string().into(),
                 index: 0,
             },
             headers: Default::default(),
+            metadata: None,
         };
 
-        input_tx.send(message).await.unwrap();
-
-        let (_output_stream, transform_handle) = transformer.transform_stream(input_stream)?;
-
-        // Await the join handle and expect an error due to the panic
-        let result = transform_handle.await.unwrap();
+        let result = transformer
+            .transform_batch(vec![message], CancellationToken::new())
+            .await;
         assert!(result.is_err(), "Expected an error due to panic");
         assert!(result.unwrap_err().to_string().contains("panic"));
 

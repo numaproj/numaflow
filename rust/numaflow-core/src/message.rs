@@ -8,16 +8,17 @@ use chrono::{DateTime, Utc};
 use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
 
-use crate::shared::grpc::prost_timestamp_from_utc;
-use crate::shared::grpc::utc_from_timestamp;
 use crate::Error;
+use crate::shared::grpc::prost_timestamp_from_utc;
 
 const DROP: &str = "U+005C__DROP__";
 
-/// A message that is sent from the source to the sink.
-/// It is cheap to clone.
+/// The message that is passed from the source to the sink.
+/// NOTE: It is cheap to clone.
 #[derive(Debug, Clone)]
 pub(crate) struct Message {
+    /// Type of the message that flows through the ISB.
+    pub(crate) typ: MessageType,
     /// keys of the message
     pub(crate) keys: Arc<[String]>,
     /// tags of the message
@@ -27,17 +28,84 @@ pub(crate) struct Message {
     /// offset of the message, it is optional because offset is only
     /// available when we read the message, and we don't persist the
     /// offset in the ISB.
-    pub(crate) offset: Option<Offset>,
+    pub(crate) offset: Offset,
     /// event time of the message
     pub(crate) event_time: DateTime<Utc>,
+    /// watermark of the message
+    pub(crate) watermark: Option<DateTime<Utc>>,
     /// id of the message
     pub(crate) id: MessageID,
     /// headers of the message
     pub(crate) headers: HashMap<String, String>,
+    /// Additional metadata that could be passed per message between the vertices.
+    pub(crate) metadata: Option<Metadata>,
+}
+
+/// Type of the [Message].
+#[derive(Debug, Clone, Default)]
+pub(crate) enum MessageType {
+    /// the payload is Data
+    #[default]
+    Data,
+    /// the payload is a control message.
+    #[allow(clippy::upper_case_acronyms)]
+    WMB,
+}
+
+impl fmt::Display for MessageType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MessageType::Data => write!(f, "Data"),
+            MessageType::WMB => write!(f, "WMB"),
+        }
+    }
+}
+
+// proto enum is an i32 type and WMB is defined as enum in the proto.
+impl From<i32> for MessageType {
+    fn from(kind: i32) -> Self {
+        match kind {
+            0 => MessageType::Data,
+            _ => MessageType::WMB,
+        }
+    }
+}
+
+impl From<MessageType> for i32 {
+    fn from(kind: MessageType) -> Self {
+        match kind {
+            MessageType::Data => 0,
+            MessageType::WMB => 1,
+        }
+    }
+}
+
+impl Default for Message {
+    fn default() -> Self {
+        Self {
+            keys: Arc::new([]),
+            tags: None,
+            value: Bytes::new(),
+            offset: Default::default(),
+            event_time: Utc::now(),
+            watermark: None,
+            id: Default::default(),
+            headers: HashMap::new(),
+            metadata: None,
+            typ: Default::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct Metadata {
+    /// name of the previous vertex.
+    pub(crate) previous_vertex: String,
+    // In the future we could use this for OTLP, etc.
 }
 
 /// Offset of the message which will be used to acknowledge the message.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Hash, Serialize, Deserialize, Eq, PartialEq)]
 pub(crate) enum Offset {
     Int(IntOffset),
     String(StringOffset),
@@ -52,24 +120,30 @@ impl fmt::Display for Offset {
     }
 }
 
+impl Default for Offset {
+    fn default() -> Self {
+        Offset::Int(Default::default())
+    }
+}
+
 impl Message {
     // Check if the message should be dropped.
     pub(crate) fn dropped(&self) -> bool {
         self.tags
             .as_ref()
-            .map_or(false, |tags| tags.contains(&DROP.to_string()))
+            .is_some_and(|tags| tags.contains(&DROP.to_string()))
     }
 }
 
 /// IntOffset is integer based offset enum type.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct IntOffset {
-    pub(crate) offset: u64,
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
+pub(crate) struct IntOffset {
+    pub(crate) offset: i64,
     pub(crate) partition_idx: u16,
 }
 
 impl IntOffset {
-    pub fn new(seq: u64, partition_idx: u16) -> Self {
+    pub(crate) fn new(seq: i64, partition_idx: u16) -> Self {
         Self {
             offset: seq,
             partition_idx,
@@ -84,7 +158,7 @@ impl fmt::Display for IntOffset {
 }
 
 /// StringOffset is string based offset enum type.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub(crate) struct StringOffset {
     /// offset could be a complex base64 string.
     pub(crate) offset: Bytes,
@@ -127,6 +201,16 @@ pub(crate) struct MessageID {
     pub(crate) index: i32,
 }
 
+impl Default for MessageID {
+    fn default() -> Self {
+        Self {
+            vertex_name: Bytes::new(),
+            offset: Bytes::new(),
+            index: 0,
+        }
+    }
+}
+
 impl From<numaflow_pb::objects::isb::MessageId> for MessageID {
     fn from(id: numaflow_pb::objects::isb::MessageId) -> Self {
         Self {
@@ -158,6 +242,15 @@ impl fmt::Display for MessageID {
     }
 }
 
+impl TryFrom<Message> for Bytes {
+    type Error = Error;
+
+    fn try_from(value: Message) -> Result<Self, Self::Error> {
+        let b: BytesMut = value.try_into()?;
+        Ok(b.freeze())
+    }
+}
+
 impl TryFrom<Message> for BytesMut {
     type Error = Error;
 
@@ -165,10 +258,10 @@ impl TryFrom<Message> for BytesMut {
         let proto_message = numaflow_pb::objects::isb::Message {
             header: Some(numaflow_pb::objects::isb::Header {
                 message_info: Some(numaflow_pb::objects::isb::MessageInfo {
-                    event_time: prost_timestamp_from_utc(message.event_time),
+                    event_time: Some(prost_timestamp_from_utc(message.event_time)),
                     is_late: false, // Set this according to your logic
                 }),
-                kind: numaflow_pb::objects::isb::MessageKind::Data as i32,
+                kind: message.typ.into(),
                 id: Some(message.id.into()),
                 keys: message.keys.to_vec(),
                 headers: message.headers,
@@ -186,46 +279,17 @@ impl TryFrom<Message> for BytesMut {
     }
 }
 
-impl TryFrom<Bytes> for Message {
-    type Error = Error;
-
-    fn try_from(bytes: Bytes) -> Result<Self, Self::Error> {
-        let proto_message = numaflow_pb::objects::isb::Message::decode(bytes)
-            .map_err(|e| Error::Proto(e.to_string()))?;
-
-        let header = proto_message
-            .header
-            .ok_or(Error::Proto("Missing header".to_string()))?;
-        let body = proto_message
-            .body
-            .ok_or(Error::Proto("Missing body".to_string()))?;
-        let message_info = header
-            .message_info
-            .ok_or(Error::Proto("Missing message_info".to_string()))?;
-        let id = header.id.ok_or(Error::Proto("Missing id".to_string()))?;
-
-        Ok(Message {
-            keys: Arc::from(header.keys.into_boxed_slice()),
-            tags: None,
-            value: body.payload.into(),
-            offset: None,
-            event_time: utc_from_timestamp(message_info.event_time),
-            id: id.into(),
-            headers: header.headers,
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::error::Result;
+    use std::collections::HashMap;
+
     use chrono::TimeZone;
     use numaflow_pb::objects::isb::{
         Body, Header, Message as ProtoMessage, MessageId, MessageInfo,
     };
-    use std::collections::HashMap;
 
     use super::*;
+    use crate::error::Result;
 
     #[test]
     fn test_offset_display() {
@@ -249,20 +313,23 @@ mod tests {
     #[test]
     fn test_message_to_vec_u8() {
         let message = Message {
+            typ: Default::default(),
             keys: Arc::from(vec!["key1".to_string()]),
             tags: None,
             value: vec![1, 2, 3].into(),
-            offset: Some(Offset::String(StringOffset {
+            offset: Offset::String(StringOffset {
                 offset: "123".to_string().into(),
                 partition_idx: 0,
-            })),
+            }),
             event_time: Utc.timestamp_opt(1627846261, 0).unwrap(),
+            watermark: None,
             id: MessageID {
                 vertex_name: "vertex".to_string().into(),
                 offset: "123".to_string().into(),
                 index: 0,
             },
             headers: HashMap::new(),
+            metadata: None,
         };
 
         let result: Result<BytesMut> = message.clone().try_into();
@@ -271,7 +338,7 @@ mod tests {
         let proto_message = ProtoMessage {
             header: Some(Header {
                 message_info: Some(MessageInfo {
-                    event_time: prost_timestamp_from_utc(message.event_time),
+                    event_time: Some(prost_timestamp_from_utc(message.event_time)),
                     is_late: false,
                 }),
                 kind: numaflow_pb::objects::isb::MessageKind::Data as i32,
@@ -287,44 +354,6 @@ mod tests {
         let mut buf = Vec::new();
         prost::Message::encode(&proto_message, &mut buf).unwrap();
         assert_eq!(result.unwrap(), buf);
-    }
-
-    #[test]
-    fn test_vec_u8_to_message() {
-        let proto_message = ProtoMessage {
-            header: Some(Header {
-                message_info: Some(MessageInfo {
-                    event_time: prost_timestamp_from_utc(Utc.timestamp_opt(1627846261, 0).unwrap()),
-                    is_late: false,
-                }),
-                kind: numaflow_pb::objects::isb::MessageKind::Data as i32,
-                id: Some(MessageId {
-                    vertex_name: "vertex".to_string(),
-                    offset: "123".to_string(),
-                    index: 0,
-                }),
-                keys: vec!["key1".to_string()],
-                headers: HashMap::new(),
-            }),
-            body: Some(Body {
-                payload: vec![1, 2, 3],
-            }),
-        };
-
-        let mut buf = BytesMut::new();
-        prost::Message::encode(&proto_message, &mut buf).unwrap();
-        let buf = buf.freeze();
-
-        let result: Result<Message> = buf.try_into();
-        assert!(result.is_ok());
-
-        let message = result.unwrap();
-        assert_eq!(message.keys.to_vec(), vec!["key1".to_string()]);
-        assert_eq!(message.value, vec![1, 2, 3]);
-        assert_eq!(
-            message.event_time,
-            Utc.timestamp_opt(1627846261, 0).unwrap()
-        );
     }
 
     #[test]

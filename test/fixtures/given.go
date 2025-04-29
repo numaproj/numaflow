@@ -31,16 +31,18 @@ import (
 )
 
 type Given struct {
-	t                *testing.T
-	isbSvcClient     flowpkg.InterStepBufferServiceInterface
-	pipelineClient   flowpkg.PipelineInterface
-	vertexClient     flowpkg.VertexInterface
-	monoVertexClient flowpkg.MonoVertexInterface
-	isbSvc           *dfv1.InterStepBufferService
-	pipeline         *dfv1.Pipeline
-	monoVertex       *dfv1.MonoVertex
-	restConfig       *rest.Config
-	kubeClient       kubernetes.Interface
+	t                     *testing.T
+	isbSvcClient          flowpkg.InterStepBufferServiceInterface
+	pipelineClient        flowpkg.PipelineInterface
+	servingPipelineClient flowpkg.ServingPipelineInterface
+	vertexClient          flowpkg.VertexInterface
+	monoVertexClient      flowpkg.MonoVertexInterface
+	isbSvc                *dfv1.InterStepBufferService
+	pipeline              *dfv1.Pipeline
+	servingPipeline       *dfv1.ServingPipeline
+	monoVertex            *dfv1.MonoVertex
+	restConfig            *rest.Config
+	kubeClient            kubernetes.Interface
 }
 
 // ISBSvc creates an ISBSvc based on the parameter, this may be:
@@ -76,6 +78,24 @@ func (g *Given) Pipeline(text string) *Given {
 	l[Label] = LabelValue
 	g.pipeline.SetLabels(l)
 	g.pipeline.Spec.InterStepBufferServiceName = ISBSvcName
+	return g
+}
+
+// ServingPipeline creates a Pipeline based on the parameter, this may be:
+//
+// 1. A file name if it starts with "@"
+// 2. Raw YAML.
+func (g *Given) ServingPipeline(text string) *Given {
+	g.t.Helper()
+	g.servingPipeline = new(dfv1.ServingPipeline)
+	g.readResource(text, g.servingPipeline)
+	l := g.servingPipeline.GetLabels()
+	if l == nil {
+		l = map[string]string{}
+	}
+	l[Label] = LabelValue
+	g.servingPipeline.SetLabels(l)
+	g.servingPipeline.Spec.Pipeline.InterStepBufferServiceName = ISBSvcName
 	return g
 }
 
@@ -154,15 +174,17 @@ func (g *Given) readResource(text string, v metav1.Object) {
 
 func (g *Given) When() *When {
 	return &When{
-		t:                g.t,
-		isbSvcClient:     g.isbSvcClient,
-		pipelineClient:   g.pipelineClient,
-		vertexClient:     g.vertexClient,
-		monoVertexClient: g.monoVertexClient,
-		isbSvc:           g.isbSvc,
-		pipeline:         g.pipeline,
-		monoVertex:       g.monoVertex,
-		restConfig:       g.restConfig,
-		kubeClient:       g.kubeClient,
+		t:                     g.t,
+		isbSvcClient:          g.isbSvcClient,
+		pipelineClient:        g.pipelineClient,
+		servingPipelineClient: g.servingPipelineClient,
+		vertexClient:          g.vertexClient,
+		monoVertexClient:      g.monoVertexClient,
+		isbSvc:                g.isbSvc,
+		pipeline:              g.pipeline,
+		servingPipeline:       g.servingPipeline,
+		monoVertex:            g.monoVertex,
+		restConfig:            g.restConfig,
+		kubeClient:            g.kubeClient,
 	}
 }

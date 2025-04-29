@@ -2,6 +2,10 @@
 #[rustfmt::skip]
 pub mod isb;
 
-#[path = "objects/wmb.rs"]
+#[path = "objects/watermark.rs"]
 #[rustfmt::skip]
-pub mod wmb;
+pub mod watermark;
+
+#[path = "objects/wal.rs"]
+#[rustfmt::skip]
+pub mod wal;

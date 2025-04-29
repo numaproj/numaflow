@@ -1,5 +1,4 @@
 import { EventType } from "@visx/event/lib/types";
-import { Dispatch, SetStateAction } from "react";
 
 export interface Pod {
   name: string;
@@ -97,7 +96,6 @@ export interface PodDetailProps {
   type: string;
   containerName: string;
   pod: Pod;
-  podDetails: PodDetail;
   vertexId: string;
 }
 export interface ContainerInfoProps {
@@ -126,6 +124,10 @@ export interface PodSpecificInfoProps {
   totalMemory: string;
 }
 export interface PodInfoProps {
+  namespaceId: string;
+  pipelineId: string;
+  vertexId: string;
+  type: string;
   pod: Pod;
   podDetails: PodDetail;
   containerName: string;
@@ -137,9 +139,30 @@ export interface PodLogsProps {
   namespaceId: string;
   podName: string;
   containerName: string;
+  type: string;
 }
 
 export interface ResourceUsage {
   cpuPercent?: number;
   memoryPercent?: number;
+}
+
+export interface ContainerError {
+  container: string;
+  timestamp: string;
+  code: string;
+  message: string;
+  details: string;
+}
+
+export interface  ReplicaErrors {
+  replica: string;
+  containerErrors: ContainerError[];
+}
+
+export interface ErrorsFetchResult {
+  data?: ReplicaErrors[];
+  loading: boolean;
+  error: any;
+  refresh: () => void;
 }

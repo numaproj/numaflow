@@ -5,11 +5,11 @@ path = "src/main.rs"
 [package]
 name = "numaflow-pb"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-tonic-build = "0.12.3"
-prost = "0.13.2"
-prost-types = "0.13.1"
-tonic = "0.12.3"
-prost-build = "0.13.3"
+tonic-build = "0.13.0"
+prost = "0.13.5"
+prost-types = "0.13.5"
+tonic = "0.13.0"
+prost-build = "0.13.5"

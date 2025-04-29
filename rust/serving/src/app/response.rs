@@ -1,6 +1,6 @@
+use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 
@@ -29,7 +29,8 @@ impl ServeResponse {
 pub enum ApiError {
     BadRequest(String),
     InternalServerError(String),
-    BadGateway(String),
+    Conflict(String),
+    TooManyRequests(String),
 }
 
 impl IntoResponse for ApiError {
@@ -44,7 +45,8 @@ impl IntoResponse for ApiError {
         let (status, message) = match self {
             ApiError::BadRequest(message) => (StatusCode::BAD_REQUEST, message),
             ApiError::InternalServerError(message) => (StatusCode::INTERNAL_SERVER_ERROR, message),
-            ApiError::BadGateway(message) => (StatusCode::BAD_GATEWAY, message),
+            ApiError::Conflict(message) => (StatusCode::CONFLICT, message),
+            ApiError::TooManyRequests(message) => (StatusCode::TOO_MANY_REQUESTS, message),
         };
 
         (

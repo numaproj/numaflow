@@ -1,79 +1,138 @@
+use crate::{
+    Error::{self, ParseConfig},
+    pipeline::PipelineDCG,
+};
+use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
+use bytes::Bytes;
+use rcgen::{Certificate, CertifiedKey, KeyPair, generate_simple_self_signed};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Debug;
+use tracing::info;
 
-use base64::prelude::BASE64_STANDARD;
-use base64::Engine;
-use rcgen::{generate_simple_self_signed, Certificate, CertifiedKey, KeyPair};
-use serde::{Deserialize, Serialize};
-
-use crate::{
-    pipeline::PipelineDCG,
-    Error::{self, ParseConfig},
-};
-
-const ENV_NUMAFLOW_SERVING_SOURCE_OBJECT: &str = "NUMAFLOW_SERVING_SOURCE_OBJECT";
-const ENV_NUMAFLOW_SERVING_STORE_TTL: &str = "NUMAFLOW_SERVING_STORE_TTL";
-const ENV_NUMAFLOW_SERVING_HOST_IP: &str = "NUMAFLOW_SERVING_HOST_IP";
 const ENV_NUMAFLOW_SERVING_APP_PORT: &str = "NUMAFLOW_SERVING_APP_LISTEN_PORT";
-const ENV_NUMAFLOW_SERVING_AUTH_TOKEN: &str = "NUMAFLOW_SERVING_AUTH_TOKEN";
-const ENV_MIN_PIPELINE_SPEC: &str = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC";
+pub const ENV_MIN_PIPELINE_SPEC: &str = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC";
+pub const DEFAULT_ID_HEADER: &str = "X-Numaflow-Id";
+pub const DEFAULT_POD_HASH_KEY: &str = "X-Numaflow-Pod-Hash";
+pub const DEFAULT_CALLBACK_URL_HEADER_KEY: &str = "X-Numaflow-Callback-Url";
+const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
+const DEFAULT_SERVING_STORE_SOCKET: &str = "/var/run/numaflow/serving.sock";
+const DEFAULT_SERVING_STORE_SERVER_INFO_FILE: &str = "/var/run/numaflow/serving-server-info";
+const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
+const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
+const ENV_NUMAFLOW_SERVING_CALLBACK_STORE: &str = "NUMAFLOW_SERVING_CALLBACK_STORE";
+const ENV_NUMAFLOW_SERVING_RESPONSE_STORE: &str = "NUMAFLOW_SERVING_RESPONSE_STORE";
+const ENV_NUMAFLOW_SERVING_STATUS_STORE: &str = "NUMAFLOW_SERVING_STATUS_STORE";
+const ENV_NUMAFLOW_POD: &str = "NUMAFLOW_POD";
 
-pub fn generate_certs() -> std::result::Result<(Certificate, KeyPair), String> {
+pub fn generate_certs() -> Result<(Certificate, KeyPair), String> {
     let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
         .map_err(|e| format!("Failed to generate cert {:?}", e))?;
     Ok((cert, key_pair))
 }
 
-#[derive(Debug, Deserialize, Clone, PartialEq)]
-pub struct RedisConfig {
-    pub addr: String,
-    pub max_tasks: usize,
-    pub retries: usize,
-    pub retries_duration_millis: u16,
-    pub ttl_secs: Option<u32>,
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub(crate) enum RequestType {
+    Sse,
+    Sync,
+    Async,
 }
 
-impl Default for RedisConfig {
+impl TryInto<Bytes> for RequestType {
+    type Error = serde_json::Error;
+
+    fn try_into(self) -> Result<Bytes, Self::Error> {
+        Ok(Bytes::from(serde_json::to_vec(&self)?))
+    }
+}
+
+impl TryFrom<Bytes> for RequestType {
+    type Error = serde_json::Error;
+
+    fn try_from(value: Bytes) -> Result<Self, Self::Error> {
+        serde_json::from_slice(&value)
+    }
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct UserDefinedStoreConfig {
+    pub grpc_max_message_size: usize,
+    pub socket_path: String,
+    pub server_info_path: String,
+}
+
+impl Default for UserDefinedStoreConfig {
     fn default() -> Self {
         Self {
-            addr: "redis://127.0.0.1:6379".to_owned(),
-            max_tasks: 50,
-            retries: 5,
-            retries_duration_millis: 100,
-            // TODO: we might need an option type here. Zero value of u32 can be used instead of None
-            ttl_secs: Some(1),
+            grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+            socket_path: DEFAULT_SERVING_STORE_SOCKET.to_string(),
+            server_info_path: DEFAULT_SERVING_STORE_SERVER_INFO_FILE.to_string(),
         }
     }
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct Settings {
+    /// The HTTP header used to communicate to the client about the unique id assigned for a request in the store
+    /// The client may also set the value of this header when sending the payload.
     pub tid_header: String,
+    pub pod_hash: String,
     pub app_listen_port: u16,
     pub metrics_server_listen_port: u16,
     pub upstream_addr: String,
     pub drain_timeout_secs: u64,
-    pub redis: RedisConfig,
-    /// The IP address of the numaserve pod. This will be used to construct the value for X-Numaflow-Callback-Url header
-    pub host_ip: String,
+    pub store_type: StoreType,
+    pub js_callback_store: String,
+    pub js_response_store: String,
+    pub js_status_store: String,
     pub api_auth_token: Option<String>,
     pub pipeline_spec: PipelineDCG,
+    pub nats_basic_auth: Option<(String, String)>,
+    pub js_message_stream: String,
+    pub jetstream_url: String,
+}
+
+#[derive(Default, Debug, Deserialize, Clone, PartialEq)]
+pub enum StoreType {
+    UserDefined(UserDefinedStoreConfig),
+    #[default]
+    Nats,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            tid_header: "ID".to_owned(),
+            tid_header: DEFAULT_ID_HEADER.to_owned(),
+            pod_hash: "0".to_owned(),
             app_listen_port: 3000,
             metrics_server_listen_port: 3001,
             upstream_addr: "localhost:8888".to_owned(),
-            drain_timeout_secs: 10,
-            redis: RedisConfig::default(),
-            host_ip: "127.0.0.1".to_owned(),
+            drain_timeout_secs: 600,
+            store_type: StoreType::default(),
+            js_callback_store: "callback-kv".to_owned(),
+            js_response_store: "response-kv".to_owned(),
+            js_status_store: "status-kv".to_owned(),
             api_auth_token: None,
             pipeline_spec: Default::default(),
+            nats_basic_auth: None,
+            js_message_stream: "test-stream".into(),
+            jetstream_url: "localhost:4222".into(),
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct AuthToken {
+    /// Name of the configmap
+    name: String,
+    /// Key within the configmap
+    key: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct Auth {
+    token: AuthToken,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -82,6 +141,7 @@ pub struct Serving {
     pub msg_id_header_key: Option<String>,
     #[serde(rename = "store")]
     pub callback_storage: CallbackStorageConfig,
+    auth: Option<Auth>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -92,40 +152,100 @@ pub struct CallbackStorageConfig {
 /// This implementation is to load settings from env variables
 impl TryFrom<HashMap<String, String>> for Settings {
     type Error = Error;
-    fn try_from(env_vars: HashMap<String, String>) -> std::result::Result<Self, Self::Error> {
-        let host_ip = env_vars
-            .get(ENV_NUMAFLOW_SERVING_HOST_IP)
-            .ok_or_else(|| {
-                ParseConfig(format!(
-                    "Environment variable {ENV_NUMAFLOW_SERVING_HOST_IP} is not set"
-                ))
-            })?
-            .to_owned();
+    fn try_from(env_vars: HashMap<String, String>) -> Result<Self, Self::Error> {
+        let pipeline_spec_encoded = env_vars.get(ENV_MIN_PIPELINE_SPEC).ok_or_else(|| {
+            Error::ParseConfig(format!(
+                "Pipeline spec is not set using environment variable {ENV_MIN_PIPELINE_SPEC}"
+            ))
+        })?;
 
-        let pipeline_spec: PipelineDCG = env_vars
-            .get(ENV_MIN_PIPELINE_SPEC)
-            .ok_or_else(|| {
-                Error::ParseConfig(format!(
-                    "Pipeline spec is not set using environment variable {ENV_MIN_PIPELINE_SPEC}"
-                ))
-            })?
-            .parse()
+        let pipeline_spec: PipelineDCG = pipeline_spec_encoded.parse().map_err(|e| {
+            Error::ParseConfig(format!(
+                "Parsing pipeline spec: {}: error={e:?}",
+                env_vars.get(ENV_MIN_PIPELINE_SPEC).unwrap()
+            ))
+        })?;
+        let pipeline_spec_decoded = BASE64_STANDARD
+            .decode(pipeline_spec_encoded.as_bytes())
+            .map_err(|e| ParseConfig(format!("decoding {ENV_MIN_PIPELINE_SPEC}: {e:?}")))?;
+
+        #[derive(Deserialize)]
+        struct Vertex {
+            source: Option<numaflow_models::models::Source>,
+        }
+
+        #[derive(Deserialize)]
+        struct PipelineVertices {
+            vertices: Vec<Vertex>,
+        }
+
+        let pvs: PipelineVertices = serde_json::from_slice(pipeline_spec_decoded.as_slice())
             .map_err(|e| {
-                Error::ParseConfig(format!(
-                    "Parsing pipeline spec: {}: error={e:?}",
-                    env_vars.get(ENV_MIN_PIPELINE_SPEC).unwrap()
+                ParseConfig(format!(
+                    "Parsing vertex spec from {ENV_MIN_PIPELINE_SPEC}: {e:?}"
                 ))
             })?;
 
-        let mut settings = Settings {
-            host_ip,
-            pipeline_spec,
-            ..Default::default()
+        let mut js_source_spec = None;
+        for vtx in pvs.vertices {
+            let Some(src) = vtx.source else {
+                continue;
+            };
+            let Some(jetstream) = src.jetstream else {
+                return Err(ParseConfig(format!(
+                    "Expected the source to be Jetstream in {ENV_MIN_PIPELINE_SPEC}"
+                )));
+            };
+            js_source_spec = Some(jetstream);
+        }
+        let js_source_spec = js_source_spec.ok_or_else(|| {
+            ParseConfig(format!(
+                "Jetstream source settings was not found in {ENV_MIN_PIPELINE_SPEC}"
+            ))
+        })?;
+
+        let nats_username = env_vars.get(ENV_NUMAFLOW_SERVING_JETSTREAM_USER);
+        let nats_basic_auth = match nats_username {
+            Some(username) => {
+                let nats_passwd = env_vars
+                    .get("NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD")
+                    .ok_or_else(|| {
+                        ParseConfig(format!(
+                    "Environment variable '{ENV_NUMAFLOW_SERVING_JETSTREAM_USER}' is set, but '{ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD}' is not set"
+                ))})?;
+                Some((username.into(), nats_passwd.into()))
+            }
+            None => None,
         };
 
-        if let Some(api_auth_token) = env_vars.get(ENV_NUMAFLOW_SERVING_AUTH_TOKEN) {
-            settings.api_auth_token = Some(api_auth_token.to_owned());
-        }
+        let js_cb_store = env_vars
+            .get(ENV_NUMAFLOW_SERVING_CALLBACK_STORE)
+            .ok_or_else(|| {
+                ParseConfig("Serving store is default, but environment variable is not set".into())
+            })?;
+
+        let js_response_store = env_vars
+            .get(ENV_NUMAFLOW_SERVING_RESPONSE_STORE)
+            .ok_or_else(|| {
+                ParseConfig("Serving store is default, but environment variable is not set".into())
+            })?;
+
+        let js_status_store = env_vars
+            .get(ENV_NUMAFLOW_SERVING_STATUS_STORE)
+            .ok_or_else(|| {
+                ParseConfig("Serving store is default, but environment variable is not set".into())
+            })?;
+
+        let mut settings = Settings {
+            pipeline_spec,
+            js_callback_store: js_cb_store.into(),
+            nats_basic_auth,
+            js_message_stream: js_source_spec.stream,
+            jetstream_url: js_source_spec.url,
+            js_response_store: js_response_store.into(),
+            js_status_store: js_status_store.into(),
+            ..Default::default()
+        };
 
         if let Some(app_port) = env_vars.get(ENV_NUMAFLOW_SERVING_APP_PORT) {
             settings.app_listen_port = app_port.parse().map_err(|e| {
@@ -135,68 +255,102 @@ impl TryFrom<HashMap<String, String>> for Settings {
             })?;
         }
 
-        // Update redis.ttl_secs from environment variable
-        if let Some(ttl_secs) = env_vars.get(ENV_NUMAFLOW_SERVING_STORE_TTL) {
-            let ttl_secs: u32 = ttl_secs.parse().map_err(|e| {
-                ParseConfig(format!("parsing {ENV_NUMAFLOW_SERVING_STORE_TTL}: {e:?}"))
+        let serving_server_settings_encoded = env_vars
+            .get("NUMAFLOW_SERVING_SOURCE_SETTINGS")
+            .ok_or_else(|| {
+                ParseConfig(
+                    "Environment variable NUMAFLOW_SERVING_SOURCE_SETTINGS is not set".into(),
+                )
             })?;
-            settings.redis.ttl_secs = Some(ttl_secs);
-        }
+        let serving_server_settings_decoded = BASE64_STANDARD
+            .decode(serving_server_settings_encoded.as_bytes())
+            .map_err(|e| ParseConfig(format!("decoding {ENV_MIN_PIPELINE_SPEC}: {e:?}")))?;
 
-        let Some(source_spec_encoded) = env_vars.get(ENV_NUMAFLOW_SERVING_SOURCE_OBJECT) else {
-            return Ok(settings);
+        let serving_server_settings: numaflow_models::models::ServingSpec =
+            serde_json::from_slice(serving_server_settings_decoded.as_slice()).map_err(|err| {
+                ParseConfig(format!(
+                    "Parsing Serving settings from environment variable 'NUMAFLOW_SERVING_SOURCE_SETTINGS': {err:?}"
+                ))
+            })?;
+
+        settings.store_type = if serving_server_settings.store.is_some() {
+            StoreType::UserDefined(UserDefinedStoreConfig::default())
+        } else {
+            StoreType::Nats
         };
 
-        let source_spec_decoded = BASE64_STANDARD
-            .decode(source_spec_encoded.as_bytes())
-            .map_err(|e| ParseConfig(format!("decoding NUMAFLOW_SERVING_SOURCE: {e:?}")))?;
+        settings.tid_header = serving_server_settings.msg_id_header_key;
+        settings.pod_hash = env_vars
+            .get(ENV_NUMAFLOW_POD)
+            .unwrap()
+            .split('-')
+            .last()
+            .unwrap_or("0")
+            .to_string();
 
-        let source_spec = serde_json::from_slice::<Serving>(&source_spec_decoded)
-            .map_err(|e| ParseConfig(format!("parsing NUMAFLOW_SERVING_SOURCE: {e:?}")))?;
+        settings.drain_timeout_secs = serving_server_settings
+            .request_timeout_seconds
+            .unwrap_or(120)
+            .max(1) as u64; // Ensure timeout is at least 1 second
 
-        // Update tid_header from source_spec
-        if let Some(msg_id_header_key) = source_spec.msg_id_header_key {
-            settings.tid_header = msg_id_header_key;
+        if let Some(auth) = serving_server_settings.auth {
+            let token = auth.token.unwrap();
+            let auth_token = get_secret_from_volume(&token.name, &token.key)
+                .map_err(|e| ParseConfig(e.to_string()))?;
+            settings.api_auth_token = Some(auth_token);
         }
 
-        // Update redis.addr from source_spec, currently we only support redis as callback storage
-        settings.redis.addr = source_spec.callback_storage.url;
-
+        info!("Settings {:?}", settings);
         Ok(settings)
     }
 }
 
+// Retrieve value from mounted secret volume
+// "/var/numaflow/secrets/${secretRef.name}/${secretRef.key}" is expected to be the file path
+pub(crate) fn get_secret_from_volume(name: &str, key: &str) -> Result<String, String> {
+    let path = format!("/var/numaflow/secrets/{name}/{key}");
+    let val = std::fs::read_to_string(path.clone())
+        .map_err(|e| format!("Reading secret from file {path}: {e:?}"))?;
+    Ok(val.trim().into())
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::pipeline::{Edge, Vertex};
-
     use super::*;
+    use crate::pipeline::{Edge, Vertex};
 
     #[test]
     fn test_default_config() {
         let settings = Settings::default();
 
-        assert_eq!(settings.tid_header, "ID");
+        assert_eq!(settings.tid_header, "X-Numaflow-Id");
+        assert_eq!(settings.pod_hash, "0");
         assert_eq!(settings.app_listen_port, 3000);
         assert_eq!(settings.metrics_server_listen_port, 3001);
         assert_eq!(settings.upstream_addr, "localhost:8888");
-        assert_eq!(settings.drain_timeout_secs, 10);
-        assert_eq!(settings.redis.addr, "redis://127.0.0.1:6379");
-        assert_eq!(settings.redis.max_tasks, 50);
-        assert_eq!(settings.redis.retries, 5);
-        assert_eq!(settings.redis.retries_duration_millis, 100);
+        assert_eq!(settings.drain_timeout_secs, 600);
+        assert_eq!(settings.store_type, StoreType::Nats,);
     }
 
     #[test]
-    fn test_config_parse() {
+    fn test_pipeline_config_parse() {
         // Set up the environment variables
         let env_vars = [
-            (ENV_NUMAFLOW_SERVING_HOST_IP, "10.2.3.5"),
-            (ENV_NUMAFLOW_SERVING_AUTH_TOKEN, "api-auth-token"),
             (ENV_NUMAFLOW_SERVING_APP_PORT, "8443"),
-            (ENV_NUMAFLOW_SERVING_STORE_TTL, "86400"),
-            (ENV_NUMAFLOW_SERVING_SOURCE_OBJECT, "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQiLCJzdG9yZSI6eyJ1cmwiOiJyZWRpczovL3JlZGlzOjYzNzkifX0="),
-            (ENV_MIN_PIPELINE_SPEC, "eyJ2ZXJ0aWNlcyI6W3sibmFtZSI6InNlcnZpbmctaW4iLCJzb3VyY2UiOnsic2VydmluZyI6eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQiLCJzdG9yZSI6eyJ1cmwiOiJyZWRpczovL3JlZGlzOjYzNzkifX19LCJjb250YWluZXJUZW1wbGF0ZSI6eyJyZXNvdXJjZXMiOnt9LCJpbWFnZVB1bGxQb2xpY3kiOiJOZXZlciIsImVudiI6W3sibmFtZSI6IlJVU1RfTE9HIiwidmFsdWUiOiJpbmZvIn1dfSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19fSx7Im5hbWUiOiJzZXJ2aW5nLXNpbmsiLCJzaW5rIjp7InVkc2luayI6eyJjb250YWluZXIiOnsiaW1hZ2UiOiJxdWF5LmlvL251bWFpby9udW1hZmxvdy1ycy9zaW5rLWxvZzpzdGFibGUiLCJlbnYiOlt7Im5hbWUiOiJOVU1BRkxPV19DQUxMQkFDS19VUkxfS0VZIiwidmFsdWUiOiJYLU51bWFmbG93LUNhbGxiYWNrLVVybCJ9LHsibmFtZSI6Ik5VTUFGTE9XX01TR19JRF9IRUFERVJfS0VZIiwidmFsdWUiOiJYLU51bWFmbG93LUlkIn1dLCJyZXNvdXJjZXMiOnt9fX0sInJldHJ5U3RyYXRlZ3kiOnt9fSwiY29udGFpbmVyVGVtcGxhdGUiOnsicmVzb3VyY2VzIjp7fSwiaW1hZ2VQdWxsUG9saWN5IjoiTmV2ZXIifSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19fV0sImVkZ2VzIjpbeyJmcm9tIjoic2VydmluZy1pbiIsInRvIjoic2VydmluZy1zaW5rIiwiY29uZGl0aW9ucyI6bnVsbH1dLCJsaWZlY3ljbGUiOnt9LCJ3YXRlcm1hcmsiOnt9fQ==")
+            (ENV_NUMAFLOW_POD, "serving-server-kddc"),
+            ("NUMAFLOW_ISBSVC_JETSTREAM_USER", "testuser"),
+            ("NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD", "testpasswd"),
+            ("NUMAFLOW_SERVING_CALLBACK_STORE", "test-kv-store"),
+            ("NUMAFLOW_SERVING_STATUS_STORE", "test-kv-store"),
+            ("NUMAFLOW_SERVING_RESPONSE_STORE", "test-kv-store"),
+            (
+                "NUMAFLOW_SERVING_SOURCE_SETTINGS",
+                "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQifQ==",
+            ),
+            (
+                ENV_MIN_PIPELINE_SPEC,
+                "eyJ2ZXJ0aWNlcyI6W3sibmFtZSI6ImluIiwic291cmNlIjp7ImpldHN0cmVhbSI6eyJ1cmwiOiJuYXRzOi8vaXNic3ZjLWRlZmF1bHQtanMtc3ZjLmRlZmF1bHQuc3ZjOjQyMjIiLCJzdHJlYW0iOiJzZXJ2aW5nLXNvdXJjZS1zaW1wbGUtcGlwZWxpbmUiLCJ0bHMiOm51bGwsImF1dGgiOnsiYmFzaWMiOnsidXNlciI6eyJuYW1lIjoiaXNic3ZjLWRlZmF1bHQtanMtY2xpZW50LWF1dGgiLCJrZXkiOiJjbGllbnQtYXV0aC11c2VyIn0sInBhc3N3b3JkIjp7Im5hbWUiOiJpc2JzdmMtZGVmYXVsdC1qcy1jbGllbnQtYXV0aCIsImtleSI6ImNsaWVudC1hdXRoLXBhc3N3b3JkIn19fX19LCJjb250YWluZXJUZW1wbGF0ZSI6eyJyZXNvdXJjZXMiOnt9LCJlbnYiOlt7Im5hbWUiOiJOVU1BRkxPV19DQUxMQkFDS19FTkFCTEVEIiwidmFsdWUiOiJ0cnVlIn0seyJuYW1lIjoiTlVNQUZMT1dfU0VSVklOR19TT1VSQ0VfU0VUVElOR1MiLCJ2YWx1ZSI6ImV5SmhkWFJvSWpwdWRXeHNMQ0p6WlhKMmFXTmxJanAwY25WbExDSnRjMmRKUkVobFlXUmxja3RsZVNJNklsZ3RUblZ0WVdac2IzY3RTV1FpZlE9PSJ9LHsibmFtZSI6Ik5VTUFGTE9XX1NFUlZJTkdfS1ZfU1RPUkUiLCJ2YWx1ZSI6InNlcnZpbmctc3RvcmUtc2ltcGxlLXBpcGVsaW5lX1NFUlZJTkdfS1ZfU1RPUkUifV19LCJzY2FsZSI6eyJtaW4iOjEsIm1heCI6MX0sImluaXRDb250YWluZXJzIjpbeyJuYW1lIjoidmFsaWRhdGUtc3RyZWFtLWluaXQiLCJpbWFnZSI6InF1YXkuaW8vbnVtYXByb2ovbnVtYWZsb3c6ODA4MkU2NTYtQTAxOS00QjE1LUE2ODQtNTg2RkM3RDJDQTFGIiwiYXJncyI6WyJpc2JzdmMtdmFsaWRhdGUiLCItLWlzYnN2Yy10eXBlPWpldHN0cmVhbSIsIi0tYnVmZmVycz1zZXJ2aW5nLXNvdXJjZS1zaW1wbGUtcGlwZWxpbmUiXSwiZW52IjpbeyJuYW1lIjoiTlVNQUZMT1dfUElQRUxJTkVfTkFNRSIsInZhbHVlIjoicy1zaW1wbGUtcGlwZWxpbmUifSx7Im5hbWUiOiJHT0RFQlVHIn0seyJuYW1lIjoiTlVNQUZMT1dfSVNCU1ZDX0NPTkZJRyIsInZhbHVlIjoiZXlKcVpYUnpkSEpsWVcwaU9uc2lkWEpzSWpvaWJtRjBjem92TDJselluTjJZeTFrWldaaGRXeDBMV3B6TFhOMll5NWtaV1poZFd4MExuTjJZem8wTWpJeUlpd2lZWFYwYUNJNmV5SmlZWE5wWXlJNmV5SjFjMlZ5SWpwN0ltNWhiV1VpT2lKcGMySnpkbU10WkdWbVlYVnNkQzFxY3kxamJHbGxiblF0WVhWMGFDSXNJbXRsZVNJNkltTnNhV1Z1ZEMxaGRYUm9MWFZ6WlhJaWZTd2ljR0Z6YzNkdmNtUWlPbnNpYm1GdFpTSTZJbWx6WW5OMll5MWtaV1poZFd4MExXcHpMV05zYVdWdWRDMWhkWFJvSWl3aWEyVjVJam9pWTJ4cFpXNTBMV0YxZEdndGNHRnpjM2R2Y21RaWZYMTlMQ0p6ZEhKbFlXMURiMjVtYVdjaU9pSmpiMjV6ZFcxbGNqcGNiaUFnWVdOcmQyRnBkRG9nTmpCelhHNGdJRzFoZUdGamEzQmxibVJwYm1jNklESTFNREF3WEc1dmRHSjFZMnRsZERwY2JpQWdhR2x6ZEc5eWVUb2dNVnh1SUNCdFlYaGllWFJsY3pvZ01GeHVJQ0J0WVhoMllXeDFaWE5wZW1VNklEQmNiaUFnY21Wd2JHbGpZWE02SUROY2JpQWdjM1J2Y21GblpUb2dNRnh1SUNCMGRHdzZJRE5vWEc1d2NtOWpZblZqYTJWME9seHVJQ0JvYVhOMGIzSjVPaUF4WEc0Z0lHMWhlR0o1ZEdWek9pQXdYRzRnSUcxaGVIWmhiSFZsYzJsNlpUb2dNRnh1SUNCeVpYQnNhV05oY3pvZ00xeHVJQ0J6ZEc5eVlXZGxPaUF3WEc0Z0lIUjBiRG9nTnpKb1hHNXpkSEpsWVcwNlhHNGdJR1IxY0d4cFkyRjBaWE02SURZd2MxeHVJQ0J0WVhoaFoyVTZJRGN5YUZ4dUlDQnRZWGhpZVhSbGN6b2dMVEZjYmlBZ2JXRjRiWE5uY3pvZ01UQXdNREF3WEc0Z0lISmxjR3hwWTJGek9pQXpYRzRnSUhKbGRHVnVkR2x2YmpvZ01GeHVJQ0J6ZEc5eVlXZGxPaUF3WEc0aWZYMD0ifSx7Im5hbWUiOiJOVU1BRkxPV19JU0JTVkNfSkVUU1RSRUFNX1VSTCIsInZhbHVlIjoibmF0czovL2lzYnN2Yy1kZWZhdWx0LWpzLXN2Yy5kZWZhdWx0LnN2Yzo0MjIyIn0seyJuYW1lIjoiTlVNQUZMT1dfSVNCU1ZDX0pFVFNUUkVBTV9UTFNfRU5BQkxFRCIsInZhbHVlIjoiZmFsc2UifSx7Im5hbWUiOiJOVU1BRkxPV19JU0JTVkNfSkVUU1RSRUFNX1VTRVIiLCJ2YWx1ZUZyb20iOnsic2VjcmV0S2V5UmVmIjp7Im5hbWUiOiJpc2JzdmMtZGVmYXVsdC1qcy1jbGllbnQtYXV0aCIsImtleSI6ImNsaWVudC1hdXRoLXVzZXIifX19LHsibmFtZSI6Ik5VTUFGTE9XX0lTQlNWQ19KRVRTVFJFQU1fUEFTU1dPUkQiLCJ2YWx1ZUZyb20iOnsic2VjcmV0S2V5UmVmIjp7Im5hbWUiOiJpc2JzdmMtZGVmYXVsdC1qcy1jbGllbnQtYXV0aCIsImtleSI6ImNsaWVudC1hdXRoLXBhc3N3b3JkIn19fV0sInJlc291cmNlcyI6eyJyZXF1ZXN0cyI6eyJjcHUiOiIxMDBtIiwibWVtb3J5IjoiMTI4TWkifX0sImltYWdlUHVsbFBvbGljeSI6IklmTm90UHJlc2VudCJ9XSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19fSx7Im5hbWUiOiJjYXQiLCJ1ZGYiOnsiY29udGFpbmVyIjp7ImltYWdlIjoicXVheS5pby9udW1haW8vbnVtYWZsb3ctZ28vbWFwLWZvcndhcmQtbWVzc2FnZTpzdGFibGUiLCJyZXNvdXJjZXMiOnt9fSwiYnVpbHRpbiI6bnVsbCwiZ3JvdXBCeSI6bnVsbH0sImNvbnRhaW5lclRlbXBsYXRlIjp7InJlc291cmNlcyI6e30sImVudiI6W3sibmFtZSI6Ik5VTUFGTE9XX0NBTExCQUNLX0VOQUJMRUQiLCJ2YWx1ZSI6InRydWUifSx7Im5hbWUiOiJOVU1BRkxPV19TRVJWSU5HX1NPVVJDRV9TRVRUSU5HUyIsInZhbHVlIjoiZXlKaGRYUm9JanB1ZFd4c0xDSnpaWEoyYVdObElqcDBjblZsTENKdGMyZEpSRWhsWVdSbGNrdGxlU0k2SWxndFRuVnRZV1pzYjNjdFNXUWlmUT09In0seyJuYW1lIjoiTlVNQUZMT1dfU0VSVklOR19LVl9TVE9SRSIsInZhbHVlIjoic2VydmluZy1zdG9yZS1zaW1wbGUtcGlwZWxpbmVfU0VSVklOR19LVl9TVE9SRSJ9XX0sInNjYWxlIjp7Im1pbiI6MSwibWF4IjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19fSx7Im5hbWUiOiJvdXQiLCJzaW5rIjp7InVkc2luayI6eyJjb250YWluZXIiOnsiaW1hZ2UiOiJxdWF5LmlvL251bWFpby9udW1hZmxvdy1nby9zaW5rLXNlcnZlOnN0YWJsZSIsInJlc291cmNlcyI6e319fSwicmV0cnlTdHJhdGVneSI6e319LCJjb250YWluZXJUZW1wbGF0ZSI6eyJyZXNvdXJjZXMiOnt9LCJlbnYiOlt7Im5hbWUiOiJOVU1BRkxPV19DQUxMQkFDS19FTkFCTEVEIiwidmFsdWUiOiJ0cnVlIn0seyJuYW1lIjoiTlVNQUZMT1dfU0VSVklOR19TT1VSQ0VfU0VUVElOR1MiLCJ2YWx1ZSI6ImV5SmhkWFJvSWpwdWRXeHNMQ0p6WlhKMmFXTmxJanAwY25WbExDSnRjMmRKUkVobFlXUmxja3RsZVNJNklsZ3RUblZ0WVdac2IzY3RTV1FpZlE9PSJ9LHsibmFtZSI6Ik5VTUFGTE9XX1NFUlZJTkdfS1ZfU1RPUkUiLCJ2YWx1ZSI6InNlcnZpbmctc3RvcmUtc2ltcGxlLXBpcGVsaW5lX1NFUlZJTkdfS1ZfU1RPUkUifV19LCJzY2FsZSI6eyJtaW4iOjEsIm1heCI6MX0sInVwZGF0ZVN0cmF0ZWd5Ijp7InR5cGUiOiJSb2xsaW5nVXBkYXRlIiwicm9sbGluZ1VwZGF0ZSI6eyJtYXhVbmF2YWlsYWJsZSI6IjI1JSJ9fX1dLCJlZGdlcyI6W3siZnJvbSI6ImluIiwidG8iOiJjYXQiLCJjb25kaXRpb25zIjpudWxsfSx7ImZyb20iOiJjYXQiLCJ0byI6Im91dCIsImNvbmRpdGlvbnMiOm51bGx9XSwibGlmZWN5Y2xlIjp7fSwid2F0ZXJtYXJrIjp7fX0=",
+            ),
         ];
 
         // Call the config method
@@ -209,34 +363,39 @@ mod tests {
 
         let expected_config = Settings {
             tid_header: "X-Numaflow-Id".into(),
+            pod_hash: "kddc".into(),
             app_listen_port: 8443,
             metrics_server_listen_port: 3001,
             upstream_addr: "localhost:8888".into(),
-            drain_timeout_secs: 10,
-            redis: RedisConfig {
-                addr: "redis://redis:6379".into(),
-                max_tasks: 50,
-                retries: 5,
-                retries_duration_millis: 100,
-                ttl_secs: Some(86400),
-            },
-            host_ip: "10.2.3.5".into(),
-            api_auth_token: Some("api-auth-token".into()),
+            drain_timeout_secs: 120,
+            store_type: StoreType::Nats,
+            api_auth_token: None,
+            js_callback_store: "test-kv-store".into(),
+            js_status_store: "test-kv-store".into(),
+            js_response_store: "test-kv-store".into(),
+            nats_basic_auth: Some(("testuser".into(), "testpasswd".into())),
+            js_message_stream: "serving-source-simple-pipeline".into(),
+            jetstream_url: "nats://isbsvc-default-js-svc.default.svc:4222".into(),
             pipeline_spec: PipelineDCG {
                 vertices: vec![
-                    Vertex {
-                        name: "serving-in".into(),
+                    Vertex { name: "in".into() },
+                    Vertex { name: "cat".into() },
+                    Vertex { name: "out".into() },
+                ],
+                edges: vec![
+                    Edge {
+                        from: "in".into(),
+                        to: "cat".into(),
+                        conditions: None,
                     },
-                    Vertex {
-                        name: "serving-sink".into(),
+                    Edge {
+                        from: "cat".into(),
+                        to: "out".into(),
+                        conditions: None,
                     },
                 ],
-                edges: vec![Edge {
-                    from: "serving-in".into(),
-                    to: "serving-sink".into(),
-                    conditions: None,
-                }],
             },
+            ..Default::default()
         };
         assert_eq!(settings, expected_config);
     }

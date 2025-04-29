@@ -4,7 +4,7 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use pin_project::pin_project;
-use tokio::time::{sleep_until, Instant, Sleep};
+use tokio::time::{Instant, Sleep, sleep_until};
 
 use crate::{Condition, Operation};
 
@@ -17,11 +17,11 @@ use crate::{Condition, Operation};
 ///     /
 /// (op)            (Ok) -> [Return(Ok)]*
 ///    \           /
-///     (Ready) ---       (Non-retriable) -> [Return(Err)]*
+///     (Ready) ---       (Non-retryable) -> [Return(Err)]*
 ///                \     /
 ///                 (Err)                            (None) -> [Return(Err)]*
 ///                      \                          /
-///                       (Retriable) ---> (Backoff)          (Pending)
+///                       (Retryable) ---> (Backoff)          (Pending)
 ///                                                \        /
 ///                                                  (Sleep)
 ///                                                        \
@@ -144,8 +144,8 @@ where
 #[cfg(test)]
 mod tests {
     use std::future;
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     use super::*;
     use crate::strategy::fixed;

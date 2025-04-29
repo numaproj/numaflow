@@ -1,14 +1,31 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  createContext,
+  Dispatch,
+  SetStateAction,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import Box from "@mui/material/Box";
 import { VertexUpdate } from "./partials/VertexUpdate";
 import { ProcessingRates } from "./partials/ProcessingRates";
+import { Errors } from "./partials/Errors";
 import { K8sEvents } from "../K8sEvents";
 import { Buffers } from "./partials/Buffers";
 import { Pods } from "../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods";
 import { SpecEditorModalProps } from "../..";
 import { CloseModal } from "../CloseModal";
+import { AppContext } from "../../../../../App";
+import { useErrorsFetch } from "../../../../../utils/fetchWrappers/errorsFetch";
+import { AppContextProps } from "../../../../../types/declarations/app";
+import {
+  ContainerError,
+  ReplicaErrors,
+} from "../../../../../types/declarations/pods";
 import sourceIcon from "../../../../../images/source.png";
 import sinkIcon from "../../../../../images/sink.png";
 import mapIcon from "../../../../../images/map.png";
@@ -21,7 +38,8 @@ const PODS_VIEW_TAB_INDEX = 0;
 const SPEC_TAB_INDEX = 1;
 const PROCESSING_RATES_TAB_INDEX = 2;
 const K8S_EVENTS_TAB_INDEX = 3;
-const BUFFERS_TAB_INDEX = 4;
+const ERRORS_TAB_INDEX = 4;
+const BUFFERS_TAB_INDEX = 5;
 
 export enum VertexType {
   SOURCE,
@@ -43,6 +61,30 @@ export interface VertexDetailsProps {
   refresh: () => void;
 }
 
+export interface VertexDetailsContextProps {
+  setVertexTab: Dispatch<SetStateAction<number>>;
+  podsViewTab: number;
+  setPodsViewTab: Dispatch<SetStateAction<number>>;
+  expanded: Set<string>;
+  setExpanded: Dispatch<SetStateAction<Set<string>>>;
+  presets: any;
+  setPresets: Dispatch<SetStateAction<any>>;
+}
+
+export const VertexDetailsContext = createContext<VertexDetailsContextProps>({
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  setVertexTab: () => {},
+  podsViewTab: 0,
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  setPodsViewTab: () => {},
+  expanded: new Set(),
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  setExpanded: () => {},
+  presets: undefined,
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  setPresets: () => {},
+});
+
 export function VertexDetails({
   namespaceId,
   pipelineId,
@@ -54,14 +96,22 @@ export function VertexDetails({
   setModalOnClose,
   refresh,
 }: VertexDetailsProps) {
+  const { addError } = useContext<AppContextProps>(AppContext);
+  const [errorsCount, setErrorsCount] = useState<number>(0);
   const [vertexSpec, setVertexSpec] = useState<any>();
   const [vertexType, setVertexType] = useState<VertexType | undefined>();
-  const [tabValue, setTabValue] = useState(PODS_VIEW_TAB_INDEX);
+  const [tabValue, setTabValue] = useState<number>(PODS_VIEW_TAB_INDEX);
+  const [podsViewTab, setPodsViewTab] = useState<number>(0);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [updateModalOnClose, setUpdateModalOnClose] = useState<
     SpecEditorModalProps | undefined
   >();
+  const [presets, setPresets] = useState<any>(undefined);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
   const [targetTab, setTargetTab] = useState<number | undefined>();
+  const [constructedDetails, setConstructedDetails] = useState<
+    (ContainerError & { pod: string })[]
+  >([]);
 
   // Find the vertex spec by id
   useEffect(() => {
@@ -158,6 +208,10 @@ export function VertexDetails({
         setUpdateModalOpen(true);
       } else {
         setTabValue(newValue);
+        if (tabValue === PODS_VIEW_TAB_INDEX) {
+          setPodsViewTab(0);
+          setExpanded(new Set());
+        }
       }
     },
     [tabValue, updateModalOnClose]
@@ -185,152 +239,252 @@ export function VertexDetails({
     [setModalOnClose]
   );
 
+  const { data: errorsDetailsData } = useErrorsFetch({
+    namespaceId,
+    pipelineId,
+    vertexId,
+    type,
+    addError,
+  });
+
+  // flattens the error data into a single array of container errors
+  const constructDetails = useCallback((details?: ReplicaErrors[]) => {
+    const newDetails: (ContainerError & { pod: string })[] = [];
+    if (details) {
+      details?.forEach((d) => {
+        d.containerErrors.forEach((c) => {
+          newDetails.push({
+            pod: d.replica,
+            container: c.container,
+            timestamp: c.timestamp,
+            code: c.code,
+            message: c.message,
+            details: c.details,
+          });
+        });
+      });
+    }
+    setConstructedDetails(newDetails);
+  }, []);
+
+  useEffect(() => {
+    if (errorsDetailsData) constructDetails(errorsDetailsData);
+  }, [errorsDetailsData, constructDetails]);
+
+  const filterErrorsWithinLast24Hours = useCallback(
+    (containerErrorsData: (ContainerError & { pod: string })[]) => {
+      const currentTime = new Date().getTime();
+      const twentyFourHoursAgo = currentTime - 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+      return containerErrorsData.filter((errorData) => {
+        return (
+          errorData.timestamp &&
+          new Date(errorData.timestamp).getTime() >= twentyFourHoursAgo
+        );
+      });
+    },
+    []
+  );
+
+  useEffect(() => {
+    const filteredDetailsData =
+      filterErrorsWithinLast24Hours(constructedDetails);
+    setErrorsCount(filteredDetailsData.length);
+  }, [constructedDetails, filterErrorsWithinLast24Hours]);
+
   return (
-    <Box
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100%",
+    <VertexDetailsContext.Provider
+      value={{
+        setVertexTab: setTabValue,
+        podsViewTab,
+        setPodsViewTab,
+        expanded,
+        setExpanded,
+        presets,
+        setPresets,
       }}
     >
-      {header}
       <Box
-        sx={{ marginTop: "1.6rem", borderBottom: 1, borderColor: "divider" }}
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          height: "100%",
+        }}
       >
-        <Tabs
-          className="vertex-details-tabs"
-          value={tabValue}
-          onChange={handleTabChange}
+        {header}
+        <Box
+          sx={{ marginTop: "1.6rem", borderBottom: 1, borderColor: "divider" }}
         >
-          <Tab
-            className={
-              tabValue === PODS_VIEW_TAB_INDEX
-                ? "vertex-details-tab-selected"
-                : "vertex-details-tab"
-            }
-            label="Pods View"
-            data-testid="pods-tab"
-          />
-          <Tab
-            className={
-              tabValue === SPEC_TAB_INDEX
-                ? "vertex-details-tab-selected"
-                : "vertex-details-tab"
-            }
-            label="Spec"
-            data-testid="spec-tab"
-          />
-          <Tab
-            className={
-              tabValue === PROCESSING_RATES_TAB_INDEX
-                ? "vertex-details-tab-selected"
-                : "vertex-details-tab"
-            }
-            label="Processing Rates"
-            data-testid="pr-tab"
-          />
-          <Tab
-            className={
-              tabValue === K8S_EVENTS_TAB_INDEX
-                ? "vertex-details-tab-selected"
-                : "vertex-details-tab"
-            }
-            label="K8s Events"
-            data-testid="events-tab"
-          />
-          {buffers && (
+          <Tabs
+            className="vertex-details-tabs"
+            value={tabValue}
+            onChange={handleTabChange}
+          >
             <Tab
               className={
-                tabValue === BUFFERS_TAB_INDEX
+                tabValue === PODS_VIEW_TAB_INDEX
                   ? "vertex-details-tab-selected"
                   : "vertex-details-tab"
               }
-              label="Buffers"
-              data-testid="buffers-tab"
+              label="Pods View"
+              data-testid="pods-tab"
             />
-          )}
-        </Tabs>
-      </Box>
-      <div
-        className="vertex-details-tab-panel"
-        role="tabpanel"
-        hidden={tabValue !== PODS_VIEW_TAB_INDEX}
-      >
-        {tabValue === PODS_VIEW_TAB_INDEX && (
-          <Pods
-            namespaceId={namespaceId}
-            pipelineId={pipelineId}
-            vertexId={vertexId}
-            type={type}
-          />
-        )}
-      </div>
-      <div
-        className="vertex-details-tab-panel"
-        role="tabpanel"
-        hidden={tabValue !== SPEC_TAB_INDEX}
-      >
-        {tabValue === SPEC_TAB_INDEX && (
-          <Box sx={{ height: "100%" }}>
-            <VertexUpdate
-              namespaceId={namespaceId}
-              pipelineId={pipelineId}
-              vertexId={vertexId}
-              vertexSpec={vertexSpec}
-              type={type}
-              setModalOnClose={handleUpdateModalClose}
-              refresh={refresh}
+            <Tab
+              className={
+                tabValue === SPEC_TAB_INDEX
+                  ? "vertex-details-tab-selected"
+                  : "vertex-details-tab"
+              }
+              label="Spec"
+              data-testid="spec-tab"
             />
-          </Box>
-        )}
-      </div>
-      <div
-        className="vertex-details-tab-panel"
-        role="tabpanel"
-        hidden={tabValue !== PROCESSING_RATES_TAB_INDEX}
-      >
-        {tabValue === PROCESSING_RATES_TAB_INDEX && (
-          <ProcessingRates
-            vertexId={vertexId}
-            pipelineId={pipelineId}
-            type={type}
-            vertexMetrics={vertexMetrics}
-          />
-        )}
-      </div>
-      <div
-        className="vertex-details-tab-panel"
-        role="tabpanel"
-        hidden={tabValue !== K8S_EVENTS_TAB_INDEX}
-      >
-        {tabValue === K8S_EVENTS_TAB_INDEX && (
-          <K8sEvents
-            namespaceId={namespaceId}
-            pipelineId={
-              type === "monoVertex" ? `${pipelineId} (MonoVertex)` : pipelineId
-            }
-            vertexId={type === "monoVertex" ? undefined : vertexId}
-            excludeHeader
-            square
-          />
-        )}
-      </div>
-      {buffers && (
+            <Tab
+              className={
+                tabValue === PROCESSING_RATES_TAB_INDEX
+                  ? "vertex-details-tab-selected"
+                  : "vertex-details-tab"
+              }
+              label="Processing Rates"
+              data-testid="pr-tab"
+            />
+            <Tab
+              className={
+                tabValue === K8S_EVENTS_TAB_INDEX
+                  ? "vertex-details-tab-selected"
+                  : "vertex-details-tab"
+              }
+              label="K8s Events"
+              data-testid="events-tab"
+            />
+            <Tab
+              className={
+                tabValue === ERRORS_TAB_INDEX
+                  ? "vertex-details-tab-selected"
+                  : "vertex-details-tab"
+              }
+              label={
+                <Box className={"vertex-details-errors-tab-title"}>
+                  <Box>Errors</Box>
+                  <Box sx={{ color: errorsCount ? "red" : "#6B6C72" }}>
+                    {errorsCount}
+                  </Box>
+                </Box>
+              }
+              data-testid="errors-tab"
+            />
+            {buffers && (
+              <Tab
+                className={
+                  tabValue === BUFFERS_TAB_INDEX
+                    ? "vertex-details-tab-selected"
+                    : "vertex-details-tab"
+                }
+                label="Buffers"
+                data-testid="buffers-tab"
+              />
+            )}
+          </Tabs>
+        </Box>
         <div
           className="vertex-details-tab-panel"
           role="tabpanel"
-          hidden={tabValue !== BUFFERS_TAB_INDEX}
+          hidden={tabValue !== PODS_VIEW_TAB_INDEX}
         >
-          {tabValue === BUFFERS_TAB_INDEX && <Buffers buffers={buffers} />}
+          {tabValue === PODS_VIEW_TAB_INDEX && (
+            <Pods
+              namespaceId={namespaceId}
+              pipelineId={pipelineId}
+              vertexId={vertexId}
+              type={type}
+            />
+          )}
         </div>
-      )}
-      {updateModalOnClose && updateModalOpen && (
-        <CloseModal
-          {...updateModalOnClose}
-          onConfirm={handleUpdateModalConfirm}
-          onCancel={handleUpdateModalCancel}
-        />
-      )}
-    </Box>
+        <div
+          className="vertex-details-tab-panel"
+          role="tabpanel"
+          hidden={tabValue !== SPEC_TAB_INDEX}
+        >
+          {tabValue === SPEC_TAB_INDEX && (
+            <Box sx={{ height: "100%" }}>
+              <VertexUpdate
+                namespaceId={namespaceId}
+                pipelineId={pipelineId}
+                vertexId={vertexId}
+                vertexSpec={vertexSpec}
+                type={type}
+                setModalOnClose={handleUpdateModalClose}
+                refresh={refresh}
+              />
+            </Box>
+          )}
+        </div>
+        <div
+          className="vertex-details-tab-panel"
+          role="tabpanel"
+          hidden={tabValue !== PROCESSING_RATES_TAB_INDEX}
+        >
+          {tabValue === PROCESSING_RATES_TAB_INDEX && (
+            <ProcessingRates
+              vertexId={vertexId}
+              namespaceId={namespaceId}
+              pipelineId={pipelineId}
+              type={type}
+              vertexMetrics={vertexMetrics}
+            />
+          )}
+        </div>
+        <div
+          className="vertex-details-tab-panel"
+          role="tabpanel"
+          hidden={tabValue !== K8S_EVENTS_TAB_INDEX}
+        >
+          {tabValue === K8S_EVENTS_TAB_INDEX && (
+            <K8sEvents
+              namespaceId={namespaceId}
+              pipelineId={
+                type === "monoVertex"
+                  ? `${pipelineId} (MonoVertex)`
+                  : pipelineId
+              }
+              vertexId={type === "monoVertex" ? undefined : vertexId}
+              excludeHeader
+              square
+            />
+          )}
+        </div>
+        <div
+          className="vertex-details-tab-panel"
+          role="tabpanel"
+          hidden={tabValue !== ERRORS_TAB_INDEX}
+        >
+          {tabValue === ERRORS_TAB_INDEX && (
+            <Errors details={constructedDetails} square />
+          )}
+        </div>
+        {buffers && (
+          <div
+            className="vertex-details-tab-panel"
+            role="tabpanel"
+            hidden={tabValue !== BUFFERS_TAB_INDEX}
+          >
+            {tabValue === BUFFERS_TAB_INDEX && (
+              <Buffers
+                buffers={buffers}
+                namespaceId={namespaceId}
+                pipelineId={pipelineId}
+                vertexId={vertexId}
+                type={type}
+              />
+            )}
+          </div>
+        )}
+        {updateModalOnClose && updateModalOpen && (
+          <CloseModal
+            {...updateModalOnClose}
+            onConfirm={handleUpdateModalConfirm}
+            onCancel={handleUpdateModalCancel}
+          />
+        )}
+      </Box>
+    </VertexDetailsContext.Provider>
   );
 }

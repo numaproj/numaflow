@@ -1,15 +1,14 @@
-use forwarder::ForwarderBuilder;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::config::is_mono_vertex;
 use crate::config::monovertex::MonovertexConfig;
 use crate::error::{self};
+use crate::metrics::{LagReader, PendingReaderTasks_};
 use crate::shared::create_components;
 use crate::sink::SinkWriter;
 use crate::source::Source;
 use crate::tracker::TrackerHandle;
-use crate::transformer::Transformer;
 use crate::{metrics, shared};
 
 /// [forwarder] orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
@@ -18,23 +17,15 @@ use crate::{metrics, shared};
 /// - Invokes the SourceTransformer concurrently
 /// - Calls the Sinker to write the batch to the Sink
 /// - Send Acknowledgement back to the Source
-mod forwarder;
+pub(crate) mod forwarder;
 
 pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
     config: &MonovertexConfig,
 ) -> error::Result<()> {
-    let tracker_handle = TrackerHandle::new();
-    let (source, source_grpc_client) = create_components::create_source(
-        config.batch_size,
-        config.read_timeout,
-        &config.source_config,
-        tracker_handle.clone(),
-        cln_token.clone(),
-    )
-    .await?;
+    let tracker_handle = TrackerHandle::new(None, None);
 
-    let (transformer, transformer_grpc_client) = create_components::create_transformer(
+    let transformer = create_components::create_transformer(
         config.batch_size,
         config.transformer_config.clone(),
         tracker_handle.clone(),
@@ -42,34 +33,45 @@ pub(crate) async fn start_forwarder(
     )
     .await?;
 
-    let (sink_writer, sink_grpc_client, fb_sink_grpc_client) =
-        create_components::create_sink_writer(
-            config.batch_size,
-            config.read_timeout,
-            config.sink_config.clone(),
-            config.fb_sink_config.clone(),
-            tracker_handle,
-            &cln_token,
-        )
-        .await?;
+    let source = create_components::create_source(
+        config.batch_size,
+        config.read_timeout,
+        &config.source_config,
+        tracker_handle.clone(),
+        transformer,
+        None,
+        cln_token.clone(),
+    )
+    .await?;
+
+    let sink_writer = create_components::create_sink_writer(
+        config.batch_size,
+        config.read_timeout,
+        config.sink_config.clone(),
+        config.fb_sink_config.clone(),
+        tracker_handle,
+        None,
+        &cln_token,
+    )
+    .await?;
 
     // Start the metrics server in a separate background async spawn,
     // This should be running throughout the lifetime of the application, hence the handle is not
     // joined.
-    let metrics_state =
-        metrics::UserDefinedContainerState::Monovertex(metrics::MonovertexContainerState {
-            source_client: source_grpc_client.clone(),
-            sink_client: sink_grpc_client.clone(),
-            transformer_client: transformer_grpc_client.clone(),
-            fb_sink_client: fb_sink_grpc_client.clone(),
-        });
+    let metrics_state = metrics::ComponentHealthChecks::Monovertex(metrics::MonovertexComponents {
+        source: source.clone(),
+        sink: sink_writer.clone(),
+    });
 
     // start the metrics server
     // FIXME: what to do with the handle
-    shared::metrics::start_metrics_server(config.metrics_config.clone(), metrics_state).await;
+    let metrics_server_handle =
+        shared::metrics::start_metrics_server(config.metrics_config.clone(), metrics_state).await;
 
-    start(config.clone(), source, sink_writer, transformer, cln_token).await?;
+    start(config.clone(), source, sink_writer, cln_token).await?;
 
+    // abort the metrics server
+    metrics_server_handle.abort();
     Ok(())
 }
 
@@ -77,28 +79,31 @@ async fn start(
     mvtx_config: MonovertexConfig,
     source: Source,
     sink: SinkWriter,
-    transformer: Option<Transformer>,
     cln_token: CancellationToken,
 ) -> error::Result<()> {
-    // start the pending reader to publish pending metrics
-    let pending_reader =
-        shared::metrics::create_pending_reader(&mvtx_config.metrics_config, source.clone()).await;
-    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
+    // Store the pending reader handle outside, so it doesn't get dropped immediately.
 
-    let mut forwarder_builder = ForwarderBuilder::new(source, sink, cln_token);
+    // only check the pending and lag for source for pod_id = 0
+    let _pending_reader_handle: Option<PendingReaderTasks_> = if mvtx_config.replica == 0 {
+        // start the pending reader to publish pending metrics
+        let pending_reader = shared::metrics::create_pending_reader(
+            &mvtx_config.metrics_config,
+            LagReader::Source(source.clone()),
+        )
+        .await;
+        // TODO(lookback) - using new implementation for monovertex right now,
+        // deprecate old implementation and use this for pipeline as well once
+        // corresponding changes are completed.
+        Some(pending_reader.start_(is_mono_vertex()).await)
+    } else {
+        None
+    };
 
-    // add transformer if exists
-    if let Some(transformer_client) = transformer {
-        forwarder_builder = forwarder_builder.transformer(transformer_client);
-    }
-
-    // build the final forwarder
-    let forwarder = forwarder_builder.build();
+    let forwarder = forwarder::Forwarder::new(source, sink);
 
     info!("Forwarder is starting...");
-
     // start the forwarder, it will return only on Signal
-    forwarder.start().await?;
+    forwarder.start(cln_token).await?;
 
     info!("Forwarder stopped gracefully.");
     Ok(())

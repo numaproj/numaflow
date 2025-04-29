@@ -12,11 +12,14 @@ import {
   quantileOptions,
 } from "../../../utils/constants";
 
+import "./style.css";
+
 export interface MetricDropDownProps {
   metric: any;
   type: string;
   field: string;
   setMetricReq: any;
+  presets?: any;
 }
 
 const Dropdown = ({
@@ -24,25 +27,38 @@ const Dropdown = ({
   type,
   field,
   setMetricReq,
+  presets,
 }: MetricDropDownProps) => {
+  // to handle cases there is no "mono-vertex" as dimension at top level (for eg: container level cpu/memory)
+  const initialDimensionValue = useMemo(() => {
+    if (!metric?.dimensions?.length) return dimensionReverseMap[type];
+
+    return (
+      metric?.dimensions?.find(
+        (val: any) => val?.name === dimensionReverseMap[type]
+      )?.name || metric?.dimensions[0]?.name
+    );
+  }, [metric, type]);
+
   const getInitialValue = useMemo(() => {
     switch (field) {
       case "dimension":
-        return dimensionReverseMap[type];
+        return initialDimensionValue;
       case "quantile":
-        return quantileOptions[quantileOptions.length-1];
+        return presets?.quantile ?? quantileOptions[quantileOptions.length - 1];
       case "duration":
-        return durationOptions[0];
+        return presets?.duration ?? durationOptions[0];
       default:
         return "";
     }
-  }, [field, dimensionReverseMap, type, quantileOptions, durationOptions]);
+  }, [field, initialDimensionValue, quantileOptions, durationOptions, presets]);
 
   const [value, setValue] = useState<string>(getInitialValue);
-  let fieldName = field.charAt(0).toUpperCase() + field.slice(1);
-  if (fieldName == "Duration"){
-    fieldName = "Query Window"
-  }
+
+  const fieldName = useMemo(() => {
+    const capitalizedField = field.charAt(0).toUpperCase() + field.slice(1);
+    return capitalizedField === "Duration" ? "Query Window" : capitalizedField;
+  }, [field]);
 
   // Update metricsReq with the initial value
   useEffect(() => {
@@ -54,9 +70,9 @@ const Dropdown = ({
       case "dimension":
         return metric?.dimensions?.map((dimension: any) => (
           <MenuItem
+            className={"dropdown-menu-items"}
             key={`dropdown-${dimension?.name}`}
             value={dimension?.name}
-            sx={{ fontSize: "1.4rem" }}
           >
             {dimensionMap[dimension?.name]}
           </MenuItem>
@@ -64,9 +80,9 @@ const Dropdown = ({
       case "quantile":
         return quantileOptions?.map((quantile: string) => (
           <MenuItem
+            className={"dropdown-menu-items"}
             key={`dropdown-${quantile}`}
             value={quantile}
-            sx={{ fontSize: "1.4rem" }}
           >
             {quantileMap[quantile]}
           </MenuItem>
@@ -74,9 +90,9 @@ const Dropdown = ({
       case "duration":
         return durationOptions?.map((duration: string) => (
           <MenuItem
+            className={"dropdown-menu-items"}
             key={`dropdown-${duration}`}
             value={duration}
-            sx={{ fontSize: "1.4rem" }}
           >
             {durationMap[duration]}
           </MenuItem>
@@ -95,11 +111,15 @@ const Dropdown = ({
   ]);
 
   return (
-    <FormControl fullWidth>
-      <InputLabel id={`${field}-select-label`} sx={{ fontSize: "1.4rem" }}>
+    <FormControl className={"dropdown-form-select"}>
+      <InputLabel
+        className={"dropdown-input-label"}
+        id={`${field}-select-label`}
+      >
         {fieldName}
       </InputLabel>
       <Select
+        className={"dropdown-select-value"}
         labelId={`${field}-select-label`}
         id={`${field}-select`}
         value={value}
@@ -108,7 +128,6 @@ const Dropdown = ({
           setValue(e.target.value);
           setMetricReq((prev: any) => ({ ...prev, [field]: e.target.value }));
         }}
-        sx={{ fontSize: "1.6rem",  height: '50px' }}
       >
         {getDropDownEntries}
       </Select>

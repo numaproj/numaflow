@@ -19,7 +19,7 @@ limitations under the License.
 package externalversions
 
 import (
-	"fmt"
+	fmt "fmt"
 
 	v1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -59,6 +59,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Numaflow().V1alpha1().MonoVertices().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("pipelines"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Numaflow().V1alpha1().Pipelines().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("servingpipelines"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Numaflow().V1alpha1().ServingPipelines().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("vertices"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Numaflow().V1alpha1().Vertices().Informer()}, nil
 

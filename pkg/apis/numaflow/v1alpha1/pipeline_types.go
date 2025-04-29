@@ -54,6 +54,25 @@ const (
 	PipelineConditionVerticesHealthy           ConditionType = "VerticesHealthy"
 )
 
+func (pp PipelinePhase) Code() int {
+	switch pp {
+	case PipelinePhaseUnknown:
+		return 0
+	case PipelinePhaseRunning:
+		return 1
+	case PipelinePhasePaused:
+		return 2
+	case PipelinePhaseFailed:
+		return 3
+	case PipelinePhasePausing:
+		return 4
+	case PipelinePhaseDeleting:
+		return 5
+	default:
+		return 0
+	}
+}
+
 // +genclient
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:shortName=pl
@@ -211,16 +230,6 @@ func (p Pipeline) GetSideInputsManagerDeploymentName(sideInputName string) strin
 
 func (p Pipeline) GetSideInputsStoreName() string {
 	return fmt.Sprintf("%s-%s", p.Namespace, p.Name)
-}
-
-func (p Pipeline) GetServingSourceStreamNames() []string {
-	var servingSourceNames []string
-	for _, srcVertex := range p.Spec.Vertices {
-		if srcVertex.IsASource() && srcVertex.Source.Serving != nil {
-			servingSourceNames = append(servingSourceNames, fmt.Sprintf("%s-%s-serving-source", p.Name, srcVertex.Name))
-		}
-	}
-	return servingSourceNames
 }
 
 func (p Pipeline) GetSideInputsManagerDeployments(req GetSideInputDeploymentReq) ([]*appv1.Deployment, error) {
@@ -453,10 +462,12 @@ func (p Pipeline) GetTerminationGracePeriodSeconds() int64 {
 }
 
 func (p Pipeline) GetDesiredPhase() PipelinePhase {
-	if string(p.Spec.Lifecycle.DesiredPhase) != "" {
-		return p.Spec.Lifecycle.DesiredPhase
+	switch p.Spec.Lifecycle.DesiredPhase {
+	case PipelinePhasePaused:
+		return PipelinePhasePaused
+	default:
+		return PipelinePhaseRunning
 	}
-	return PipelinePhaseRunning
 }
 
 // return PauseGracePeriodSeconds if set

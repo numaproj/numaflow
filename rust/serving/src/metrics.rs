@@ -6,19 +6,21 @@ use axum::body::Body;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::{
+    Router,
     extract::{MatchedPath, Request},
     middleware::Next,
     response::Response,
     routing::get,
-    Router,
 };
+use axum_server::Handle;
 use axum_server::tls_rustls::RustlsConfig;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
-use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
+use prometheus_client::metrics::histogram::{Histogram, exponential_buckets};
 use prometheus_client::registry::Registry;
-use tracing::debug;
+use tokio_util::sync::CancellationToken;
+use tracing::{debug, info};
 
 use crate::Error::MetricsServer;
 
@@ -28,7 +30,7 @@ pub const SERVING_PATH_LABEL: &str = "path";
 const SERVING_STATUS_LABEL: &str = "status";
 
 // Define the metrics
-const HTTP_REQUESTS_TOTAL: &str = "http_requests_total";
+const HTTP_REQUESTS_TOTAL: &str = "http_requests_count";
 const HTTP_REQUESTS_DURATION: &str = "http_requests_duration";
 
 #[derive(Default)]
@@ -50,9 +52,18 @@ fn global_registry() -> &'static GlobalRegistry {
     GLOBAL_REGISTER.get_or_init(GlobalRegistry::new)
 }
 
-pub struct ServingMetrics {
-    pub http_requests_total: Family<Vec<(String, String)>, Counter>,
-    pub http_requests_duration: Family<Vec<(String, String)>, Histogram>,
+pub(crate) struct ServingMetrics {
+    pub(crate) http_requests_count: Family<Vec<(String, String)>, Counter>,
+    pub(crate) http_requests_duration: Family<Vec<(String, String)>, Histogram>,
+
+    pub(crate) request_register_count: Counter,
+    pub(crate) request_register_fail_count: Counter,
+    pub(crate) request_register_duplicate_count: Counter,
+    pub(crate) request_register_duration: Histogram,
+
+    pub(crate) payload_save_duration: Histogram,
+    pub(crate) datum_retrive_duration: Histogram,
+    pub(crate) processing_time: Histogram,
 }
 
 impl ServingMetrics {
@@ -60,12 +71,30 @@ impl ServingMetrics {
         let http_requests_total = Family::<Vec<(String, String)>, Counter>::default();
         let http_requests_duration =
             Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                Histogram::new(exponential_buckets(0.001, 2.0, 20))
+                Histogram::new(exponential_buckets(0.001, 2.0, 10))
             });
 
+        let cb_store_register_count = Counter::default();
+        let cb_store_register_fail_count = Counter::default();
+        let cb_store_register_duplicate_count = Counter::default();
+
+        let cb_store_register_duration = Histogram::new(exponential_buckets(0.001, 2.0, 10));
+
+        let payload_save_duration = Histogram::new(exponential_buckets(0.001, 2.0, 10));
+        let datum_retrive_duration = Histogram::new(exponential_buckets(0.001, 2.0, 10));
+
+        let processing_time = Histogram::new(exponential_buckets(1.0, 2.0, 10));
+
         let metrics = Self {
-            http_requests_total,
+            http_requests_count: http_requests_total,
             http_requests_duration,
+            request_register_count: cb_store_register_count,
+            request_register_fail_count: cb_store_register_fail_count,
+            request_register_duplicate_count: cb_store_register_duplicate_count,
+            request_register_duration: cb_store_register_duration,
+            payload_save_duration,
+            datum_retrive_duration,
+            processing_time,
         };
 
         let mut registry = global_registry().registry.lock();
@@ -73,12 +102,54 @@ impl ServingMetrics {
         registry.register(
             HTTP_REQUESTS_TOTAL,
             "A Counter to keep track of the total number of HTTP requests",
-            metrics.http_requests_total.clone(),
+            metrics.http_requests_count.clone(),
         );
         registry.register(
             HTTP_REQUESTS_DURATION,
             "A Histogram to keep track of the duration of HTTP requests",
             metrics.http_requests_duration.clone(),
+        );
+
+        registry.register(
+            "REQUEST_REGISTER",
+            "A Counter to keep track of the number of register requests",
+            metrics.request_register_count.clone(),
+        );
+
+        registry.register(
+            "REQUEST_REGISTER_FAIL",
+            "A Counter to keep track of the number of failed register requests",
+            metrics.request_register_fail_count.clone(),
+        );
+
+        registry.register(
+            "REQUEST_REGISTER_DUPLICATES",
+            "A Counter to keep track of the number of failed register requests due to duplicate request id",
+            metrics.request_register_fail_count.clone(),
+        );
+
+        registry.register(
+            "REQUEST_REGISTER_DURATION",
+            "A Histogram to keep track of the duration of the successful register of requests",
+            metrics.request_register_duration.clone(),
+        );
+
+        registry.register(
+            "PAYLOAD_JESTREAM_SAVE_DURATION",
+            "A Histogram to keep track of the time it takes to save request payload to Jestream",
+            metrics.payload_save_duration.clone(),
+        );
+
+        registry.register(
+            "DATUM_RETRIEVE_DURATION",
+            "A Histogram to keep track of the latency for retrieving pipeline result from datum store",
+            metrics.datum_retrive_duration.clone(),
+        );
+
+        registry.register(
+            "PROCESSING_TIME",
+            "A Histogram to keep track of the pipeline processing time of a request payload",
+            metrics.processing_time.clone(),
         );
 
         metrics
@@ -94,15 +165,24 @@ pub(crate) fn serving_metrics() -> &'static ServingMetrics {
 pub(crate) async fn start_https_metrics_server(
     addr: SocketAddr,
     tls_config: RustlsConfig,
+    cln_token: CancellationToken,
 ) -> crate::Result<()> {
     let metrics_app = Router::new().route("/metrics", get(metrics_handler));
 
-    tracing::info!(?addr, "Starting metrics server");
+    let handle = Handle::new();
+    let shutdown_handle = handle.clone();
+    tokio::spawn(async move {
+        cln_token.cancelled().await;
+        shutdown_handle.shutdown();
+    });
+
     axum_server::bind_rustls(addr, tls_config)
+        .handle(handle)
         .serve(metrics_app.into_make_service())
         .await
         .map_err(|e| MetricsServer(format!("Starting web server for metrics: {}", e)))?;
 
+    info!(?addr, "Metrics server stopped");
     Ok(())
 }
 
@@ -149,7 +229,7 @@ pub(crate) async fn capture_metrics(request: Request, next: Next) -> Response {
         .observe(latency);
 
     serving_metrics()
-        .http_requests_total
+        .http_requests_count
         .get_or_create(&labels)
         .inc();
 
@@ -185,7 +265,8 @@ mod tests {
 
         let addr = SocketAddr::from(([127, 0, 0, 1], 0));
         let server = tokio::spawn(async move {
-            let result = start_https_metrics_server(addr, tls_config).await;
+            let result =
+                start_https_metrics_server(addr, tls_config, CancellationToken::new()).await;
             assert!(result.is_ok())
         });
 

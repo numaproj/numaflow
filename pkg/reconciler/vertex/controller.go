@@ -84,8 +84,18 @@ func (r *vertexReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	if !equality.Semantic.DeepEqual(vertex.Status, vertexCopy.Status) {
-		if err := r.client.Status().Update(ctx, vertexCopy); err != nil {
-			return reconcile.Result{}, err
+		// Use Server Side Apply
+		statusPatch := &dfv1.Vertex{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:          vertex.Name,
+				Namespace:     vertex.Namespace,
+				ManagedFields: nil,
+			},
+			TypeMeta: vertex.TypeMeta,
+			Status:   vertexCopy.Status,
+		}
+		if err := r.client.Status().Patch(ctx, statusPatch, client.Apply, client.ForceOwnership, client.FieldOwner(dfv1.Project)); err != nil {
+			return ctrl.Result{}, err
 		}
 	}
 	return result, err
@@ -103,8 +113,6 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 
 	vertex.Status.InitConditions()
 	vertex.Status.SetObservedGeneration(vertex.Generation)
-
-	desiredReplicas := vertex.GetReplicas()
 
 	isbSvc := &dfv1.InterStepBufferService{}
 	isbSvcName := dfv1.DefaultISBSvcName
@@ -168,8 +176,8 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 
 	vertex.Status.MarkDeployed()
 
-	// Mark it running before checking the status of the pods
-	vertex.Status.MarkPhaseRunning()
+	// Mark desired phase before checking the status of the pods
+	vertex.Status.MarkPhase(vertex.Spec.Lifecycle.GetDesiredPhase(), "", "")
 
 	// Check status of the pods
 	var podList corev1.PodList
@@ -179,6 +187,7 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		return ctrl.Result{}, fmt.Errorf("failed to get pods of a vertex: %w", err)
 	}
 	readyPods := reconciler.NumOfReadyPods(podList)
+	desiredReplicas := vertex.CalculateReplicas()
 	if readyPods > desiredReplicas { // It might happen in some corner cases, such as during rollout
 		readyPods = desiredReplicas
 	}
@@ -195,13 +204,15 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 
 func (r *vertexReconciler) orchestratePods(ctx context.Context, vertex *dfv1.Vertex, pipeline *dfv1.Pipeline, isbSvc *dfv1.InterStepBufferService) error {
 	log := logging.FromContext(ctx)
-	desiredReplicas := vertex.GetReplicas()
+	desiredReplicas := vertex.CalculateReplicas()
 	vertex.Status.DesiredReplicas = uint32(desiredReplicas)
 
 	// Set metrics
 	defer func() {
 		reconciler.VertexDesiredReplicas.WithLabelValues(vertex.Namespace, vertex.Spec.PipelineName, vertex.Spec.Name).Set(float64(desiredReplicas))
 		reconciler.VertexCurrentReplicas.WithLabelValues(vertex.Namespace, vertex.Spec.PipelineName, vertex.Spec.Name).Set(float64(vertex.Status.Replicas))
+		reconciler.VertexMinReplicas.WithLabelValues(vertex.Namespace, vertex.Spec.PipelineName, vertex.Spec.Name).Set(float64(vertex.Spec.Scale.GetMinReplicas()))
+		reconciler.VertexMaxReplicas.WithLabelValues(vertex.Namespace, vertex.Spec.PipelineName, vertex.Spec.Name).Set(float64(vertex.Spec.Scale.GetMaxReplicas()))
 	}()
 
 	// Build pod spec of the 1st replica to calculate the hash, which is used to determine whether the pod spec is changed
@@ -524,14 +535,13 @@ func (r *vertexReconciler) createOrUpdateServices(ctx context.Context, vertex *d
 func (r *vertexReconciler) buildPodSpec(vertex *dfv1.Vertex, pl *dfv1.Pipeline, isbSvcConfig dfv1.BufferServiceConfig, replicaIndex int) (*corev1.PodSpec, error) {
 	isbSvcType, envs := sharedutil.GetIsbSvcEnvVars(isbSvcConfig)
 	podSpec, err := vertex.GetPodSpec(dfv1.GetVertexPodSpecReq{
-		ISBSvcType:              isbSvcType,
-		Image:                   r.image,
-		PullPolicy:              corev1.PullPolicy(sharedutil.LookupEnvStringOr(dfv1.EnvImagePullPolicy, "")),
-		Env:                     envs,
-		SideInputsStoreName:     pl.GetSideInputsStoreName(),
-		ServingSourceStreamName: vertex.GetServingSourceStreamName(),
-		PipelineSpec:            pl.Spec,
-		DefaultResources:        r.config.GetDefaults().GetDefaultContainerResources(),
+		ISBSvcType:          isbSvcType,
+		Image:               r.image,
+		PullPolicy:          corev1.PullPolicy(sharedutil.LookupEnvStringOr(dfv1.EnvImagePullPolicy, "")),
+		Env:                 envs,
+		SideInputsStoreName: pl.GetSideInputsStoreName(),
+		PipelineSpec:        pl.Spec,
+		DefaultResources:    r.config.GetDefaults().GetDefaultContainerResources(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate pod spec, error: %w", err)

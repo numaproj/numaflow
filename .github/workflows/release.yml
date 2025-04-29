@@ -3,7 +3,7 @@ name: release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
     branches:
       - main
       - dev-release*
@@ -14,7 +14,7 @@ defaults:
 
 jobs:
   build-go-binaries:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     if: github.repository == 'numaproj/numaflow'
     name: Build binaries
     steps:
@@ -24,7 +24,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: "1.24"
 
       - name: Build binaries
         run: |
@@ -48,18 +48,26 @@ jobs:
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1.9.0
         with:
-          rustflags: ''
+          rustflags: ""
       - name: Install dependencies
         run: sudo apt-get install -y protobuf-compiler
       - name: Build binary
         run: RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target x86_64-unknown-linux-gnu
       - name: Rename binary
-        run: cp -pv target/x86_64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-amd64
+        run: |
+          cp -pv target/x86_64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-amd64
+          cp -pv target/x86_64-unknown-linux-gnu/release/entrypoint entrypoint-linux-amd64
       - name: Upload numaflow binary
         uses: actions/upload-artifact@v4
         with:
           name: numaflow-rs-linux-amd64
           path: rust/numaflow-rs-linux-amd64
+      - name: Upload entrypoint binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: entrypoint-linux-amd64
+          path: rust/entrypoint-linux-amd64
+          if-no-files-found: error
 
   build-rust-arm64:
     runs-on: ubuntu-24.04
@@ -74,27 +82,34 @@ jobs:
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1.9.0
         with:
-          rustflags: ''
-      - name: Install dependenices
-        run: sudo apt-get install -y gcc-aarch64-linux-gnu protobuf-compiler
+          rustflags: ""
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu protobuf-compiler
       - name: Build binary
         run: RUSTFLAGS='-C target-feature=+crt-static -C linker=aarch64-linux-gnu-gcc' cargo build --release --target aarch64-unknown-linux-gnu
       - name: Rename binary
-        run: cp -pv target/aarch64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-arm64
+        run: |
+          cp -pv target/aarch64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-arm64
+          cp -pv target/aarch64-unknown-linux-gnu/release/entrypoint entrypoint-linux-arm64
       - name: Upload numaflow binary
         uses: actions/upload-artifact@v4
         with:
           name: numaflow-rs-linux-arm64
           path: rust/numaflow-rs-linux-arm64
+      - name: Upload entrypoint binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: entrypoint-linux-arm64
+          path: rust/entrypoint-linux-arm64
 
   build-push-linux-multi:
     name: Build & push linux/amd64 and linux/arm64
-    needs: [ build-go-binaries, build-rust-amd64, build-rust-arm64]
-    runs-on: ubuntu-20.04
+    needs: [build-go-binaries, build-rust-amd64, build-rust-arm64]
+    runs-on: ubuntu-24.04
     if: github.repository == 'numaproj/numaflow'
     strategy:
       matrix:
-        target: [ numaflow ]
+        target: [numaflow]
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node
@@ -122,10 +137,22 @@ jobs:
           name: numaflow-rs-linux-amd64
           path: dist/
 
+      - name: Download Entrypoint amd64 binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: entrypoint-linux-amd64
+          path: dist/
+
       - name: Download Rust arm64 binaries
         uses: actions/download-artifact@v4
         with:
           name: numaflow-rs-linux-arm64
+          path: dist/
+
+      - name: Download Entrypoint arm64 binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: entrypoint-linux-arm64
           path: dist/
 
       - name: Registry Login
@@ -148,10 +175,10 @@ jobs:
         run: |
           IMAGE_NAMESPACE=${{ secrets.QUAYIO_ORG }} VERSION=${{ steps.version.outputs.VERSION }} DOCKER_PUSH=true make image-multi
 
-  Bom:
-    runs-on: ubuntu-latest
+  bom:
+    runs-on: ubuntu-24.04
     if: github.repository == 'numaproj/numaflow'
-    needs: [ build-push-linux-multi ]
+    needs: [build-push-linux-multi]
     steps:
       # https://stackoverflow.com/questions/58033366/how-to-get-current-branch-within-github-actions
       - run: |
@@ -162,7 +189,7 @@ jobs:
           fi
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: "1.24"
       - uses: actions/checkout@v4
       - run: go install sigs.k8s.io/bom/cmd/bom@v0.2.0
       - run: go install github.com/spdx/spdx-sbom-generator/cmd/generator@v0.0.13
@@ -176,10 +203,10 @@ jobs:
           name: sbom.tar.gz
           path: /tmp/sbom.tar.gz
 
-  Release:
-    runs-on: ubuntu-latest
+  release:
+    runs-on: ubuntu-24.04
     if: github.repository == 'numaproj/numaflow'
-    needs: [ build-push-linux-multi, bom ]
+    needs: [build-push-linux-multi, bom]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -208,7 +235,7 @@ jobs:
       - name: Install cosign
         uses: sigstore/cosign-installer@v2.8.1
         with:
-          cosign-release: 'v1.13.1'
+          cosign-release: "v1.13.1"
 
       - name: Install crane to get digest of image
         uses: imjasonh/setup-crane@v0.2

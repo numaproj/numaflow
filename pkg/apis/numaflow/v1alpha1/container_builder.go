@@ -83,6 +83,11 @@ func (b containerBuilder) appendVolumeMounts(x ...corev1.VolumeMount) containerB
 	return b
 }
 
+func (b containerBuilder) volumeMounts(x ...corev1.VolumeMount) containerBuilder {
+	b.VolumeMounts = x
+	return b
+}
+
 func (b containerBuilder) resources(x corev1.ResourceRequirements) containerBuilder {
 	b.Resources = x
 	return b
@@ -93,7 +98,7 @@ func (b containerBuilder) asSidecar() containerBuilder {
 	if !isSidecarSupported() {
 		return b
 	}
-	b.RestartPolicy = ptr.To[corev1.ContainerRestartPolicy](corev1.ContainerRestartPolicyAlways)
+	b.RestartPolicy = ptr.To(corev1.ContainerRestartPolicyAlways)
 	return b
 }
 

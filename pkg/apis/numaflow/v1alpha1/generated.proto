@@ -142,6 +142,10 @@ message AbstractSink {
   // UDSink sink is used to write the data to the user-defined sink.
   // +optional
   optional UDSink udsink = 4;
+
+  // Serve sink is used to return results when working with a ServingPipeline.
+  // +optional
+  optional ServeSink serve = 5;
 }
 
 message AbstractVertex {
@@ -206,6 +210,14 @@ message AbstractVertex {
   // +kubebuilder:default={"type": "RollingUpdate", "rollingUpdate": {"maxUnavailable": "25%"}}
   // +optional
   optional UpdateStrategy updateStrategy = 16;
+}
+
+// AccumulatorWindow describes a special kind of SessionWindow (similar to Global Window) where output should
+// always have monotonically increasing WM but it can be manipulated through event-time by reordering the messages.
+// NOTE: Quite powerful, should not be abused; it can cause stalling of pipelines and leaks.
+message AccumulatorWindow {
+  // Timeout is the duration of inactivity after which the state of the accumulator is removed.
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration timeout = 1;
 }
 
 message Authorization {
@@ -586,6 +598,18 @@ message GetRedisStatefulSetSpecReq {
   optional .k8s.io.api.core.v1.ResourceRequirements defaultResources = 16;
 }
 
+message GetServingPipelineResourceReq {
+  optional BufferServiceConfig isbSvcConfig = 1;
+
+  optional string image = 2;
+
+  optional string pullPolicy = 3;
+
+  repeated .k8s.io.api.core.v1.EnvVar env = 4;
+
+  optional .k8s.io.api.core.v1.ResourceRequirements defaultResources = 5;
+}
+
 message GetSideInputDeploymentReq {
   optional string isbSvcType = 1;
 
@@ -923,7 +947,7 @@ message MonoVertex {
 }
 
 message MonoVertexLifecycle {
-  // DesiredPhase used to bring the pipeline from current phase to desired phase
+  // DesiredPhase used to bring the MonoVertex from current phase to desired phase
   // +kubebuilder:default=Running
   // +optional
   optional string desiredPhase = 1;
@@ -1442,6 +1466,21 @@ message SASL {
   // SASLSCRAMSHA512 contains the sasl plain config
   // +optional
   optional SASLPlain scramsha512 = 5;
+
+  // OAuth contains the oauth config
+  // +optional
+  optional SASLOAuth oauth = 6;
+}
+
+message SASLOAuth {
+  // ClientID refers to the secret that contains the client id
+  optional .k8s.io.api.core.v1.SecretKeySelector clientID = 1;
+
+  // ClientSecret refers to the secret that contains the client secret
+  optional .k8s.io.api.core.v1.SecretKeySelector clientSecret = 2;
+
+  // TokenEndpoint refers to the token endpoint
+  optional string tokenEndpoint = 3;
 }
 
 message SASLPlain {
@@ -1517,8 +1556,63 @@ message Scale {
   optional uint32 replicasPerScaleDown = 12;
 }
 
-// ServingSource is the HTTP endpoint for Numaflow.
+message ServeSink {
+}
+
+// +genclient
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:shortName=spl
+// +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
+// +kubebuilder:printcolumn:name="Message",type=string,JSONPath=`.status.message`
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +k8s:openapi-gen=true
+message ServingPipeline {
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+
+  optional ServingPipelineSpec spec = 2;
+
+  // +optional
+  optional ServingPipelineStatus status = 3;
+}
+
+// +kubebuilder:object:root=true
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+message ServingPipelineList {
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
+
+  repeated ServingPipeline items = 2;
+}
+
+message ServingPipelineSpec {
+  optional ServingSpec serving = 1;
+
+  optional PipelineSpec pipeline = 2;
+}
+
+message ServingPipelineStatus {
+  optional Status status = 1;
+
+  // +optional
+  optional string phase = 2;
+
+  // +optional
+  optional string message = 3;
+
+  // +optional
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Time lastUpdated = 4;
+
+  // The generation observed by the ServingPipeline controller.
+  // +optional
+  optional int64 observedGeneration = 11;
+}
+
+// ServingSource is the source vertex for ServingPipeline and should be used only with ServingPipeline.
 message ServingSource {
+}
+
+message ServingSpec {
   // +optional
   optional Authorization auth = 1;
 
@@ -1529,18 +1623,25 @@ message ServingSource {
   // The header key from which the message id will be extracted
   optional string msgIDHeaderKey = 3;
 
-  // Persistent store for the callbacks for serving and tracking
-  optional ServingStore store = 4;
+  // Request timeout in seconds. Default value is 120 seconds.
+  // +optional
+  optional uint32 requestTimeoutSeconds = 4;
+
+  // +optional
+  optional ServingStore store = 5;
+
+  // Container template for the serving container.
+  // +optional
+  optional ContainerTemplate containerTemplate = 6;
+
+  // Initial replicas of the serving server deployment.
+  // +optional
+  optional int32 replicas = 7;
 }
 
-// ServingStore to track and store data and metadata for tracking and serving.
+// ServingStore defines information of a Serving Store used in a pipeline
 message ServingStore {
-  // URL of the persistent store to write the callbacks
-  optional string url = 1;
-
-  // TTL for the data in the store and tracker
-  // +optional
-  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration ttl = 2;
+  optional Container container = 1;
 }
 
 // SessionWindow describes a session window
@@ -1779,6 +1880,13 @@ message VertexInstance {
   optional int32 replica = 3;
 }
 
+message VertexLifecycle {
+  // DesiredPhase used to bring the vertex from current phase to desired phase
+  // +kubebuilder:default=Running
+  // +optional
+  optional string desiredPhase = 1;
+}
+
 message VertexLimits {
   // Read batch size from the source or buffer.
   // It overrides the settings from pipeline limits.
@@ -1831,6 +1939,11 @@ message VertexSpec {
   // +kubebuilder:default={"disabled": false}
   // +optional
   optional Watermark watermark = 7;
+
+  // Lifecycle defines the Lifecycle properties of a vertex
+  // +kubebuilder:default={"desiredPhase": Running}
+  // +optional
+  optional VertexLifecycle lifecycle = 8;
 }
 
 message VertexStatus {
@@ -1920,5 +2033,8 @@ message Window {
 
   // +optional
   optional SessionWindow session = 3;
+
+  // +optional
+  optional AccumulatorWindow accumulator = 4;
 }
 

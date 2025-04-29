@@ -1,26 +1,37 @@
-use numaflow_pulsar::source::PulsarSource;
-use std::sync::Arc;
-use tokio::sync::OwnedSemaphorePermit;
-use tokio::sync::Semaphore;
-use tokio::sync::{mpsc, oneshot};
-use tokio::task::JoinHandle;
-use tokio::time;
-use tokio_stream::wrappers::ReceiverStream;
-use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+//! [Source] vertex is responsible for reliable reading data from an unbounded source into Numaflow
+//! and also assigning [Watermark].
+//!
+//! [Source]: https://numaflow.numaproj.io/user-guide/sources/overview/
+//! [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 
 use crate::config::{get_vertex_name, is_mono_vertex};
+use crate::error::{Error, Result};
 use crate::message::ReadAck;
 use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_forward_metric_labels,
     pipeline_isb_metric_labels, pipeline_metrics,
 };
 use crate::tracker::TrackerHandle;
-use crate::Result;
 use crate::{
     message::{Message, Offset},
+    metrics,
     reader::LagReader,
 };
+use numaflow_jetstream::JetstreamSource;
+use numaflow_pb::clients::source::source_client::SourceClient;
+use numaflow_pulsar::source::PulsarSource;
+use numaflow_sqs::source::SQSSource;
+use std::sync::Arc;
+use tokio::sync::OwnedSemaphorePermit;
+use tokio::sync::Semaphore;
+use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
+use tokio::time::Instant;
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
+use tonic::transport::Channel;
+use tracing::warn;
+use tracing::{error, info};
 
 /// [User-Defined Source] extends Numaflow to add custom sources supported outside the builtins.
 ///
@@ -37,8 +48,14 @@ pub(crate) mod generator;
 /// [Pulsar]: https://numaflow.numaproj.io/user-guide/sources/pulsar/
 pub(crate) mod pulsar;
 
-pub(crate) mod serving;
-use serving::ServingSource;
+pub(crate) mod jetstream;
+
+pub(crate) mod sqs;
+
+use crate::transformer::Transformer;
+use crate::watermark::source::SourceWatermarkHandle;
+
+const MAX_ACK_PENDING: usize = 10000;
 
 /// Set of Read related items that has to be implemented to become a Source.
 pub(crate) trait SourceReader {
@@ -48,9 +65,8 @@ pub(crate) trait SourceReader {
 
     async fn read(&mut self) -> Result<Vec<Message>>;
 
-    #[allow(dead_code)]
     /// number of partitions processed by this source.
-    fn partitions(&self) -> Vec<u16>;
+    async fn partitions(&mut self) -> Result<Vec<u16>>;
 }
 
 /// Set of Ack related items that has to be implemented to become a Source.
@@ -71,7 +87,10 @@ pub(crate) enum SourceType {
         generator::GeneratorLagReader,
     ),
     Pulsar(PulsarSource),
-    Serving(ServingSource),
+    #[allow(clippy::upper_case_acronyms)]
+    #[allow(dead_code)] // TODO(SQS): remove it when integrated with controller
+    SQS(SQSSource),
+    Jetstream(JetstreamSource),
 }
 
 enum ActorMessage {
@@ -88,6 +107,9 @@ enum ActorMessage {
     },
     Pending {
         respond_to: oneshot::Sender<Result<Option<usize>>>,
+    },
+    Partitions {
+        respond_to: oneshot::Sender<Result<Vec<u16>>>,
     },
 }
 
@@ -134,6 +156,10 @@ where
                 let pending = self.lag_reader.pending().await;
                 let _ = respond_to.send(pending);
             }
+            ActorMessage::Partitions { respond_to } => {
+                let partitions = self.reader.partitions().await;
+                let _ = respond_to.send(partitions);
+            }
         }
     }
 
@@ -145,12 +171,23 @@ where
 }
 
 /// Source is used to read, ack, and get the pending messages count from the source.
+/// Source is responsible for invoking the transformer.
+///
+/// Error handling and shutdown: Source will stop reading messages from the source when the
+/// cancellation token is cancelled(any downstream critical error). There can be critical
+/// non retryable errors in source as well(udsource crashing etc.), we will drop the downstream
+/// tokio stream to signal the shutdown to the downstream components and wait for all the inflight
+/// messages to be acked before shutting down the source.
 #[derive(Clone)]
 pub(crate) struct Source {
     read_batch_size: usize,
     sender: mpsc::Sender<ActorMessage>,
     tracker_handle: TrackerHandle,
     read_ahead: bool,
+    /// Transformer handler for transforming messages from Source.
+    transformer: Option<Transformer>,
+    watermark_handle: Option<SourceWatermarkHandle>,
+    health_checker: Option<SourceClient<Channel>>,
 }
 
 impl Source {
@@ -160,10 +197,14 @@ impl Source {
         src_type: SourceType,
         tracker_handle: TrackerHandle,
         read_ahead: bool,
+        transformer: Option<Transformer>,
+        watermark_handle: Option<SourceWatermarkHandle>,
     ) -> Self {
         let (sender, receiver) = mpsc::channel(batch_size);
+        let mut health_checker = None;
         match src_type {
             SourceType::UserDefinedSource(reader, acker, lag_reader) => {
+                health_checker = Some(reader.get_source_client());
                 tokio::spawn(async move {
                     let actor = SourceActor::new(receiver, reader, acker, lag_reader);
                     actor.run().await;
@@ -186,19 +227,34 @@ impl Source {
                     actor.run().await;
                 });
             }
-            SourceType::Serving(serving) => {
+            SourceType::SQS(sqs_source) => {
+                tokio::spawn(async move {
+                    let actor = SourceActor::new(
+                        receiver,
+                        sqs_source.clone(),
+                        sqs_source.clone(),
+                        sqs_source,
+                    );
+                    actor.run().await;
+                });
+            }
+            SourceType::Jetstream(jetstream) => {
                 tokio::spawn(async move {
                     let actor =
-                        SourceActor::new(receiver, serving.clone(), serving.clone(), serving);
+                        SourceActor::new(receiver, jetstream.clone(), jetstream.clone(), jetstream);
                     actor.run().await;
                 });
             }
         };
+
         Self {
             read_batch_size: batch_size,
             sender,
             tracker_handle,
             read_ahead,
+            transformer,
+            watermark_handle,
+            health_checker,
         }
     }
 
@@ -211,7 +267,7 @@ impl Source {
         let _ = source_handle.send(msg).await;
         receiver
             .await
-            .map_err(|e| crate::error::Error::ActorPatternRecv(e.to_string()))?
+            .map_err(|e| Error::ActorPatternRecv(e.to_string()))?
     }
 
     /// ack the offsets by communicating with the ack actor.
@@ -226,7 +282,7 @@ impl Source {
         let _ = source_handle.send(msg).await;
         receiver
             .await
-            .map_err(|e| crate::error::Error::ActorPatternRecv(e.to_string()))?
+            .map_err(|e| Error::ActorPatternRecv(e.to_string()))?
     }
 
     /// get the pending messages count by communicating with the pending actor.
@@ -238,105 +294,102 @@ impl Source {
         let _ = self.sender.send(msg).await;
         receiver
             .await
-            .map_err(|e| crate::error::Error::ActorPatternRecv(e.to_string()))?
+            .map_err(|e| Error::ActorPatternRecv(e.to_string()))?
+    }
+
+    /// get the source partitions from which the source is reading from.
+    async fn partitions(source_handle: mpsc::Sender<ActorMessage>) -> Result<Vec<u16>> {
+        let (sender, receiver) = oneshot::channel();
+        let msg = ActorMessage::Partitions { respond_to: sender };
+        // Ignore send errors. If send fails, so does the recv.await below. There's no reason
+        // to check for the same failure twice.
+        let _ = source_handle.send(msg).await;
+        receiver
+            .await
+            .map_err(|e| Error::ActorPatternRecv(e.to_string()))?
     }
 
     /// Starts streaming messages from the source. It returns a stream of messages and
     /// a handle to the spawned task.
     pub(crate) fn streaming_read(
-        &self,
+        mut self,
         cln_token: CancellationToken,
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
-        let batch_size = self.read_batch_size;
-        let (messages_tx, messages_rx) = mpsc::channel(batch_size);
-        let source_handle = self.sender.clone();
-        let tracker_handle = self.tracker_handle.clone();
-        let read_ahead_enabled = self.read_ahead;
+        let (messages_tx, messages_rx) = mpsc::channel(2 * self.read_batch_size);
 
-        let pipeline_labels = pipeline_forward_metric_labels("Source", Some(get_vertex_name()));
+        let mut pipeline_labels = pipeline_forward_metric_labels("Source").clone();
+        pipeline_labels.push((
+            metrics::PIPELINE_PARTITION_NAME_LABEL.to_string(),
+            get_vertex_name().to_string(),
+        ));
+
         let mvtx_labels = mvtx_forward_metric_labels();
 
-        info!("Started streaming source with batch size: {}", batch_size);
+        info!(?self.read_batch_size, "Started streaming source with batch size");
         let handle = tokio::spawn(async move {
             // this semaphore is used only if read-ahead is disabled. we hold this semaphore to
-            // make sure we can read only if the current inflight ones are ack'ed.
-            let semaphore = Arc::new(Semaphore::new(1));
+            // make sure we can read only if the current inflight ones are ack'ed. If read ahead
+            // is disabled you can have upto (max_ack_pending / read_batch_size) ack tasks. We
+            // divide by read_batch_size because we do batch acking in source.
+            let max_ack_tasks = match &self.read_ahead {
+                true => MAX_ACK_PENDING / self.read_batch_size,
+                false => 1,
+            };
+            let semaphore = Arc::new(Semaphore::new(max_ack_tasks));
 
+            let mut result = Ok(());
             loop {
                 if cln_token.is_cancelled() {
                     info!("Cancellation token is cancelled. Stopping the source.");
-                    return Ok(());
+                    break;
                 }
 
-                if !read_ahead_enabled {
-                    // Acquire the semaphore permit before reading the next batch to make
-                    // sure we are not reading ahead and all the inflight messages are acked.
-                    let _permit = Arc::clone(&semaphore).acquire_owned().await.unwrap();
-                }
-                // Reserve the permits before invoking the read method.
-                let mut permit = match messages_tx.reserve_many(batch_size).await {
-                    Ok(permit) => permit,
-                    Err(e) => {
-                        error!("Error while reserving permits: {:?}", e);
-                        return Err(crate::error::Error::Source(e.to_string()));
-                    }
-                };
+                // Acquire the semaphore permit before reading the next batch to make
+                // sure we are not reading ahead and all the inflight messages are acked.
+                let _permit = Arc::clone(&semaphore)
+                    .acquire_owned()
+                    .await
+                    .expect("acquiring permit should not fail");
 
-                let read_start_time = time::Instant::now();
-                let messages = match Self::read(source_handle.clone()).await {
+                let read_start_time = Instant::now();
+                let messages = match Self::read(self.sender.clone()).await {
                     Ok(messages) => messages,
                     Err(e) => {
                         error!("Error while reading messages: {:?}", e);
-                        return Err(e);
+                        result = Err(e);
+                        break;
                     }
                 };
 
-                let n = messages.len();
-                if is_mono_vertex() {
-                    monovertex_metrics()
-                        .read_total
-                        .get_or_create(mvtx_labels)
-                        .inc_by(n as u64);
-                    monovertex_metrics()
-                        .read_time
-                        .get_or_create(mvtx_labels)
-                        .observe(read_start_time.elapsed().as_micros() as f64);
-                } else {
-                    pipeline_metrics()
-                        .forwarder
-                        .read_total
-                        .get_or_create(pipeline_labels)
-                        .inc_by(n as u64);
-                    pipeline_metrics()
-                        .forwarder
-                        .read_time
-                        .get_or_create(pipeline_labels)
-                        .observe(read_start_time.elapsed().as_micros() as f64);
+                let msgs_len = messages.len();
+                Self::send_read_metrics(&pipeline_labels, mvtx_labels, read_start_time, msgs_len);
+
+                // attempt to publish idle watermark since we are not able to read any message from
+                // the source.
+                if msgs_len == 0 {
+                    if let Some(watermark_handle) = self.watermark_handle.as_mut() {
+                        watermark_handle
+                            .publish_source_idle_watermark(
+                                Self::partitions(self.sender.clone())
+                                    .await
+                                    .unwrap_or_default(),
+                            )
+                            .await;
+                    }
                 }
 
-                let mut ack_batch = Vec::with_capacity(n);
-                for message in messages {
+                let mut offsets = vec![];
+                let mut ack_batch = Vec::with_capacity(msgs_len);
+                for message in messages.iter() {
                     let (resp_ack_tx, resp_ack_rx) = oneshot::channel();
-                    let offset = message.offset.clone().expect("offset can never be none");
+                    let offset = message.offset.clone();
 
                     // insert the offset and the ack one shot in the tracker.
-                    tracker_handle
-                        .insert(message.id.offset.clone(), resp_ack_tx)
-                        .await?;
+                    self.tracker_handle.insert(message, resp_ack_tx).await?;
 
                     // store the ack one shot in the batch to invoke ack later.
-                    ack_batch.push((offset, resp_ack_rx));
-
-                    match permit.next() {
-                        Some(permit) => {
-                            permit.send(message);
-                        }
-                        None => {
-                            unreachable!(
-                                "Permits should be reserved for all messages in the batch"
-                            );
-                        }
-                    }
+                    ack_batch.push((offset.clone(), resp_ack_rx));
+                    offsets.push(offset);
                 }
 
                 // start a background task to invoke ack on the source for the offsets that are acked.
@@ -344,25 +397,71 @@ impl Source {
                 // we wait for all the inflight messages to be acked before reading the next batch.
                 tokio::spawn(Self::invoke_ack(
                     read_start_time,
-                    source_handle.clone(),
+                    self.sender.clone(),
                     ack_batch,
-                    if !read_ahead_enabled {
-                        Some(Arc::clone(&semaphore).acquire_owned().await.unwrap())
-                    } else {
-                        None
-                    },
+                    _permit,
                 ));
+
+                // transform the batch if the transformer is present, this need not
+                // be streaming because transformation should be fast operation.
+                let messages = match self.transformer.as_mut() {
+                    None => messages,
+                    Some(transformer) => match transformer
+                        .transform_batch(messages, cln_token.clone())
+                        .await
+                    {
+                        Ok(messages) => messages,
+                        Err(e) => {
+                            error!(
+                                ?e,
+                                "Error while transforming messages, sending nack to the batch"
+                            );
+                            for offset in offsets {
+                                self.tracker_handle
+                                    .discard(offset)
+                                    .await
+                                    .expect("tracker operations should never fail");
+                            }
+                            result = Err(e);
+                            break;
+                        }
+                    },
+                };
+
+                if let Some(watermark_handle) = self.watermark_handle.as_mut() {
+                    watermark_handle
+                        .generate_and_publish_source_watermark(&messages)
+                        .await;
+                }
+
+                // write the messages to downstream.
+                for message in messages {
+                    messages_tx
+                        .send(message)
+                        .await
+                        .expect("send should not fail");
+                }
             }
+            info!(status=?result, "Source stopped, waiting for inflight messages to be acked");
+            // wait for all the ack tasks to be completed before stopping the source, since we give
+            // a permit for each ack task all the permits should be released when the ack tasks are
+            // done, we can verify this by trying to acquire the permit for max_ack_tasks.
+            let _permit = Arc::clone(&semaphore)
+                .acquire_many_owned(max_ack_tasks as u32)
+                .await
+                .expect("acquiring permit should not fail");
+            info!("All inflight messages are acked. Source stopped.");
+            result
         });
         Ok((ReceiverStream::new(messages_rx), handle))
     }
 
     /// Listens to the oneshot receivers and invokes ack on the source for the offsets that are acked.
     async fn invoke_ack(
-        e2e_start_time: time::Instant,
+        e2e_start_time: Instant,
         source_handle: mpsc::Sender<ActorMessage>,
         ack_rx_batch: Vec<(Offset, oneshot::Receiver<ReadAck>)>,
-        _permit: Option<OwnedSemaphorePermit>, // permit to release after acking the offsets.
+        _permit: OwnedSemaphorePermit, // permit to release after acking the offsets.
     ) -> Result<()> {
         let n = ack_rx_batch.len();
         let mut offsets_to_ack = Vec::with_capacity(n);
@@ -373,22 +472,53 @@ impl Source {
                     offsets_to_ack.push(offset);
                 }
                 Ok(ReadAck::Nak) => {
-                    error!("Nak received for offset: {:?}", offset);
+                    warn!(?offset, "Nak received for offset");
                 }
                 Err(e) => {
-                    error!(
-                        "Error receiving ack for offset: {:?}, error: {:?}",
-                        offset, e
-                    );
+                    error!(?offset, err=?e, "Error receiving ack for offset");
                 }
             }
         }
 
-        let start = time::Instant::now();
+        let start = Instant::now();
         if !offsets_to_ack.is_empty() {
             Self::ack(source_handle, offsets_to_ack).await?;
         }
+        Self::send_ack_metrics(e2e_start_time, n, start);
 
+        Ok(())
+    }
+
+    fn send_read_metrics(
+        pipeline_labels: &Vec<(String, String)>,
+        mvtx_labels: &Vec<(String, String)>,
+        read_start_time: Instant,
+        n: usize,
+    ) {
+        if is_mono_vertex() {
+            monovertex_metrics()
+                .read_total
+                .get_or_create(mvtx_labels)
+                .inc_by(n as u64);
+            monovertex_metrics()
+                .read_time
+                .get_or_create(mvtx_labels)
+                .observe(read_start_time.elapsed().as_micros() as f64);
+        } else {
+            pipeline_metrics()
+                .forwarder
+                .read_total
+                .get_or_create(pipeline_labels)
+                .inc_by(n as u64);
+            pipeline_metrics()
+                .forwarder
+                .read_time
+                .get_or_create(pipeline_labels)
+                .observe(read_start_time.elapsed().as_micros() as f64);
+        }
+    }
+
+    fn send_ack_metrics(e2e_start_time: Instant, n: usize, start: Instant) {
         if is_mono_vertex() {
             monovertex_metrics()
                 .ack_time
@@ -423,20 +553,41 @@ impl Source {
                 .get_or_create(pipeline_isb_metric_labels())
                 .observe(e2e_start_time.elapsed().as_micros() as f64);
         }
-        Ok(())
+    }
+
+    pub(crate) async fn ready(&mut self) -> bool {
+        let source_ready = if let Some(client) = &mut self.health_checker {
+            let request = tonic::Request::new(());
+            match client.is_ready(request).await {
+                Ok(response) => response.into_inner().ready,
+                Err(e) => {
+                    error!("Source is not ready: {:?}", e);
+                    false
+                }
+            }
+        } else {
+            true
+        };
+
+        let transformer_ready = if let Some(client) = &mut self.transformer {
+            client.ready().await
+        } else {
+            true
+        };
+
+        source_ready && transformer_ready
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::time::Duration;
-
     use chrono::Utc;
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow_pb::clients::source::source_client::SourceClient;
+    use std::collections::HashSet;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
     use tokio::sync::mpsc::Sender;
     use tokio_stream::StreamExt;
     use tokio_util::sync::CancellationToken;
@@ -542,34 +693,48 @@ mod tests {
             .map_err(|e| panic!("failed to create source reader: {:?}", e))
             .unwrap();
 
+        let tracker = TrackerHandle::new(None, None);
         let source = Source::new(
             5,
             SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
-            TrackerHandle::new(),
+            tracker.clone(),
             true,
+            None,
+            None,
         );
+
+        let sender = source.sender.clone();
 
         let cln_token = CancellationToken::new();
 
-        let (mut stream, handle) = source.streaming_read(cln_token.clone()).unwrap();
+        let (mut stream, handle) = source.clone().streaming_read(cln_token.clone()).unwrap();
         let mut offsets = vec![];
         // we should read all the 100 messages
         for _ in 0..100 {
             let message = stream.next().await.unwrap();
             assert_eq!(message.value, "hello".as_bytes());
-            offsets.push(message.offset.clone().unwrap());
+            offsets.push(message.offset.clone());
         }
 
         // ack all the messages
-        Source::ack(source.sender.clone(), offsets).await.unwrap();
+        Source::ack(sender.clone(), offsets.clone()).await.unwrap();
+
+        for offset in offsets {
+            tracker.discard(offset).await.unwrap();
+        }
 
         // since we acked all the messages, pending should be 0
         let pending = source.pending().await.unwrap();
         assert_eq!(pending, Some(0));
 
+        let partitions = Source::partitions(sender.clone()).await.unwrap();
+        assert_eq!(partitions, vec![1, 2]);
+
+        drop(source);
+        drop(sender);
+
         cln_token.cancel();
         let _ = handle.await.unwrap();
-        drop(source);
         let _ = shutdown_tx.send(());
         server_handle.await.unwrap();
     }

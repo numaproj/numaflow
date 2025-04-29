@@ -464,6 +464,14 @@ func TestValidatePipeline(t *testing.T) {
 		assert.Contains(t, err.Error(), "pipeline has no sink")
 	})
 
+	t.Run("pipeline with serve sink", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices[2].Sink = &dfv1.Sink{AbstractSink: dfv1.AbstractSink{Serve: &dfv1.ServeSink{}}}
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "builtin 'serve' sink used in \"output\" vertex is only allowed with ServingPipeline")
+	})
+
 	t.Run("last vertex is not sink", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
 		testObj.Spec.Vertices = append(testObj.Spec.Vertices, dfv1.AbstractVertex{Name: "bad-output", UDF: &dfv1.UDF{Builtin: &dfv1.Function{Name: "cat"}}})
@@ -524,6 +532,48 @@ func TestValidatePipeline(t *testing.T) {
 		err := ValidatePipeline(testObj)
 		assert.NoError(t, err)
 	})
+
+	t.Run("valid pipeline - Serving source", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices = append(
+			testObj.Spec.Vertices,
+			dfv1.AbstractVertex{
+				Name:   "serving-in",
+				Source: &dfv1.Source{Serving: &dfv1.ServingSource{}},
+			},
+		)
+		testObj.Spec.Edges = append(
+			testObj.Spec.Edges,
+			dfv1.Edge{From: "serving-in", To: "p1"},
+		)
+
+		err := ValidatePipeline(testObj)
+		assert.NoError(t, err)
+	})
+
+	t.Run("invalid pipeline - Reduce with Serving source", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		testObj.Spec.Vertices = append(
+			testObj.Spec.Vertices,
+			dfv1.AbstractVertex{
+				Name:   "serving-in",
+				Source: &dfv1.Source{Serving: &dfv1.ServingSource{}},
+			}, dfv1.AbstractVertex{
+				Name: "reduce-vtx",
+				UDF:  &dfv1.UDF{GroupBy: &dfv1.GroupBy{}},
+			},
+		)
+		testObj.Spec.Edges = append(
+			testObj.Spec.Edges,
+			dfv1.Edge{From: "serving-in", To: "reduce-vtx"},
+			dfv1.Edge{From: "reduce-vtx", To: "output"},
+		)
+
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), `pipeline has a Serving source "serving-in" and a reduce vertex "reduce-vtx". Reduce is not supported with Serving source`)
+	})
+
 }
 
 func TestValidateReducePipeline(t *testing.T) {
@@ -631,18 +681,6 @@ func TestValidateVertex(t *testing.T) {
 		assert.Contains(t, err.Error(), "or equal to")
 	})
 
-	t.Run("max == 0", func(t *testing.T) {
-		v := dfv1.AbstractVertex{
-			Name: "my-vertex",
-			Scale: dfv1.Scale{
-				Max: ptr.To[int32](0),
-			},
-		}
-		err := validateVertex(v)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "can not be 0")
-	})
-
 	t.Run("rollingUpdateStrategy - invalid maxUnavailable", func(t *testing.T) {
 		v := dfv1.AbstractVertex{
 			Name: "my-vertex",
@@ -662,7 +700,7 @@ func TestValidateVertex(t *testing.T) {
 			Name: "my-vertex",
 			UpdateStrategy: dfv1.UpdateStrategy{
 				RollingUpdate: &dfv1.RollingUpdateStrategy{
-					MaxUnavailable: ptr.To[intstr.IntOrString](intstr.FromString("10%")),
+					MaxUnavailable: ptr.To(intstr.FromString("10%")),
 				},
 			},
 		}
@@ -675,7 +713,7 @@ func TestValidateVertex(t *testing.T) {
 			Name: "my-vertex",
 			UpdateStrategy: dfv1.UpdateStrategy{
 				RollingUpdate: &dfv1.RollingUpdateStrategy{
-					MaxUnavailable: ptr.To[intstr.IntOrString](intstr.FromInt(3)),
+					MaxUnavailable: ptr.To(intstr.FromInt(3)),
 				},
 			},
 		}

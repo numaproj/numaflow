@@ -26,21 +26,22 @@ const (
 	Project = "numaflow"
 
 	// label/annotation keys.
-	KeyInstance         = "numaflow.numaproj.io/instance" // instance key of the object
-	KeyHash             = "numaflow.numaproj.io/hash"     // hash of the object
-	KeyComponent        = "app.kubernetes.io/component"
-	KeyPartOf           = "app.kubernetes.io/part-of"
-	KeyManagedBy        = "app.kubernetes.io/managed-by"
-	KeyAppName          = "app.kubernetes.io/name"
-	KeyISBSvcName       = "numaflow.numaproj.io/isbsvc-name"
-	KeyISBSvcType       = "numaflow.numaproj.io/isbsvc-type"
-	KeyPipelineName     = "numaflow.numaproj.io/pipeline-name"
-	KeyVertexName       = "numaflow.numaproj.io/vertex-name"
-	KeyMonoVertexName   = "numaflow.numaproj.io/mono-vertex-name"
-	KeyReplica          = "numaflow.numaproj.io/replica"
-	KeySideInputName    = "numaflow.numaproj.io/side-input-name"
-	KeyPauseTimestamp   = "numaflow.numaproj.io/pause-timestamp"
-	KeyDefaultContainer = "kubectl.kubernetes.io/default-container"
+	KeyInstance            = "numaflow.numaproj.io/instance" // instance key of the object
+	KeyHash                = "numaflow.numaproj.io/hash"     // hash of the object
+	KeyComponent           = "app.kubernetes.io/component"
+	KeyPartOf              = "app.kubernetes.io/part-of"
+	KeyManagedBy           = "app.kubernetes.io/managed-by"
+	KeyAppName             = "app.kubernetes.io/name"
+	KeyISBSvcName          = "numaflow.numaproj.io/isbsvc-name"
+	KeyISBSvcType          = "numaflow.numaproj.io/isbsvc-type"
+	KeyPipelineName        = "numaflow.numaproj.io/pipeline-name"
+	KeyVertexName          = "numaflow.numaproj.io/vertex-name"
+	KeyMonoVertexName      = "numaflow.numaproj.io/mono-vertex-name"
+	KeyServingPipelineName = "numaflow.numaproj.io/serving-pipeline-name"
+	KeyReplica             = "numaflow.numaproj.io/replica"
+	KeySideInputName       = "numaflow.numaproj.io/side-input-name"
+	KeyPauseTimestamp      = "numaflow.numaproj.io/pause-timestamp"
+	KeyDefaultContainer    = "kubectl.kubernetes.io/default-container"
 
 	// ID key in the header of sources like http
 	KeyMetaID          = "X-Numaflow-Id"
@@ -76,6 +77,8 @@ const (
 	CtrInitSideInputs    = "init-side-inputs"
 	CtrSideInputsWatcher = "side-inputs-synchronizer"
 	CtrServing           = "serving"
+	CtrMonitor           = "monitor"
+	CtrUdStore           = "udstore"
 
 	// user-defined container types
 	UDContainerFunction     = "udf"
@@ -84,7 +87,7 @@ const (
 	UDContainerTransformer  = "transformer"
 	UDContainerSource       = "udsource"
 	UDContainerSideInputs   = "udsi"
-	ServingSourceContainer  = "serving"
+	UDContainerStore        = "udstore"
 
 	// components
 	ComponentISBSvc            = "isbsvc"
@@ -96,12 +99,15 @@ const (
 	ComponentSideInputManager  = "side-inputs-manager"
 	ComponentUXServer          = "numaflow-ux"
 	ComponentControllerManager = "controller-manager"
+	ComponentPipeline          = "pipeline"
+	ComponentServingServer     = "serving-server"
 
 	// controllers
-	ControllerISBSvc     = "isbsvc-controller"
-	ControllerPipeline   = "pipeline-controller"
-	ControllerVertex     = "vertex-controller"
-	ControllerMonoVertex = "mono-vertex-controller"
+	ControllerISBSvc          = "isbsvc-controller"
+	ControllerPipeline        = "pipeline-controller"
+	ControllerVertex          = "vertex-controller"
+	ControllerMonoVertex      = "mono-vertex-controller"
+	ControllerServingPipeline = "serving-pipeline-controller"
 
 	// ENV vars
 	EnvNamespace                        = "NUMAFLOW_NAMESPACE"
@@ -145,25 +151,31 @@ const (
 	EnvMemoryLimit                      = "NUMAFLOW_MEMORY_LIMIT"
 	EnvGoDebug                          = "GODEBUG"
 	EnvServingJetstreamStream           = "NUMAFLOW_SERVING_JETSTREAM_STREAM"
-	EnvServingObject                    = "NUMAFLOW_SERVING_SOURCE_OBJECT"
 	EnvServingPort                      = "NUMAFLOW_SERVING_APP_LISTEN_PORT"
-	EnvServingAuthToken                 = "NUMAFLOW_SERVING_AUTH_TOKEN"
 	EnvServingMinPipelineSpec           = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC"
 	EnvServingHostIP                    = "NUMAFLOW_SERVING_HOST_IP"
-	EnvServingStoreTTL                  = "NUMAFLOW_SERVING_STORE_TTL"
-	EnvExecuteRustBinary                = "NUMAFLOW_EXECUTE_RUST_BINARY"
+	EnvK8sServerVersion                 = "K8S_SERVER_VERSION"
+	EnvNumaflowRuntime                  = "NUMAFLOW_RUNTIME"
+	EnvServingSettings                  = "NUMAFLOW_SERVING_SOURCE_SETTINGS"
+	EnvServingCallbackStore             = "NUMAFLOW_SERVING_CALLBACK_STORE"
+	EnvServingResponseStore             = "NUMAFLOW_SERVING_RESPONSE_STORE"
+	EnvServingStatusStore               = "NUMAFLOW_SERVING_STATUS_STORE"
 
-	EnvK8sServerVersion = "K8S_SERVER_VERSION"
-
+	NumaflowRustBinary          = "/bin/numaflow-rs"
 	PathVarRun                  = "/var/run/numaflow"
 	VertexMetricsPort           = 2469
 	VertexMetricsPortName       = "metrics"
+	VertexMonitorPort           = 2470
+	VertexMonitorPortName       = "monitor"
 	VertexHTTPSPort             = 8443
 	VertexHTTPSPortName         = "https"
 	DaemonServicePort           = 4327
 	MonoVertexMetricsPort       = 2469
 	MonoVertexMetricsPortName   = "metrics"
+	MonoVertexMonitorPort       = 2470
+	MonoVertexMonitorPortName   = "monitor"
 	MonoVertexDaemonServicePort = 4327
+	ServingServicePort          = 8443
 
 	DefaultRequeueAfter = 10 * time.Second
 
@@ -183,6 +195,7 @@ const (
 	DefaultTargetProcessingSeconds  = 20  // Default targeted time in seconds to finish processing all the pending messages for a source
 	DefaultTargetBufferAvailability = 50  // Default targeted percentage of buffer availability
 	DefaultReplicasPerScale         = 2   // Default maximum replicas to be scaled up or down at once
+	MaxLookbackSeconds              = 600 // Max lookback seconds for calculating avg rate and pending
 
 	// Default persistent buffer queue options
 	DefaultPBQChannelBufferSize = 100             // Default channel size in int (what should be right value?)
@@ -210,10 +223,6 @@ const (
 	DefaultWALCompactorMaxFileSize  = 30 * 1024 * 1024               // Default max file size for the compactor
 	DefaultWALCompactionDuration    = 60 * time.Second               // Default compaction duration
 	DefaultCompactWALPath           = PathPBQMount + "/compact-wals" // Default compaction wal path
-
-	// Default Pnf options
-	DefaultPnfBatchSize     = 100         // Default flush batch size for pnf
-	DefaultPnfFlushDuration = time.Second // Default flush duration for pnf
 
 	// DefaultKafkaHandlerChannelSize is the default channel size for kafka handler
 	DefaultKafkaHandlerChannelSize = 100
@@ -284,6 +293,11 @@ const (
 	UDContainerLivezPeriodSeconds          = 60
 	UDContainerLivezTimeoutSeconds         = 30
 	UDContainerLivezFailureThreshold       = 5
+
+	//Runtime Info
+	RuntimeDirVolume    = "runtime-vol"
+	RuntimeDirMountPath = "/var/numaflow/runtime"
+	RuntimeDirSizeLimit = 20 * 1024 * 1024
 )
 
 var (

@@ -19,21 +19,17 @@ package service
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"net/http"
 	"time"
 
-	"go.uber.org/zap"
-	"google.golang.org/protobuf/types/known/emptypb"
-	"google.golang.org/protobuf/types/known/wrapperspb"
-
-	"github.com/prometheus/common/expfmt"
-
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/mvtxdaemon"
-	"github.com/numaproj/numaflow/pkg/metrics"
 	raterPkg "github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service/rater"
+	runtimePkg "github.com/numaproj/numaflow/pkg/mvtxdaemon/server/service/runtime"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
+	"go.uber.org/zap"
+	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // MonoVtxPendingMetric is the metric emitted from the MonoVtx lag reader for pending stats
@@ -42,10 +38,11 @@ const MonoVtxPendingMetric = "monovtx_pending"
 
 type MonoVertexService struct {
 	mvtxdaemon.UnimplementedMonoVertexDaemonServiceServer
-	monoVtx       *v1alpha1.MonoVertex
-	httpClient    *http.Client
-	rater         raterPkg.MonoVtxRatable
-	healthChecker *HealthChecker
+	monoVtx                *v1alpha1.MonoVertex
+	httpClient             *http.Client
+	rater                  raterPkg.MonoVtxRatable
+	healthChecker          *HealthChecker
+	monoVertexRuntimeCache runtimePkg.MonoVertexRuntimeCache
 }
 
 var _ mvtxdaemon.MonoVertexDaemonServiceServer = (*MonoVertexService)(nil)
@@ -54,6 +51,7 @@ var _ mvtxdaemon.MonoVertexDaemonServiceServer = (*MonoVertexService)(nil)
 func NewMoveVertexService(
 	monoVtx *v1alpha1.MonoVertex,
 	rater raterPkg.MonoVtxRatable,
+	monoVertexRuntimeCache runtimePkg.MonoVertexRuntimeCache,
 ) (*MonoVertexService, error) {
 	mv := MonoVertexService{
 		monoVtx: monoVtx,
@@ -63,8 +61,9 @@ func NewMoveVertexService(
 			},
 			Timeout: time.Second * 3,
 		},
-		rater:         rater,
-		healthChecker: NewHealthChecker(monoVtx),
+		rater:                  rater,
+		healthChecker:          NewHealthChecker(monoVtx),
+		monoVertexRuntimeCache: monoVertexRuntimeCache,
 	}
 	return &mv, nil
 }
@@ -78,7 +77,7 @@ func (mvs *MonoVertexService) fetchMonoVertexMetrics(ctx context.Context) (*mvtx
 	resp := new(mvtxdaemon.GetMonoVertexMetricsResponse)
 	collectedMetrics := new(mvtxdaemon.MonoVertexMetrics)
 	collectedMetrics.MonoVertex = mvs.monoVtx.Name
-	collectedMetrics.Pendings = mvs.getPending(ctx)
+	collectedMetrics.Pendings = mvs.rater.GetPending()
 	collectedMetrics.ProcessingRates = mvs.rater.GetRates()
 	resp.Metrics = collectedMetrics
 	return resp, nil
@@ -95,45 +94,38 @@ func (mvs *MonoVertexService) GetMonoVertexStatus(ctx context.Context, empty *em
 	return resp, nil
 }
 
-// getPending returns the pending count for the mono vertex
-func (mvs *MonoVertexService) getPending(ctx context.Context) map[string]*wrapperspb.Int64Value {
-	log := logging.FromContext(ctx)
-	headlessServiceName := mvs.monoVtx.GetHeadlessServiceName()
-	pendingMap := make(map[string]*wrapperspb.Int64Value)
+// GetMonoVertexErrors returns errors for a given mono vertex by accessing the local cache in the runtime service.
+// The errors are persisted in the local cache by the runtime service.
+// Errors are retrieved for all active replicas for a given mono vertex.
+// A list of replica errors for a given mono vertex is returned.
+func (mvs *MonoVertexService) GetMonoVertexErrors(ctx context.Context, request *mvtxdaemon.GetMonoVertexErrorsRequest) (*mvtxdaemon.GetMonoVertexErrorsResponse, error) {
+	monoVertex := request.GetMonoVertex()
+	resp := new(mvtxdaemon.GetMonoVertexErrorsResponse)
+	localCache := mvs.monoVertexRuntimeCache.GetLocalCache()
 
-	// Get the headless service name
-	// We can query the metrics endpoint of the (i)th pod to obtain this value.
-	// example for 0th pod : https://simple-mono-vertex-mv-0.simple-mono-vertex-mv-headless:2469/metrics
-	url := fmt.Sprintf("https://%s-mv-0.%s.%s.svc:%v/metrics", mvs.monoVtx.Name, headlessServiceName, mvs.monoVtx.Namespace, v1alpha1.MonoVertexMetricsPort)
-	if res, err := mvs.httpClient.Get(url); err != nil {
-		log.Debugf("Error reading the metrics endpoint, it might be because of mono vertex scaling down to 0: %f", err.Error())
-		return nil
-	} else {
-		// expfmt Parser from prometheus to parse the metrics
-		textParser := expfmt.TextParser{}
-		result, err := textParser.TextToMetricFamilies(res.Body)
-		if err != nil {
-			log.Errorw("Error in parsing to prometheus metric families", zap.Error(err))
-			return nil
-		}
-
-		// Get the pending messages
-		if value, ok := result[MonoVtxPendingMetric]; ok {
-			metricsList := value.GetMetric()
-			for _, metric := range metricsList {
-				labels := metric.GetLabel()
-				lookback := ""
-				for _, label := range labels {
-					if label.GetName() == metrics.LabelPeriod {
-						lookback = label.GetValue()
-						break
-					}
+	// If the errors are present in the local cache, return the errors.
+	if errors, ok := localCache[monoVertex]; ok {
+		replicaErrors := make([]*mvtxdaemon.ReplicaErrors, len(errors))
+		for i, err := range errors {
+			containerErrors := make([]*mvtxdaemon.ContainerError, len(err.ContainerErrors))
+			for j, containerError := range err.ContainerErrors {
+				containerErrors[j] = &mvtxdaemon.ContainerError{
+					Container: containerError.Container,
+					Timestamp: timestamppb.New(time.Unix(containerError.Timestamp, 0)),
+					Code:      containerError.Code,
+					Message:   containerError.Message,
+					Details:   containerError.Details,
 				}
-				pendingMap[lookback] = wrapperspb.Int64(int64(metric.Gauge.GetValue()))
+			}
+			replicaErrors[i] = &mvtxdaemon.ReplicaErrors{
+				Replica:         err.Replica,
+				ContainerErrors: containerErrors,
 			}
 		}
+		resp.Errors = replicaErrors
 	}
-	return pendingMap
+
+	return resp, nil
 }
 
 // StartHealthCheck starts the health check for the MonoVertex using the health checker

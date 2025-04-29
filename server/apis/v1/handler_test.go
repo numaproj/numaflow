@@ -152,16 +152,16 @@ func TestHandler_DiscoverMetrics(t *testing.T) {
 	}{
 		{
 			name:           "empty patterns",
-			object:         "pipeline",
+			object:         "vertex",
 			configPatterns: []Pattern{},
 			want:           MetricsDiscoveryResponse{},
 		},
 		{
 			name:   "no matching object",
-			object: "pipeline",
+			object: "pipeline", // case where request has a different object than pattern's list of objects
 			configPatterns: []Pattern{
 				{
-					Object: "vertex",
+					Objects: []string{"vertex"},
 					Metrics: []Metric{
 						{
 							Name:    "test_metric",
@@ -174,10 +174,10 @@ func TestHandler_DiscoverMetrics(t *testing.T) {
 		},
 		{
 			name:   "single metric with required filters",
-			object: "pipeline",
+			object: "vertex",
 			configPatterns: []Pattern{
 				{
-					Object: "pipeline",
+					Objects: []string{"vertex"},
 					Params: []Params{
 						{
 							Name:     "quantile",
@@ -187,7 +187,7 @@ func TestHandler_DiscoverMetrics(t *testing.T) {
 					Metrics: []Metric{
 						{
 							Name:    "processing_rate",
-							Filters: []string{"namespace", "pipeline"},
+							Filters: []string{"namespace"},
 							Dimensions: []Dimension{
 								{
 									Name: "vertex",
@@ -208,7 +208,6 @@ func TestHandler_DiscoverMetrics(t *testing.T) {
 							Name: "vertex",
 							Filters: []Filter{
 								{Name: "namespace", Required: true},
-								{Name: "pipeline", Required: true},
 								{Name: "vertex", Required: true},
 							},
 							Params: []Params{{
@@ -1025,6 +1024,69 @@ func TestHandler_GetContainerStatus(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			status := h.getContainerStatus(tt.containerState)
 			assert.Equal(t, tt.expectedStatus, status)
+		})
+	}
+}
+
+func TestHandler_IsNotSidecarContainer(t *testing.T) {
+	handler := &handler{}
+
+	tests := []struct {
+		name          string
+		containerName string
+		pod           corev1.Pod
+		expected      bool
+	}{
+		{
+			name:          "Init container with Always restart policy",
+			containerName: "init-container-1",
+			pod: corev1.Pod{
+				Spec: corev1.PodSpec{
+					InitContainers: []corev1.Container{
+						{
+							Name:          "init-container-1",
+							RestartPolicy: func() *corev1.ContainerRestartPolicy { p := corev1.ContainerRestartPolicyAlways; return &p }(),
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name:          "Container not in init containers",
+			containerName: "app-container",
+			pod: corev1.Pod{
+				Spec: corev1.PodSpec{
+					InitContainers: []corev1.Container{
+						{
+							Name: "init-container-1",
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name:          "Init container with nil RestartPolicy",
+			containerName: "init-container-3",
+			pod: corev1.Pod{
+				Spec: corev1.PodSpec{
+					InitContainers: []corev1.Container{
+						{
+							Name:          "init-container-3",
+							RestartPolicy: nil,
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := handler.isNotSidecarContainer(tt.containerName, tt.pod)
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }

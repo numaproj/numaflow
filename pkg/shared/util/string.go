@@ -18,8 +18,10 @@ package util
 
 import (
 	"crypto/rand"
+	"hash/crc32"
 	"math/big"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -40,18 +42,6 @@ func RandomLowerCaseString(length int) string {
 	return strings.ToLower(RandomString(length))
 }
 
-func StringSliceContains(list []string, str string) bool {
-	if len(list) == 0 {
-		return false
-	}
-	for _, s := range list {
-		if s == str {
-			return true
-		}
-	}
-	return false
-}
-
 // CompareSlice compares two slices based on operator.
 // OP == AND returns true if all the elements of slice a are in slice b
 // OP = OR returns true if any of the elements of slice a are in slice b
@@ -61,7 +51,7 @@ func CompareSlice(operator v1alpha1.LogicOperator, a []string, b []string) bool 
 	case v1alpha1.LogicOperatorAnd:
 		// returns true if all the elements of slice a are in slice b
 		for _, val := range a {
-			if !StringSliceContains(b, val) {
+			if !slices.Contains(b, val) {
 				return false
 			}
 		}
@@ -70,7 +60,7 @@ func CompareSlice(operator v1alpha1.LogicOperator, a []string, b []string) bool 
 	case v1alpha1.LogicOperatorOr:
 		// returns true if any of the elements of slice a are in slice b
 		for _, val := range a {
-			if StringSliceContains(b, val) {
+			if slices.Contains(b, val) {
 				return true
 			}
 		}
@@ -79,7 +69,7 @@ func CompareSlice(operator v1alpha1.LogicOperator, a []string, b []string) bool 
 	case v1alpha1.LogicOperatorNot:
 		// returns false if any of the elements of slice a are in slice b
 		for _, val := range a {
-			if StringSliceContains(b, val) {
+			if slices.Contains(b, val) {
 				return false
 			}
 		}
@@ -91,4 +81,16 @@ func CompareSlice(operator v1alpha1.LogicOperator, a []string, b []string) bool 
 func DNS1035(str string) string {
 	re := regexp.MustCompile(`[^a-z0-9-]+`)
 	return re.ReplaceAllString(strings.ToLower(str), "-")
+}
+
+// Hashcode returns a unique hashcode of a string.
+func Hashcode(str string) int {
+	i := int(crc32.ChecksumIEEE([]byte(str)))
+	if i >= 0 {
+		return i
+	}
+	if -i >= 0 {
+		return -i
+	}
+	return 0
 }

@@ -3,12 +3,14 @@ resolver = "2"
 members = [
     "backoff",
     "numaflow-models",
-    "servesink",
     "serving",
     "numaflow-core",
     "numaflow-pb",
     "extns/numaflow-pulsar",
+    "extns/numaflow-sqs",
+    "extns/numaflow-jetstream",
     "numaflow",
+    "numaflow-monitor",
 ]
 
 [workspace.lints.rust]
@@ -52,18 +54,35 @@ lto = false
 incremental = true
 
 [workspace.dependencies]
-servesink = { path = "servesink" }
 serving = { path = "serving" }
 numaflow-core = { path = "numaflow-core" }
 numaflow-models = { path = "numaflow-models" }
+numaflow-monitor = { path = "numaflow-monitor" }
 backoff = { path = "backoff" }
 numaflow-pb = { path = "numaflow-pb" }
 numaflow-pulsar = { path = "extns/numaflow-pulsar" }
-tokio = "1.41.1"
-bytes = "1.7.1"
-tracing = "0.1.40"
-axum = "0.7.5"
-axum-server = { version = "0.7.1", features = ["tls-rustls"] }
-serde = { version = "1.0.204", features = ["derive"] }
-rustls = { version = "0.23.12", features = ["aws_lc_rs"] }
-reqwest = "0.12.12"
+numaflow-jetstream = { path = "extns/numaflow-jetstream" }
+numaflow-sqs = { path = "extns/numaflow-sqs" }
+tokio = { version = "1.44.2", features = ["macros", "rt-multi-thread"] }
+bytes = "1.9.0"
+tracing = "0.1.41"
+async-nats = "0.40.0"
+thiserror = "2.0.3"
+axum = { version = "0.8.3", default-features = false, features = [
+    "http1",
+    "http2",
+    "json",
+    "matched-path",
+    "query",
+    "tracing",
+    "tokio",
+] }
+axum-server = { version = "0.7.2", features = ["tls-rustls"] }
+tower = "0.5.2"
+serde = { version = "1.0.217", features = ["derive"] }
+rustls = { version = "0.23.21", features = ["aws_lc_rs"] }
+reqwest = { version = "0.12.12", default-features = false, features = [
+    "http2",
+    "rustls-tls",
+    "json",
+] }

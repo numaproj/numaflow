@@ -21,6 +21,7 @@ fn build_client() {
                 "proto/reduce/v1/reduce.proto",
                 "proto/sessionreduce/v1/sessionreduce.proto",
                 "proto/sideinput/v1/sideinput.proto",
+                "proto/serving/v1/store.proto",
             ],
             &["proto"],
         )
@@ -31,7 +32,11 @@ fn build_objects() {
     prost_build::Config::new()
         .out_dir("src/objects")
         .compile_protos(
-            &["proto/isb/message.proto", "proto/wmb/wmb.proto"],
+            &[
+                "proto/isb/message.proto",
+                "proto/reduce/wal/wal.proto",
+                "proto/watermark/watermark.proto",
+            ],
             &["proto"],
         )
         .expect("failed to compile protos");

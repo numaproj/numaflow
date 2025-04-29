@@ -78,7 +78,7 @@ func (r *pipelineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	pl := &dfv1.Pipeline{}
 	if err := r.client.Get(ctx, req.NamespacedName, pl); err != nil {
 		if apierrors.IsNotFound(err) {
-			return reconcile.Result{}, nil
+			return ctrl.Result{}, nil
 		}
 		r.logger.Errorw("Unable to get pipeline", zap.Any("request", req), zap.Error(err))
 		return ctrl.Result{}, err
@@ -102,8 +102,20 @@ func (r *pipelineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return result, err
 		}
 	}
-	if err := r.client.Status().Update(ctx, plCopy); err != nil {
-		return result, err
+	if !equality.Semantic.DeepEqual(pl.Status, plCopy.Status) {
+		// Use Server Side Apply
+		statusPatch := &dfv1.Pipeline{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:          pl.Name,
+				Namespace:     pl.Namespace,
+				ManagedFields: nil,
+			},
+			TypeMeta: pl.TypeMeta,
+			Status:   plCopy.Status,
+		}
+		if err := r.client.Status().Patch(ctx, statusPatch, client.Apply, client.ForceOwnership, client.FieldOwner(dfv1.Project)); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 	return result, reconcileErr
 }
@@ -140,9 +152,13 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 			controllerutil.RemoveFinalizer(pl, deprecatedFinalizerName)
 			// Clean up metrics
 			_ = reconciler.PipelineHealth.DeleteLabelValues(pl.Namespace, pl.Name)
+			_ = reconciler.PipelineDesiredPhase.DeleteLabelValues(pl.Namespace, pl.Name)
+			_ = reconciler.PipelineCurrentPhase.DeleteLabelValues(pl.Namespace, pl.Name)
 			// Delete corresponding vertex metrics
 			_ = reconciler.VertexDesiredReplicas.DeletePartialMatch(map[string]string{metrics.LabelNamespace: pl.Namespace, metrics.LabelPipeline: pl.Name})
 			_ = reconciler.VertexCurrentReplicas.DeletePartialMatch(map[string]string{metrics.LabelNamespace: pl.Namespace, metrics.LabelPipeline: pl.Name})
+			_ = reconciler.VertexMinReplicas.DeletePartialMatch(map[string]string{metrics.LabelNamespace: pl.Namespace, metrics.LabelPipeline: pl.Name})
+			_ = reconciler.VertexMaxReplicas.DeletePartialMatch(map[string]string{metrics.LabelNamespace: pl.Namespace, metrics.LabelPipeline: pl.Name})
 		}
 		return ctrl.Result{}, nil
 	}
@@ -153,6 +169,8 @@ func (r *pipelineReconciler) reconcile(ctx context.Context, pl *dfv1.Pipeline) (
 		} else {
 			reconciler.PipelineHealth.WithLabelValues(pl.Namespace, pl.Name).Set(0)
 		}
+		reconciler.PipelineDesiredPhase.WithLabelValues(pl.Namespace, pl.Name).Set(float64(pl.GetDesiredPhase().Code()))
+		reconciler.PipelineCurrentPhase.WithLabelValues(pl.Namespace, pl.Name).Set(float64(pl.Status.Phase.Code()))
 	}()
 
 	pl.Status.InitConditions()
@@ -222,8 +240,9 @@ func isLifecycleChange(pl *dfv1.Pipeline) bool {
 	// Check if the desired phase of the pipeline is 'Paused', or if the current phase of the
 	// pipeline is either 'Paused' or 'Pausing'. This indicates a transition into or out of
 	// a paused state which is a lifecycle phase change
-	if oldPhase := pl.Status.Phase; pl.GetDesiredPhase() == dfv1.PipelinePhasePaused ||
-		oldPhase == dfv1.PipelinePhasePaused || oldPhase == dfv1.PipelinePhasePausing {
+	if currentPhase := pl.Status.Phase; pl.GetDesiredPhase() == dfv1.PipelinePhasePaused ||
+		currentPhase == dfv1.PipelinePhasePaused || currentPhase == dfv1.PipelinePhasePausing ||
+		pl.GetAnnotations()[dfv1.KeyPauseTimestamp] != "" {
 		return true
 	}
 
@@ -310,13 +329,12 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 		}
 		args := []string{fmt.Sprintf("--buffers=%s", strings.Join(bfs, ",")), fmt.Sprintf("--buckets=%s", strings.Join(bks, ","))}
 		args = append(args, fmt.Sprintf("--side-inputs-store=%s", pl.GetSideInputsStoreName()))
-		args = append(args, fmt.Sprintf("--serving-source-streams=%s", strings.Join(pl.GetServingSourceStreamNames(), ",")))
 		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-create", args, "cre")
 		if err := r.client.Create(ctx, batchJob); err != nil && !apierrors.IsAlreadyExists(err) {
-			r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateJobForISBCeationFailed", "Failed to create a Job: %w", err.Error())
+			r.recorder.Eventf(pl, corev1.EventTypeWarning, "CreateJobForISBCreationFailed", "Failed to create a Job: %w", err.Error())
 			return fmt.Errorf("failed to create ISB creating job, err: %w", err)
 		}
-		log.Infow("Created a job successfully for ISB creating", zap.Any("buffers", bfs), zap.Any("buckets", bks), zap.Any("servingStreams", pl.GetServingSourceStreamNames()))
+		log.Infow("Created a job successfully for ISB creating", zap.Any("buffers", bfs), zap.Any("buckets", bks))
 		r.recorder.Eventf(pl, corev1.EventTypeNormal, "CreateJobForISBCeationSuccessful", "Create ISB creation job successfully")
 	}
 
@@ -354,9 +372,19 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 			r.recorder.Eventf(pl, corev1.EventTypeNormal, "CreateVertexSuccess", "Created vertex %s successfully", vertexName)
 		} else {
 			if oldObj.GetAnnotations()[dfv1.KeyHash] != newObj.GetAnnotations()[dfv1.KeyHash] { // need to update
-				originalReplicas := oldObj.Spec.Replicas
+				originalReplicas := int32(0)
+				if x := oldObj.Spec.Replicas; x != nil {
+					originalReplicas = *x
+				}
 				oldObj.Spec = newObj.Spec
-				oldObj.Spec.Replicas = originalReplicas
+				// Keep the original replicas as much as possible
+				if originalReplicas >= newObj.Spec.Scale.GetMinReplicas() && originalReplicas <= newObj.Spec.Scale.GetMaxReplicas() {
+					oldObj.Spec.Replicas = &originalReplicas
+				} else if originalReplicas < newObj.Spec.Scale.GetMinReplicas() {
+					originalReplicas = newObj.Spec.Scale.GetMinReplicas()
+				} else {
+					originalReplicas = newObj.Spec.Scale.GetMaxReplicas()
+				}
 				oldObj.Annotations[dfv1.KeyHash] = newObj.GetAnnotations()[dfv1.KeyHash]
 				if err := r.client.Update(ctx, &oldObj); err != nil {
 					r.recorder.Eventf(pl, corev1.EventTypeWarning, "UpdateVertexFailed", "Failed to update vertex: %w", err.Error())
@@ -378,6 +406,8 @@ func (r *pipelineReconciler) reconcileFixedResources(ctx context.Context, pl *df
 		// Clean up vertex replica metrics
 		reconciler.VertexDesiredReplicas.DeleteLabelValues(pl.Namespace, pl.Name, v.Spec.Name)
 		reconciler.VertexCurrentReplicas.DeleteLabelValues(pl.Namespace, pl.Name, v.Spec.Name)
+		reconciler.VertexMinReplicas.DeleteLabelValues(pl.Namespace, pl.Name, v.Spec.Name)
+		reconciler.VertexMaxReplicas.DeleteLabelValues(pl.Namespace, pl.Name, v.Spec.Name)
 	}
 
 	// Daemon service
@@ -599,7 +629,6 @@ func (r *pipelineReconciler) cleanUpBuffers(ctx context.Context, pl *dfv1.Pipeli
 		args = append(args, fmt.Sprintf("--buffers=%s", strings.Join(allBuffers, ",")))
 		args = append(args, fmt.Sprintf("--buckets=%s", strings.Join(allBuckets, ",")))
 		args = append(args, fmt.Sprintf("--side-inputs-store=%s", pl.GetSideInputsStoreName()))
-		args = append(args, fmt.Sprintf("--serving-source-streams=%s", strings.Join(pl.GetServingSourceStreamNames(), ",")))
 
 		batchJob := buildISBBatchJob(pl, r.image, isbSvc.Status.Config, "isbsvc-delete", args, "cln")
 		batchJob.OwnerReferences = []metav1.OwnerReference{}
@@ -636,11 +665,11 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 			replicas = int32(partitions)
 		} else {
 			x := vCopy.Scale
-			if x.Min != nil && *x.Min > 1 && replicas < *x.Min {
-				replicas = *x.Min
+			if replicas < x.GetMinReplicas() {
+				replicas = x.GetMinReplicas()
 			}
-			if x.Max != nil && *x.Max > 1 && replicas > *x.Max {
-				replicas = *x.Max
+			if replicas > x.GetMaxReplicas() {
+				replicas = x.GetMaxReplicas()
 			}
 		}
 
@@ -652,8 +681,11 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 			ToEdges:                    toEdges,
 			Watermark:                  pl.Spec.Watermark,
 			Replicas:                   &replicas,
+			Lifecycle: dfv1.VertexLifecycle{
+				DesiredPhase: dfv1.VertexPhase(pl.GetDesiredPhase()),
+			},
 		}
-		hash := sharedutil.MustHash(spec.DeepCopyWithoutReplicas())
+		hash := sharedutil.MustHash(spec.DeepCopyWithoutReplicasAndLifecycle())
 		obj := dfv1.Vertex{
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace: pl.Namespace,
@@ -839,7 +871,7 @@ func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeli
 			}
 		}
 	}
-	_, err := r.scaleUpAllVertices(ctx, pl)
+	_, err := r.updateVerticeDesiredPhase(ctx, pl, allVertexFilter, dfv1.VertexPhaseRunning)
 	if err != nil {
 		return false, err
 	}
@@ -859,7 +891,7 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 	pl.Status.MarkPhasePausing()
 
 	if pl.GetAnnotations() == nil || pl.GetAnnotations()[dfv1.KeyPauseTimestamp] == "" {
-		_, err := r.scaleDownSourceVertices(ctx, pl)
+		_, err := r.updateVerticeDesiredPhase(ctx, pl, sourceVertexFilter, dfv1.VertexPhasePaused)
 		if err != nil {
 			// If there's an error requeue the request
 			return true, err
@@ -900,7 +932,7 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 
 	// if drain is completed, or we have exceeded the pause deadline, mark pl as paused and scale down
 	if time.Now().After(pauseTimestamp.Add(time.Duration(pl.GetPauseGracePeriodSeconds())*time.Second)) || drainCompleted {
-		_, err = r.scaleDownAllVertices(ctx, pl)
+		_, err = r.updateVerticeDesiredPhase(ctx, pl, allVertexFilter, dfv1.VertexPhasePaused)
 		if err != nil {
 			return true, err
 		}
@@ -930,19 +962,7 @@ func (r *pipelineReconciler) noSourceVertexPodsRunning(ctx context.Context, pl *
 	return len(pods.Items) == 0, nil
 }
 
-func (r *pipelineReconciler) scaleDownSourceVertices(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
-	return r.scaleVertex(ctx, pl, sourceVertexFilter, 0)
-}
-
-func (r *pipelineReconciler) scaleDownAllVertices(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
-	return r.scaleVertex(ctx, pl, allVertexFilter, 0)
-}
-
-func (r *pipelineReconciler) scaleUpAllVertices(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
-	return r.scaleVertex(ctx, pl, allVertexFilter, 1)
-}
-
-func (r *pipelineReconciler) scaleVertex(ctx context.Context, pl *dfv1.Pipeline, filter vertexFilterFunc, replicas int32) (bool, error) {
+func (r *pipelineReconciler) updateVerticeDesiredPhase(ctx context.Context, pl *dfv1.Pipeline, filter vertexFilterFunc, desiredPhase dfv1.VertexPhase) (bool, error) {
 	log := logging.FromContext(ctx)
 	existingVertices, err := r.findExistingVertices(ctx, pl)
 	if err != nil {
@@ -950,28 +970,14 @@ func (r *pipelineReconciler) scaleVertex(ctx context.Context, pl *dfv1.Pipeline,
 	}
 	isVertexPatched := false
 	for _, vertex := range existingVertices {
-		if origin := *vertex.Spec.Replicas; origin != replicas && filter(vertex) {
-			scaleTo := replicas
-			// if replicas equals to 1, it means we are resuming a paused pipeline
-			// in this case, if a vertex doesn't support auto-scaling, we scale up based on the vertex's configuration:
-			// for a reducer, we scale up to the partition count
-			// for a non-reducer, if min is set, we scale up to min
-			if replicas == 1 {
-				if !vertex.Scalable() {
-					if vertex.IsReduceUDF() {
-						scaleTo = int32(vertex.GetPartitionCount())
-					} else if vertex.Spec.Scale.Min != nil && *vertex.Spec.Scale.Min > 1 {
-						scaleTo = *vertex.Spec.Scale.Min
-					}
-				}
-			}
-			patchJson := fmt.Sprintf(`{"spec":{"replicas":%d}}`, scaleTo)
+		if originPhase := vertex.Spec.Lifecycle.GetDesiredPhase(); filter(vertex) && originPhase != desiredPhase {
+			patchJson := fmt.Sprintf(`{"spec":{"lifecycle":{"desiredPhase":"%s"}}}`, desiredPhase)
 			err = r.client.Patch(ctx, &vertex, client.RawPatch(types.MergePatchType, []byte(patchJson)))
 			if err != nil && !apierrors.IsNotFound(err) {
 				return false, err
 			}
-			log.Infow("Scaled vertex", zap.Int32("from", origin), zap.Int32("to", scaleTo), zap.String("vertex", vertex.Name))
-			r.recorder.Eventf(pl, corev1.EventTypeNormal, "ScalingVertex", "Scaled vertex %s from %d to %d replicas", vertex.Name, origin, scaleTo)
+			log.Infow("Updated vertex desired phase", zap.String("from", string(originPhase)), zap.String("to", string(desiredPhase)), zap.String("vertex", vertex.Name))
+			r.recorder.Eventf(pl, corev1.EventTypeNormal, "UpdateVertexDesiredPhase", "Updated vertex %q desired phase from %s to %s", vertex.Name, originPhase, desiredPhase)
 			isVertexPatched = true
 		}
 	}
@@ -981,7 +987,7 @@ func (r *pipelineReconciler) scaleVertex(ctx context.Context, pl *dfv1.Pipeline,
 func (r *pipelineReconciler) safeToDelete(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {
 	// update the phase to deleting
 	pl.Status.MarkPhaseDeleting()
-	vertexPatched, err := r.scaleDownSourceVertices(ctx, pl)
+	vertexPatched, err := r.updateVerticeDesiredPhase(ctx, pl, sourceVertexFilter, dfv1.VertexPhasePaused)
 	if err != nil {
 		return false, err
 	}

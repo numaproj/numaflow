@@ -13,6 +13,9 @@ pub enum Error {
     #[error("Sink Error - {0}")]
     Sink(String),
 
+    #[error("Fallback Sink Error - {0}")]
+    FbSink(String),
+
     #[error("Transformer Error - {0}")]
     Transformer(String),
 
@@ -26,7 +29,7 @@ pub enum Error {
     Connection(String),
 
     #[error("gRPC Error - {0}")]
-    Grpc(String),
+    Grpc(tonic::Status),
 
     #[error("Config Error - {0}")]
     Config(String),
@@ -55,10 +58,7 @@ pub enum Error {
 
     #[error("Task Error - {0}")]
     Tracker(String),
-}
 
-impl From<tonic::Status> for Error {
-    fn from(status: tonic::Status) -> Self {
-        Error::Grpc(status.to_string())
-    }
+    #[error("Watermark Error - {0}")]
+    Watermark(String),
 }

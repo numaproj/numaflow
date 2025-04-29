@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useContext } from "react";
 import Box from "@mui/material/Box";
 import TableContainer from "@mui/material/TableContainer";
 import Table from "@mui/material/Table";
@@ -6,15 +6,30 @@ import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
+import { MetricsModalWrapper } from "../../../../../MetricsModalWrapper";
+import { VERTEX_PENDING_MESSAGES } from "../../../../../../pages/Pipeline/partials/Graph/partials/NodeInfo/partials/Pods/partials/PodDetails/partials/Metrics/utils/constants";
+import { AppContextProps } from "../../../../../../../types/declarations/app";
+import { AppContext } from "../../../../../../../App";
 
 export interface BuffersProps {
   buffers: any[];
+  namespaceId: string;
+  pipelineId: string;
+  vertexId: string;
+  type: string;
 }
 
-export function Buffers({ buffers }: BuffersProps) {
+export function Buffers({
+  buffers,
+  namespaceId,
+  pipelineId,
+  vertexId,
+  type,
+}: BuffersProps) {
   if (!buffers) {
     return <div>{`No resources found.`}</div>;
   }
+  const { disableMetricsCharts } = useContext<AppContextProps>(AppContext);
 
   return (
     <Box
@@ -72,7 +87,15 @@ export function Buffers({ buffers }: BuffersProps) {
                     </TableCell>
                     <TableCell data-testid="usage">{bufferUsage}%</TableCell>
                     <TableCell data-testid="totalMessages">
-                      {buffer?.totalMessages}
+                      <MetricsModalWrapper
+                        disableMetricsCharts={disableMetricsCharts}
+                        namespaceId={namespaceId}
+                        pipelineId={pipelineId}
+                        vertexId={vertexId}
+                        type={type}
+                        metricDisplayName={VERTEX_PENDING_MESSAGES}
+                        value={buffer?.totalMessages}
+                      />
                     </TableCell>
                   </TableRow>
                 );

@@ -124,7 +124,7 @@ func TestValidateMonoVertex(t *testing.T) {
 		testObj := testMvtx.DeepCopy()
 		testObj.Spec.Sink.Fallback = nil
 		testObj.Spec.Sink.RetryStrategy = dfv1.RetryStrategy{
-			OnFailure: ptr.To[dfv1.OnFailureRetryStrategy](dfv1.OnFailureFallback),
+			OnFailure: ptr.To(dfv1.OnFailureFallback),
 		}
 		err := ValidateMonoVertex(testObj)
 		assert.Error(t, err)

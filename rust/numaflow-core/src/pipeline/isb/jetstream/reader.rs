@@ -1,54 +1,136 @@
 use std::fmt;
+use std::sync::Arc;
 use std::time::Duration;
 
 use async_nats::jetstream::{
-    consumer::PullConsumer, AckKind, Context, Message as JetstreamMessage,
+    AckKind, Context, Message as JetstreamMessage, consumer::PullConsumer,
 };
-use tokio::sync::{mpsc, oneshot};
+use backoff::retry::Retry;
+use backoff::strategy::fixed;
+use prost::Message as ProtoMessage;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::{self, Instant};
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
+use tracing::warn;
 use tracing::{error, info};
 
 use crate::config::get_vertex_name;
-use crate::config::pipeline::isb::BufferReaderConfig;
+use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
 use crate::error::Error;
-use crate::message::{IntOffset, Message, MessageID, Offset, ReadAck};
+use crate::message::{IntOffset, Message, MessageID, MessageType, Metadata, Offset, ReadAck};
 use crate::metrics::{
     pipeline_forward_metric_labels, pipeline_isb_metric_labels, pipeline_metrics,
 };
+use crate::shared::grpc::utc_from_timestamp;
 use crate::tracker::TrackerHandle;
-use crate::Result;
+use crate::watermark::isb::ISBWatermarkHandle;
+use crate::{Result, metrics};
 
-/// The JetstreamReader is a handle to the background actor that continuously fetches messages from Jetstream.
-/// It can be used to cancel the background task and stop reading from Jetstream.
-/// The sender end of the channel is not stored in this struct, since the struct is clone-able and the mpsc channel is only closed when all the senders are dropped.
-/// Storing the Sender end of channel in this struct would make it difficult to close the channel with `cancel` method.
+const ACK_RETRY_INTERVAL: u64 = 100;
+const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
+const MAX_ACK_PENDING: usize = 25000;
+
+/// The JetStreamReader is a handle to the background actor that continuously fetches messages from JetStream.
+/// It can be used to cancel the background task and stop reading from JetStream.
+///
+/// The sender end of the channel is not stored in this struct, since the struct is clone-able and the mpsc channel
+/// is only closed when all the senders are dropped. Storing the Sender end of channel in this struct would make it
+/// difficult to close the channel with `cancel` method.
+///
+/// Error handling and shutdown: The JetStreamReader will stop reading from JetStream when the cancellation token is
+/// cancelled(critical error in downstream or SIGTERM), there can't be any other cases where the JetStreamReader
+/// should stop reading messages. We just drop the tokio stream so that the downstream components can stop gracefully
+/// and before exiting we make sure all the work-in-progress(tasks) are completed.
 #[derive(Clone)]
-pub(crate) struct JetstreamReader {
-    stream_name: &'static str,
-    partition_idx: u16,
+pub(crate) struct JetStreamReader {
+    stream: Stream,
     config: BufferReaderConfig,
     consumer: PullConsumer,
     tracker_handle: TrackerHandle,
     batch_size: usize,
+    watermark_handle: Option<ISBWatermarkHandle>,
+    vertex_type: String,
 }
 
-impl JetstreamReader {
+/// JSWrappedMessage is a wrapper around the JetStream message that includes the
+/// partition index and the vertex name.
+#[derive(Debug)]
+struct JSWrappedMessage {
+    partition_idx: u16,
+    message: async_nats::jetstream::Message,
+    vertex_name: String,
+}
+
+impl TryFrom<JSWrappedMessage> for Message {
+    type Error = Error;
+
+    fn try_from(value: JSWrappedMessage) -> Result<Self> {
+        let msg_info = value.message.info().map_err(|e| {
+            Error::ISB(format!(
+                "Failed to get message info from JetStream: {:?}",
+                e
+            ))
+        })?;
+
+        let proto_message =
+            numaflow_pb::objects::isb::Message::decode(value.message.payload.clone())
+                .map_err(|e| Error::Proto(e.to_string()))?;
+
+        let header = proto_message
+            .header
+            .ok_or(Error::Proto("Missing header".to_string()))?;
+        let body = proto_message
+            .body
+            .ok_or(Error::Proto("Missing body".to_string()))?;
+        let message_info = header
+            .message_info
+            .ok_or(Error::Proto("Missing message_info".to_string()))?;
+        let offset = Offset::Int(IntOffset::new(
+            msg_info.stream_sequence as i64,
+            value.partition_idx,
+        ));
+
+        Ok(Message {
+            typ: header.kind.into(),
+            keys: Arc::from(header.keys.into_boxed_slice()),
+            tags: None,
+            value: body.payload.into(),
+            offset: offset.clone(),
+            event_time: utc_from_timestamp(message_info.event_time),
+            id: MessageID {
+                vertex_name: value.vertex_name.into(),
+                offset: offset.to_string().into(),
+                index: 0,
+            },
+            headers: header.headers,
+            watermark: None,
+            metadata: Some(Metadata {
+                previous_vertex: header
+                    .id
+                    .ok_or(Error::Proto("Missing id".to_string()))?
+                    .vertex_name,
+            }),
+        })
+    }
+}
+
+impl JetStreamReader {
     pub(crate) async fn new(
-        stream_name: &'static str,
-        partition_idx: u16,
+        vertex_type: String,
+        stream: Stream,
         js_ctx: Context,
         config: BufferReaderConfig,
         tracker_handle: TrackerHandle,
         batch_size: usize,
+        watermark_handle: Option<ISBWatermarkHandle>,
     ) -> Result<Self> {
         let mut config = config;
 
         let mut consumer: PullConsumer = js_ctx
-            .get_consumer_from_stream(&stream_name, &stream_name)
+            .get_consumer_from_stream(&stream.name, &stream.name)
             .await
             .map_err(|e| Error::ISB(format!("Failed to get consumer for stream {}", e)))?;
 
@@ -66,39 +148,38 @@ impl JetstreamReader {
         config.wip_ack_interval = wip_ack_interval;
 
         Ok(Self {
-            stream_name,
-            partition_idx,
+            vertex_type,
+            stream,
             config: config.clone(),
             consumer,
             tracker_handle,
             batch_size,
+            watermark_handle,
         })
     }
 
-    /// streaming_read is a background task that continuously fetches messages from Jetstream and
+    /// streaming_read is a background task that continuously fetches messages from JetStream and
     /// emits them on a channel. When we encounter an error, we log the error and return from the
     /// function. This drops the sender end of the channel. The closing of the channel should propagate
     /// to the receiver end and the receiver should exit gracefully. Within the loop, we only consider
     /// cancellationToken cancellation during the permit reservation and fetching messages,
     /// since rest of the operations should finish immediately.
     pub(crate) async fn streaming_read(
-        &self,
+        self,
         cancel_token: CancellationToken,
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let (messages_tx, messages_rx) = mpsc::channel(2 * self.batch_size);
 
         let handle: JoinHandle<Result<()>> = tokio::spawn({
-            let consumer = self.consumer.clone();
-            let partition_idx = self.partition_idx;
-            let config = self.config.clone();
-            let tracker_handle = self.tracker_handle.clone();
-            let cancel_token = cancel_token.clone();
-
-            let stream_name = self.stream_name;
             async move {
-                let labels = pipeline_forward_metric_labels("Sink", Some(stream_name));
+                let mut labels = pipeline_forward_metric_labels(&self.vertex_type).clone();
+                let semaphore = Arc::new(Semaphore::new(MAX_ACK_PENDING));
+                labels.push((
+                    metrics::PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                    self.stream.name.to_string(),
+                ));
 
-                let mut message_stream = consumer.messages().await.map_err(|e| {
+                let mut message_stream = self.consumer.messages().await.map_err(|e| {
                     Error::ISB(format!(
                         "Failed to get message stream from Jetstream: {:?}",
                         e
@@ -108,83 +189,79 @@ impl JetstreamReader {
                 loop {
                     tokio::select! {
                         _ = cancel_token.cancelled() => { // should we drain from the stream when token is cancelled?
-                            info!(?stream_name, "Cancellation token received, stopping the reader.");
+                            info!(stream=?self.stream, "Cancellation token received, stopping the reader.");
                             break;
                         }
                         message = message_stream.next() => {
                             let Some(message) = message else {
                                 // stream has been closed because we got none
-                                info!(?stream_name, "Stream has been closed");
+                                info!(stream=?self.stream, "Stream has been closed");
                                 break;
                             };
 
                             let jetstream_message = match message {
                                 Ok(message) => message,
                                 Err(e) => {
-                                    error!(?e, ?stream_name, "Failed to fetch messages from the Jetstream");
-                                    continue;
-                                }
-                            };
-                            let msg_info = match jetstream_message.info() {
-                                Ok(info) => info,
-                                Err(e) => {
-                                    error!(?e, ?stream_name, "Failed to get message info from Jetstream");
+                                    error!(?e, stream=?self.stream, "Failed to fetch messages from the Jetstream");
                                     continue;
                                 }
                             };
 
-                            let mut message: Message = match jetstream_message.payload.clone().try_into() {
-                                Ok(message) => message,
-                                Err(e) => {
-                                    error!(
-                                        ?e, ?stream_name, ?jetstream_message,
-                                        "Failed to parse message payload received from Jetstream",
-                                    );
-                                    continue;
-                                }
+                            let js_message = JSWrappedMessage {
+                                partition_idx: self.stream.partition,
+                                message: jetstream_message.clone(),
+                                vertex_name: get_vertex_name().to_string(),
                             };
 
-                            let offset = Offset::Int(IntOffset::new(
-                                msg_info.stream_sequence,
-                                partition_idx,
-                            ));
+                            let mut message: Message = js_message.try_into().map_err(|e| {
+                                Error::ISB(format!("Failed to convert JetStream message to Message: {:?}", e))
+                            })?;
 
-                            let message_id = MessageID {
-                                vertex_name: get_vertex_name().to_string().into(),
-                                offset: offset.to_string().into(),
-                                index: 0,
-                            };
+                            // we can ignore the wmb messages
+                            if let MessageType::WMB = message.typ {
+                                // ack the message and continue
+                                jetstream_message.ack().await.map_err(|e| {
+                                    Error::ISB(format!("Failed to ack the wmb message: {:?}", e))
+                                })?;
+                                continue;
+                            }
 
-                            message.offset = Some(offset.clone());
-                            message.id = message_id.clone();
+                            if let Some(watermark_handle) = self.watermark_handle.as_ref() {
+                                let watermark = watermark_handle.fetch_watermark(message.offset.clone()).await;
+                                message.watermark = Some(watermark);
+                            }
 
                             // Insert the message into the tracker and wait for the ack to be sent back.
                             let (ack_tx, ack_rx) = oneshot::channel();
-                            tracker_handle.insert(message_id.offset.clone(), ack_tx).await?;
+                            self.tracker_handle.insert(&message, ack_tx).await?;
 
+                            // Reserve a permit before sending the message to the channel.
+                            let permit = Arc::clone(&semaphore).acquire_owned().await.expect("Failed to acquire semaphore permit");
                             tokio::spawn(Self::start_work_in_progress(
+                                message.offset.clone(),
                                 jetstream_message,
                                 ack_rx,
-                                config.wip_ack_interval,
+                                self.config.wip_ack_interval,
+                                permit,
+                                cancel_token.clone(),
                             ));
 
-                            if let Err(e) = messages_tx.send(message).await {
-                                // nak the read message and return
-                                tracker_handle.discard(message_id.offset.clone()).await?;
-                                return Err(Error::ISB(format!(
-                                    "Failed to send message to receiver: {:?}",
-                                    e
-                                )));
-                            }
-
+                            messages_tx.send(message).await.expect("Failed to send message to channel");
                             pipeline_metrics()
                                 .forwarder
                                 .read_total
-                                .get_or_create(labels)
+                                .get_or_create(&labels)
                                 .inc();
                         }
                     }
                 }
+                info!(stream=?self.stream, "Jetstream reader stopped, waiting for ack tasks to complete");
+                // wait for all the permits to be released before returning
+                let _permit = Arc::clone(&semaphore)
+                    .acquire_many_owned(MAX_ACK_PENDING as u32)
+                    .await
+                    .expect("Failed to acquire semaphore permit");
+                info!(stream=?self.stream, "All inflight messages are successfully acked/nacked");
                 Ok(())
             }
         });
@@ -195,21 +272,26 @@ impl JetstreamReader {
     // We will continuously retry if there is an error in acknowledging the message as work-in-progress.
     // If the sender end of the ack_rx channel was dropped before sending a final Ack or Nak (due to some unhandled/unknown failure), we will send a Nak to Jetstream.
     async fn start_work_in_progress(
+        offset: Offset,
         msg: JetstreamMessage,
         mut ack_rx: oneshot::Receiver<ReadAck>,
         tick: Duration,
+        _permit: OwnedSemaphorePermit, // permit to release after acking the offsets.
+        cancel_token: CancellationToken,
     ) {
-        let mut interval = time::interval_at(Instant::now() + tick, tick);
         let start = Instant::now();
+        let mut interval = time::interval_at(start + tick, tick);
 
         loop {
             let wip = async {
                 interval.tick().await;
                 let ack_result = msg.ack_with(AckKind::Progress).await;
                 if let Err(e) = ack_result {
-                    // We expect that the ack in the next iteration will be successful.
-                    // If its some unrecoverable Jetstream error, the fetching messages in the JestreamReader implementation should also fail and cause the system to shut down.
-                    error!(?e, "Failed to send InProgress Ack to Jetstream for message");
+                    error!(
+                        ?e,
+                        ?offset,
+                        "Failed to send InProgress Ack to Jetstream for message"
+                    );
                 }
             };
 
@@ -219,16 +301,19 @@ impl JetstreamReader {
             };
 
             let ack = ack.unwrap_or_else(|e| {
-                error!(?e, "Received error while waiting for Ack oneshot channel");
+                error!(
+                    ?e,
+                    ?offset,
+                    "Received error while waiting for Ack oneshot channel"
+                );
                 ReadAck::Nak
             });
 
             match ack {
                 ReadAck::Ack => {
-                    let ack_result = msg.ack().await;
-                    if let Err(e) = ack_result {
-                        error!(?e, "Failed to send Ack to Jetstream for message");
-                    }
+                    Self::invoke_ack_with_retry(&msg, AckKind::Ack, &cancel_token, offset.clone())
+                        .await;
+
                     pipeline_metrics()
                         .forwarder
                         .ack_time
@@ -243,23 +328,79 @@ impl JetstreamReader {
                     return;
                 }
                 ReadAck::Nak => {
-                    let ack_result = msg.ack_with(AckKind::Nak(None)).await;
-                    if let Err(e) = ack_result {
-                        error!(?e, "Failed to send Nak to Jetstream for message");
-                    }
+                    Self::invoke_ack_with_retry(
+                        &msg,
+                        AckKind::Nak(None),
+                        &cancel_token,
+                        offset.clone(),
+                    )
+                    .await;
+
+                    warn!(?offset, "Sent Nak to Jetstream for message");
                     return;
                 }
             }
         }
     }
+
+    // invokes the ack with infinite retries until the cancellation token is cancelled.
+    async fn invoke_ack_with_retry(
+        msg: &JetstreamMessage,
+        ack_kind: AckKind,
+        cancel_token: &CancellationToken,
+        offset: Offset,
+    ) {
+        let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
+        let _ = Retry::retry(
+            interval,
+            async || {
+                let result = match msg.ack_with(ack_kind).await {
+                    Ok(_) => Ok(()),
+                    Err(e) => {
+                        warn!(?e, "Failed to send {:?} to Jetstream for message", ack_kind);
+                        Err(Error::Connection(format!(
+                            "Failed to send {:?}: {:?}",
+                            ack_kind, e
+                        )))
+                    }
+                };
+                if result.is_err() && cancel_token.is_cancelled() {
+                    error!(
+                        ?result,
+                        ?offset,
+                        "Cancellation token received, stopping the {:?} retry loop",
+                        ack_kind
+                    );
+                    return Ok(());
+                }
+                result
+            },
+            |_: &Error| true,
+        )
+        .await;
+    }
+
+    pub(crate) async fn pending(&mut self) -> Result<Option<usize>> {
+        let x = self.consumer.info().await.map_err(|e| {
+            Error::ISB(format!(
+                "Failed to get consumer info for stream {}: {}",
+                self.stream.name, e
+            ))
+        })?;
+        Ok(Some(x.num_pending as usize + x.num_ack_pending))
+    }
+
+    pub(crate) fn name(&self) -> &'static str {
+        self.stream.name
+    }
 }
 
-impl fmt::Display for JetstreamReader {
+impl fmt::Display for JetStreamReader {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "JetstreamReader {{ stream_name: {}, partition_idx: {}, config: {:?} }}",
-            self.stream_name, self.partition_idx, self.config
+            self.stream, self.stream.partition, self.config
         )
     }
 }
@@ -286,13 +427,13 @@ mod tests {
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
 
-        let stream_name = "test_jetstream_read";
+        let stream = Stream::new("test_jetstream_read", "test", 0);
         // Delete stream if it exists
-        let _ = context.delete_stream(stream_name).await;
+        let _ = context.delete_stream(stream.name).await;
         context
             .get_or_create_stream(stream::Config {
-                name: stream_name.into(),
-                subjects: vec![stream_name.into()],
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
                 max_message_size: 1024,
                 ..Default::default()
             })
@@ -302,27 +443,28 @@ mod tests {
         let _consumer = context
             .create_consumer_on_stream(
                 consumer::Config {
-                    name: Some(stream_name.to_string()),
+                    name: Some(stream.name.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
                 },
-                stream_name,
+                stream.name,
             )
             .await
             .unwrap();
 
         let buf_reader_config = BufferReaderConfig {
-            partitions: 0,
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
         };
-        let js_reader = JetstreamReader::new(
-            stream_name,
-            0,
+        let tracker = TrackerHandle::new(None, None);
+        let js_reader = JetStreamReader::new(
+            "Map".to_string(),
+            stream.clone(),
             context.clone(),
             buf_reader_config,
-            TrackerHandle::new(),
+            tracker.clone(),
             500,
+            None,
         )
         .await
         .unwrap();
@@ -333,23 +475,29 @@ mod tests {
             .await
             .unwrap();
 
+        let mut offsets = vec![];
         for i in 0..10 {
+            let offset = Offset::Int(IntOffset::new(i + 1, 0));
+            offsets.push(offset.clone());
             let message = Message {
+                typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: None,
+                offset,
                 event_time: Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("offset_{}", i).into(),
-                    index: i,
+                    index: i as i32,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             };
             let message_bytes: BytesMut = message.try_into().unwrap();
             context
-                .publish(stream_name, message_bytes.into())
+                .publish(stream.name, message_bytes.into())
                 .await
                 .unwrap();
         }
@@ -365,13 +513,16 @@ mod tests {
         assert_eq!(
             buffer.len(),
             10,
-            "Expected 10 messages from the Jestream reader"
+            "Expected 10 messages from the jetstream reader"
         );
 
+        for offset in offsets {
+            tracker.discard(offset).await.unwrap();
+        }
         reader_cancel_token.cancel();
         js_reader_task.await.unwrap().unwrap();
 
-        context.delete_stream(stream_name).await.unwrap();
+        context.delete_stream(stream.name).await.unwrap();
     }
 
     #[cfg(feature = "nats-tests")]
@@ -381,15 +532,15 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new();
+        let tracker_handle = TrackerHandle::new(None, None);
 
-        let stream_name = "test_ack";
+        let js_stream = Stream::new("test-ack", "test", 0);
         // Delete stream if it exists
-        let _ = context.delete_stream(stream_name).await;
+        let _ = context.delete_stream(js_stream.name).await;
         context
             .get_or_create_stream(stream::Config {
-                name: stream_name.into(),
-                subjects: vec![stream_name.into()],
+                name: js_stream.to_string(),
+                subjects: vec![js_stream.to_string()],
                 max_message_size: 1024,
                 ..Default::default()
             })
@@ -399,27 +550,27 @@ mod tests {
         let _consumer = context
             .create_consumer_on_stream(
                 consumer::Config {
-                    name: Some(stream_name.to_string()),
+                    name: Some(js_stream.to_string()),
                     ack_policy: consumer::AckPolicy::Explicit,
                     ..Default::default()
                 },
-                stream_name,
+                js_stream.name.to_string(),
             )
             .await
             .unwrap();
 
         let buf_reader_config = BufferReaderConfig {
-            partitions: 0,
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
         };
-        let js_reader = JetstreamReader::new(
-            stream_name,
-            0,
+        let js_reader = JetStreamReader::new(
+            "Map".to_string(),
+            js_stream.clone(),
             context.clone(),
             buf_reader_config,
             tracker_handle.clone(),
             1,
+            None,
         )
         .await
         .unwrap();
@@ -434,22 +585,25 @@ mod tests {
         // write 5 messages
         for i in 0..5 {
             let message = Message {
+                typ: Default::default(),
                 keys: Arc::from(vec![format!("key_{}", i)]),
                 tags: None,
                 value: format!("message {}", i).as_bytes().to_vec().into(),
-                offset: None,
+                offset: Offset::Int(IntOffset::new(i + 1, 0)),
                 event_time: Utc::now(),
+                watermark: None,
                 id: MessageID {
                     vertex_name: "vertex".to_string().into(),
                     offset: format!("{}-0", i + 1).into(),
-                    index: i,
+                    index: i as i32,
                 },
                 headers: HashMap::new(),
+                metadata: None,
             };
-            offsets.push(message.id.offset.clone());
+            offsets.push(message.offset.clone());
             let message_bytes: BytesMut = message.try_into().unwrap();
             context
-                .publish(stream_name, message_bytes.into())
+                .publish(js_stream.name, message_bytes.into())
                 .await
                 .unwrap();
         }
@@ -475,7 +629,7 @@ mod tests {
         .expect("Tracker is not empty after 1 second");
 
         let mut consumer: PullConsumer = context
-            .get_consumer_from_stream(stream_name, stream_name)
+            .get_consumer_from_stream(js_stream.name, js_stream.name)
             .await
             .unwrap();
 
@@ -487,6 +641,30 @@ mod tests {
         reader_cancel_token.cancel();
         js_reader_task.await.unwrap().unwrap();
 
-        context.delete_stream(stream_name).await.unwrap();
+        context.delete_stream(js_stream.name).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_child_tasks_not_aborted() {
+        use tokio::task;
+        use tokio::time::{Duration, sleep};
+
+        // Parent task
+        let parent_task = task::spawn(async {
+            // Spawn a child task
+            task::spawn(async {
+                for _ in 1..=5 {
+                    sleep(Duration::from_secs(1)).await;
+                }
+            });
+
+            // Parent task logic
+            sleep(Duration::from_secs(2)).await;
+        });
+
+        drop(parent_task);
+
+        // Give some time to observe the child task behavior
+        sleep(Duration::from_secs(8)).await;
     }
 }

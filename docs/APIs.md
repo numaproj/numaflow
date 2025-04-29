@@ -514,6 +514,27 @@ UDSink sink is used to write the data to the user-defined sink.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>serve</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServeSink"> ServeSink </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Serve sink is used to return results when working with a
+ServingPipeline.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -865,6 +886,77 @@ The strategy to use to replace existing pods with new ones.
 
 </table>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.AccumulatorWindow">
+
+AccumulatorWindow
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Window">Window</a>)
+</p>
+
+<p>
+
+<p>
+
+AccumulatorWindow describes a special kind of SessionWindow (similar to
+Global Window) where output should always have monotonically increasing
+WM but it can be manipulated through event-time by reordering the
+messages. NOTE: Quite powerful, should not be abused; it can cause
+stalling of pipelines and leaks.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>timeout</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+
+<td>
+
+<p>
+
+Timeout is the duration of inactivity after which the state of the
+accumulator is removed.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.Authorization">
 
 Authorization
@@ -874,7 +966,7 @@ Authorization
 
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.HTTPSource">HTTPSource</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.ServingSource">ServingSource</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.ServingSpec">ServingSpec</a>)
 </p>
 
 <p>
@@ -1151,6 +1243,7 @@ BufferServiceConfig
 <p>
 
 (<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.GetServingPipelineResourceReq">GetServingPipelineResourceReq</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.InterStepBufferServiceStatus">InterStepBufferServiceStatus</a>)
 </p>
 
@@ -1420,6 +1513,7 @@ Container
 <p>
 
 (<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServingStore">ServingStore</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.SideInput">SideInput</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.UDF">UDF</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.UDSink">UDSink</a>,
@@ -1661,6 +1755,7 @@ ContainerTemplate
 <a href="#numaflow.numaproj.io/v1alpha1.JobTemplate">JobTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSpec">MonoVertexSpec</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.ServingSpec">ServingSpec</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.SideInputsManagerTemplate">SideInputsManagerTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.VertexTemplate">VertexTemplate</a>)
 </p>
@@ -3538,6 +3633,114 @@ Description
 <td>
 
 <code>HealthConfigMapName</code></br> <em> string </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>DefaultResources</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#resourcerequirements-v1-core">
+Kubernetes core/v1.ResourceRequirements </a> </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.GetServingPipelineResourceReq">
+
+GetServingPipelineResourceReq
+</h3>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>ISBSvcConfig</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.BufferServiceConfig">
+BufferServiceConfig </a> </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>Image</code></br> <em> string </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>PullPolicy</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#pullpolicy-v1-core">
+Kubernetes core/v1.PullPolicy </a> </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>Env</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#envvar-v1-core">
+\[\]Kubernetes core/v1.EnvVar </a> </em>
 </td>
 
 <td>
@@ -6064,7 +6267,7 @@ MonoVertexPhase </a> </em>
 <em>(Optional)</em>
 <p>
 
-DesiredPhase used to bring the pipeline from current phase to desired
+DesiredPhase used to bring the MonoVertex from current phase to desired
 phase
 </p>
 
@@ -7871,7 +8074,8 @@ PipelineSpec
 
 (<em>Appears on:</em>
 <a href="#numaflow.numaproj.io/v1alpha1.GetVertexPodSpecReq">GetVertexPodSpecReq</a>,
-<a href="#numaflow.numaproj.io/v1alpha1.Pipeline">Pipeline</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.Pipeline">Pipeline</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.ServingPipelineSpec">ServingPipelineSpec</a>)
 </p>
 
 <p>
@@ -9304,6 +9508,125 @@ SASLSCRAMSHA512 contains the sasl plain config
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>oauth</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SASLOAuth"> SASLOAuth </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+OAuth contains the oauth config
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.SASLOAuth">
+
+SASLOAuth
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.SASL">SASL</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>clientID</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
+</td>
+
+<td>
+
+<p>
+
+ClientID refers to the secret that contains the client id
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>clientSecret</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
+</td>
+
+<td>
+
+<p>
+
+ClientSecret refers to the secret that contains the client secret
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>tokenEndpoint</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+TokenEndpoint refers to the token endpoint
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -9722,6 +10045,352 @@ too aggressive scaling down operations
 
 </table>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.ServeSink">
+
+ServeSink
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractSink">AbstractSink</a>)
+</p>
+
+<p>
+
+</p>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.ServingPipeline">
+
+ServingPipeline
+</h3>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>metadata</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#objectmeta-v1-meta">
+Kubernetes meta/v1.ObjectMeta </a> </em>
+</td>
+
+<td>
+
+Refer to the Kubernetes API documentation for the fields of the
+<code>metadata</code> field.
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>spec</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServingPipelineSpec">
+ServingPipelineSpec </a> </em>
+</td>
+
+<td>
+
+<br/> <br/>
+<table>
+
+<tr>
+
+<td>
+
+<code>serving</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServingSpec"> ServingSpec </a>
+</em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>pipeline</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec"> PipelineSpec </a>
+</em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+</table>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>status</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServingPipelineStatus">
+ServingPipelineStatus </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.ServingPipelinePhase">
+
+ServingPipelinePhase (<code>string</code> alias)
+</p>
+
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServingPipelineStatus">ServingPipelineStatus</a>)
+</p>
+
+<p>
+
+</p>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.ServingPipelineSpec">
+
+ServingPipelineSpec
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServingPipeline">ServingPipeline</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>serving</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServingSpec"> ServingSpec </a>
+</em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>pipeline</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec"> PipelineSpec </a>
+</em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.ServingPipelineStatus">
+
+ServingPipelineStatus
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServingPipeline">ServingPipeline</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>Status</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Status"> Status </a> </em>
+</td>
+
+<td>
+
+<p>
+
+(Members of <code>Status</code> are embedded into this type.)
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>phase</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServingPipelinePhase">
+ServingPipelinePhase </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>message</code></br> <em> string </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>lastUpdated</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#time-v1-meta">
+Kubernetes meta/v1.Time </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>observedGeneration</code></br> <em> int64 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The generation observed by the ServingPipeline controller.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.ServingSource">
 
 ServingSource
@@ -9737,8 +10406,24 @@ ServingSource
 
 <p>
 
-ServingSource is the HTTP endpoint for Numaflow.
+ServingSource is the source vertex for ServingPipeline and should be
+used only with ServingPipeline.
 </p>
+
+</p>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.ServingSpec">
+
+ServingSpec
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServingPipelineSpec">ServingPipelineSpec</a>)
+</p>
+
+<p>
 
 </p>
 
@@ -9821,6 +10506,25 @@ The header key from which the message id will be extracted
 
 <td>
 
+<code>requestTimeoutSeconds</code></br> <em> uint32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Request timeout in seconds. Default value is 120 seconds.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>store</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.ServingStore"> ServingStore </a>
 </em>
@@ -9828,9 +10532,45 @@ The header key from which the message id will be extracted
 
 <td>
 
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>containerTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.ContainerTemplate">
+ContainerTemplate </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
 <p>
 
-Persistent store for the callbacks for serving and tracking
+Container template for the serving container.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>replicas</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Initial replicas of the serving server deployment.
 </p>
 
 </td>
@@ -9849,15 +10589,14 @@ ServingStore
 <p>
 
 (<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.ServingSource">ServingSource</a>)
+<a href="#numaflow.numaproj.io/v1alpha1.ServingSpec">ServingSpec</a>)
 </p>
 
 <p>
 
 <p>
 
-ServingStore to track and store data and metadata for tracking and
-serving.
+ServingStore defines information of a Serving Store used in a pipeline
 </p>
 
 </p>
@@ -9888,36 +10627,11 @@ Description
 
 <td>
 
-<code>url</code></br> <em> string </em>
+<code>container</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Container"> Container </a> </em>
 </td>
 
 <td>
-
-<p>
-
-URL of the persistent store to write the callbacks
-</p>
-
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
-<code>ttl</code></br> <em>
-<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
-Kubernetes meta/v1.Duration </a> </em>
-</td>
-
-<td>
-
-<em>(Optional)</em>
-<p>
-
-TTL for the data in the store and tracker
-</p>
 
 </td>
 
@@ -10687,6 +11401,7 @@ Status
 <a href="#numaflow.numaproj.io/v1alpha1.InterStepBufferServiceStatus">InterStepBufferServiceStatus</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.MonoVertexStatus">MonoVertexStatus</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.PipelineStatus">PipelineStatus</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.ServingPipelineStatus">ServingPipelineStatus</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.VertexStatus">VertexStatus</a>)
 </p>
 
@@ -11721,6 +12436,27 @@ from the pipeline watermark settings.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>lifecycle</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.VertexLifecycle">
+VertexLifecycle </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Lifecycle defines the Lifecycle properties of a vertex
+</p>
+
+</td>
+
+</tr>
+
 </table>
 
 </td>
@@ -11820,6 +12556,69 @@ Description
 </td>
 
 <td>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.VertexLifecycle">
+
+VertexLifecycle
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.VertexSpec">VertexSpec</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>desiredPhase</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.VertexPhase"> VertexPhase </a>
+</em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+DesiredPhase used to bring the vertex from current phase to desired
+phase
+</p>
 
 </td>
 
@@ -11964,6 +12763,7 @@ VertexPhase (<code>string</code> alias)
 <p>
 
 (<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.VertexLifecycle">VertexLifecycle</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.VertexStatus">VertexStatus</a>)
 </p>
 
@@ -12116,6 +12916,27 @@ Description
 
 Watermark indicates watermark progression in the vertex, it’s populated
 from the pipeline watermark settings.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>lifecycle</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.VertexLifecycle">
+VertexLifecycle </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Lifecycle defines the Lifecycle properties of a vertex
 </p>
 
 </td>
@@ -12726,6 +13547,22 @@ Description
 <code>session</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.SessionWindow"> SessionWindow
 </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>accumulator</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.AccumulatorWindow">
+AccumulatorWindow </a> </em>
 </td>
 
 <td>

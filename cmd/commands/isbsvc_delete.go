@@ -33,11 +33,11 @@ import (
 
 func NewISBSvcDeleteCommand() *cobra.Command {
 	var (
-		isbSvcType           string
-		buffers              []string
-		buckets              []string
-		sideInputsStore      string
-		servingSourceStreams []string
+		isbSvcType         string
+		buffers            []string
+		buckets            []string
+		sideInputsStore    string
+		servingSourceStore string
 	)
 
 	command := &cobra.Command{
@@ -65,7 +65,7 @@ func NewISBSvcDeleteCommand() *cobra.Command {
 				}
 				defer client.Close()
 
-				isbsClient, err = isbsvc.NewISBJetStreamSvc(pipelineName, client)
+				isbsClient, err = isbsvc.NewISBJetStreamSvc(client)
 				if err != nil {
 					logger.Errorw("Failed to get a ISB Service client.", zap.Error(err))
 					return err
@@ -74,7 +74,7 @@ func NewISBSvcDeleteCommand() *cobra.Command {
 				cmd.HelpFunc()(cmd, args)
 				return fmt.Errorf("unsupported isb service type %q", isbSvcType)
 			}
-			if err = isbsClient.DeleteBuffersAndBuckets(ctx, buffers, buckets, sideInputsStore, servingSourceStreams); err != nil {
+			if err = isbsClient.DeleteBuffersAndBuckets(ctx, buffers, buckets, sideInputsStore, servingSourceStore); err != nil {
 				logger.Errorw("Failed on buffers, buckets and side inputs store deletion.", zap.Error(err))
 				return err
 			}
@@ -86,6 +86,6 @@ func NewISBSvcDeleteCommand() *cobra.Command {
 	command.Flags().StringSliceVar(&buffers, "buffers", []string{}, "Buffers to delete") // --buffers=a,b, --buffers=c
 	command.Flags().StringSliceVar(&buckets, "buckets", []string{}, "Buckets to delete") // --buckets=xxa,xxb --buckets=xxc	return command
 	command.Flags().StringVar(&sideInputsStore, "side-inputs-store", "", "Name of the side inputs store")
-	command.Flags().StringSliceVar(&servingSourceStreams, "serving-source-streams", []string{}, "Serving source streams to delete") // --serving-source-streams=a,b, --serving-source-streams=c
+	command.Flags().StringVar(&servingSourceStore, "serving-store", "", "Serving source store to delete") // --serving-store=a
 	return command
 }

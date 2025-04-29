@@ -20,8 +20,6 @@ limitations under the License.
 pub struct GetContainerReq {
     #[serde(rename = "env")]
     pub env: Vec<k8s_openapi::api::core::v1::EnvVar>,
-    #[serde(rename = "executeRustBinary")]
-    pub execute_rust_binary: bool,
     #[serde(rename = "image")]
     pub image: String,
     #[serde(rename = "imagePullPolicy")]
@@ -37,7 +35,6 @@ pub struct GetContainerReq {
 impl GetContainerReq {
     pub fn new(
         env: Vec<k8s_openapi::api::core::v1::EnvVar>,
-        execute_rust_binary: bool,
         image: String,
         image_pull_policy: String,
         isb_svc_type: String,
@@ -46,7 +43,6 @@ impl GetContainerReq {
     ) -> GetContainerReq {
         GetContainerReq {
             env,
-            execute_rust_binary,
             image,
             image_pull_policy,
             isb_svc_type,

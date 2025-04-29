@@ -1,16 +1,20 @@
 [package]
 name = "numaflow"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+
+[[bin]]
+name = "entrypoint"
+path = "src/bin/entrypoint.rs"
 
 [lints]
 workspace = true
 
 [dependencies]
-servesink.workspace = true
 serving.workspace = true
 numaflow-core.workspace = true
 numaflow-models.workspace = true
+numaflow-monitor.workspace = true
 backoff.workspace = true
 tokio.workspace = true
 tracing.workspace = true

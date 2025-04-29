@@ -19,13 +19,13 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	numaflowv1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	apisnumaflowv1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	versioned "github.com/numaproj/numaflow/pkg/client/clientset/versioned"
 	internalinterfaces "github.com/numaproj/numaflow/pkg/client/informers/externalversions/internalinterfaces"
-	v1alpha1 "github.com/numaproj/numaflow/pkg/client/listers/numaflow/v1alpha1"
+	numaflowv1alpha1 "github.com/numaproj/numaflow/pkg/client/listers/numaflow/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -36,7 +36,7 @@ import (
 // Vertices.
 type VertexInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha1.VertexLister
+	Lister() numaflowv1alpha1.VertexLister
 }
 
 type vertexInformer struct {
@@ -71,7 +71,7 @@ func NewFilteredVertexInformer(client versioned.Interface, namespace string, res
 				return client.NumaflowV1alpha1().Vertices(namespace).Watch(context.TODO(), options)
 			},
 		},
-		&numaflowv1alpha1.Vertex{},
+		&apisnumaflowv1alpha1.Vertex{},
 		resyncPeriod,
 		indexers,
 	)
@@ -82,9 +82,9 @@ func (f *vertexInformer) defaultInformer(client versioned.Interface, resyncPerio
 }
 
 func (f *vertexInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&numaflowv1alpha1.Vertex{}, f.defaultInformer)
+	return f.factory.InformerFor(&apisnumaflowv1alpha1.Vertex{}, f.defaultInformer)
 }
 
-func (f *vertexInformer) Lister() v1alpha1.VertexLister {
-	return v1alpha1.NewVertexLister(f.Informer().GetIndexer())
+func (f *vertexInformer) Lister() numaflowv1alpha1.VertexLister {
+	return numaflowv1alpha1.NewVertexLister(f.Informer().GetIndexer())
 }

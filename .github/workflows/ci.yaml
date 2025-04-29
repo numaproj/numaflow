@@ -9,7 +9,7 @@ on:
 jobs:
   ui:
     name: UI
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 6
     steps:
       - name: Checkout code
@@ -30,7 +30,7 @@ jobs:
         run: git diff --exit-code
   codegen:
     name: Codegen
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Checkout code
@@ -43,7 +43,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.24"
       - name: Add bins to PATH
         run: |
           echo /home/runner/go/bin >> $GITHUB_PATH
@@ -59,7 +59,7 @@ jobs:
 
   unit-tests:
     name: Unit Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     services:
       redis:
@@ -71,21 +71,18 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-      nats:
-        image: "bitnami/nats:latest"
-        ports:
-          - 4222:4222
-        env:
-          NATS_EXTRA_ARGS: -js
 
     steps:
+      - name: Start JetStream
+        run: docker run -d -p 4222:4222 nats:latest -js
+
       - name: Start Pulsar standalone container
         run: docker run -d -p 6650:6650 -p 8080:8080 apachepulsar/pulsar:4.0.0 bin/pulsar standalone
 
       - name: Set up Go 1.x
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.24"
         id: go
 
       - name: Check out code
@@ -129,7 +126,7 @@ jobs:
       - name: Check Rust formatting
         working-directory: ./rust
         run: |
-            cargo fmt -- --check
+          cargo fmt -- --check
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4
@@ -140,7 +137,7 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
       GOPATH: /home/runner/go
@@ -149,7 +146,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.24"
       - name: Restore Go build cache
         uses: actions/cache@v4
         with:
@@ -175,27 +172,41 @@ jobs:
           echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
           echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
       - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.5
+        uses: mozilla-actions/sccache-action@v0.0.9
       - name: Install dependencies
-        run: sudo apt-get install -y protobuf-compiler
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - name: Print Protoc version
         run: protoc --version
       - name: Build binary
         run: RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target x86_64-unknown-linux-gnu
-      - name: Rename binary
-        run: cp -pv target/x86_64-unknown-linux-gnu/release/numaflow ./numaflow-rs-linux-amd64
-      - name: List files
-        run: pwd && ls -al && file ./numaflow-rs-linux-amd64
+      - name: Rename binaries
+        run: |
+          cp -pv target/x86_64-unknown-linux-gnu/release/numaflow ./numaflow-rs-linux-amd64
+          cp -pv target/x86_64-unknown-linux-gnu/release/entrypoint ./entrypoint-linux-amd64
+      - name: Verify numaflow binary is Statically Linked
+        run: |
+          file ./numaflow-rs-linux-amd64
+          file ./numaflow-rs-linux-amd64 | grep -q 'static-pie linked'
+      - name: Verify entrypoint binary is Statically Linked
+        run: |
+          file ./entrypoint-linux-amd64
+          file ./entrypoint-linux-amd64 | grep -q 'static-pie linked'
       - name: Upload numaflow binary
         uses: actions/upload-artifact@v4
         with:
           name: numaflow-rs-linux-amd64
           path: rust/numaflow-rs-linux-amd64
           if-no-files-found: error
+      - name: Upload entrypoint binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: entrypoint-linux-amd64
+          path: rust/entrypoint-linux-amd64
+          if-no-files-found: error
 
   e2e-tests:
     name: E2E Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [build-rust-amd64]
     timeout-minutes: 20
     strategy:
@@ -218,6 +229,7 @@ jobs:
             idle-source-e2e,
             monovertex-e2e,
             builtin-source-e2e,
+            serving-e2e,
           ]
         include:
           - driver: redis
@@ -238,7 +250,7 @@ jobs:
       - name: Setup Golang
         uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.24"
       - name: Add bins to PATH
         run: |
           echo /home/runner/go/bin >> $GITHUB_PATH
@@ -256,6 +268,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: numaflow-rs-linux-amd64
+      - name: Download Entrypoint amd64 binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: entrypoint-linux-amd64
       - name: Install k3d
         run: curl -sfL https://raw.githubusercontent.com/rancher/k3d/main/install.sh | bash &
       - name: Create a cluster

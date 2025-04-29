@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
-use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use numaflow_models::models::PipelineSpec;
 use serde::{Deserialize, Serialize};
 
@@ -64,6 +64,7 @@ pub(crate) struct Edge {
 
 /// DCG (directed compute graph) of the pipeline with minimal information build using vertices and edges
 /// from the pipeline spec
+/// A monovertex is represented as a single source vertex with zero edges.
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct PipelineDCG {
     pub(crate) vertices: Vec<Vertex>,

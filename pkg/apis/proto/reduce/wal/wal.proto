@@ -1,0 +1,20 @@
+syntax = "proto3";
+import "google/protobuf/timestamp.proto";
+
+// stores all the proto definitions that are required for the WAL
+package wal;
+
+// GCEvent is the event that is persisted in the WAL when a window is garbage collected
+message GCEvent {
+  // start_time of the window
+  google.protobuf.Timestamp start_time = 1;
+  // end time of the window
+  google.protobuf.Timestamp end_time = 2;
+  // keys of the window, it will be empty for aligned windows
+  repeated string keys = 3;
+}
+
+message Footer {
+  // the latest event time in the current Segment
+  google.protobuf.Timestamp latest_event_time = 1;
+}

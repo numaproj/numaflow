@@ -2260,6 +2260,8 @@ spec:
                           runAsUser:
                             format: int64
                             type: integer
+                          seLinuxChangePolicy:
+                            type: string
                           seLinuxOptions:
                             properties:
                               level:
@@ -3108,6 +3110,8 @@ spec:
                           runAsUser:
                             format: int64
                             type: integer
+                          seLinuxChangePolicy:
+                            type: string
                           seLinuxOptions:
                             properties:
                               level:
@@ -4193,6 +4197,8 @@ spec:
                           runAsUser:
                             format: int64
                             type: integer
+                          seLinuxChangePolicy:
+                            type: string
                           seLinuxOptions:
                             properties:
                               level:
@@ -5275,6 +5281,8 @@ spec:
                           runAsUser:
                             format: int64
                             type: integer
+                          seLinuxChangePolicy:
+                            type: string
                           seLinuxOptions:
                             properties:
                               level:
@@ -7096,6 +7104,8 @@ spec:
                         runAsUser:
                           format: int64
                           type: integer
+                        seLinuxChangePolicy:
+                          type: string
                         seLinuxOptions:
                           properties:
                             level:
@@ -8158,6 +8168,41 @@ spec:
                                       type: object
                                     mechanism:
                                       type: string
+                                    oauth:
+                                      properties:
+                                        clientID:
+                                          properties:
+                                            key:
+                                              type: string
+                                            name:
+                                              default: ""
+                                              type: string
+                                            optional:
+                                              type: boolean
+                                          required:
+                                          - key
+                                          type: object
+                                          x-kubernetes-map-type: atomic
+                                        clientSecret:
+                                          properties:
+                                            key:
+                                              type: string
+                                            name:
+                                              default: ""
+                                              type: string
+                                            optional:
+                                              type: boolean
+                                          required:
+                                          - key
+                                          type: object
+                                          x-kubernetes-map-type: atomic
+                                        tokenEndpoint:
+                                          type: string
+                                      required:
+                                      - clientID
+                                      - clientSecret
+                                      - tokenEndpoint
+                                      type: object
                                     plain:
                                       properties:
                                         handshake:
@@ -8315,6 +8360,8 @@ spec:
                               - topic
                               type: object
                             log:
+                              type: object
+                            serve:
                               type: object
                             udsink:
                               properties:
@@ -8693,6 +8740,41 @@ spec:
                                   type: object
                                 mechanism:
                                   type: string
+                                oauth:
+                                  properties:
+                                    clientID:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          default: ""
+                                          type: string
+                                        optional:
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                    clientSecret:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          default: ""
+                                          type: string
+                                        optional:
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                    tokenEndpoint:
+                                      type: string
+                                  required:
+                                  - clientID
+                                  - clientSecret
+                                  - tokenEndpoint
+                                  type: object
                                 plain:
                                   properties:
                                     handshake:
@@ -8865,6 +8947,8 @@ spec:
                             onFailure:
                               default: retry
                               type: string
+                          type: object
+                        serve:
                           type: object
                         udsink:
                           properties:
@@ -9407,6 +9491,41 @@ spec:
                                   type: object
                                 mechanism:
                                   type: string
+                                oauth:
+                                  properties:
+                                    clientID:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          default: ""
+                                          type: string
+                                        optional:
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                    clientSecret:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          default: ""
+                                          type: string
+                                        optional:
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                    tokenEndpoint:
+                                      type: string
+                                  required:
+                                  - clientID
+                                  - clientSecret
+                                  - tokenEndpoint
+                                  type: object
                                 plain:
                                   properties:
                                     handshake:
@@ -9712,39 +9831,6 @@ spec:
                           - topic
                           type: object
                         serving:
-                          properties:
-                            auth:
-                              properties:
-                                token:
-                                  properties:
-                                    key:
-                                      type: string
-                                    name:
-                                      default: ""
-                                      type: string
-                                    optional:
-                                      type: boolean
-                                  required:
-                                  - key
-                                  type: object
-                                  x-kubernetes-map-type: atomic
-                              type: object
-                            msgIDHeaderKey:
-                              type: string
-                            service:
-                              type: boolean
-                            store:
-                              properties:
-                                ttl:
-                                  type: string
-                                url:
-                                  type: string
-                              required:
-                              - url
-                              type: object
-                          required:
-                          - msgIDHeaderKey
-                          - store
                           type: object
                         transformer:
                           properties:
@@ -10726,6 +10812,11 @@ spec:
                               type: object
                             window:
                               properties:
+                                accumulator:
+                                  properties:
+                                    timeout:
+                                      type: string
+                                  type: object
                                 fixed:
                                   properties:
                                     length:

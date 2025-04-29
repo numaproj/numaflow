@@ -1,16 +1,18 @@
+use bytes::Bytes;
+use numaflow_monitor::runtime;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::{Handshake, SinkRequest, SinkResponse, TransmissionStatus};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
-use tonic::{Request, Streaming};
+use tonic::{Code, Request, Status, Streaming};
 use tracing::error;
 
+use crate::Error;
+use crate::Result;
 use crate::message::Message;
 use crate::shared::grpc::prost_timestamp_from_utc;
 use crate::sink::{ResponseFromSink, Sink};
-use crate::Error;
-use crate::Result;
 
 const DEFAULT_CHANNEL_SIZE: usize = 1000;
 
@@ -27,8 +29,8 @@ impl From<Message> for SinkRequest {
             request: Some(numaflow_pb::clients::sink::sink_request::Request {
                 keys: message.keys.to_vec(),
                 value: message.value.to_vec(),
-                event_time: prost_timestamp_from_utc(message.event_time),
-                watermark: None,
+                event_time: Some(prost_timestamp_from_utc(message.event_time)),
+                watermark: message.watermark.map(prost_timestamp_from_utc),
                 id: message.id.to_string(),
                 headers: message.headers,
             }),
@@ -56,14 +58,20 @@ impl UserDefinedSink {
 
         let mut resp_stream = client
             .sink_fn(Request::new(sink_stream))
-            .await?
+            .await
+            .map_err(Error::Grpc)?
             .into_inner();
 
         // First response from the server will be the handshake response. We need to check if the
         // server has accepted the handshake.
-        let handshake_response = resp_stream.message().await?.ok_or(Error::Sink(
-            "failed to receive handshake response".to_string(),
-        ))?;
+        let handshake_response =
+            resp_stream
+                .message()
+                .await
+                .map_err(Error::Grpc)?
+                .ok_or(Error::Sink(
+                    "failed to receive handshake response".to_string(),
+                ))?;
 
         // Handshake cannot be None during the initial phase, and it has to set `sot` to true.
         if handshake_response.handshake.map_or(true, |h| !h.sot) {
@@ -112,12 +120,25 @@ impl Sink for UserDefinedSink {
             let response = self
                 .resp_stream
                 .message()
-                .await?
+                .await
+                .map_err(Error::Grpc)?
                 .ok_or(Error::Sink("failed to receive response".to_string()))?;
 
-            if response.status.map_or(false, |s| s.eot) {
+            if response.status.is_some_and(|s| s.eot) {
                 if responses.len() != num_requests {
-                    error!("received EOT message before all responses are received, we will wait indefinitely for the remaining responses");
+                    error!(
+                        "received EOT message before all responses are received, we will wait indefinitely for the remaining responses"
+                    );
+                    // persist the error for debugging
+                    runtime::persist_application_error(Status::with_details(
+                        Code::Internal,
+                        "UDF_PARTIAL_RESPONSE(udsink)",
+                        Bytes::from_static(
+                            b"received End-Of-Transmission (EOT) before all responses are received from the ud-sink,\
+                            we will wait indefinitely for the remaining responses. This indicates that there is a bug\
+                            in the user-code. Please check whether you are accidentally skipping the messages.",
+                        ),
+                    ));
                 } else {
                     break;
                 }
@@ -131,7 +152,6 @@ impl Sink for UserDefinedSink {
                     .collect::<Vec<ResponseFromSink>>(),
             );
         }
-
         Ok(responses)
     }
 }
@@ -147,7 +167,7 @@ mod tests {
 
     use super::*;
     use crate::error::Result;
-    use crate::message::{Message, MessageID};
+    use crate::message::{IntOffset, Message, MessageID, Offset};
     use crate::shared::grpc::create_rpc_channel;
     use crate::sink::user_defined::UserDefinedSink;
 
@@ -201,10 +221,11 @@ mod tests {
 
         let messages = vec![
             Message {
+                typ: Default::default(),
                 keys: Arc::from(vec![]),
                 tags: None,
                 value: b"Hello, World!".to_vec().into(),
-                offset: None,
+                offset: Offset::Int(IntOffset::new(0, 0)),
                 event_time: Utc::now(),
                 headers: Default::default(),
                 id: MessageID {
@@ -212,12 +233,15 @@ mod tests {
                     offset: "1".to_string().into(),
                     index: 0,
                 },
+                watermark: None,
+                metadata: None,
             },
             Message {
+                typ: Default::default(),
                 keys: Arc::from(vec![]),
                 tags: None,
                 value: b"Hello, World!".to_vec().into(),
-                offset: None,
+                offset: Offset::Int(IntOffset::new(0, 0)),
                 event_time: Utc::now(),
                 headers: Default::default(),
                 id: MessageID {
@@ -225,6 +249,8 @@ mod tests {
                     offset: "2".to_string().into(),
                     index: 1,
                 },
+                watermark: None,
+                metadata: None,
             },
         ];
 

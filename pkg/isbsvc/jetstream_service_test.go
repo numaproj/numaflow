@@ -23,21 +23,21 @@ func TestJetstreamSvc_CreationDeletionValidation(t *testing.T) {
 	client := nats2.NewTestClient(t, s.ClientURL())
 	defer client.Close()
 
-	isbSvc, err := NewISBJetStreamSvc("testPipeline", client)
+	isbSvc, err := NewISBJetStreamSvc(client)
 	assert.NoError(t, err)
 
 	buffers := []string{"test-buffer-1", "test-buffer-2"}
 	buckets := []string{"test-bucket-1", "test-bucket-2"}
-	servingStreams := []string{"test-serving-stream-1", "test-serving-stream-2"}
+	servingStreamStore := "test-serving-stream-1"
 	sideInputStore := "test-side-input-store"
 
-	err = isbSvc.CreateBuffersAndBuckets(ctx, buffers, buckets, sideInputStore, servingStreams)
+	err = isbSvc.CreateBuffersAndBuckets(ctx, buffers, buckets, sideInputStore, servingStreamStore)
 	assert.NoError(t, err)
 
-	err = isbSvc.ValidateBuffersAndBuckets(ctx, buffers, buckets, sideInputStore, servingStreams)
+	err = isbSvc.ValidateBuffersAndBuckets(ctx, buffers, buckets, sideInputStore, servingStreamStore)
 	assert.NoError(t, err)
 
-	err = isbSvc.DeleteBuffersAndBuckets(ctx, buffers, buckets, sideInputStore, servingStreams)
+	err = isbSvc.DeleteBuffersAndBuckets(ctx, buffers, buckets, sideInputStore, servingStreamStore)
 	assert.NoError(t, err)
 }
 
@@ -68,7 +68,7 @@ func TestJetstreamSvc_GetBufferInfo(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	isbSvc, err := NewISBJetStreamSvc("testPipeline", client)
+	isbSvc, err := NewISBJetStreamSvc(client)
 	assert.NoError(t, err)
 
 	buffer := "test-buffer"
@@ -92,13 +92,13 @@ func TestJetstreamSvc_CreateWatermarkStores(t *testing.T) {
 	client := nats2.NewTestClient(t, s.ClientURL())
 	defer client.Close()
 
-	isbSvc, err := NewISBJetStreamSvc("testPipeline", client)
+	isbSvc, err := NewISBJetStreamSvc(client)
 	assert.NoError(t, err)
 
 	bucketName := "test-bucket"
 	partitions := 3
 
-	err = isbSvc.CreateBuffersAndBuckets(ctx, []string{"test-buffer"}, []string{"test-bucket"}, "test-side-input-store", []string{"test-serving-stream"})
+	err = isbSvc.CreateBuffersAndBuckets(ctx, []string{"test-buffer"}, []string{"test-bucket"}, "test-side-input-store", "test-serving-store")
 	assert.NoError(t, err)
 
 	_, err = isbSvc.CreateWatermarkStores(ctx, bucketName, partitions, false)

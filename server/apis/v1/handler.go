@@ -25,6 +25,7 @@ import (
 	"math"
 	"net/http"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -924,10 +925,11 @@ func (h *handler) PodLogs(c *gin.Context) {
 	// parse the query parameters
 	tailLines := h.parseTailLines(c.Query("tailLines"))
 	logOptions := &corev1.PodLogOptions{
-		Container: c.Query("container"),
-		Follow:    c.Query("follow") == "true",
-		TailLines: tailLines,
-		Previous:  c.Query("previous") == "true",
+		Container:  c.Query("container"),
+		Follow:     c.Query("follow") == "true",
+		TailLines:  tailLines,
+		Timestamps: true,
+		Previous:   c.Query("previous") == "true",
 	}
 
 	stream, err := h.kubeClient.CoreV1().Pods(ns).GetLogs(pod, logOptions).Stream(c)
@@ -1260,6 +1262,44 @@ func (h *handler) GetMonoVertexHealth(c *gin.Context) {
 	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, response))
 }
 
+// GetVertexErrors is used to provide the errors of a given vertex
+func (h *handler) GetVertexErrors(c *gin.Context) {
+	ns, pipeline, vertex := c.Param("namespace"), c.Param("pipeline"), c.Param("vertex")
+
+	client, err := h.getPipelineDaemonClient(ns, pipeline)
+	if err != nil || client == nil {
+		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline, err.Error()))
+		return
+	}
+
+	errors, err := client.GetVertexErrors(c, pipeline, vertex)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to get the errors for pipeline %q vertex %q: %s", pipeline, vertex, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, errors))
+}
+
+// GetMonoVertexErrors is used to provide the errors of a given mono vertex
+func (h *handler) GetMonoVertexErrors(c *gin.Context) {
+	ns, monoVertex := c.Param("namespace"), c.Param("mono-vertex")
+
+	client, err := h.getMonoVertexDaemonClient(ns, monoVertex)
+	if err != nil || client == nil {
+		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for mono vertex %q, %s", monoVertex, err.Error()))
+		return
+	}
+
+	errors, err := client.GetMonoVertexErrors(c, monoVertex)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to get the errors for mono vertex %q: %s", monoVertex, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, errors))
+}
+
 func (h *handler) GetMetricData(c *gin.Context) {
 	var requestBody MetricsRequestBody
 	if h.promQlServiceObj == nil {
@@ -1312,7 +1352,7 @@ func (h *handler) DiscoverMetrics(c *gin.Context) {
 	var discoveredMetrics MetricsDiscoveryResponse
 
 	for _, pattern := range configData.Patterns {
-		if pattern.Object == object {
+		if slices.Contains(pattern.Objects, object) {
 			for _, metric := range pattern.Metrics {
 				var requiredFilters []Filter
 				// Populate the required filters
@@ -1325,6 +1365,14 @@ func (h *handler) DiscoverMetrics(c *gin.Context) {
 				// Computing dimension data for each metric
 				var dimensionData []Dimensions
 				for _, dimension := range metric.Dimensions {
+					// Check if the object is "mono-vertex", skip the "vertex"(pipeline) dimension
+					if object == "mono-vertex" && dimension.Name == "vertex" {
+						continue
+					}
+					// Check if the object is "vertex"(pipeline), skip the "mono-vertex" dimension
+					if object == "vertex" && dimension.Name == "mono-vertex" {
+						continue
+					}
 					var combinedFilters = requiredFilters
 					// Add the dimension filters
 					for _, filter := range dimension.Filters {
@@ -1340,7 +1388,7 @@ func (h *handler) DiscoverMetrics(c *gin.Context) {
 					})
 				}
 
-				discoveredMetrics = append(discoveredMetrics, NewDiscoveryResponse(metric.Name, metric.DisplayName, metric.Unit, dimensionData))
+				discoveredMetrics = append(discoveredMetrics, NewDiscoveryResponse(pattern.Name, metric.Name, metric.MetricDescription, metric.DisplayName, metric.Unit, dimensionData))
 			}
 		}
 	}
@@ -1643,8 +1691,16 @@ func (h *handler) getPodDetails(pod corev1.Pod) (PodDetails, error) {
 }
 
 func (h *handler) getContainerDetails(pod corev1.Pod) map[string]ContainerDetails {
-	var containerDetailsMap = make(map[string]ContainerDetails)
-	for _, status := range pod.Status.ContainerStatuses {
+	totalContainers := len(pod.Spec.Containers) + len(pod.Spec.InitContainers)
+	containerDetailsMap := make(map[string]ContainerDetails, totalContainers)
+
+	// Helper function to process container statuses
+	processContainerStatus := func(status corev1.ContainerStatus, isInitContainer bool) {
+		// Skip init containers without Always restart policy
+		if isInitContainer && h.isNotSidecarContainer(status.Name, pod) {
+			return
+		}
+
 		containerName := status.Name
 		details := ContainerDetails{
 			Name:         status.Name,
@@ -1666,13 +1722,25 @@ func (h *handler) getContainerDetails(pod corev1.Pod) map[string]ContainerDetail
 		containerDetailsMap[containerName] = details
 	}
 
-	// Get CPU/Memory requests and limits from Pod spec
-	for _, container := range pod.Spec.Containers {
+	for _, status := range pod.Status.InitContainerStatuses {
+		processContainerStatus(status, true)
+	}
+	for _, status := range pod.Status.ContainerStatuses {
+		processContainerStatus(status, false)
+	}
+
+	// Helper function to process container resources
+	processContainerResources := func(container corev1.Container, isInitContainer bool) {
+		// Skip init containers without Always restart policy
+		if isInitContainer && h.isNotSidecarContainer(container.Name, pod) {
+			return
+		}
+
 		cpuRequest := container.Resources.Requests.Cpu().MilliValue()
 		memRequest := container.Resources.Requests.Memory().Value() / (1024 * 1024)
 		cpuLimit := container.Resources.Limits.Cpu().MilliValue()
 		memLimit := container.Resources.Limits.Memory().Value() / (1024 * 1024)
-		// Get the existing ContainerDetails or create a new one
+
 		details, ok := containerDetailsMap[container.Name]
 		if !ok {
 			details = ContainerDetails{Name: container.Name} // Initialize if not found
@@ -1691,7 +1759,26 @@ func (h *handler) getContainerDetails(pod corev1.Pod) map[string]ContainerDetail
 		}
 		containerDetailsMap[container.Name] = details
 	}
+
+	for _, container := range pod.Spec.InitContainers {
+		processContainerResources(container, true)
+	}
+	for _, container := range pod.Spec.Containers {
+		processContainerResources(container, false)
+	}
+
 	return containerDetailsMap
+}
+
+// Helper function to check if container is an init container without "Always" restart policy
+// for sidecar containers (eg: ud containers), we set "Always" restart policy in k8s >= 1.29
+func (h *handler) isNotSidecarContainer(containerName string, pod corev1.Pod) bool {
+	for _, initContainer := range pod.Spec.InitContainers {
+		if initContainer.Name == containerName {
+			return initContainer.RestartPolicy == nil || *initContainer.RestartPolicy != corev1.ContainerRestartPolicyAlways
+		}
+	}
+	return true
 }
 
 func (h *handler) getContainerStatus(state corev1.ContainerState) string {

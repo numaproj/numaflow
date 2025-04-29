@@ -1,12 +1,13 @@
-use base64::prelude::BASE64_STANDARD;
+use std::sync::Arc;
+use std::time::Duration;
+
 use base64::Engine;
+use base64::prelude::BASE64_STANDARD;
 use numaflow_pb::clients::source;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::source::{
-    read_request, read_response, AckRequest, AckResponse, ReadRequest, ReadResponse,
+    AckRequest, AckResponse, ReadRequest, ReadResponse, read_request, read_response,
 };
-use std::sync::Arc;
-use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
@@ -16,7 +17,7 @@ use crate::message::{Message, MessageID, Offset, StringOffset};
 use crate::reader::LagReader;
 use crate::shared::grpc::utc_from_timestamp;
 use crate::source::{SourceAcker, SourceReader};
-use crate::{config, Error, Result};
+use crate::{Error, Result, config};
 
 /// User-Defined Source to operative on custom sources.
 #[derive(Debug)]
@@ -25,6 +26,7 @@ pub(crate) struct UserDefinedSourceRead {
     resp_stream: Streaming<ReadResponse>,
     num_records: usize,
     timeout: Duration,
+    source_client: SourceClient<Channel>,
 }
 
 /// User-Defined Source to operative on custom sources.
@@ -53,17 +55,18 @@ pub(crate) async fn new_source(
 
 impl UserDefinedSourceRead {
     async fn new(
-        mut client: SourceClient<Channel>,
+        client: SourceClient<Channel>,
         batch_size: usize,
         timeout: Duration,
     ) -> Result<Self> {
-        let (read_tx, resp_stream) = Self::create_reader(batch_size, &mut client).await?;
+        let (read_tx, resp_stream) = Self::create_reader(batch_size, &mut client.clone()).await?;
 
         Ok(Self {
             read_tx,
             resp_stream,
             num_records: batch_size,
             timeout,
+            source_client: client,
         })
     }
 
@@ -86,20 +89,30 @@ impl UserDefinedSourceRead {
 
         let mut resp_stream = client
             .read_fn(Request::new(read_stream))
-            .await?
+            .await
+            .map_err(Error::Grpc)?
             .into_inner();
 
         // first response from the server will be the handshake response. We need to check if the
         // server has accepted the handshake.
-        let handshake_response = resp_stream.message().await?.ok_or(Error::Source(
-            "failed to receive handshake response".to_string(),
-        ))?;
+        let handshake_response =
+            resp_stream
+                .message()
+                .await
+                .map_err(Error::Grpc)?
+                .ok_or(Error::Source(
+                    "failed to receive handshake response".to_string(),
+                ))?;
         // handshake cannot to None during the initial phase, and it has to set `sot` to true.
         if handshake_response.handshake.map_or(true, |h| !h.sot) {
             return Err(Error::Source("invalid handshake response".to_string()));
         }
 
         Ok((read_tx, resp_stream))
+    }
+
+    pub(crate) fn get_source_client(&self) -> SourceClient<Channel> {
+        self.source_client.clone()
     }
 }
 
@@ -109,18 +122,34 @@ impl TryFrom<read_response::Result> for Message {
 
     fn try_from(result: read_response::Result) -> Result<Self> {
         let source_offset = match result.offset {
-            Some(o) => Offset::String(StringOffset {
+            Some(o) if !o.offset.is_empty() => Offset::String(StringOffset {
                 offset: BASE64_STANDARD.encode(o.offset).into(),
                 partition_idx: o.partition_id as u16,
             }),
-            None => return Err(Error::Source("Offset not found".to_string())),
+
+            Some(_) => {
+                return Err(Error::Source(
+                    "Invalid offset found in response. \
+                    This is user code error. Please make sure that offset is not empty in response."
+                        .to_string(),
+                ));
+            }
+
+            None => {
+                return Err(Error::Source(
+                    "Offset not found. This is user code error. \
+                    Please make sure that offset is present in response."
+                        .to_string(),
+                ));
+            }
         };
 
         Ok(Message {
+            typ: Default::default(),
             keys: Arc::from(result.keys),
             tags: None,
             value: result.payload.into(),
-            offset: Some(source_offset.clone()),
+            offset: source_offset.clone(),
             event_time: utc_from_timestamp(result.event_time),
             id: MessageID {
                 vertex_name: config::get_vertex_name().to_string().into(),
@@ -128,6 +157,8 @@ impl TryFrom<read_response::Result> for Message {
                 index: 0,
             },
             headers: result.headers,
+            watermark: None,
+            metadata: None,
         })
     }
 }
@@ -137,13 +168,16 @@ impl TryFrom<Offset> for source::Offset {
 
     fn try_from(offset: Offset) -> std::result::Result<Self, Self::Error> {
         match offset {
-            Offset::Int(_) => Err(Error::Source("IntOffset not supported".to_string())),
-            Offset::String(o) => Ok(numaflow_pb::clients::source::Offset {
+            Offset::String(StringOffset {
+                offset,
+                partition_idx,
+            }) => Ok(source::Offset {
                 offset: BASE64_STANDARD
-                    .decode(o.offset)
+                    .decode(offset)
                     .expect("we control the encoding, so this should never fail"),
-                partition_id: o.partition_idx as i32,
+                partition_id: partition_idx as i32,
             }),
+            Offset::Int(_) => Err(Error::Source("IntOffset not supported".to_string())),
         }
     }
 }
@@ -169,22 +203,32 @@ impl SourceReader for UserDefinedSourceRead {
 
         let mut messages = Vec::with_capacity(self.num_records);
 
-        while let Some(response) = self.resp_stream.message().await? {
-            if response.status.map_or(false, |status| status.eot) {
+        while let Some(response) = self.resp_stream.message().await.map_err(Error::Grpc)? {
+            if response.status.is_some_and(|status| status.eot) {
                 break;
             }
 
             let result = response
                 .result
-                .ok_or_else(|| Error::Source("Empty message".to_string()))?;
+                .ok_or_else(|| Error::Source("Empty message in response".to_string()))?;
 
             messages.push(result.try_into()?);
         }
         Ok(messages)
     }
 
-    fn partitions(&self) -> Vec<u16> {
-        unimplemented!()
+    async fn partitions(&mut self) -> Result<Vec<u16>> {
+        let partitions = self
+            .source_client
+            .partitions_fn(Request::new(()))
+            .await
+            .map_err(|e| Error::Source(e.to_string()))?
+            .into_inner()
+            .result
+            .expect("partitions not found")
+            .partitions;
+
+        Ok(partitions.iter().map(|p| *p as u16).collect())
     }
 }
 
@@ -215,14 +259,22 @@ impl UserDefinedSourceAck {
             .await
             .map_err(|e| Error::Source(format!("failed to send ack handshake request: {}", e)))?;
 
-        let mut ack_resp_stream = client.ack_fn(Request::new(ack_stream)).await?.into_inner();
+        let mut ack_resp_stream = client
+            .ack_fn(Request::new(ack_stream))
+            .await
+            .map_err(Error::Grpc)?
+            .into_inner();
 
         // first response from the server will be the handshake response. We need to check if the
         // server has accepted the handshake.
-        let ack_handshake_response = ack_resp_stream.message().await?.ok_or(Error::Source(
-            "failed to receive ack handshake response".to_string(),
-        ))?;
-        // handshake cannot to None during the initial phase and it has to set `sot` to true.
+        let ack_handshake_response = ack_resp_stream
+            .message()
+            .await
+            .map_err(Error::Grpc)?
+            .ok_or(Error::Source(
+                "failed to receive ack handshake response".to_string(),
+            ))?;
+        // handshake cannot to None during the initial phase, and it has to set `sot` to true.
         if ack_handshake_response.handshake.map_or(true, |h| !h.sot) {
             return Err(Error::Source("invalid ack handshake response".to_string()));
         }
@@ -249,7 +301,8 @@ impl SourceAcker for UserDefinedSourceAck {
         let _ = self
             .ack_resp_stream
             .message()
-            .await?
+            .await
+            .map_err(Error::Grpc)?
             .ok_or(Error::Source("failed to receive ack response".to_string()))?;
 
         Ok(())
@@ -272,7 +325,8 @@ impl LagReader for UserDefinedSourceLagReader {
         Ok(self
             .source_client
             .pending_fn(Request::new(()))
-            .await?
+            .await
+            .map_err(Error::Grpc)?
             .into_inner()
             .result
             .map(|r| r.count as usize))
@@ -281,16 +335,16 @@ impl LagReader for UserDefinedSourceLagReader {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{HashMap, HashSet};
-
-    use super::*;
-    use crate::message::IntOffset;
-    use crate::shared::grpc::{create_rpc_channel, prost_timestamp_from_utc};
     use chrono::{TimeZone, Utc};
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow_pb::clients::source::source_client::SourceClient;
+    use std::collections::{HashMap, HashSet};
     use tokio::sync::mpsc::Sender;
+
+    use super::*;
+    use crate::message::IntOffset;
+    use crate::shared::grpc::{create_rpc_channel, prost_timestamp_from_utc};
 
     struct SimpleSource {
         num: usize,
@@ -384,12 +438,15 @@ mod tests {
         assert_eq!(messages.len(), 5);
 
         let response = src_ack
-            .ack(messages.iter().map(|m| m.offset.clone().unwrap()).collect())
+            .ack(messages.iter().map(|m| m.offset.clone()).collect())
             .await;
         assert!(response.is_ok());
 
         let pending = lag_reader.pending().await.unwrap();
         assert_eq!(pending, Some(0));
+
+        let partitions = src_read.partitions().await.unwrap();
+        assert_eq!(partitions, vec![2]);
 
         // we need to drop the client, because if there are any in-flight requests
         // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
@@ -410,9 +467,9 @@ mod tests {
                 offset: BASE64_STANDARD.encode("123").into_bytes(),
                 partition_id: 0,
             }),
-            event_time: Some(
-                prost_timestamp_from_utc(Utc.timestamp_opt(1627846261, 0).unwrap()).unwrap(),
-            ),
+            event_time: Some(prost_timestamp_from_utc(
+                Utc.timestamp_opt(1627846261, 0).unwrap(),
+            )),
             keys: vec!["key1".to_string()],
             headers: HashMap::new(),
         };

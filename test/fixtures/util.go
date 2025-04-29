@@ -200,6 +200,36 @@ statefulSetWatch:
 	}
 }
 
+func WaitForServingPipelineRunning(ctx context.Context, servingPipelineClient flowpkg.ServingPipelineInterface, servingPipelineName string, timeout time.Duration) error {
+	fieldSelector := "metadata.name=" + servingPipelineName
+	opts := metav1.ListOptions{FieldSelector: fieldSelector}
+	watch, err := servingPipelineClient.Watch(ctx, opts)
+	if err != nil {
+		return err
+	}
+	defer watch.Stop()
+	timeoutCh := make(chan bool, 1)
+	go func() {
+		time.Sleep(timeout)
+		timeoutCh <- true
+	}()
+	for {
+		select {
+		case event := <-watch.ResultChan():
+			i, ok := event.Object.(*dfv1.ServingPipeline)
+			if ok {
+				if i.Status.Phase == dfv1.ServingPipelinePhaseRunning {
+					return nil
+				}
+			} else {
+				return fmt.Errorf("not ServingPipeline")
+			}
+		case <-timeoutCh:
+			return fmt.Errorf("timeout after %v waiting for Pipeline running", timeout)
+		}
+	}
+}
+
 func WaitForPipelineRunning(ctx context.Context, pipelineClient flowpkg.PipelineInterface, pipelineName string, timeout time.Duration) error {
 	fieldSelector := "metadata.name=" + pipelineName
 	opts := metav1.ListOptions{FieldSelector: fieldSelector}
@@ -308,7 +338,7 @@ func WaitForVertexPodRunning(kubeClient kubernetes.Interface, vertexClient flowp
 		if err != nil {
 			return fmt.Errorf("error getting vertex pod name: %w", err)
 		}
-		ok = ok && len(podList.Items) > 0 && len(podList.Items) == vertexList.Items[0].GetReplicas() // pod number should equal to desired replicas
+		ok = ok && len(podList.Items) > 0 && len(podList.Items) == vertexList.Items[0].CalculateReplicas() // pod number should equal to desired replicas
 		for _, p := range podList.Items {
 			ok = ok && isPodReady(p)
 		}

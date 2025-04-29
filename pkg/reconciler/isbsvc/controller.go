@@ -23,6 +23,7 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
@@ -88,8 +89,20 @@ func (r *interStepBufferServiceReconciler) Reconcile(ctx context.Context, req ct
 			return ctrl.Result{}, err
 		}
 	}
-	if err := r.client.Status().Update(ctx, isbSvcCopy); err != nil {
-		return ctrl.Result{}, err
+	if !equality.Semantic.DeepEqual(isbSvc.Status, isbSvcCopy.Status) {
+		// Use Server Side Apply
+		statusPatch := &dfv1.InterStepBufferService{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:          isbSvc.Name,
+				Namespace:     isbSvc.Namespace,
+				ManagedFields: nil,
+			},
+			TypeMeta: isbSvc.TypeMeta,
+			Status:   isbSvcCopy.Status,
+		}
+		if err := r.client.Status().Patch(ctx, statusPatch, client.Apply, client.ForceOwnership, client.FieldOwner(dfv1.Project)); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 	return ctrl.Result{}, reconcileErr
 }
@@ -116,9 +129,7 @@ func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc
 	if controllerutil.ContainsFinalizer(isbSvc, deprecatedFinalizerName) { // Remove deprecated finalizer if exists
 		controllerutil.RemoveFinalizer(isbSvc, deprecatedFinalizerName)
 	}
-	if needsFinalizer(isbSvc) {
-		controllerutil.AddFinalizer(isbSvc, finalizerName)
-	}
+	controllerutil.AddFinalizer(isbSvc, finalizerName)
 
 	defer func() {
 		if isbSvc.Status.IsHealthy() {
@@ -138,14 +149,4 @@ func (r *interStepBufferServiceReconciler) reconcile(ctx context.Context, isbSvc
 		isbSvc.Status.MarkConfigured()
 	}
 	return installer.Install(ctx, isbSvc, r.client, r.kubeClient, r.config, log, r.recorder)
-}
-
-func needsFinalizer(isbSvc *dfv1.InterStepBufferService) bool {
-	if isbSvc.Spec.Redis != nil && isbSvc.Spec.Redis.Native != nil && isbSvc.Spec.Redis.Native.Persistence != nil {
-		return true
-	}
-	if isbSvc.Spec.JetStream != nil && isbSvc.Spec.JetStream.Persistence != nil {
-		return true
-	}
-	return false
 }

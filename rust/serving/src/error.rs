@@ -19,9 +19,12 @@ pub enum Error {
     // subgraph generator errors
     SubGraphGenerator(String),
 
-    #[error("StoreWrite Error - {0}")]
-    // Store write errors
-    StoreWrite(String),
+    #[error("Store - {0}")]
+    // Store operation errors
+    Store(String),
+
+    #[error("Status - {0}")]
+    Status(String),
 
     #[error("SubGraphNotFound Error - {0}")]
     // Sub Graph Not Found Error
@@ -30,10 +33,6 @@ pub enum Error {
     #[error("SubGraphInvalidInput Error - {0}")]
     // Sub Graph Invalid Input Error
     SubGraphInvalidInput(String),
-
-    #[error("StoreRead Error - {0}")]
-    // Store read errors
-    StoreRead(String),
 
     #[error("Metrics Error - {0}")]
     // Metrics errors
@@ -50,6 +49,9 @@ pub enum Error {
 
     #[error("Serving source error - {0}")]
     Source(String),
+
+    #[error("Duplicate request - {0}")]
+    Duplicate(String),
 
     #[error("Other Error - {0}")]
     // catch-all variant for now
