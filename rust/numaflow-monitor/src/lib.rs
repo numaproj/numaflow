@@ -1,6 +1,6 @@
 use crate::app::start_main_server;
-use crate::config::generate_certs;
 use crate::config::MonitorServerConfig;
+use crate::config::generate_certs;
 use crate::error::{Error, Result};
 use axum_server::tls_rustls::RustlsConfig;
 use std::net::SocketAddr;
