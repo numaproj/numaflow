@@ -1,4 +1,4 @@
-use std::env;
+use std::collections::HashMap;
 use std::time::Duration;
 
 use base64::prelude::BASE64_STANDARD;
@@ -9,7 +9,7 @@ use serde_json::from_slice;
 use super::pipeline::ServingCallbackConfig;
 use super::{
     get_namespace, get_pipeline_name, DEFAULT_CALLBACK_CONCURRENCY, ENV_CALLBACK_CONCURRENCY,
-    ENV_CALLBACK_ENABLED,
+    ENV_CALLBACK_ENABLED, ENV_MONO_VERTEX_OBJ,
 };
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::sink::SinkConfig;
@@ -66,8 +66,11 @@ impl Default for MonovertexConfig {
 
 impl MonovertexConfig {
     /// Load the MonoVertex Settings.
-    pub(crate) fn load(mono_vertex_spec: String) -> Result<Self> {
+    pub(crate) fn load(env_vars: HashMap<String, String>) -> Result<Self> {
         // controller sets this env var.
+        let mono_vertex_spec = env_vars
+            .get(ENV_MONO_VERTEX_OBJ)
+            .ok_or_else(|| Error::Config(format!("{ENV_MONO_VERTEX_OBJ} is not set")))?;
         let decoded_spec = BASE64_STANDARD
             .decode(mono_vertex_spec.as_bytes())
             .map_err(|e| Error::Config(format!("Failed to decode mono vertex spec: {:?}", e)))?;
@@ -116,8 +119,10 @@ impl MonovertexConfig {
             .ok_or_else(|| Error::Config("Source not found".to_string()))?;
 
         let source_config = SourceConfig {
-            read_ahead: env::var("READ_AHEAD")
-                .unwrap_or("false".to_string())
+            read_ahead: env_vars
+                .get("READ_AHEAD")
+                .map(|val| val.as_str())
+                .unwrap_or("false")
                 .parse()
                 .unwrap(),
             source_type: source.try_into()?,
@@ -151,9 +156,11 @@ impl MonovertexConfig {
             .unwrap_or(DEFAULT_LOOKBACK_WINDOW_IN_SECS);
 
         let mut callback_config = None;
-        if env::var(ENV_CALLBACK_ENABLED).is_ok() {
-            let callback_concurrency: usize = env::var(ENV_CALLBACK_CONCURRENCY)
-                .unwrap_or_else(|_| format!("{DEFAULT_CALLBACK_CONCURRENCY}"))
+        if env_vars.contains_key(ENV_CALLBACK_ENABLED) {
+            let callback_concurrency: usize = env_vars
+                .get(ENV_CALLBACK_CONCURRENCY)
+                .cloned()
+                .unwrap_or_else(|| DEFAULT_CALLBACK_CONCURRENCY.to_string())
                 .parse()
                 .map_err(|e| {
                     Error::Config(format!(
@@ -187,6 +194,8 @@ impl MonovertexConfig {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use base64::prelude::BASE64_STANDARD;
     use base64::Engine;
 
@@ -194,6 +203,7 @@ mod tests {
     use crate::config::components::source::SourceType;
     use crate::config::components::transformer::TransformerType;
     use crate::config::monovertex::MonovertexConfig;
+    use crate::config::ENV_MONO_VERTEX_OBJ;
     use crate::error::Error;
 
     #[test]
@@ -224,9 +234,11 @@ mod tests {
         "#;
 
         let encoded_valid_config = BASE64_STANDARD.encode(valid_config);
-        let spec = encoded_valid_config.as_str();
 
-        let config = MonovertexConfig::load(spec.to_string()).unwrap();
+        let mut env_vars = HashMap::new();
+        env_vars.insert(ENV_MONO_VERTEX_OBJ.to_string(), encoded_valid_config);
+
+        let config = MonovertexConfig::load(env_vars).unwrap();
 
         assert_eq!(config.name, "test_vertex");
         assert_eq!(config.batch_size, 1000);
@@ -257,9 +269,11 @@ mod tests {
         }
         "#;
         let encoded_invalid_config = BASE64_STANDARD.encode(invalid_config);
-        let spec = encoded_invalid_config.as_str();
 
-        let result = MonovertexConfig::load(spec.to_string());
+        let mut env_vars = HashMap::new();
+        env_vars.insert(ENV_MONO_VERTEX_OBJ.to_string(), encoded_invalid_config);
+
+        let result = MonovertexConfig::load(env_vars);
         assert!(matches!(result, Err(Error::Config(_))));
     }
 
@@ -287,9 +301,11 @@ mod tests {
         }
         "#;
         let encoded_invalid_config = BASE64_STANDARD.encode(invalid_config);
-        let spec = encoded_invalid_config.as_str();
+        let mut env_vars = HashMap::new();
+        env_vars.insert(ENV_MONO_VERTEX_OBJ.to_string(), encoded_invalid_config);
 
-        let result = MonovertexConfig::load(spec.to_string());
+        let result = MonovertexConfig::load(env_vars);
+
         assert!(matches!(result, Err(Error::Config(_))));
     }
 
@@ -320,10 +336,12 @@ mod tests {
             }
         }
         "#;
-        let encoded_invalid_config = BASE64_STANDARD.encode(valid_config);
-        let spec = encoded_invalid_config.as_str();
 
-        let config = MonovertexConfig::load(spec.to_string()).unwrap();
+        let encoded_invalid_config = BASE64_STANDARD.encode(valid_config);
+        let mut env_vars = HashMap::new();
+        env_vars.insert(ENV_MONO_VERTEX_OBJ.to_string(), encoded_invalid_config);
+
+        let config = MonovertexConfig::load(env_vars).unwrap();
 
         assert_eq!(config.name, "test_vertex");
         assert!(config.transformer_config.is_some());
@@ -373,9 +391,10 @@ mod tests {
         }
         "#;
         let encoded_invalid_config = BASE64_STANDARD.encode(valid_config);
-        let spec = encoded_invalid_config.as_str();
+        let mut env_vars = HashMap::new();
+        env_vars.insert(ENV_MONO_VERTEX_OBJ.to_string(), encoded_invalid_config);
 
-        let config = MonovertexConfig::load(spec.to_string()).unwrap();
+        let config = MonovertexConfig::load(env_vars).unwrap();
 
         assert_eq!(config.name, "test_vertex");
         assert!(matches!(

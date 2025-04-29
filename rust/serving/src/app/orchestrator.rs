@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
-use tracing::{debug, error, info, trace, warn, Instrument};
+use tracing::{error, info, trace, warn, Instrument};
 
 use crate::app::store::cbstore::CallbackStore;
 use crate::app::store::datastore::DataStore;
