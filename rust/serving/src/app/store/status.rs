@@ -255,7 +255,7 @@ impl StatusTracker {
         info!(id, replica_id = ?self.pod_hash, error, "Marking request as failed");
         let failed_status = ProcessingStatus::Failed {
             error: error.to_string(),
-            pod_hash: self.pod_hash.clone(),
+            pod_hash: self.pod_hash.to_string(),
         };
         self.update_status(id, failed_status).await
     }
@@ -279,7 +279,7 @@ impl StatusTracker {
     pub(crate) async fn deregister(&self, id: &str, subgraph: &str, pod_hash: &str) -> Result<()> {
         let completed_status = ProcessingStatus::Completed {
             subgraph: subgraph.to_string(),
-            pod_hash: self.pod_hash.to_string(),
+            pod_hash: pod_hash.to_string(),
         };
 
         self.update_status(id, completed_status).await?;
@@ -293,7 +293,7 @@ impl StatusTracker {
         // lifecycle of the request, we need to do it here.
         let done_key = format!(
             "{}.{}.{}.{}",
-            RESPONSE_KEY_PREFIX, self.pod_hash, id, DONE_PROCESSING_MARKER
+            RESPONSE_KEY_PREFIX, pod_hash, id, DONE_PROCESSING_MARKER
         );
         response_kv
             .put(done_key.clone(), Bytes::new())

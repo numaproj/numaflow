@@ -21,7 +21,6 @@ spec:
         udf:
           container:
             image: quay.io/numaio/numaflow-go/map-forward-message:stable
-            imagePullPolicy: Always
       - name: out
         scale:
           min: 1
