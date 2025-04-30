@@ -311,12 +311,19 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 			m.Watermark = time.Time(processorWM)
 		}
 
+		metrics.SourceTransformerReadMessagesCount.With(metricLabelsForTransformer).Add(float64(len(readMessages)))
 		transformerProcessingStart := time.Now()
 		readWriteMessagePairs, err = df.applyTransformer(ctx, readMessages)
 		if err != nil {
+			metrics.SourceTransformerError.With(metricLabelsForTransformer).Inc()
 			df.opts.logger.Errorw("failed to apply source transformer", zap.Error(err))
 			return err
 		}
+		transformerWriteCount := 0
+		for _, m := range readWriteMessagePairs {
+			transformerWriteCount += len(m.WriteMessages)
+		}
+		metrics.SourceTransformerWriteMessagesCount.With(metricLabelsForTransformer).Add(float64(transformerWriteCount))
 
 		df.opts.logger.Debugw("concurrent applyTransformer completed",
 			zap.Int("concurrency", df.opts.transformerConcurrency),

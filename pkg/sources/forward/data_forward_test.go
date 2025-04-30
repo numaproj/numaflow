@@ -732,6 +732,18 @@ func TestNewDataForward(t *testing.T) {
 			assert.Equal(t, make([]error, batchSize), errs)
 			assert.True(t, to1.IsEmpty())
 
+			// iterate to see whether metrics will eventually succeed
+			err = validateTransformerErrorMetrics()
+			for err != nil {
+				select {
+				case <-ctx.Done():
+					t.Errorf("failed waiting metrics collection to succeed [%s] (%s)", ctx.Err(), err)
+				default:
+					time.Sleep(10 * time.Millisecond)
+					err = validateTransformerErrorMetrics()
+				}
+			}
+
 			f.Stop()
 			time.Sleep(1 * time.Millisecond)
 
@@ -1235,6 +1247,30 @@ func validateMetrics(batchSize int64) (err error) {
 		return err
 	}
 
+	transformerReadMetadata := `
+		# HELP source_forwarder_transformer_read_total Total number of Messages Read by source transformer
+		# TYPE source_forwarder_transformer_read_total counter
+		`
+	transformerReadExpected := `
+		source_forwarder_transformer_read_total{partition_name="from",pipeline="testPipeline",replica="0",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
+		`
+	err = testutil.CollectAndCompare(metrics.SourceTransformerReadMessagesCount, strings.NewReader(transformerReadMetadata+transformerReadExpected), "source_forwarder_transformer_read_total")
+	if err != nil {
+		return err
+	}
+
+	transformerWriteMetadata := `
+		# HELP source_forwarder_transformer_write_total Total number of Messages Written by source transformer
+		# TYPE source_forwarder_transformer_write_total counter
+		`
+	transformerWriteExpected := `
+		source_forwarder_transformer_write_total{partition_name="from",pipeline="testPipeline",replica="0",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
+		`
+	err = testutil.CollectAndCompare(metrics.SourceTransformerWriteMessagesCount, strings.NewReader(transformerWriteMetadata+transformerWriteExpected), "source_forwarder_transformer_write_total")
+	if err != nil {
+		return err
+	}
+
 	writeMetadata := `
 		# HELP forwarder_write_total Total number of Messages Written
 		# TYPE forwarder_write_total counter
@@ -1273,8 +1309,27 @@ func validateMetrics(batchSize int64) (err error) {
 	return nil
 }
 
+func validateTransformerErrorMetrics() (err error) {
+	metadata := `
+		# HELP source_forwarder_transformer_error_total Total number of source transformer Errors
+		# TYPE source_forwarder_transformer_error_total counter
+		`
+	expected := `
+		source_forwarder_transformer_error_total{partition_name="from",pipeline="testPipeline",replica="0",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(1)) + `
+		`
+	err = testutil.CollectAndCompare(metrics.SourceTransformerError, strings.NewReader(metadata+expected), "source_forwarder_transformer_error_total")
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func metricsReset() {
 	metrics.ReadMessagesCount.Reset()
+	metrics.SourceTransformerReadMessagesCount.Reset()
+	metrics.SourceTransformerWriteMessagesCount.Reset()
+	metrics.SourceTransformerError.Reset()
 	metrics.WriteMessagesCount.Reset()
 	metrics.AckMessagesCount.Reset()
 }
