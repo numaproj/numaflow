@@ -45,6 +45,8 @@ type Source struct {
 	Serving *ServingSource `json:"serving,omitempty" protobuf:"bytes,8,opt,name=serving"`
 	// +optional
 	Pulsar *PulsarSource `json:"pulsar,omitempty" protobuf:"bytes,9,opt,name=pulsar"`
+	// +optional
+	Sqs *SqsSource `json:"sqs,omitempty" protobuf:"bytes,10,opt,name=sqs"`
 }
 
 func (s Source) getContainers(req getContainerReq) ([]corev1.Container, []corev1.Container, error) {

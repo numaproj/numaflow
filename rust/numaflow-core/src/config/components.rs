@@ -7,9 +7,10 @@ pub(crate) mod source {
 
     use bytes::Bytes;
     use numaflow_jetstream::{JetstreamSourceConfig, NatsAuth, TlsClientAuthCerts, TlsConfig};
-    use numaflow_models::models::{GeneratorSource, PulsarSource, Source};
+    use numaflow_models::models::{GeneratorSource, PulsarSource, Source, SqsSource};
     use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
-    use tracing::warn;
+    use numaflow_sqs::source::SQSSourceConfig;
+    use tracing::{info, warn};
 
     use crate::Result;
     use crate::error::Error;
@@ -37,6 +38,7 @@ pub(crate) mod source {
         UserDefined(UserDefinedConfig),
         Pulsar(PulsarSourceConfig),
         Jetstream(JetstreamSourceConfig),
+        Sqs(SQSSourceConfig),
     }
 
     impl From<Box<GeneratorSource>> for SourceType {
@@ -99,6 +101,35 @@ pub(crate) mod source {
                 auth,
             };
             Ok(SourceType::Pulsar(pulsar_config))
+        }
+    }
+
+    impl TryFrom<Box<SqsSource>> for SourceType {
+        type Error = Error;
+
+        fn try_from(value: Box<SqsSource>) -> Result<Self> {
+            info!("Sqs source: {value:?}");
+            if value.aws_region.is_empty() {
+                return Err(Error::Config(
+                    "AWS region is required for SQS source".to_string(),
+                ));
+            }
+
+            let sqs_source_config = SQSSourceConfig {
+                queue_name: value.queue_name,
+                region: value.aws_region,
+                queue_owner_aws_account_id: value.queue_owner_aws_account_id,
+                attribute_names: value.attribute_names.unwrap_or_default(),
+                message_attribute_names: value.message_attribute_names.unwrap_or_default(),
+                max_number_of_messages: Some(value.max_number_of_messages.unwrap_or(10)),
+                wait_time_seconds: Some(value.wait_time_seconds.unwrap_or(0)),
+                visibility_timeout: Some(value.visibility_timeout.unwrap_or(30)),
+                endpoint_url: value.endpoint_url,
+            };
+
+            info!("parsed SQS source config: {sqs_source_config:?}");
+
+            Ok(SourceType::Sqs(sqs_source_config))
         }
     }
 
@@ -249,6 +280,10 @@ pub(crate) mod source {
 
             if let Some(pulsar) = source.pulsar.take() {
                 return pulsar.try_into();
+            }
+
+            if let Some(sqs) = source.sqs.take() {
+                return sqs.try_into();
             }
 
             if let Some(_serving) = source.serving.take() {

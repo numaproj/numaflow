@@ -22,6 +22,9 @@ pub enum Error {
     #[error("Failed to receive message from channel. Actor task is terminated: {0:?}")]
     ActorTaskTerminated(oneshot::error::RecvError),
 
+    #[error("Invalid configuration: {0}")]
+    InvalidConfig(String),
+
     #[error("{0}")]
     Other(String),
 }
@@ -56,7 +59,7 @@ mod tests {
 
         let sqs = aws_sdk_sqs::Client::from_conf(
             aws_sdk_sqs::Config::builder()
-                .behavior_version(BehaviorVersion::latest())
+                .behavior_version(BehaviorVersion::v2025_01_17())
                 .region(aws_sdk_sqs::config::Region::new("us-east-1"))
                 .credentials_provider(make_sqs_test_credentials())
                 .interceptor(get_object_mocks)

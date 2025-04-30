@@ -29,10 +29,8 @@ bytes.workspace = true
 serde.workspace = true
 rustls.workspace = true
 tower.workspace = true
-reqwest.workspace = true
-hyper = "1.2.0"
 async-nats.workspace = true
-tonic = { version = "0.13.0"}
+tonic = { version = "0.13.0" }
 thiserror = "2.0.3"
 tokio-util = "0.7.11"
 tokio-stream = "0.1.15"
@@ -59,13 +57,9 @@ numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "c6aa3a8
 pulsar = { version = "6.3.0", default-features = false, features = [
     "tokio-rustls-runtime",
 ] }
-aws-smithy-runtime = { version = "1.7.6", features = ["test-util"] }
-aws-smithy-types = "1.2.11"
 http = "1.2.0"
-aws-config = "1.5.11"
-aws-sdk-sqs = "1.51.0"
-reqwest = { workspace = true, features = ["json"] }
-aws-smithy-mocks-experimental = "0.2.1"
+aws-sdk-sqs = "1.65.0"
+aws-smithy-mocks-experimental = "0.2.3"
 k8s-openapi = { version = "0.24.0", features = ["v1_32"] }
 
 [build-dependencies]

@@ -10,16 +10,13 @@ workspace = true
 tokio.workspace = true
 tracing.workspace = true
 bytes.workspace = true
-serde.workspace = true
-aws-config = "1.5.11"
-aws-sdk-sqs = "1.51.0"
-aws-smithy-runtime = { version = "1.7.6", features = ["test-util"] }
-aws-smithy-types = "1.2.11"
-chrono = "0.4.38"
-tonic = "0.13.0"
-prost = "0.11.9"
-thiserror = "1.0.69"
+aws-config = "1.6.2"
+aws-sdk-sqs = "1.65.0"
+aws-smithy-types = "1.3.1"
+chrono = "0.4.41"
+thiserror = "2.0.12"
 
 
 [dev-dependencies]
-aws-smithy-mocks-experimental = "0.2.1"
+aws-smithy-mocks-experimental = "0.2.3"
+test-log = "0.2.17"

@@ -40,20 +40,22 @@ impl From<numaflow_sqs::Error> for Error {
             numaflow_sqs::Error::ActorTaskTerminated(_) => {
                 Error::ActorPatternRecv(value.to_string())
             }
+            numaflow_sqs::Error::InvalidConfig(e) => Error::Source(e),
             numaflow_sqs::Error::Other(e) => Error::Source(e),
         }
     }
 }
 
-#[allow(dead_code)] // TODO(SQS): remove it when integrated with controller
 pub(crate) async fn new_sqs_source(
     cfg: SQSSourceConfig,
     batch_size: usize,
     timeout: Duration,
+    vertex_replica: u16,
 ) -> crate::Result<SQSSource> {
     Ok(SqsSourceBuilder::new(cfg)
         .batch_size(batch_size)
         .timeout(timeout)
+        .vertex_replica(vertex_replica)
         .build()
         .await?)
 }
@@ -167,6 +169,13 @@ pub mod tests {
         let sqs_source = SqsSourceBuilder::new(SQSSourceConfig {
             region: SQS_DEFAULT_REGION.to_string(),
             queue_name: "test-q".to_string(),
+            queue_owner_aws_account_id: "12345678912".to_string(),
+            visibility_timeout: None,
+            max_number_of_messages: None,
+            wait_time_seconds: None,
+            endpoint_url: None,
+            attribute_names: vec![],
+            message_attribute_names: vec![],
         })
         .batch_size(1)
         .timeout(Duration::from_secs(1))

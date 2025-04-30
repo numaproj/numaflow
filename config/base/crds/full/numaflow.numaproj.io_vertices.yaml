@@ -4621,6 +4621,38 @@ spec:
                     type: object
                   serving:
                     type: object
+                  sqs:
+                    properties:
+                      attributeNames:
+                        items:
+                          type: string
+                        type: array
+                      awsRegion:
+                        type: string
+                      endpointUrl:
+                        type: string
+                      maxNumberOfMessages:
+                        format: int32
+                        type: integer
+                      messageAttributeNames:
+                        items:
+                          type: string
+                        type: array
+                      queueName:
+                        type: string
+                      queueOwnerAWSAccountID:
+                        type: string
+                      visibilityTimeout:
+                        format: int32
+                        type: integer
+                      waitTimeSeconds:
+                        format: int32
+                        type: integer
+                    required:
+                    - awsRegion
+                    - queueName
+                    - queueOwnerAWSAccountID
+                    type: object
                   transformer:
                     properties:
                       builtin:
