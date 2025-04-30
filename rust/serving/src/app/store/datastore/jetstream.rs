@@ -85,7 +85,6 @@ fn extract_bytes_list(merged: &Bytes) -> Result<Vec<Bytes>, String> {
 #[derive(Clone)]
 pub(crate) struct JetStreamDataStore {
     kv_store: Store,
-    pod_hash: &'static str,
     responses_map: Arc<Mutex<HashMap<String, ResponseMode>>>,
     cln_token: CancellationToken,
 }
@@ -113,7 +112,6 @@ impl JetStreamDataStore {
         .await;
         Ok(Self {
             kv_store,
-            pod_hash,
             responses_map,
             cln_token,
         })
@@ -496,7 +494,7 @@ impl DataStore for JetStreamDataStore {
     async fn retrieve_data(
         &mut self,
         id: &str,
-        pod_hash: Option<&str>,
+        pod_hash: Option<String>,
     ) -> StoreResult<Vec<Vec<u8>>> {
         // if the pod_hash is same as the current pod hash then we can rely on the central watcher for
         // responses else we will have to create a new watcher for the old pod hash to get all the
@@ -505,7 +503,7 @@ impl DataStore for JetStreamDataStore {
             Self::get_historic_response(
                 self.kv_store.clone(),
                 id,
-                pod_hash_value,
+                &pod_hash_value,
                 self.cln_token.clone(),
             )
             .await
@@ -518,11 +516,29 @@ impl DataStore for JetStreamDataStore {
     async fn stream_data(
         &mut self,
         id: &str,
-        pod_hash: &str,
+        failed_pod_hash: Option<String>,
     ) -> StoreResult<ReceiverStream<Arc<Bytes>>> {
         // if the pod_hash is same as the current pod hash then we can rely on the central watcher for
         // responses else we will have to create a new watcher for the old pod hash.
-        if pod_hash.eq(self.pod_hash) {
+        if let Some(failed_pod_hash) = failed_pod_hash {
+            let (tx, rx) = mpsc::channel(10);
+            tokio::spawn({
+                let kv_store = self.kv_store.clone();
+                let request_id = id.to_string();
+                let cln_token = self.cln_token.clone();
+                async move {
+                    Self::stream_historic_responses(
+                        kv_store,
+                        &request_id,
+                        &failed_pod_hash,
+                        tx,
+                        cln_token,
+                    )
+                    .await;
+                }
+            });
+            Ok(ReceiverStream::new(rx))
+        } else {
             // we need to wait for the start processing marker entry to be processed by the central watcher
             loop {
                 {
@@ -535,25 +551,6 @@ impl DataStore for JetStreamDataStore {
                 }
                 sleep(Duration::from_millis(5)).await;
             }
-        } else {
-            let (tx, rx) = mpsc::channel(10);
-            tokio::spawn({
-                let kv_store = self.kv_store.clone();
-                let request_id = id.to_string();
-                let pod_hash = pod_hash.to_string();
-                let cln_token = self.cln_token.clone();
-                async move {
-                    Self::stream_historic_responses(
-                        kv_store,
-                        &request_id,
-                        &pod_hash,
-                        tx,
-                        cln_token,
-                    )
-                    .await;
-                }
-            });
-            Ok(ReceiverStream::new(rx))
         }
     }
 
@@ -670,7 +667,7 @@ mod tests {
         let payload = Bytes::from_static(b"test_payload");
         store.kv_store.put(key, payload.clone()).await.unwrap();
 
-        let mut stream = store.stream_data(id, pod_hash).await.unwrap();
+        let mut stream = store.stream_data(id, None).await.unwrap();
 
         // Verify that the response is received
         let received_response = stream.next().await.unwrap();
@@ -729,7 +726,10 @@ mod tests {
         let done_key = format!("rs.{other_pod_hash}.{id}.done.processing");
         store.kv_store.put(done_key, Bytes::new()).await.unwrap();
 
-        let result = store.retrieve_data(id, Some(other_pod_hash)).await.unwrap();
+        let result = store
+            .retrieve_data(id, Some(other_pod_hash.to_string()))
+            .await
+            .unwrap();
         assert!(result.len() > 0);
         assert_eq!(result[0], b"test_payload");
 
@@ -785,7 +785,10 @@ mod tests {
         let done_key = format!("rs.{other_pod_hash}.{id}.done.processing");
         store.kv_store.put(done_key, Bytes::new()).await.unwrap();
 
-        let mut stream = store.stream_data(id, other_pod_hash).await.unwrap();
+        let mut stream = store
+            .stream_data(id, Some(other_pod_hash.to_string()))
+            .await
+            .unwrap();
 
         let received_response = stream.next().await.unwrap();
         assert_eq!(

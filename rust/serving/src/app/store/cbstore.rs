@@ -23,7 +23,7 @@ pub(crate) trait LocalCallbackStore {
     async fn register_and_watch(
         &mut self,
         id: &str,
-        pod_hash: &str,
+        failed_pod_hash: Option<String>,
     ) -> StoreResult<ReceiverStream<Arc<Callback>>>;
     /// This method will be called when processing is completed for a request id.
     async fn deregister(&mut self, id: &str) -> StoreResult<()>;

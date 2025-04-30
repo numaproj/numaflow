@@ -44,10 +44,17 @@ pub(crate) type Result<T> = std::result::Result<T, Error>;
 pub(crate) trait LocalDataStore {
     /// retrieve the data from the store.
     /// FIXME: make pod_hash optional
-    async fn retrieve_data(&mut self, id: &str, pod_hash: Option<&str>) -> Result<Vec<Vec<u8>>>;
+    async fn retrieve_data(
+        &mut self,
+        id: &str,
+        failed_pod_hash: Option<String>,
+    ) -> Result<Vec<Vec<u8>>>;
     /// streams the data from the store
-    async fn stream_data(&mut self, id: &str, pod_hash: &str)
-    -> Result<ReceiverStream<Arc<Bytes>>>;
+    async fn stream_data(
+        &mut self,
+        id: &str,
+        failed_pod_hash: Option<String>,
+    ) -> Result<ReceiverStream<Arc<Bytes>>>;
     /// check if the store is ready
     async fn ready(&mut self) -> bool;
 }

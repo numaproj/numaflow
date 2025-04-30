@@ -37,7 +37,7 @@ impl DataStore for UserDefinedStore {
     async fn retrieve_data(
         &mut self,
         id: &str,
-        _pod_hash: Option<&str>,
+        _pod_hash: Option<String>,
     ) -> StoreResult<Vec<Vec<u8>>> {
         let request = GetRequest { id: id.to_string() };
         let response = self
@@ -52,7 +52,7 @@ impl DataStore for UserDefinedStore {
     async fn stream_data(
         &mut self,
         _id: &str,
-        _pod_hash: &str,
+        _pod_hash: Option<String>,
     ) -> StoreResult<ReceiverStream<Arc<Bytes>>> {
         unimplemented!("stream_response is not supported for UserDefinedStore")
     }

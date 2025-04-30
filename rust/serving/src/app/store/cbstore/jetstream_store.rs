@@ -24,7 +24,6 @@ const CALLBACK_KEY_PREFIX: &str = "cb";
 /// JetStream implementation of the callback store.
 #[derive(Clone)]
 pub(crate) struct JetStreamCallbackStore {
-    pod_hash: &'static str,
     callback_kv: Store,
     callback_senders: Arc<Mutex<HashMap<String, mpsc::Sender<Arc<Callback>>>>>,
     cln_token: CancellationToken,
@@ -63,7 +62,6 @@ impl JetStreamCallbackStore {
         .await;
 
         Ok(Self {
-            pod_hash,
             callback_kv,
             callback_senders,
             cln_token,
@@ -295,22 +293,18 @@ impl super::CallbackStore for JetStreamCallbackStore {
     async fn register_and_watch(
         &mut self,
         id: &str,
-        pod_hash: &str,
+        failed_pod_hash: Option<String>,
     ) -> StoreResult<ReceiverStream<Arc<Callback>>> {
         let (tx, rx) = mpsc::channel(10);
 
         // if the pod_hash is same as the current pod, we can directly register the sender because
         // central watcher is already watching the callbacks for this pod. If not we will have to
         // create a new watcher for watching callbacks of the different pod.
-        if pod_hash.eq(self.pod_hash) {
-            let mut senders_guard = self.callback_senders.lock().await;
-            senders_guard.insert(id.to_string(), tx);
-            Ok(ReceiverStream::new(rx))
-        } else {
+        if let Some(failed_pod_hash) = failed_pod_hash {
             let callback_kv_clone = self.callback_kv.clone();
             let id_clone = id.to_string();
             let tx_clone = tx.clone();
-            let previous_pod_hash = pod_hash.to_string();
+            let previous_pod_hash = failed_pod_hash.clone();
             let cln_token = self.cln_token.clone();
 
             let mut senders_guard = self.callback_senders.lock().await;
@@ -326,6 +320,10 @@ impl super::CallbackStore for JetStreamCallbackStore {
                 )
                 .await;
             });
+            Ok(ReceiverStream::new(rx))
+        } else {
+            let mut senders_guard = self.callback_senders.lock().await;
+            senders_guard.insert(id.to_string(), tx);
             Ok(ReceiverStream::new(rx))
         }
     }
@@ -380,7 +378,7 @@ mod tests {
         .unwrap();
 
         let id = "AFA7E0A1-3F0A-4C1B-AB94-BDA57694648D";
-        let result = store.register_and_watch(id, "xbac").await;
+        let result = store.register_and_watch(id, None).await;
         assert!(result.is_ok());
 
         // delete store
@@ -419,7 +417,7 @@ mod tests {
         .unwrap();
 
         let id = "test_watch_id_two";
-        let mut stream = store.register_and_watch(id, pod_hash).await.unwrap();
+        let mut stream = store.register_and_watch(id, None).await.unwrap();
 
         // Simulate a callback being added to the store
         let callback = Callback {
@@ -507,7 +505,7 @@ mod tests {
 
         // Register and watch the callbacks
         let mut stream = store
-            .register_and_watch(id, previous_pod_hash)
+            .register_and_watch(id, Some(previous_pod_hash.to_string()))
             .await
             .unwrap();
 

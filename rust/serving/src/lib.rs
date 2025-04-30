@@ -150,14 +150,8 @@ async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
                 Some(settings.js_response_store.to_string()),
             )
             .await?;
-            let callback_state = CallbackState::new(
-                settings.pod_hash,
-                msg_graph,
-                nats_store,
-                callback_store,
-                status_tracker,
-            )
-            .await?;
+            let callback_state =
+                CallbackState::new(msg_graph, nats_store, callback_store, status_tracker).await?;
             let app = AppState {
                 js_context,
                 settings,
@@ -178,14 +172,8 @@ async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
             )
             .await?;
             let ud_store = UserDefinedStore::new(ud_config.clone()).await?;
-            let callback_state = CallbackState::new(
-                settings.pod_hash,
-                msg_graph,
-                ud_store,
-                callback_store,
-                status_tracker,
-            )
-            .await?;
+            let callback_state =
+                CallbackState::new(msg_graph, ud_store, callback_store, status_tracker).await?;
             let app = AppState {
                 js_context,
                 settings,

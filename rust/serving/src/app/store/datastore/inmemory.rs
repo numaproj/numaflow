@@ -32,7 +32,7 @@ impl super::DataStore for InMemoryDataStore {
     async fn retrieve_data(
         &mut self,
         id: &str,
-        _pod_hash: Option<&str>,
+        _pod_hash: Option<String>,
     ) -> StoreResult<Vec<Vec<u8>>> {
         let id = format!("{id}_{STORE_KEY_SUFFIX}");
         let data = self.data.lock().await;
@@ -49,7 +49,7 @@ impl super::DataStore for InMemoryDataStore {
     async fn stream_data(
         &mut self,
         id: &str,
-        _pod_hash: &str,
+        _pod_hash: Option<String>,
     ) -> StoreResult<ReceiverStream<Arc<Bytes>>> {
         let (tx, rx) = tokio::sync::mpsc::channel(10);
         let data = self.data.lock().await;
@@ -106,7 +106,7 @@ mod tests {
     async fn test_stream_response() {
         let mut store = create_test_store();
         let id = "test_id_saved";
-        let mut rx = store.stream_data(id, "0").await.unwrap();
+        let mut rx = store.stream_data(id, None).await.unwrap();
         let received_response = rx.next().await.unwrap();
         assert_eq!(
             received_response,

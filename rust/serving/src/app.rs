@@ -349,7 +349,7 @@ mod tests {
             .unwrap();
         let msg_graph = MessageGraph::from_pipeline(&settings.pipeline_spec)?;
         let callback_state =
-            CallbackState::new("0", msg_graph, datum_store, callback_store, status_tracker).await?;
+            CallbackState::new(msg_graph, datum_store, callback_store, status_tracker).await?;
 
         let nats_connection = async_nats::connect("localhost:4222")
             .await
@@ -410,7 +410,7 @@ mod tests {
         let pipeline_spec = PIPELINE_SPEC_ENCODED.parse().unwrap();
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec)?;
         let callback_state =
-            CallbackState::new("0", msg_graph, datum_store, callback_store, status_tracker).await?;
+            CallbackState::new(msg_graph, datum_store, callback_store, status_tracker).await?;
 
         let nats_connection = async_nats::connect("localhost:4222")
             .await

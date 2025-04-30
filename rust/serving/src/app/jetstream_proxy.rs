@@ -578,14 +578,8 @@ mod tests {
 
         let pipeline_spec = PIPELINE_SPEC_ENCODED.parse().unwrap();
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec)?;
-        let orchestrator_state = OrchestratorState::new(
-            pod_hash,
-            msg_graph,
-            datum_store,
-            callback_store,
-            status_tracker,
-        )
-        .await?;
+        let orchestrator_state =
+            OrchestratorState::new(msg_graph, datum_store, callback_store, status_tracker).await?;
 
         let app_state = AppState {
             js_context: context,
@@ -730,15 +724,10 @@ mod tests {
         .await
         .unwrap();
 
-        let orchestrator_state = OrchestratorState::new(
-            POD_HASH,
-            msg_graph,
-            datum_store,
-            callback_store,
-            status_tracker,
-        )
-        .await
-        .unwrap();
+        let orchestrator_state =
+            OrchestratorState::new(msg_graph, datum_store, callback_store, status_tracker)
+                .await
+                .unwrap();
 
         let app_state = AppState {
             js_context: context,
@@ -858,15 +847,10 @@ mod tests {
         .await
         .unwrap();
 
-        let orchestrator_state = OrchestratorState::new(
-            POD_HASH,
-            msg_graph,
-            datum_store,
-            callback_store,
-            status_tracker,
-        )
-        .await
-        .unwrap();
+        let orchestrator_state =
+            OrchestratorState::new(msg_graph, datum_store, callback_store, status_tracker)
+                .await
+                .unwrap();
 
         let app_state = AppState {
             js_context: context,
@@ -1020,14 +1004,8 @@ mod tests {
         .await
         .unwrap();
 
-        let orchestrator_state = OrchestratorState::new(
-            POD_HASH,
-            msg_graph,
-            datum_store,
-            callback_store,
-            status_tracker,
-        )
-        .await?;
+        let orchestrator_state =
+            OrchestratorState::new(msg_graph, datum_store, callback_store, status_tracker).await?;
 
         let app_state = AppState {
             js_context: context,
