@@ -383,13 +383,11 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 	}
 
 	// forward the messages to the edge buffer (could be multiple edges)
-	writeStart := time.Now()
 	writeOffsets, err = df.writeToBuffers(ctx, messageToStep)
 	if err != nil {
 		df.opts.logger.Errorw("failed to write to toBuffers", zap.Error(err))
 		return err
 	}
-	metrics.WriteProcessingTime.With(metricLabelsWithPartition).Observe(float64(time.Since(writeStart).Microseconds()))
 
 	// activeWatermarkBuffers records the buffers that the publisher has published
 	// a watermark in this batch processing cycle.
@@ -535,6 +533,7 @@ func (df *DataForward) writeToBuffer(ctx context.Context, toBufferPartition isb.
 	}
 	totalCount = len(messages)
 	writeOffsets = make([]isb.Offset, 0, totalCount)
+	writeStart := time.Now()
 
 	for {
 		_writeOffsets, errs := toBufferPartition.Write(ctx, messages)
@@ -603,6 +602,7 @@ func (df *DataForward) writeToBuffer(ctx context.Context, toBufferPartition isb.
 		}
 	}
 
+	metrics.WriteProcessingTime.With(metricLabelsWithPartition).Observe(float64(time.Since(writeStart).Microseconds()))
 	metrics.WriteMessagesCount.With(metricLabelsWithPartition).Add(float64(writeCount))
 	metrics.WriteBytesCount.With(metricLabelsWithPartition).Add(writeBytes)
 	return writeOffsets, nil
