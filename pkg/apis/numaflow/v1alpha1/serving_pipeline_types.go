@@ -184,22 +184,16 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 		return nil, fmt.Errorf("failed to marshal serving source settings: %w", err)
 	}
 	encodedServingSourceSettings := base64.StdEncoding.EncodeToString(servingSourceSettings)
-
 	envVars := []corev1.EnvVar{
 		{Name: EnvNamespace, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},
 		{Name: EnvPod, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
 		{Name: EnvServingMinPipelineSpec, Value: encodedPipelineSpec},
-		{Name: "NUMAFLOW_SERVING_SOURCE_SETTINGS", Value: encodedServingSourceSettings},
-		{Name: "NUMAFLOW_SERVING_KV_STORE", Value: fmt.Sprintf("%s_SERVING_KV_STORE", sp.GetServingStoreName())},
+		{Name: EnvServingSettings, Value: encodedServingSourceSettings},
+		{Name: EnvServingCallbackStore, Value: fmt.Sprintf("%s_SERVING_CALLBACK_STORE", sp.GetServingStoreName())},
+		{Name: EnvServingResponseStore, Value: fmt.Sprintf("%s_SERVING_RESPONSE_STORE", sp.GetServingStoreName())},
+		{Name: EnvServingStatusStore, Value: fmt.Sprintf("%s_SERVING_STATUS_STORE", sp.GetServingStoreName())},
 		{Name: EnvServingPort, Value: strconv.Itoa(ServingServicePort)},
-		{ // TODO: do we still need it?
-			Name: EnvServingHostIP,
-			ValueFrom: &corev1.EnvVarSource{
-				FieldRef: &corev1.ObjectFieldSelector{
-					FieldPath: "status.podIP",
-				},
-			},
-		},
+		{Name: EnvReplica, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + KeyReplica + "']"}}},
 	}
 	envVars = append(envVars, req.Env...)
 
@@ -325,7 +319,9 @@ func (sp ServingPipeline) GetPipelineObj(req GetServingPipelineResourceReq) Pipe
 			plSpec.Vertices[i].ContainerTemplate.Env,
 			corev1.EnvVar{Name: EnvCallbackEnabled, Value: "true"},
 			corev1.EnvVar{Name: EnvServingSettings, Value: encodedServingSourceSettings},
-			corev1.EnvVar{Name: EnvServingStore, Value: fmt.Sprintf("%s_SERVING_KV_STORE", sp.GetServingStoreName())},
+			corev1.EnvVar{Name: EnvServingCallbackStore, Value: fmt.Sprintf("%s_SERVING_CALLBACK_STORE", sp.GetServingStoreName())},
+			corev1.EnvVar{Name: EnvServingResponseStore, Value: fmt.Sprintf("%s_SERVING_RESPONSE_STORE", sp.GetServingStoreName())},
+			corev1.EnvVar{Name: EnvServingStatusStore, Value: fmt.Sprintf("%s_SERVING_STATUS_STORE", sp.GetServingStoreName())},
 			corev1.EnvVar{Name: EnvNumaflowRuntime, Value: "rust"},
 		)
 		if plSpec.Vertices[i].Scale.Min == nil {
@@ -516,5 +512,5 @@ func (pls *ServingPipelineStatus) IsHealthy() bool {
 type ServingPipelineList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
-	Items           []Pipeline `json:"items" protobuf:"bytes,2,rep,name=items"`
+	Items           []ServingPipeline `json:"items" protobuf:"bytes,2,rep,name=items"`
 }

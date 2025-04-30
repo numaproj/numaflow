@@ -1,5 +1,9 @@
-use crate::config::{config, CustomResourceType};
+use std::collections::HashMap;
+
+use crate::config::CustomResourceType;
 use bytes::Bytes;
+use config::Settings;
+use numaflow_monitor::runtime;
 use tokio::signal;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -57,16 +61,17 @@ mod tracker;
 /// [Map]: https://numaflow.numaproj.io/user-guide/user-defined-functions/map/map/
 mod mapper;
 
-/// Serving store to store the result of the serving pipeline.
-mod serving_store;
-
 /// [Watermark] _is a monotonically increasing timestamp of the oldest work/event not yet completed_
 ///
 ///
 /// [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 mod watermark;
 
-use numaflow_monitor::runtime;
+/// [Reduce] is a function which "collects" a group of items and then perform some "reduction" operation
+/// on all of them, thus reducing them to a single value.
+///
+/// [Reduce]:https://numaflow.numaproj.io/user-guide/user-defined-functions/reduce/reduce/
+mod reduce;
 
 pub async fn run() -> Result<()> {
     let cln_token = CancellationToken::new();
@@ -79,7 +84,10 @@ pub async fn run() -> Result<()> {
         Ok(())
     });
 
-    let crd_type = config().custom_resource_type.clone();
+    let env_vars: HashMap<String, String> = std::env::vars().collect();
+    let settings = Settings::load(env_vars)?;
+    let crd_type = settings.custom_resource_type.clone();
+
     match crd_type {
         CustomResourceType::MonoVertex(config) => {
             info!("Starting monovertex forwarder with config: {:#?}", config);

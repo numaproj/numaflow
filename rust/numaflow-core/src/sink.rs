@@ -3,25 +3,26 @@
 //!
 //! [Sink]: https://numaflow.numaproj.io/user-guide/sinks/overview/
 
-use std::collections::HashMap;
-use std::time::Duration;
-
 use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
+use numaflow_pb::clients::sink::Status::{Failure, Fallback, Serve, Success};
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::sink_response;
-use numaflow_pb::clients::sink::Status::{Failure, Fallback, Serve, Success};
+use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
+use std::collections::HashMap;
+use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tokio::{pin, time};
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::{error, info, warn};
 use user_defined::UserDefinedSink;
 
+use crate::Result;
 use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
@@ -30,9 +31,8 @@ use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_forward_metric_labels,
     pipeline_metrics,
 };
-use crate::serving_store::ServingStore;
+use crate::sink::serve::{ServingStore, StoreEntry};
 use crate::tracker::TrackerHandle;
-use crate::Result;
 
 /// A [Blackhole] sink which reads but never writes to anywhere, semantic equivalent of `/dev/null`.
 ///
@@ -44,14 +44,14 @@ mod blackhole;
 /// [Log]: https://numaflow.numaproj.io/user-guide/sinks/log/
 mod log;
 
-mod serve;
+/// Serving [ServingStore] to store the result of the serving pipeline. It also contains the builtin [serve::ServeSink]
+/// to write to the serving store.
+pub mod serve;
 
 /// [User-Defined Sink] extends Numaflow to add custom sources supported outside the builtins.
 ///
 /// [User-Defined Sink]: https://numaflow.numaproj.io/user-guide/sinks/user-defined-sinks/
 mod user_defined;
-
-const NUMAFLOW_ID_HEADER: &str = "X-Numaflow-Id";
 
 /// Set of items to be implemented be a Numaflow Sink.
 ///
@@ -399,6 +399,7 @@ impl SinkWriter {
     ) -> Result<JoinHandle<Result<()>>> {
         let handle: JoinHandle<Result<()>> = tokio::spawn({
             async move {
+                info!(?self.batch_size, ?self.chunk_timeout, "Starting sink writer");
                 let chunk_stream =
                     messages_stream.chunks_timeout(self.batch_size, self.chunk_timeout);
 
@@ -857,23 +858,36 @@ impl SinkWriter {
             ));
         };
 
+        // convert Message to StoreEntry
+        let mut payloads = Vec::with_capacity(serving_msgs.len());
         for msg in serving_msgs {
-            let payload = msg.value.clone().into();
-            let id = msg.headers.get(NUMAFLOW_ID_HEADER).ok_or(Error::Sink(
-                "Missing numaflow id header. \
-                Numaflow Id header should be there in the serving message headers."
-                    .to_string(),
-            ))?;
+            let id = msg
+                .headers
+                .get(DEFAULT_ID_HEADER)
+                .ok_or(Error::Sink("Missing numaflow id header".to_string()))?
+                .clone();
+            let pod_hash = msg
+                .headers
+                .get(DEFAULT_POD_HASH_KEY)
+                .ok_or(Error::Sink("Missing pod replica header".to_string()))?
+                .clone();
+            payloads.push(StoreEntry {
+                pod_hash,
+                id,
+                value: msg.value.clone(),
+            });
+        }
 
-            match serving_store {
-                ServingStore::UserDefined(ud_store) => {
-                    ud_store.put_datum(id, get_vertex_name(), payload).await?;
-                }
-                ServingStore::Nats(nats_store) => {
-                    nats_store.put_datum(id, get_vertex_name(), payload).await?;
-                }
+        // push to corresponding store
+        match serving_store {
+            ServingStore::UserDefined(ud_store) => {
+                ud_store.put_datum(get_vertex_name(), payloads).await?;
+            }
+            ServingStore::Nats(nats_store) => {
+                nats_store.put_datum(get_vertex_name(), payloads).await?;
             }
         }
+
         Ok(())
     }
 
@@ -946,12 +960,11 @@ mod tests {
     use super::*;
     use crate::config::pipeline::NatsStoreConfig;
     use crate::message::{IntOffset, Message, MessageID, Offset, ReadAck};
-    use crate::serving_store::nats::NatsServingStore;
     use crate::shared::grpc::create_rpc_channel;
+    use crate::sink::serve::nats::NatsServingStore;
     use async_nats::jetstream;
     use async_nats::jetstream::kv::Config;
     use chrono::{TimeZone, Utc};
-    use futures::StreamExt;
     use numaflow::sink;
     use numaflow_pb::clients::sink::{SinkRequest, SinkResponse};
     use std::sync::Arc;
@@ -1266,7 +1279,7 @@ mod tests {
             NatsServingStore::new(
                 context.clone(),
                 NatsStoreConfig {
-                    name: serving_store.to_string(),
+                    rs_store_name: serving_store.to_string(),
                 },
             )
             .await
@@ -1310,7 +1323,8 @@ mod tests {
         let messages: Vec<Message> = (0..10)
             .map(|i| {
                 let mut headers = HashMap::new();
-                headers.insert(NUMAFLOW_ID_HEADER.to_string(), format!("id_{}", i));
+                headers.insert(DEFAULT_ID_HEADER.to_string(), format!("id_{}", i));
+                headers.insert(DEFAULT_POD_HASH_KEY.to_string(), "abcd".to_string());
                 Message {
                     typ: Default::default(),
                     keys: Arc::from(vec!["serve".to_string()]),

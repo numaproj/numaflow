@@ -19,10 +19,10 @@ limitations under the License.
 package v1alpha1
 
 import (
-	v1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/listers"
-	"k8s.io/client-go/tools/cache"
+	numaflowv1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	labels "k8s.io/apimachinery/pkg/labels"
+	listers "k8s.io/client-go/listers"
+	cache "k8s.io/client-go/tools/cache"
 )
 
 // VertexLister helps list Vertices.
@@ -30,7 +30,7 @@ import (
 type VertexLister interface {
 	// List lists all Vertices in the indexer.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.Vertex, err error)
+	List(selector labels.Selector) (ret []*numaflowv1alpha1.Vertex, err error)
 	// Vertices returns an object that can list and get Vertices.
 	Vertices(namespace string) VertexNamespaceLister
 	VertexListerExpansion
@@ -38,17 +38,17 @@ type VertexLister interface {
 
 // vertexLister implements the VertexLister interface.
 type vertexLister struct {
-	listers.ResourceIndexer[*v1alpha1.Vertex]
+	listers.ResourceIndexer[*numaflowv1alpha1.Vertex]
 }
 
 // NewVertexLister returns a new VertexLister.
 func NewVertexLister(indexer cache.Indexer) VertexLister {
-	return &vertexLister{listers.New[*v1alpha1.Vertex](indexer, v1alpha1.Resource("vertex"))}
+	return &vertexLister{listers.New[*numaflowv1alpha1.Vertex](indexer, numaflowv1alpha1.Resource("vertex"))}
 }
 
 // Vertices returns an object that can list and get Vertices.
 func (s *vertexLister) Vertices(namespace string) VertexNamespaceLister {
-	return vertexNamespaceLister{listers.NewNamespaced[*v1alpha1.Vertex](s.ResourceIndexer, namespace)}
+	return vertexNamespaceLister{listers.NewNamespaced[*numaflowv1alpha1.Vertex](s.ResourceIndexer, namespace)}
 }
 
 // VertexNamespaceLister helps list and get Vertices.
@@ -56,15 +56,15 @@ func (s *vertexLister) Vertices(namespace string) VertexNamespaceLister {
 type VertexNamespaceLister interface {
 	// List lists all Vertices in the indexer for a given namespace.
 	// Objects returned here must be treated as read-only.
-	List(selector labels.Selector) (ret []*v1alpha1.Vertex, err error)
+	List(selector labels.Selector) (ret []*numaflowv1alpha1.Vertex, err error)
 	// Get retrieves the Vertex from the indexer for a given namespace and name.
 	// Objects returned here must be treated as read-only.
-	Get(name string) (*v1alpha1.Vertex, error)
+	Get(name string) (*numaflowv1alpha1.Vertex, error)
 	VertexNamespaceListerExpansion
 }
 
 // vertexNamespaceLister implements the VertexNamespaceLister
 // interface.
 type vertexNamespaceLister struct {
-	listers.ResourceIndexer[*v1alpha1.Vertex]
+	listers.ResourceIndexer[*numaflowv1alpha1.Vertex]
 }

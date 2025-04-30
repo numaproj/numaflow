@@ -8,8 +8,8 @@ use chrono::{DateTime, Utc};
 use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
 
-use crate::shared::grpc::prost_timestamp_from_utc;
 use crate::Error;
+use crate::shared::grpc::prost_timestamp_from_utc;
 
 const DROP: &str = "U+005C__DROP__";
 
@@ -239,6 +239,15 @@ impl fmt::Display for MessageID {
             std::str::from_utf8(&self.offset).expect("it should be valid utf-8"),
             self.index
         )
+    }
+}
+
+impl TryFrom<Message> for Bytes {
+    type Error = Error;
+
+    fn try_from(value: Message) -> Result<Self, Self::Error> {
+        let b: BytesMut = value.try_into()?;
+        Ok(b.freeze())
     }
 }
 

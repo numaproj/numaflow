@@ -40,7 +40,7 @@ impl From<String> for Error {
 #[cfg(test)]
 mod tests {
     use aws_config::BehaviorVersion;
-    use aws_smithy_mocks_experimental::{mock, MockResponseInterceptor, RuleMode};
+    use aws_smithy_mocks_experimental::{MockResponseInterceptor, RuleMode, mock};
     use aws_smithy_types::error::ErrorMetadata;
 
     use super::*;
@@ -69,9 +69,11 @@ mod tests {
 
         let converted_error = Error::Sqs(err.into());
         assert!(matches!(converted_error, Error::Sqs(_)));
-        assert!(converted_error
-            .to_string()
-            .contains("Failed with SQS error"));
+        assert!(
+            converted_error
+                .to_string()
+                .contains("Failed with SQS error")
+        );
     }
 
     #[test]

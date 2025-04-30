@@ -1,13 +1,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use tokio::sync::mpsc;
-use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
-use tokio_stream::wrappers::ReceiverStream;
-
 use crate::app::store::datastore::{Error as StoreError, Result as StoreResult};
 use crate::callback::Callback;
+use tokio::sync::Mutex;
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 
 /// An in-memory implementation of the callback store. Only used for testing.
 #[derive(Clone)]
@@ -26,20 +24,9 @@ impl InMemoryCallbackStore {
 }
 
 impl super::CallbackStore for InMemoryCallbackStore {
-    /// Register a request id in the store. If the `id` already exists in the store,
-    /// `StoreError::DuplicateRequest` error is returned.
-    async fn register(&mut self, id: &str) -> StoreResult<()> {
-        let mut data = self.data.lock().await;
-        if data.contains_key(id) {
-            return Err(StoreError::DuplicateRequest(id.to_string()));
-        }
-        data.insert(id.to_string(), Vec::new());
-        Ok(())
-    }
-
     /// De-register a request id from the store. If the `id` does not exist in the store,
     /// `StoreError::InvalidRequestId` error is returned.
-    async fn deregister(&mut self, id: &str, _sub_graph: &str) -> StoreResult<()> {
+    async fn deregister(&mut self, id: &str) -> StoreResult<()> {
         let mut data = self.data.lock().await;
         if data.remove(id).is_none() {
             return Err(StoreError::InvalidRequestId(id.to_string()));
@@ -47,16 +34,16 @@ impl super::CallbackStore for InMemoryCallbackStore {
         Ok(())
     }
 
-    async fn mark_as_failed(&mut self, _id: &str, _error: &str) -> StoreResult<()> {
-        Ok(())
-    }
-
-    async fn watch_callbacks(
+    async fn register_and_watch(
         &mut self,
         id: &str,
-    ) -> StoreResult<(ReceiverStream<Arc<Callback>>, JoinHandle<()>)> {
+        _pod_hash: &str,
+    ) -> StoreResult<ReceiverStream<Arc<Callback>>> {
+        let mut data = self.data.lock().await;
+        if !data.contains_key(id) {
+            data.insert(id.to_string(), Vec::new());
+        }
         let (tx, rx) = mpsc::channel(10);
-        let data = self.data.lock().await;
         if let Some(callbacks) = data.get(id) {
             for callback in callbacks {
                 tx.send(Arc::clone(callback))
@@ -66,15 +53,7 @@ impl super::CallbackStore for InMemoryCallbackStore {
         } else {
             return Err(StoreError::InvalidRequestId(id.to_string()));
         }
-        Ok((ReceiverStream::new(rx), tokio::spawn(async {})))
-    }
-
-    async fn status(&mut self, _id: &str) -> StoreResult<super::ProcessingStatus> {
-        let data = self.data.lock().await;
-        if data.get(_id).is_none() {
-            return Err(StoreError::InvalidRequestId(_id.to_string()));
-        }
-        Ok(super::ProcessingStatus::InProgress)
+        Ok(ReceiverStream::new(rx))
     }
 
     async fn ready(&mut self) -> bool {
@@ -90,7 +69,7 @@ mod tests {
     use tokio_stream::StreamExt;
 
     use super::*;
-    use crate::app::store::cbstore::{CallbackStore, ProcessingStatus};
+    use crate::app::store::cbstore::CallbackStore;
     use crate::callback::Callback;
 
     fn create_test_store() -> InMemoryCallbackStore {
@@ -107,27 +86,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_register() {
-        let mut store = create_test_store();
-        let id = "new_test_id";
-        let result = store.register(id).await;
-        assert!(result.is_ok());
-
-        // Try to register the same id again, should return an error
-        let result = store.register(id).await;
-        assert!(matches!(result, Err(StoreError::DuplicateRequest(_))));
-    }
-
-    #[tokio::test]
     async fn test_deregister() {
         let mut store = create_test_store();
         let id = "test_id";
 
-        let result = store.deregister(id, "sub_graph").await;
+        let result = store.deregister(id).await;
         assert!(result.is_ok());
 
         // Try to deregister the same id again, should return an error
-        let result = store.deregister(id, "sub_graph").await;
+        let result = store.deregister(id).await;
         assert!(matches!(result, Err(StoreError::InvalidRequestId(_))));
     }
 
@@ -136,20 +103,11 @@ mod tests {
         let mut store = create_test_store();
         let id = "test_id";
 
-        let (mut rx, _handle) = store.watch_callbacks(id).await.unwrap();
+        let mut rx = store.register_and_watch(id, "0").await.unwrap();
         let received_callback = rx.next().await.unwrap();
         assert_eq!(received_callback.id, "test_id");
         assert_eq!(received_callback.vertex, "vertex");
         assert_eq!(received_callback.cb_time, 12345);
         assert_eq!(received_callback.from_vertex, "from_vertex");
-    }
-
-    #[tokio::test]
-    async fn test_status() {
-        let mut store = create_test_store();
-        let id = "test_id";
-
-        let status = store.status(id).await.unwrap();
-        assert!(matches!(status, ProcessingStatus::InProgress));
     }
 }

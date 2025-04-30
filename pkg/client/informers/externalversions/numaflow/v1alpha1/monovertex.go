@@ -19,13 +19,13 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	numaflowv1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	apisnumaflowv1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	versioned "github.com/numaproj/numaflow/pkg/client/clientset/versioned"
 	internalinterfaces "github.com/numaproj/numaflow/pkg/client/informers/externalversions/internalinterfaces"
-	v1alpha1 "github.com/numaproj/numaflow/pkg/client/listers/numaflow/v1alpha1"
+	numaflowv1alpha1 "github.com/numaproj/numaflow/pkg/client/listers/numaflow/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -36,7 +36,7 @@ import (
 // MonoVertices.
 type MonoVertexInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha1.MonoVertexLister
+	Lister() numaflowv1alpha1.MonoVertexLister
 }
 
 type monoVertexInformer struct {
@@ -71,7 +71,7 @@ func NewFilteredMonoVertexInformer(client versioned.Interface, namespace string,
 				return client.NumaflowV1alpha1().MonoVertices(namespace).Watch(context.TODO(), options)
 			},
 		},
-		&numaflowv1alpha1.MonoVertex{},
+		&apisnumaflowv1alpha1.MonoVertex{},
 		resyncPeriod,
 		indexers,
 	)
@@ -82,9 +82,9 @@ func (f *monoVertexInformer) defaultInformer(client versioned.Interface, resyncP
 }
 
 func (f *monoVertexInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&numaflowv1alpha1.MonoVertex{}, f.defaultInformer)
+	return f.factory.InformerFor(&apisnumaflowv1alpha1.MonoVertex{}, f.defaultInformer)
 }
 
-func (f *monoVertexInformer) Lister() v1alpha1.MonoVertexLister {
-	return v1alpha1.NewMonoVertexLister(f.Informer().GetIndexer())
+func (f *monoVertexInformer) Lister() numaflowv1alpha1.MonoVertexLister {
+	return numaflowv1alpha1.NewMonoVertexLister(f.Informer().GetIndexer())
 }

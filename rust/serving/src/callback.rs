@@ -1,10 +1,7 @@
-use std::{
-    sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::sync::Arc;
 
-use async_nats::jetstream::kv::Store;
 use async_nats::jetstream::Context;
+use async_nats::jetstream::kv::Store;
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use bytes::Bytes;
@@ -85,13 +82,11 @@ impl CallbackHandler {
     pub async fn callback(
         &self,
         id: String,
+        pod_hash: String,
         previous_vertex: String,
         responses: Vec<Option<Vec<String>>>,
     ) -> crate::Result<JoinHandle<()>> {
-        let cb_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("System time is older than Unix epoch time")
-            .as_millis() as u64;
+        let cb_time = Utc::now().timestamp_millis() as u64;
 
         let responses = responses
             .into_iter()
@@ -111,23 +106,21 @@ impl CallbackHandler {
         let store = self.store.clone();
         let handle = tokio::spawn(async move {
             let timestamp = Utc::now().timestamp_nanos_opt().unwrap();
-            let callbacks_key = format!("cb.{id}.{vertex_name}.{timestamp}");
+            let callbacks_key = format!("cb.{pod_hash}.{id}.{vertex_name}.{timestamp}");
             let interval = fixed::Interval::from_millis(1000).take(2);
 
             let _permit = permit;
             let value = serde_json::to_string(&callback_payload).expect("Failed to serialize");
             let result = Retry::retry(
                 interval,
-                || async {
-                    match store.put(&callbacks_key, Bytes::from(value.clone())).await {
-                        Ok(resp) => Ok(resp),
-                        Err(e) => {
-                            warn!(?e, "Failed to write callback to store, retrying..");
-                            Err(Error::Other(format!(
-                                "Failed to write callback to store: {}",
-                                e
-                            )))
-                        }
+                async || match store.put(&callbacks_key, Bytes::from(value.clone())).await {
+                    Ok(resp) => Ok(resp),
+                    Err(e) => {
+                        warn!(?e, "Failed to write callback to store, retrying..");
+                        Err(Error::Other(format!(
+                            "Failed to write callback to store: {}",
+                            e
+                        )))
                     }
                 },
                 |_: &Error| true,
@@ -184,7 +177,12 @@ mod tests {
             CallbackHandler::new("test_vertex".to_string(), context.clone(), store_name, 1).await;
 
         callback_handler
-            .callback(id.to_string(), "test_from_vertex".to_string(), vec![])
+            .callback(
+                id.to_string(),
+                "0".to_string(),
+                "test_from_vertex".to_string(),
+                vec![],
+            )
             .await
             .unwrap()
             .await

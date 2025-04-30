@@ -5,29 +5,30 @@ use axum::extract::{MatchedPath, Query, State};
 use axum::http::StatusCode;
 use axum::middleware::Next;
 use axum::response::Response;
-use axum::{body::Body, http::Request, middleware, response::IntoResponse, routing::get, Router};
-use axum_server::tls_rustls::RustlsConfig;
+use axum::{Router, body::Body, http::Request, middleware, response::IntoResponse, routing::get};
 use axum_server::Handle;
+use axum_server::tls_rustls::RustlsConfig;
 use http::HeaderName;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
 use serde::Deserialize;
 use tokio::signal;
+use tokio_util::sync::CancellationToken;
 use tower::ServiceBuilder;
 use tower_http::classify::ServerErrorsFailureClass;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
-use tracing::{info, info_span, Span};
+use tracing::{Span, info, info_span};
 use uuid::Uuid;
 
 use self::{
-    direct_proxy::direct_proxy, jetstream_proxy::jetstream_proxy, message_path::get_message_path,
+    direct_proxy::direct_proxy, jetstream_proxy::serving_proxy, message_path::get_message_path,
 };
+use crate::AppState;
+use crate::Error::InitError;
 use crate::app::store::cbstore::CallbackStore;
 use crate::app::store::datastore::DataStore;
 use crate::metrics::capture_metrics;
-use crate::AppState;
-use crate::Error::InitError;
 
 /// simple direct reverse-proxy
 mod direct_proxy;
@@ -46,6 +47,7 @@ pub(crate) mod tracker;
 pub(crate) async fn start_main_server<T, U>(
     app: AppState<T, U>,
     tls_config: RustlsConfig,
+    cancel_token: CancellationToken,
 ) -> crate::Result<()>
 where
     T: Clone + Send + Sync + DataStore + 'static,
@@ -60,6 +62,7 @@ where
     tokio::spawn(graceful_shutdown(
         handle.clone(),
         app.settings.drain_timeout_secs,
+        cancel_token.clone(),
     ));
 
     info!(?app_addr, "Starting application server");
@@ -72,6 +75,7 @@ where
         .await
         .map_err(|e| InitError(format!("Starting web server for metrics: {}", e)))?;
 
+    info!(?app_addr, "Server stopped");
     Ok(())
 }
 
@@ -164,9 +168,9 @@ where
     Ok(setup_app(app).await?.layer(layers))
 }
 
-// Gracefully shutdown the server on receiving SIGINT or SIGTERM
-// by sending a shutdown signal to the server using the handle.
-async fn graceful_shutdown(handle: Handle, duration_secs: u64) {
+/// Gracefully shutdown the server on receiving SIGINT or SIGTERM
+/// by sending a shutdown signal to the server using the handle.
+async fn graceful_shutdown(handle: Handle, duration_secs: u64, cancel_token: CancellationToken) {
     let ctrl_c = async {
         signal::ctrl_c()
             .await
@@ -185,10 +189,10 @@ async fn graceful_shutdown(handle: Handle, duration_secs: u64) {
         _ = terminate => {},
     }
 
-    info!("sending graceful shutdown signal");
-
+    info!("Got terminate signal, gracefully shutting down the server");
     // Signal the server to shut down using Handle.
     handle.graceful_shutdown(Some(Duration::from_secs(duration_secs)));
+    cancel_token.cancel();
 }
 
 const PUBLISH_ENDPOINTS: [&str; 3] = ["/v1/process/sync", "/v1/process/async", "/v1/process/fetch"];
@@ -216,7 +220,7 @@ async fn auth_middleware(
                     return Response::builder()
                         .status(401)
                         .body(Body::empty())
-                        .expect("failed to build response")
+                        .expect("failed to build response");
                 }
             };
             if auth_token.to_str().expect("auth token should be a string")
@@ -293,7 +297,7 @@ async fn routes<
     app_state: AppState<T, U>,
 ) -> crate::Result<Router> {
     let state = app_state.orchestrator_state.clone();
-    let jetstream_proxy = jetstream_proxy(app_state.clone()).await?;
+    let jetstream_proxy = serving_proxy(app_state.clone()).await?;
 
     let message_path_handler = get_message_path(state);
     Ok(jetstream_proxy.merge(message_path_handler))
@@ -310,9 +314,10 @@ mod tests {
     use tracker::MessageGraph;
 
     use super::*;
+    use crate::Settings;
     use crate::app::store::cbstore::memstore::InMemoryCallbackStore;
     use crate::app::store::datastore::inmemory::InMemoryDataStore;
-    use crate::Settings;
+    use crate::app::store::status::StatusTracker;
 
     const PIPELINE_SPEC_ENCODED: &str = "eyJ2ZXJ0aWNlcyI6W3sibmFtZSI6ImluIiwic291cmNlIjp7InNlcnZpbmciOnsiYXV0aCI6bnVsbCwic2VydmljZSI6dHJ1ZSwibXNnSURIZWFkZXJLZXkiOiJYLU51bWFmbG93LUlkIiwic3RvcmUiOnsidXJsIjoicmVkaXM6Ly9yZWRpczo2Mzc5In19fSwiY29udGFpbmVyVGVtcGxhdGUiOnsicmVzb3VyY2VzIjp7fSwiaW1hZ2VQdWxsUG9saWN5IjoiTmV2ZXIiLCJlbnYiOlt7Im5hbWUiOiJSVVNUX0xPRyIsInZhbHVlIjoiZGVidWcifV19LCJzY2FsZSI6eyJtaW4iOjF9LCJ1cGRhdGVTdHJhdGVneSI6eyJ0eXBlIjoiUm9sbGluZ1VwZGF0ZSIsInJvbGxpbmdVcGRhdGUiOnsibWF4VW5hdmFpbGFibGUiOiIyNSUifX19LHsibmFtZSI6InBsYW5uZXIiLCJ1ZGYiOnsiY29udGFpbmVyIjp7ImltYWdlIjoiYXNjaWk6MC4xIiwiYXJncyI6WyJwbGFubmVyIl0sInJlc291cmNlcyI6e30sImltYWdlUHVsbFBvbGljeSI6Ik5ldmVyIn0sImJ1aWx0aW4iOm51bGwsImdyb3VwQnkiOm51bGx9LCJjb250YWluZXJUZW1wbGF0ZSI6eyJyZXNvdXJjZXMiOnt9LCJpbWFnZVB1bGxQb2xpY3kiOiJOZXZlciJ9LCJzY2FsZSI6eyJtaW4iOjF9LCJ1cGRhdGVTdHJhdGVneSI6eyJ0eXBlIjoiUm9sbGluZ1VwZGF0ZSIsInJvbGxpbmdVcGRhdGUiOnsibWF4VW5hdmFpbGFibGUiOiIyNSUifX19LHsibmFtZSI6InRpZ2VyIiwidWRmIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6ImFzY2lpOjAuMSIsImFyZ3MiOlsidGlnZXIiXSwicmVzb3VyY2VzIjp7fSwiaW1hZ2VQdWxsUG9saWN5IjoiTmV2ZXIifSwiYnVpbHRpbiI6bnVsbCwiZ3JvdXBCeSI6bnVsbH0sImNvbnRhaW5lclRlbXBsYXRlIjp7InJlc291cmNlcyI6e30sImltYWdlUHVsbFBvbGljeSI6Ik5ldmVyIn0sInNjYWxlIjp7Im1pbiI6MX0sInVwZGF0ZVN0cmF0ZWd5Ijp7InR5cGUiOiJSb2xsaW5nVXBkYXRlIiwicm9sbGluZ1VwZGF0ZSI6eyJtYXhVbmF2YWlsYWJsZSI6IjI1JSJ9fX0seyJuYW1lIjoiZG9nIiwidWRmIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6ImFzY2lpOjAuMSIsImFyZ3MiOlsiZG9nIl0sInJlc291cmNlcyI6e30sImltYWdlUHVsbFBvbGljeSI6Ik5ldmVyIn0sImJ1aWx0aW4iOm51bGwsImdyb3VwQnkiOm51bGx9LCJjb250YWluZXJUZW1wbGF0ZSI6eyJyZXNvdXJjZXMiOnt9LCJpbWFnZVB1bGxQb2xpY3kiOiJOZXZlciJ9LCJzY2FsZSI6eyJtaW4iOjF9LCJ1cGRhdGVTdHJhdGVneSI6eyJ0eXBlIjoiUm9sbGluZ1VwZGF0ZSIsInJvbGxpbmdVcGRhdGUiOnsibWF4VW5hdmFpbGFibGUiOiIyNSUifX19LHsibmFtZSI6ImVsZXBoYW50IiwidWRmIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6ImFzY2lpOjAuMSIsImFyZ3MiOlsiZWxlcGhhbnQiXSwicmVzb3VyY2VzIjp7fSwiaW1hZ2VQdWxsUG9saWN5IjoiTmV2ZXIifSwiYnVpbHRpbiI6bnVsbCwiZ3JvdXBCeSI6bnVsbH0sImNvbnRhaW5lclRlbXBsYXRlIjp7InJlc291cmNlcyI6e30sImltYWdlUHVsbFBvbGljeSI6Ik5ldmVyIn0sInNjYWxlIjp7Im1pbiI6MX0sInVwZGF0ZVN0cmF0ZWd5Ijp7InR5cGUiOiJSb2xsaW5nVXBkYXRlIiwicm9sbGluZ1VwZGF0ZSI6eyJtYXhVbmF2YWlsYWJsZSI6IjI1JSJ9fX0seyJuYW1lIjoiYXNjaWlhcnQiLCJ1ZGYiOnsiY29udGFpbmVyIjp7ImltYWdlIjoiYXNjaWk6MC4xIiwiYXJncyI6WyJhc2NpaWFydCJdLCJyZXNvdXJjZXMiOnt9LCJpbWFnZVB1bGxQb2xpY3kiOiJOZXZlciJ9LCJidWlsdGluIjpudWxsLCJncm91cEJ5IjpudWxsfSwiY29udGFpbmVyVGVtcGxhdGUiOnsicmVzb3VyY2VzIjp7fSwiaW1hZ2VQdWxsUG9saWN5IjoiTmV2ZXIifSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19fSx7Im5hbWUiOiJzZXJ2ZS1zaW5rIiwic2luayI6eyJ1ZHNpbmsiOnsiY29udGFpbmVyIjp7ImltYWdlIjoic2VydmVzaW5rOjAuMSIsImVudiI6W3sibmFtZSI6Ik5VTUFGTE9XX0NBTExCQUNLX1VSTF9LRVkiLCJ2YWx1ZSI6IlgtTnVtYWZsb3ctQ2FsbGJhY2stVXJsIn0seyJuYW1lIjoiTlVNQUZMT1dfTVNHX0lEX0hFQURFUl9LRVkiLCJ2YWx1ZSI6IlgtTnVtYWZsb3ctSWQifV0sInJlc291cmNlcyI6e30sImltYWdlUHVsbFBvbGljeSI6Ik5ldmVyIn19LCJyZXRyeVN0cmF0ZWd5Ijp7fX0sImNvbnRhaW5lclRlbXBsYXRlIjp7InJlc291cmNlcyI6e30sImltYWdlUHVsbFBvbGljeSI6Ik5ldmVyIn0sInNjYWxlIjp7Im1pbiI6MX0sInVwZGF0ZVN0cmF0ZWd5Ijp7InR5cGUiOiJSb2xsaW5nVXBkYXRlIiwicm9sbGluZ1VwZGF0ZSI6eyJtYXhVbmF2YWlsYWJsZSI6IjI1JSJ9fX0seyJuYW1lIjoiZXJyb3Itc2luayIsInNpbmsiOnsidWRzaW5rIjp7ImNvbnRhaW5lciI6eyJpbWFnZSI6InNlcnZlc2luazowLjEiLCJlbnYiOlt7Im5hbWUiOiJOVU1BRkxPV19DQUxMQkFDS19VUkxfS0VZIiwidmFsdWUiOiJYLU51bWFmbG93LUNhbGxiYWNrLVVybCJ9LHsibmFtZSI6Ik5VTUFGTE9XX01TR19JRF9IRUFERVJfS0VZIiwidmFsdWUiOiJYLU51bWFmbG93LUlkIn1dLCJyZXNvdXJjZXMiOnt9LCJpbWFnZVB1bGxQb2xpY3kiOiJOZXZlciJ9fSwicmV0cnlTdHJhdGVneSI6e319LCJjb250YWluZXJUZW1wbGF0ZSI6eyJyZXNvdXJjZXMiOnt9LCJpbWFnZVB1bGxQb2xpY3kiOiJOZXZlciJ9LCJzY2FsZSI6eyJtaW4iOjF9LCJ1cGRhdGVTdHJhdGVneSI6eyJ0eXBlIjoiUm9sbGluZ1VwZGF0ZSIsInJvbGxpbmdVcGRhdGUiOnsibWF4VW5hdmFpbGFibGUiOiIyNSUifX19XSwiZWRnZXMiOlt7ImZyb20iOiJpbiIsInRvIjoicGxhbm5lciIsImNvbmRpdGlvbnMiOm51bGx9LHsiZnJvbSI6InBsYW5uZXIiLCJ0byI6ImFzY2lpYXJ0IiwiY29uZGl0aW9ucyI6eyJ0YWdzIjp7Im9wZXJhdG9yIjoib3IiLCJ2YWx1ZXMiOlsiYXNjaWlhcnQiXX19fSx7ImZyb20iOiJwbGFubmVyIiwidG8iOiJ0aWdlciIsImNvbmRpdGlvbnMiOnsidGFncyI6eyJvcGVyYXRvciI6Im9yIiwidmFsdWVzIjpbInRpZ2VyIl19fX0seyJmcm9tIjoicGxhbm5lciIsInRvIjoiZG9nIiwiY29uZGl0aW9ucyI6eyJ0YWdzIjp7Im9wZXJhdG9yIjoib3IiLCJ2YWx1ZXMiOlsiZG9nIl19fX0seyJmcm9tIjoicGxhbm5lciIsInRvIjoiZWxlcGhhbnQiLCJjb25kaXRpb25zIjp7InRhZ3MiOnsib3BlcmF0b3IiOiJvciIsInZhbHVlcyI6WyJlbGVwaGFudCJdfX19LHsiZnJvbSI6InRpZ2VyIiwidG8iOiJzZXJ2ZS1zaW5rIiwiY29uZGl0aW9ucyI6bnVsbH0seyJmcm9tIjoiZG9nIiwidG8iOiJzZXJ2ZS1zaW5rIiwiY29uZGl0aW9ucyI6bnVsbH0seyJmcm9tIjoiZWxlcGhhbnQiLCJ0byI6InNlcnZlLXNpbmsiLCJjb25kaXRpb25zIjpudWxsfSx7ImZyb20iOiJhc2NpaWFydCIsInRvIjoic2VydmUtc2luayIsImNvbmRpdGlvbnMiOm51bGx9LHsiZnJvbSI6InBsYW5uZXIiLCJ0byI6ImVycm9yLXNpbmsiLCJjb25kaXRpb25zIjp7InRhZ3MiOnsib3BlcmF0b3IiOiJvciIsInZhbHVlcyI6WyJlcnJvciJdfX19XSwibGlmZWN5Y2xlIjp7fSwid2F0ZXJtYXJrIjp7fX0=";
 
@@ -326,9 +331,27 @@ mod tests {
 
         let datum_store = InMemoryDataStore::new(None);
         let callback_store = InMemoryCallbackStore::new(None);
+        let store_name = "test_health_check_endpoints";
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let _ = context.delete_key_value(store_name).await;
 
+        let _ = context
+            .create_key_value(jetstream::kv::Config {
+                bucket: store_name.to_string(),
+                history: 5,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let status_tracker = StatusTracker::new(context.clone(), store_name, "0".to_string(), None)
+            .await
+            .unwrap();
         let msg_graph = MessageGraph::from_pipeline(&settings.pipeline_spec)?;
-        let callback_state = CallbackState::new(msg_graph, datum_store, callback_store).await?;
+        let callback_state =
+            CallbackState::new("0", msg_graph, datum_store, callback_store, status_tracker).await?;
 
         let nats_connection = async_nats::connect("localhost:4222")
             .await
@@ -338,6 +361,7 @@ mod tests {
             js_context,
             settings,
             orchestrator_state: callback_state,
+            cancellation_token: CancellationToken::new(),
         };
 
         let router = setup_app(app).await.unwrap();
@@ -366,10 +390,29 @@ mod tests {
 
         let datum_store = InMemoryDataStore::new(None);
         let callback_store = InMemoryCallbackStore::new(None);
+        let store_name = "test_auth_middleware";
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let _ = context.delete_key_value(store_name).await;
+
+        let _ = context
+            .create_key_value(jetstream::kv::Config {
+                bucket: store_name.to_string(),
+                history: 5,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let status_tracker = StatusTracker::new(context.clone(), store_name, "0".to_string(), None)
+            .await
+            .unwrap();
 
         let pipeline_spec = PIPELINE_SPEC_ENCODED.parse().unwrap();
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec)?;
-        let callback_state = CallbackState::new(msg_graph, datum_store, callback_store).await?;
+        let callback_state =
+            CallbackState::new("0", msg_graph, datum_store, callback_store, status_tracker).await?;
 
         let nats_connection = async_nats::connect("localhost:4222")
             .await
@@ -380,6 +423,7 @@ mod tests {
             js_context,
             settings: Arc::new(settings),
             orchestrator_state: callback_state,
+            cancellation_token: CancellationToken::new(),
         };
 
         let router = router_with_auth(app_state).await.unwrap();

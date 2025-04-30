@@ -4958,7 +4958,7 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingPipelineList(ref common.ReferenceC
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Pipeline"),
+										Ref:     ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingPipeline"),
 									},
 								},
 							},
@@ -4969,7 +4969,7 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingPipelineList(ref common.ReferenceC
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Pipeline", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingPipeline", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
 	}
 }
 

@@ -1,5 +1,5 @@
 //!  Config module for Sidecar monitor container
-use rcgen::{generate_simple_self_signed, Certificate, CertifiedKey, KeyPair};
+use rcgen::{Certificate, CertifiedKey, KeyPair, generate_simple_self_signed};
 
 pub fn generate_certs() -> std::result::Result<(Certificate, KeyPair), String> {
     let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])

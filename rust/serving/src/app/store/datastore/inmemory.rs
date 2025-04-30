@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 
 use crate::app::store::datastore::{Error as StoreError, Result as StoreResult};
@@ -30,7 +29,11 @@ impl InMemoryDataStore {
 impl super::DataStore for InMemoryDataStore {
     /// Retrieves data for a given id from the `HashMap`.
     /// Each piece of data is deserialized from bytes into a `String`.
-    async fn retrieve_data(&mut self, id: &str) -> StoreResult<Vec<Vec<u8>>> {
+    async fn retrieve_data(
+        &mut self,
+        id: &str,
+        _pod_hash: Option<&str>,
+    ) -> StoreResult<Vec<Vec<u8>>> {
         let id = format!("{id}_{STORE_KEY_SUFFIX}");
         let data = self.data.lock().await;
         match data.get(&id) {
@@ -46,7 +49,8 @@ impl super::DataStore for InMemoryDataStore {
     async fn stream_data(
         &mut self,
         id: &str,
-    ) -> StoreResult<(ReceiverStream<Arc<Bytes>>, JoinHandle<()>)> {
+        _pod_hash: &str,
+    ) -> StoreResult<ReceiverStream<Arc<Bytes>>> {
         let (tx, rx) = tokio::sync::mpsc::channel(10);
         let data = self.data.lock().await;
         if let Some(response) = data.get(id) {
@@ -56,7 +60,7 @@ impl super::DataStore for InMemoryDataStore {
                     .map_err(|_| StoreError::StoreRead("Failed to send datum".to_string()))?;
             }
         }
-        Ok((ReceiverStream::new(rx), tokio::task::spawn(async {})))
+        Ok(ReceiverStream::new(rx))
     }
 
     async fn ready(&mut self) -> bool {
@@ -72,8 +76,8 @@ mod tests {
     use tokio_stream::StreamExt;
 
     use super::*;
-    use crate::app::store::datastore::inmemory::InMemoryDataStore;
     use crate::app::store::datastore::DataStore;
+    use crate::app::store::datastore::inmemory::InMemoryDataStore;
 
     fn create_test_store() -> InMemoryDataStore {
         let mut datum_map: HashMap<String, Vec<Vec<u8>>> = HashMap::new();
@@ -85,7 +89,7 @@ mod tests {
     async fn test_retrieve_datum() {
         let mut store = create_test_store();
         let id = "test_id";
-        let result = store.retrieve_data(id).await.unwrap();
+        let result = store.retrieve_data(id, None).await.unwrap();
         assert!(result.len() > 0);
         assert_eq!(result[0], b"test_payload");
     }
@@ -94,7 +98,7 @@ mod tests {
     async fn test_retrieve_datum_not_found() {
         let mut store = create_test_store();
         let id = "non_existent_id";
-        let result = store.retrieve_data(id).await;
+        let result = store.retrieve_data(id, None).await;
         assert!(matches!(result, Err(StoreError::InvalidRequestId(_))));
     }
 
@@ -102,7 +106,7 @@ mod tests {
     async fn test_stream_response() {
         let mut store = create_test_store();
         let id = "test_id_saved";
-        let (mut rx, _handle) = store.stream_data(id).await.unwrap();
+        let mut rx = store.stream_data(id, "0").await.unwrap();
         let received_response = rx.next().await.unwrap();
         assert_eq!(
             received_response,

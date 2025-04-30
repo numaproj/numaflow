@@ -100,7 +100,7 @@ impl source::LagReader for PulsarSource {
 #[cfg(feature = "pulsar-tests")]
 #[cfg(test)]
 mod tests {
-    use pulsar::{producer, proto, Pulsar, TokioExecutor};
+    use pulsar::{Pulsar, TokioExecutor, producer, proto};
     use source::{LagReader, SourceAcker, SourceReader};
 
     use super::*;

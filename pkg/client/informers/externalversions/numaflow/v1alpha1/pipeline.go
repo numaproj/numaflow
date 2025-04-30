@@ -19,13 +19,13 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"context"
+	context "context"
 	time "time"
 
-	numaflowv1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	apisnumaflowv1alpha1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	versioned "github.com/numaproj/numaflow/pkg/client/clientset/versioned"
 	internalinterfaces "github.com/numaproj/numaflow/pkg/client/informers/externalversions/internalinterfaces"
-	v1alpha1 "github.com/numaproj/numaflow/pkg/client/listers/numaflow/v1alpha1"
+	numaflowv1alpha1 "github.com/numaproj/numaflow/pkg/client/listers/numaflow/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	watch "k8s.io/apimachinery/pkg/watch"
@@ -36,7 +36,7 @@ import (
 // Pipelines.
 type PipelineInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1alpha1.PipelineLister
+	Lister() numaflowv1alpha1.PipelineLister
 }
 
 type pipelineInformer struct {
@@ -71,7 +71,7 @@ func NewFilteredPipelineInformer(client versioned.Interface, namespace string, r
 				return client.NumaflowV1alpha1().Pipelines(namespace).Watch(context.TODO(), options)
 			},
 		},
-		&numaflowv1alpha1.Pipeline{},
+		&apisnumaflowv1alpha1.Pipeline{},
 		resyncPeriod,
 		indexers,
 	)
@@ -82,9 +82,9 @@ func (f *pipelineInformer) defaultInformer(client versioned.Interface, resyncPer
 }
 
 func (f *pipelineInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&numaflowv1alpha1.Pipeline{}, f.defaultInformer)
+	return f.factory.InformerFor(&apisnumaflowv1alpha1.Pipeline{}, f.defaultInformer)
 }
 
-func (f *pipelineInformer) Lister() v1alpha1.PipelineLister {
-	return v1alpha1.NewPipelineLister(f.Informer().GetIndexer())
+func (f *pipelineInformer) Lister() numaflowv1alpha1.PipelineLister {
+	return numaflowv1alpha1.NewPipelineLister(f.Informer().GetIndexer())
 }

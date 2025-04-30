@@ -13,8 +13,8 @@ use prost_types::Timestamp;
 use tokio::net::UnixStream;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
-use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
+use tonic::transport::{Channel, Endpoint};
 use tower::service_fn;
 use tracing::{info, warn};
 
@@ -116,16 +116,14 @@ pub(crate) async fn create_rpc_channel(socket_path: PathBuf) -> error::Result<Ch
     let interval = fixed::Interval::from_millis(RECONNECT_INTERVAL).take(MAX_RECONNECT_ATTEMPTS);
     let channel = Retry::retry(
         interval,
-        || async {
-            match connect_with_uds(socket_path.clone()).await {
-                Ok(channel) => Ok(channel),
-                Err(e) => {
-                    warn!(?e, ?socket_path, "Failed to connect to UDS socket");
-                    Err(Error::Connection(format!(
-                        "Failed to connect {socket_path:?}: {:?}",
-                        e
-                    )))
-                }
+        async || match connect_with_uds(socket_path.clone()).await {
+            Ok(channel) => Ok(channel),
+            Err(e) => {
+                warn!(?e, ?socket_path, "Failed to connect to UDS socket");
+                Err(Error::Connection(format!(
+                    "Failed to connect {socket_path:?}: {:?}",
+                    e
+                )))
             }
         },
         |_: &Error| true,

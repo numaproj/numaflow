@@ -5,10 +5,9 @@ use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use bytes::Bytes;
 use http::Uri;
-use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
 use numaflow_pb::clients::serving::GetRequest;
+use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
 use tokio::net::UnixStream;
-use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::{Channel, Endpoint};
 use tower::service_fn;
@@ -35,7 +34,11 @@ impl UserDefinedStore {
 
 impl DataStore for UserDefinedStore {
     // FIXME(serving): we need to return the origin details along with the payload
-    async fn retrieve_data(&mut self, id: &str) -> StoreResult<Vec<Vec<u8>>> {
+    async fn retrieve_data(
+        &mut self,
+        id: &str,
+        _pod_hash: Option<&str>,
+    ) -> StoreResult<Vec<Vec<u8>>> {
         let request = GetRequest { id: id.to_string() };
         let response = self
             .client
@@ -49,7 +52,8 @@ impl DataStore for UserDefinedStore {
     async fn stream_data(
         &mut self,
         _id: &str,
-    ) -> StoreResult<(ReceiverStream<Arc<Bytes>>, JoinHandle<()>)> {
+        _pod_hash: &str,
+    ) -> StoreResult<ReceiverStream<Arc<Bytes>>> {
         unimplemented!("stream_response is not supported for UserDefinedStore")
     }
 
@@ -68,16 +72,14 @@ pub(crate) async fn create_rpc_channel(socket_path: PathBuf) -> StoreResult<Chan
     let interval = fixed::Interval::from_millis(RECONNECT_INTERVAL).take(MAX_RECONNECT_ATTEMPTS);
     let channel = Retry::retry(
         interval,
-        || async {
-            match connect_with_uds(socket_path.clone()).await {
-                Ok(channel) => Ok(channel),
-                Err(e) => {
-                    warn!(?e, ?socket_path, "Failed to connect to UDS socket");
-                    Err(StoreError::Connection(format!(
-                        "Failed to connect to uds socket {socket_path:?}: {:?}",
-                        e
-                    )))
-                }
+        async || match connect_with_uds(socket_path.clone()).await {
+            Ok(channel) => Ok(channel),
+            Err(e) => {
+                warn!(?e, ?socket_path, "Failed to connect to UDS socket");
+                Err(StoreError::Connection(format!(
+                    "Failed to connect to uds socket {socket_path:?}: {:?}",
+                    e
+                )))
             }
         },
         |_: &StoreError| true,
@@ -145,7 +147,7 @@ mod tests {
             store: Arc::new(Mutex::new(HashMap::new())),
         };
         let id = "test_id".to_string();
-        let payload = vec![numaflow::serving_store::Payload {
+        let payload = vec![serving_store::Payload {
             origin: "test_origin".to_string(),
             value: vec![1, 2, 3],
         }];
@@ -177,7 +179,7 @@ mod tests {
         assert!(store.ready().await);
 
         // Test retrieve_data
-        let retrieved_data = store.retrieve_data(&id).await.unwrap();
+        let retrieved_data = store.retrieve_data(&id, None).await.unwrap();
         assert_eq!(retrieved_data, vec![payload[0].value.clone()]);
 
         drop(store);

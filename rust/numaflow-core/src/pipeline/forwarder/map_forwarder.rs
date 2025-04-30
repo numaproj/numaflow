@@ -1,11 +1,11 @@
 use tokio_util::sync::CancellationToken;
 use tracing::error;
 
+use crate::Result;
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
-use crate::Result;
 
 /// Map forwarder is a component which starts a streaming reader, a mapper, and a writer
 /// and manages the lifecycle of these components.
