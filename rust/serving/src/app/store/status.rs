@@ -255,7 +255,7 @@ impl StatusTracker {
         info!(id, replica_id = ?self.pod_hash, error, "Marking request as failed");
         let failed_status = ProcessingStatus::Failed {
             error: error.to_string(),
-            pod_hash: self.pod_hash.to_string(),
+            pod_hash: self.pod_hash.clone(),
         };
         self.update_status(id, failed_status).await
     }
@@ -276,7 +276,7 @@ impl StatusTracker {
     /// Deregister marks the request as completed in the status kv store, it also (unlike registed)
     /// writes a done processing marker to the response kv store (if nats is used) to signal the
     /// response watcher.
-    pub(crate) async fn deregister(&self, id: &str, subgraph: &str) -> Result<()> {
+    pub(crate) async fn deregister(&self, id: &str, subgraph: &str, pod_hash: &str) -> Result<()> {
         let completed_status = ProcessingStatus::Completed {
             subgraph: subgraph.to_string(),
             pod_hash: self.pod_hash.to_string(),
@@ -551,7 +551,7 @@ mod tests {
             .expect("Failed to register request");
 
         tracker
-            .deregister(request_id, "test_subgraph")
+            .deregister(request_id, "test_subgraph", "test_pod")
             .await
             .expect("Failed to deregister request");
 

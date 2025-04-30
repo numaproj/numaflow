@@ -18,9 +18,9 @@ use std::collections::hash_map::Entry;
 use std::io::Cursor;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
+use tokio::sync::{Mutex, Semaphore};
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tokio_stream::StreamExt;
@@ -131,6 +131,7 @@ impl JetStreamDataStore {
         // monotonic revision which is reset when pod is restarted
         let mut latest_revision = 0;
 
+        let semaphore = Arc::new(Semaphore::new(500));
         let mut watcher = Self::create_watcher(
             &kv_store,
             &watch_pattern,
@@ -158,7 +159,7 @@ impl JetStreamDataStore {
                                     continue;
                                 }
 
-                                if let Err(e) = Self::process_entry(&entry, &responses_map, &pod_hash, &kv_store).await {
+                                if let Err(e) = Self::process_entry(&entry, &responses_map, &pod_hash, &kv_store, &semaphore).await {
                                     error!(error = ?e, "Failed to process entry");
                                 }
                             }
@@ -228,6 +229,7 @@ impl JetStreamDataStore {
         responses_map: &Arc<Mutex<HashMap<String, ResponseMode>>>,
         pod_hash: &str,
         kv_store: &Store,
+        semaphore: &Arc<Semaphore>,
     ) -> Result<(), String> {
         let parts: Vec<&str> = entry.key.splitn(5, '.').collect();
         let key_prefix = parts[0];
@@ -281,17 +283,33 @@ impl JetStreamDataStore {
             // that it can be retrieved when needed. We only need to store the merged response for
             // sync and async because for sse it will be streaming. It's safe to store for sync request
             // because during failure of sync request it will be converted as an async request.
-            let mut response_map = responses_map.lock().await;
-            if let Some(ResponseMode::Unary(responses)) = response_map.remove(request_id) {
-                // we use rs.{pod_hash}.{request_id}.final.result.processed as the key for the final result
-                // and the value will be the merged response.
-                let merged_response = merge_bytes_list(&responses);
-                let final_result_key =
-                    format!("{}.{}", RESPONSE_KEY_PREFIX, FINAL_RESULT_KEY_SUFFIX);
-                kv_store
-                    .put(final_result_key, merged_response)
+            let responses = {
+                let mut response_map = responses_map.lock().await;
+                response_map.remove(request_id)
+            };
+
+            if let Some(ResponseMode::Unary(responses)) = responses {
+                let permit = Arc::clone(semaphore)
+                    .acquire_owned()
                     .await
-                    .map_err(|e| format!("Failed to put final result: {:?}", e))?;
+                    .expect("Semaphore is poisoned");
+                // Spawn a task to write the merged response to the KV store
+                let kv_store = kv_store.clone();
+                let request_id = request_id.to_string();
+                tokio::spawn(async move {
+                    let _permit = permit;
+                    // we use rs.{pod_hash}.{request_id}.final.result.processed as the key for the final result
+                    // and the value will be the merged response.
+                    let merged_response = merge_bytes_list(&responses);
+                    let final_result_key = format!(
+                        "{}.{}.{}",
+                        RESPONSE_KEY_PREFIX, request_id, FINAL_RESULT_KEY_SUFFIX
+                    );
+
+                    if let Err(e) = kv_store.put(final_result_key, merged_response).await {
+                        error!(error = ?e, "Failed to put final result");
+                    }
+                });
             }
         } else {
             // we can append the response for the list for sync and async, for sse we can write the
@@ -316,7 +334,8 @@ impl JetStreamDataStore {
     /// Retrieves the final result from the KV store for a given request ID using the final key, it
     /// keeps retrying until the final result is available.
     async fn get_data_from_response_store(&self, id: &str) -> StoreResult<Vec<Vec<u8>>> {
-        let final_result_key = format!("{}.{}", RESPONSE_KEY_PREFIX, FINAL_RESULT_KEY_SUFFIX);
+        let final_result_key =
+            format!("{}.{}.{}", RESPONSE_KEY_PREFIX, id, FINAL_RESULT_KEY_SUFFIX);
 
         loop {
             match self.kv_store.get(&final_result_key).await {

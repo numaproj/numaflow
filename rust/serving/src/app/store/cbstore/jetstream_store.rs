@@ -313,6 +313,8 @@ impl super::CallbackStore for JetStreamCallbackStore {
             let previous_pod_hash = pod_hash.to_string();
             let cln_token = self.cln_token.clone();
 
+            let mut senders_guard = self.callback_senders.lock().await;
+            senders_guard.insert(id.to_string(), tx);
             // Spawn a separate task for historical callbacks
             tokio::spawn(async move {
                 JetStreamCallbackStore::watch_historical_callbacks(

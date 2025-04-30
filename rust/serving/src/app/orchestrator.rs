@@ -111,7 +111,7 @@ where
 
                 if let Some(graph) = subgraph {
                     status_tracker
-                        .deregister(&msg_id, &graph)
+                        .deregister(&msg_id, &graph, &pod_hash)
                         .await
                         .expect("Failed to deregister");
                     cb_store
@@ -217,6 +217,7 @@ where
 
         let mut cb_store = self.callback_store.clone();
         let status_tracker = self.status_tracker.clone();
+        let pod_hash_clone = pod_hash.clone();
         tokio::spawn(async move {
             let mut callbacks = Vec::new();
             while let Some(cb) = callbacks_stream.next().await {
@@ -233,7 +234,7 @@ where
 
                 if let Some(graph) = subgraph {
                     status_tracker
-                        .deregister(&msg_id, &graph)
+                        .deregister(&msg_id, &graph, &pod_hash_clone)
                         .await
                         .expect("Failed to deregister in status tracker");
                     cb_store

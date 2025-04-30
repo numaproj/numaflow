@@ -7,15 +7,24 @@ spec:
     service: true
     msgIDHeaderKey: "X-Numaflow-Id"
   pipeline:
+    limits:
+      readTimeout: 20ms
     vertices:
       - name: in
+        scale:
+          min: 1
         source:
           serving: {}
       - name: cat
+        scale:
+          min: 1
         udf:
           container:
             image: quay.io/numaio/numaflow-go/map-forward-message:stable
+            imagePullPolicy: Always
       - name: out
+        scale:
+          min: 1
         sink:
           serve: {}
     edges:
