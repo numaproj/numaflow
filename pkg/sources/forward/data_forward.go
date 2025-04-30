@@ -210,6 +210,12 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 		metrics.LabelVertexReplicaIndex: replicaIndex,
 		metrics.LabelPartitionName:      df.reader.GetName(),
 	}
+	metricLabelsForTransformer := map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexReplicaIndex: replicaIndex,
+		metrics.LabelPartitionName:      df.reader.GetName(),
+	}
 	// Initialize forwardAChunk and read start times
 	start := time.Now()
 	readStart := time.Now()
@@ -316,7 +322,7 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 			zap.Int("concurrency", df.opts.transformerConcurrency),
 			zap.Duration("took", time.Since(transformerProcessingStart)),
 		)
-		metrics.SourceTransformerProcessingTime.With(metricLabelsWithPartition).Observe(float64(time.Since(transformerProcessingStart).Microseconds()))
+		metrics.SourceTransformerProcessingTime.With(metricLabelsForTransformer).Observe(float64(time.Since(transformerProcessingStart).Microseconds()))
 	} else {
 		for idx, m := range readMessages {
 			// assign watermark to the message
