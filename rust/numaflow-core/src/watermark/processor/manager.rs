@@ -6,21 +6,22 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use std::sync::RwLock;
-use std::time::Duration;
 use std::time::SystemTime;
-
-use async_nats::jetstream::kv::Watch;
-use backoff::retry::Retry;
-use backoff::strategy::fixed;
-use bytes::Bytes;
-use futures::{StreamExt, TryStreamExt};
-use prost::Message as ProtoMessage;
-use tracing::{debug, error, info, warn};
+use std::time::{Duration, UNIX_EPOCH};
 
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::error::{Error, Result};
 use crate::watermark::processor::timeline::OffsetTimeline;
 use crate::watermark::wmb::WMB;
+use async_nats::jetstream::kv::Watch;
+use backoff::retry::Retry;
+use backoff::strategy::fixed;
+use bytes::Bytes;
+use chrono::Utc;
+use futures::{StreamExt, TryStreamExt};
+use numaflow_pb::objects::watermark::Heartbeat;
+use prost::Message as ProtoMessage;
+use tracing::{debug, error, info, warn};
 
 const DEFAULT_PROCESSOR_REFRESH_RATE: u16 = 5;
 
@@ -205,8 +206,16 @@ impl ProcessorManager {
                 continue;
             };
 
+            // heartbeat decode can fail when users update the golang based runtime to rust without
+            // recreating the pipeline, we will use the current time as the heartbeat, we can remove
+            // the default once we stop supporting the golang based runtime
             let hb = numaflow_pb::objects::watermark::Heartbeat::decode(value)
-                .expect("Failed to decode heartbeat")
+                .unwrap_or(Heartbeat {
+                    heartbeat: SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .expect("Failed to get duration since epoch")
+                        .as_secs() as i64,
+                })
                 .heartbeat;
             heartbeats.insert(processor_name, hb);
         }
@@ -489,7 +498,7 @@ mod tests {
         // Spawn a task to keep publishing heartbeats
         let hb_task = tokio::spawn(async move {
             loop {
-                let heartbeat = numaflow_pb::objects::watermark::Heartbeat { heartbeat: 100 };
+                let heartbeat = Heartbeat { heartbeat: 100 };
                 let mut bytes = BytesMut::new();
                 heartbeat
                     .encode(&mut bytes)

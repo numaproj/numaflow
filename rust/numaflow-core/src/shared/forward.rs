@@ -10,9 +10,9 @@ pub(crate) fn should_forward(
     tags: Option<Arc<[String]>>,
     conditions: Option<Box<ForwardConditions>>,
 ) -> bool {
-    conditions.map_or(true, |conditions| {
-        conditions.tags.operator.as_ref().map_or(true, |operator| {
-            tags.as_ref().map_or(true, |tags| {
+    conditions.is_none_or(|conditions| {
+        conditions.tags.operator.as_ref().is_none_or(|operator| {
+            tags.as_ref().is_none_or(|tags| {
                 !conditions.tags.values.is_empty()
                     && check_operator_condition(operator, &conditions.tags.values, tags)
             })

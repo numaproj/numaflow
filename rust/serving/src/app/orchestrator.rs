@@ -360,7 +360,7 @@ mod tests {
         let status_tracker = StatusTracker::new(
             context.clone(),
             store_name,
-            pod_hash.to_string(),
+            pod_hash,
             Some(store_name.to_string()),
         )
         .await
@@ -534,7 +534,7 @@ mod tests {
         let status_tracker = StatusTracker::new(
             context.clone(),
             store_name,
-            pod_hash.to_string(),
+            pod_hash,
             Some(store_name.to_string()),
         )
         .await

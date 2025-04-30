@@ -24,7 +24,7 @@ const CALLBACK_KEY_PREFIX: &str = "cb";
 /// JetStream implementation of the callback store.
 #[derive(Clone)]
 pub(crate) struct JetStreamCallbackStore {
-    pod_hash: String,
+    pod_hash: &'static str,
     callback_kv: Store,
     callback_senders: Arc<Mutex<HashMap<String, mpsc::Sender<Arc<Callback>>>>>,
     cln_token: CancellationToken,
@@ -33,7 +33,7 @@ pub(crate) struct JetStreamCallbackStore {
 impl JetStreamCallbackStore {
     pub(crate) async fn new(
         js_context: Context,
-        pod_hash: &str,
+        pod_hash: &'static str,
         callback_bucket: &str,
         cln_token: CancellationToken,
     ) -> StoreResult<Self> {
@@ -63,7 +63,7 @@ impl JetStreamCallbackStore {
         .await;
 
         Ok(Self {
-            pod_hash: pod_hash.to_string(),
+            pod_hash,
             callback_kv,
             callback_senders,
             cln_token,
@@ -136,7 +136,6 @@ impl JetStreamCallbackStore {
                                 cb_sender.send(callback).await.expect("Failed to send callback");
                             } else {
                                 error!(id = ?callback.id, "No active sender found for request id. Callback not sent.");
-                                continue;
                             }
                         }
                         Some(Err(e)) => {
@@ -303,7 +302,7 @@ impl super::CallbackStore for JetStreamCallbackStore {
         // if the pod_hash is same as the current pod, we can directly register the sender because
         // central watcher is already watching the callbacks for this pod. If not we will have to
         // create a new watcher for watching callbacks of the different pod.
-        if pod_hash.eq(&self.pod_hash) {
+        if pod_hash.eq(self.pod_hash) {
             let mut senders_guard = self.callback_senders.lock().await;
             senders_guard.insert(id.to_string(), tx);
             Ok(ReceiverStream::new(rx))

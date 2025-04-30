@@ -76,7 +76,7 @@ impl TryFrom<ProcessingStatus> for Bytes {
 /// StatusTracker is responsible for tracking the status of requests in the KV store.
 #[derive(Clone)]
 pub(crate) struct StatusTracker {
-    pod_hash: String,
+    pod_hash: &'static str,
     status_kv: Store,
     /// Optional response kv store to write start and done processing marker. For user defined store,
     /// this is not used.
@@ -86,8 +86,8 @@ pub(crate) struct StatusTracker {
 impl StatusTracker {
     pub(crate) async fn new(
         js_context: Context,
-        status_bucket: &str,
-        pod_hash: String,
+        status_bucket: &'static str,
+        pod_hash: &'static str,
         response_bucket: Option<String>,
     ) -> Result<Self> {
         let status_kv = js_context.get_key_value(status_bucket).await.map_err(|e| {
@@ -121,7 +121,7 @@ impl StatusTracker {
     pub(crate) async fn register(&self, id: &str, request_type: RequestType) -> Result<()> {
         let status_key = format!("{}.{}", STATUS_KEY_PREFIX, id);
         let initial_status = ProcessingStatus::InProgress {
-            pod_hash: self.pod_hash.clone(),
+            pod_hash: self.pod_hash.to_string(),
         };
 
         match self
@@ -255,7 +255,7 @@ impl StatusTracker {
         info!(id, replica_id = ?self.pod_hash, error, "Marking request as failed");
         let failed_status = ProcessingStatus::Failed {
             error: error.to_string(),
-            pod_hash: self.pod_hash.clone(),
+            pod_hash: self.pod_hash.to_string(),
         };
         self.update_status(id, failed_status).await
     }
@@ -279,7 +279,7 @@ impl StatusTracker {
     pub(crate) async fn deregister(&self, id: &str, subgraph: &str) -> Result<()> {
         let completed_status = ProcessingStatus::Completed {
             subgraph: subgraph.to_string(),
-            pod_hash: self.pod_hash.clone(),
+            pod_hash: self.pod_hash.to_string(),
         };
 
         self.update_status(id, completed_status).await?;
@@ -379,7 +379,7 @@ mod tests {
         let mut tracker = StatusTracker::new(
             context.clone(),
             status_bucket,
-            "test_pod".to_string(),
+            "test_pod",
             Some(response_bucket.to_string()),
         )
         .await
@@ -435,10 +435,9 @@ mod tests {
             .await
             .unwrap();
 
-        let tracker =
-            StatusTracker::new(context.clone(), status_bucket, "test_pod".to_string(), None)
-                .await
-                .unwrap();
+        let tracker = StatusTracker::new(context.clone(), status_bucket, "test_pod", None)
+            .await
+            .unwrap();
 
         let request_id = "test_request";
         tracker
@@ -475,10 +474,9 @@ mod tests {
             .await
             .unwrap();
 
-        let mut tracker =
-            StatusTracker::new(context.clone(), status_bucket, "test_pod".to_string(), None)
-                .await
-                .unwrap();
+        let mut tracker = StatusTracker::new(context.clone(), status_bucket, "test_pod", None)
+            .await
+            .unwrap();
 
         let request_id = "test_request";
         tracker
@@ -540,7 +538,7 @@ mod tests {
         let mut tracker = StatusTracker::new(
             context.clone(),
             status_bucket,
-            "test_pod".to_string(),
+            "test_pod",
             Some(response_bucket.to_string()),
         )
         .await
@@ -610,7 +608,7 @@ mod tests {
         let mut tracker = StatusTracker::new(
             context.clone(),
             status_bucket,
-            "test_pod".to_string(),
+            "test_pod",
             Some(response_bucket.to_string()),
         )
         .await
@@ -666,10 +664,9 @@ mod tests {
             .await
             .unwrap();
 
-        let tracker =
-            StatusTracker::new(context.clone(), status_bucket, "test_pod".to_string(), None)
-                .await
-                .unwrap();
+        let tracker = StatusTracker::new(context.clone(), status_bucket, "test_pod", None)
+            .await
+            .unwrap();
 
         let request_id = "test_request";
 

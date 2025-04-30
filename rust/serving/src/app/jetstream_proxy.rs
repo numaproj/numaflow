@@ -33,9 +33,9 @@ const NUMAFLOW_RESP_ARRAY_IDX_LEN: &str = "Numaflow-Array-Index-Len";
 
 struct ProxyState<T, U> {
     js_context: Context,
-    stream: String,
-    tid_header: String,
-    pod_hash: String,
+    stream: &'static str,
+    tid_header: &'static str,
+    pod_hash: &'static str,
     orchestrator: orchestrator::OrchestratorState<T, U>,
     cancellation_token: CancellationToken,
 }
@@ -49,11 +49,11 @@ pub(crate) async fn serving_proxy<
 ) -> crate::Result<Router> {
     let proxy_state = Arc::new(ProxyState {
         js_context: state.js_context.clone(),
-        stream: state.settings.js_message_stream.clone(),
-        tid_header: state.settings.tid_header.clone(),
-        pod_hash: state.settings.pod_hash.clone(),
-        orchestrator: state.orchestrator_state.clone(),
-        cancellation_token: state.cancellation_token.clone(),
+        stream: state.settings.js_message_stream,
+        tid_header: state.settings.tid_header,
+        pod_hash: state.settings.pod_hash,
+        orchestrator: state.orchestrator_state,
+        cancellation_token: state.cancellation_token,
     });
 
     let router = Router::new()
@@ -151,8 +151,8 @@ where
             String::from_utf8_lossy(value.as_bytes()).to_string(),
         );
     }
-    msg_headers.insert(proxy_state.tid_header.clone(), id.clone());
-    msg_headers.insert(DEFAULT_POD_HASH_KEY, proxy_state.pod_hash.clone());
+    msg_headers.insert(proxy_state.tid_header, id.clone());
+    msg_headers.insert(DEFAULT_POD_HASH_KEY, proxy_state.pod_hash);
 
     let mut orchestrator_state = proxy_state.orchestrator.clone();
     let response_stream = orchestrator_state
@@ -165,7 +165,7 @@ where
     // retry again we will show them its duplicate.
     if let Err(err) = publish_to_jetstream(
         proxy_state.js_context.clone(),
-        &proxy_state.stream,
+        proxy_state.stream,
         &id,
         msg_headers,
         body,
@@ -251,8 +251,8 @@ async fn sync_publish<
             String::from_utf8_lossy(value.as_bytes()).to_string(),
         );
     }
-    msg_headers.insert(proxy_state.tid_header.clone(), id.clone());
-    msg_headers.insert(DEFAULT_POD_HASH_KEY, proxy_state.pod_hash.clone());
+    msg_headers.insert(proxy_state.tid_header, id.clone());
+    msg_headers.insert(DEFAULT_POD_HASH_KEY, proxy_state.pod_hash);
 
     let processing_start = Instant::now();
     // Register the ID in the callback proxy state
@@ -281,7 +281,7 @@ async fn sync_publish<
     // retry again we will show them its duplicate.
     if let Err(err) = publish_to_jetstream(
         proxy_state.js_context.clone(),
-        &proxy_state.stream,
+        proxy_state.stream,
         &id,
         msg_headers,
         body,
@@ -353,7 +353,7 @@ async fn sync_publish<
 
     let mut header_map = HeaderMap::new();
     header_map.insert(
-        HeaderName::from_str(&proxy_state.tid_header).unwrap(),
+        HeaderName::from_str(proxy_state.tid_header).unwrap(),
         HeaderValue::from_str(&id).unwrap(),
     );
 
@@ -398,8 +398,8 @@ async fn async_publish<
             String::from_utf8_lossy(value.as_bytes()).to_string(),
         );
     }
-    msg_headers.insert(proxy_state.tid_header.clone(), id.clone());
-    msg_headers.insert(DEFAULT_POD_HASH_KEY, proxy_state.pod_hash.clone());
+    msg_headers.insert(proxy_state.tid_header, id.clone());
+    msg_headers.insert(DEFAULT_POD_HASH_KEY, proxy_state.pod_hash);
 
     let processing_start = Instant::now();
     // Register request in Redis
@@ -463,7 +463,7 @@ async fn async_publish<
     // retry again we will show them its duplicate.
     if let Err(err) = publish_to_jetstream(
         proxy_state.js_context.clone(),
-        &proxy_state.stream,
+        proxy_state.stream,
         &id,
         msg_headers,
         body,
@@ -548,8 +548,8 @@ mod tests {
 
         let settings = Settings {
             tid_header: ID_HEADER.into(),
-            js_callback_store: store_name.to_string(),
-            js_message_stream: message_stream_name.to_string(),
+            js_callback_store: store_name,
+            js_message_stream: message_stream_name,
             ..Default::default()
         };
 
@@ -570,7 +570,7 @@ mod tests {
         let status_tracker = StatusTracker::new(
             context.clone(),
             store_name,
-            pod_hash.to_string(),
+            pod_hash,
             Some(store_name.to_string()),
         )
         .await
@@ -698,10 +698,10 @@ mod tests {
         let settings = Settings {
             tid_header: ID_HEADER.into(),
             pod_hash: POD_HASH.into(),
-            js_callback_store: store_name.to_string(),
-            js_status_store: store_name.to_string(),
-            js_response_store: store_name.to_string(),
-            js_message_stream: messages_stream_name.to_string(),
+            js_callback_store: store_name,
+            js_status_store: store_name,
+            js_response_store: store_name,
+            js_message_stream: messages_stream_name,
             ..Default::default()
         };
 
@@ -724,7 +724,7 @@ mod tests {
         let status_tracker = StatusTracker::new(
             context.clone(),
             store_name,
-            POD_HASH.to_string(),
+            POD_HASH,
             Some(store_name.to_string()),
         )
         .await
@@ -825,10 +825,10 @@ mod tests {
             .unwrap();
 
         let settings = Settings {
-            js_callback_store: store_name.to_string(),
-            js_status_store: store_name.to_string(),
-            js_response_store: store_name.to_string(),
-            js_message_stream: messages_stream_name.to_string(),
+            js_callback_store: store_name,
+            js_status_store: store_name,
+            js_response_store: store_name,
+            js_message_stream: messages_stream_name,
             pod_hash: POD_HASH.into(),
             ..Default::default()
         };
@@ -852,7 +852,7 @@ mod tests {
         let status_tracker = StatusTracker::new(
             context.clone(),
             store_name,
-            POD_HASH.to_string(),
+            POD_HASH,
             Some(store_name.to_string()),
         )
         .await
@@ -988,10 +988,10 @@ mod tests {
         let settings = Settings {
             tid_header: ID_HEADER.into(),
             pod_hash: POD_HASH.into(),
-            js_callback_store: store_name.to_string(),
-            js_response_store: store_name.to_string(),
-            js_status_store: store_name.to_string(),
-            js_message_stream: messages_stream_name.to_string(),
+            js_callback_store: store_name,
+            js_response_store: store_name,
+            js_status_store: store_name,
+            js_message_stream: messages_stream_name,
             ..Default::default()
         };
 
@@ -1014,7 +1014,7 @@ mod tests {
         let status_tracker = StatusTracker::new(
             context.clone(),
             store_name,
-            POD_HASH.to_string(),
+            POD_HASH,
             Some(store_name.to_string()),
         )
         .await
