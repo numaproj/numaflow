@@ -20,7 +20,12 @@ kubectl create secret generic aws-secret \
 --from-literal secret-access-key=${SECRET_ACCESS_KEY}
 ```
 
-### <TODO> IAM ROLE
+### IAM ROLE
+1. Use an IAM role with the necessary permissions to access the SQS queue.
+2. Ensure the IAM role of the pod has access to the SQS queue, and the SQS queue policy allows the IAM role to perform actions on the queue.
+3. Attach the appropriate service account with the IAM role to the pod.
+
+For more details, refer to the AWS documentation: https://docs.aws.amazon.com/eks/latest/userguide/pod-id-how-it-works.html
 
 ## Create the numaflow pipeline 
 
@@ -38,6 +43,7 @@ spec:
         sqs:
           queueName: "your-queue-name"        # Required: Name of your SQS queue
           awsRegion: "your-aws-region"        # Required: AWS region where queue is located
+          queueOwnerAWSAccountID: "123456789012" # Required: AWS account ID of the queue owner
           # Optional configurations
           maxNumberOfMessages: 10             # Max messages per poll (1-10)
           visibilityTimeout: 30              # Visibility timeout in seconds
@@ -72,6 +78,7 @@ spec:
         sqs:
           queueName: "queue-name"
           awsRegion: "us-west-2"
+          queueOwnerAWSAccountID: "123456789012" # Required: AWS account ID of the queue owner
           # Optional configurations
           maxNumberOfMessages: 10            # Max messages per poll (1-10)
           visibilityTimeout: 30              # Visibility timeout in seconds
