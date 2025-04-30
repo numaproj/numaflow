@@ -31,7 +31,7 @@ use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_forward_metric_labels,
     pipeline_metrics,
 };
-use crate::serving_store::{ServingStore, StoreEntry};
+use crate::sink::serve::{ServingStore, StoreEntry};
 use crate::tracker::TrackerHandle;
 
 /// A [Blackhole] sink which reads but never writes to anywhere, semantic equivalent of `/dev/null`.
@@ -44,7 +44,9 @@ mod blackhole;
 /// [Log]: https://numaflow.numaproj.io/user-guide/sinks/log/
 mod log;
 
-mod serve;
+/// Serving [ServingStore] to store the result of the serving pipeline. It also contains the builtin [serve::ServeSink]
+/// to write to the serving store.
+pub mod serve;
 
 /// [User-Defined Sink] extends Numaflow to add custom sources supported outside the builtins.
 ///
@@ -958,12 +960,11 @@ mod tests {
     use super::*;
     use crate::config::pipeline::NatsStoreConfig;
     use crate::message::{IntOffset, Message, MessageID, Offset, ReadAck};
-    use crate::serving_store::nats::NatsServingStore;
     use crate::shared::grpc::create_rpc_channel;
+    use crate::sink::serve::nats::NatsServingStore;
     use async_nats::jetstream;
     use async_nats::jetstream::kv::Config;
     use chrono::{TimeZone, Utc};
-    use futures::StreamExt;
     use numaflow::sink;
     use numaflow_pb::clients::sink::{SinkRequest, SinkResponse};
     use std::sync::Arc;
