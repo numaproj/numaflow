@@ -74,7 +74,7 @@ impl UserDefinedSink {
                 ))?;
 
         // Handshake cannot be None during the initial phase, and it has to set `sot` to true.
-        if handshake_response.handshake.map_or(true, |h| !h.sot) {
+        if handshake_response.handshake.is_none_or(|h| !h.sot) {
             return Err(Error::Sink("invalid handshake response".to_string()));
         }
 

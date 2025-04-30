@@ -66,6 +66,7 @@ impl Drop for SegmentWriteActor {
 }
 
 impl SegmentWriteActor {
+    #[allow(clippy::too_many_arguments)]
     /// Creates a new SegmentWriteActor.
     fn new(
         wal_type: WalType,

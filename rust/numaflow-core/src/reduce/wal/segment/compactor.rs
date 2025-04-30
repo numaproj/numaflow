@@ -55,7 +55,7 @@ pub(crate) struct Compactor {
     kind: WindowKind,
 }
 
-const WAL_KEY_SEPERATOR: &'static str = ":";
+const WAL_KEY_SEPERATOR: &str = ":";
 
 impl Compactor {
     /// Creates a new Compactor.
@@ -703,7 +703,7 @@ mod tests {
 
         let write_result_cnt = tokio::spawn(async move {
             let mut counter = 0;
-            while let Some(msg) = offset_stream.next().await {
+            while let Some(_) = offset_stream.next().await {
                 counter += 1;
             }
             return counter;
