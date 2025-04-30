@@ -336,7 +336,7 @@ pub async fn create_source(
                 read_timeout,
                 *get_vertex_replica(),
             )
-                .await?;
+            .await?;
             Ok(Source::new(
                 batch_size,
                 source::SourceType::SQS(sqs),

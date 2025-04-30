@@ -9,7 +9,7 @@ pub(crate) mod source {
     use numaflow_jetstream::{JetstreamSourceConfig, NatsAuth, TlsClientAuthCerts, TlsConfig};
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source, SqsSource};
     use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
-    use numaflow_sqs::source::{SQSSourceConfig};
+    use numaflow_sqs::source::SQSSourceConfig;
     use tracing::{info, warn};
 
     use crate::Result;
@@ -108,7 +108,6 @@ pub(crate) mod source {
         type Error = Error;
 
         fn try_from(value: Box<SqsSource>) -> Result<Self> {
-            
             info!("Sqs source: {value:?}");
             if value.aws_region.is_empty() {
                 return Err(Error::Config(
@@ -133,7 +132,6 @@ pub(crate) mod source {
             Ok(SourceType::Sqs(sqs_source_config))
         }
     }
-
 
     impl TryFrom<Box<numaflow_models::models::JetStreamSource>> for SourceType {
         type Error = Error;
