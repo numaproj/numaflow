@@ -18,9 +18,9 @@ use std::collections::hash_map::Entry;
 use std::io::Cursor;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
+use tokio::sync::{Mutex, Semaphore};
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 use tokio_stream::StreamExt;
@@ -85,7 +85,6 @@ fn extract_bytes_list(merged: &Bytes) -> Result<Vec<Bytes>, String> {
 #[derive(Clone)]
 pub(crate) struct JetStreamDataStore {
     kv_store: Store,
-    pod_hash: &'static str,
     responses_map: Arc<Mutex<HashMap<String, ResponseMode>>>,
     cln_token: CancellationToken,
 }
@@ -113,13 +112,13 @@ impl JetStreamDataStore {
         .await;
         Ok(Self {
             kv_store,
-            pod_hash,
             responses_map,
             cln_token,
         })
     }
 
-    /// Spawns the central task that watches response keys and manages data collection.
+    /// Spawns the central task that watches response keys and manages data collection. It creates
+    /// a tokio task for accumulating responses for a given request id and writing to the KV store.
     async fn spawn_central_watcher(
         pod_hash: String,
         kv_store: Store,
@@ -141,6 +140,8 @@ impl JetStreamDataStore {
         .expect("Failed to create central result watcher");
 
         tokio::spawn(async move {
+            const CONCURRENT_STORE_WRITER: usize = 500;
+            let semaphore = Arc::new(Semaphore::new(CONCURRENT_STORE_WRITER));
             loop {
                 tokio::select! {
                     // Stop watching if the cancellation token is triggered
@@ -158,7 +159,7 @@ impl JetStreamDataStore {
                                     continue;
                                 }
 
-                                if let Err(e) = Self::process_entry(&entry, &responses_map, &pod_hash, &kv_store).await {
+                                if let Err(e) = Self::process_entry(&entry, &responses_map, &pod_hash, &kv_store, &semaphore).await {
                                     error!(error = ?e, "Failed to process entry");
                                 }
                             }
@@ -186,6 +187,11 @@ impl JetStreamDataStore {
                     }
                 }
             }
+            // this is in exit code, no explicit error handling required
+            _ = semaphore
+                .acquire_many_owned(CONCURRENT_STORE_WRITER as u32)
+                .await
+                .expect("should have acquired all tasks");
         })
     }
 
@@ -228,6 +234,7 @@ impl JetStreamDataStore {
         responses_map: &Arc<Mutex<HashMap<String, ResponseMode>>>,
         pod_hash: &str,
         kv_store: &Store,
+        semaphore: &Arc<Semaphore>,
     ) -> Result<(), String> {
         let parts: Vec<&str> = entry.key.splitn(5, '.').collect();
         let key_prefix = parts[0];
@@ -281,17 +288,33 @@ impl JetStreamDataStore {
             // that it can be retrieved when needed. We only need to store the merged response for
             // sync and async because for sse it will be streaming. It's safe to store for sync request
             // because during failure of sync request it will be converted as an async request.
-            let mut response_map = responses_map.lock().await;
-            if let Some(ResponseMode::Unary(responses)) = response_map.remove(request_id) {
-                // we use rs.{pod_hash}.{request_id}.final.result.processed as the key for the final result
-                // and the value will be the merged response.
-                let merged_response = merge_bytes_list(&responses);
-                let final_result_key =
-                    format!("{}.{}", RESPONSE_KEY_PREFIX, FINAL_RESULT_KEY_SUFFIX);
-                kv_store
-                    .put(final_result_key, merged_response)
+            let responses = {
+                let mut response_map = responses_map.lock().await;
+                response_map.remove(request_id)
+            };
+
+            if let Some(ResponseMode::Unary(responses)) = responses {
+                let permit = Arc::clone(semaphore)
+                    .acquire_owned()
                     .await
-                    .map_err(|e| format!("Failed to put final result: {:?}", e))?;
+                    .expect("Semaphore is poisoned");
+                // Spawn a task to write the merged response to the KV store
+                let kv_store = kv_store.clone();
+                let request_id = request_id.to_string();
+                tokio::spawn(async move {
+                    let _permit = permit;
+                    // we use rs.{pod_hash}.{request_id}.final.result.processed as the key for the final result
+                    // and the value will be the merged response.
+                    let merged_response = merge_bytes_list(&responses);
+                    let final_result_key = format!(
+                        "{}.{}.{}",
+                        RESPONSE_KEY_PREFIX, request_id, FINAL_RESULT_KEY_SUFFIX
+                    );
+
+                    if let Err(e) = kv_store.put(final_result_key, merged_response).await {
+                        error!(error = ?e, "Failed to put final result");
+                    }
+                });
             }
         } else {
             // we can append the response for the list for sync and async, for sse we can write the
@@ -316,7 +339,8 @@ impl JetStreamDataStore {
     /// Retrieves the final result from the KV store for a given request ID using the final key, it
     /// keeps retrying until the final result is available.
     async fn get_data_from_response_store(&self, id: &str) -> StoreResult<Vec<Vec<u8>>> {
-        let final_result_key = format!("{}.{}", RESPONSE_KEY_PREFIX, FINAL_RESULT_KEY_SUFFIX);
+        let final_result_key =
+            format!("{}.{}.{}", RESPONSE_KEY_PREFIX, id, FINAL_RESULT_KEY_SUFFIX);
 
         loop {
             match self.kv_store.get(&final_result_key).await {
@@ -477,7 +501,7 @@ impl DataStore for JetStreamDataStore {
     async fn retrieve_data(
         &mut self,
         id: &str,
-        pod_hash: Option<&str>,
+        pod_hash: Option<String>,
     ) -> StoreResult<Vec<Vec<u8>>> {
         // if the pod_hash is same as the current pod hash then we can rely on the central watcher for
         // responses else we will have to create a new watcher for the old pod hash to get all the
@@ -486,7 +510,7 @@ impl DataStore for JetStreamDataStore {
             Self::get_historic_response(
                 self.kv_store.clone(),
                 id,
-                pod_hash_value,
+                &pod_hash_value,
                 self.cln_token.clone(),
             )
             .await
@@ -499,11 +523,29 @@ impl DataStore for JetStreamDataStore {
     async fn stream_data(
         &mut self,
         id: &str,
-        pod_hash: &str,
+        failed_pod_hash: Option<String>,
     ) -> StoreResult<ReceiverStream<Arc<Bytes>>> {
         // if the pod_hash is same as the current pod hash then we can rely on the central watcher for
         // responses else we will have to create a new watcher for the old pod hash.
-        if pod_hash.eq(self.pod_hash) {
+        if let Some(failed_pod_hash) = failed_pod_hash {
+            let (tx, rx) = mpsc::channel(10);
+            tokio::spawn({
+                let kv_store = self.kv_store.clone();
+                let request_id = id.to_string();
+                let cln_token = self.cln_token.clone();
+                async move {
+                    Self::stream_historic_responses(
+                        kv_store,
+                        &request_id,
+                        &failed_pod_hash,
+                        tx,
+                        cln_token,
+                    )
+                    .await;
+                }
+            });
+            Ok(ReceiverStream::new(rx))
+        } else {
             // we need to wait for the start processing marker entry to be processed by the central watcher
             loop {
                 {
@@ -516,25 +558,6 @@ impl DataStore for JetStreamDataStore {
                 }
                 sleep(Duration::from_millis(5)).await;
             }
-        } else {
-            let (tx, rx) = mpsc::channel(10);
-            tokio::spawn({
-                let kv_store = self.kv_store.clone();
-                let request_id = id.to_string();
-                let pod_hash = pod_hash.to_string();
-                let cln_token = self.cln_token.clone();
-                async move {
-                    Self::stream_historic_responses(
-                        kv_store,
-                        &request_id,
-                        &pod_hash,
-                        tx,
-                        cln_token,
-                    )
-                    .await;
-                }
-            });
-            Ok(ReceiverStream::new(rx))
         }
     }
 
@@ -651,7 +674,7 @@ mod tests {
         let payload = Bytes::from_static(b"test_payload");
         store.kv_store.put(key, payload.clone()).await.unwrap();
 
-        let mut stream = store.stream_data(id, pod_hash).await.unwrap();
+        let mut stream = store.stream_data(id, None).await.unwrap();
 
         // Verify that the response is received
         let received_response = stream.next().await.unwrap();
@@ -710,7 +733,10 @@ mod tests {
         let done_key = format!("rs.{other_pod_hash}.{id}.done.processing");
         store.kv_store.put(done_key, Bytes::new()).await.unwrap();
 
-        let result = store.retrieve_data(id, Some(other_pod_hash)).await.unwrap();
+        let result = store
+            .retrieve_data(id, Some(other_pod_hash.to_string()))
+            .await
+            .unwrap();
         assert!(result.len() > 0);
         assert_eq!(result[0], b"test_payload");
 
@@ -766,7 +792,10 @@ mod tests {
         let done_key = format!("rs.{other_pod_hash}.{id}.done.processing");
         store.kv_store.put(done_key, Bytes::new()).await.unwrap();
 
-        let mut stream = store.stream_data(id, other_pod_hash).await.unwrap();
+        let mut stream = store
+            .stream_data(id, Some(other_pod_hash.to_string()))
+            .await
+            .unwrap();
 
         let received_response = stream.next().await.unwrap();
         assert_eq!(

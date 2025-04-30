@@ -62,11 +62,9 @@ where
     tokio::spawn(graceful_shutdown(
         handle.clone(),
         app.settings.drain_timeout_secs,
-        cancel_token.clone(),
     ));
 
     info!(?app_addr, "Starting application server");
-
     let router = router_with_auth(app).await?;
 
     axum_server::bind_rustls(app_addr, tls_config)
@@ -75,7 +73,12 @@ where
         .await
         .map_err(|e| InitError(format!("Starting web server for metrics: {}", e)))?;
 
-    info!(?app_addr, "Server stopped");
+    info!(
+        ?app_addr,
+        "Server stopped, cleanup up the background tasks."
+    );
+    cancel_token.cancel();
+
     Ok(())
 }
 
@@ -170,7 +173,7 @@ where
 
 /// Gracefully shutdown the server on receiving SIGINT or SIGTERM
 /// by sending a shutdown signal to the server using the handle.
-async fn graceful_shutdown(handle: Handle, duration_secs: u64, cancel_token: CancellationToken) {
+async fn graceful_shutdown(handle: Handle, duration_secs: u64) {
     let ctrl_c = async {
         signal::ctrl_c()
             .await
@@ -192,7 +195,6 @@ async fn graceful_shutdown(handle: Handle, duration_secs: u64, cancel_token: Can
     info!("Got terminate signal, gracefully shutting down the server");
     // Signal the server to shut down using Handle.
     handle.graceful_shutdown(Some(Duration::from_secs(duration_secs)));
-    cancel_token.cancel();
 }
 
 const PUBLISH_ENDPOINTS: [&str; 3] = ["/v1/process/sync", "/v1/process/async", "/v1/process/fetch"];
@@ -351,7 +353,7 @@ mod tests {
             .unwrap();
         let msg_graph = MessageGraph::from_pipeline(&settings.pipeline_spec)?;
         let callback_state =
-            CallbackState::new("0", msg_graph, datum_store, callback_store, status_tracker).await?;
+            CallbackState::new(msg_graph, datum_store, callback_store, status_tracker).await?;
 
         let nats_connection = async_nats::connect("localhost:4222")
             .await
@@ -412,7 +414,7 @@ mod tests {
         let pipeline_spec = PIPELINE_SPEC_ENCODED.parse().unwrap();
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec)?;
         let callback_state =
-            CallbackState::new("0", msg_graph, datum_store, callback_store, status_tracker).await?;
+            CallbackState::new(msg_graph, datum_store, callback_store, status_tracker).await?;
 
         let nats_connection = async_nats::connect("localhost:4222")
             .await

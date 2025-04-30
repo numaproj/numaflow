@@ -276,10 +276,17 @@ impl StatusTracker {
     /// Deregister marks the request as completed in the status kv store, it also (unlike registed)
     /// writes a done processing marker to the response kv store (if nats is used) to signal the
     /// response watcher.
-    pub(crate) async fn deregister(&self, id: &str, subgraph: &str) -> Result<()> {
+    pub(crate) async fn deregister(
+        &self,
+        id: &str,
+        subgraph: &str,
+        pod_hash: Option<String>,
+    ) -> Result<()> {
+        let pod_hash = pod_hash.unwrap_or(self.pod_hash.to_string());
+
         let completed_status = ProcessingStatus::Completed {
             subgraph: subgraph.to_string(),
-            pod_hash: self.pod_hash.to_string(),
+            pod_hash: pod_hash.clone(),
         };
 
         self.update_status(id, completed_status).await?;
@@ -293,7 +300,7 @@ impl StatusTracker {
         // lifecycle of the request, we need to do it here.
         let done_key = format!(
             "{}.{}.{}.{}",
-            RESPONSE_KEY_PREFIX, self.pod_hash, id, DONE_PROCESSING_MARKER
+            RESPONSE_KEY_PREFIX, pod_hash, id, DONE_PROCESSING_MARKER
         );
         response_kv
             .put(done_key.clone(), Bytes::new())
@@ -551,7 +558,7 @@ mod tests {
             .expect("Failed to register request");
 
         tracker
-            .deregister(request_id, "test_subgraph")
+            .deregister(request_id, "test_subgraph", None)
             .await
             .expect("Failed to deregister request");
 

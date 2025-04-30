@@ -37,7 +37,7 @@ impl super::CallbackStore for InMemoryCallbackStore {
     async fn register_and_watch(
         &mut self,
         id: &str,
-        _pod_hash: &str,
+        _failed_pod_hash: Option<String>,
     ) -> StoreResult<ReceiverStream<Arc<Callback>>> {
         let mut data = self.data.lock().await;
         if !data.contains_key(id) {
@@ -103,7 +103,7 @@ mod tests {
         let mut store = create_test_store();
         let id = "test_id";
 
-        let mut rx = store.register_and_watch(id, "0").await.unwrap();
+        let mut rx = store.register_and_watch(id, None).await.unwrap();
         let received_callback = rx.next().await.unwrap();
         assert_eq!(received_callback.id, "test_id");
         assert_eq!(received_callback.vertex, "vertex");

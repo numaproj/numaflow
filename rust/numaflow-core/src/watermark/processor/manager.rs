@@ -17,7 +17,6 @@ use async_nats::jetstream::kv::Watch;
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use bytes::Bytes;
-use chrono::Utc;
 use futures::{StreamExt, TryStreamExt};
 use numaflow_pb::objects::watermark::Heartbeat;
 use prost::Message as ProtoMessage;

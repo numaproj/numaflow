@@ -86,7 +86,7 @@ mod tests {
 
         let pipeline_spec: PipelineDCG = PIPELINE_SPEC_ENCODED.parse().unwrap();
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec).unwrap();
-        let state = CallbackState::new("xbda", msg_graph, data_store, cb_store, status_tracker)
+        let state = CallbackState::new(msg_graph, data_store, cb_store, status_tracker)
             .await
             .unwrap();
         let app = get_message_path(state);

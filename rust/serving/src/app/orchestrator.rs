@@ -24,7 +24,6 @@ pub(crate) struct OrchestratorState<T, U> {
     datum_store: T,
     callback_store: U,
     status_tracker: StatusTracker,
-    pod_hash: String,
 }
 
 impl<T, U> OrchestratorState<T, U>
@@ -34,7 +33,6 @@ where
 {
     /// Create a new State to track connections and callback data
     pub(crate) async fn new(
-        pod_hash: &str,
         msg_graph: MessageGraph,
         datum_store: T,
         callback_store: U,
@@ -45,7 +43,6 @@ where
             datum_store,
             callback_store,
             status_tracker,
-            pod_hash: pod_hash.to_string(),
         })
     }
 
@@ -66,7 +63,7 @@ where
         // was cancelled before sending the response then the previous pod hash will be returned
         // with cancelled error, and we will fetch the callbacks and responses again.
         let pod_hash = match self.status_tracker.register(id, request_type).await {
-            Ok(_) => self.pod_hash.clone(),
+            Ok(_) => None,
             Err(e) => match e {
                 status::Error::Cancelled {
                     err,
@@ -76,7 +73,7 @@ where
                         ?err,
                         "Request was cancelled, fetching callbacks and responses again"
                     );
-                    previous_pod_hash
+                    Some(previous_pod_hash)
                 }
                 status::Error::Duplicate(msg) => {
                     warn!(error = ?msg, "Request already exists in the store");
@@ -94,10 +91,10 @@ where
         // start watching for callbacks
         let mut callbacks_stream = self
             .callback_store
-            .register_and_watch(id, &pod_hash)
+            .register_and_watch(id, pod_hash.clone())
             .await?;
 
-        let mut status_tracker = self.status_tracker.clone();
+        let status_tracker = self.status_tracker.clone();
         let mut cb_store = self.callback_store.clone();
         let span = tracing::Span::current();
         let callback_watcher = async move {
@@ -111,7 +108,7 @@ where
 
                 if let Some(graph) = subgraph {
                     status_tracker
-                        .deregister(&msg_id, &graph)
+                        .deregister(&msg_id, &graph, pod_hash)
                         .await
                         .expect("Failed to deregister");
                     cb_store
@@ -121,12 +118,8 @@ where
 
                     // send can only fail if the request was cancelled by the client or the handler task
                     // was terminated.
-                    if tx.send(Ok(graph)).is_err() {
-                        status_tracker
-                            .mark_as_failed(&msg_id, "Cancelled")
-                            .await
-                            .expect("Failed to mark the request as failed");
-                    }
+                    tx.send(Ok(graph))
+                        .expect("receiver was dropped, request is cancelled");
                     break;
                 }
             }
@@ -161,7 +154,7 @@ where
                 let notify = self.process_request(id, request_type).await?;
                 notify.await.expect("sender was dropped")?;
                 Ok(Some(
-                    self.datum_store.retrieve_data(id, Some(&pod_hash)).await?,
+                    self.datum_store.retrieve_data(id, Some(pod_hash)).await?,
                 ))
             }
         }
@@ -184,7 +177,7 @@ where
         // was cancelled before sending the response then the previous pod hash will be returned
         // with cancelled error, and we will fetch the callbacks and responses again.
         let pod_hash = match self.status_tracker.register(id, request_type).await {
-            Ok(_) => self.pod_hash.clone(),
+            Ok(_) => None,
             Err(e) => match e {
                 status::Error::Cancelled {
                     err,
@@ -194,7 +187,7 @@ where
                         ?err,
                         "Request was cancelled, fetching callbacks and responses again"
                     );
-                    previous_pod_hash
+                    Some(previous_pod_hash)
                 }
                 status::Error::Duplicate(msg) => {
                     warn!(error = ?msg, "Request already exists in the tracker");
@@ -212,11 +205,12 @@ where
         // start watching for callbacks
         let mut callbacks_stream = self
             .callback_store
-            .register_and_watch(id, &pod_hash)
+            .register_and_watch(id, pod_hash.clone())
             .await?;
 
         let mut cb_store = self.callback_store.clone();
         let status_tracker = self.status_tracker.clone();
+        let pod_hash_clone = pod_hash.clone();
         tokio::spawn(async move {
             let mut callbacks = Vec::new();
             while let Some(cb) = callbacks_stream.next().await {
@@ -233,7 +227,7 @@ where
 
                 if let Some(graph) = subgraph {
                     status_tracker
-                        .deregister(&msg_id, &graph)
+                        .deregister(&msg_id, &graph, pod_hash_clone)
                         .await
                         .expect("Failed to deregister in status tracker");
                     cb_store
@@ -248,7 +242,7 @@ where
         // watch for data stored in the datastore
         let request_id = id.to_string();
         let mut status_tracker = self.status_tracker.clone();
-        let mut response_stream = self.datum_store.stream_data(id, &pod_hash).await?;
+        let mut response_stream = self.datum_store.stream_data(id, pod_hash).await?;
         tokio::spawn(async move {
             while let Some(response) = response_stream.next().await {
                 if tx.send(response).await.is_err() {
@@ -366,15 +360,10 @@ mod tests {
         .await
         .unwrap();
 
-        let mut state = OrchestratorState::new(
-            pod_hash,
-            msg_graph,
-            datum_store,
-            callback_store,
-            status_tracker,
-        )
-        .await
-        .unwrap();
+        let mut state =
+            OrchestratorState::new(msg_graph, datum_store, callback_store, status_tracker)
+                .await
+                .unwrap();
 
         let id = "test_id".to_string();
 
@@ -544,15 +533,10 @@ mod tests {
 
         let msg_graph = MessageGraph::from_pipeline(&pipeline_spec).unwrap();
 
-        let mut state = OrchestratorState::new(
-            pod_hash,
-            msg_graph,
-            datum_store,
-            callback_store,
-            status_tracker,
-        )
-        .await
-        .unwrap();
+        let mut state =
+            OrchestratorState::new(msg_graph, datum_store, callback_store, status_tracker)
+                .await
+                .unwrap();
 
         let id = "test_id".to_string();
 
