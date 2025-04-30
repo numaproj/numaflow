@@ -117,7 +117,8 @@ impl JetStreamDataStore {
         })
     }
 
-    /// Spawns the central task that watches response keys and manages data collection.
+    /// Spawns the central task that watches response keys and manages data collection. It creates
+    /// a tokio task for accumulating responses for a given request id and writing to the KV store.
     async fn spawn_central_watcher(
         pod_hash: String,
         kv_store: Store,
@@ -129,7 +130,6 @@ impl JetStreamDataStore {
         // monotonic revision which is reset when pod is restarted
         let mut latest_revision = 0;
 
-        let semaphore = Arc::new(Semaphore::new(500));
         let mut watcher = Self::create_watcher(
             &kv_store,
             &watch_pattern,
@@ -140,6 +140,8 @@ impl JetStreamDataStore {
         .expect("Failed to create central result watcher");
 
         tokio::spawn(async move {
+            const CONCURRENT_STORE_WRITER: usize = 500;
+            let semaphore = Arc::new(Semaphore::new(CONCURRENT_STORE_WRITER));
             loop {
                 tokio::select! {
                     // Stop watching if the cancellation token is triggered
@@ -185,6 +187,11 @@ impl JetStreamDataStore {
                     }
                 }
             }
+            // this is in exit code, no explicit error handling required
+            _ = semaphore
+                .acquire_many_owned(CONCURRENT_STORE_WRITER as u32)
+                .await
+                .expect("should have acquired all tasks");
         })
     }
 

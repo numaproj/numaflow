@@ -73,8 +73,12 @@ where
         .await
         .map_err(|e| InitError(format!("Starting web server for metrics: {}", e)))?;
 
-    info!(?app_addr, "Server stopped, Cancellation token triggered.");
+    info!(
+        ?app_addr,
+        "Server stopped, cleanup up the background tasks."
+    );
     cancel_token.cancel();
+
     Ok(())
 }
 
