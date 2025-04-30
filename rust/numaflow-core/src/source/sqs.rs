@@ -166,7 +166,6 @@ pub mod tests {
         let sqs_client =
             aws_sdk_sqs::Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
 
-        // TODO: use config in sqs actor methods
         let sqs_source = SqsSourceBuilder::new(SQSSourceConfig {
             region: SQS_DEFAULT_REGION.to_string(),
             queue_name: "test-q".to_string(),

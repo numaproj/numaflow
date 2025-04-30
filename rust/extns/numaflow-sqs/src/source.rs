@@ -5,6 +5,7 @@
 //! - Batched message handling for efficiency
 //! - Robust error handling and retry logic
 //! - Configurable timeouts and batch sizes
+
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Duration;
@@ -25,7 +26,6 @@ pub const SQS_DEFAULT_REGION: &str = "us-west-2";
 /// Configuration for an SQS message source.
 ///
 /// Used to initialize the SQS client with region and queue settings.
-/// TODO: use config in sqs actor methods
 #[derive(Debug, Clone, PartialEq)]
 pub struct SQSSourceConfig {
     // Required fields
@@ -356,7 +356,7 @@ impl SqsActor {
         Ok(messages)
     }
 
-    // delete message from SQS, serves as Numaflow source ack.
+    /// delete message from SQS, serves as Numaflow source ack.
     async fn delete_messages(&mut self, offsets: Vec<Bytes>) -> Result<()> {
         for offset in offsets {
             let offset = match std::str::from_utf8(&offset) {
@@ -386,16 +386,16 @@ impl SqsActor {
         Ok(())
     }
 
-    // get the pending message count from SQS using the ApproximateNumberOfMessages attribute
-    // Note: The ApproximateNumberOfMessages metrics may not achieve consistency until at least
-    // 1 minute after the producers stop sending messages.
-    // This period is required for the queue metadata to reach eventual consistency.
+    /// get the pending message count from SQS using the ApproximateNumberOfMessages attribute
+    /// Note: The ApproximateNumberOfMessages metrics may not achieve consistency until at least
+    /// 1 minute after the producers stop sending messages.
+    /// This period is required for the queue metadata to reach eventual consistency.
     async fn get_pending_messages(&mut self) -> Result<Option<usize>> {
         let sdk_response = self
             .client
             .get_queue_attributes()
             .queue_url(self.queue_url.clone())
-            .attribute_names(aws_sdk_sqs::types::QueueAttributeName::ApproximateNumberOfMessages)
+            .attribute_names(QueueAttributeName::ApproximateNumberOfMessages)
             .send()
             .await;
 
@@ -565,7 +565,7 @@ impl SqsSourceBuilder {
 }
 
 impl SQSSource {
-    // read messages from SQS, corresponding sqs sdk method is receive_message
+    /// read messages from SQS, corresponding sqs sdk method is receive_message
     pub async fn read_messages(&self) -> Result<Vec<SQSMessage>> {
         tracing::debug!("Reading messages from SQS");
         let start = Instant::now();
@@ -588,8 +588,8 @@ impl SQSSource {
         Ok(messages)
     }
 
-    // acknowledge the offsets of the messages read from SQS
-    // corresponding sqs sdk method is delete_message
+    /// acknowledge the offsets of the messages read from SQS
+    /// corresponding sqs sdk method is delete_message
     pub async fn ack_offsets(&self, offsets: Vec<Bytes>) -> Result<()> {
         tracing::debug!(offsets = ?offsets, "Acknowledging offsets");
         let (tx, rx) = oneshot::channel();
@@ -601,9 +601,9 @@ impl SQSSource {
         rx.await.map_err(Error::ActorTaskTerminated)?
     }
 
-    // get the pending message count from SQS
-    // corresponding sqs sdk method is get_queue_attributes
-    // with the attribute name ApproximateNumberOfMessages
+    /// get the pending message count from SQS
+    /// corresponding sqs sdk method is get_queue_attributes
+    /// with the attribute name ApproximateNumberOfMessages
     pub async fn pending_count(&self) -> Option<usize> {
         let (tx, rx) = oneshot::channel();
         let msg = SQSActorMessage::GetPending { respond_to: tx };

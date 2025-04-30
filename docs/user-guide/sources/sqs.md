@@ -1,12 +1,14 @@
 # Setting up Numaflow MonoVertex with SQS Source
 
-This guide explains how to set up a Numaflow MonoVertex that reads from an AWS SQS queue. We'll cover creating the necessary Kubernetes secrets for AWS credentials and configuring the MonoVertex specification.
+This guide explains how to set up a Numaflow MonoVertex that reads from an AWS SQS queue. 
 
-## 1. Creating AWS Credentials Secret
+## Configuring Credentials to access AWS 
 
-First, we need to create a Kubernetes secret to store AWS credentials securely.
+There are couple of ways you could achieve this.
 
-### Encode AWS Credentials
+### Creating AWS Credentials Secret
+
+First, we need to create a Kubernetes secret to store AWS credentials securely and encode AWS Credentials.
 
 ```bash
 # Encode your AWS credentials (replace with your actual credentials)
@@ -18,7 +20,9 @@ kubectl create secret generic aws-secret \
 --from-literal secret-access-key=${SECRET_ACCESS_KEY}
 ```
 
-## 2. Create the numaflow pipeline 
+### <TODO> IAM ROLE
+
+## Create the numaflow pipeline 
 
 Create a file named `sqs-pl.yaml` with either of the following content.
 
@@ -86,7 +90,7 @@ spec:
       to: out
 ```
 
-## 3. Apply the Configuration
+## Apply the Configuration
 
 Apply the pipeline specification:
 
@@ -94,7 +98,7 @@ Apply the pipeline specification:
 kubectl apply -f sqs-pl.yaml
 ```
 
-## 4. Verify the Setup
+## Verify the Setup
 
 Check that the MonoVertex is running:
 
@@ -103,16 +107,10 @@ kubectl get monovertex sqs-reader
 kubectl get pods -l numaflow.numaproj.io/vertex-name=sqs-reader
 ```
 
-## Important Security Considerations
 
-1. Never commit AWS credentials to version control
-2. Consider using IAM roles instead of access keys when possible
-3. Ensure proper RBAC controls are in place
-4. Regularly rotate AWS credentials
-5. Use appropriate queue permissions in AWS
-6. Consider using VPC endpoints for SQS access
+## Miscellaneous
 
-## Troubleshooting
+### Troubleshooting
 
 - Check the pods logs for any errors:
 ```bash
