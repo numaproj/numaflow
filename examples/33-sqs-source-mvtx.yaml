@@ -1,0 +1,22 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: MonoVertex
+metadata:
+  name: sqs-reader
+spec:
+  source:
+    sqs:
+      queueName: "sqs-numa-test"
+      awsRegion: "us-west-2"
+      queueOwnerAWSAccountID: "123456789012"
+      maxNumberOfMessages: 10
+      visibilityTimeout: 30
+      waitTimeSeconds: 20
+      attributeNames:
+        - All
+      messageAttributeNames:
+        - All
+  sink:
+    log: {}
+  scale:
+    min: 1
+    max: 2

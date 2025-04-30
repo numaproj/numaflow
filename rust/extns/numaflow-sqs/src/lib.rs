@@ -59,7 +59,7 @@ mod tests {
 
         let sqs = aws_sdk_sqs::Client::from_conf(
             aws_sdk_sqs::Config::builder()
-                .behavior_version(BehaviorVersion::latest())
+                .behavior_version(BehaviorVersion::v2025_01_17())
                 .region(aws_sdk_sqs::config::Region::new("us-east-1"))
                 .credentials_provider(make_sqs_test_credentials())
                 .interceptor(get_object_mocks)
