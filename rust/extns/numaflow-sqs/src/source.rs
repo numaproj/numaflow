@@ -44,6 +44,7 @@ pub struct SQSSourceConfig {
 
 impl SQSSourceConfig {
     /// Validates the SQS source configuration
+    #[allow(clippy::result_large_err)]
     pub fn validate(&self) -> Result<()> {
         // Validate required fields
         if self.region.is_empty() {
@@ -337,7 +338,7 @@ impl SqsActor {
                     .map(|attrs| {
                         attrs
                             .iter()
-                            .map(|(k, v)| (k.to_string().clone(), v.to_string().clone()))
+                            .map(|(k, v)| (k.to_string(), v.to_string()))
                             .collect()
                     })
                     .unwrap_or_default();
@@ -376,8 +377,7 @@ impl SqsActor {
             {
                 tracing::error!(
                     ?err,
-                    "{} {}",
-                    self.queue_url.clone(),
+                    queue_url = ?self.queue_url,
                     "Error while deleting message from SQS"
                 );
                 return Err(Error::Sqs(err.into()));
@@ -404,7 +404,7 @@ impl SqsActor {
             Err(err) => {
                 tracing::error!(
                     ?err,
-                    queue_url = self.queue_url,
+                    queue_url = ?self.queue_url,
                     "failed to get queue attributes from SQS"
                 );
                 return Err(Error::Sqs(err.into()));
@@ -579,7 +579,7 @@ impl SQSSource {
 
         let _ = self.actor_tx.send(msg).await;
         let messages = rx.await.map_err(ActorTaskTerminated)??;
-        tracing::debug!(
+        tracing::trace!(
             count = messages.len(),
             requested_count = self.batch_size,
             time_taken_ms = start.elapsed().as_millis(),
@@ -597,7 +597,7 @@ impl SQSSource {
             offsets,
             respond_to: tx,
         };
-        let _ = self.actor_tx.send(msg).await;
+        self.actor_tx.send(msg).await.expect("rx was dropped");
         rx.await.map_err(Error::ActorTaskTerminated)?
     }
 
