@@ -808,4 +808,371 @@ mod tests {
             "Expected 980 messages to remain after compaction"
         );
     }
+
+    #[tokio::test]
+    async fn test_compact_with_replay_aligned() -> WalResult<()> {
+        // Create a temporary directory for the test
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+
+        // Create WAL directories
+        fs::create_dir_all(path.join(WalType::Gc.to_string())).unwrap();
+        fs::create_dir_all(path.join(WalType::Data.to_string())).unwrap();
+        fs::create_dir_all(path.join(WalType::Compact.to_string())).unwrap();
+
+        // Create GC WAL with test events
+        let gc_wal = AppendOnlyWal::new(
+            WalType::Gc,
+            path.clone(),
+            100,  // max_file_size_mb
+            1000, // flush_interval_ms
+            100,  // channel_buffer_size
+        )
+        .await?;
+
+        // Create a GC event with a specific end time
+        let gc_end = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 10).unwrap();
+        let gc_event = GcEvent {
+            end_time: Some(prost_timestamp_from_utc(gc_end)),
+            ..Default::default()
+        };
+
+        // Write the GC event to the WAL
+        let (tx, rx) = mpsc::channel(100);
+        let (_result_rx, writer_handle) = gc_wal.streaming_write(ReceiverStream::new(rx)).await?;
+
+        let mut buf = Vec::new();
+        prost::Message::encode(&gc_event, &mut buf)
+            .map_err(|e| format!("Failed to encode GC event: {e}"))?;
+        tx.send(SegmentWriteMessage::WriteData {
+            id: None,
+            data: Bytes::from(buf),
+        })
+        .await
+        .map_err(|e| format!("Failed to send data: {e}"))?;
+
+        // Drop the sender to close the channel
+        drop(tx);
+        writer_handle
+            .await
+            .map_err(|e| format!("Writer failed: {e}"))??;
+
+        // Create segment WAL with test messages
+        let segment_wal = AppendOnlyWal::new(
+            WalType::Data,
+            path.clone(),
+            100,  // max_file_size_mb
+            1000, // flush_interval_ms
+            100,  // channel_buffer_size
+        )
+        .await?;
+
+        // Create messages with different event times
+        let (tx, rx) = mpsc::channel(100);
+        let (_result_rx, writer_handle) =
+            segment_wal.streaming_write(ReceiverStream::new(rx)).await?;
+
+        // Message with event time before the GC end time (should be filtered out)
+        let before_time = Utc.with_ymd_and_hms(2025, 4, 1, 0, 59, 0).unwrap();
+        let mut before_message = Message::default();
+        before_message.event_time = before_time;
+        before_message.keys = Arc::from(vec!["test-key".to_string()]);
+        before_message.value = bytes::Bytes::from(vec![1, 2, 3]);
+        before_message.id = MessageID {
+            vertex_name: "test-vertex".to_string().into(),
+            offset: "1".to_string().into(),
+            index: 0,
+        };
+
+        // Message with event time after the GC end time (should be retained)
+        let after_time = Utc.with_ymd_and_hms(2025, 4, 1, 1, 30, 0).unwrap();
+        let mut after_message = Message::default();
+        after_message.event_time = after_time;
+        after_message.keys = Arc::from(vec!["test-key".to_string()]);
+        after_message.value = bytes::Bytes::from(vec![4, 5, 6]);
+        after_message.id = MessageID {
+            vertex_name: "test-vertex".to_string().into(),
+            offset: "2".to_string().into(),
+            index: 0,
+        };
+
+        // Write the messages to the WAL
+        let before_proto: Bytes = before_message.try_into().unwrap();
+        tx.send(SegmentWriteMessage::WriteData {
+            id: Some("msg-1".to_string()),
+            data: before_proto,
+        })
+        .await
+        .map_err(|e| format!("Failed to send data: {e}"))?;
+
+        let after_proto: Bytes = after_message.try_into().unwrap();
+        tx.send(SegmentWriteMessage::WriteData {
+            id: Some("msg-2".to_string()),
+            data: after_proto,
+        })
+        .await
+        .map_err(|e| format!("Failed to send data: {e}"))?;
+
+        // Drop the sender to close the channel
+        drop(tx);
+        writer_handle
+            .await
+            .map_err(|e| format!("Writer failed: {e}"))??;
+
+        // Create a compactor with aligned window kind
+        let compactor = Compactor::new(
+            path.clone(),
+            WindowKind::Aligned,
+            100,  // max_file_size_mb
+            1000, // flush_interval_ms
+            100,  // channel_buffer_size
+        )
+        .await?;
+
+        // Create a channel to receive replayed messages
+        let (replay_tx, mut replay_rx) = mpsc::channel(100);
+
+        // Call compact_with_replay
+        let handle = compactor.compact_with_replay(replay_tx).await?;
+
+        // Wait for compaction to complete
+        handle
+            .await
+            .map_err(|e| format!("Compaction failed: {e}"))??;
+
+        // Count the number of messages received through the replay channel
+        let mut replayed_count = 0;
+        while let Ok(data) = replay_rx.try_recv() {
+            let msg: numaflow_pb::objects::isb::Message = prost::Message::decode(data)
+                .map_err(|e| format!("Failed to decode message: {e}"))?;
+
+            // Verify that the message has an event time after the GC end time
+            if let Some(header) = msg.header {
+                if let Some(message_info) = header.message_info {
+                    let event_time = utc_from_timestamp(message_info.event_time);
+                    assert!(
+                        event_time > gc_end,
+                        "Found message with event_time <= gc_end"
+                    );
+                }
+            }
+            replayed_count += 1;
+        }
+
+        // Verify that only one message was replayed (the one with event time after GC end time)
+        assert_eq!(
+            replayed_count, 1,
+            "Expected only one message to be replayed"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_compact_with_replay_unaligned() -> WalResult<()> {
+        // Create a temporary directory for the test
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().to_path_buf();
+
+        // Create WAL directories
+        fs::create_dir_all(path.join(WalType::Gc.to_string())).unwrap();
+        fs::create_dir_all(path.join(WalType::Data.to_string())).unwrap();
+        fs::create_dir_all(path.join(WalType::Compact.to_string())).unwrap();
+
+        // Create GC WAL with test events
+        let gc_wal = AppendOnlyWal::new(
+            WalType::Gc,
+            path.clone(),
+            100,  // max_file_size_mb
+            1000, // flush_interval_ms
+            100,  // channel_buffer_size
+        )
+        .await?;
+
+        // Create GC events with different keys and end times
+        let (tx, rx) = mpsc::channel(100);
+        let (_result_rx, writer_handle) = gc_wal.streaming_write(ReceiverStream::new(rx)).await?;
+
+        // GC event for key1:key2 with end time
+        let gc_end_1 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 10).unwrap();
+        let gc_event_1 = GcEvent {
+            end_time: Some(prost_timestamp_from_utc(gc_end_1)),
+            keys: vec!["key1".to_string(), "key2".to_string()],
+            ..Default::default()
+        };
+
+        // GC event for key3:key4 with a different end time
+        let gc_end_2 = Utc.with_ymd_and_hms(2025, 4, 1, 2, 0, 0).unwrap();
+        let gc_event_2 = GcEvent {
+            end_time: Some(prost_timestamp_from_utc(gc_end_2)),
+            keys: vec!["key3".to_string(), "key4".to_string()],
+            ..Default::default()
+        };
+
+        // Write the GC events to the WAL
+        for event in [gc_event_1, gc_event_2] {
+            let mut buf = Vec::new();
+            prost::Message::encode(&event, &mut buf)
+                .map_err(|e| format!("Failed to encode GC event: {e}"))?;
+            tx.send(SegmentWriteMessage::WriteData {
+                id: None,
+                data: Bytes::from(buf),
+            })
+            .await
+            .map_err(|e| format!("Failed to send data: {e}"))?;
+        }
+
+        // Drop the sender to close the channel
+        drop(tx);
+        writer_handle
+            .await
+            .map_err(|e| format!("Writer failed: {e}"))??;
+
+        // Create segment WAL with test messages
+        let segment_wal = AppendOnlyWal::new(
+            WalType::Data,
+            path.clone(),
+            100,  // max_file_size_mb
+            1000, // flush_interval_ms
+            100,  // channel_buffer_size
+        )
+        .await?;
+
+        // Create messages with different keys and event times
+        let (tx, rx) = mpsc::channel(100);
+        let (_result_rx, writer_handle) =
+            segment_wal.streaming_write(ReceiverStream::new(rx)).await?;
+
+        // Message 1: key1:key2 with event time before gc_end_1 (should be filtered out)
+        let before_time_1 = Utc.with_ymd_and_hms(2025, 4, 1, 0, 59, 0).unwrap();
+        let mut message_1 = Message::default();
+        message_1.event_time = before_time_1;
+        message_1.keys = Arc::from(vec!["key1".to_string(), "key2".to_string()]);
+        message_1.value = bytes::Bytes::from(vec![1, 2, 3]);
+        message_1.id = MessageID {
+            vertex_name: "test-vertex".to_string().into(),
+            offset: "1".to_string().into(),
+            index: 0,
+        };
+
+        // Message 2: key1:key2 with event time after gc_end_1 (should be retained)
+        let after_time_1 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 30, 0).unwrap();
+        let mut message_2 = Message::default();
+        message_2.event_time = after_time_1;
+        message_2.keys = Arc::from(vec!["key1".to_string(), "key2".to_string()]);
+        message_2.value = bytes::Bytes::from(vec![4, 5, 6]);
+        message_2.id = MessageID {
+            vertex_name: "test-vertex".to_string().into(),
+            offset: "2".to_string().into(),
+            index: 0,
+        };
+
+        // Message 3: key3:key4 with event time before gc_end_2 (should be filtered out)
+        let before_time_2 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 30, 0).unwrap();
+        let mut message_3 = Message::default();
+        message_3.event_time = before_time_2;
+        message_3.keys = Arc::from(vec!["key3".to_string(), "key4".to_string()]);
+        message_3.value = bytes::Bytes::from(vec![7, 8, 9]);
+        message_3.id = MessageID {
+            vertex_name: "test-vertex".to_string().into(),
+            offset: "3".to_string().into(),
+            index: 0,
+        };
+
+        // Message 4: key3:key4 with event time after gc_end_2 (should be retained)
+        let after_time_2 = Utc.with_ymd_and_hms(2025, 4, 1, 2, 30, 0).unwrap();
+        let mut message_4 = Message::default();
+        message_4.event_time = after_time_2;
+        message_4.keys = Arc::from(vec!["key3".to_string(), "key4".to_string()]);
+        message_4.value = bytes::Bytes::from(vec![10, 11, 12]);
+        message_4.id = MessageID {
+            vertex_name: "test-vertex".to_string().into(),
+            offset: "4".to_string().into(),
+            index: 0,
+        };
+
+        // Write the messages to the WAL
+        for (i, message) in [message_1, message_2, message_3, message_4]
+            .iter()
+            .enumerate()
+        {
+            let proto: Bytes = message.clone().try_into().unwrap();
+            tx.send(SegmentWriteMessage::WriteData {
+                id: Some(format!("msg-{}", i + 1)),
+                data: proto,
+            })
+            .await
+            .map_err(|e| format!("Failed to send data: {e}"))?;
+        }
+
+        // Drop the sender to close the channel
+        drop(tx);
+        writer_handle
+            .await
+            .map_err(|e| format!("Writer failed: {e}"))??;
+
+        // Create a compactor with unaligned window kind
+        let compactor = Compactor::new(
+            path.clone(),
+            WindowKind::Unaligned,
+            100,  // max_file_size_mb
+            1000, // flush_interval_ms
+            100,  // channel_buffer_size
+        )
+        .await?;
+
+        // Create a channel to receive replayed messages
+        let (replay_tx, mut replay_rx) = mpsc::channel(100);
+
+        // Call compact_with_replay
+        let handle = compactor.compact_with_replay(replay_tx).await?;
+
+        // Wait for compaction to complete
+        handle
+            .await
+            .map_err(|e| format!("Compaction failed: {e}"))??;
+
+        // Count the number of messages received through the replay channel
+        let mut replayed_count = 0;
+        let mut key1_key2_count = 0;
+        let mut key3_key4_count = 0;
+
+        while let Ok(data) = replay_rx.try_recv() {
+            let msg: numaflow_pb::objects::isb::Message = prost::Message::decode(data)
+                .map_err(|e| format!("Failed to decode message: {e}"))?;
+
+            // Verify that the message has an event time after the appropriate GC end time
+            if let Some(header) = msg.header {
+                let key_str = header.keys.join(WAL_KEY_SEPERATOR);
+
+                if key_str == "key1:key2" {
+                    key1_key2_count += 1;
+                    if let Some(message_info) = header.message_info.as_ref() {
+                        let event_time = utc_from_timestamp(message_info.event_time);
+                        assert!(
+                            event_time > gc_end_1,
+                            "Found key1:key2 message with event_time <= gc_end_1"
+                        );
+                    }
+                } else if key_str == "key3:key4" {
+                    key3_key4_count += 1;
+                    if let Some(message_info) = header.message_info.as_ref() {
+                        let event_time = utc_from_timestamp(message_info.event_time);
+                        assert!(
+                            event_time > gc_end_2,
+                            "Found key3:key4 message with event_time <= gc_end_2"
+                        );
+                    }
+                }
+            }
+            replayed_count += 1;
+        }
+
+        // Verify that only two messages were replayed (one for each key combination)
+        assert_eq!(replayed_count, 2, "Expected two messages to be replayed");
+        assert_eq!(key1_key2_count, 1, "Expected one key1:key2 message");
+        assert_eq!(key3_key4_count, 1, "Expected one key3:key4 message");
+
+        Ok(())
+    }
 }
