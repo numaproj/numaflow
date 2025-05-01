@@ -20,6 +20,7 @@ use crate::reduce::wal::segment::WalType;
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use crate::reduce::wal::segment::replay::{ReplayWal, SegmentEntry};
 use crate::shared::grpc::utc_from_timestamp;
+use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use numaflow_pb::objects::isb;
 use numaflow_pb::objects::wal::GcEvent;
@@ -87,6 +88,14 @@ impl Compactor {
         })
     }
 
+    /// Compact and replay the compacted data.
+    pub(crate) async fn compact_with_replay(
+        self,
+        tx: mpsc::Sender<Bytes>,
+    ) -> WalResult<JoinHandle<WalResult<()>>> {
+        Ok(tokio::spawn(async move { self.compact(Some(tx)).await }))
+    }
+
     /// Starts the compaction process every `interval_ms` milliseconds.
     pub(crate) async fn start_compaction(
         self,
@@ -98,7 +107,7 @@ impl Compactor {
             loop {
                 tokio::select! {
                 _ = tick.tick() => {
-                        self.compact().await?;
+                        self.compact(None).await?;
                      }
                 _ = cln_token.cancelled() => {
                         break;
@@ -112,10 +121,10 @@ impl Compactor {
 
     /// Compact first needs to get all the GC files and build a compaction map. This map will have
     /// the oldest data before which all can be deleted.
-    pub(crate) async fn compact(&self) -> WalResult<()> {
+    pub(crate) async fn compact(&self, replay_tx: Option<mpsc::Sender<Bytes>>) -> WalResult<()> {
         match self.kind {
-            WindowKind::Aligned => self.compact_aligned().await?,
-            WindowKind::Unaligned => self.compact_unaligned().await?,
+            WindowKind::Aligned => self.compact_aligned(replay_tx.clone()).await?,
+            WindowKind::Unaligned => self.compact_unaligned(replay_tx).await?,
         }
         Ok(())
     }
@@ -130,18 +139,19 @@ impl Compactor {
     /// - If event_time is <= oldest_time, skip it, otherwise write it into the Compaction Append WAL.
     /// - Send the Rotate message to the Compaction Append WAL after each Segment file has been processed.
     /// - Delete the Segment File after the Rotate is complete.
-    async fn compact_aligned(&self) -> WalResult<()> {
+    async fn compact_aligned(&self, replay_tx: Option<mpsc::Sender<Bytes>>) -> WalResult<()> {
         // Get the oldest time and scanned GC files
         let (oldest_time, gc_files) = self.build_aligned_compaction().await?;
 
         let compact = AlignedCompaction(oldest_time);
 
         // Compact the compaction_ro_wal
-        self.process_wal_stream(&self.compaction_ro_wal, &compact)
+        self.process_wal_stream(&self.compaction_ro_wal, &compact, replay_tx.clone())
             .await?;
 
         // Compact the segment_wal
-        self.process_wal_stream(&self.segment_wal, &compact).await?;
+        self.process_wal_stream(&self.segment_wal, &compact, replay_tx)
+            .await?;
 
         // Delete the GC files
         for gc_file in gc_files {
@@ -163,18 +173,19 @@ impl Compactor {
     /// - If event_time is <= oldest_time, skip it, otherwise write it into the Compaction Append WAL.
     /// - Send the Rotate message to the Compaction Append WAL after each Segment file has been processed.
     /// - Delete the Segment File after the Rotate is complete.
-    async fn compact_unaligned(&self) -> WalResult<()> {
+    async fn compact_unaligned(&self, replay_tx: Option<mpsc::Sender<Bytes>>) -> WalResult<()> {
         // Get the oldest time map and scanned GC files
         let (oldest_time_map, gc_files) = self.build_unaligned_compaction().await?;
 
         let compact = UnalignedCompaction(oldest_time_map);
 
         // Compact the compaction_ro_wal
-        self.process_wal_stream(&self.compaction_ro_wal, &compact)
+        self.process_wal_stream(&self.compaction_ro_wal, &compact, replay_tx.clone())
             .await?;
 
         // Compact the segment_wal
-        self.process_wal_stream(&self.segment_wal, &compact).await?;
+        self.process_wal_stream(&self.segment_wal, &compact, replay_tx)
+            .await?;
 
         // Delete the GC files
         for gc_file in gc_files {
@@ -192,6 +203,7 @@ impl Compactor {
         &self,
         wal: &ReplayWal,
         should_retain: &T,
+        replay_tx: Option<mpsc::Sender<Bytes>>,
     ) -> WalResult<()> {
         // Get a streaming reader for the WAL
         let (mut rx, handle) = wal.clone().streaming_read()?;
@@ -215,11 +227,22 @@ impl Compactor {
                     if should_retain.should_retain_message(&msg)? {
                         // Send the message to the compaction WAL
                         wal_tx
-                            .send(SegmentWriteMessage::WriteData { id: None, data })
+                            .send(SegmentWriteMessage::WriteData {
+                                id: None,
+                                data: data.clone(),
+                            })
                             .await
                             .map_err(|e| {
                                 format!("Failed to send message to compaction WAL: {}", e)
                             })?;
+
+                        // if replay_tx is provided, send the message to it.
+                        // This is used to replay the compacted data during boot up
+                        if let Some(tx) = replay_tx.clone() {
+                            tx.send(data).await.map_err(|e| {
+                                format!("Failed to send message to replay channel: {}", e)
+                            })?;
+                        }
                     }
                 }
                 SegmentEntry::DataFooter { .. } => {
@@ -754,7 +777,7 @@ mod tests {
         .await
         .unwrap();
 
-        compactor.compact().await.unwrap();
+        compactor.compact(None).await.unwrap();
 
         // Verify compacted data
         let compaction_wal = ReplayWal::new(WalType::Compact, test_path);

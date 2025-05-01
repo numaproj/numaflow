@@ -225,7 +225,7 @@ mod tests {
         .await
         .unwrap();
 
-        compactor.compact().await.unwrap();
+        compactor.compact(None).await.unwrap();
 
         // Verify compacted data
         let compaction_wal = ReplayWal::new(WalType::Compact, test_path);
@@ -373,7 +373,7 @@ mod tests {
         .await
         .unwrap();
 
-        compactor.compact().await.unwrap();
+        compactor.compact(None).await.unwrap();
 
         // Verify compacted data
         let compaction_wal = ReplayWal::new(WalType::Compact, test_path);
