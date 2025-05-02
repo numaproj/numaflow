@@ -839,7 +839,16 @@ mod tests {
 
         // Write the GC event to the WAL
         let (tx, rx) = mpsc::channel(100);
-        let (_result_rx, writer_handle) = gc_wal.streaming_write(ReceiverStream::new(rx)).await?;
+        let (mut gc_wal_write_rx, writer_handle) =
+            gc_wal.streaming_write(ReceiverStream::new(rx)).await?;
+
+        let write_result_cnt = tokio::spawn(async move {
+            let mut counter = 0;
+            while let Some(_) = gc_wal_write_rx.next().await {
+                counter += 1;
+            }
+            return counter;
+        });
 
         let mut buf = Vec::new();
         prost::Message::encode(&gc_event, &mut buf)
@@ -919,6 +928,9 @@ mod tests {
             .await
             .map_err(|e| format!("Writer failed: {e}"))??;
 
+        // we do not get data written to the tx channel because ID is None
+        assert_eq!(write_result_cnt.await.unwrap(), 0);
+
         // Create a compactor with aligned window kind
         let compactor = Compactor::new(
             path.clone(),
@@ -991,7 +1003,16 @@ mod tests {
 
         // Create GC events with different keys and end times
         let (tx, rx) = mpsc::channel(100);
-        let (_result_rx, writer_handle) = gc_wal.streaming_write(ReceiverStream::new(rx)).await?;
+        let (mut gc_wal_write_rx, writer_handle) =
+            gc_wal.streaming_write(ReceiverStream::new(rx)).await?;
+
+        let write_result_cnt = tokio::spawn(async move {
+            let mut counter = 0;
+            while let Some(_) = gc_wal_write_rx.next().await {
+                counter += 1;
+            }
+            return counter;
+        });
 
         // GC event for key1:key2 with end time
         let gc_end_1 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 10).unwrap();
@@ -1027,6 +1048,9 @@ mod tests {
         writer_handle
             .await
             .map_err(|e| format!("Writer failed: {e}"))??;
+
+        // we do not get data written to the tx channel because ID is None
+        assert_eq!(write_result_cnt.await.unwrap(), 0);
 
         // Create segment WAL with test messages
         let segment_wal = AppendOnlyWal::new(
