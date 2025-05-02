@@ -143,7 +143,10 @@ impl UserDefinedTransformer {
                         tags: Some(Arc::from(result.tags)),
                         value: result.value.into(),
                         offset: msg_info.offset.clone(),
-                        event_time: utc_from_timestamp(result.event_time),
+                        event_time: result
+                            .event_time
+                            .map(utc_from_timestamp)
+                            .expect("event time should be present"),
                         headers: msg_info.headers.clone(),
                         watermark: None,
                         metadata: None,

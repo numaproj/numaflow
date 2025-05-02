@@ -98,8 +98,14 @@ pub(crate) struct GcEventEntry {
 impl From<GcEvent> for GcEventEntry {
     fn from(value: GcEvent) -> Self {
         Self {
-            start_time: utc_from_timestamp(value.start_time),
-            end_time: utc_from_timestamp(value.end_time),
+            start_time: value
+                .start_time
+                .map(utc_from_timestamp)
+                .expect("start time should be present"),
+            end_time: value
+                .end_time
+                .map(utc_from_timestamp)
+                .expect("end time should be present"),
             keys: value.keys.into(),
         }
     }
@@ -237,7 +243,7 @@ mod tests {
                 let msg: numaflow_pb::objects::isb::Message = prost::Message::decode(data).unwrap();
                 if let Some(header) = msg.header {
                     if let Some(message_info) = header.message_info {
-                        let event_time = utc_from_timestamp(message_info.event_time);
+                        let event_time = message_info.event_time.map(utc_from_timestamp).unwrap();
                         assert!(
                             event_time > gc_end,
                             "Found message with event_time <= gc_end"
@@ -390,8 +396,7 @@ mod tests {
                     // Check event time based on key
                     if let (Some(message_info), keys) = (header.message_info.as_ref(), header.keys)
                     {
-                        let event_time = utc_from_timestamp(message_info.event_time);
-
+                        let event_time = message_info.event_time.map(utc_from_timestamp).unwrap();
                         if keys.contains(&"key1".to_string()) {
                             key1_count += 1;
                             assert!(

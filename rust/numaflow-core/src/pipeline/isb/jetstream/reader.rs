@@ -99,7 +99,7 @@ impl TryFrom<JSWrappedMessage> for Message {
             tags: None,
             value: body.payload.into(),
             offset: offset.clone(),
-            event_time: utc_from_timestamp(message_info.event_time),
+            event_time: message_info.event_time.map(utc_from_timestamp).unwrap(),
             id: MessageID {
                 vertex_name: value.vertex_name.into(),
                 offset: offset.to_string().into(),

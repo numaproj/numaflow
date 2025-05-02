@@ -403,7 +403,11 @@ impl ShouldRetain for AlignedCompaction {
             .header
             .as_ref()
             .and_then(|header| header.message_info.as_ref())
-            .map(|info| utc_from_timestamp(info.event_time))
+            .map(|info| {
+                info.event_time
+                    .map(utc_from_timestamp)
+                    .expect("event time should be present")
+            })
             .expect("Failed to extract event time from message");
 
         // Retain the message if its event time is greater than the oldest time
@@ -419,7 +423,11 @@ impl ShouldRetain for UnalignedCompaction {
             .header
             .as_ref()
             .and_then(|header| header.message_info.as_ref())
-            .map(|info| utc_from_timestamp(info.event_time))
+            .map(|info| {
+                info.event_time
+                    .map(utc_from_timestamp)
+                    .expect("event time should be present")
+            })
             .expect("Failed to extract event time from message");
 
         // Extract the keys from the message
@@ -789,7 +797,10 @@ mod tests {
                 let msg: numaflow_pb::objects::isb::Message = prost::Message::decode(data).unwrap();
                 if let Some(header) = msg.header {
                     if let Some(message_info) = header.message_info {
-                        let event_time = utc_from_timestamp(message_info.event_time);
+                        let event_time = message_info
+                            .event_time
+                            .map(utc_from_timestamp)
+                            .expect("event time should not be empty");
                         assert!(
                             event_time > gc_end_2,
                             "Found message with event_time <= gc_end_2"
@@ -961,7 +972,7 @@ mod tests {
             // Verify that the message has an event time after the GC end time
             if let Some(header) = msg.header {
                 if let Some(message_info) = header.message_info {
-                    let event_time = utc_from_timestamp(message_info.event_time);
+                    let event_time = message_info.event_time.map(utc_from_timestamp).unwrap();
                     assert!(
                         event_time > gc_end,
                         "Found message with event_time <= gc_end"
@@ -1175,7 +1186,7 @@ mod tests {
                 if key_str == "key1:key2" {
                     key1_key2_count += 1;
                     if let Some(message_info) = header.message_info.as_ref() {
-                        let event_time = utc_from_timestamp(message_info.event_time);
+                        let event_time = message_info.event_time.map(utc_from_timestamp).unwrap();
                         assert!(
                             event_time > gc_end_1,
                             "Found key1:key2 message with event_time <= gc_end_1"
@@ -1184,7 +1195,7 @@ mod tests {
                 } else if key_str == "key3:key4" {
                     key3_key4_count += 1;
                     if let Some(message_info) = header.message_info.as_ref() {
-                        let event_time = utc_from_timestamp(message_info.event_time);
+                        let event_time = message_info.event_time.map(utc_from_timestamp).unwrap();
                         assert!(
                             event_time > gc_end_2,
                             "Found key3:key4 message with event_time <= gc_end_2"

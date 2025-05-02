@@ -251,24 +251,33 @@ impl TryFrom<Message> for Bytes {
     }
 }
 
+// Convert Message to BytesMut used to persist in WAL
 impl TryFrom<Message> for BytesMut {
     type Error = Error;
 
     fn try_from(message: Message) -> Result<Self, Self::Error> {
-        let proto_message = numaflow_pb::objects::isb::Message {
-            header: Some(numaflow_pb::objects::isb::Header {
-                message_info: Some(numaflow_pb::objects::isb::MessageInfo {
-                    event_time: Some(prost_timestamp_from_utc(message.event_time)),
-                    is_late: false,
+        let Offset::Int(int_offset) = message.offset else {
+            return Err(Error::ISB("Invalid offset".to_string()));
+        };
+        let proto_message = numaflow_pb::objects::isb::ReadMessage {
+            message: Some(numaflow_pb::objects::isb::Message {
+                header: Some(numaflow_pb::objects::isb::Header {
+                    message_info: Some(numaflow_pb::objects::isb::MessageInfo {
+                        event_time: Some(prost_timestamp_from_utc(message.event_time)),
+                        is_late: false,
+                    }),
+                    kind: message.typ.into(),
+                    id: Some(message.id.into()),
+                    keys: message.keys.to_vec(),
+                    headers: message.headers,
                 }),
-                kind: message.typ.into(),
-                id: Some(message.id.into()),
-                keys: message.keys.to_vec(),
-                headers: message.headers,
+                body: Some(numaflow_pb::objects::isb::Body {
+                    payload: message.value.to_vec(),
+                }),
             }),
-            body: Some(numaflow_pb::objects::isb::Body {
-                payload: message.value.to_vec(),
-            }),
+            read_offset: int_offset.offset,
+            watermark: message.watermark.map(prost_timestamp_from_utc),
+            metadata: None,
         };
 
         let mut buf = BytesMut::new();
@@ -279,6 +288,7 @@ impl TryFrom<Message> for BytesMut {
     }
 }
 
+// Convert Bytes to Message, used while reading from WAL
 impl TryFrom<Bytes> for Message {
     type Error = Error;
 
@@ -303,13 +313,16 @@ impl TryFrom<Bytes> for Message {
             tags: None,
             value: Bytes::from(body.payload),
             offset: Offset::Int(IntOffset::new(proto_read_message.read_offset, 0)),
-            event_time: utc_from_timestamp(header.message_info.expect("info missing").event_time),
-            watermark: Some(utc_from_timestamp(proto_read_message.watermark)), // Convert watermark timestamp
+            event_time: header
+                .message_info
+                .expect("info can't be empty")
+                .event_time
+                .map(utc_from_timestamp)
+                .expect("event time should be present"),
+            watermark: proto_read_message.watermark.map(utc_from_timestamp),
             id: header.id.map(Into::into).unwrap_or_default(),
             headers: header.headers,
-            metadata: proto_read_message.metadata.map(|meta| Metadata {
-                previous_vertex: meta.num_delivered.to_string(), // Example mapping
-            }),
+            metadata: None,
         })
     }
 }
