@@ -46,3 +46,9 @@ impl From<String> for Error {
         Error::Other(value)
     }
 }
+
+impl From<Error> for crate::error::Error {
+    fn from(value: Error) -> Self {
+        crate::error::Error::WAL(value.to_string())
+    }
+}

@@ -73,8 +73,8 @@ pub struct ReadMessage {
     #[prost(message, optional, tag = "1")]
     pub message: ::core::option::Option<Message>,
     /// ReadOffset is the offset at which the message was read
-    #[prost(string, tag = "2")]
-    pub read_offset: ::prost::alloc::string::String,
+    #[prost(int64, tag = "2")]
+    pub read_offset: i64,
     /// Watermark is the watermark timestamp
     #[prost(message, optional, tag = "3")]
     pub watermark: ::core::option::Option<::prost_types::Timestamp>,

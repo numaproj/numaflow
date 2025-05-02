@@ -98,8 +98,14 @@ pub(crate) struct GcEventEntry {
 impl From<GcEvent> for GcEventEntry {
     fn from(value: GcEvent) -> Self {
         Self {
-            start_time: utc_from_timestamp(value.start_time),
-            end_time: utc_from_timestamp(value.end_time),
+            start_time: value
+                .start_time
+                .map(utc_from_timestamp)
+                .expect("start time should be present"),
+            end_time: value
+                .end_time
+                .map(utc_from_timestamp)
+                .expect("end time should be present"),
             keys: value.keys.into(),
         }
     }
@@ -119,6 +125,7 @@ impl From<GcEventEntry> for GcEvent {
 mod tests {
     use super::*;
     use crate::message::{Message, MessageID, Offset, StringOffset};
+    use crate::reduce::wal::WalMessage;
     use crate::reduce::wal::segment::WalType;
     use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
     use crate::reduce::wal::segment::compactor::{Compactor, WindowKind};
@@ -201,6 +208,7 @@ mod tests {
                 offset: i.to_string().into(),
                 index: 0,
             };
+            let message: WalMessage = message.into();
 
             let proto_message: Bytes = message.try_into().unwrap();
             tx.send(SegmentWriteMessage::WriteData {
@@ -234,10 +242,11 @@ mod tests {
         let mut remaining_message_count = 0;
         while let Some(entry) = rx.next().await {
             if let SegmentEntry::DataEntry { data, .. } = entry {
-                let msg: numaflow_pb::objects::isb::Message = prost::Message::decode(data).unwrap();
-                if let Some(header) = msg.header {
+                let msg: numaflow_pb::objects::isb::ReadMessage =
+                    prost::Message::decode(data).unwrap();
+                if let Some(header) = msg.message.unwrap().header {
                     if let Some(message_info) = header.message_info {
-                        let event_time = utc_from_timestamp(message_info.event_time);
+                        let event_time = message_info.event_time.map(utc_from_timestamp).unwrap();
                         assert!(
                             event_time > gc_end,
                             "Found message with event_time <= gc_end"
@@ -349,6 +358,7 @@ mod tests {
                 offset: i.to_string().into(),
                 index: 0,
             };
+            let message: WalMessage = message.into();
 
             let proto_message: Bytes = message.try_into().unwrap();
             tx.send(SegmentWriteMessage::WriteData {
@@ -385,13 +395,13 @@ mod tests {
 
         while let Some(entry) = rx.next().await {
             if let SegmentEntry::DataEntry { data, .. } = entry {
-                let msg: numaflow_pb::objects::isb::Message = prost::Message::decode(data).unwrap();
-                if let Some(header) = msg.header {
+                let msg: numaflow_pb::objects::isb::ReadMessage =
+                    prost::Message::decode(data).unwrap();
+                if let Some(header) = msg.message.unwrap().header {
                     // Check event time based on key
                     if let (Some(message_info), keys) = (header.message_info.as_ref(), header.keys)
                     {
-                        let event_time = utc_from_timestamp(message_info.event_time);
-
+                        let event_time = message_info.event_time.map(utc_from_timestamp).unwrap();
                         if keys.contains(&"key1".to_string()) {
                             key1_count += 1;
                             assert!(

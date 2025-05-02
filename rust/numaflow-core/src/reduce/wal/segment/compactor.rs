@@ -221,10 +221,12 @@ impl Compactor {
             match entry {
                 SegmentEntry::DataEntry { data, .. } => {
                     // Deserialize the message
-                    let msg: isb::Message = prost::Message::decode(data.clone())
+                    let msg: isb::ReadMessage = prost::Message::decode(data.clone())
                         .map_err(|e| format!("Failed to decode message: {}", e))?;
 
-                    if should_retain.should_retain_message(&msg)? {
+                    if should_retain
+                        .should_retain_message(&msg.message.expect("Message should be present"))?
+                    {
                         // Send the message to the compaction WAL
                         wal_tx
                             .send(SegmentWriteMessage::WriteData {
@@ -403,7 +405,11 @@ impl ShouldRetain for AlignedCompaction {
             .header
             .as_ref()
             .and_then(|header| header.message_info.as_ref())
-            .map(|info| utc_from_timestamp(info.event_time))
+            .map(|info| {
+                info.event_time
+                    .map(utc_from_timestamp)
+                    .expect("event time should be present")
+            })
             .expect("Failed to extract event time from message");
 
         // Retain the message if its event time is greater than the oldest time
@@ -419,7 +425,11 @@ impl ShouldRetain for UnalignedCompaction {
             .header
             .as_ref()
             .and_then(|header| header.message_info.as_ref())
-            .map(|info| utc_from_timestamp(info.event_time))
+            .map(|info| {
+                info.event_time
+                    .map(utc_from_timestamp)
+                    .expect("event time should be present")
+            })
             .expect("Failed to extract event time from message");
 
         // Extract the keys from the message
@@ -447,6 +457,7 @@ impl ShouldRetain for UnalignedCompaction {
 mod tests {
     use super::*;
     use crate::message::{Message, MessageID, Offset, StringOffset};
+    use crate::reduce::wal::WalMessage;
     use crate::shared::grpc::prost_timestamp_from_utc;
     use bytes::Bytes;
     use chrono::TimeZone;
@@ -481,6 +492,10 @@ mod tests {
         // Create some test GC events with different timestamps
         let gc_events = vec![
             GcEvent {
+                start_time: Some(prost_types::Timestamp {
+                    seconds: 0,
+                    nanos: 0,
+                }),
                 end_time: Some(prost_types::Timestamp {
                     seconds: 1000,
                     nanos: 0,
@@ -488,6 +503,10 @@ mod tests {
                 ..Default::default()
             },
             GcEvent {
+                start_time: Some(prost_types::Timestamp {
+                    seconds: 0,
+                    nanos: 0,
+                }),
                 end_time: Some(prost_types::Timestamp {
                     seconds: 2000,
                     nanos: 0,
@@ -566,6 +585,10 @@ mod tests {
         // Create some test GC events with different timestamps and keys
         let gc_events = vec![
             GcEvent {
+                start_time: Some(prost_types::Timestamp {
+                    seconds: 0,
+                    nanos: 0,
+                }),
                 end_time: Some(prost_types::Timestamp {
                     seconds: 1000,
                     nanos: 0,
@@ -574,6 +597,10 @@ mod tests {
                 ..Default::default()
             },
             GcEvent {
+                start_time: Some(prost_types::Timestamp {
+                    seconds: 0,
+                    nanos: 0,
+                }),
                 end_time: Some(prost_types::Timestamp {
                     seconds: 2000,
                     nanos: 0,
@@ -582,6 +609,10 @@ mod tests {
                 ..Default::default()
             },
             GcEvent {
+                start_time: Some(prost_types::Timestamp {
+                    seconds: 0,
+                    nanos: 0,
+                }),
                 end_time: Some(prost_types::Timestamp {
                     seconds: 1500,
                     nanos: 0,
@@ -650,10 +681,9 @@ mod tests {
         Ok(())
     }
 
-    // FIXME
     #[tokio::test]
     async fn test_gc_wal_and_compaction_with_multiple_files() {
-        let test_path = tempfile::tempdir().unwrap().into_path();
+        let test_path = tempdir().unwrap().into_path();
 
         // Create GC WAL
         let gc_wal = AppendOnlyWal::new(
@@ -746,6 +776,8 @@ mod tests {
                 index: 0,
             };
 
+            let message: WalMessage = message.into();
+
             let proto_message: Bytes = message.try_into().unwrap();
             tx.send(SegmentWriteMessage::WriteData {
                 offset: Some(Offset::String(StringOffset::new(format!("msg-{}", i), 0))),
@@ -786,10 +818,14 @@ mod tests {
         let mut remaining_message_count = 0;
         while let Some(entry) = rx.next().await {
             if let SegmentEntry::DataEntry { data, .. } = entry {
-                let msg: numaflow_pb::objects::isb::Message = prost::Message::decode(data).unwrap();
-                if let Some(header) = msg.header {
+                let msg: numaflow_pb::objects::isb::ReadMessage =
+                    prost::Message::decode(data).unwrap();
+                if let Some(header) = msg.message.unwrap().header {
                     if let Some(message_info) = header.message_info {
-                        let event_time = utc_from_timestamp(message_info.event_time);
+                        let event_time = message_info
+                            .event_time
+                            .map(utc_from_timestamp)
+                            .expect("event time should not be empty");
                         assert!(
                             event_time > gc_end_2,
                             "Found message with event_time <= gc_end_2"
@@ -831,8 +867,10 @@ mod tests {
         .await?;
 
         // Create a GC event with a specific end time
+        let gc_start = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 0).unwrap();
         let gc_end = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 10).unwrap();
         let gc_event = GcEvent {
+            start_time: Some(prost_timestamp_from_utc(gc_start)),
             end_time: Some(prost_timestamp_from_utc(gc_end)),
             ..Default::default()
         };
@@ -893,6 +931,8 @@ mod tests {
             index: 0,
         };
 
+        let before_message: WalMessage = before_message.into();
+
         // Message with event time after the GC end time (should be retained)
         let after_time = Utc.with_ymd_and_hms(2025, 4, 1, 1, 30, 0).unwrap();
         let mut after_message = Message::default();
@@ -904,6 +944,8 @@ mod tests {
             offset: "2".to_string().into(),
             index: 0,
         };
+
+        let after_message: WalMessage = after_message.into();
 
         // Write the messages to the WAL
         let before_proto: Bytes = before_message.try_into().unwrap();
@@ -955,13 +997,13 @@ mod tests {
         // Count the number of messages received through the replay channel
         let mut replayed_count = 0;
         while let Ok(data) = replay_rx.try_recv() {
-            let msg: numaflow_pb::objects::isb::Message = prost::Message::decode(data)
+            let msg: numaflow_pb::objects::isb::ReadMessage = prost::Message::decode(data)
                 .map_err(|e| format!("Failed to decode message: {e}"))?;
 
             // Verify that the message has an event time after the GC end time
-            if let Some(header) = msg.header {
+            if let Some(header) = msg.message.unwrap().header {
                 if let Some(message_info) = header.message_info {
-                    let event_time = utc_from_timestamp(message_info.event_time);
+                    let event_time = message_info.event_time.map(utc_from_timestamp).unwrap();
                     assert!(
                         event_time > gc_end,
                         "Found message with event_time <= gc_end"
@@ -1015,16 +1057,20 @@ mod tests {
         });
 
         // GC event for key1:key2 with end time
+        let gc_start_1 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 0).unwrap();
         let gc_end_1 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 10).unwrap();
         let gc_event_1 = GcEvent {
+            start_time: Some(prost_timestamp_from_utc(gc_start_1)),
             end_time: Some(prost_timestamp_from_utc(gc_end_1)),
             keys: vec!["key1".to_string(), "key2".to_string()],
             ..Default::default()
         };
 
         // GC event for key3:key4 with a different end time
+        let gc_start_2 = Utc.with_ymd_and_hms(2025, 4, 1, 2, 0, 0).unwrap();
         let gc_end_2 = Utc.with_ymd_and_hms(2025, 4, 1, 2, 0, 0).unwrap();
         let gc_event_2 = GcEvent {
+            start_time: Some(prost_timestamp_from_utc(gc_start_2)),
             end_time: Some(prost_timestamp_from_utc(gc_end_2)),
             keys: vec!["key3".to_string(), "key4".to_string()],
             ..Default::default()
@@ -1078,6 +1124,7 @@ mod tests {
             offset: "1".to_string().into(),
             index: 0,
         };
+        let message_1: WalMessage = message_1.into();
 
         // Message 2: key1:key2 with event time after gc_end_1 (should be retained)
         let after_time_1 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 30, 0).unwrap();
@@ -1090,6 +1137,7 @@ mod tests {
             offset: "2".to_string().into(),
             index: 0,
         };
+        let message_2: WalMessage = message_2.into();
 
         // Message 3: key3:key4 with event time before gc_end_2 (should be filtered out)
         let before_time_2 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 30, 0).unwrap();
@@ -1102,6 +1150,7 @@ mod tests {
             offset: "3".to_string().into(),
             index: 0,
         };
+        let message_3: WalMessage = message_3.into();
 
         // Message 4: key3:key4 with event time after gc_end_2 (should be retained)
         let after_time_2 = Utc.with_ymd_and_hms(2025, 4, 1, 2, 30, 0).unwrap();
@@ -1114,6 +1163,7 @@ mod tests {
             offset: "4".to_string().into(),
             index: 0,
         };
+        let message_4: WalMessage = message_4.into();
 
         // Write the messages to the WAL
         for (i, message) in [message_1, message_2, message_3, message_4]
@@ -1165,17 +1215,17 @@ mod tests {
         let mut key3_key4_count = 0;
 
         while let Ok(data) = replay_rx.try_recv() {
-            let msg: numaflow_pb::objects::isb::Message = prost::Message::decode(data)
+            let msg: numaflow_pb::objects::isb::ReadMessage = prost::Message::decode(data)
                 .map_err(|e| format!("Failed to decode message: {e}"))?;
 
             // Verify that the message has an event time after the appropriate GC end time
-            if let Some(header) = msg.header {
+            if let Some(header) = msg.message.unwrap().header {
                 let key_str = header.keys.join(WAL_KEY_SEPERATOR);
 
                 if key_str == "key1:key2" {
                     key1_key2_count += 1;
                     if let Some(message_info) = header.message_info.as_ref() {
-                        let event_time = utc_from_timestamp(message_info.event_time);
+                        let event_time = message_info.event_time.map(utc_from_timestamp).unwrap();
                         assert!(
                             event_time > gc_end_1,
                             "Found key1:key2 message with event_time <= gc_end_1"
@@ -1184,7 +1234,7 @@ mod tests {
                 } else if key_str == "key3:key4" {
                     key3_key4_count += 1;
                     if let Some(message_info) = header.message_info.as_ref() {
-                        let event_time = utc_from_timestamp(message_info.event_time);
+                        let event_time = message_info.event_time.map(utc_from_timestamp).unwrap();
                         assert!(
                             event_time > gc_end_2,
                             "Found key3:key4 message with event_time <= gc_end_2"
