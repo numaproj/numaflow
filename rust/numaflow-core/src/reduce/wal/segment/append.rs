@@ -463,13 +463,17 @@ mod tests {
 
         // We can't sort Offset values directly, so we'll just check that we received the same number of IDs
         assert_eq!(
-            received_ids.len(), expected_ids.len(),
+            received_ids.len(),
+            expected_ids.len(),
             "Mismatch between expected and received successful IDs count"
         );
 
         // Check that each expected ID is in the received IDs
         for expected_id in expected_ids {
-            assert!(received_ids.contains(&expected_id), "Missing expected ID in received IDs");
+            assert!(
+                received_ids.contains(&expected_id),
+                "Missing expected ID in received IDs"
+            );
         }
 
         let mut files: Vec<_> = fs::read_dir(&base_path)
@@ -537,7 +541,10 @@ mod tests {
             .await
             .expect("Failed to start WAL service");
 
-        let id1 = Some(Offset::String(StringOffset::new("flush-test-1".to_string(), 0)));
+        let id1 = Some(Offset::String(StringOffset::new(
+            "flush-test-1".to_string(),
+            0,
+        )));
         let data1 = Bytes::from("Data to be flushed");
         wal_tx
             .send(SegmentWriteMessage::WriteData {
