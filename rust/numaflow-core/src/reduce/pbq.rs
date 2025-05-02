@@ -16,6 +16,37 @@ pub(crate) struct WAL {
     compactor: Compactor,
 }
 
+/// PBQBuilder is a builder for PBQ.
+pub(crate) struct PBQBuilder {
+    isb_reader: JetStreamReader,
+    tracker_handle: TrackerHandle,
+    wal: Option<WAL>,
+}
+
+impl PBQBuilder {
+    /// Creates a new PBQBuilder.
+    pub(crate) fn new(isb_reader: JetStreamReader, tracker_handle: TrackerHandle) -> Self {
+        Self {
+            isb_reader,
+            tracker_handle,
+            wal: None,
+        }
+    }
+
+    pub(crate) fn wal(mut self, wal: WAL) -> Self {
+        self.wal = Some(wal);
+        self
+    }
+
+    pub(crate) fn build(self) -> PBQ {
+        PBQ {
+            isb_reader: self.isb_reader,
+            wal: self.wal,
+            tracker_handle: self.tracker_handle,
+        }
+    }
+}
+
 /// PBQ is a persistent buffer queue.
 pub(crate) struct PBQ {
     isb_reader: JetStreamReader,
@@ -24,19 +55,6 @@ pub(crate) struct PBQ {
 }
 
 impl PBQ {
-    /// Creates a new PBQ.
-    pub(crate) fn new(
-        isb_reader: JetStreamReader,
-        wal: Option<WAL>,
-        tracker_handle: TrackerHandle,
-    ) -> Self {
-        Self {
-            isb_reader,
-            wal,
-            tracker_handle,
-        }
-    }
-
     /// Starts the PBQ and returns a ReceiverStream and a JoinHandle for monitoring errors.
     pub(crate) async fn start(
         self,
