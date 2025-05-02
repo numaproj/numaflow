@@ -82,7 +82,7 @@ message ReadMessage {
   // Message is the actual message read from the buffer
   Message message = 1;
   // ReadOffset is the offset at which the message was read
-  string read_offset = 2;
+  int64 read_offset = 2;
   // Watermark is the watermark timestamp
   google.protobuf.Timestamp watermark = 3;
   // Metadata is the metadata of the message after a message is read from the buffer.

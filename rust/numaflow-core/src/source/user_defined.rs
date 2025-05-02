@@ -150,7 +150,10 @@ impl TryFrom<read_response::Result> for Message {
             tags: None,
             value: result.payload.into(),
             offset: source_offset.clone(),
-            event_time: utc_from_timestamp(result.event_time),
+            event_time: result
+                .event_time
+                .map(utc_from_timestamp)
+                .expect("event time should be present"),
             id: MessageID {
                 vertex_name: config::get_vertex_name().to_string().into(),
                 offset: source_offset.to_string().into(),

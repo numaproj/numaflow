@@ -149,8 +149,6 @@ pub(crate) async fn connect_with_uds(uds_path: PathBuf) -> error::Result<Channel
     Ok(channel)
 }
 
-pub(crate) fn utc_from_timestamp(t: Option<Timestamp>) -> DateTime<Utc> {
-    t.map_or(Utc.timestamp_nanos(-1), |t| {
-        DateTime::from_timestamp(t.seconds, t.nanos as u32).unwrap_or(Utc.timestamp_nanos(-1))
-    })
+pub(crate) fn utc_from_timestamp(t: Timestamp) -> DateTime<Utc> {
+    DateTime::from_timestamp(t.seconds, t.nanos as u32).unwrap_or(Utc.timestamp_nanos(-1))
 }
