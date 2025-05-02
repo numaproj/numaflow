@@ -1,3 +1,4 @@
+use crate::message::Offset;
 use crate::reduce::wal::error::WalResult;
 use crate::reduce::wal::segment::WalType;
 use bytes::Bytes;
@@ -23,8 +24,8 @@ const ROTATE_IF_STALE_DURATION: chrono::Duration = chrono::Duration::seconds(30)
 pub(crate) enum SegmentWriteMessage {
     /// Writes the given payload to the WAL.
     WriteData {
-        /// Unique ID of the payload. Useful to detect write failures.
-        id: Option<String>,
+        /// Unique offset of the payload. Useful to detect write failures.
+        offset: Option<Offset>,
         /// Data to be written on do the WAL.
         data: Bytes,
     },
@@ -56,7 +57,7 @@ struct SegmentWriteActor {
     /// Maximum file size per segment.
     max_file_size: u64,
     /// The result of [SegmentWriteMessage] operation.
-    result_tx: Sender<String>,
+    result_tx: Sender<Offset>,
 }
 
 impl Drop for SegmentWriteActor {
@@ -76,7 +77,7 @@ impl SegmentWriteActor {
         current_file: BufWriter<File>,
         max_file_size: u64,
         flush_interval: Duration,
-        result_tx: Sender<String>,
+        result_tx: Sender<Offset>,
     ) -> Self {
         Self {
             wal_type,
@@ -132,7 +133,7 @@ impl SegmentWriteActor {
     /// we should exit upon errors.
     async fn handle_message(&mut self, msg: SegmentWriteMessage) -> WalResult<()> {
         match msg {
-            SegmentWriteMessage::WriteData { id, data } => {
+            SegmentWriteMessage::WriteData { offset: id, data } => {
                 self.write_data(data).await?;
                 // we need to respond only if ID is provided
                 if let Some(id) = id {
@@ -304,11 +305,11 @@ impl AppendOnlyWal {
     pub(crate) async fn streaming_write(
         self,
         stream: ReceiverStream<SegmentWriteMessage>,
-    ) -> WalResult<(ReceiverStream<String>, JoinHandle<WalResult<()>>)> {
+    ) -> WalResult<(ReceiverStream<Offset>, JoinHandle<WalResult<()>>)> {
         let (file_name, file_buf) =
             SegmentWriteActor::open_segment(&self.wal_type, &self.base_path, 0).await?;
 
-        let (result_tx, result_rx) = mpsc::channel::<String>(self.channel_buffer_size);
+        let (result_tx, result_rx) = mpsc::channel::<Offset>(self.channel_buffer_size);
 
         let max_file_size_bytes = self.max_file_size_mb * 1024 * 1024;
         let flush_duration = Duration::from_millis(self.flush_interval_ms);
@@ -341,10 +342,12 @@ impl AppendOnlyWal {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::message::{Offset, StringOffset};
     use crate::reduce::wal::segment::WalType;
     use bytes::{Bytes, BytesMut};
     use futures::stream::StreamExt;
     use std::fs;
+    use std::mem::size_of;
     use tempfile::tempdir;
 
     #[tokio::test]
@@ -374,23 +377,23 @@ mod tests {
         let mut expected_ids = Vec::new();
         let mut received_results = Vec::new();
 
-        let id1 = "msg-001".to_string();
+        let id1 = Offset::String(StringOffset::new("msg-001".to_string(), 0));
         let data1 = Bytes::from("some initial data");
         expected_ids.push(id1.clone());
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                id: Some(id1),
+                offset: Some(id1),
                 data: data1.clone(),
             })
             .await
             .unwrap();
 
-        let id2 = "msg-002".to_string();
+        let id2 = Offset::String(StringOffset::new("msg-002".to_string(), 0));
         let data2 = Bytes::from(" more data here");
         expected_ids.push(id2.clone());
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                id: Some(id2),
+                offset: Some(id2),
                 data: data2.clone(),
             })
             .await
@@ -398,44 +401,44 @@ mod tests {
 
         let large_data_size = (0.6 * 1024.0 * 1024.0) as usize;
         let large_data1 = Bytes::from(vec![b'A'; large_data_size]);
-        let id3 = "msg-large-1".to_string();
+        let id3 = Offset::String(StringOffset::new("msg-large-1".to_string(), 0));
         expected_ids.push(id3.clone());
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                id: Some(id3),
+                offset: Some(id3),
                 data: large_data1.clone(),
             })
             .await
             .unwrap();
 
         let large_data2 = Bytes::from(vec![b'B'; large_data_size]);
-        let id4 = "msg-large-2".to_string();
+        let id4 = Offset::String(StringOffset::new("msg-large-2".to_string(), 0));
         expected_ids.push(id4.clone());
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                id: Some(id4),
+                offset: Some(id4),
                 data: large_data2.clone(),
             })
             .await
             .unwrap();
 
-        let id5 = "msg-005-rotated".to_string();
+        let id5 = Offset::String(StringOffset::new("msg-005-rotated".to_string(), 0));
         let data5 = Bytes::from("data after rotation");
         expected_ids.push(id5.clone());
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                id: Some(id5),
+                offset: Some(id5),
                 data: data5.clone(),
             })
             .await
             .unwrap();
 
-        let id6 = "msg-006-rotated".to_string();
+        let id6 = Offset::String(StringOffset::new("msg-006-rotated".to_string(), 0));
         let data6 = Bytes::from(" more data after rotation");
         expected_ids.push(id6.clone());
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                id: Some(id6),
+                offset: Some(id6),
                 data: data6.clone(),
             })
             .await
@@ -458,12 +461,20 @@ mod tests {
             received_ids.push(result);
         }
 
-        received_ids.sort();
-        expected_ids.sort();
+        // We can't sort Offset values directly, so we'll just check that we received the same number of IDs
         assert_eq!(
-            received_ids, expected_ids,
-            "Mismatch between expected and received successful IDs"
+            received_ids.len(),
+            expected_ids.len(),
+            "Mismatch between expected and received successful IDs count"
         );
+
+        // Check that each expected ID is in the received IDs
+        for expected_id in expected_ids {
+            assert!(
+                received_ids.contains(&expected_id),
+                "Missing expected ID in received IDs"
+            );
+        }
 
         let mut files: Vec<_> = fs::read_dir(&base_path)
             .unwrap()
@@ -530,11 +541,14 @@ mod tests {
             .await
             .expect("Failed to start WAL service");
 
-        let id1 = Some("flush-test-1".to_string());
+        let id1 = Some(Offset::String(StringOffset::new(
+            "flush-test-1".to_string(),
+            0,
+        )));
         let data1 = Bytes::from("Data to be flushed");
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                id: id1.clone(),
+                offset: id1.clone(),
                 data: data1.clone(),
             })
             .await
@@ -600,11 +614,11 @@ mod tests {
             .expect("Failed to start WAL service");
 
         // Send some data to the WAL
-        let id1 = Some("msg-001".to_string());
+        let id1 = Some(Offset::String(StringOffset::new("msg-001".to_string(), 0)));
         let data1 = Bytes::from("data before rotation");
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                id: id1.clone(),
+                offset: id1.clone(),
                 data: data1.clone(),
             })
             .await
@@ -617,11 +631,11 @@ mod tests {
             .unwrap();
 
         // Send more data after rotation
-        let id2 = Some("msg-002".to_string());
+        let id2 = Some(Offset::String(StringOffset::new("msg-002".to_string(), 0)));
         let data2 = Bytes::from("data after rotation");
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                id: id2.clone(),
+                offset: id2.clone(),
                 data: data2.clone(),
             })
             .await
