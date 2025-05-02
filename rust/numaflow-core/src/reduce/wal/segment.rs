@@ -118,7 +118,7 @@ impl From<GcEventEntry> for GcEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::{Message, MessageID};
+    use crate::message::{Message, MessageID, Offset, StringOffset};
     use crate::reduce::wal::segment::WalType;
     use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
     use crate::reduce::wal::segment::compactor::{Compactor, WindowKind};
@@ -161,7 +161,7 @@ mod tests {
             .unwrap();
 
         tx.send(SegmentWriteMessage::WriteData {
-            id: Some("gc".to_string()),
+            id: Some(Offset::String(StringOffset::new("gc".to_string(), 0))),
             data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event)),
         })
         .await
@@ -204,7 +204,7 @@ mod tests {
 
             let proto_message: Bytes = message.try_into().unwrap();
             tx.send(SegmentWriteMessage::WriteData {
-                id: Some(format!("msg-{}", i)),
+                id: Some(Offset::String(StringOffset::new(format!("msg-{}", i), 0))),
                 data: proto_message,
             })
             .await
@@ -297,14 +297,14 @@ mod tests {
 
         // Send both GC events
         tx.send(SegmentWriteMessage::WriteData {
-            id: Some("gc1".to_string()),
+            id: Some(Offset::String(StringOffset::new("gc1".to_string(), 0))),
             data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event1)),
         })
         .await
         .unwrap();
 
         tx.send(SegmentWriteMessage::WriteData {
-            id: Some("gc2".to_string()),
+            id: Some(Offset::String(StringOffset::new("gc2".to_string(), 0))),
             data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event2)),
         })
         .await
@@ -352,7 +352,7 @@ mod tests {
 
             let proto_message: Bytes = message.try_into().unwrap();
             tx.send(SegmentWriteMessage::WriteData {
-                id: Some(format!("msg-{}", i)),
+                id: Some(Offset::String(StringOffset::new(format!("msg-{}", i), 0))),
                 data: proto_message,
             })
             .await

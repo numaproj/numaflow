@@ -446,7 +446,7 @@ impl ShouldRetain for UnalignedCompaction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::{Message, MessageID};
+    use crate::message::{Message, MessageID, Offset, StringOffset};
     use crate::shared::grpc::prost_timestamp_from_utc;
     use bytes::Bytes;
     use chrono::TimeZone;
@@ -690,14 +690,14 @@ mod tests {
             .unwrap();
 
         tx.send(SegmentWriteMessage::WriteData {
-            id: Some("gc1".to_string()),
+            id: Some(Offset::String(StringOffset::new("gc1".to_string(), 0))),
             data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event_1)),
         })
         .await
         .unwrap();
 
         tx.send(SegmentWriteMessage::WriteData {
-            id: Some("gc2".to_string()),
+            id: Some(Offset::String(StringOffset::new("gc2".to_string(), 0))),
             data: bytes::Bytes::from(prost::Message::encode_to_vec(&gc_event_2)),
         })
         .await
@@ -748,7 +748,7 @@ mod tests {
 
             let proto_message: Bytes = message.try_into().unwrap();
             tx.send(SegmentWriteMessage::WriteData {
-                id: Some(format!("msg-{}", i)),
+                id: Some(Offset::String(StringOffset::new(format!("msg-{}", i), 0))),
                 data: proto_message,
             })
             .await
@@ -899,7 +899,7 @@ mod tests {
         // Write the messages to the WAL
         let before_proto: Bytes = before_message.try_into().unwrap();
         tx.send(SegmentWriteMessage::WriteData {
-            id: Some("msg-1".to_string()),
+            id: Some(Offset::String(StringOffset::new("msg-1".to_string(), 0))),
             data: before_proto,
         })
         .await
@@ -907,7 +907,7 @@ mod tests {
 
         let after_proto: Bytes = after_message.try_into().unwrap();
         tx.send(SegmentWriteMessage::WriteData {
-            id: Some("msg-2".to_string()),
+            id: Some(Offset::String(StringOffset::new("msg-2".to_string(), 0))),
             data: after_proto,
         })
         .await
@@ -1098,7 +1098,10 @@ mod tests {
         {
             let proto: Bytes = message.clone().try_into().unwrap();
             tx.send(SegmentWriteMessage::WriteData {
-                id: Some(format!("msg-{}", i + 1)),
+                id: Some(Offset::String(StringOffset::new(
+                    format!("msg-{}", i + 1),
+                    0,
+                ))),
                 data: proto,
             })
             .await
