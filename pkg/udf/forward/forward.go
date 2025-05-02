@@ -297,6 +297,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) error {
 		// Trigger the UDF processing based on the mode enabled for map
 		// ie Batch Map or unary map
 		// This will be a blocking call until the all the UDF results for the batch are received.
+		udfStart := time.Now()
 		udfResults, err = isdf.applyUDF(ctx, dataMessages)
 		if err != nil {
 			isdf.opts.logger.Errorw("failed to applyUDF", zap.Error(err))
@@ -304,6 +305,7 @@ func (isdf *InterStepDataForward) forwardAChunk(ctx context.Context) error {
 			isdf.fromBufferPartition.NoAck(ctx, readOffsets)
 			return err
 		}
+		metrics.UDFProcessingTime.With(metricLabels).Observe(float64(time.Since(udfStart).Microseconds()))
 
 		// let's figure out which vertex to send the results to.
 		// update the toBuffer(s) with writeMessages.
@@ -476,7 +478,7 @@ func (isdf *InterStepDataForward) streamMessage(ctx context.Context, dataMessage
 		return nil, fmt.Errorf("failed to applyUDF, error: %w", err)
 	}
 
-	metrics.UDFProcessingTime.With(metricLabels).Observe(float64(time.Since(start).Microseconds()))
+	metrics.ConcurrentUDFProcessingTime.With(metricLabels).Observe(float64(time.Since(start).Microseconds()))
 
 	return writeOffsets, nil
 }
