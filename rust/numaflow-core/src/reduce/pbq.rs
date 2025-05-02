@@ -55,8 +55,8 @@ pub(crate) struct PBQ {
 }
 
 impl PBQ {
-    /// Starts the PBQ and returns a ReceiverStream and a JoinHandle for monitoring errors.
-    pub(crate) async fn start(
+    /// Streaming read from PBQ, returns a ReceiverStream and a JoinHandle for monitoring errors.
+    pub(crate) async fn streaming_read(
         self,
         cancellation_token: CancellationToken,
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
@@ -144,5 +144,129 @@ impl PBQ {
         isb_handle.await.expect("task failed")?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
+    use crate::message::{IntOffset, MessageID, Offset};
+    use crate::reduce::wal::segment::WalType;
+    use async_nats::jetstream;
+    use async_nats::jetstream::{consumer, stream};
+    use bytes::{Bytes, BytesMut};
+    use chrono::Utc;
+    use std::collections::HashMap;
+    use std::fs;
+    use std::sync::Arc;
+    use std::time::Duration;
+    use tempfile::tempdir;
+
+    // #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_pbq_read_without_wal() {
+        let js_url = "localhost:4222";
+        // Create JetStream context
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+
+        let stream = Stream::new("test_pbq_read_without_wal", "test", 0);
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream.name).await;
+        context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                max_message_size: 1024,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        let buf_reader_config = BufferReaderConfig {
+            streams: vec![],
+            wip_ack_interval: Duration::from_millis(5),
+        };
+        let tracker = TrackerHandle::new(None, None);
+        let js_reader = JetStreamReader::new(
+            "test".to_string(),
+            stream.clone(),
+            context.clone(),
+            buf_reader_config,
+            tracker.clone(),
+            500,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let reader_cancel_token = CancellationToken::new();
+
+        let pbq = PBQBuilder::new(js_reader, tracker.clone()).build();
+
+        let (mut pbq_stream, handle) = pbq
+            .streaming_read(reader_cancel_token.clone())
+            .await
+            .unwrap();
+
+        let mut offsets = vec![];
+        for i in 0..10 {
+            let offset = Offset::Int(IntOffset::new(i + 1, 0));
+            offsets.push(offset.clone());
+            let message = Message {
+                typ: Default::default(),
+                keys: Arc::from(vec![format!("key_{}", i)]),
+                tags: None,
+                value: format!("pbq message {}", i).as_bytes().to_vec().into(),
+                offset,
+                event_time: Utc::now(),
+                watermark: None,
+                id: MessageID {
+                    vertex_name: "vertex".to_string().into(),
+                    offset: format!("offset_{}", i).into(),
+                    index: i as i32,
+                },
+                headers: HashMap::new(),
+                metadata: None,
+            };
+            let message_bytes: BytesMut = message.try_into().unwrap();
+            context
+                .publish(stream.name, message_bytes.into())
+                .await
+                .unwrap();
+        }
+
+        let mut buffer = vec![];
+        for _ in 0..10 {
+            let Some(val) = pbq_stream.next().await else {
+                break;
+            };
+            buffer.push(val);
+        }
+
+        assert_eq!(
+            buffer.len(),
+            10,
+            "Expected 10 messages from the jetstream reader"
+        );
+
+        for offset in offsets {
+            tracker.discard(offset).await.unwrap();
+        }
+        reader_cancel_token.cancel();
+        context.delete_stream(stream.name).await.unwrap();
     }
 }
