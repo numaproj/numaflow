@@ -87,6 +87,8 @@ nav:
                   - Fixed: "user-guide/user-defined-functions/reduce/windowing/fixed.md"
                   - Sliding: "user-guide/user-defined-functions/reduce/windowing/sliding.md"
                   - Session: "user-guide/user-defined-functions/reduce/windowing/session.md"
+              - Accumulator:
+                  - Overview: "user-guide/user-defined-functions/reduce/accumulator/accumulator.md"
               - Examples: "user-guide/user-defined-functions/reduce/examples.md"
       - SDKs:
           - Overview: user-guide/sdks/overview.md
