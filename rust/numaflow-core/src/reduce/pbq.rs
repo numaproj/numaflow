@@ -1,18 +1,10 @@
-//! PBQ is a persistent buffer queue. It is used to store the data that is not yet processed and
-//! forwarded. It exposes a ReceiverStream that can be used to read the data from the PBQ.
-//! Reading in PBQ is done as follows:
-//! - Before it can read from ISB (during bootup)
-//!   - it will read from WAL and replay the data.
-//! - After it has replayed from the WAL (after bootup)
-//!   - Read the data from the ISB
-//!   - Write the data to WAL
-
 use crate::error::Result;
 use crate::message::Message;
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use crate::reduce::wal::segment::compactor::Compactor;
 use crate::tracker::TrackerHandle;
+use tokio::sync::mpsc::{self, Sender};
 use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
@@ -26,7 +18,6 @@ pub(crate) struct WAL {
 
 /// PBQ is a persistent buffer queue.
 pub(crate) struct PBQ {
-    /// JetStream Reader.
     isb_reader: JetStreamReader,
     wal: Option<WAL>,
     tracker_handle: TrackerHandle,
@@ -46,75 +37,93 @@ impl PBQ {
         }
     }
 
-    /// Starts the PBQ and returns a ReceiverStream that can be used to read the data from the PBQ.
-    /// It replays data from WAL and then starts reading from ISB.
-    pub(crate) async fn streaming_read(
+    /// Starts the PBQ and returns a ReceiverStream and a JoinHandle for monitoring errors.
+    pub(crate) async fn start(
         self,
         cancellation_token: CancellationToken,
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
+        let (tx, rx) = mpsc::channel(100);
         let Some(wal) = self.wal else {
             // No WAL, just read from ISB
             return self.isb_reader.streaming_read(cancellation_token).await;
         };
 
-        let (tx, rx) = tokio::sync::mpsc::channel(100);
-        let task_handle = tokio::spawn(async move {
-            let (wal_tx, wal_rx) = tokio::sync::mpsc::channel(100);
-            // Replay the messages from WAL
-            Self::replay_messages_from_wal(wal.compactor, tx.clone()).await?;
-            let (mut isb_stream, handle) =
-                self.isb_reader.streaming_read(cancellation_token).await?;
+        let handle = tokio::spawn(async move {
+            // Replay messages from WAL
+            Self::replay_wal(wal.compactor, &tx).await?;
 
-            let (mut offset_stream, wal_handle) = wal
-                .append_only_wal
-                .streaming_write(ReceiverStream::new(wal_rx))
-                .await?;
+            // Read from ISB and write to WAL
+            Self::read_isb_and_write_wal(
+                self.isb_reader,
+                wal.append_only_wal,
+                self.tracker_handle,
+                tx,
+                cancellation_token,
+            )
+            .await?;
 
-            // start a background task to listen on the offset stream and invoke delete on the tracker
-            // so that the messages gets acked.
-            tokio::spawn(async move {
-                while let Some(offset) = offset_stream.next().await {
-                    self.tracker_handle
-                        .delete(offset)
-                        .await
-                        .expect("failed to delete offset");
-                }
-            });
-
-            while let Some(msg) = isb_stream.next().await {
-                wal_tx
-                    .send(SegmentWriteMessage::WriteData {
-                        offset: Some(msg.offset.clone()),
-                        data: msg
-                            .clone()
-                            .try_into()
-                            .expect("failed to parse message to bytes"),
-                    })
-                    .await
-                    .expect("rx dropped");
-
-                tx.send(msg.clone()).await.expect("rx dropped");
-            }
             Ok(())
         });
 
-        Ok((ReceiverStream::new(rx), task_handle))
+        Ok((ReceiverStream::new(rx), handle))
     }
 
-    async fn replay_messages_from_wal(
-        compactor: Compactor,
-        tx: tokio::sync::mpsc::Sender<Message>,
-    ) -> Result<()> {
-        let (wal_tx, mut wal_rx) = tokio::sync::mpsc::channel(100);
-        let wal_handle = compactor.compact_with_replay(wal_tx).await?;
+    /// Replays messages from the WAL.
+    async fn replay_wal(compactor: Compactor, tx: &Sender<Message>) -> Result<()> {
+        let (wal_tx, mut wal_rx) = mpsc::channel(100);
+        compactor.compact_with_replay(wal_tx).await?;
 
         while let Some(msg) = wal_rx.recv().await {
-            tx.send(msg.try_into().expect("failed to parse message from Bytes"))
+            tx.send(msg.try_into().expect("Failed to parse message from Bytes"))
                 .await
-                .expect("tx dropped");
+                .expect("Receiver dropped");
         }
 
-        wal_handle.await.expect("wal task failed")?;
+        Ok(())
+    }
+
+    /// Reads from ISB and writes to WAL.
+    async fn read_isb_and_write_wal(
+        isb_reader: JetStreamReader,
+        append_only_wal: AppendOnlyWal,
+        tracker_handle: TrackerHandle,
+        tx: Sender<Message>,
+        cancellation_token: CancellationToken,
+    ) -> Result<()> {
+        let (wal_tx, wal_rx) = mpsc::channel(100);
+        let (mut isb_stream, isb_handle) = isb_reader.streaming_read(cancellation_token).await?;
+        let (mut offset_stream, wal_handle) = append_only_wal
+            .streaming_write(ReceiverStream::new(wal_rx))
+            .await?;
+
+        // Handle offsets in the same task
+        tokio::spawn(async move {
+            while let Some(offset) = offset_stream.next().await {
+                tracker_handle
+                    .delete(offset)
+                    .await
+                    .expect("Failed to delete offset");
+            }
+        });
+
+        while let Some(msg) = isb_stream.next().await {
+            wal_tx
+                .send(SegmentWriteMessage::WriteData {
+                    offset: Some(msg.offset.clone()),
+                    data: msg
+                        .clone()
+                        .try_into()
+                        .expect("Failed to parse message to bytes"),
+                })
+                .await
+                .expect("Receiver dropped");
+
+            tx.send(msg).await.expect("Receiver dropped");
+        }
+
+        wal_handle.await.expect("task failed")?;
+        isb_handle.await.expect("task failed")?;
+
         Ok(())
     }
 }
