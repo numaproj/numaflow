@@ -1,6 +1,7 @@
 use crate::error::Result;
 use crate::message::Message;
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
+use crate::reduce::wal::WalMessage;
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use crate::reduce::wal::segment::compactor::Compactor;
 use crate::tracker::TrackerHandle;
@@ -93,9 +94,8 @@ impl PBQ {
         compactor.compact_with_replay(wal_tx).await?;
 
         while let Some(msg) = wal_rx.recv().await {
-            tx.send(msg.try_into().expect("Failed to parse message from Bytes"))
-                .await
-                .expect("Receiver dropped");
+            let msg: WalMessage = msg.try_into().unwrap();
+            tx.send(msg.into()).await.expect("Receiver dropped");
         }
 
         Ok(())
@@ -152,16 +152,13 @@ mod tests {
     use super::*;
     use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
     use crate::message::{IntOffset, MessageID, Offset};
-    use crate::reduce::wal::segment::WalType;
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
-    use bytes::{Bytes, BytesMut};
+    use bytes::BytesMut;
     use chrono::Utc;
     use std::collections::HashMap;
-    use std::fs;
     use std::sync::Arc;
     use std::time::Duration;
-    use tempfile::tempdir;
 
     // #[cfg(feature = "nats-tests")]
     #[tokio::test]

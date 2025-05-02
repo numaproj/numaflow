@@ -457,6 +457,7 @@ impl ShouldRetain for UnalignedCompaction {
 mod tests {
     use super::*;
     use crate::message::{Message, MessageID, Offset, StringOffset};
+    use crate::reduce::wal::WalMessage;
     use crate::shared::grpc::prost_timestamp_from_utc;
     use bytes::Bytes;
     use chrono::TimeZone;
@@ -775,6 +776,8 @@ mod tests {
                 index: 0,
             };
 
+            let message: WalMessage = message.into();
+
             let proto_message: Bytes = message.try_into().unwrap();
             tx.send(SegmentWriteMessage::WriteData {
                 offset: Some(Offset::String(StringOffset::new(format!("msg-{}", i), 0))),
@@ -928,6 +931,8 @@ mod tests {
             index: 0,
         };
 
+        let before_message: WalMessage = before_message.into();
+
         // Message with event time after the GC end time (should be retained)
         let after_time = Utc.with_ymd_and_hms(2025, 4, 1, 1, 30, 0).unwrap();
         let mut after_message = Message::default();
@@ -939,6 +944,8 @@ mod tests {
             offset: "2".to_string().into(),
             index: 0,
         };
+
+        let after_message: WalMessage = after_message.into();
 
         // Write the messages to the WAL
         let before_proto: Bytes = before_message.try_into().unwrap();
@@ -1117,6 +1124,7 @@ mod tests {
             offset: "1".to_string().into(),
             index: 0,
         };
+        let message_1: WalMessage = message_1.into();
 
         // Message 2: key1:key2 with event time after gc_end_1 (should be retained)
         let after_time_1 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 30, 0).unwrap();
@@ -1129,6 +1137,7 @@ mod tests {
             offset: "2".to_string().into(),
             index: 0,
         };
+        let message_2: WalMessage = message_2.into();
 
         // Message 3: key3:key4 with event time before gc_end_2 (should be filtered out)
         let before_time_2 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 30, 0).unwrap();
@@ -1141,6 +1150,7 @@ mod tests {
             offset: "3".to_string().into(),
             index: 0,
         };
+        let message_3: WalMessage = message_3.into();
 
         // Message 4: key3:key4 with event time after gc_end_2 (should be retained)
         let after_time_2 = Utc.with_ymd_and_hms(2025, 4, 1, 2, 30, 0).unwrap();
@@ -1153,6 +1163,7 @@ mod tests {
             offset: "4".to_string().into(),
             index: 0,
         };
+        let message_4: WalMessage = message_4.into();
 
         // Write the messages to the WAL
         for (i, message) in [message_1, message_2, message_3, message_4]

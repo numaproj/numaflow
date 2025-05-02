@@ -125,6 +125,7 @@ impl From<GcEventEntry> for GcEvent {
 mod tests {
     use super::*;
     use crate::message::{Message, MessageID, Offset, StringOffset};
+    use crate::reduce::wal::WalMessage;
     use crate::reduce::wal::segment::WalType;
     use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
     use crate::reduce::wal::segment::compactor::{Compactor, WindowKind};
@@ -207,6 +208,7 @@ mod tests {
                 offset: i.to_string().into(),
                 index: 0,
             };
+            let message: WalMessage = message.into();
 
             let proto_message: Bytes = message.try_into().unwrap();
             tx.send(SegmentWriteMessage::WriteData {
@@ -356,6 +358,7 @@ mod tests {
                 offset: i.to_string().into(),
                 index: 0,
             };
+            let message: WalMessage = message.into();
 
             let proto_message: Bytes = message.try_into().unwrap();
             tx.send(SegmentWriteMessage::WriteData {
