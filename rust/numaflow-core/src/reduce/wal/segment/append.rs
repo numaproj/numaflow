@@ -24,8 +24,8 @@ const ROTATE_IF_STALE_DURATION: chrono::Duration = chrono::Duration::seconds(30)
 pub(crate) enum SegmentWriteMessage {
     /// Writes the given payload to the WAL.
     WriteData {
-        /// Unique ID of the payload. Useful to detect write failures.
-        id: Option<Offset>,
+        /// Unique offset of the payload. Useful to detect write failures.
+        offset: Option<Offset>,
         /// Data to be written on do the WAL.
         data: Bytes,
     },
@@ -133,7 +133,7 @@ impl SegmentWriteActor {
     /// we should exit upon errors.
     async fn handle_message(&mut self, msg: SegmentWriteMessage) -> WalResult<()> {
         match msg {
-            SegmentWriteMessage::WriteData { id, data } => {
+            SegmentWriteMessage::WriteData { offset: id, data } => {
                 self.write_data(data).await?;
                 // we need to respond only if ID is provided
                 if let Some(id) = id {
@@ -382,7 +382,7 @@ mod tests {
         expected_ids.push(id1.clone());
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                id: Some(id1),
+                offset: Some(id1),
                 data: data1.clone(),
             })
             .await
@@ -393,7 +393,7 @@ mod tests {
         expected_ids.push(id2.clone());
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                id: Some(id2),
+                offset: Some(id2),
                 data: data2.clone(),
             })
             .await
@@ -405,7 +405,7 @@ mod tests {
         expected_ids.push(id3.clone());
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                id: Some(id3),
+                offset: Some(id3),
                 data: large_data1.clone(),
             })
             .await
@@ -416,7 +416,7 @@ mod tests {
         expected_ids.push(id4.clone());
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                id: Some(id4),
+                offset: Some(id4),
                 data: large_data2.clone(),
             })
             .await
@@ -427,7 +427,7 @@ mod tests {
         expected_ids.push(id5.clone());
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                id: Some(id5),
+                offset: Some(id5),
                 data: data5.clone(),
             })
             .await
@@ -438,7 +438,7 @@ mod tests {
         expected_ids.push(id6.clone());
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                id: Some(id6),
+                offset: Some(id6),
                 data: data6.clone(),
             })
             .await
@@ -548,7 +548,7 @@ mod tests {
         let data1 = Bytes::from("Data to be flushed");
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                id: id1.clone(),
+                offset: id1.clone(),
                 data: data1.clone(),
             })
             .await
@@ -618,7 +618,7 @@ mod tests {
         let data1 = Bytes::from("data before rotation");
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                id: id1.clone(),
+                offset: id1.clone(),
                 data: data1.clone(),
             })
             .await
@@ -635,7 +635,7 @@ mod tests {
         let data2 = Bytes::from("data after rotation");
         wal_tx
             .send(SegmentWriteMessage::WriteData {
-                id: id2.clone(),
+                offset: id2.clone(),
                 data: data2.clone(),
             })
             .await
