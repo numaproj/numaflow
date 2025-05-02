@@ -86,7 +86,8 @@ impl PBQ {
         Ok((ReceiverStream::new(rx), handle))
     }
 
-    /// Replays messages from the WAL.
+    /// Replays messages from the WAL converts them to [crate::message::Message] and sends them to
+    /// the tx channel.
     async fn replay_wal(compactor: Compactor, tx: &Sender<Message>) -> Result<()> {
         let (wal_tx, mut wal_rx) = mpsc::channel(100);
         compactor.compact_with_replay(wal_tx).await?;
@@ -114,7 +115,7 @@ impl PBQ {
             .streaming_write(ReceiverStream::new(wal_rx))
             .await?;
 
-        // Handle offsets in the same task
+        // acknowledge the successfully written wal messages by listening on the offset stream.
         tokio::spawn(async move {
             while let Some(offset) = offset_stream.next().await {
                 tracker_handle

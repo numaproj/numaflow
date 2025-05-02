@@ -162,7 +162,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "nats-tests")]
+    // #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_source_forwarder() {
         let tracker_handle = TrackerHandle::new(None, None);

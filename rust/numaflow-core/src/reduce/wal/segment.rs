@@ -240,8 +240,9 @@ mod tests {
         let mut remaining_message_count = 0;
         while let Some(entry) = rx.next().await {
             if let SegmentEntry::DataEntry { data, .. } = entry {
-                let msg: numaflow_pb::objects::isb::Message = prost::Message::decode(data).unwrap();
-                if let Some(header) = msg.header {
+                let msg: numaflow_pb::objects::isb::ReadMessage =
+                    prost::Message::decode(data).unwrap();
+                if let Some(header) = msg.message.unwrap().header {
                     if let Some(message_info) = header.message_info {
                         let event_time = message_info.event_time.map(utc_from_timestamp).unwrap();
                         assert!(
@@ -391,8 +392,9 @@ mod tests {
 
         while let Some(entry) = rx.next().await {
             if let SegmentEntry::DataEntry { data, .. } = entry {
-                let msg: numaflow_pb::objects::isb::Message = prost::Message::decode(data).unwrap();
-                if let Some(header) = msg.header {
+                let msg: numaflow_pb::objects::isb::ReadMessage =
+                    prost::Message::decode(data).unwrap();
+                if let Some(header) = msg.message.unwrap().header {
                     // Check event time based on key
                     if let (Some(message_info), keys) = (header.message_info.as_ref(), header.keys)
                     {

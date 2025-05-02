@@ -221,10 +221,12 @@ impl Compactor {
             match entry {
                 SegmentEntry::DataEntry { data, .. } => {
                     // Deserialize the message
-                    let msg: isb::Message = prost::Message::decode(data.clone())
+                    let msg: isb::ReadMessage = prost::Message::decode(data.clone())
                         .map_err(|e| format!("Failed to decode message: {}", e))?;
 
-                    if should_retain.should_retain_message(&msg)? {
+                    if should_retain
+                        .should_retain_message(&msg.message.expect("Message should be present"))?
+                    {
                         // Send the message to the compaction WAL
                         wal_tx
                             .send(SegmentWriteMessage::WriteData {
@@ -489,6 +491,10 @@ mod tests {
         // Create some test GC events with different timestamps
         let gc_events = vec![
             GcEvent {
+                start_time: Some(prost_types::Timestamp {
+                    seconds: 0,
+                    nanos: 0,
+                }),
                 end_time: Some(prost_types::Timestamp {
                     seconds: 1000,
                     nanos: 0,
@@ -496,6 +502,10 @@ mod tests {
                 ..Default::default()
             },
             GcEvent {
+                start_time: Some(prost_types::Timestamp {
+                    seconds: 0,
+                    nanos: 0,
+                }),
                 end_time: Some(prost_types::Timestamp {
                     seconds: 2000,
                     nanos: 0,
@@ -574,6 +584,10 @@ mod tests {
         // Create some test GC events with different timestamps and keys
         let gc_events = vec![
             GcEvent {
+                start_time: Some(prost_types::Timestamp {
+                    seconds: 0,
+                    nanos: 0,
+                }),
                 end_time: Some(prost_types::Timestamp {
                     seconds: 1000,
                     nanos: 0,
@@ -582,6 +596,10 @@ mod tests {
                 ..Default::default()
             },
             GcEvent {
+                start_time: Some(prost_types::Timestamp {
+                    seconds: 0,
+                    nanos: 0,
+                }),
                 end_time: Some(prost_types::Timestamp {
                     seconds: 2000,
                     nanos: 0,
@@ -590,6 +608,10 @@ mod tests {
                 ..Default::default()
             },
             GcEvent {
+                start_time: Some(prost_types::Timestamp {
+                    seconds: 0,
+                    nanos: 0,
+                }),
                 end_time: Some(prost_types::Timestamp {
                     seconds: 1500,
                     nanos: 0,
@@ -658,10 +680,9 @@ mod tests {
         Ok(())
     }
 
-    // FIXME
     #[tokio::test]
     async fn test_gc_wal_and_compaction_with_multiple_files() {
-        let test_path = tempfile::tempdir().unwrap().into_path();
+        let test_path = tempdir().unwrap().into_path();
 
         // Create GC WAL
         let gc_wal = AppendOnlyWal::new(
@@ -794,8 +815,9 @@ mod tests {
         let mut remaining_message_count = 0;
         while let Some(entry) = rx.next().await {
             if let SegmentEntry::DataEntry { data, .. } = entry {
-                let msg: numaflow_pb::objects::isb::Message = prost::Message::decode(data).unwrap();
-                if let Some(header) = msg.header {
+                let msg: numaflow_pb::objects::isb::ReadMessage =
+                    prost::Message::decode(data).unwrap();
+                if let Some(header) = msg.message.unwrap().header {
                     if let Some(message_info) = header.message_info {
                         let event_time = message_info
                             .event_time
@@ -842,8 +864,10 @@ mod tests {
         .await?;
 
         // Create a GC event with a specific end time
+        let gc_start = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 0).unwrap();
         let gc_end = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 10).unwrap();
         let gc_event = GcEvent {
+            start_time: Some(prost_timestamp_from_utc(gc_start)),
             end_time: Some(prost_timestamp_from_utc(gc_end)),
             ..Default::default()
         };
@@ -966,11 +990,11 @@ mod tests {
         // Count the number of messages received through the replay channel
         let mut replayed_count = 0;
         while let Ok(data) = replay_rx.try_recv() {
-            let msg: numaflow_pb::objects::isb::Message = prost::Message::decode(data)
+            let msg: numaflow_pb::objects::isb::ReadMessage = prost::Message::decode(data)
                 .map_err(|e| format!("Failed to decode message: {e}"))?;
 
             // Verify that the message has an event time after the GC end time
-            if let Some(header) = msg.header {
+            if let Some(header) = msg.message.unwrap().header {
                 if let Some(message_info) = header.message_info {
                     let event_time = message_info.event_time.map(utc_from_timestamp).unwrap();
                     assert!(
@@ -1026,16 +1050,20 @@ mod tests {
         });
 
         // GC event for key1:key2 with end time
+        let gc_start_1 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 0).unwrap();
         let gc_end_1 = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 10).unwrap();
         let gc_event_1 = GcEvent {
+            start_time: Some(prost_timestamp_from_utc(gc_start_1)),
             end_time: Some(prost_timestamp_from_utc(gc_end_1)),
             keys: vec!["key1".to_string(), "key2".to_string()],
             ..Default::default()
         };
 
         // GC event for key3:key4 with a different end time
+        let gc_start_2 = Utc.with_ymd_and_hms(2025, 4, 1, 2, 0, 0).unwrap();
         let gc_end_2 = Utc.with_ymd_and_hms(2025, 4, 1, 2, 0, 0).unwrap();
         let gc_event_2 = GcEvent {
+            start_time: Some(prost_timestamp_from_utc(gc_start_2)),
             end_time: Some(prost_timestamp_from_utc(gc_end_2)),
             keys: vec!["key3".to_string(), "key4".to_string()],
             ..Default::default()
@@ -1176,11 +1204,11 @@ mod tests {
         let mut key3_key4_count = 0;
 
         while let Ok(data) = replay_rx.try_recv() {
-            let msg: numaflow_pb::objects::isb::Message = prost::Message::decode(data)
+            let msg: numaflow_pb::objects::isb::ReadMessage = prost::Message::decode(data)
                 .map_err(|e| format!("Failed to decode message: {e}"))?;
 
             // Verify that the message has an event time after the appropriate GC end time
-            if let Some(header) = msg.header {
+            if let Some(header) = msg.message.unwrap().header {
                 let key_str = header.keys.join(WAL_KEY_SEPERATOR);
 
                 if key_str == "key1:key2" {

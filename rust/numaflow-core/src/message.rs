@@ -242,17 +242,36 @@ impl fmt::Display for MessageID {
     }
 }
 
-impl TryFrom<Message> for Bytes {
+impl TryFrom<Message> for BytesMut {
     type Error = Error;
 
-    fn try_from(value: Message) -> Result<Self, Self::Error> {
-        let b: BytesMut = value.try_into()?;
-        Ok(b.freeze())
+    fn try_from(message: Message) -> Result<Self, Self::Error> {
+        let proto_message = numaflow_pb::objects::isb::Message {
+            header: Some(numaflow_pb::objects::isb::Header {
+                message_info: Some(numaflow_pb::objects::isb::MessageInfo {
+                    event_time: Some(prost_timestamp_from_utc(message.event_time)),
+                    is_late: false, // Set this according to your logic
+                }),
+                kind: message.typ.into(),
+                id: Some(message.id.into()),
+                keys: message.keys.to_vec(),
+                headers: message.headers,
+            }),
+            body: Some(numaflow_pb::objects::isb::Body {
+                payload: message.value.to_vec(),
+            }),
+        };
+
+        let mut buf = BytesMut::new();
+        proto_message
+            .encode(&mut buf)
+            .map_err(|e| Error::Proto(e.to_string()))?;
+        Ok(buf)
     }
 }
 
-// Convert Message to BytesMut used to persist in WAL
-impl TryFrom<Message> for BytesMut {
+// Convert Message to Bytes used to persist in WAL
+impl TryFrom<Message> for Bytes {
     type Error = Error;
 
     fn try_from(message: Message) -> Result<Self, Self::Error> {
@@ -284,7 +303,7 @@ impl TryFrom<Message> for BytesMut {
         proto_message
             .encode(&mut buf)
             .map_err(|e| Error::Proto(e.to_string()))?;
-        Ok(buf)
+        Ok(buf.freeze())
     }
 }
 
