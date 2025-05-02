@@ -61,4 +61,7 @@ pub enum Error {
 
     #[error("Watermark Error - {0}")]
     Watermark(String),
+
+    #[error("WAL Error - {0}")]
+    WAL(String),
 }

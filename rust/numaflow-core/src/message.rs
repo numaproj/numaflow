@@ -9,7 +9,7 @@ use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
 
 use crate::Error;
-use crate::shared::grpc::prost_timestamp_from_utc;
+use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 
 const DROP: &str = "U+005C__DROP__";
 
@@ -259,7 +259,7 @@ impl TryFrom<Message> for BytesMut {
             header: Some(numaflow_pb::objects::isb::Header {
                 message_info: Some(numaflow_pb::objects::isb::MessageInfo {
                     event_time: Some(prost_timestamp_from_utc(message.event_time)),
-                    is_late: false, // Set this according to your logic
+                    is_late: false,
                 }),
                 kind: message.typ.into(),
                 id: Some(message.id.into()),
@@ -276,6 +276,41 @@ impl TryFrom<Message> for BytesMut {
             .encode(&mut buf)
             .map_err(|e| Error::Proto(e.to_string()))?;
         Ok(buf)
+    }
+}
+
+impl TryFrom<Bytes> for Message {
+    type Error = Error;
+
+    fn try_from(value: Bytes) -> Result<Self, Self::Error> {
+        let proto_read_message: numaflow_pb::objects::isb::ReadMessage =
+            prost::Message::decode(value.as_ref()).map_err(|e| Error::Proto(e.to_string()))?;
+
+        let proto_message = proto_read_message
+            .message
+            .ok_or_else(|| Error::Proto("Missing inner message".to_string()))?;
+
+        let header = proto_message
+            .header
+            .ok_or_else(|| Error::Proto("Missing header".to_string()))?;
+        let body = proto_message
+            .body
+            .ok_or_else(|| Error::Proto("Missing body".to_string()))?;
+
+        Ok(Message {
+            typ: header.kind.into(),
+            keys: Arc::from(header.keys),
+            tags: None,
+            value: Bytes::from(body.payload),
+            offset: Offset::Int(IntOffset::new(proto_read_message.read_offset, 0)),
+            event_time: utc_from_timestamp(header.message_info.expect("info missing").event_time),
+            watermark: Some(utc_from_timestamp(proto_read_message.watermark)), // Convert watermark timestamp
+            id: header.id.map(Into::into).unwrap_or_default(),
+            headers: header.headers,
+            metadata: proto_read_message.metadata.map(|meta| Metadata {
+                previous_vertex: meta.num_delivered.to_string(), // Example mapping
+            }),
+        })
     }
 }
 

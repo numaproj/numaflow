@@ -82,6 +82,8 @@ impl ReplayWal {
 
         let mut reader = BufReader::new(file);
 
+        let replay_tx = Some(tx.clone());
+
         // we read data_len first and then move our offset up till the len
         // refresher: each entry in our file is <u64(data_len)><[u8;data_len]>
         loop {
