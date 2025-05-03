@@ -1,7 +1,5 @@
 # Windowing
 
-## Overview
-
 In the world of data processing on an unbounded stream, Windowing is a concept
 of grouping data using temporal boundaries. We use event-time to discover
 temporal boundaries on an unbounded, infinite stream and [Watermark](../../../../core-concepts/watermarks.md) to ensure
@@ -9,6 +7,17 @@ the datasets within the boundaries are complete. The [reduce](../reduce.md) is
 applied on these grouped datasets.
 For example, when we say, we want to find number of users online per minute, we use
 windowing to group the users into one minute buckets.
+
+## Window Types
+
+Numaflow supports the following types of windows
+
+- [Fixed](fixed.md)
+- [Sliding](sliding.md)
+- [Session](session.md)
+- [Accumulator](accumulator.md)
+
+## Configuration
 
 The entirety of windowing is under the `groupBy` section.
 
@@ -25,14 +34,6 @@ Since a window can be [Non-Keyed v/s Keyed](#non-keyed-vs-keyed-windows),
 we have an explicit field called `keyed`to differentiate between both (see below).
 
 Under the `window` section we will define different types of windows.
-
-## Window Types
-
-Numaflow supports the following types of windows
-
-- [Fixed](fixed.md)
-- [Sliding](sliding.md)
-- [Session](session.md)
 
 ## Non-Keyed v/s Keyed Windows
 

@@ -1,11 +1,17 @@
 # Accumulator
 
-## Overview
+Accumulator is a special kind of window similar to a [Session Window](session.md) designed for reordering 
+and joining multiple ordered streams. Unlike other windowing strategies like fixed, sliding, or session windows, the 
+Accumulator window maintains state for each key and allows for manipulation of the Datum by reordering messages before 
+emitting them. Reordering is a different type of problem outside of both `map`/`flatmap` (one to ~one) and 
+`reduce` (many to ~one) and instead of `Message`, we have to emit back the original `Datum`.
 
-Accumulator is a special kind of window (similar to a Global Window) designed for reordering and joining multiple ordered
-streams. Unlike other windowing strategies like fixed, sliding, or session windows, the Accumulator window maintains 
-state for each key and allows for manipulation of event time by reordering messages before emitting them.
+![plot](../../../../assets/accumulator.png)
 
+Another difference between the Accumulator and the Session windows is that in Accumulator, there is no concept of 
+[window merge](./session.md#window-merge).
+
+## Configuration
 
 ```yaml
 vertices:
