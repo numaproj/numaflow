@@ -1305,11 +1305,18 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
-    Overview
+  <a href="#window-merge" class="md-nav__link">
+    Window Merge
   </a>
   
-    <nav class="md-nav" aria-label="Overview">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    Configuration
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1335,6 +1342,20 @@
   
 </nav>
       
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../accumulator/" class="md-nav__link">
+        Accumulator
+      </a>
     </li>
   
 
@@ -2469,11 +2490,18 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
-    Overview
+  <a href="#window-merge" class="md-nav__link">
+    Window Merge
   </a>
   
-    <nav class="md-nav" aria-label="Overview">
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    Configuration
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2514,11 +2542,16 @@
 
 
 <h1 id="session">Session<a class="headerlink" href="#session" title="Permanent link">&para;</a></h1>
-<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
 <p>Session window is a type of Unaligned window where the window’s end time keeps moving until there is no data for a 
 given time duration. Unlike fixed and sliding windows, session windows do not overlap, nor do they have a set start
 and end time. They can be used to group data based on activity.</p>
 <p><img alt="plot" src="../../../../../assets/session.png" /></p>
+<h2 id="window-merge">Window Merge<a class="headerlink" href="#window-merge" title="Permanent link">&para;</a></h2>
+<p>There are cases where two session windows can be merged into one. This happens when the end time of one window is greater
+than the start time of the other window. The reason for creating two sessions is that there was a gap (greater than
+the session timeout) between the arrival of the events due to out-of-orderliness at the source. The moment an event that
+arrives in between the two windows arrives, the two windows are merged into one.</p>
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><span class="nt">vertices</span><span class="p">:</span>
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf</span>
 <span class="w">    </span><span class="nt">udf</span><span class="p">:</span>
@@ -2604,13 +2637,13 @@ for the key until the timeout.</p>
       
       
         
-        <a href="../../examples/" class="md-footer__link md-footer__link--next" aria-label="Next: Examples" rel="next">
+        <a href="../accumulator/" class="md-footer__link md-footer__link--next" aria-label="Next: Accumulator" rel="next">
           <div class="md-footer__title">
             <div class="md-ellipsis">
               <span class="md-footer__direction">
                 Next
               </span>
-              Examples
+              Accumulator
             </div>
           </div>
           <div class="md-footer__button md-icon">

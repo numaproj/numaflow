@@ -1263,15 +1263,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
-    Overview
+  <a href="#window-types" class="md-nav__link">
+    Window Types
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#window-types" class="md-nav__link">
-    Window Types
+  <a href="#configuration" class="md-nav__link">
+    Configuration
   </a>
   
 </li>
@@ -1355,6 +1355,20 @@
     <li class="md-nav__item">
       <a href="../session/" class="md-nav__link">
         Session
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../accumulator/" class="md-nav__link">
+        Accumulator
       </a>
     </li>
   
@@ -2490,15 +2504,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#overview" class="md-nav__link">
-    Overview
+  <a href="#window-types" class="md-nav__link">
+    Window Types
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#window-types" class="md-nav__link">
-    Window Types
+  <a href="#configuration" class="md-nav__link">
+    Configuration
   </a>
   
 </li>
@@ -2556,7 +2570,6 @@
 
 
 <h1 id="windowing">Windowing<a class="headerlink" href="#windowing" title="Permanent link">&para;</a></h1>
-<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
 <p>In the world of data processing on an unbounded stream, Windowing is a concept
 of grouping data using temporal boundaries. We use event-time to discover
 temporal boundaries on an unbounded, infinite stream and <a href="../../../../../core-concepts/watermarks/">Watermark</a> to ensure
@@ -2564,6 +2577,15 @@ the datasets within the boundaries are complete. The <a href="../../reduce/">red
 applied on these grouped datasets.
 For example, when we say, we want to find number of users online per minute, we use
 windowing to group the users into one minute buckets.</p>
+<h2 id="window-types">Window Types<a class="headerlink" href="#window-types" title="Permanent link">&para;</a></h2>
+<p>Numaflow supports the following types of windows</p>
+<ul>
+<li><a href="../fixed/">Fixed</a></li>
+<li><a href="../sliding/">Sliding</a></li>
+<li><a href="../session/">Session</a></li>
+<li><a href="../accumulator/">Accumulator</a></li>
+</ul>
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
 <p>The entirety of windowing is under the <code>groupBy</code> section.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">vertices</span><span class="p">:</span>
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf</span>
@@ -2575,13 +2597,6 @@ windowing to group the users into one minute buckets.</p>
 <p>Since a window can be <a href="#non-keyed-vs-keyed-windows">Non-Keyed v/s Keyed</a>,
 we have an explicit field called <code>keyed</code>to differentiate between both (see below).</p>
 <p>Under the <code>window</code> section we will define different types of windows.</p>
-<h2 id="window-types">Window Types<a class="headerlink" href="#window-types" title="Permanent link">&para;</a></h2>
-<p>Numaflow supports the following types of windows</p>
-<ul>
-<li><a href="../fixed/">Fixed</a></li>
-<li><a href="../sliding/">Sliding</a></li>
-<li><a href="../session/">Session</a></li>
-</ul>
 <h2 id="non-keyed-vs-keyed-windows">Non-Keyed v/s Keyed Windows<a class="headerlink" href="#non-keyed-vs-keyed-windows" title="Permanent link">&para;</a></h2>
 <h3 id="non-keyed">Non-Keyed<a class="headerlink" href="#non-keyed" title="Permanent link">&para;</a></h3>
 <p>A <code>non-keyed</code> partition is a partition where the window is the boundary condition.
