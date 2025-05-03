@@ -17,7 +17,7 @@ use tracing::{debug, info};
 
 /// Segment Entry as recorded in the WAL.
 #[derive(Debug)]
-pub(crate) enum SegmentEntry {
+pub(in crate::reduce) enum SegmentEntry {
     /// Data entry in the Segment
     DataEntry { size: u64, data: Bytes },
     /// The file has been switched
@@ -30,14 +30,14 @@ pub(crate) enum SegmentEntry {
 
 /// Replay the WAL in-order.
 #[derive(Debug, Clone)]
-pub(crate) struct ReplayWal {
+pub(in crate::reduce) struct ReplayWal {
     wal_type: WalType,
     base_path: PathBuf,
 }
 
 impl ReplayWal {
     /// Creates a new Replayer for the WAL.
-    pub(crate) fn new(wal_type: WalType, base_path: PathBuf) -> Self {
+    pub(in crate::reduce) fn new(wal_type: WalType, base_path: PathBuf) -> Self {
         Self {
             wal_type,
             base_path,
@@ -46,7 +46,7 @@ impl ReplayWal {
 
     /// Reads the WAL files and streams it via the stream. Stream will be closed once all the
     /// entries are read.
-    pub(crate) fn streaming_read(
+    pub(in crate::reduce) fn streaming_read(
         self,
     ) -> WalResult<(ReceiverStream<SegmentEntry>, JoinHandle<WalResult<()>>)> {
         let mut files: Vec<PathBuf> = list_files(&self.wal_type, self.base_path.clone());
