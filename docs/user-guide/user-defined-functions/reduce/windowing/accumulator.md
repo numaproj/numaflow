@@ -1,15 +1,69 @@
 # Accumulator
 
-Accumulator is a special kind of window similar to a [Session Window](session.md) designed for reordering 
-and joining multiple ordered streams. Unlike other windowing strategies like fixed, sliding, or session windows, the 
-Accumulator window maintains state for each key and allows for manipulation of the Datum by reordering messages before 
-emitting them. Reordering is a different type of problem outside of both `map`/`flatmap` (one to ~one) and 
-`reduce` (many to ~one) and instead of `Message`, we have to emit back the original `Datum`.
+Accumulator is a special kind of window similar to a [Session Window](session.md) designed for complex operations like 
+reordering, custom triggering, and joining multiple ordered streams. Unlike other windowing strategies like fixed,
+sliding, or session windows, the Accumulator window maintains state for each key and allows for manipulation of the Datum
+and emitting them based on custom rules (e.g., sorting) . Accumulator is a different type of problem outside both 
+`map`/`flatmap` (one to ~one) and `reduce` (many to ~one) and instead of `Message`, we have to emit back the "manipulated"
+`Datum`.
 
 ![plot](../../../../assets/accumulator.png)
 
 Another difference between the Accumulator and the Session windows is that in Accumulator, there is no concept of 
 [window merge](./session.md#window-merge).
+
+## Why Accumulator?
+
+Accumulator is a powerful concept that lets you tap into the raw Datum stream and manipulate not just the order but the
+Datum stream itself. It has a powerful semantics where the input and output is a stream of `Datum` creating a
+Global Window. It opens up the possibility of very advanced use cases like custom triggers (e.g., count based triggers
+combined with windowing strategies). 
+
+```python
+def Accumulator(<- stream in[Datum]) -> stream out[Datum] {
+  let state = OrderedList()
+  for i = range in {
+    # The condition will return true of Watermark progresses
+    if WatermarkProgressed(i) == true {
+        # pop all sorted elements and Write to output stream
+        Write(out, state.popN()) 
+    }
+    state.insert(i) 
+  }
+}
+```
+
+### Considerations
+
+The Accumulator window is powerful but should be used carefully as it can cause pipeline stalling if not configured 
+properly.
+
+#### Factors to consider
+
+Please consider the following factors when using the Accumulator window (not comprehensive): 
+1. For high-throughput scenarios, ensure adequate storage is provisioned
+2. The timeout should be set based on the expected data arrival patterns and latency requirements
+3. Consider the trade-off between data completeness (longer timeout) and processing latency (shorter timeout)
+4. Please make sure Watermark is honored when publishing the data, else completeness and correctness is not guaranteed
+
+#### Data Retention
+
+To ensure there is no data loss during pod restarts, the Accumulator window replays data from persistent storage. The
+system stores data until `Outbound(Watermark) - 1`, which means it keeps the minimum necessary data to ensure correctness
+while managing resource usage.
+
+#### Constraints
+
+1. For data older than `Outbound(Watermark) - 1`, users need to bring in an external store and implement replay on restart
+2. Data deletion is based on the `Outbound(Watermark)`
+
+### Few general use cases
+
+1. **Stream Joining**: Combining multiple ordered streams into a single ordered output
+2. **Event Reordering**: Handling out-of-order events and ensuring they're processed in the correct sequence
+3. **Time-based Correlation**: Correlating events from different sources based on their timestamps
+4. **Custom Sorting**: Implementing user-defined sorting logic for event streams
+5. **Custom Triggering**: Triggering actions based on specific conditions or events within the stream
 
 ## Configuration
 
@@ -43,30 +97,6 @@ The Accumulator window works by:
 Unlike both `map` or `reduce` operations, where `Datum` is consumed and `Message` is returned, for reordering with the 
 Accumulator, the `Datum` is kept intact.
 
-## Data Retention
-
-To ensure there is no data loss during pod restarts, the Accumulator window replays data from persistent storage. The 
-system stores data until `Outbound(Watermark) - 1`, which means it keeps the minimum necessary data to ensure correctness
-while managing resource usage.
-
-### Constraints
-
-1. For data older than `Outbound(Watermark) - 1`, users need to bring in an external store and implement replay on restart
-2. Data deletion is based on the `Outbound(Watermark)`
-
-## Use Cases
-
-1. **Stream Joining**: Combining multiple ordered streams into a single ordered output
-2. **Event Reordering**: Handling out-of-order events and ensuring they're processed in the correct sequence
-3. **Time-based Correlation**: Correlating events from different sources based on their timestamps
-4. **Custom Sorting**: Implementing user-defined sorting logic for event streams
-
-## Considerations
-
-1. The Accumulator window is powerful but should be used carefully as it can cause pipeline stalling if not configured properly
-2. For high-throughput scenarios, ensure adequate storage is provisioned
-3. The timeout should be set based on the expected data arrival patterns and latency requirements
-4. Consider the trade-off between data completeness (longer timeout) and processing latency (shorter timeout)
 
 ## Example
 
