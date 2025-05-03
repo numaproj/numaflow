@@ -9,7 +9,7 @@ use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
 
 use crate::Error;
-use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
+use crate::shared::grpc::prost_timestamp_from_utc;
 
 const DROP: &str = "U+005C__DROP__";
 
