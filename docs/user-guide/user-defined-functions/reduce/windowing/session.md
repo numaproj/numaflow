@@ -1,12 +1,18 @@
 # Session
 
-## Overview
-
 Session window is a type of Unaligned window where the window’s end time keeps moving until there is no data for a 
 given time duration. Unlike fixed and sliding windows, session windows do not overlap, nor do they have a set start
 and end time. They can be used to group data based on activity.
 
 ![plot](../../../../assets/session.png)
+
+## Window Merge
+There are cases where two session windows can be merged into one. This happens when the end time of one window is greater
+than the start time of the other window. The reason for creating two sessions is that there was a gap (greater than
+the session timeout) between the arrival of the events due to out-of-orderliness at the source. The moment an event that
+arrives in between the two windows arrives, the two windows are merged into one.
+
+## Configuration
 
 ```yaml
 vertices:

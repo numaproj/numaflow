@@ -1,7 +1,5 @@
 # Fixed
 
-## Overview
-
 Fixed windows (sometimes called tumbling windows) are defined by a static window size, e.g. 30 second
 windows, one minute windows, etc. They are generally aligned, i.e. every window applies across all
 the data for the corresponding period of time. It has a fixed size measured in time and does not
@@ -10,6 +8,8 @@ For example, a window size of 20 seconds will include all entities of the stream
 certain 20-second interval.
 
 ![plot](../../../../assets/fixed.png)
+
+## Configuration
 
 To enable Fixed window, we use `fixed` under `window` section.
 

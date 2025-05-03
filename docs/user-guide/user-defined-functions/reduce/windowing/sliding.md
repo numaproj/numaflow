@@ -1,7 +1,5 @@
 # Sliding
 
-## Overview
-
 Sliding windows are similar to Fixed windows, the size of the windows is measured in time and is fixed.
 The important difference from the Fixed window is the fact that it allows an element to be present in
 more than one window. The additional window slide parameter controls how frequently a sliding window
@@ -9,6 +7,8 @@ is started. Hence, sliding windows will be overlapping and the slide should be s
 length.
 
 ![plot](../../../../assets/sliding.png)
+
+## Configuration
 
 ```yaml
 vertices:
