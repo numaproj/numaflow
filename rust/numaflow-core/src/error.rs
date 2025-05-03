@@ -63,5 +63,6 @@ pub enum Error {
     Watermark(String),
 
     #[error("WAL Error - {0}")]
+    #[allow(clippy::upper_case_acronyms)]
     WAL(String),
 }

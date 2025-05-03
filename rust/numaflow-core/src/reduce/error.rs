@@ -6,6 +6,7 @@ pub(crate) type ReduceResult<T> = Result<T, Error>;
 
 #[derive(Debug)]
 pub(crate) enum Error {
+    #[allow(clippy::upper_case_acronyms)]
     WAL(wal::error::Error),
     /// Other errors.
     Other(String),
