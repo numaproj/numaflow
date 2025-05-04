@@ -1,11 +1,11 @@
 # Accumulator
 
 Accumulator is a special kind of window similar to a [Session Window](session.md) designed for complex operations like 
-reordering, custom triggering, and joining multiple ordered streams. Unlike other windowing strategies like fixed,
-sliding, or session windows, the Accumulator window maintains state for each key and allows for manipulation of the Datum
-and emitting them based on custom rules (e.g., sorting) . Accumulator is a different type of problem outside both 
-`map`/`flatmap` (one to ~one) and `reduce` (many to ~one) and instead of `Message`, we have to emit back the "manipulated"
-`Datum`.
+reordering, custom triggering, and joining multiple ordered streams. Like other windowing strategies (fixed,
+sliding, or session windows), the Accumulator window maintains state for each key, but unlike others, it allows for 
+manipulation of the `Datum` and emitting them based on custom rules (e.g., sorting) . Accumulator solves is a different 
+type of problem outside both `map`/`flatmap` (one to ~one) and `reduce` (many to ~one) and instead of `Message`, we 
+have to emit back the "manipulated" `Datum`.
 
 ![plot](../../../../assets/accumulator.png)
 
@@ -23,7 +23,7 @@ combined with windowing strategies).
 def Accumulator(<- stream in[Datum]) -> stream out[Datum] {
   let state = OrderedList()
   for i = range in {
-    # The condition will return true of Watermark progresses
+    # The condition will return true if Watermark progresses
     if WatermarkProgressed(i) == true {
         # pop all sorted elements and Write to output stream
         Write(out, state.popN()) 
@@ -41,6 +41,7 @@ properly.
 #### Factors to consider
 
 Please consider the following factors when using the Accumulator window (not comprehensive): 
+
 1. For high-throughput scenarios, ensure adequate storage is provisioned
 2. The timeout should be set based on the expected data arrival patterns and latency requirements
 3. Consider the trade-off between data completeness (longer timeout) and processing latency (shorter timeout)
@@ -109,8 +110,6 @@ kind: Pipeline
 metadata:
   name: simple-accumulator
 spec:
-  limits:
-    readBatchSize: 1
   vertices:
     - name: http-one
       scale:
