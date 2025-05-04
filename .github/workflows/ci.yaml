@@ -5,7 +5,7 @@ on:
       - "main"
       - "release-*"
   pull_request:
-    branches: [main]
+    branches: [main, release-1.4]
 jobs:
   ui:
     name: UI
