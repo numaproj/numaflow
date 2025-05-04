@@ -2651,11 +2651,11 @@
 
 <h1 id="accumulator">Accumulator<a class="headerlink" href="#accumulator" title="Permanent link">&para;</a></h1>
 <p>Accumulator is a special kind of window similar to a <a href="../session/">Session Window</a> designed for complex operations like 
-reordering, custom triggering, and joining multiple ordered streams. Unlike other windowing strategies like fixed,
-sliding, or session windows, the Accumulator window maintains state for each key and allows for manipulation of the Datum
-and emitting them based on custom rules (e.g., sorting) . Accumulator is a different type of problem outside both 
-<code>map</code>/<code>flatmap</code> (one to ~one) and <code>reduce</code> (many to ~one) and instead of <code>Message</code>, we have to emit back the "manipulated"
-<code>Datum</code>.</p>
+reordering, custom triggering, and joining multiple ordered streams. Like other windowing strategies (fixed,
+sliding, or session windows), the Accumulator window maintains state for each key, but unlike others, it allows for 
+manipulation of the <code>Datum</code> and emitting them based on custom rules (e.g., sorting) . Accumulator solves is a different 
+type of problem outside both <code>map</code>/<code>flatmap</code> (one to ~one) and <code>reduce</code> (many to ~one) and instead of <code>Message</code>, we 
+have to emit back the "manipulated" <code>Datum</code>.</p>
 <p><img alt="plot" src="../../../../../assets/accumulator.png" /></p>
 <p>Another difference between the Accumulator and the Session windows is that in Accumulator, there is no concept of 
 <a href="../session/#window-merge">window merge</a>.</p>
@@ -2667,7 +2667,7 @@ combined with windowing strategies). </p>
 <div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">Accumulator</span><span class="p">(</span><span class="o">&lt;-</span> <span class="n">stream</span> <span class="ow">in</span><span class="p">[</span><span class="n">Datum</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">stream</span> <span class="n">out</span><span class="p">[</span><span class="n">Datum</span><span class="p">]</span> <span class="p">{</span>
   <span class="n">let</span> <span class="n">state</span> <span class="o">=</span> <span class="n">OrderedList</span><span class="p">()</span>
   <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="nb">range</span> <span class="ow">in</span> <span class="p">{</span>
-    <span class="c1"># The condition will return true of Watermark progresses</span>
+    <span class="c1"># The condition will return true if Watermark progresses</span>
     <span class="k">if</span> <span class="n">WatermarkProgressed</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="o">==</span> <span class="n">true</span> <span class="p">{</span>
         <span class="c1"># pop all sorted elements and Write to output stream</span>
         <span class="n">Write</span><span class="p">(</span><span class="n">out</span><span class="p">,</span> <span class="n">state</span><span class="o">.</span><span class="n">popN</span><span class="p">())</span> 
@@ -2680,11 +2680,13 @@ combined with windowing strategies). </p>
 <p>The Accumulator window is powerful but should be used carefully as it can cause pipeline stalling if not configured 
 properly.</p>
 <h4 id="factors-to-consider">Factors to consider<a class="headerlink" href="#factors-to-consider" title="Permanent link">&para;</a></h4>
-<p>Please consider the following factors when using the Accumulator window (not comprehensive): 
-1. For high-throughput scenarios, ensure adequate storage is provisioned
-2. The timeout should be set based on the expected data arrival patterns and latency requirements
-3. Consider the trade-off between data completeness (longer timeout) and processing latency (shorter timeout)
-4. Please make sure Watermark is honored when publishing the data, else completeness and correctness is not guaranteed</p>
+<p>Please consider the following factors when using the Accumulator window (not comprehensive): </p>
+<ol>
+<li>For high-throughput scenarios, ensure adequate storage is provisioned</li>
+<li>The timeout should be set based on the expected data arrival patterns and latency requirements</li>
+<li>Consider the trade-off between data completeness (longer timeout) and processing latency (shorter timeout)</li>
+<li>Please make sure Watermark is honored when publishing the data, else completeness and correctness is not guaranteed</li>
+</ol>
 <h4 id="data-retention">Data Retention<a class="headerlink" href="#data-retention" title="Permanent link">&para;</a></h4>
 <p>To ensure there is no data loss during pod restarts, the Accumulator window replays data from persistent storage. The
 system stores data until <code>Outbound(Watermark) - 1</code>, which means it keeps the minimum necessary data to ensure correctness
@@ -2734,8 +2736,6 @@ Accumulator window to join and sort two HTTP sources:</p>
 <span class="nt">metadata</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">simple-accumulator</span>
 <span class="nt">spec</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">limits</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">readBatchSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
 <span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http-one</span>
 <span class="w">      </span><span class="nt">scale</span><span class="p">:</span>
