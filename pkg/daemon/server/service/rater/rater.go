@@ -92,7 +92,7 @@ func NewRater(ctx context.Context, p *v1alpha1.Pipeline, opts ...Option) *Rater 
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 			},
-			Timeout: time.Second * 1,
+			Timeout: time.Second * 2,
 		},
 		log:                          logging.FromContext(ctx).Named("Rater"),
 		timestampedPodCounts:         make(map[string]*sharedqueue.OverflowQueue[*TimestampedCounts]),
