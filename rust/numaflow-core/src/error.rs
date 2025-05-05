@@ -62,6 +62,9 @@ pub enum Error {
     #[error("Watermark Error - {0}")]
     Watermark(String),
 
+    #[error("Reduce Error - {0}")]
+    Reduce(String),
+
     #[error("WAL Error - {0}")]
     #[allow(clippy::upper_case_acronyms)]
     WAL(String),
