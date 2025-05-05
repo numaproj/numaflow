@@ -1078,7 +1078,7 @@ Kubernetes meta/v1.Duration </a> </em>
 <em>(Optional)</em>
 <p>
 
-Interval sets the delay to wait before retry, after a failure occurs.
+Interval sets the initial retry interval, after a failure occurs.
 </p>
 
 </td>
@@ -1089,7 +1089,7 @@ Interval sets the delay to wait before retry, after a failure occurs.
 
 <td>
 
-<code>steps</code></br> <em> uint32 </em>
+<code>maxRetryAttempts</code></br> <em> uint32 </em>
 </td>
 
 <td>
@@ -1097,8 +1097,50 @@ Interval sets the delay to wait before retry, after a failure occurs.
 <em>(Optional)</em>
 <p>
 
-Steps defines the number of times to try writing to a sink including
-retries
+MaxRetryAttempts defines the maximum number of retry attempts
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>multiplier</code></br> <em> string </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Multiplier specifies the factor by which the retry interval increases
+after each attempt. For example, a multiplier of “2.0” doubles the
+interval after each retry.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>maxInterval</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+MaxInterval specifies the maximum interval between retries, capping the
+exponential growth.
 </p>
 
 </td>

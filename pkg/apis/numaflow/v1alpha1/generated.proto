@@ -229,14 +229,23 @@ message Authorization {
 
 // Backoff defines parameters used to systematically configure the retry strategy.
 message Backoff {
-  // Interval sets the delay to wait before retry, after a failure occurs.
+  // Interval sets the initial retry interval, after a failure occurs.
   // +kubebuilder:default="1ms"
   // +optional
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration interval = 1;
 
-  // Steps defines the number of times to try writing to a sink including retries
+  // MaxRetryAttempts defines the maximum number of retry attempts
   // +optional
-  optional uint32 steps = 2;
+  optional uint32 maxRetryAttempts = 2;
+
+  // Multiplier specifies the factor by which the retry interval increases after each attempt.
+  // For example, a multiplier of "2.0" doubles the interval after each retry.
+  // +optional
+  optional string multiplier = 3;
+
+  // MaxInterval specifies the maximum interval between retries, capping the exponential growth.
+  // +optional
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration maxInterval = 4;
 }
 
 // BasicAuth represents the basic authentication approach which contains a user name and a password.

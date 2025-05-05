@@ -7441,9 +7441,13 @@ spec:
                           interval:
                             default: 1ms
                             type: string
-                          steps:
+                          maxInterval:
+                            type: string
+                          maxRetryAttempts:
                             format: int32
                             type: integer
+                          multiplier:
+                            type: string
                         type: object
                       onFailure:
                         default: retry
@@ -18829,9 +18833,13 @@ spec:
                                 interval:
                                   default: 1ms
                                   type: string
-                                steps:
+                                maxInterval:
+                                  type: string
+                                maxRetryAttempts:
                                   format: int32
                                   type: integer
+                                multiplier:
+                                  type: string
                               type: object
                             onFailure:
                               default: retry
@@ -30592,9 +30600,13 @@ spec:
                                     interval:
                                       default: 1ms
                                       type: string
-                                    steps:
+                                    maxInterval:
+                                      type: string
+                                    maxRetryAttempts:
                                       format: int32
                                       type: integer
+                                    multiplier:
+                                      type: string
                                   type: object
                                 onFailure:
                                   default: retry
@@ -37710,9 +37722,13 @@ spec:
                           interval:
                             default: 1ms
                             type: string
-                          steps:
+                          maxInterval:
+                            type: string
+                          maxRetryAttempts:
                             format: int32
                             type: integer
+                          multiplier:
+                            type: string
                         type: object
                       onFailure:
                         default: retry

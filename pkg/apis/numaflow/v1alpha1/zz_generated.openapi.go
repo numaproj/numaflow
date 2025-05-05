@@ -668,15 +668,28 @@ func schema_pkg_apis_numaflow_v1alpha1_Backoff(ref common.ReferenceCallback) com
 				Properties: map[string]spec.Schema{
 					"interval": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Interval sets the delay to wait before retry, after a failure occurs.",
+							Description: "Interval sets the initial retry interval, after a failure occurs.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
-					"steps": {
+					"maxRetryAttempts": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Steps defines the number of times to try writing to a sink including retries",
+							Description: "MaxRetryAttempts defines the maximum number of retry attempts",
 							Type:        []string{"integer"},
 							Format:      "int64",
+						},
+					},
+					"multiplier": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Multiplier specifies the factor by which the retry interval increases after each attempt. For example, a multiplier of \"2.0\" doubles the interval after each retry.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"maxInterval": {
+						SchemaProps: spec.SchemaProps{
+							Description: "MaxInterval specifies the maximum interval between retries, capping the exponential growth.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
 				},

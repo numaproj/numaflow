@@ -22,9 +22,14 @@ limitations under the License.
 pub struct Backoff {
     #[serde(rename = "interval", skip_serializing_if = "Option::is_none")]
     pub interval: Option<kube::core::Duration>,
-    /// Steps defines the number of times to try writing to a sink including retries
-    #[serde(rename = "steps", skip_serializing_if = "Option::is_none")]
-    pub steps: Option<i64>,
+    #[serde(rename = "maxInterval", skip_serializing_if = "Option::is_none")]
+    pub max_interval: Option<kube::core::Duration>,
+    /// MaxRetryAttempts defines the maximum number of retry attempts
+    #[serde(rename = "maxRetryAttempts", skip_serializing_if = "Option::is_none")]
+    pub max_retry_attempts: Option<i64>,
+    /// Multiplier specifies the factor by which the retry interval increases after each attempt. For example, a multiplier of \"2.0\" doubles the interval after each retry.
+    #[serde(rename = "multiplier", skip_serializing_if = "Option::is_none")]
+    pub multiplier: Option<String>,
 }
 
 impl Backoff {
@@ -32,7 +37,9 @@ impl Backoff {
     pub fn new() -> Backoff {
         Backoff {
             interval: None,
-            steps: None,
+            max_interval: None,
+            max_retry_attempts: None,
+            multiplier: None,
         }
     }
 }

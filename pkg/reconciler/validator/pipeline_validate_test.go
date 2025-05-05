@@ -1239,7 +1239,7 @@ func TestIsValidSinkRetryStrategy(t *testing.T) {
 			sink: dfv1.Sink{},
 			strategy: dfv1.RetryStrategy{
 				BackOff: &dfv1.Backoff{
-					Steps: &zeroSteps,
+					MaxRetryAttempts: &zeroSteps,
 				},
 				OnFailure: func() *dfv1.OnFailureRetryStrategy { str := dfv1.OnFailureDrop; return &str }(),
 			},

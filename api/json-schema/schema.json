@@ -19758,12 +19758,20 @@
       "properties": {
         "interval": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
-          "description": "Interval sets the delay to wait before retry, after a failure occurs."
+          "description": "Interval sets the initial retry interval, after a failure occurs."
         },
-        "steps": {
-          "description": "Steps defines the number of times to try writing to a sink including retries",
+        "maxInterval": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
+          "description": "MaxInterval specifies the maximum interval between retries, capping the exponential growth."
+        },
+        "maxRetryAttempts": {
+          "description": "MaxRetryAttempts defines the maximum number of retry attempts",
           "format": "int64",
           "type": "integer"
+        },
+        "multiplier": {
+          "description": "Multiplier specifies the factor by which the retry interval increases after each attempt. For example, a multiplier of \"2.0\" doubles the interval after each retry.",
+          "type": "string"
         }
       },
       "type": "object"

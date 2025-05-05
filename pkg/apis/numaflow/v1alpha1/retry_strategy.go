@@ -17,6 +17,8 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"strconv"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 )
@@ -49,20 +51,20 @@ type RetryStrategy struct {
 
 // Backoff defines parameters used to systematically configure the retry strategy.
 type Backoff struct {
-	// Interval sets the delay to wait before retry, after a failure occurs.
+	// Interval sets the initial retry interval, after a failure occurs.
 	// +kubebuilder:default="1ms"
 	// +optional
 	Interval *metav1.Duration `json:"interval,omitempty" protobuf:"bytes,1,opt,name=interval"`
-	// Steps defines the number of times to try writing to a sink including retries
+	// MaxRetryAttempts defines the maximum number of retry attempts
 	// +optional
-	Steps *uint32 `json:"steps,omitempty" protobuf:"bytes,2,opt,name=steps"`
-	// TODO(Retry): Enable after we add support for exponential backoff
-	//// +optional
-	//Cap *metav1.Duration `json:"cap,omitempty" protobuf:"bytes,3,opt,name=cap"`
-	//// +optional
-	//Factor *floatstr `json:"factor,omitempty" protobuf:"bytes,2,opt,name=factor"`
-	//// +optional
-	//Jitter *floatstr `json:"jitter,omitempty" protobuf:"bytes,3,opt,name=jitter"`
+	MaxRetryAttempts *uint32 `json:"maxRetryAttempts,omitempty" protobuf:"bytes,2,opt,name=maxRetryAttempts"`
+	// Multiplier specifies the factor by which the retry interval increases after each attempt.
+	// For example, a multiplier of "2.0" doubles the interval after each retry.
+	// +optional
+	Multiplier *string `json:"multiplier,omitempty" protobuf:"bytes,3,opt,name=multiplier"`
+	// MaxInterval specifies the maximum interval between retries, capping the exponential growth.
+	// +optional
+	MaxInterval *metav1.Duration `json:"maxInterval,omitempty" protobuf:"bytes,4,opt,name=maxInterval"`
 }
 
 // GetBackoff constructs a wait.Backoff configuration using default values and optionally overrides
@@ -72,6 +74,8 @@ func (r RetryStrategy) GetBackoff() wait.Backoff {
 	wt := wait.Backoff{
 		Duration: DefaultRetryInterval,
 		Steps:    DefaultRetrySteps,
+		Factor:   1.0,                  // Default multiplier (no exponential backoff by default)
+		Cap:      DefaultRetryInterval, // Cap set to the same as Duration for fixed interval
 	}
 
 	// If a custom back-off configuration is present, check and substitute the respective parts.
@@ -80,9 +84,22 @@ func (r RetryStrategy) GetBackoff() wait.Backoff {
 		if r.BackOff.Interval != nil {
 			wt.Duration = r.BackOff.Interval.Duration
 		}
-		// If custom Steps are specified, override the default Steps.
-		if r.BackOff.Steps != nil {
-			wt.Steps = int(*r.BackOff.Steps)
+		// If custom MaxRetryAttempts are specified, override the default Steps.
+		if r.BackOff.MaxRetryAttempts != nil {
+			wt.Steps = int(*r.BackOff.MaxRetryAttempts)
+		}
+		// If a custom Multiplier is specified, override the default Factor.
+		if r.BackOff.Multiplier != nil {
+			if multiplier, err := strconv.ParseFloat(*r.BackOff.Multiplier, 64); err == nil {
+				wt.Factor = multiplier
+			} else {
+				// Handle the error or set a default value
+				wt.Factor = 1.0
+			}
+		}
+		// If a custom MaxInterval is specified, set the Cap.
+		if r.BackOff.MaxInterval != nil {
+			wt.Cap = r.BackOff.MaxInterval.Duration
 		}
 	}
 

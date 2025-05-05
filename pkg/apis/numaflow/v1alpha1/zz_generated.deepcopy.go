@@ -281,9 +281,19 @@ func (in *Backoff) DeepCopyInto(out *Backoff) {
 		*out = new(metav1.Duration)
 		**out = **in
 	}
-	if in.Steps != nil {
-		in, out := &in.Steps, &out.Steps
+	if in.MaxRetryAttempts != nil {
+		in, out := &in.MaxRetryAttempts, &out.MaxRetryAttempts
 		*out = new(uint32)
+		**out = **in
+	}
+	if in.Multiplier != nil {
+		in, out := &in.Multiplier, &out.Multiplier
+		*out = new(string)
+		**out = **in
+	}
+	if in.MaxInterval != nil {
+		in, out := &in.MaxInterval, &out.MaxInterval
+		*out = new(metav1.Duration)
 		**out = **in
 	}
 	return
