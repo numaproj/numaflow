@@ -12,7 +12,6 @@ use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 
-/// Implement From<Message> for reduce_request::Payload to avoid code duplication
 impl From<&Message> for reduce_request::Payload {
     fn from(msg: &Message) -> Self {
         Self {
@@ -82,7 +81,7 @@ impl From<AlignedWindowMessage> for ReduceRequest {
 }
 
 /// Wrapper for ReduceResponse that includes index and vertex name
-pub(crate) struct UdReducerResponse {
+struct UdReducerResponse {
     pub response: ReduceResponse,
     pub index: i32,
     pub vertex_name: String,

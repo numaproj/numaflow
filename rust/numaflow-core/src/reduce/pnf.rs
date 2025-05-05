@@ -1,11 +1,15 @@
 use crate::Result;
+use crate::error::Error;
 use crate::message::Message;
 use crate::reduce::client::aligned::UserDefinedAlignedReduce;
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
+use tracing::{error, info, warn};
 
 #[derive(Debug, Clone)]
 pub(crate) enum WindowKind {
@@ -43,22 +47,22 @@ impl Window {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum WindowOperation {
+pub(in crate::reduce) enum WindowOperation {
     Open(Message),
     Close,
     Append(Message),
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum AlignedWindowMessage {
+pub(in crate::reduce) enum AlignedWindowMessage {
     Fixed(FixedWindowMessage),
     Sliding(SlidingWindowMessage),
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct FixedWindowMessage {
-    pub(crate) operation: WindowOperation,
-    pub(crate) window: Window,
+pub(in crate::reduce) struct FixedWindowMessage {
+    pub(in crate::reduce) operation: WindowOperation,
+    pub(in crate::reduce) window: Window,
 }
 
 #[derive(Debug, Clone)]
@@ -75,66 +79,70 @@ impl FixedWindower {
         FixedWindower {}
     }
 
-    pub(crate) async fn assign_windows(_msg: Message) -> FixedWindowMessage {
+    pub(crate) async fn assign_windows(&self, _msg: Message) -> FixedWindowMessage {
         unimplemented!()
     }
 }
 
 pub(crate) enum AlignedReduceActorMessage {
-    Fixed {
-        msg: FixedWindowMessage,
-        tx: tokio::sync::mpsc::Sender<Message>,
-    },
-    Sliding {
-        msg: SlidingWindowMessage,
-        tx: tokio::sync::mpsc::Sender<Message>,
-    },
+    Fixed { msg: FixedWindowMessage },
+    Sliding { msg: SlidingWindowMessage },
 }
 
 /// Represents an active reduce stream for a window
 struct ActiveStream {
     /// Sender for window messages
-    message_tx: tokio::sync::mpsc::Sender<AlignedWindowMessage>,
+    message_tx: mpsc::Sender<AlignedWindowMessage>,
     /// Handle to the task processing the window
     task_handle: JoinHandle<()>,
 }
 
 pub(crate) struct AlignedReduceActor {
-    pub(crate) receiver: tokio::sync::mpsc::Receiver<AlignedReduceActorMessage>,
+    pub(crate) receiver: mpsc::Receiver<AlignedReduceActorMessage>,
     pub(crate) client: UserDefinedAlignedReduce,
     /// Map of active streams keyed by window ID (pnf_slot)
     active_streams: HashMap<String, ActiveStream>,
+    /// Sender for output messages
+    result_tx: mpsc::Sender<Message>,
+    /// Sender for error messages
+    error_tx: mpsc::Sender<Error>,
 }
 
 impl AlignedReduceActor {
     pub(crate) async fn new(
         client: UserDefinedAlignedReduce,
-        receiver: tokio::sync::mpsc::Receiver<AlignedReduceActorMessage>,
+        receiver: mpsc::Receiver<AlignedReduceActorMessage>,
+        result_tx: mpsc::Sender<Message>,
+        error_tx: mpsc::Sender<Error>,
     ) -> Self {
         AlignedReduceActor {
             client,
             receiver,
             active_streams: HashMap::new(),
+            result_tx,
+            error_tx,
         }
     }
 
     pub(crate) async fn run(mut self) {
         while let Some(msg) = self.receiver.recv().await {
             if let Err(e) = self.handle_message(msg).await {
-                tracing::error!("Error handling message: {}", e);
+                error!("Error handling message: {}", e);
+                // Send the error to the error channel
+                if let Err(send_err) = self.error_tx.send(e).await {
+                    error!("Failed to send error to error channel: {}", send_err);
+                }
             }
         }
     }
 
     pub(crate) async fn handle_message(&mut self, msg: AlignedReduceActorMessage) -> Result<()> {
         match msg {
-            AlignedReduceActorMessage::Fixed { msg, tx } => {
-                self.handle_window_message(msg.window, msg.operation, tx)
-                    .await
+            AlignedReduceActorMessage::Fixed { msg } => {
+                self.handle_window_message(msg.window, msg.operation).await
             }
-            AlignedReduceActorMessage::Sliding { msg, tx } => {
-                self.handle_window_message(msg.window, msg.operation, tx)
-                    .await
+            AlignedReduceActorMessage::Sliding { msg } => {
+                self.handle_window_message(msg.window, msg.operation).await
             }
         }
     }
@@ -144,19 +152,18 @@ impl AlignedReduceActor {
         &mut self,
         window: Window,
         operation: WindowOperation,
-        result_tx: tokio::sync::mpsc::Sender<Message>,
     ) -> Result<()> {
         let window_id = window.pnf_slot();
-
         match operation {
             WindowOperation::Open(msg) => {
                 // Create a new channel for this window's messages
-                let (message_tx, message_rx) = tokio::sync::mpsc::channel(100);
+                let (message_tx, message_rx) = mpsc::channel(100);
                 let message_stream = ReceiverStream::new(message_rx);
 
                 // Clone what we need for the task
                 let mut client = self.client.clone();
-                let result_tx_clone = result_tx.clone();
+                let result_tx_clone = self.result_tx.clone();
+                let error_tx_clone = self.error_tx.clone();
 
                 // Create the initial window message
                 let window_msg = AlignedWindowMessage::Fixed(FixedWindowMessage {
@@ -168,13 +175,20 @@ impl AlignedReduceActor {
                 let task_handle = tokio::spawn(async move {
                     // Send the window messages to the client for processing
                     if let Err(e) = client.reduce_fn(message_stream, result_tx_clone).await {
-                        tracing::error!("Error in reduce_fn: {}", e);
+                        // Send the error to the error channel to signal failure
+                        error_tx_clone
+                            .send(e.clone())
+                            .await
+                            .expect("failed to send error");
+
+                        // TODO: rethink whether we should write the responses to js writer here
+                        // instead of sending it to a next component (we have to write gc events etc)
                     }
                 });
 
                 // Store the stream and task handle
                 self.active_streams.insert(
-                    window_id,
+                    window_id.clone(),
                     ActiveStream {
                         message_tx: message_tx.clone(),
                         task_handle,
@@ -182,61 +196,48 @@ impl AlignedReduceActor {
                 );
 
                 // Send the open message
-                message_tx.send(window_msg).await.map_err(|e| {
-                    crate::Error::Reduce(format!("failed to send open message: {}", e))
-                })?;
+                let _ = message_tx.send(window_msg).await;
             }
             WindowOperation::Append(msg) => {
-                // Get the existing stream
-                if let Some(active_stream) = self.active_streams.get(&window_id) {
-                    // Create the append window message
-                    let window_msg = AlignedWindowMessage::Fixed(FixedWindowMessage {
-                        operation: WindowOperation::Append(msg),
-                        window,
-                    });
+                // Get the existing stream - this should always exist
+                let active_stream = self
+                    .active_streams
+                    .get(&window_id)
+                    .unwrap_or_else(|| panic!("no active stream for window {}", window_id));
 
-                    // Send the append message
-                    active_stream
-                        .message_tx
-                        .send(window_msg)
-                        .await
-                        .map_err(|e| {
-                            crate::Error::Reduce(format!("failed to send append message: {}", e))
-                        })?;
-                } else {
-                    return Err(crate::Error::Reduce(format!(
-                        "no active stream for window {}",
-                        window_id
-                    )));
-                }
+                // Create the append window message
+                let window_msg = AlignedWindowMessage::Fixed(FixedWindowMessage {
+                    operation: WindowOperation::Append(msg),
+                    window,
+                });
+
+                // Send the append message
+                let _ = active_stream.message_tx.send(window_msg).await;
             }
             WindowOperation::Close => {
-                // Get the existing stream
-                if let Some(active_stream) = self.active_streams.remove(&window_id) {
-                    // Create the close window message
-                    let window_msg = AlignedWindowMessage::Fixed(FixedWindowMessage {
-                        operation: WindowOperation::Close,
-                        window,
-                    });
+                // Get the existing stream - this should always exist
+                let active_stream = self
+                    .active_streams
+                    .remove(&window_id)
+                    .unwrap_or_else(|| panic!("no active stream for window {}", window_id));
 
-                    // Send the close message
-                    if let Err(e) = active_stream.message_tx.send(window_msg).await {
-                        tracing::warn!("Failed to send close message: {}", e);
-                    }
+                // Create the close window message
+                let window_msg = AlignedWindowMessage::Fixed(FixedWindowMessage {
+                    operation: WindowOperation::Close,
+                    window,
+                });
 
-                    // Drop the sender to signal completion
-                    drop(active_stream.message_tx);
+                // Send the close message
+                let _ = active_stream.message_tx.send(window_msg).await;
 
-                    // Wait for the task to complete
-                    if let Err(e) = active_stream.task_handle.await {
-                        tracing::warn!("Error waiting for reduce task: {}", e);
-                    }
-                } else {
-                    return Err(crate::Error::Reduce(format!(
-                        "no active stream for window {}",
-                        window_id
-                    )));
-                }
+                // Drop the sender to signal completion
+                drop(active_stream.message_tx);
+
+                // Wait for the task to complete
+                active_stream
+                    .task_handle
+                    .await
+                    .unwrap_or_else(|_| panic!("reduce task for window {} failed", window_id));
             }
         }
 
@@ -245,41 +246,94 @@ impl AlignedReduceActor {
 }
 
 pub(crate) struct ProcessAndForward {
-    pub(crate) actor_tx: tokio::sync::mpsc::Sender<AlignedReduceActorMessage>,
-    pub(crate) windower: FixedWindower,
+    client: UserDefinedAlignedReduce,
+    windower: FixedWindower,
+    /// this the final state of the component (any error will set this as Err)
+    final_result: Result<()>,
+    /// The moment we see an error, we will set this to true.
+    shutting_down_on_err: bool,
 }
 
 impl ProcessAndForward {
     pub(crate) async fn new(client: UserDefinedAlignedReduce, windower: FixedWindower) -> Self {
-        let (tx, rx) = tokio::sync::mpsc::channel(100);
-        tokio::spawn(async move {
-            let actor = AlignedReduceActor::new(client, rx).await;
-            actor.run().await;
-        });
         ProcessAndForward {
+            client,
             windower,
-            actor_tx: tx,
+            final_result: Ok(()),
+            shutting_down_on_err: false,
         }
     }
 
     pub(crate) async fn start(
-        self,
-        mut stream: ReceiverStream<Message>,
+        mut self,
+        input_stream: ReceiverStream<Message>,
+        cln_token: CancellationToken,
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
-        let (tx, rx) = tokio::sync::mpsc::channel(100);
-        let handle = tokio::spawn(async move {
-            while let Some(msg) = stream.next().await {
-                let window_msg = FixedWindower::assign_windows(msg).await;
-                self.actor_tx
-                    .send(AlignedReduceActorMessage::Fixed {
-                        msg: window_msg,
-                        tx: tx.clone(),
-                    })
-                    .await
-                    .expect("Failed to send message to actor");
-            }
-            Ok(())
+        let (output_tx, output_rx) = mpsc::channel(100);
+        let (error_tx, mut error_rx) = mpsc::channel(10);
+
+        // Create the actor channel
+        let (actor_tx, actor_rx) = mpsc::channel(100);
+
+        // Create and start the actor
+        let actor =
+            AlignedReduceActor::new(self.client, actor_rx, output_tx.clone(), error_tx.clone())
+                .await;
+
+        tokio::spawn(async move {
+            actor.run().await;
         });
-        Ok((ReceiverStream::new(rx), handle))
+
+        // Spawn the main processing task
+        let handle = tokio::spawn(async move {
+            let mut input_stream = input_stream;
+
+            loop {
+                tokio::select! {
+                    Some(error) = error_rx.recv() => {
+                        // When we get an error, cancel the token to signal upstream to stop sending
+                        // new messages, and we empty the input stream and exit.
+                        if self.final_result.is_ok() {
+                            error!(?error, "Error received while performing reduce operation");
+                            cln_token.cancel();
+                            // We mark that we are in error state
+                            self.final_result = Err(error);
+                            self.shutting_down_on_err = true;
+                        }
+                    },
+                    read_msg = input_stream.next() => {
+                        let Some(msg) = read_msg else {
+                            break;
+                        };
+
+                        // If there are errors then we need to drain the stream
+                        if self.shutting_down_on_err {
+                            warn!(
+                                "Reduce component is shutting down because of an error, not accepting the message"
+                            );
+                            continue;
+                        }
+
+                        // Process the message through the windower
+                        let window_msg = self.windower.assign_windows(msg).await;
+
+                        // Send to the actor for processing
+                        if let Err(e) = actor_tx.send(AlignedReduceActorMessage::Fixed {
+                            msg: window_msg,
+                        }).await {
+                            error!(?e, "Failed to send message to reduce actor");
+                            let _ = error_tx.send(Error::Reduce(format!(
+                                "Failed to send message to reduce actor: {}", e
+                            ))).await;
+                        }
+                    }
+                }
+            }
+
+            info!(status=?self.final_result, "Reduce component is completed with status");
+            self.final_result
+        });
+
+        Ok((ReceiverStream::new(output_rx), handle))
     }
 }
