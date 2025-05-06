@@ -229,23 +229,32 @@ message Authorization {
 
 // Backoff defines parameters used to systematically configure the retry strategy.
 message Backoff {
-  // Interval sets the initial retry interval, after a failure occurs.
+  // Interval sets the initial retry duration, after a failure occurs.
   // +kubebuilder:default="1ms"
   // +optional
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration interval = 1;
 
-  // MaxRetryAttempts defines the maximum number of retry attempts
+  // Steps defines the maximum number of retry attempts
   // +optional
-  optional uint32 maxRetryAttempts = 2;
+  optional uint32 steps = 2;
 
-  // Multiplier specifies the factor by which the retry interval increases after each attempt.
-  // For example, a multiplier of "2.0" doubles the interval after each retry.
+  // Duration is multiplied by factor each iteration, if factor is not zero
+  // and the limits imposed by Steps and Cap have not been reached.
   // +optional
-  optional string multiplier = 3;
+  optional double factor = 3;
 
-  // MaxInterval specifies the maximum interval between retries, capping the exponential growth.
+  // A limit on revised values of the duration parameter. If a
+  // multiplication by the factor parameter would make the duration
+  // exceed the cap then the duration is set to the cap and the
+  // steps parameter is set to zero.
   // +optional
-  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration maxInterval = 4;
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration cap = 4;
+
+  // The sleep at each iteration is the duration plus an additional
+  // amount chosen uniformly at random from the interval between
+  // zero and `jitter*duration`.
+  // +optional
+  optional double jitter = 5;
 }
 
 // BasicAuth represents the basic authentication approach which contains a user name and a password.
@@ -1424,9 +1433,9 @@ message RedisSettings {
 }
 
 // RetryStrategy struct encapsulates the settings for retrying operations in the event of failures.
-// It includes a BackOff strategy to manage the timing of retries and defines the action to take upon failure.
+// It includes a Exponential BackOff strategy to manage the timing of retries and defines the actions to be take upon failure.
 message RetryStrategy {
-  // BackOff specifies the parameters for the backoff strategy, controlling how delays between retries should increase.
+  // BackOff specifies the parameters for the exponential backoff strategy, controlling how delays between retries should increase.
   // +optional
   optional Backoff backoff = 1;
 

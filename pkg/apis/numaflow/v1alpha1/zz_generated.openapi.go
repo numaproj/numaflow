@@ -668,28 +668,35 @@ func schema_pkg_apis_numaflow_v1alpha1_Backoff(ref common.ReferenceCallback) com
 				Properties: map[string]spec.Schema{
 					"interval": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Interval sets the initial retry interval, after a failure occurs.",
+							Description: "Interval sets the initial retry duration, after a failure occurs.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
-					"maxRetryAttempts": {
+					"steps": {
 						SchemaProps: spec.SchemaProps{
-							Description: "MaxRetryAttempts defines the maximum number of retry attempts",
+							Description: "Steps defines the maximum number of retry attempts",
 							Type:        []string{"integer"},
 							Format:      "int64",
 						},
 					},
-					"multiplier": {
+					"factor": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Multiplier specifies the factor by which the retry interval increases after each attempt. For example, a multiplier of \"2.0\" doubles the interval after each retry.",
-							Type:        []string{"string"},
-							Format:      "",
+							Description: "Duration is multiplied by factor each iteration, if factor is not zero and the limits imposed by Steps and Cap have not been reached.",
+							Type:        []string{"number"},
+							Format:      "double",
 						},
 					},
-					"maxInterval": {
+					"cap": {
 						SchemaProps: spec.SchemaProps{
-							Description: "MaxInterval specifies the maximum interval between retries, capping the exponential growth.",
+							Description: "A limit on revised values of the duration parameter. If a multiplication by the factor parameter would make the duration exceed the cap then the duration is set to the cap and the steps parameter is set to zero.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
+					"jitter": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The sleep at each iteration is the duration plus an additional amount chosen uniformly at random from the interval between zero and `jitter*duration`.",
+							Type:        []string{"number"},
+							Format:      "double",
 						},
 					},
 				},
@@ -4618,12 +4625,12 @@ func schema_pkg_apis_numaflow_v1alpha1_RetryStrategy(ref common.ReferenceCallbac
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "RetryStrategy struct encapsulates the settings for retrying operations in the event of failures. It includes a BackOff strategy to manage the timing of retries and defines the action to take upon failure.",
+				Description: "RetryStrategy struct encapsulates the settings for retrying operations in the event of failures. It includes a Exponential BackOff strategy to manage the timing of retries and defines the actions to be take upon failure.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"backoff": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BackOff specifies the parameters for the backoff strategy, controlling how delays between retries should increase.",
+							Description: "BackOff specifies the parameters for the exponential backoff strategy, controlling how delays between retries should increase.",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Backoff"),
 						},
 					},

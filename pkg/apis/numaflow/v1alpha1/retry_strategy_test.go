@@ -44,8 +44,8 @@ func TestGetBackoff(t *testing.T) {
 			name: "custom backoff",
 			strategy: RetryStrategy{
 				BackOff: &Backoff{
-					Interval:         &metav1.Duration{Duration: 10 * time.Second},
-					MaxRetryAttempts: &steps,
+					Interval: &metav1.Duration{Duration: 10 * time.Second},
+					Steps:    &steps,
 				},
 			},
 			expectedBackoff: wait.Backoff{

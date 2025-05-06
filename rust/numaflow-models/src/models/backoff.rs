@@ -20,26 +20,30 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Backoff {
+    #[serde(rename = "cap", skip_serializing_if = "Option::is_none")]
+    pub cap: Option<kube::core::Duration>,
+    /// Duration is multiplied by factor each iteration, if factor is not zero and the limits imposed by Steps and Cap have not been reached.
+    #[serde(rename = "factor", skip_serializing_if = "Option::is_none")]
+    pub factor: Option<f64>,
     #[serde(rename = "interval", skip_serializing_if = "Option::is_none")]
     pub interval: Option<kube::core::Duration>,
-    #[serde(rename = "maxInterval", skip_serializing_if = "Option::is_none")]
-    pub max_interval: Option<kube::core::Duration>,
-    /// MaxRetryAttempts defines the maximum number of retry attempts
-    #[serde(rename = "maxRetryAttempts", skip_serializing_if = "Option::is_none")]
-    pub max_retry_attempts: Option<i64>,
-    /// Multiplier specifies the factor by which the retry interval increases after each attempt. For example, a multiplier of \"2.0\" doubles the interval after each retry.
-    #[serde(rename = "multiplier", skip_serializing_if = "Option::is_none")]
-    pub multiplier: Option<String>,
+    /// The sleep at each iteration is the duration plus an additional amount chosen uniformly at random from the interval between zero and `jitter*duration`.
+    #[serde(rename = "jitter", skip_serializing_if = "Option::is_none")]
+    pub jitter: Option<f64>,
+    /// Steps defines the maximum number of retry attempts
+    #[serde(rename = "steps", skip_serializing_if = "Option::is_none")]
+    pub steps: Option<i64>,
 }
 
 impl Backoff {
     /// Backoff defines parameters used to systematically configure the retry strategy.
     pub fn new() -> Backoff {
         Backoff {
+            cap: None,
+            factor: None,
             interval: None,
-            max_interval: None,
-            max_retry_attempts: None,
-            multiplier: None,
+            jitter: None,
+            steps: None,
         }
     }
 }

@@ -22,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 
+	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
@@ -618,9 +619,35 @@ func hasValidSinkRetryStrategy(s dfv1.Sink) bool {
 	if s.RetryStrategy.OnFailure != nil && *s.RetryStrategy.OnFailure == dfv1.OnFailureFallback && !hasValidFallbackSink(&s) {
 		return false
 	}
-	// If steps are provided in the strategy they cannot be 0, as we do not allow no tries for writing
-	if s.RetryStrategy.BackOff != nil && s.RetryStrategy.BackOff.MaxRetryAttempts != nil && *s.RetryStrategy.BackOff.MaxRetryAttempts == 0 {
-		return false
+
+	if s.RetryStrategy.BackOff != nil {
+		// If steps are provided in the strategy they cannot be 0, as we do not allow no tries for writing
+		if s.RetryStrategy.BackOff.Steps != nil && *s.RetryStrategy.BackOff.Steps == 0 {
+			return false
+		}
+		// If factor is provided in the strategy it cannot be negative
+		if s.RetryStrategy.BackOff.Factor != nil && *s.RetryStrategy.BackOff.Factor <= 0 {
+			return false
+		}
+
+		// If cap and interval are provided, cap must be greater than or equal to interval
+		if s.RetryStrategy.BackOff.Cap != nil && s.RetryStrategy.BackOff.Interval != nil {
+			if s.RetryStrategy.BackOff.Cap.Duration < s.RetryStrategy.BackOff.Interval.Duration {
+				return false
+			}
+		}
+
+		// If cap is provided but interval isn't, cap must be greater than or equal to default interval value
+		if s.RetryStrategy.BackOff.Cap != nil && s.RetryStrategy.BackOff.Interval == nil {
+			if s.RetryStrategy.BackOff.Cap.Duration < v1alpha1.DefaultRetryInterval {
+				return false
+			}
+		}
+
+		// if jitter is provided, it should be greater than or equal to 0
+		if s.RetryStrategy.BackOff.Jitter != nil && *s.RetryStrategy.BackOff.Jitter < 0 {
+			return false
+		}
 	}
 	// If no errors are found, the function returns true indicating the validation passed.
 	return true

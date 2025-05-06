@@ -1078,7 +1078,7 @@ Kubernetes meta/v1.Duration </a> </em>
 <em>(Optional)</em>
 <p>
 
-Interval sets the initial retry interval, after a failure occurs.
+Interval sets the initial retry duration, after a failure occurs.
 </p>
 
 </td>
@@ -1089,7 +1089,7 @@ Interval sets the initial retry interval, after a failure occurs.
 
 <td>
 
-<code>maxRetryAttempts</code></br> <em> uint32 </em>
+<code>steps</code></br> <em> uint32 </em>
 </td>
 
 <td>
@@ -1097,7 +1097,7 @@ Interval sets the initial retry interval, after a failure occurs.
 <em>(Optional)</em>
 <p>
 
-MaxRetryAttempts defines the maximum number of retry attempts
+Steps defines the maximum number of retry attempts
 </p>
 
 </td>
@@ -1108,7 +1108,7 @@ MaxRetryAttempts defines the maximum number of retry attempts
 
 <td>
 
-<code>multiplier</code></br> <em> string </em>
+<code>factor</code></br> <em> float64 </em>
 </td>
 
 <td>
@@ -1116,9 +1116,8 @@ MaxRetryAttempts defines the maximum number of retry attempts
 <em>(Optional)</em>
 <p>
 
-Multiplier specifies the factor by which the retry interval increases
-after each attempt. For example, a multiplier of “2.0” doubles the
-interval after each retry.
+Duration is multiplied by factor each iteration, if factor is not zero
+and the limits imposed by Steps and Cap have not been reached.
 </p>
 
 </td>
@@ -1129,7 +1128,7 @@ interval after each retry.
 
 <td>
 
-<code>maxInterval</code></br> <em>
+<code>cap</code></br> <em>
 <a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
 Kubernetes meta/v1.Duration </a> </em>
 </td>
@@ -1139,8 +1138,30 @@ Kubernetes meta/v1.Duration </a> </em>
 <em>(Optional)</em>
 <p>
 
-MaxInterval specifies the maximum interval between retries, capping the
-exponential growth.
+A limit on revised values of the duration parameter. If a multiplication
+by the factor parameter would make the duration exceed the cap then the
+duration is set to the cap and the steps parameter is set to zero.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>jitter</code></br> <em> float64 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The sleep at each iteration is the duration plus an additional amount
+chosen uniformly at random from the interval between zero and
+<code>jitter\*duration</code>.
 </p>
 
 </td>
@@ -9260,8 +9281,9 @@ RetryStrategy
 <p>
 
 RetryStrategy struct encapsulates the settings for retrying operations
-in the event of failures. It includes a BackOff strategy to manage the
-timing of retries and defines the action to take upon failure.
+in the event of failures. It includes a Exponential BackOff strategy to
+manage the timing of retries and defines the actions to be take upon
+failure.
 </p>
 
 </p>
@@ -9301,8 +9323,8 @@ Description
 <em>(Optional)</em>
 <p>
 
-BackOff specifies the parameters for the backoff strategy, controlling
-how delays between retries should increase.
+BackOff specifies the parameters for the exponential backoff strategy,
+controlling how delays between retries should increase.
 </p>
 
 </td>

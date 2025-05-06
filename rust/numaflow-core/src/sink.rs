@@ -539,7 +539,6 @@ impl SinkWriter {
                         &mut fallback_msgs,
                         &mut serving_msgs,
                         &mut messages_to_send,
-                        retry_config,
                     )
                     .await;
                 match status {
@@ -564,6 +563,19 @@ impl SinkWriter {
                             .to_string(),
                     ));
                 }
+
+                // Calculate exponential backoff delay
+                // TODO: calculate delay with jitter
+                let base_delay = ((retry_config.sink_initial_retry_interval_in_ms as f64)
+                    * retry_config.sink_retry_factor.powf(attempts as f64))
+                .min(retry_config.sink_max_retry_interval_in_ms as f64);
+                // info!(
+                //     "calculated delay {} before attempt number {}",
+                //     delay,
+                //     attempts + 1
+                // );
+                // Sleep for the calculated delay
+                sleep(Duration::from_millis(delay as u64)).await;
             }
 
             // If after the retries we still have messages to process, handle the post retry failures
@@ -687,7 +699,6 @@ impl SinkWriter {
         fallback_msgs: &mut Vec<Message>,
         serving_msgs: &mut Vec<Message>,
         messages_to_send: &mut Vec<Message>,
-        retry_config: &RetryConfig,
     ) -> Result<bool> {
         match self.sink(messages_to_send.clone()).await {
             Ok(response) => {
@@ -727,11 +738,6 @@ impl SinkWriter {
                 if messages_to_send.is_empty() {
                     return Ok(true);
                 }
-
-                sleep(Duration::from_millis(
-                    retry_config.sink_retry_interval_in_ms as u64,
-                ))
-                .await;
 
                 // we need to retry
                 Ok(false)
