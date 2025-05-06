@@ -20,20 +20,14 @@ pub(in crate::reduce) enum WindowKind {
 
 #[derive(Debug, Clone)]
 pub(in crate::reduce) struct Window {
-    pub(in crate::reduce) window_kind: WindowKind,
     pub(in crate::reduce) start_time: DateTime<Utc>,
     pub(in crate::reduce) end_time: DateTime<Utc>,
-    id: Bytes,
+    pub(in crate::reduce) id: Bytes,
 }
 
 impl Window {
-    pub(in crate::reduce) fn new(
-        window_kind: WindowKind,
-        start_time: DateTime<Utc>,
-        end_time: DateTime<Utc>,
-    ) -> Self {
+    pub(in crate::reduce) fn new(start_time: DateTime<Utc>, end_time: DateTime<Utc>) -> Self {
         Self {
-            window_kind,
             start_time,
             end_time,
             id: format!(
@@ -75,22 +69,31 @@ pub(crate) struct SlidingWindowMessage {
     pub(crate) window: Window,
 }
 
+pub(crate) trait Windower {
+    /// Assigns windows to a message
+    fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage>;
+
+    /// Closes any pending windows
+    fn close_windows(&self) -> Vec<AlignedWindowMessage>;
+
+    fn delete_window(&self, window: Window);
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct FixedWindower {}
 
-impl FixedWindower {
-    pub(crate) async fn new() -> Self {
-        FixedWindower {}
-    }
-
-    pub(crate) async fn assign_windows(&self, _msg: Message) -> FixedWindowMessage {
+impl Windower for FixedWindower {
+    fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage> {
         unimplemented!()
     }
-}
 
-pub(crate) enum AlignedReduceActorMessage {
-    Fixed { msg: FixedWindowMessage },
-    Sliding { msg: SlidingWindowMessage },
+    fn close_windows(&self) -> Vec<AlignedWindowMessage> {
+        unimplemented!()
+    }
+
+    fn delete_window(&self, _window: Window) {
+        unimplemented!()
+    }
 }
 
 /// Represents an active reduce stream for a window
@@ -101,9 +104,9 @@ struct ActiveStream {
     task_handle: JoinHandle<()>,
 }
 
-pub(crate) struct AlignedReduceActor {
-    pub(crate) receiver: mpsc::Receiver<AlignedReduceActorMessage>,
-    pub(crate) client: UserDefinedAlignedReduce,
+struct AlignedReduceActor {
+    receiver: mpsc::Receiver<AlignedWindowMessage>,
+    client: UserDefinedAlignedReduce,
     /// Map of active streams keyed by window ID (pnf_slot)
     active_streams: HashMap<Bytes, ActiveStream>,
     /// Sender for output messages
@@ -115,7 +118,7 @@ pub(crate) struct AlignedReduceActor {
 impl AlignedReduceActor {
     pub(crate) async fn new(
         client: UserDefinedAlignedReduce,
-        receiver: mpsc::Receiver<AlignedReduceActorMessage>,
+        receiver: mpsc::Receiver<AlignedWindowMessage>,
         result_tx: mpsc::Sender<Message>,
         error_tx: mpsc::Sender<Error>,
     ) -> Self {
@@ -128,7 +131,7 @@ impl AlignedReduceActor {
         }
     }
 
-    pub(crate) async fn run(mut self) {
+    async fn run(mut self) {
         while let Some(msg) = self.receiver.recv().await {
             if let Err(e) = self.handle_message(msg).await {
                 error!("Error handling message: {}", e);
@@ -140,15 +143,12 @@ impl AlignedReduceActor {
         }
     }
 
-    pub(crate) async fn handle_message(
-        &mut self,
-        msg: AlignedReduceActorMessage,
-    ) -> error::Result<()> {
+    async fn handle_message(&mut self, msg: AlignedWindowMessage) -> error::Result<()> {
         match msg {
-            AlignedReduceActorMessage::Fixed { msg } => {
+            AlignedWindowMessage::Fixed(msg) => {
                 self.handle_window_message(msg.window, msg.operation).await
             }
-            AlignedReduceActorMessage::Sliding { msg } => {
+            AlignedWindowMessage::Sliding(msg) => {
                 self.handle_window_message(msg.window, msg.operation).await
             }
         }
@@ -264,17 +264,17 @@ impl AlignedReduceActor {
     }
 }
 
-pub(crate) struct ProcessAndForward {
+pub(crate) struct ProcessAndForward<W: Windower + Send + Sync + Clone + 'static> {
     client: UserDefinedAlignedReduce,
-    windower: FixedWindower,
+    windower: W,
     /// this the final state of the component (any error will set this as Err)
     final_result: error::Result<()>,
     /// The moment we see an error, we will set this to true.
     shutting_down_on_err: bool,
 }
 
-impl ProcessAndForward {
-    pub(crate) async fn new(client: UserDefinedAlignedReduce, windower: FixedWindower) -> Self {
+impl<W: Windower + Send + Sync + Clone + 'static> ProcessAndForward<W> {
+    pub(crate) async fn new(client: UserDefinedAlignedReduce, windower: W) -> Self {
         ProcessAndForward {
             client,
             windower,
@@ -334,16 +334,16 @@ impl ProcessAndForward {
                         }
 
                         // Process the message through the windower
-                        let window_msg = self.windower.assign_windows(msg).await;
+                        let window_msgs = self.windower.assign_windows(msg);
 
-                        // Send to the actor for processing
-                        if let Err(e) = actor_tx.send(AlignedReduceActorMessage::Fixed {
-                            msg: window_msg,
-                        }).await {
-                            error!(?e, "Failed to send message to reduce actor");
-                            let _ = error_tx.send(Error::Reduce(format!(
-                                "Failed to send message to reduce actor: {}", e
-                            ))).await;
+                        for window_msg in window_msgs {
+                            // Send to the actor for processing
+                            if let Err(e) = actor_tx.send(window_msg).await {
+                                error!(?e, "Failed to send message to reduce actor");
+                                let _ = error_tx.send(Error::Reduce(format!(
+                                    "Failed to send message to reduce actor: {}", e
+                                ))).await;
+                            }
                         }
                     }
                 }
