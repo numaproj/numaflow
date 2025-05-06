@@ -12,7 +12,7 @@ pub(crate) trait Windower {
     fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage>;
 
     /// Closes any pending windows
-    fn close_windows(&self) -> Vec<AlignedWindowMessage>;
+    fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage>;
 
     /// Deletes a window
     fn delete_window(&self, window: Window);
