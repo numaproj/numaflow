@@ -138,7 +138,13 @@ func (t *OffsetTimeline) PutIdle(node wmb.WMB) {
 				// If we have an active watermark between two idle watermarks, but this active watermark is skipped
 				// publishing due to "skip publishing same watermark", we will see this warning.
 				// In this case, it's safe to insert the idle watermark.
-				t.log.Warnw("The idle watermark has a larger offset from the head idle watermark", zap.Int64("idleWatermark", node.Watermark),
+				// Example:
+				// * An idle watermark is sent at offset X.
+				// * A message comes in, so idling is cleared, but no new watermark is sent because the watermark hasn't
+				//   advanced.
+				// * Later, if it goes idle again, a new idle watermark is sent with a higher offset because the watermark
+				//   has advanced.
+				t.log.Debugw("The idle watermark has a larger offset from the head idle watermark", zap.Int64("idleWatermark", node.Watermark),
 					zap.Int64("existingOffset", elementNode.Offset), zap.Int64("inputOffset", node.Offset))
 				t.watermarks.InsertBefore(node, e)
 				t.watermarks.Remove(t.watermarks.Back())
