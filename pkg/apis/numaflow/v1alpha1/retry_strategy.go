@@ -56,19 +56,19 @@ type Backoff struct {
 	// Steps defines the maximum number of retry attempts
 	// +optional
 	Steps *uint32 `json:"steps,omitempty" protobuf:"bytes,2,opt,name=steps"`
-	// Duration is multiplied by factor each iteration, if factor is not zero
+	// Interval is multiplied by factor each iteration, if factor is not zero
 	// and the limits imposed by Steps and Cap have not been reached.
 	// +optional
 	Factor *float64 `json:"factor,omitempty" protobuf:"bytes,3,opt,name=factor"`
-	// A limit on revised values of the duration parameter. If a
-	// multiplication by the factor parameter would make the duration
-	// exceed the cap then the duration is set to the cap and the
+	// A limit on revised values of the interval parameter. If a
+	// multiplication by the factor parameter would make the interval
+	// exceed the cap then the interval is set to the cap and the
 	// steps parameter is set to zero.
 	// +optional
 	Cap *metav1.Duration `json:"cap,omitempty" protobuf:"bytes,4,opt,name=cap"`
-	// The sleep at each iteration is the duration plus an additional
+	// The sleep at each iteration is the interval plus an additional
 	// amount chosen uniformly at random from the interval between
-	// zero and `jitter*duration`.
+	// zero and `jitter*interval`.
 	// +optional
 	Jitter *float64 `json:"jitter,omitempty" protobuf:"bytes,5,opt,name=jitter"`
 }

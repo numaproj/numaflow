@@ -681,20 +681,20 @@ func schema_pkg_apis_numaflow_v1alpha1_Backoff(ref common.ReferenceCallback) com
 					},
 					"factor": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Duration is multiplied by factor each iteration, if factor is not zero and the limits imposed by Steps and Cap have not been reached.",
+							Description: "Interval is multiplied by factor each iteration, if factor is not zero and the limits imposed by Steps and Cap have not been reached.",
 							Type:        []string{"number"},
 							Format:      "double",
 						},
 					},
 					"cap": {
 						SchemaProps: spec.SchemaProps{
-							Description: "A limit on revised values of the duration parameter. If a multiplication by the factor parameter would make the duration exceed the cap then the duration is set to the cap and the steps parameter is set to zero.",
+							Description: "A limit on revised values of the interval parameter. If a multiplication by the factor parameter would make the interval exceed the cap then the interval is set to the cap and the steps parameter is set to zero.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
 					"jitter": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The sleep at each iteration is the duration plus an additional amount chosen uniformly at random from the interval between zero and `jitter*duration`.",
+							Description: "The sleep at each iteration is the interval plus an additional amount chosen uniformly at random from the interval between zero and `jitter*interval`.",
 							Type:        []string{"number"},
 							Format:      "double",
 						},

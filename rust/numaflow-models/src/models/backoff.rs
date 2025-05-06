@@ -22,12 +22,12 @@ limitations under the License.
 pub struct Backoff {
     #[serde(rename = "cap", skip_serializing_if = "Option::is_none")]
     pub cap: Option<kube::core::Duration>,
-    /// Duration is multiplied by factor each iteration, if factor is not zero and the limits imposed by Steps and Cap have not been reached.
+    /// Interval is multiplied by factor each iteration, if factor is not zero and the limits imposed by Steps and Cap have not been reached.
     #[serde(rename = "factor", skip_serializing_if = "Option::is_none")]
     pub factor: Option<f64>,
     #[serde(rename = "interval", skip_serializing_if = "Option::is_none")]
     pub interval: Option<kube::core::Duration>,
-    /// The sleep at each iteration is the duration plus an additional amount chosen uniformly at random from the interval between zero and `jitter*duration`.
+    /// The sleep at each iteration is the interval plus an additional amount chosen uniformly at random from the interval between zero and `jitter*interval`.
     #[serde(rename = "jitter", skip_serializing_if = "Option::is_none")]
     pub jitter: Option<f64>,
     /// Steps defines the maximum number of retry attempts

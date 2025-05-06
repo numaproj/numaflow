@@ -1116,7 +1116,7 @@ Steps defines the maximum number of retry attempts
 <em>(Optional)</em>
 <p>
 
-Duration is multiplied by factor each iteration, if factor is not zero
+Interval is multiplied by factor each iteration, if factor is not zero
 and the limits imposed by Steps and Cap have not been reached.
 </p>
 
@@ -1138,9 +1138,9 @@ Kubernetes meta/v1.Duration </a> </em>
 <em>(Optional)</em>
 <p>
 
-A limit on revised values of the duration parameter. If a multiplication
-by the factor parameter would make the duration exceed the cap then the
-duration is set to the cap and the steps parameter is set to zero.
+A limit on revised values of the interval parameter. If a multiplication
+by the factor parameter would make the interval exceed the cap then the
+interval is set to the cap and the steps parameter is set to zero.
 </p>
 
 </td>
@@ -1159,9 +1159,9 @@ duration is set to the cap and the steps parameter is set to zero.
 <em>(Optional)</em>
 <p>
 
-The sleep at each iteration is the duration plus an additional amount
+The sleep at each iteration is the interval plus an additional amount
 chosen uniformly at random from the interval between zero and
-<code>jitter\*duration</code>.
+<code>jitter\*interval</code>.
 </p>
 
 </td>

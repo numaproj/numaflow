@@ -566,14 +566,9 @@ impl SinkWriter {
 
                 // Calculate exponential backoff delay
                 // TODO: calculate delay with jitter
-                let base_delay = ((retry_config.sink_initial_retry_interval_in_ms as f64)
+                let delay = ((retry_config.sink_initial_retry_interval_in_ms as f64)
                     * retry_config.sink_retry_factor.powf(attempts as f64))
                 .min(retry_config.sink_max_retry_interval_in_ms as f64);
-                // info!(
-                //     "calculated delay {} before attempt number {}",
-                //     delay,
-                //     attempts + 1
-                // );
                 // Sleep for the calculated delay
                 sleep(Duration::from_millis(delay as u64)).await;
             }
