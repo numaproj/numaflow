@@ -269,7 +269,29 @@ func (h *handler) GetClusterSummary(c *gin.Context) {
 		if value, ok := namespaceSummaryMap[pipeline.Namespace]; ok {
 			summary = value
 		}
-		status, err := getPipelineStatus(&pipeline)
+
+		// getting health status for each pipeline
+		resourceHealth, err := h.healthChecker.getPipelineResourceHealth(h, pipeline.Namespace, pipeline.Name)
+		if err != nil {
+			h.respondWithError(c, fmt.Sprintf("Failed to get the resourceHealth for pipeline %q: %s", pipeline.Name, err.Error()))
+			return
+		}
+
+		// Get a new daemon client for the given pipeline
+		client, err := h.getPipelineDaemonClient(pipeline.Namespace, pipeline.Name)
+		if err != nil || client == nil {
+			h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for pipeline %q, %s", pipeline.Name, err.Error()))
+			return
+		}
+
+		// Get the data criticality for the given pipeline
+		dataStatus, err := client.GetPipelineStatus(c, pipeline.Name)
+		if err != nil {
+			h.respondWithError(c, fmt.Sprintf("Failed to get the dataStatus for pipeline %q: %s", pipeline.Name, err.Error()))
+			return
+		}
+
+		status, err := getPipelineConsolidatedHealthStatus(&pipeline, resourceHealth.Status, dataStatus.Status)
 		if err != nil {
 			h.respondWithError(c, fmt.Sprintf("Failed to fetch cluster summary, %s", err.Error()))
 			return
@@ -1480,6 +1502,25 @@ func getPipelineStatus(pipeline *dfv1.Pipeline) (string, error) {
 		retStatus = dfv1.PipelineStatusInactive
 	} else if pipeline.GetDesiredPhase() == dfv1.PipelinePhaseRunning {
 		retStatus = dfv1.PipelineStatusHealthy
+	} else if pipeline.GetDesiredPhase() == dfv1.PipelinePhaseFailed {
+		retStatus = dfv1.PipelineStatusCritical
+	}
+	return retStatus, nil
+}
+
+func getPipelineConsolidatedHealthStatus(pipeline *dfv1.Pipeline, resourceHealth, dataStatus string) (string, error) {
+	retStatus := dfv1.PipelineStatusHealthy
+
+	if pipeline.GetDesiredPhase() == dfv1.PipelinePhasePaused || pipeline.GetDesiredPhase() == dfv1.PipelinePhasePausing || pipeline.GetDesiredPhase() == dfv1.PipelinePhaseDeleting {
+		retStatus = dfv1.PipelineStatusInactive
+	} else if pipeline.GetDesiredPhase() == dfv1.PipelinePhaseRunning {
+		if resourceHealth == dfv1.PipelineStatusHealthy && dataStatus == dfv1.PipelineStatusHealthy {
+			retStatus = dfv1.PipelineStatusHealthy
+		} else if resourceHealth == dfv1.PipelineStatusUnhealthy || resourceHealth == dfv1.PipelineStatusCritical || dataStatus == dfv1.PipelineStatusCritical {
+			retStatus = dfv1.PipelineStatusCritical
+		} else if resourceHealth == dfv1.PipelineStatusWarning || dataStatus == dfv1.PipelineStatusWarning {
+			retStatus = dfv1.PipelineStatusWarning
+		}
 	} else if pipeline.GetDesiredPhase() == dfv1.PipelinePhaseFailed {
 		retStatus = dfv1.PipelineStatusCritical
 	}
