@@ -44,6 +44,7 @@ pub(crate) mod sink_forwarder;
 /// Write is ISB.
 pub(crate) mod map_forwarder;
 
+mod reduce_forwarder;
 /// Source where the Reader is builtin or User-defined Source, Write is ISB,
 /// with an optional Transformer.
 pub(crate) mod source_forwarder;

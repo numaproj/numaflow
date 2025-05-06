@@ -1,7 +1,8 @@
 use crate::Result;
 use crate::config::get_vertex_name;
 use crate::message::{IntOffset, Message, MessageID, Offset};
-use crate::reduce::pnf::aligned::reducer::{AlignedWindowMessage, WindowOperation};
+use crate::reduce::pnf::aligned::windower::AlignedWindowMessage;
+use crate::reduce::pnf::aligned::windower::WindowOperation;
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 use chrono::Utc;
 use numaflow_pb::clients::reduce::reduce_client::ReduceClient;
