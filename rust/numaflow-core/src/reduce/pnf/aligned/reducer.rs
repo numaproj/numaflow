@@ -3,7 +3,7 @@ use crate::message::Message;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::reduce::pnf::aligned::user_defined::UserDefinedAlignedReduce;
 use crate::reduce::pnf::aligned::windower::{
-    AlignedWindowMessage, FixedWindowMessage, Window, WindowOperation, Windower,
+    AlignedWindowMessage, FixedWindowMessage, Window, WindowManager, WindowOperation,
 };
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use bytes::Bytes;
@@ -228,7 +228,7 @@ impl AlignedReduceActor {
 }
 
 /// Processes messages and forwards results to the next stage
-pub(crate) struct ProcessAndForward<W: Windower + Send + Sync + Clone + 'static> {
+pub(crate) struct ProcessAndForward<W: WindowManager + Send + Sync + Clone + 'static> {
     client: UserDefinedAlignedReduce,
     windower: W,
     js_writer: JetstreamWriter,
@@ -239,7 +239,7 @@ pub(crate) struct ProcessAndForward<W: Windower + Send + Sync + Clone + 'static>
     gc_wal: Option<AppendOnlyWal>,
 }
 
-impl<W: Windower + Send + Sync + Clone + 'static> ProcessAndForward<W> {
+impl<W: WindowManager + Send + Sync + Clone + 'static> ProcessAndForward<W> {
     pub(crate) async fn new(
         client: UserDefinedAlignedReduce,
         windower: W,

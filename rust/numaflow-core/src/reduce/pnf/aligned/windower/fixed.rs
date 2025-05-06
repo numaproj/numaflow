@@ -7,18 +7,18 @@ use chrono::{DateTime, TimeZone, Utc};
 
 use crate::message::Message;
 use crate::reduce::pnf::aligned::windower::{
-    AlignedWindowMessage, FixedWindowMessage, Window, WindowOperation, Windower,
+    AlignedWindowMessage, FixedWindowMessage, Window, WindowManager, WindowOperation,
 };
 
 #[derive(Debug, Clone)]
-pub(crate) struct FixedWindower {
+pub(crate) struct FixedWindowManager {
     /// Duration of each window
     window_length: Duration,
     /// Active windows sorted by end time
     active_windows: Arc<Mutex<BTreeMap<DateTime<Utc>, Window>>>,
 }
 
-impl FixedWindower {
+impl FixedWindowManager {
     pub(crate) fn new(window_length: Duration) -> Self {
         Self {
             window_length,
@@ -46,7 +46,7 @@ impl FixedWindower {
     }
 }
 
-impl Windower for FixedWindower {
+impl WindowManager for FixedWindowManager {
     fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage> {
         let window = self.create_window(&msg);
         let mut result = Vec::new();
@@ -124,7 +124,7 @@ mod tests {
     #[tokio::test]
     async fn test_assign_windows() {
         // Create a fixed windower with 60s window length
-        let windower = FixedWindower::new(Duration::from_secs(60));
+        let windower = FixedWindowManager::new(Duration::from_secs(60));
         let base_time = Utc.timestamp_millis_opt(60000).unwrap();
 
         // Create a test message with event time at base_time
@@ -188,7 +188,7 @@ mod tests {
     #[test]
     fn test_insert_window() {
         // Create a fixed windower with 60s window length
-        let windower = FixedWindower::new(Duration::from_secs(60));
+        let windower = FixedWindowManager::new(Duration::from_secs(60));
         let base_time = Utc.timestamp_millis_opt(60000).unwrap();
 
         // Create a window
@@ -240,7 +240,7 @@ mod tests {
     #[test]
     fn test_close_windows() {
         // Create a fixed windower with 60s window length
-        let windower = FixedWindower::new(Duration::from_secs(60));
+        let windower = FixedWindowManager::new(Duration::from_secs(60));
         let base_time = Utc.timestamp_millis_opt(60000).unwrap();
 
         // Create windows
@@ -316,7 +316,7 @@ mod tests {
     #[test]
     fn test_delete_window() {
         // Create a fixed windower with 60s window length
-        let windower = FixedWindower::new(Duration::from_secs(60));
+        let windower = FixedWindowManager::new(Duration::from_secs(60));
         let base_time = Utc.timestamp_millis_opt(60000).unwrap();
 
         // Create windows
@@ -356,7 +356,7 @@ mod tests {
     #[test]
     fn test_oldest_window_endtime() {
         // Create a fixed windower with 60s window length
-        let windower = FixedWindower::new(Duration::from_secs(60));
+        let windower = FixedWindowManager::new(Duration::from_secs(60));
         let base_time = Utc.timestamp_millis_opt(60000).unwrap();
 
         // Create windows

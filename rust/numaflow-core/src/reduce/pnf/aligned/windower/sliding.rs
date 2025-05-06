@@ -7,11 +7,11 @@ use chrono::{DateTime, TimeZone, Utc};
 
 use crate::message::Message;
 use crate::reduce::pnf::aligned::windower::{
-    AlignedWindowMessage, SlidingWindowMessage, Window, WindowOperation, Windower,
+    AlignedWindowMessage, SlidingWindowMessage, Window, WindowManager, WindowOperation,
 };
 
 #[derive(Debug, Clone)]
-pub(crate) struct SlidingWindower {
+pub(crate) struct SlidingWindowManager {
     /// Duration of each window
     window_length: Duration,
     /// Slide duration
@@ -20,7 +20,7 @@ pub(crate) struct SlidingWindower {
     active_windows: Arc<Mutex<BTreeMap<DateTime<Utc>, Window>>>,
 }
 
-impl SlidingWindower {
+impl SlidingWindowManager {
     pub(crate) fn new(window_length: Duration, slide: Duration) -> Self {
         Self {
             window_length,
@@ -65,7 +65,7 @@ impl SlidingWindower {
     }
 }
 
-impl Windower for SlidingWindower {
+impl WindowManager for SlidingWindowManager {
     fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage> {
         let windows = self.create_windows(&msg);
         let mut result = Vec::new();
@@ -148,7 +148,7 @@ mod tests {
     #[tokio::test]
     async fn test_assign_windows_length_divisible_by_slide() {
         // Create a sliding windower with 60s window length and 20s slide
-        let windower = SlidingWindower::new(Duration::from_secs(60), Duration::from_secs(20));
+        let windower = SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(20));
 
         // Base time: 60000ms (60s)
         let base_time = Utc.timestamp_millis_opt(60000).unwrap();
@@ -242,7 +242,7 @@ mod tests {
     #[tokio::test]
     async fn test_assign_windows_length_not_divisible_by_slide() {
         // Create a sliding windower with 60s window length and 40s slide
-        let windower = SlidingWindower::new(Duration::from_secs(60), Duration::from_secs(40));
+        let windower = SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(40));
 
         // Base time: 600s
         let base_time = Utc.timestamp_opt(600, 0).unwrap();
@@ -322,7 +322,7 @@ mod tests {
         let base_time = Utc.timestamp_millis_opt(60000).unwrap();
 
         // Create a sliding windower with 60s window length and 10s slide
-        let windower = SlidingWindower::new(Duration::from_secs(60), Duration::from_secs(10));
+        let windower = SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(10));
 
         // Create windows
         let window1 = Window::new(base_time, base_time + chrono::Duration::seconds(60));
@@ -416,7 +416,7 @@ mod tests {
         let base_time = Utc.timestamp_millis_opt(60000).unwrap();
 
         // Create a sliding windower with 60s window length and 10s slide
-        let windower = SlidingWindower::new(Duration::from_secs(60), Duration::from_secs(10));
+        let windower = SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(10));
 
         // Create windows
         let window1 = Window::new(base_time, base_time + chrono::Duration::seconds(60));
@@ -485,7 +485,7 @@ mod tests {
         let base_time = Utc.timestamp_millis_opt(60000).unwrap();
 
         // Create a sliding windower with 60s window length and 10s slide
-        let windower = SlidingWindower::new(Duration::from_secs(60), Duration::from_secs(10));
+        let windower = SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(10));
 
         // Create windows
         let window1 = Window::new(base_time, base_time + chrono::Duration::seconds(60));
@@ -542,7 +542,7 @@ mod tests {
     #[test]
     fn test_assign_windows_with_small_slide() {
         // Create a sliding windower with 60s window length and 10s slide
-        let windower = SlidingWindower::new(Duration::from_secs(60), Duration::from_secs(10));
+        let windower = SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(10));
 
         // Create a test message with event time at 105s
         let msg = Message {

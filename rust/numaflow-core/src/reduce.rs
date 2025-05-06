@@ -12,4 +12,3 @@ pub(crate) mod pbq;
 
 /// Process and Forward (PNF) for processing the reduce data and forwarding it to the next vertex.
 pub(crate) mod pnf;
-pub(crate) mod user_defined;
