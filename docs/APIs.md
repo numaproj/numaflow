@@ -11405,6 +11405,95 @@ JetStreamSource </a> </em>
 
 </table>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.SqsSink">
+
+SqsSink
+</h3>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>awsRegion</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+AWSRegion is the AWS Region where the SQS queue is located
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>queueName</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+QueueName is the name of the SQS queue
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>queueOwnerAWSAccountID</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+QueueOwnerAWSAccountID is the queue owner aws account id
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.SqsSource">
 
 SqsSource

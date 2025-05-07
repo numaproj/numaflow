@@ -1745,6 +1745,17 @@ message Source {
   optional SqsSource sqs = 10;
 }
 
+message SqsSink {
+  // AWSRegion is the AWS Region where the SQS queue is located
+  optional string awsRegion = 1;
+
+  // QueueName is the name of the SQS queue
+  optional string queueName = 2;
+
+  // QueueOwnerAWSAccountID is the queue owner aws account id
+  optional string queueOwnerAWSAccountID = 3;
+}
+
 // SqsSource represents the configuration of an AWS SQS source
 message SqsSource {
   // AWSRegion is the AWS Region where the SQS queue is located

@@ -20,6 +20,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::{error, info, warn};
+use numaflow_sqs::sink::{SqsSink};
 use user_defined::UserDefinedSink;
 
 use crate::Result;
@@ -52,6 +53,7 @@ pub mod serve;
 ///
 /// [User-Defined Sink]: https://numaflow.numaproj.io/user-guide/sinks/user-defined-sinks/
 mod user_defined;
+mod sqs;
 
 /// Set of items to be implemented be a Numaflow Sink.
 ///
@@ -103,6 +105,7 @@ pub(crate) enum SinkClientType {
     Blackhole,
     Serve,
     UserDefined(SinkClient<Channel>),
+    Sqs(SqsSink),
 }
 
 /// User defined clients which will be used for doing sidecar health checks.
@@ -295,6 +298,13 @@ impl SinkWriterBuilder {
                     actor.run().await;
                 });
             }
+            SinkClientType::Sqs(sqs_sink) => {
+                // TODO: add health check for sqs sink
+                tokio::spawn(async {
+                    let actor = SinkActor::new(receiver, sqs_sink);
+                    actor.run().await;
+                });
+            }
         };
 
         // start fallback sinks
@@ -327,6 +337,13 @@ impl SinkWriterBuilder {
                     let sink = UserDefinedSink::new(sink_client).await?;
                     tokio::spawn(async {
                         let actor = SinkActor::new(fb_receiver, sink);
+                        actor.run().await;
+                    });
+                }
+                SinkClientType::Sqs(sqs_sink) => {
+                    // TODO: add health check for sqs sink
+                    tokio::spawn(async {
+                        let actor = SinkActor::new(fb_receiver, sqs_sink);
                         actor.run().await;
                     });
                 }

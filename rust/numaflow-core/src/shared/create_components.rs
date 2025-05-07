@@ -22,7 +22,7 @@ use crate::source::Source;
 use crate::source::generator::new_generator;
 use crate::source::jetstream::new_jetstream_source;
 use crate::source::pulsar::new_pulsar_source;
-use crate::source::sqs::new_sqs_source;
+use crate::source::sqs::{new_sqs_sink, new_sqs_source};
 use crate::source::user_defined::new_source;
 use crate::tracker::TrackerHandle;
 use crate::transformer::Transformer;
@@ -90,6 +90,15 @@ pub(crate) async fn create_sink_writer(
             )
             .retry_config(primary_sink.retry_config.unwrap_or_default())
         }
+        SinkType::Sqs(sqs_sink_config) => {
+            let sqs_sink = new_sqs_sink(sqs_sink_config).await?;
+            SinkWriterBuilder::new(
+                batch_size,
+                read_timeout,
+                SinkClientType::Sqs(sqs_sink.clone()),
+                tracker_handle,
+            )
+        }
     };
 
     if let Some(fb_sink) = fallback_sink {
@@ -133,6 +142,13 @@ pub(crate) async fn create_sink_writer(
 
                 Ok(sink_writer_builder
                     .fb_sink_client(SinkClientType::UserDefined(sink_grpc_client.clone()))
+                    .build()
+                    .await?)
+            }
+            SinkType::Sqs(sqs_sink_config) => {
+                let sqs_sink = new_sqs_sink(sqs_sink_config).await?;
+                Ok(sink_writer_builder
+                    .fb_sink_client(SinkClientType::Sqs(sqs_sink.clone()))
                     .build()
                     .await?)
             }
@@ -339,7 +355,7 @@ pub async fn create_source(
             .await?;
             Ok(Source::new(
                 batch_size,
-                source::SourceType::SQS(sqs),
+                source::SourceType::Sqs(sqs),
                 tracker_handle,
                 source_config.read_ahead,
                 transformer,

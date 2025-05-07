@@ -49,6 +49,9 @@ type AbstractSink struct {
 	// Serve sink is used to return results when working with a ServingPipeline.
 	// +optional
 	Serve *ServeSink `json:"serve,omitempty" protobuf:"bytes,5,opt,name=serve"`
+	//
+	// +optional
+	Sqs *SqsSink `json:"sqs,omitempty" protobuf:"bytes,6,opt,name=sqs"`
 }
 
 func (s Sink) getContainers(req getContainerReq) ([]corev1.Container, []corev1.Container, error) {

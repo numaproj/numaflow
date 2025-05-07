@@ -22414,6 +22414,28 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.SqsSink": {
+      "type": "object",
+      "required": [
+        "awsRegion",
+        "queueName",
+        "queueOwnerAWSAccountID"
+      ],
+      "properties": {
+        "awsRegion": {
+          "description": "AWSRegion is the AWS Region where the SQS queue is located",
+          "type": "string"
+        },
+        "queueName": {
+          "description": "QueueName is the name of the SQS queue",
+          "type": "string"
+        },
+        "queueOwnerAWSAccountID": {
+          "description": "QueueOwnerAWSAccountID is the queue owner aws account id",
+          "type": "string"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.SqsSource": {
       "description": "SqsSource represents the configuration of an AWS SQS source",
       "type": "object",

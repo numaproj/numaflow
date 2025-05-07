@@ -9,7 +9,7 @@ pub(crate) mod source {
     use numaflow_jetstream::{JetstreamSourceConfig, NatsAuth, TlsClientAuthCerts, TlsConfig};
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source, SqsSource};
     use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
-    use numaflow_sqs::source::SQSSourceConfig;
+    use numaflow_sqs::source::SqsSourceConfig;
     use tracing::{info, warn};
 
     use crate::Result;
@@ -38,7 +38,7 @@ pub(crate) mod source {
         UserDefined(UserDefinedConfig),
         Pulsar(PulsarSourceConfig),
         Jetstream(JetstreamSourceConfig),
-        Sqs(SQSSourceConfig),
+        Sqs(SqsSourceConfig),
     }
 
     impl From<Box<GeneratorSource>> for SourceType {
@@ -115,7 +115,7 @@ pub(crate) mod source {
                 ));
             }
 
-            let sqs_source_config = SQSSourceConfig {
+            let sqs_source_config = SqsSourceConfig {
                 queue_name: value.queue_name,
                 region: value.aws_region,
                 queue_owner_aws_account_id: value.queue_owner_aws_account_id,
@@ -352,9 +352,9 @@ pub(crate) mod sink {
     const DEFAULT_SINK_RETRY_INTERVAL_IN_MS: u32 = 1;
 
     use std::fmt::Display;
-
-    use numaflow_models::models::{Backoff, RetryStrategy, Sink};
-
+    use tracing::info;
+    use numaflow_models::models::{Backoff, RetryStrategy, Sink, SqsSink};
+    use numaflow_sqs::sink::{SqsSinkConfig};
     use crate::Result;
     use crate::error::Error;
 
@@ -370,6 +370,7 @@ pub(crate) mod sink {
         Blackhole(BlackholeConfig),
         Serve,
         UserDefined(UserDefinedConfig),
+        Sqs(SqsSinkConfig),
     }
 
     impl SinkType {
@@ -432,6 +433,30 @@ pub(crate) mod sink {
         pub grpc_max_message_size: usize,
         pub socket_path: String,
         pub server_info_path: String,
+    }
+    
+    impl TryFrom<Box<SqsSink>> for SinkType {
+        type Error = Error;
+
+        fn try_from(value: Box<SqsSink>) -> Result<Self> {
+            info!("Sqs sink: {value:?}");
+            
+            if value.aws_region.is_empty() {
+                return Err(Error::Config(
+                    "AWS region is required for SQS sink".to_string(),
+                ));
+            }
+            
+            let sqs_sink_config = SqsSinkConfig {
+                queue_name: value.queue_name,
+                region: value.aws_region,
+                queue_owner_aws_account_id: value.queue_owner_aws_account_id,
+            };
+
+            info!("parsed SQS sink config: {sqs_sink_config:?}");
+            
+            Ok(SinkType::Sqs(sqs_sink_config))
+        }
     }
 
     #[derive(Debug, Clone, PartialEq)]

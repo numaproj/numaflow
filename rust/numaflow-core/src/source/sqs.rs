@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
-
-use numaflow_sqs::source::{SQSMessage, SQSSource, SQSSourceConfig, SqsSourceBuilder};
+use numaflow_sqs::sink::{SqsSink, SqsSinkBuilder, SqsSinkConfig};
+use numaflow_sqs::source::{SQSMessage, SqsSource, SqsSourceConfig, SqsSourceBuilder};
 
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
@@ -33,25 +33,37 @@ impl TryFrom<SQSMessage> for Message {
     }
 }
 
+impl From<numaflow_sqs::SqsSourceError> for Error {
+    fn from(value: numaflow_sqs::SqsSourceError) -> Self {
+        match value {
+            numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::Sqs(e)) => Error::Source(e.to_string()),
+            numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::ActorTaskTerminated(_))=> {
+                    Error::ActorPatternRecv(value.to_string())
+                },
+            numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::InvalidConfig(e)) => Error::Source(e),
+            numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::Other(e)) => Error::Source(e),
+        }
+    }
+}
+
+
 impl From<numaflow_sqs::Error> for Error {
     fn from(value: numaflow_sqs::Error) -> Self {
         match value {
-            numaflow_sqs::Error::Sqs(e) => Error::Source(e.to_string()),
-            numaflow_sqs::Error::ActorTaskTerminated(_) => {
-                Error::ActorPatternRecv(value.to_string())
-            }
-            numaflow_sqs::Error::InvalidConfig(e) => Error::Source(e),
-            numaflow_sqs::Error::Other(e) => Error::Source(e),
+            numaflow_sqs::Error::Sqs(e) => Error::Other(e.to_string()),
+            numaflow_sqs::Error::ActorTaskTerminated(_) => Error::Other(value.to_string()),
+            numaflow_sqs::Error::InvalidConfig(e) => Error::Other(e),
+            numaflow_sqs::Error::Other(e) => Error::Other(e),
         }
     }
 }
 
 pub(crate) async fn new_sqs_source(
-    cfg: SQSSourceConfig,
+    cfg: SqsSourceConfig,
     batch_size: usize,
     timeout: Duration,
     vertex_replica: u16,
-) -> crate::Result<SQSSource> {
+) -> crate::Result<SqsSource> {
     Ok(SqsSourceBuilder::new(cfg)
         .batch_size(batch_size)
         .timeout(timeout)
@@ -60,7 +72,13 @@ pub(crate) async fn new_sqs_source(
         .await?)
 }
 
-impl source::SourceReader for SQSSource {
+pub(crate) async fn new_sqs_sink(
+    cfg: SqsSinkConfig,
+) -> crate::error::Result<SqsSink> {
+    Ok(SqsSinkBuilder::new(cfg).build().await?)
+}
+
+impl source::SourceReader for SqsSource {
     fn name(&self) -> &'static str {
         "Sqs"
     }
@@ -79,7 +97,7 @@ impl source::SourceReader for SQSSource {
     }
 }
 
-impl source::SourceAcker for SQSSource {
+impl source::SourceAcker for SqsSource {
     async fn ack(&mut self, offsets: Vec<Offset>) -> crate::error::Result<()> {
         let mut sqs_offsets = Vec::with_capacity(offsets.len());
         for offset in offsets {
@@ -94,7 +112,7 @@ impl source::SourceAcker for SQSSource {
     }
 }
 
-impl source::LagReader for SQSSource {
+impl source::LagReader for SqsSource {
     async fn pending(&mut self) -> crate::error::Result<Option<usize>> {
         Ok(self.pending_count().await)
     }
@@ -166,7 +184,7 @@ pub mod tests {
         let sqs_client =
             aws_sdk_sqs::Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
 
-        let sqs_source = SqsSourceBuilder::new(SQSSourceConfig {
+        let sqs_source = SqsSourceBuilder::new(SqsSourceConfig {
             region: SQS_DEFAULT_REGION.to_string(),
             queue_name: "test-q".to_string(),
             queue_owner_aws_account_id: "12345678912".to_string(),
@@ -189,7 +207,7 @@ pub mod tests {
         let tracker_handle = TrackerHandle::new(None, None);
         let source = Source::new(
             1,
-            SourceType::SQS(sqs_source),
+            SourceType::Sqs(sqs_source),
             tracker_handle.clone(),
             true,
             None,
