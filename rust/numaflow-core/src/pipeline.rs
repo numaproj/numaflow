@@ -7,7 +7,7 @@ use serving::callback::CallbackHandler;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::config::components::reducer::WindowType;
+use crate::config::components::reduce::WindowType;
 use crate::config::is_mono_vertex;
 use crate::config::pipeline;
 use crate::config::pipeline::isb::Stream;
@@ -22,12 +22,13 @@ use crate::pipeline::forwarder::source_forwarder;
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::pipeline::pipeline::isb::BufferReaderConfig;
+use crate::reduce::pbq::PBQBuilder;
 use crate::reduce::pnf::aligned::reducer::AlignedReducer;
 use crate::reduce::pnf::aligned::windower::fixed::FixedWindowManager;
 use crate::reduce::pnf::aligned::windower::sliding::SlidingWindowManager;
 use crate::reduce::wal::segment::WalType;
 use crate::reduce::wal::segment::append::AppendOnlyWal;
-use crate::reduce::wal::segment::compactor::WindowKind;
+use crate::reduce::wal::segment::compactor::{Compactor, WindowKind};
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
 use crate::sink::serve::ServingStore;
@@ -410,7 +411,7 @@ async fn start_reduce_forwarder(
         create_components::create_aligned_reducer(reduce_vtx_config.reducer_config.clone()).await?;
 
     // Create WAL if configured
-    let wal = if let Some(storage_config) = &reduce_vtx_config.storage_config {
+    let (wal, gc_wal) = if let Some(storage_config) = &reduce_vtx_config.storage_config {
         let wal_path = storage_config.path.clone();
 
         let append_only_wal = AppendOnlyWal::new(
@@ -422,8 +423,8 @@ async fn start_reduce_forwarder(
         )
         .await?;
 
-        let compactor = crate::reduce::wal::segment::compactor::Compactor::new(
-            wal_path,
+        let compactor = Compactor::new(
+            wal_path.clone(),
             WindowKind::Aligned,
             storage_config.max_file_size_mb,
             storage_config.flush_interval_ms,
@@ -431,16 +432,28 @@ async fn start_reduce_forwarder(
         )
         .await?;
 
-        Some(crate::reduce::pbq::WAL {
-            append_only_wal,
-            compactor,
-        })
+        let gc_wal = AppendOnlyWal::new(
+            WalType::Gc,
+            wal_path,
+            storage_config.max_file_size_mb,
+            storage_config.flush_interval_ms,
+            storage_config.channel_buffer_size,
+        )
+        .await?;
+
+        (
+            Some(crate::reduce::pbq::WAL {
+                append_only_wal,
+                compactor,
+            }),
+            Some(gc_wal),
+        )
     } else {
-        None
+        (None, None)
     };
 
     // Create PBQ
-    let pbq_builder = crate::reduce::pbq::PBQBuilder::new(buffer_reader, tracker_handle.clone());
+    let pbq_builder = PBQBuilder::new(buffer_reader, tracker_handle.clone());
     let pbq = if let Some(wal) = wal {
         pbq_builder.wal(wal).build()
     } else {
@@ -454,7 +467,7 @@ async fn start_reduce_forwarder(
                 reducer_client,
                 FixedWindowManager::new(fixed_config.length),
                 buffer_writer,
-                None,
+                gc_wal,
             )
             .await;
             let forwarder = ReduceForwarder::new(pbq, pnf);
@@ -465,7 +478,7 @@ async fn start_reduce_forwarder(
                 reducer_client,
                 SlidingWindowManager::new(sliding_config.length, sliding_config.slide),
                 buffer_writer,
-                None,
+                gc_wal,
             )
             .await;
             let forwarder = ReduceForwarder::new(pbq, pnf);

@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use crate::config::components::reduce::ReducerType;
 use crate::config::components::sink::{SinkConfig, SinkType};
 use crate::config::components::source::{SourceConfig, SourceType};
 use crate::config::components::transformer::TransformerConfig;
@@ -364,10 +365,10 @@ pub async fn create_source(
 
 /// Creates a user-defined aligned reducer client
 pub(crate) async fn create_aligned_reducer(
-    reducer_config: config::components::reducer::ReducerConfig,
+    reducer_config: config::components::reduce::ReducerConfig,
 ) -> crate::Result<UserDefinedAlignedReduce> {
     match reducer_config.reducer_type {
-        config::components::reducer::ReducerType::UserDefined(config) => {
+        ReducerType::UserDefined(config) => {
             // Create gRPC channel
             let channel = grpc::create_rpc_channel(config.socket_path.clone().into()).await?;
 

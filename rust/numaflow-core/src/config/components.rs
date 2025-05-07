@@ -619,7 +619,7 @@ pub(crate) mod metrics {
     }
 }
 
-pub(crate) mod reducer {
+pub(crate) mod reduce {
     const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
     const DEFAULT_REDUCER_SOCKET: &str = "/var/run/numaflow/reduce.sock";
     const DEFAULT_REDUCER_SERVER_INFO_FILE: &str = "/var/run/numaflow/reducer-server-info";
@@ -635,7 +635,6 @@ pub(crate) mod reducer {
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct ReducerConfig {
-        pub(crate) concurrency: usize,
         pub(crate) reducer_type: ReducerType,
         pub(crate) window_config: WindowConfig,
     }
@@ -781,10 +780,10 @@ pub(crate) mod reducer {
     impl Default for StorageConfig {
         fn default() -> Self {
             Self {
-                path: std::path::PathBuf::from("/tmp/numaflow/wal"),
+                path: std::path::PathBuf::from("/var/numaflow/pbq/wals"),
                 max_file_size_mb: 10,
                 flush_interval_ms: 100,
-                channel_buffer_size: 100,
+                channel_buffer_size: 500,
             }
         }
     }
@@ -1172,7 +1171,7 @@ mod reducer_tests {
         Window,
     };
 
-    use super::reducer::{ReducerType, UserDefinedConfig, WindowConfig, WindowType};
+    use super::reduce::{ReducerType, UserDefinedConfig, WindowConfig, WindowType};
 
     #[test]
     fn test_default_user_defined_config() {
