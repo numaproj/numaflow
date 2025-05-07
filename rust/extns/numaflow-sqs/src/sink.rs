@@ -271,16 +271,16 @@ impl SqsSink {
 
 #[cfg(test)]
 mod tests {
+    use crate::Error;
+    use crate::sink::{SqsSinkBuilder, SqsSinkConfig, SqsSinkMessage, create_sqs_client};
+    use crate::source::SQS_DEFAULT_REGION;
     use aws_config::BehaviorVersion;
-    use aws_sdk_sqs::{Client, Config};
     use aws_sdk_sqs::types::BatchResultErrorEntry;
-    use aws_smithy_mocks_experimental::{mock, MockResponseInterceptor, Rule, RuleMode};
+    use aws_sdk_sqs::{Client, Config};
+    use aws_smithy_mocks_experimental::{MockResponseInterceptor, Rule, RuleMode, mock};
     use aws_smithy_types::error::ErrorMetadata;
     use bytes::Bytes;
-    use crate::Error;
-    use crate::sink::{create_sqs_client, SqsSinkBuilder, SqsSinkConfig, SqsSinkMessage};
     use test_log::test;
-    use crate::source::SQS_DEFAULT_REGION;
 
     #[test(tokio::test)]
     async fn test_client_creation_with_defaults() {
@@ -299,7 +299,7 @@ mod tests {
         // Test missing config
         let result = create_sqs_client(None).await;
         assert!(matches!(result, Err(Error::InvalidConfig(_))));
-        
+
         // Test empty region
         let config = SqsSinkConfig {
             region: "".to_string(),
@@ -308,7 +308,7 @@ mod tests {
         };
         let result = create_sqs_client(Some(config)).await;
         assert!(matches!(result, Err(Error::InvalidConfig(_))));
-        
+
         // Test empty queue name
         let config = SqsSinkConfig {
             region: "us-west-2".to_string(),
@@ -317,7 +317,7 @@ mod tests {
         };
         let result = create_sqs_client(Some(config)).await;
         assert!(matches!(result, Err(Error::InvalidConfig(_))));
-        
+
         // Test empty queue owner AWS account ID
         let config = SqsSinkConfig {
             region: "us-west-2".to_string(),
@@ -334,7 +334,7 @@ mod tests {
         let builder = SqsSinkBuilder::default();
         assert_eq!(builder.config.region, SQS_DEFAULT_REGION);
         assert_eq!(builder.config.queue_name, "");
-        
+
         let queue_url_output = get_queue_url_output();
 
         let sqs_operation_mocks = MockResponseInterceptor::new()
@@ -343,7 +343,7 @@ mod tests {
 
         let sqs_mock_client =
             Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
-        
+
         let config = SqsSinkConfig {
             region: SQS_DEFAULT_REGION.to_string(),
             queue_name: "test-q".to_string(),
@@ -352,18 +352,19 @@ mod tests {
 
         let sink = SqsSinkBuilder::new(config.clone())
             .client(sqs_mock_client)
-            .build().await;
+            .build()
+            .await;
         assert!(sink.is_ok());
 
         let sink = sink.unwrap();
         assert_eq!(sink.actor_tx.capacity(), 10);
     }
-    
+
     #[test(tokio::test)]
     async fn test_sqs_sink_send_messages() {
         let queue_url_output = get_queue_url_output();
         let send_message_output = get_send_message_output();
-        
+
         let sqs_operation_mocks = MockResponseInterceptor::new()
             .rule_mode(RuleMode::MatchAny)
             .with_rule(&queue_url_output)
@@ -380,7 +381,8 @@ mod tests {
 
         let sink = SqsSinkBuilder::new(config.clone())
             .client(sqs_mock_client)
-            .build().await;
+            .build()
+            .await;
         assert!(sink.is_ok());
 
         let sink = sink.unwrap();
@@ -391,7 +393,7 @@ mod tests {
 
         let result = sink.sink_messages(messages).await;
         assert!(result.is_ok());
-        
+
         let responses = result.unwrap();
         assert_eq!(responses.len(), 1);
         assert_eq!(responses[0].id, "1");
@@ -421,7 +423,8 @@ mod tests {
 
         let sink = SqsSinkBuilder::new(config.clone())
             .client(sqs_mock_client)
-            .build().await;
+            .build()
+            .await;
         assert!(sink.is_ok());
 
         let sink = sink.unwrap();
@@ -465,7 +468,8 @@ mod tests {
 
         let sink = SqsSinkBuilder::new(config.clone())
             .client(sqs_mock_client)
-            .build().await;
+            .build()
+            .await;
         assert!(sink.is_ok());
 
         let sink = sink.unwrap();
@@ -476,9 +480,12 @@ mod tests {
 
         let result = sink.sink_messages(messages).await;
         assert!(result.is_err());
-        
+
         let error = result.unwrap_err();
-        assert_eq!(error.to_string(), "Failed with SQS error - unhandled error (InvalidParameterValue)");
+        assert_eq!(
+            error.to_string(),
+            "Failed with SQS error - unhandled error (InvalidParameterValue)"
+        );
         assert!(matches!(error, Error::Sqs(_)));
     }
 
@@ -492,23 +499,27 @@ mod tests {
             });
         queue_url_output
     }
-    
+
     fn get_send_message_output() -> Rule {
         let successful = aws_sdk_sqs::types::SendMessageBatchResultEntry::builder()
             .id("1")
             .message_id("msg-id-1")
             .md5_of_message_body("f11a425906289abf8cce1733622834c8")
-            .build().unwrap();
-        
+            .build()
+            .unwrap();
+
         let send_message_output = mock!(aws_sdk_sqs::Client::send_message_batch)
-            .match_requests(|inp| inp.queue_url().unwrap() == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/")
+            .match_requests(|inp| {
+                inp.queue_url().unwrap()
+                    == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
+            })
             .then_output(move || {
                 // Create a vector of successful entries
                 let successful_entries = vec![successful.clone()];
-                
+
                 // Create an empty vector for failed entries
                 let failed_entries: Vec<BatchResultErrorEntry> = Vec::new();
-                
+
                 aws_sdk_sqs::operation::send_message_batch::SendMessageBatchOutput::builder()
                     .set_successful(Some(successful_entries))
                     .set_failed(Some(failed_entries))
@@ -523,17 +534,22 @@ mod tests {
             .id("1")
             .message_id("msg-id-1")
             .md5_of_message_body("84769b6348524b3317694d80c0ac6df9")
-            .build().unwrap();
-        
+            .build()
+            .unwrap();
+
         let failed = aws_sdk_sqs::types::BatchResultErrorEntry::builder()
             .id("2")
             .code("InvalidParameterValue")
             .message("The message is too large for the queue.")
             .sender_fault(true)
-            .build().unwrap();
+            .build()
+            .unwrap();
 
         let send_message_output = mock!(aws_sdk_sqs::Client::send_message_batch)
-            .match_requests(|inp| inp.queue_url().unwrap() == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/")
+            .match_requests(|inp| {
+                inp.queue_url().unwrap()
+                    == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
+            })
             .then_output(move || {
                 // Create a vector of successful entries
                 let successful_entries = vec![successful.clone()];
@@ -552,11 +568,14 @@ mod tests {
 
     fn get_send_message_output_all_fail() -> Rule {
         let send_message_output = mock!(aws_sdk_sqs::Client::send_message_batch)
-            .match_requests(|inp| inp.queue_url().unwrap() == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/")
+            .match_requests(|inp| {
+                inp.queue_url().unwrap()
+                    == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
+            })
             .then_error(|| {
                 aws_sdk_sqs::operation::send_message_batch::SendMessageBatchError::generic(
-                    ErrorMetadata::builder().
-                        message("The message is too large for the queue.")
+                    ErrorMetadata::builder()
+                        .message("The message is too large for the queue.")
                         .code("InvalidParameterValue")
                         .build(),
                 )
@@ -582,5 +601,4 @@ mod tests {
             "",
         )
     }
-    
 }
