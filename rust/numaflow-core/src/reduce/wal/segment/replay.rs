@@ -138,8 +138,18 @@ fn sort_filenames(mut files: Vec<PathBuf>) -> Vec<PathBuf> {
             (timestamp, index)
         };
 
-        let (ts_a, idx_a) = parse(a.to_str().expect("filename is valid"));
-        let (ts_b, idx_b) = parse(b.to_str().expect("filename is valid"));
+        let (ts_a, idx_a) = parse(
+            a.file_name()
+                .expect("valid unix file")
+                .to_str()
+                .expect("filename is valid"),
+        );
+        let (ts_b, idx_b) = parse(
+            b.file_name()
+                .expect("valid unix file")
+                .to_str()
+                .expect("filename is valid"),
+        );
 
         // first sort on timestamp, if it matches, then sort on index
         match ts_a.cmp(&ts_b) {
