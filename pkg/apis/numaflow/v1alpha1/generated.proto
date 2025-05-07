@@ -146,6 +146,9 @@ message AbstractSink {
   // Serve sink is used to return results when working with a ServingPipeline.
   // +optional
   optional ServeSink serve = 5;
+
+  // +optional
+  optional SqsSink sqs = 6;
 }
 
 message AbstractVertex {

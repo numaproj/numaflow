@@ -133,6 +133,11 @@ func (in *AbstractSink) DeepCopyInto(out *AbstractSink) {
 		*out = new(ServeSink)
 		**out = **in
 	}
+	if in.Sqs != nil {
+		in, out := &in.Sqs, &out.Sqs
+		*out = new(SqsSink)
+		**out = **in
+	}
 	return
 }
 

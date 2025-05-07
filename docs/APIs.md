@@ -535,6 +535,21 @@ ServingPipeline.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>sqs</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SqsSink"> SqsSink </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -11409,6 +11424,12 @@ JetStreamSource </a> </em>
 
 SqsSink
 </h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractSink">AbstractSink</a>)
+</p>
 
 <p>
 

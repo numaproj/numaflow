@@ -19581,6 +19581,9 @@
           "description": "Serve sink is used to return results when working with a ServingPipeline.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServeSink"
         },
+        "sqs": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SqsSink"
+        },
         "udsink": {
           "description": "UDSink sink is used to write the data to the user-defined sink.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSink"
@@ -22354,6 +22357,9 @@
         "serve": {
           "description": "Serve sink is used to return results when working with a ServingPipeline.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServeSink"
+        },
+        "sqs": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SqsSink"
         },
         "udsink": {
           "description": "UDSink sink is used to write the data to the user-defined sink.",
