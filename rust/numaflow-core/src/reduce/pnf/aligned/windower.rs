@@ -5,9 +5,9 @@ use chrono::{DateTime, Utc};
 use numaflow_pb::objects::wal::GcEvent;
 
 /// Fixed Window Operations.
-pub(super) mod fixed;
+pub(crate) mod fixed;
 /// Sliding Window Operations.
-pub(super) mod sliding;
+pub(crate) mod sliding;
 
 pub(crate) trait WindowManager {
     /// Assigns windows to a message. There can be more than one for Sliding Window.
@@ -22,13 +22,6 @@ pub(crate) trait WindowManager {
 
     /// Returns the oldest window yet to be completed. This will be the lowest Watermark in the Vertex.
     fn oldest_window_endtime(&self) -> DateTime<Utc>;
-}
-
-/// Aligned Windows can be of following Kinds.
-#[derive(Debug, Clone)]
-pub(crate) enum WindowKind {
-    Fixed,
-    Sliding,
 }
 
 /// A Window is represented by its start and end time. All the data which event time falls within
@@ -76,7 +69,7 @@ impl Window {
 }
 
 /// Window operations that can be performed on a [Window]. It is derived from the [Message] and the
-/// [WindowKind].
+/// window kind.
 #[derive(Debug, Clone)]
 pub(crate) enum WindowOperation {
     /// Open is create a new Window (Open the Book).

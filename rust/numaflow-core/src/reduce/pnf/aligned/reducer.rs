@@ -228,7 +228,7 @@ impl AlignedReduceActor {
 }
 
 /// Processes messages and forwards results to the next stage
-pub(crate) struct ProcessAndForward<W: WindowManager + Send + Sync + Clone + 'static> {
+pub(crate) struct AlignedReducer<W: WindowManager + Send + Sync + Clone + 'static> {
     client: UserDefinedAlignedReduce,
     windower: W,
     js_writer: JetstreamWriter,
@@ -239,7 +239,7 @@ pub(crate) struct ProcessAndForward<W: WindowManager + Send + Sync + Clone + 'st
     gc_wal: Option<AppendOnlyWal>,
 }
 
-impl<W: WindowManager + Send + Sync + Clone + 'static> ProcessAndForward<W> {
+impl<W: WindowManager + Send + Sync + Clone + 'static> AlignedReducer<W> {
     pub(crate) async fn new(
         client: UserDefinedAlignedReduce,
         windower: W,

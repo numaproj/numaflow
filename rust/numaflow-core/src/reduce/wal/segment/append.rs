@@ -4,7 +4,7 @@ use crate::reduce::wal::segment::WalType;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use std::path::Path;
-use std::{io, path::PathBuf};
+use std::path::PathBuf;
 use tokio::io::BufWriter;
 use tokio::task::JoinHandle;
 use tokio::{
@@ -289,7 +289,7 @@ impl AppendOnlyWal {
         max_file_size_mb: u64,
         flush_interval_ms: u64,
         channel_buffer_size: usize,
-    ) -> Result<Self, io::Error> {
+    ) -> WalResult<Self> {
         tokio::fs::create_dir_all(&base_path).await?;
         Ok(Self {
             wal_type,

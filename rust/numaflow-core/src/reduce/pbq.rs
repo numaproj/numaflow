@@ -14,8 +14,8 @@ use tokio_util::sync::CancellationToken;
 /// WAL for storing the data. If None, we will not persist the data.
 #[allow(clippy::upper_case_acronyms)]
 pub(crate) struct WAL {
-    append_only_wal: AppendOnlyWal,
-    compactor: Compactor,
+    pub(crate) append_only_wal: AppendOnlyWal,
+    pub(crate) compactor: Compactor,
 }
 
 /// PBQBuilder is a builder for PBQ.

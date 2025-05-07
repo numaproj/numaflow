@@ -7,17 +7,27 @@ use serving::callback::CallbackHandler;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
+use crate::config::components::reducer::WindowType;
 use crate::config::is_mono_vertex;
 use crate::config::pipeline;
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::watermark::WatermarkConfig;
-use crate::config::pipeline::{PipelineConfig, ServingStoreType, SinkVtxConfig, SourceVtxConfig};
+use crate::config::pipeline::{
+    PipelineConfig, ReduceVtxConfig, ServingStoreType, SinkVtxConfig, SourceVtxConfig,
+};
 use crate::metrics::{ComponentHealthChecks, LagReader, PendingReaderTasks, PipelineComponents};
+use crate::pipeline::forwarder::reduce_forwarder::ReduceForwarder;
 use crate::pipeline::forwarder::source_forwarder;
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::pipeline::pipeline::isb::BufferReaderConfig;
+use crate::reduce::pnf::aligned::reducer::AlignedReducer;
+use crate::reduce::pnf::aligned::windower::fixed::FixedWindowManager;
+use crate::reduce::pnf::aligned::windower::sliding::SlidingWindowManager;
+use crate::reduce::wal::segment::WalType;
+use crate::reduce::wal::segment::append::AppendOnlyWal;
+use crate::reduce::wal::segment::compactor::WindowKind;
 use crate::shared::create_components;
 use crate::shared::metrics::start_metrics_server;
 use crate::sink::serve::ServingStore;
@@ -121,6 +131,35 @@ pub(crate) async fn start_forwarder(
                 js_context,
                 config.clone(),
                 map.clone(),
+                edge_watermark_handle,
+            )
+            .await?;
+        }
+        pipeline::VertexType::Reduce(reduce) => {
+            info!("Starting reduce forwarder");
+
+            // create watermark handle, if watermark is enabled
+            let edge_watermark_handle = match &config.watermark_config {
+                Some(WatermarkConfig::Edge(edge_config)) => Some(
+                    ISBWatermarkHandle::new(
+                        config.vertex_name,
+                        config.replica,
+                        config.read_timeout,
+                        js_context.clone(),
+                        edge_config,
+                        &config.to_vertex_config,
+                        cln_token.clone(),
+                    )
+                    .await?,
+                ),
+                _ => None,
+            };
+
+            start_reduce_forwarder(
+                cln_token,
+                js_context,
+                config.clone(),
+                reduce.clone(),
                 edge_watermark_handle,
             )
             .await?;
@@ -318,6 +357,124 @@ async fn start_map_forwarder(
     metrics_server_handle.abort();
 
     info!("All forwarders have stopped successfully");
+    Ok(())
+}
+
+async fn start_reduce_forwarder(
+    cln_token: CancellationToken,
+    js_context: Context,
+    config: PipelineConfig,
+    reduce_vtx_config: ReduceVtxConfig,
+    watermark_handle: Option<ISBWatermarkHandle>,
+) -> Result<()> {
+    // Only the reader config of the first "from" vertex is needed
+    let reader_config = &config
+        .from_vertex_config
+        .first()
+        .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
+        .reader_config;
+
+    // Create buffer reader for the single stream
+    let stream = reader_config
+        .streams
+        .first()
+        .cloned()
+        .ok_or_else(|| error::Error::Config("No stream found for reduce vertex".to_string()))?;
+
+    let tracker_handle = TrackerHandle::new(watermark_handle.clone(), None);
+
+    // Create buffer reader
+    let buffer_reader = create_buffer_reader(
+        config.vertex_type_config.to_string(),
+        stream,
+        reader_config.clone(),
+        js_context.clone(),
+        tracker_handle.clone(),
+        config.batch_size,
+        watermark_handle.clone(),
+    )
+    .await?;
+
+    // Create buffer writer
+    let buffer_writer = create_buffer_writer(
+        &config,
+        js_context.clone(),
+        tracker_handle.clone(),
+        cln_token.clone(),
+        watermark_handle.clone().map(WatermarkHandle::ISB),
+    )
+    .await;
+
+    // Create user-defined aligned reducer client
+    let reducer_client =
+        create_components::create_aligned_reducer(reduce_vtx_config.reducer_config.clone()).await?;
+
+    // Create WAL if configured
+    let wal = if let Some(storage_config) = &reduce_vtx_config.storage_config {
+        let wal_path = storage_config.path.clone();
+
+        let append_only_wal = AppendOnlyWal::new(
+            WalType::Data,
+            wal_path.clone(),
+            storage_config.max_file_size_mb,
+            storage_config.flush_interval_ms,
+            storage_config.channel_buffer_size,
+        )
+        .await?;
+
+        let compactor = crate::reduce::wal::segment::compactor::Compactor::new(
+            wal_path,
+            WindowKind::Aligned,
+            storage_config.max_file_size_mb,
+            storage_config.flush_interval_ms,
+            storage_config.channel_buffer_size,
+        )
+        .await?;
+
+        Some(crate::reduce::pbq::WAL {
+            append_only_wal,
+            compactor,
+        })
+    } else {
+        None
+    };
+
+    // Create PBQ
+    let pbq_builder = crate::reduce::pbq::PBQBuilder::new(buffer_reader, tracker_handle.clone());
+    let pbq = if let Some(wal) = wal {
+        pbq_builder.wal(wal).build()
+    } else {
+        pbq_builder.build()
+    };
+
+    // Create windower based on window config
+    match &reduce_vtx_config.reducer_config.window_config.window_type {
+        WindowType::Fixed(fixed_config) => {
+            let pnf = AlignedReducer::new(
+                reducer_client,
+                FixedWindowManager::new(fixed_config.length),
+                buffer_writer,
+                None,
+            )
+            .await;
+            let forwarder = ReduceForwarder::new(pbq, pnf);
+            forwarder.start(cln_token).await?;
+        }
+        WindowType::Sliding(sliding_config) => {
+            let pnf = AlignedReducer::new(
+                reducer_client,
+                SlidingWindowManager::new(sliding_config.length, sliding_config.slide),
+                buffer_writer,
+                None,
+            )
+            .await;
+            let forwarder = ReduceForwarder::new(pbq, pnf);
+            forwarder.start(cln_token).await?;
+        }
+        _ => unimplemented!(),
+    }
+
+    info!("Reduce forwarder has stopped successfully");
     Ok(())
 }
 

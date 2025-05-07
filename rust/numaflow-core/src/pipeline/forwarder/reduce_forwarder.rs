@@ -4,18 +4,18 @@ use tracing::{error, info};
 use crate::Result;
 use crate::error::Error;
 use crate::reduce::pbq::PBQ;
-use crate::reduce::pnf::aligned::reducer::ProcessAndForward;
+use crate::reduce::pnf::aligned::reducer::AlignedReducer;
 use crate::reduce::pnf::aligned::windower::WindowManager;
 
 /// ReduceForwarder is a component which starts a PBQ reader and a ProcessAndForward processor
 /// and manages the lifecycle of these components.
 pub(crate) struct ReduceForwarder<W: WindowManager + Send + Sync + Clone + 'static> {
     pbq: PBQ,
-    processor: ProcessAndForward<W>,
+    processor: AlignedReducer<W>,
 }
 
 impl<W: WindowManager + Send + Sync + Clone + 'static> ReduceForwarder<W> {
-    pub(crate) fn new(pbq: PBQ, processor: ProcessAndForward<W>) -> Self {
+    pub(crate) fn new(pbq: PBQ, processor: AlignedReducer<W>) -> Self {
         Self { pbq, processor }
     }
 
