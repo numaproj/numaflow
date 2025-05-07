@@ -9280,10 +9280,10 @@ RetryStrategy
 
 <p>
 
-RetryStrategy struct encapsulates the settings for retrying operations
-in the event of failures. It includes a Exponential BackOff strategy to
-manage the timing of retries and defines the actions to be take upon
-failure.
+The RetryStrategy struct defines the configuration for handling
+operation retries in case of failures. It incorporates an Exponential
+BackOff strategy to control retry timing and specifies the actions to
+take upon failure.
 </p>
 
 </p>

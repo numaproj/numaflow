@@ -644,8 +644,10 @@ func hasValidSinkRetryStrategy(s dfv1.Sink) bool {
 			}
 		}
 
-		// if jitter is provided, it should be greater than or equal to 0
-		if s.RetryStrategy.BackOff.Jitter != nil && *s.RetryStrategy.BackOff.Jitter < 0 {
+		// If jitter is provided, it should be greater than or equal to 0 and less than 1
+		// Jitter is typically used to introduce small random variations to avoid synchronized retries
+		// A jitter value less than 1 ensures that the delay remains within a reasonable range around the base delay.
+		if s.RetryStrategy.BackOff.Jitter != nil && (*s.RetryStrategy.BackOff.Jitter < 0 || *s.RetryStrategy.BackOff.Jitter >= 1) {
 			return false
 		}
 	}

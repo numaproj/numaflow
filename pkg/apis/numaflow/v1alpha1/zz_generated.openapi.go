@@ -4625,7 +4625,7 @@ func schema_pkg_apis_numaflow_v1alpha1_RetryStrategy(ref common.ReferenceCallbac
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "RetryStrategy struct encapsulates the settings for retrying operations in the event of failures. It includes a Exponential BackOff strategy to manage the timing of retries and defines the actions to be take upon failure.",
+				Description: "The RetryStrategy struct defines the configuration for handling operation retries in case of failures. It incorporates an Exponential BackOff strategy to control retry timing and specifies the actions to take upon failure.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"backoff": {

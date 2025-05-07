@@ -1196,6 +1196,7 @@ func TestIsValidSinkRetryStrategy(t *testing.T) {
 	zeroSteps := uint32(0)
 	negativeFactor := float64(-1)
 	negativeJitter := float64(-0.5)
+	greaterThanOneJitter := float64(1.1)
 	validJitter := float64(0.5)
 	validFactor := float64(2.0)
 	validInterval := metav1.Duration{Duration: 1 * time.Millisecond}
@@ -1230,7 +1231,7 @@ func TestIsValidSinkRetryStrategy(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "valid strategy with jitter >= 0",
+			name: "valid strategy with jitter >= 0 and less than 1",
 			sink: dfv1.Sink{},
 			strategy: dfv1.RetryStrategy{
 				BackOff: &dfv1.Backoff{
@@ -1245,6 +1246,16 @@ func TestIsValidSinkRetryStrategy(t *testing.T) {
 			strategy: dfv1.RetryStrategy{
 				BackOff: &dfv1.Backoff{
 					Jitter: &negativeJitter,
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid strategy with jitter >= 1",
+			sink: dfv1.Sink{},
+			strategy: dfv1.RetryStrategy{
+				BackOff: &dfv1.Backoff{
+					Jitter: &greaterThanOneJitter,
 				},
 			},
 			wantErr: true,

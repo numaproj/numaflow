@@ -7,6 +7,8 @@ use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
 use numaflow_pb::clients::sink::Status::{Failure, Fallback, Serve, Success};
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::sink_response;
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -530,6 +532,8 @@ impl SinkWriter {
         // only breaks out of this loop based on the retry strategy unless all the messages have been written to sink
         // successfully.
         let retry_config = &self.retry_config.clone();
+        // Initialize a `StdRng` instance which implements std::marker::Send
+        let mut rng = StdRng::from_entropy();
 
         loop {
             while attempts < retry_config.sink_max_retry_attempts {
@@ -564,11 +568,13 @@ impl SinkWriter {
                     ));
                 }
 
-                // Calculate exponential backoff delay
-                // TODO: calculate delay with jitter
-                let delay = ((retry_config.sink_initial_retry_interval_in_ms as f64)
-                    * retry_config.sink_retry_factor.powf(attempts as f64))
-                .min(retry_config.sink_max_retry_interval_in_ms as f64);
+                // Calculate exponential backoff delay for the next retry attempt
+                let delay = Self::calculate_exponential_delay(
+                    retry_config,
+                    attempts,
+                    &mut rng,
+                    retry_config.sink_retry_jitter,
+                );
                 // Sleep for the calculated delay
                 sleep(Duration::from_millis(delay as u64)).await;
             }
@@ -910,6 +916,31 @@ impl SinkWriter {
                 .get_or_create(mvtx_forward_metric_labels())
                 .observe(fallback_sink_start.elapsed().as_micros() as f64);
         }
+    }
+
+    fn calculate_exponential_delay<R: Rng>(
+        retry_config: &RetryConfig,
+        attempts: u16,
+        rng: &mut R,
+        jitter: f64,
+    ) -> f64 {
+        // Calculate the base delay using the initial retry interval and the retry factor
+        // The base delay is calculated as: initial_retry_interval * retry_factor^attempts
+        let base_delay = (retry_config.sink_initial_retry_interval_in_ms as f64)
+            * retry_config.sink_retry_factor.powi(attempts as i32);
+
+        // If jitter is 0, return the base delay
+        // and cap it to the max retry interval
+        // to avoid exceeding the max retry interval
+        if jitter == 0.0 {
+            return base_delay.min(retry_config.sink_max_retry_interval_in_ms as f64);
+        }
+
+        // Apply jitter to the base delay
+        // jitter is a value between 0 and 1
+        // 1.0 - jitter gives us the lower bound and 1.0 + jitter gives us the upper bound
+        let jitter_factor: f64 = rng.gen_range(1.0 - jitter..=1.0 + jitter);
+        (base_delay * jitter_factor).min(retry_config.sink_max_retry_interval_in_ms as f64)
     }
 }
 
