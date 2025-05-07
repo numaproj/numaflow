@@ -7,6 +7,7 @@ use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
 use numaflow_pb::clients::sink::Status::{Failure, Fallback, Serve, Success};
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::sink::sink_response;
+use numaflow_sqs::sink::SqsSink;
 use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -20,7 +21,6 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::{error, info, warn};
-use numaflow_sqs::sink::{SqsSink};
 use user_defined::UserDefinedSink;
 
 use crate::Result;
@@ -49,11 +49,11 @@ mod log;
 /// to write to the serving store.
 pub mod serve;
 
+mod sqs;
 /// [User-Defined Sink] extends Numaflow to add custom sources supported outside the builtins.
 ///
 /// [User-Defined Sink]: https://numaflow.numaproj.io/user-guide/sinks/user-defined-sinks/
 mod user_defined;
-mod sqs;
 
 /// Set of items to be implemented be a Numaflow Sink.
 ///

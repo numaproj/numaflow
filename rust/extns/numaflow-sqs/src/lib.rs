@@ -90,12 +90,12 @@ pub enum Error {
 #[derive(thiserror::Error, Debug)]
 pub enum SqsSourceError {
     #[error("SqsSourceError: {0}")]
-    Error(Error)
+    Error(Error),
 }
 #[derive(thiserror::Error, Debug)]
 pub enum SqsSinkError {
     #[error("SqsSinkError: {0}")]
-    Error(Error)
+    Error(Error),
 }
 
 pub type Result<T> = core::result::Result<T, Error>;

@@ -1,7 +1,7 @@
+use numaflow_sqs::sink::{SqsSink, SqsSinkBuilder, SqsSinkConfig};
+use numaflow_sqs::source::{SQSMessage, SqsSource, SqsSourceBuilder, SqsSourceConfig};
 use std::sync::Arc;
 use std::time::Duration;
-use numaflow_sqs::sink::{SqsSink, SqsSinkBuilder, SqsSinkConfig};
-use numaflow_sqs::source::{SQSMessage, SqsSource, SqsSourceConfig, SqsSourceBuilder};
 
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
@@ -36,16 +36,19 @@ impl TryFrom<SQSMessage> for Message {
 impl From<numaflow_sqs::SqsSourceError> for Error {
     fn from(value: numaflow_sqs::SqsSourceError) -> Self {
         match value {
-            numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::Sqs(e)) => Error::Source(e.to_string()),
-            numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::ActorTaskTerminated(_))=> {
-                    Error::ActorPatternRecv(value.to_string())
-                },
-            numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::InvalidConfig(e)) => Error::Source(e),
+            numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::Sqs(e)) => {
+                Error::Source(e.to_string())
+            }
+            numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::ActorTaskTerminated(_)) => {
+                Error::ActorPatternRecv(value.to_string())
+            }
+            numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::InvalidConfig(e)) => {
+                Error::Source(e)
+            }
             numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::Other(e)) => Error::Source(e),
         }
     }
 }
-
 
 impl From<numaflow_sqs::Error> for Error {
     fn from(value: numaflow_sqs::Error) -> Self {
@@ -72,9 +75,7 @@ pub(crate) async fn new_sqs_source(
         .await?)
 }
 
-pub(crate) async fn new_sqs_sink(
-    cfg: SqsSinkConfig,
-) -> crate::error::Result<SqsSink> {
+pub(crate) async fn new_sqs_sink(cfg: SqsSinkConfig) -> crate::error::Result<SqsSink> {
     Ok(SqsSinkBuilder::new(cfg).build().await?)
 }
 

@@ -12,8 +12,6 @@ use std::time::Duration;
 
 use crate::Error::ActorTaskTerminated;
 use crate::{Error, Result};
-use aws_config::meta::region::RegionProviderChain;
-use aws_config::{BehaviorVersion, Region};
 use aws_sdk_sqs::Client;
 use aws_sdk_sqs::types::{MessageSystemAttributeName, QueueAttributeName};
 use bytes::Bytes;
@@ -97,8 +95,14 @@ impl SqsSourceConfig {
 pub async fn create_sqs_client(config: Option<SqsSourceConfig>) -> Result<Client> {
     tracing::info!(
         "Creating SQS source client for queue {queue_name} in region {region}",
-        region = config.as_ref().map(|c| c.region.clone()).unwrap_or_default(),
-        queue_name = config.as_ref().map(|c| c.queue_name.clone()).unwrap_or_default()
+        region = config
+            .as_ref()
+            .map(|c| c.region.clone())
+            .unwrap_or_default(),
+        queue_name = config
+            .as_ref()
+            .map(|c| c.queue_name.clone())
+            .unwrap_or_default()
     );
 
     crate::create_sqs_client(config.map(crate::SqsConfig::Source)).await

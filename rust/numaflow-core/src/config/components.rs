@@ -351,12 +351,12 @@ pub(crate) mod sink {
     const DEFAULT_MAX_SINK_RETRY_ATTEMPTS: u16 = u16::MAX;
     const DEFAULT_SINK_RETRY_INTERVAL_IN_MS: u32 = 1;
 
-    use std::fmt::Display;
-    use tracing::info;
-    use numaflow_models::models::{Backoff, RetryStrategy, Sink, SqsSink};
-    use numaflow_sqs::sink::{SqsSinkConfig};
     use crate::Result;
     use crate::error::Error;
+    use numaflow_models::models::{Backoff, RetryStrategy, Sink, SqsSink};
+    use numaflow_sqs::sink::SqsSinkConfig;
+    use std::fmt::Display;
+    use tracing::info;
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct SinkConfig {
@@ -434,19 +434,19 @@ pub(crate) mod sink {
         pub socket_path: String,
         pub server_info_path: String,
     }
-    
+
     impl TryFrom<Box<SqsSink>> for SinkType {
         type Error = Error;
 
         fn try_from(value: Box<SqsSink>) -> Result<Self> {
             info!("Sqs sink: {value:?}");
-            
+
             if value.aws_region.is_empty() {
                 return Err(Error::Config(
                     "AWS region is required for SQS sink".to_string(),
                 ));
             }
-            
+
             let sqs_sink_config = SqsSinkConfig {
                 queue_name: value.queue_name,
                 region: value.aws_region,
@@ -454,7 +454,7 @@ pub(crate) mod sink {
             };
 
             info!("parsed SQS sink config: {sqs_sink_config:?}");
-            
+
             Ok(SinkType::Sqs(sqs_sink_config))
         }
     }

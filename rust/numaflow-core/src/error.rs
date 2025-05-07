@@ -39,7 +39,7 @@ pub enum Error {
 
     #[error("Proto Error - {0}")]
     Proto(String),
-    
+
     #[error("Other Error - {0}")]
     Other(String),
 

@@ -1,5 +1,3 @@
-use aws_config::meta::region::RegionProviderChain;
-use aws_config::{BehaviorVersion, Region};
 use aws_sdk_sqs::Client;
 use aws_sdk_sqs::types::SendMessageBatchRequestEntry;
 use bytes::Bytes;
@@ -28,13 +26,13 @@ impl SqsSinkConfig {
         if self.queue_name.is_empty() {
             return Err(Error::InvalidConfig("queue name is required".to_string()));
         }
-        
+
         if self.queue_owner_aws_account_id.is_empty() {
             return Err(Error::InvalidConfig(
                 "queue owner AWS account ID is required".to_string(),
             ));
         }
-        
+
         Ok(())
     }
 }
@@ -43,8 +41,14 @@ impl SqsSinkConfig {
 pub async fn create_sqs_client(config: Option<SqsSinkConfig>) -> Result<Client> {
     tracing::info!(
         "Creating SQS sink client for queue {queue_name} in region {region}",
-        region = config.as_ref().map(|c| c.region.clone()).unwrap_or_default(),
-        queue_name = config.as_ref().map(|c| c.queue_name.clone()).unwrap_or_default()
+        region = config
+            .as_ref()
+            .map(|c| c.region.clone())
+            .unwrap_or_default(),
+        queue_name = config
+            .as_ref()
+            .map(|c| c.queue_name.clone())
+            .unwrap_or_default()
     );
 
     crate::create_sqs_client(config.map(crate::SqsConfig::Sink)).await
