@@ -546,6 +546,11 @@ ServingPipeline.
 <td>
 
 <em>(Optional)</em>
+<p>
+
+SQS sink is used to write the data to the AWS SQS.
+</p>
+
 </td>
 
 </tr>

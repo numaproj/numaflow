@@ -49,7 +49,7 @@ type AbstractSink struct {
 	// Serve sink is used to return results when working with a ServingPipeline.
 	// +optional
 	Serve *ServeSink `json:"serve,omitempty" protobuf:"bytes,5,opt,name=serve"`
-	//
+	// SQS sink is used to write the data to the AWS SQS.
 	// +optional
 	Sqs *SqsSink `json:"sqs,omitempty" protobuf:"bytes,6,opt,name=sqs"`
 }

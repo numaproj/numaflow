@@ -333,7 +333,8 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractSink(ref common.ReferenceCallback
 					},
 					"sqs": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SqsSink"),
+							Description: "SQS sink is used to write the data to the AWS SQS.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SqsSink"),
 						},
 					},
 				},
@@ -5455,7 +5456,8 @@ func schema_pkg_apis_numaflow_v1alpha1_Sink(ref common.ReferenceCallback) common
 					},
 					"sqs": {
 						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SqsSink"),
+							Description: "SQS sink is used to write the data to the AWS SQS.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SqsSink"),
 						},
 					},
 					"fallback": {

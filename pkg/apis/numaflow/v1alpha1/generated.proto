@@ -147,6 +147,7 @@ message AbstractSink {
   // +optional
   optional ServeSink serve = 5;
 
+  // SQS sink is used to write the data to the AWS SQS.
   // +optional
   optional SqsSink sqs = 6;
 }
