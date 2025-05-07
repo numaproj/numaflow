@@ -210,12 +210,6 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 		metrics.LabelVertexReplicaIndex: replicaIndex,
 		metrics.LabelPartitionName:      df.reader.GetName(),
 	}
-	metricLabelsForTransformer := map[string]string{
-		metrics.LabelVertex:             df.vertexName,
-		metrics.LabelPipeline:           df.pipelineName,
-		metrics.LabelVertexReplicaIndex: replicaIndex,
-		metrics.LabelPartitionName:      df.reader.GetName(),
-	}
 	// Initialize forwardAChunk and read start times
 	start := time.Now()
 	readStart := time.Now()
@@ -311,11 +305,11 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 			m.Watermark = time.Time(processorWM)
 		}
 
-		metrics.SourceTransformerReadMessagesCount.With(metricLabelsForTransformer).Add(float64(len(readMessages)))
+		metrics.SourceTransformerReadMessagesCount.With(metricLabelsWithPartition).Add(float64(len(readMessages)))
 		transformerProcessingStart := time.Now()
 		readWriteMessagePairs, err = df.applyTransformer(ctx, readMessages)
 		if err != nil {
-			metrics.SourceTransformerError.With(metricLabelsForTransformer).Inc()
+			metrics.SourceTransformerError.With(metricLabelsWithPartition).Inc()
 			df.opts.logger.Errorw("failed to apply source transformer", zap.Error(err))
 			return err
 		}
@@ -323,13 +317,13 @@ func (df *DataForward) forwardAChunk(ctx context.Context) error {
 		for _, m := range readWriteMessagePairs {
 			transformerWriteCount += len(m.WriteMessages)
 		}
-		metrics.SourceTransformerWriteMessagesCount.With(metricLabelsForTransformer).Add(float64(transformerWriteCount))
+		metrics.SourceTransformerWriteMessagesCount.With(metricLabelsWithPartition).Add(float64(transformerWriteCount))
 
 		df.opts.logger.Debugw("concurrent applyTransformer completed",
 			zap.Int("concurrency", df.opts.transformerConcurrency),
 			zap.Duration("took", time.Since(transformerProcessingStart)),
 		)
-		metrics.SourceTransformerProcessingTime.With(metricLabelsForTransformer).Observe(float64(time.Since(transformerProcessingStart).Microseconds()))
+		metrics.SourceTransformerProcessingTime.With(metricLabelsWithPartition).Observe(float64(time.Since(transformerProcessingStart).Microseconds()))
 	} else {
 		for idx, m := range readMessages {
 			// assign watermark to the message

@@ -227,7 +227,7 @@ var (
 		Subsystem: "source_forwarder",
 		Name:      "transformer_error_total",
 		Help:      "Total number of source transformer Errors",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
 	// SourceTransformerProcessingTime is a histogram to Observe Source Transformer Processing times as a whole
 	SourceTransformerProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
@@ -235,21 +235,21 @@ var (
 		Name:      "transformer_processing_time",
 		Help:      "Processing times of source transformer (100 microseconds to 15 minutes)",
 		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*15, 10),
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
 	// SourceTransformerReadMessagesCount is used to indicate the number of messages read by source transformer
 	SourceTransformerReadMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "source_forwarder",
 		Name:      "transformer_read_total",
 		Help:      "Total number of Messages Read by source transformer",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
 	// SourceTransformerWriteMessagesCount is used to indicate the number of messages written by source transformer
 	SourceTransformerWriteMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "source_forwarder",
 		Name:      "transformer_write_total",
 		Help:      "Total number of Messages Written by source transformer",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex, LabelPartitionName})
+	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 )
 
 // Reduce forwarder specific metrics

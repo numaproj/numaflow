@@ -1252,7 +1252,7 @@ func validateMetrics(batchSize int64) (err error) {
 		# TYPE source_forwarder_transformer_read_total counter
 		`
 	transformerReadExpected := `
-		source_forwarder_transformer_read_total{partition_name="from",pipeline="testPipeline",replica="0",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
+		source_forwarder_transformer_read_total{partition_name="from",pipeline="testPipeline",replica="0",vertex="testVertex",vertex_type="Source"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
 		`
 	err = testutil.CollectAndCompare(metrics.SourceTransformerReadMessagesCount, strings.NewReader(transformerReadMetadata+transformerReadExpected), "source_forwarder_transformer_read_total")
 	if err != nil {
@@ -1264,7 +1264,7 @@ func validateMetrics(batchSize int64) (err error) {
 		# TYPE source_forwarder_transformer_write_total counter
 		`
 	transformerWriteExpected := `
-		source_forwarder_transformer_write_total{partition_name="from",pipeline="testPipeline",replica="0",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
+		source_forwarder_transformer_write_total{partition_name="from",pipeline="testPipeline",replica="0",vertex="testVertex",vertex_type="Source"} ` + fmt.Sprintf("%f", float64(batchSize)) + `
 		`
 	err = testutil.CollectAndCompare(metrics.SourceTransformerWriteMessagesCount, strings.NewReader(transformerWriteMetadata+transformerWriteExpected), "source_forwarder_transformer_write_total")
 	if err != nil {
@@ -1315,7 +1315,7 @@ func validateTransformerErrorMetrics() (err error) {
 		# TYPE source_forwarder_transformer_error_total counter
 		`
 	expected := `
-		source_forwarder_transformer_error_total{partition_name="from",pipeline="testPipeline",replica="0",vertex="testVertex"} ` + fmt.Sprintf("%f", float64(1)) + `
+		source_forwarder_transformer_error_total{partition_name="from",pipeline="testPipeline",replica="0",vertex="testVertex",vertex_type="Source"} ` + fmt.Sprintf("%f", float64(1)) + `
 		`
 	err = testutil.CollectAndCompare(metrics.SourceTransformerError, strings.NewReader(metadata+expected), "source_forwarder_transformer_error_total")
 	if err != nil {
