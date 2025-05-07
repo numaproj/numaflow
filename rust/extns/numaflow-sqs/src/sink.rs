@@ -1,5 +1,5 @@
 /// Module for handling AWS SQS sink operations, allowing messages to be sent to SQS queues.
-/// 
+///
 /// This module provides functionality to configure and use AWS SQS as a sink for messaging.
 use aws_sdk_sqs::Client;
 use aws_sdk_sqs::types::SendMessageBatchRequestEntry;
@@ -51,7 +51,7 @@ impl SqsSinkConfig {
 }
 
 /// Creates and configures an SQS client for sink based on the provided configuration.
-/// 
+///
 /// This function validates the configuration and creates an SQS client that can be used
 /// to interact with the specified SQS queue.
 pub async fn create_sqs_client(
