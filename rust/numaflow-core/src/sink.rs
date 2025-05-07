@@ -299,7 +299,6 @@ impl SinkWriterBuilder {
                 });
             }
             SinkClientType::Sqs(sqs_sink) => {
-                // TODO: add health check for sqs sink
                 tokio::spawn(async {
                     let actor = SinkActor::new(receiver, sqs_sink);
                     actor.run().await;
@@ -341,7 +340,6 @@ impl SinkWriterBuilder {
                     });
                 }
                 SinkClientType::Sqs(sqs_sink) => {
-                    // TODO: add health check for sqs sink
                     tokio::spawn(async {
                         let actor = SinkActor::new(fb_receiver, sqs_sink);
                         actor.run().await;
