@@ -40,8 +40,8 @@ pub enum Error {
     #[error("Proto Error - {0}")]
     Proto(String),
 
-    #[error("Other Error - {0}")]
-    Other(String),
+    #[error("SQS Error - {0}")]
+    SQS(String),
 
     #[allow(clippy::upper_case_acronyms)]
     #[error("ISB Error - {0}")]

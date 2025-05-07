@@ -53,10 +53,10 @@ impl From<numaflow_sqs::SqsSourceError> for Error {
 impl From<numaflow_sqs::Error> for Error {
     fn from(value: numaflow_sqs::Error) -> Self {
         match value {
-            numaflow_sqs::Error::Sqs(e) => Error::Other(e.to_string()),
-            numaflow_sqs::Error::ActorTaskTerminated(_) => Error::Other(value.to_string()),
-            numaflow_sqs::Error::InvalidConfig(e) => Error::Other(e),
-            numaflow_sqs::Error::Other(e) => Error::Other(e),
+            numaflow_sqs::Error::Sqs(e) => Error::SQS(e.to_string()),
+            numaflow_sqs::Error::ActorTaskTerminated(_) => Error::SQS(value.to_string()),
+            numaflow_sqs::Error::InvalidConfig(e) => Error::SQS(e),
+            numaflow_sqs::Error::Other(e) => Error::SQS(e),
         }
     }
 }
@@ -81,7 +81,7 @@ pub(crate) async fn new_sqs_sink(cfg: SqsSinkConfig) -> crate::error::Result<Sqs
 
 impl source::SourceReader for SqsSource {
     fn name(&self) -> &'static str {
-        "Sqs"
+        "SQS"
     }
 
     async fn read(&mut self) -> crate::Result<Vec<Message>> {

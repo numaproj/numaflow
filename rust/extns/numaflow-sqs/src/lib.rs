@@ -89,12 +89,12 @@ pub enum Error {
 
 #[derive(thiserror::Error, Debug)]
 pub enum SqsSourceError {
-    #[error("SqsSourceError: {0}")]
+    #[error("SQS Source Error: {0}")]
     Error(Error),
 }
 #[derive(thiserror::Error, Debug)]
 pub enum SqsSinkError {
-    #[error("SqsSinkError: {0}")]
+    #[error("SQS Sink Error: {0}")]
     Error(Error),
 }
 
