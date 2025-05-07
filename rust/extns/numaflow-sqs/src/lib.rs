@@ -20,8 +20,62 @@ pub enum SqsConfig {
     Sink(sink::SqsSinkConfig),
 }
 
+/// Custom error types for the SQS client library.
+///
+/// Design goals:
+/// - Ergonomic error handling with thiserror
+/// - Clear error propagation from AWS SDK
+/// - Explicit handling of actor communication failures
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("Failed with SQS error - {0}")]
+    Sqs(#[from] aws_sdk_sqs::Error),
+
+    #[error("Failed to receive message from channel. Actor task is terminated: {0:?}")]
+    ActorTaskTerminated(oneshot::error::RecvError),
+
+    #[error("Invalid configuration: {0}")]
+    InvalidConfig(String),
+
+    #[error("{0}")]
+    Other(String),
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum SqsSourceError {
+    #[error("SQS Source Error: {0}")]
+    Error(#[from] Error),
+}
+#[derive(thiserror::Error, Debug)]
+pub enum SqsSinkError {
+    #[error("SQS Sink Error: {0}")]
+    Error(#[from] Error),
+}
+
+impl From<String> for Error {
+    fn from(value: String) -> Self {
+        Error::Other(value)
+    }
+}
+
+impl From<SqsSourceError> for Error {
+    fn from(value: SqsSourceError) -> Self {
+        match value {
+            SqsSourceError::Error(err) => err,
+        }
+    }
+}
+
+impl From<SqsSinkError> for Error {
+    fn from(value: SqsSinkError) -> Self {
+        match value {
+            SqsSinkError::Error(err) => err,
+        }
+    }
+}
+
 /// Creates and configures an SQS client based on the provided configuration.
-pub async fn create_sqs_client(config: Option<SqsConfig>) -> Result<Client> {
+pub async fn create_sqs_client(config: Option<SqsConfig>) -> Result<Client, Error> {
     let config = match config {
         Some(cfg) => cfg,
         None => {
@@ -64,46 +118,6 @@ pub async fn create_sqs_client(config: Option<SqsConfig>) -> Result<Client> {
 
     // Create and return the client
     Ok(Client::new(&shared_config))
-}
-
-/// Custom error types for the SQS client library.
-///
-/// Design goals:
-/// - Ergonomic error handling with thiserror
-/// - Clear error propagation from AWS SDK
-/// - Explicit handling of actor communication failures
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-    #[error("Failed with SQS error - {0}")]
-    Sqs(#[from] aws_sdk_sqs::Error),
-
-    #[error("Failed to receive message from channel. Actor task is terminated: {0:?}")]
-    ActorTaskTerminated(oneshot::error::RecvError),
-
-    #[error("Invalid configuration: {0}")]
-    InvalidConfig(String),
-
-    #[error("{0}")]
-    Other(String),
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum SqsSourceError {
-    #[error("SQS Source Error: {0}")]
-    Error(Error),
-}
-#[derive(thiserror::Error, Debug)]
-pub enum SqsSinkError {
-    #[error("SQS Sink Error: {0}")]
-    Error(Error),
-}
-
-pub type Result<T> = core::result::Result<T, Error>;
-
-impl From<String> for Error {
-    fn from(value: String) -> Self {
-        Error::Other(value)
-    }
 }
 
 #[cfg(test)]

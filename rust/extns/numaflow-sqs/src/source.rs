@@ -11,7 +11,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use crate::Error::ActorTaskTerminated;
-use crate::{Error, Result};
+use crate::{Error, SqsSourceError};
 use aws_sdk_sqs::Client;
 use aws_sdk_sqs::types::{MessageSystemAttributeName, QueueAttributeName};
 use bytes::Bytes;
@@ -20,6 +20,8 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
 
 pub const SQS_DEFAULT_REGION: &str = "us-west-2";
+
+pub type Result<T> = std::result::Result<T, SqsSourceError>;
 
 /// Configuration for an SQS message source.
 ///
@@ -46,44 +48,48 @@ impl SqsSourceConfig {
     pub fn validate(&self) -> Result<()> {
         // Validate required fields
         if self.region.is_empty() {
-            return Err(Error::InvalidConfig("region is required".to_string()));
+            return Err(SqsSourceError::from(Error::InvalidConfig(
+                "region is required".to_string(),
+            )));
         }
 
         if self.queue_name.is_empty() {
-            return Err(Error::InvalidConfig("queue name is required".to_string()));
+            return Err(SqsSourceError::from(Error::InvalidConfig(
+                "queue name is required".to_string(),
+            )));
         }
 
         if self.queue_owner_aws_account_id.is_empty() {
-            return Err(Error::InvalidConfig(
+            return Err(SqsSourceError::from(Error::InvalidConfig(
                 "queue owner AWS account ID is required".to_string(),
-            ));
+            )));
         }
 
         // Validate optional fields if present
         if let Some(timeout) = self.visibility_timeout {
             if !(0..=43200).contains(&timeout) {
-                return Err(Error::InvalidConfig(format!(
+                return Err(SqsSourceError::from(Error::InvalidConfig(format!(
                     "visibility_timeout must be between 0 and 43200, got {}",
                     timeout
-                )));
+                ))));
             }
         }
 
         if let Some(max_msgs) = self.max_number_of_messages {
             if !(1..=10).contains(&max_msgs) {
-                return Err(Error::InvalidConfig(format!(
+                return Err(SqsSourceError::from(Error::InvalidConfig(format!(
                     "max_number_of_messages must be between 1 and 10, got {}",
                     max_msgs
-                )));
+                ))));
             }
         }
 
         if let Some(wait_time) = self.wait_time_seconds {
             if !(0..=20).contains(&wait_time) {
-                return Err(Error::InvalidConfig(format!(
+                return Err(SqsSourceError::from(Error::InvalidConfig(format!(
                     "wait_time_seconds must be between 0 and 20, got {}",
                     wait_time
-                )));
+                ))));
             }
         }
 
@@ -92,7 +98,9 @@ impl SqsSourceConfig {
 }
 
 /// Creates and configures an SQS client for source based on the provided configuration.
-pub async fn create_sqs_client(config: Option<SqsSourceConfig>) -> Result<Client> {
+pub async fn create_sqs_client(
+    config: Option<SqsSourceConfig>,
+) -> std::result::Result<Client, Error> {
     tracing::info!(
         "Creating SQS source client for queue {queue_name} in region {region}",
         region = config
@@ -282,7 +290,7 @@ impl SqsActor {
                     queue_url = self.queue_url,
                     "failed to receive messages from SQS"
                 );
-                return Err(Error::Sqs(err.into()));
+                return Err(SqsSourceError::from(Error::Sqs(err.into())));
             }
         };
 
@@ -344,7 +352,9 @@ impl SqsActor {
                 Ok(offset) => offset,
                 Err(err) => {
                     tracing::error!(?err, "failed to parse offset");
-                    return Err(Error::Other("failed to parse offset".to_string()));
+                    return Err(SqsSourceError::from(Error::Other(
+                        "failed to parse offset".to_string(),
+                    )));
                 }
             };
             if let Err(err) = self
@@ -360,7 +370,7 @@ impl SqsActor {
                     queue_url = ?self.queue_url,
                     "Error while deleting message from SQS"
                 );
-                return Err(Error::Sqs(err.into()));
+                return Err(SqsSourceError::from(Error::Sqs(err.into())));
             }
         }
         Ok(())
@@ -387,7 +397,7 @@ impl SqsActor {
                     queue_url = ?self.queue_url,
                     "failed to get queue attributes from SQS"
                 );
-                return Err(Error::Sqs(err.into()));
+                return Err(SqsSourceError::from(Error::Sqs(err.into())));
             }
         };
 
@@ -405,9 +415,9 @@ impl SqsActor {
             Ok(count) => count,
             Err(err) => {
                 tracing::error!(?err, "failed to parse ApproximateNumberOfMessages");
-                return Err(Error::Other(
+                return Err(SqsSourceError::from(Error::Other(
                     "failed to parse ApproximateNumberOfMessages".to_string(),
-                ));
+                )));
             }
         };
         Ok(Some(approx_pending_messages_count))

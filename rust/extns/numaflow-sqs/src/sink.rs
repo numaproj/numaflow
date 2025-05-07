@@ -4,9 +4,11 @@ use bytes::Bytes;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::Error::ActorTaskTerminated;
-use crate::{Error, Result};
+use crate::{Error, SqsSinkError};
 
 pub const SQS_DEFAULT_REGION: &str = "us-west-2";
+
+pub type Result<T> = std::result::Result<T, SqsSinkError>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct SqsSinkConfig {
@@ -20,17 +22,21 @@ impl SqsSinkConfig {
     pub fn validate(&self) -> Result<()> {
         // Validate required fields
         if self.region.is_empty() {
-            return Err(Error::InvalidConfig("region is required".to_string()));
+            return Err(SqsSinkError::from(Error::InvalidConfig(
+                "region is required".to_string(),
+            )));
         }
 
         if self.queue_name.is_empty() {
-            return Err(Error::InvalidConfig("queue name is required".to_string()));
+            return Err(SqsSinkError::from(Error::InvalidConfig(
+                "queue name is required".to_string(),
+            )));
         }
 
         if self.queue_owner_aws_account_id.is_empty() {
-            return Err(Error::InvalidConfig(
+            return Err(SqsSinkError::from(Error::InvalidConfig(
                 "queue owner AWS account ID is required".to_string(),
-            ));
+            )));
         }
 
         Ok(())
@@ -38,7 +44,9 @@ impl SqsSinkConfig {
 }
 
 /// Creates and configures an SQS client for sink based on the provided configuration.
-pub async fn create_sqs_client(config: Option<SqsSinkConfig>) -> Result<Client> {
+pub async fn create_sqs_client(
+    config: Option<SqsSinkConfig>,
+) -> std::result::Result<Client, Error> {
     tracing::info!(
         "Creating SQS sink client for queue {queue_name} in region {region}",
         region = config
@@ -124,7 +132,7 @@ impl SqsSinkActor {
                 }
                 Err(err) => {
                     tracing::error!("Failed to create SQS message entry: {:?}", err);
-                    return Err(Error::Sqs(err.into()));
+                    return Err(SqsSinkError::from(Error::Sqs(err.into())));
                 }
             }
         }
@@ -152,7 +160,9 @@ impl SqsSinkActor {
 
                 for failed in output.failed {
                     let id = failed.id;
-                    let status = Err(Error::Other(failed.message.unwrap_or_default().to_string()));
+                    let status = Err(SqsSinkError::from(Error::Other(
+                        failed.message.unwrap_or_default().to_string(),
+                    )));
                     sink_message_responses.push(SqsSinkResponse {
                         id,
                         status,
@@ -165,7 +175,7 @@ impl SqsSinkActor {
             }
             Err(err) => {
                 tracing::error!("Failed to send messages: {:?}", err);
-                Err(Error::Sqs(err.into()))
+                Err(SqsSinkError::from(Error::Sqs(err.into())))
             }
         }
     }
@@ -271,9 +281,6 @@ impl SqsSink {
 
 #[cfg(test)]
 mod tests {
-    use crate::Error;
-    use crate::sink::{SqsSinkBuilder, SqsSinkConfig, SqsSinkMessage, create_sqs_client};
-    use crate::source::SQS_DEFAULT_REGION;
     use aws_config::BehaviorVersion;
     use aws_sdk_sqs::types::BatchResultErrorEntry;
     use aws_sdk_sqs::{Client, Config};
@@ -281,6 +288,10 @@ mod tests {
     use aws_smithy_types::error::ErrorMetadata;
     use bytes::Bytes;
     use test_log::test;
+
+    use crate::sink::{SqsSinkBuilder, SqsSinkConfig, SqsSinkMessage, create_sqs_client};
+    use crate::source::SQS_DEFAULT_REGION;
+    use crate::{Error, SqsSinkError};
 
     #[test(tokio::test)]
     async fn test_client_creation_with_defaults() {
@@ -486,7 +497,7 @@ mod tests {
             error.to_string(),
             "Failed with SQS error - unhandled error (InvalidParameterValue)"
         );
-        assert!(matches!(error, Error::Sqs(_)));
+        assert!(matches!(error, SqsSinkError::Error(Error::Sqs(_))));
     }
 
     fn get_queue_url_output() -> Rule {
