@@ -275,6 +275,7 @@ mod tests {
     use aws_sdk_sqs::{Client, Config};
     use aws_sdk_sqs::types::BatchResultErrorEntry;
     use aws_smithy_mocks_experimental::{mock, MockResponseInterceptor, Rule, RuleMode};
+    use aws_smithy_types::error::ErrorMetadata;
     use bytes::Bytes;
     use crate::Error;
     use crate::sink::{create_sqs_client, SqsSinkBuilder, SqsSinkConfig, SqsSinkMessage};
@@ -443,6 +444,43 @@ mod tests {
         assert_eq!(responses[1].code, Some("InvalidParameterValue".to_string()));
         assert_eq!(responses[1].sender_fault, Some(true));
     }
+    #[test(tokio::test)]
+    async fn test_sqs_sink_send_messages_all_fail() {
+        let queue_url_output = get_queue_url_output();
+        let send_message_output = get_send_message_output_all_fail();
+
+        let sqs_operation_mocks = MockResponseInterceptor::new()
+            .rule_mode(RuleMode::MatchAny)
+            .with_rule(&queue_url_output)
+            .with_rule(&send_message_output);
+
+        let sqs_mock_client =
+            Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
+
+        let config = SqsSinkConfig {
+            region: SQS_DEFAULT_REGION.to_string(),
+            queue_name: "test-q".to_string(),
+            queue_owner_aws_account_id: "123456789012".to_string(),
+        };
+
+        let sink = SqsSinkBuilder::new(config.clone())
+            .client(sqs_mock_client)
+            .build().await;
+        assert!(sink.is_ok());
+
+        let sink = sink.unwrap();
+        let messages = vec![SqsSinkMessage {
+            id: "1".to_string(),
+            message_body: Bytes::from("test message"),
+        }];
+
+        let result = sink.sink_messages(messages).await;
+        assert!(result.is_err());
+        
+        let error = result.unwrap_err();
+        assert_eq!(error.to_string(), "Failed with SQS error - unhandled error (InvalidParameterValue)");
+        assert!(matches!(error, Error::Sqs(_)));
+    }
 
     fn get_queue_url_output() -> Rule {
         let queue_url_output = mock!(aws_sdk_sqs::Client::get_queue_url)
@@ -508,6 +546,20 @@ mod tests {
                     .set_failed(Some(failed_entries))
                     .build()
                     .unwrap()
+            });
+        send_message_output
+    }
+
+    fn get_send_message_output_all_fail() -> Rule {
+        let send_message_output = mock!(aws_sdk_sqs::Client::send_message_batch)
+            .match_requests(|inp| inp.queue_url().unwrap() == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/")
+            .then_error(|| {
+                aws_sdk_sqs::operation::send_message_batch::SendMessageBatchError::generic(
+                    ErrorMetadata::builder().
+                        message("The message is too large for the queue.")
+                        .code("InvalidParameterValue")
+                        .build(),
+                )
             });
         send_message_output
     }
