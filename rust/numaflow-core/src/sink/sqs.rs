@@ -45,7 +45,6 @@ impl Sink for SqsSink {
         let sqs_sink_result = self.sink_messages(sqs_messages).await;
 
         if sqs_sink_result.is_err() {
-            // TODO: fix this error handling
             return Err(Error::from(sqs_sink_result.err().unwrap()));
         }
         for sqs_response in sqs_sink_result?.iter() {

@@ -878,7 +878,7 @@ mod tests {
             Err(err) => {
                 assert_eq!(
                     err.to_string(),
-                    "Failed with SQS error - unhandled error (InvalidAddress)"
+                    "SQS Source Error: Failed with SQS error - unhandled error (InvalidAddress)"
                 );
             }
         }

@@ -1,3 +1,6 @@
+/// Module for handling AWS SQS sink operations, allowing messages to be sent to SQS queues.
+/// 
+/// This module provides functionality to configure and use AWS SQS as a sink for messaging.
 use aws_sdk_sqs::Client;
 use aws_sdk_sqs::types::SendMessageBatchRequestEntry;
 use bytes::Bytes;
@@ -10,10 +13,14 @@ pub const SQS_DEFAULT_REGION: &str = "us-west-2";
 
 pub type Result<T> = std::result::Result<T, SqsSinkError>;
 
+/// Configuration for the AWS SQS sink.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SqsSinkConfig {
+    /// AWS region where the SQS queue is located
     pub region: String,
+    /// Name of the SQS queue
     pub queue_name: String,
+    /// AWS account ID of the queue owner
     pub queue_owner_aws_account_id: String,
 }
 
@@ -44,6 +51,9 @@ impl SqsSinkConfig {
 }
 
 /// Creates and configures an SQS client for sink based on the provided configuration.
+/// 
+/// This function validates the configuration and creates an SQS client that can be used
+/// to interact with the specified SQS queue.
 pub async fn create_sqs_client(
     config: Option<SqsSinkConfig>,
 ) -> std::result::Result<Client, Error> {
@@ -69,8 +79,11 @@ enum SqsSinkActorMessage {
     },
 }
 
+/// Message to be sent to SQS.
 pub struct SqsSinkMessage {
+    /// Unique identifier for the message
     pub id: String,
+    /// Message body content as bytes
     pub message_body: Bytes,
 }
 
@@ -181,21 +194,28 @@ impl SqsSinkActor {
     }
 }
 
+/// Main SQS sink client that handles sending messages to SQS.
 #[derive(Clone)]
 pub struct SqsSink {
     actor_tx: mpsc::Sender<SqsSinkActorMessage>,
 }
 
+/// Builder for creating and configuring an SQS sink.
 #[derive(Clone)]
 pub struct SqsSinkBuilder {
     config: SqsSinkConfig,
     client: Option<Client>,
 }
+/// Response from sending a message to SQS.
 #[derive(Debug)]
 pub struct SqsSinkResponse {
+    /// ID of the message that was sent
     pub id: String,
+    /// Status of the send operation
     pub status: Result<()>,
+    /// Error code if any
     pub code: Option<String>,
+    /// Indicates if the error was caused by the sender
     pub sender_fault: Option<bool>,
 }
 
@@ -263,6 +283,9 @@ impl SqsSinkBuilder {
 }
 
 impl SqsSink {
+    /// Sends a batch of messages to the SQS queue.
+    ///
+    /// Returns responses for each message, including success or failure status.
     pub async fn sink_messages(
         &self,
         messages: Vec<SqsSinkMessage>,
@@ -495,7 +518,7 @@ mod tests {
         let error = result.unwrap_err();
         assert_eq!(
             error.to_string(),
-            "Failed with SQS error - unhandled error (InvalidParameterValue)"
+            "SQS Sink Error: Failed with SQS error - unhandled error (InvalidParameterValue)"
         );
         assert!(matches!(error, SqsSinkError::Error(Error::Sqs(_))));
     }
