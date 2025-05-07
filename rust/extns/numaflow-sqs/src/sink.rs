@@ -268,3 +268,267 @@ impl SqsSink {
         rx.await.map_err(ActorTaskTerminated)?
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use aws_config::BehaviorVersion;
+    use aws_sdk_sqs::{Client, Config};
+    use aws_sdk_sqs::types::BatchResultErrorEntry;
+    use aws_smithy_mocks_experimental::{mock, MockResponseInterceptor, Rule, RuleMode};
+    use bytes::Bytes;
+    use crate::Error;
+    use crate::sink::{create_sqs_client, SqsSinkBuilder, SqsSinkConfig, SqsSinkMessage};
+    use test_log::test;
+    use crate::source::SQS_DEFAULT_REGION;
+
+    #[test(tokio::test)]
+    async fn test_client_creation_with_defaults() {
+        let config = SqsSinkConfig {
+            region: "us-west-2".to_string(),
+            queue_name: "test-queue".to_string(),
+            queue_owner_aws_account_id: "123456789012".to_string(),
+        };
+
+        let result = create_sqs_client(Some(config)).await;
+        assert!(result.is_ok());
+    }
+
+    #[test(tokio::test)]
+    async fn test_client_creation_validation_failures() {
+        // Test missing config
+        let result = create_sqs_client(None).await;
+        assert!(matches!(result, Err(Error::InvalidConfig(_))));
+        
+        // Test empty region
+        let config = SqsSinkConfig {
+            region: "".to_string(),
+            queue_name: "test-queue".to_string(),
+            queue_owner_aws_account_id: "123456789012".to_string(),
+        };
+        let result = create_sqs_client(Some(config)).await;
+        assert!(matches!(result, Err(Error::InvalidConfig(_))));
+        
+        // Test empty queue name
+        let config = SqsSinkConfig {
+            region: "us-west-2".to_string(),
+            queue_name: "".to_string(),
+            queue_owner_aws_account_id: "123456789012".to_string(),
+        };
+        let result = create_sqs_client(Some(config)).await;
+        assert!(matches!(result, Err(Error::InvalidConfig(_))));
+        
+        // Test empty queue owner AWS account ID
+        let config = SqsSinkConfig {
+            region: "us-west-2".to_string(),
+            queue_name: "test-queue".to_string(),
+            queue_owner_aws_account_id: "".to_string(),
+        };
+        let result = create_sqs_client(Some(config)).await;
+        assert!(matches!(result, Err(Error::InvalidConfig(_))));
+    }
+
+    #[test(tokio::test)]
+    async fn test_sqs_sink_builder() {
+        // test default
+        let builder = SqsSinkBuilder::default();
+        assert_eq!(builder.config.region, SQS_DEFAULT_REGION);
+        assert_eq!(builder.config.queue_name, "");
+        
+        let queue_url_output = get_queue_url_output();
+
+        let sqs_operation_mocks = MockResponseInterceptor::new()
+            .rule_mode(RuleMode::MatchAny)
+            .with_rule(&queue_url_output);
+
+        let sqs_mock_client =
+            Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
+        
+        let config = SqsSinkConfig {
+            region: SQS_DEFAULT_REGION.to_string(),
+            queue_name: "test-q".to_string(),
+            queue_owner_aws_account_id: "123456789012".to_string(),
+        };
+
+        let sink = SqsSinkBuilder::new(config.clone())
+            .client(sqs_mock_client)
+            .build().await;
+        assert!(sink.is_ok());
+
+        let sink = sink.unwrap();
+        assert_eq!(sink.actor_tx.capacity(), 10);
+    }
+    
+    #[test(tokio::test)]
+    async fn test_sqs_sink_send_messages() {
+        let queue_url_output = get_queue_url_output();
+        let send_message_output = get_send_message_output();
+        
+        let sqs_operation_mocks = MockResponseInterceptor::new()
+            .rule_mode(RuleMode::MatchAny)
+            .with_rule(&queue_url_output)
+            .with_rule(&send_message_output);
+
+        let sqs_mock_client =
+            Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
+
+        let config = SqsSinkConfig {
+            region: SQS_DEFAULT_REGION.to_string(),
+            queue_name: "test-q".to_string(),
+            queue_owner_aws_account_id: "123456789012".to_string(),
+        };
+
+        let sink = SqsSinkBuilder::new(config.clone())
+            .client(sqs_mock_client)
+            .build().await;
+        assert!(sink.is_ok());
+
+        let sink = sink.unwrap();
+        let messages = vec![SqsSinkMessage {
+            id: "1".to_string(),
+            message_body: Bytes::from("test message"),
+        }];
+
+        let result = sink.sink_messages(messages).await;
+        assert!(result.is_ok());
+        
+        let responses = result.unwrap();
+        assert_eq!(responses.len(), 1);
+        assert_eq!(responses[0].id, "1");
+        assert!(responses[0].status.is_ok());
+        assert_eq!(responses[0].code, None);
+        assert_eq!(responses[0].sender_fault, None);
+    }
+
+    #[test(tokio::test)]
+    async fn test_sqs_sink_send_messages_with_failed() {
+        let queue_url_output = get_queue_url_output();
+        let send_message_output = get_send_message_output_with_failed();
+
+        let sqs_operation_mocks = MockResponseInterceptor::new()
+            .rule_mode(RuleMode::MatchAny)
+            .with_rule(&queue_url_output)
+            .with_rule(&send_message_output);
+
+        let sqs_mock_client =
+            Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
+
+        let config = SqsSinkConfig {
+            region: SQS_DEFAULT_REGION.to_string(),
+            queue_name: "test-q".to_string(),
+            queue_owner_aws_account_id: "123456789012".to_string(),
+        };
+
+        let sink = SqsSinkBuilder::new(config.clone())
+            .client(sqs_mock_client)
+            .build().await;
+        assert!(sink.is_ok());
+
+        let sink = sink.unwrap();
+        let messages = vec![SqsSinkMessage {
+            id: "1".to_string(),
+            message_body: Bytes::from("test message"),
+        }];
+
+        let result = sink.sink_messages(messages).await;
+        assert!(result.is_ok());
+
+        let responses = result.unwrap();
+        assert_eq!(responses.len(), 2);
+        assert_eq!(responses[0].id, "1");
+        assert!(responses[0].status.is_ok());
+        assert_eq!(responses[0].code, None);
+        assert_eq!(responses[0].sender_fault, None);
+        assert_eq!(responses[1].id, "2");
+        assert!(responses[1].status.is_err());
+        assert_eq!(responses[1].code, Some("InvalidParameterValue".to_string()));
+        assert_eq!(responses[1].sender_fault, Some(true));
+    }
+
+    fn get_queue_url_output() -> Rule {
+        let queue_url_output = mock!(aws_sdk_sqs::Client::get_queue_url)
+            .match_requests(|inp| inp.queue_name().unwrap() == "test-q")
+            .then_output(|| {
+                aws_sdk_sqs::operation::get_queue_url::GetQueueUrlOutput::builder()
+                    .queue_url("https://sqs.us-west-2.amazonaws.com/926113353675/test-q/")
+                    .build()
+            });
+        queue_url_output
+    }
+    
+    fn get_send_message_output() -> Rule {
+        let successful = aws_sdk_sqs::types::SendMessageBatchResultEntry::builder()
+            .id("1")
+            .message_id("msg-id-1")
+            .md5_of_message_body("f11a425906289abf8cce1733622834c8")
+            .build().unwrap();
+        
+        let send_message_output = mock!(aws_sdk_sqs::Client::send_message_batch)
+            .match_requests(|inp| inp.queue_url().unwrap() == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/")
+            .then_output(move || {
+                // Create a vector of successful entries
+                let successful_entries = vec![successful.clone()];
+                
+                // Create an empty vector for failed entries
+                let failed_entries: Vec<BatchResultErrorEntry> = Vec::new();
+                
+                aws_sdk_sqs::operation::send_message_batch::SendMessageBatchOutput::builder()
+                    .set_successful(Some(successful_entries))
+                    .set_failed(Some(failed_entries))
+                    .build()
+                    .unwrap()
+            });
+        send_message_output
+    }
+
+    fn get_send_message_output_with_failed() -> Rule {
+        let successful = aws_sdk_sqs::types::SendMessageBatchResultEntry::builder()
+            .id("1")
+            .message_id("msg-id-1")
+            .md5_of_message_body("84769b6348524b3317694d80c0ac6df9")
+            .build().unwrap();
+        
+        let failed = aws_sdk_sqs::types::BatchResultErrorEntry::builder()
+            .id("2")
+            .code("InvalidParameterValue")
+            .message("The message is too large for the queue.")
+            .sender_fault(true)
+            .build().unwrap();
+
+        let send_message_output = mock!(aws_sdk_sqs::Client::send_message_batch)
+            .match_requests(|inp| inp.queue_url().unwrap() == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/")
+            .then_output(move || {
+                // Create a vector of successful entries
+                let successful_entries = vec![successful.clone()];
+
+                // Create an empty vector for failed entries
+                let failed_entries: Vec<BatchResultErrorEntry> = vec![failed.clone()];
+
+                aws_sdk_sqs::operation::send_message_batch::SendMessageBatchOutput::builder()
+                    .set_successful(Some(successful_entries))
+                    .set_failed(Some(failed_entries))
+                    .build()
+                    .unwrap()
+            });
+        send_message_output
+    }
+
+    fn get_test_config_with_interceptor(interceptor: MockResponseInterceptor) -> Config {
+        aws_sdk_sqs::Config::builder()
+            .behavior_version(BehaviorVersion::v2025_01_17())
+            .credentials_provider(make_sqs_test_credentials())
+            .region(aws_sdk_sqs::config::Region::new(SQS_DEFAULT_REGION))
+            .interceptor(interceptor)
+            .build()
+    }
+
+    fn make_sqs_test_credentials() -> aws_sdk_sqs::config::Credentials {
+        aws_sdk_sqs::config::Credentials::new(
+            "ATESTCLIENT",
+            "astestsecretkey",
+            Some("atestsessiontoken".to_string()),
+            None,
+            "",
+        )
+    }
+    
+}
