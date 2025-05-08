@@ -1,11 +1,5 @@
 use std::time::Duration;
 
-use numaflow_pb::clients::map::map_client::MapClient;
-use numaflow_pb::clients::sink::sink_client::SinkClient;
-use numaflow_pb::clients::source::source_client::SourceClient;
-use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use tokio_util::sync::CancellationToken;
-use numaflow_sqs::sink::SqsSinkBuilder;
 use crate::config::components::sink::{SinkConfig, SinkType};
 use crate::config::components::source::{SourceConfig, SourceType};
 use crate::config::components::transformer::TransformerConfig;
@@ -22,12 +16,18 @@ use crate::source::Source;
 use crate::source::generator::new_generator;
 use crate::source::jetstream::new_jetstream_source;
 use crate::source::pulsar::new_pulsar_source;
-use crate::source::sqs::{new_sqs_source};
+use crate::source::sqs::new_sqs_source;
 use crate::source::user_defined::new_source;
 use crate::tracker::TrackerHandle;
 use crate::transformer::Transformer;
 use crate::watermark::source::SourceWatermarkHandle;
 use crate::{config, error, metrics, source};
+use numaflow_pb::clients::map::map_client::MapClient;
+use numaflow_pb::clients::sink::sink_client::SinkClient;
+use numaflow_pb::clients::source::source_client::SourceClient;
+use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use numaflow_sqs::sink::SqsSinkBuilder;
+use tokio_util::sync::CancellationToken;
 
 /// Creates a sink writer based on the configuration
 pub(crate) async fn create_sink_writer(

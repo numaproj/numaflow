@@ -78,12 +78,8 @@ impl From<SqsSinkError> for Error {
 pub async fn create_sqs_client(config: SqsConfig) -> Result<Client, Error> {
     // Get the region and validate the configuration based on variant
     let region = match &config {
-        SqsConfig::Source(cfg) => {
-            cfg.region
-        }
-        SqsConfig::Sink(cfg) => {
-            cfg.region
-        }
+        SqsConfig::Source(cfg) => cfg.region,
+        SqsConfig::Sink(cfg) => cfg.region,
     };
 
     let region_provider = RegionProviderChain::first_try(Region::new(region))
