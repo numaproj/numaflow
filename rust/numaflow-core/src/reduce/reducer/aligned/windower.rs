@@ -9,7 +9,7 @@ pub(crate) mod fixed;
 /// Sliding Window Operations.
 pub(crate) mod sliding;
 
-pub(crate) trait WindowManager {
+pub(crate) trait WindowManager: Send + Sync + Clone + 'static {
     /// Assigns windows to a message. There can be more than one for Sliding Window.
     fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage>;
 

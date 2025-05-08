@@ -9,12 +9,12 @@ use crate::reduce::reducer::aligned::windower::WindowManager;
 
 /// ReduceForwarder is a component which starts a PBQ reader and a ProcessAndForward processor
 /// and manages the lifecycle of these components.
-pub(crate) struct ReduceForwarder<W: WindowManager + Send + Sync + Clone + 'static> {
+pub(crate) struct ReduceForwarder<W: WindowManager> {
     pbq: PBQ,
     processor: AlignedReducer<W>,
 }
 
-impl<W: WindowManager + Send + Sync + Clone + 'static> ReduceForwarder<W> {
+impl<W: WindowManager> ReduceForwarder<W> {
     pub(crate) fn new(pbq: PBQ, processor: AlignedReducer<W>) -> Self {
         Self { pbq, processor }
     }
