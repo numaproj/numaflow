@@ -1350,9 +1350,9 @@ func TestIsValidSinkRetryStrategy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.sink.RetryStrategy = tt.strategy
-			ok := hasValidSinkRetryStrategy(tt.sink)
-			if (!ok) != tt.wantErr {
-				t.Errorf("isValidSinkRetryStrategy() got = %v, want %v", ok, tt.wantErr)
+			err := hasValidSinkRetryStrategy(tt.sink)
+			if (err == nil) == tt.wantErr {
+				t.Errorf("isValidSinkRetryStrategy() got = %v, want %v", (err == nil), tt.wantErr)
 			}
 		})
 	}
