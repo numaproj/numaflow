@@ -749,7 +749,7 @@ mod sink_tests {
                 )),
                 steps: Option::from(u16::MAX as i64),
                 cap: Option::from(kube::core::Duration::from(
-                    std::time::Duration::from_millis(1u64),
+                    std::time::Duration::from_millis(4294967295u64),
                 )),
                 factor: Option::from(1.0),
                 jitter: Option::from(0.0),
@@ -759,7 +759,7 @@ mod sink_tests {
         let default_config = RetryConfig::default();
         assert_eq!(default_config.sink_max_retry_attempts, u16::MAX);
         assert_eq!(default_config.sink_initial_retry_interval_in_ms, 1);
-        assert_eq!(default_config.sink_max_retry_interval_in_ms, 1);
+        assert_eq!(default_config.sink_max_retry_interval_in_ms, 4294967295);
         assert_eq!(default_config.sink_retry_factor, 1.0);
         assert_eq!(default_config.sink_retry_jitter, 0.0);
         assert_eq!(
