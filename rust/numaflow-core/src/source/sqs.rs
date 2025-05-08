@@ -1,4 +1,4 @@
-use numaflow_sqs::source::{SQSMessage, SqsSource, SqsSourceBuilder, SqsSourceConfig};
+use numaflow_sqs::source::{SqsMessage, SqsSource, SqsSourceBuilder, SqsSourceConfig};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -7,10 +7,10 @@ use crate::error::Error;
 use crate::message::{Message, MessageID, Offset, StringOffset};
 use crate::source;
 
-impl TryFrom<SQSMessage> for Message {
+impl TryFrom<SqsMessage> for Message {
     type Error = Error;
 
-    fn try_from(message: SQSMessage) -> crate::Result<Self> {
+    fn try_from(message: SqsMessage) -> crate::Result<Self> {
         let offset = Offset::String(StringOffset::new(message.offset, *get_vertex_replica()));
 
         Ok(Message {
@@ -127,7 +127,7 @@ pub mod tests {
         let mut headers = HashMap::new();
         headers.insert("foo".to_string(), "bar".to_string());
 
-        let sqs_message = SQSMessage {
+        let sqs_message = SqsMessage {
             key: "key".to_string(),
             payload: Bytes::from("value".to_string()),
             offset: "offset".to_string(),

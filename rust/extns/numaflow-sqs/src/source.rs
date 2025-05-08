@@ -51,7 +51,7 @@ pub struct SqsSourceConfig {
 /// - Handle concurrent requests without locks
 enum SQSActorMessage {
     Receive {
-        respond_to: oneshot::Sender<Result<Vec<SQSMessage>>>,
+        respond_to: oneshot::Sender<Result<Vec<SqsMessage>>>,
         count: i32,
         timeout_at: Instant,
     },
@@ -71,7 +71,7 @@ enum SQSActorMessage {
 /// - Includes full message metadata for debugging
 /// - Maintains original SQS attributes and headers
 #[derive(Debug)]
-pub struct SQSMessage {
+pub struct SqsMessage {
     pub key: String,
     pub payload: Bytes,
     pub offset: String,
@@ -149,7 +149,7 @@ impl SqsActor {
     /// - Respects timeout for long polling
     /// - Processes message attributes and system metadata
     /// - Returns messages in a normalized format
-    async fn get_messages(&mut self, count: i32, timeout_at: Instant) -> Result<Vec<SQSMessage>> {
+    async fn get_messages(&mut self, count: i32, timeout_at: Instant) -> Result<Vec<SqsMessage>> {
         let remaining_time = timeout_at - Instant::now();
 
         // default to one second if remaining time is less than one second
@@ -258,7 +258,7 @@ impl SqsActor {
                     })
                     .unwrap_or_default();
 
-                SQSMessage {
+                SqsMessage {
                     key,
                     payload,
                     offset,
@@ -480,7 +480,7 @@ impl SqsSourceBuilder {
 
 impl SqsSource {
     /// read messages from SQS, corresponding sqs sdk method is receive_message
-    pub async fn read_messages(&self) -> Result<Vec<SQSMessage>> {
+    pub async fn read_messages(&self) -> Result<Vec<SqsMessage>> {
         tracing::debug!("Reading messages from SQS");
         let start = Instant::now();
         let (tx, rx) = oneshot::channel();
