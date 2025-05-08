@@ -1194,7 +1194,7 @@ func TestValidateSink(t *testing.T) {
 
 func TestIsValidSinkRetryStrategy(t *testing.T) {
 	zeroSteps := uint32(0)
-	negativeFactor := float64(-1)
+	invalidFactor := float64(0.5)
 	negativeJitter := float64(-0.5)
 	greaterThanOneJitter := float64(1.1)
 	validJitter := float64(0.5)
@@ -1261,11 +1261,11 @@ func TestIsValidSinkRetryStrategy(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "invalid strategy with negative factor",
+			name: "invalid strategy with factor less than 1",
 			sink: dfv1.Sink{},
 			strategy: dfv1.RetryStrategy{
 				BackOff: &dfv1.Backoff{
-					Factor: &negativeFactor,
+					Factor: &invalidFactor,
 				},
 			},
 			wantErr: true,

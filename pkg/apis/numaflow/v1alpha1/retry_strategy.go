@@ -83,7 +83,7 @@ func (r RetryStrategy) GetBackoff() wait.Backoff {
 		Duration: DefaultRetryInterval,
 		Steps:    DefaultRetrySteps,
 		Factor:   DefaultFactor,
-		Cap:      DefaultRetryInterval, // Cap set to the same as Duration for fixed interval
+		Cap:      DefaultMaxRetryInterval,
 	}
 
 	// If a custom exponential back-off configuration is present, check and substitute the respective parts.

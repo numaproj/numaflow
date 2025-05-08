@@ -270,7 +270,7 @@ mod tests {
                     .clone()
                     .unwrap()
                     .sink_max_retry_interval_in_ms,
-                1000
+                4294967295
             );
             assert_eq!(
                 mvtx_cfg

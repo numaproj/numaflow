@@ -625,9 +625,9 @@ func hasValidSinkRetryStrategy(s dfv1.Sink) error {
 		if s.RetryStrategy.BackOff.Steps != nil && *s.RetryStrategy.BackOff.Steps == 0 {
 			return fmt.Errorf("steps in backoff strategy cannot be 0")
 		}
-		// If factor is provided in the strategy it cannot be negative
-		if s.RetryStrategy.BackOff.Factor != nil && *s.RetryStrategy.BackOff.Factor <= 0 {
-			return fmt.Errorf("factor in backoff strategy cannot be negative")
+		// If factor is provided in the strategy it should be greater than or equal to 1
+		if s.RetryStrategy.BackOff.Factor != nil && *s.RetryStrategy.BackOff.Factor < 1 {
+			return fmt.Errorf("factor in backoff strategy cannot be less than 1")
 		}
 
 		// If cap and interval are provided, cap must be greater than or equal to interval

@@ -264,6 +264,9 @@ const (
 	// for responsiveness and system load considerations.
 	DefaultRetryInterval = 1 * time.Millisecond
 
+	// DefaultMaxRetryInterval specifies the default max retry duration.
+	DefaultMaxRetryInterval = math.MaxUint32 * time.Millisecond
+
 	// DefaultRetrySteps is defined to dictate how many times the platform should attempt to retry
 	// a write operation to a sink following a failure. The value is set to math.MaxInt32 - 1,
 	// effectively indicating an almost indefinite number of retries. This large default is chosen
