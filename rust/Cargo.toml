@@ -11,6 +11,7 @@ members = [
     "extns/numaflow-jetstream",
     "numaflow",
     "numaflow-monitor",
+    "extns/numaflow-kafka",
 ]
 
 [workspace.lints.rust]
