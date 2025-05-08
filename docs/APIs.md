@@ -40,6 +40,7 @@ AbstractPodTemplate
 <a href="#numaflow.numaproj.io/v1alpha1.JobTemplate">JobTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.MonoVertexSpec">MonoVertexSpec</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.NativeRedis">NativeRedis</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.ServingSpec">ServingSpec</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.SideInputsManagerTemplate">SideInputsManagerTemplate</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.VertexTemplate">VertexTemplate</a>)
 </p>
@@ -10573,6 +10574,28 @@ Container template for the serving container.
 Initial replicas of the serving server deployment.
 </p>
 
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>AbstractPodTemplate</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractPodTemplate">
+AbstractPodTemplate </a> </em>
+</td>
+
+<td>
+
+<p>
+
+(Members of <code>AbstractPodTemplate</code> are embedded into this
+type.)
+</p>
+
+<em>(Optional)</em>
 </td>
 
 </tr>
