@@ -1,4 +1,3 @@
-use numaflow_sqs::sink::{SqsSink, SqsSinkBuilder, SqsSinkConfig};
 use numaflow_sqs::source::{SQSMessage, SqsSource, SqsSourceBuilder, SqsSourceConfig};
 use std::sync::Arc;
 use std::time::Duration;
@@ -62,10 +61,6 @@ pub(crate) async fn new_sqs_source(
         .vertex_replica(vertex_replica)
         .build()
         .await?)
-}
-
-pub(crate) async fn new_sqs_sink(cfg: SqsSinkConfig) -> crate::error::Result<SqsSink> {
-    Ok(SqsSinkBuilder::new(cfg).build().await?)
 }
 
 impl source::SourceReader for SqsSource {
@@ -175,9 +170,9 @@ pub mod tests {
             aws_sdk_sqs::Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
 
         let sqs_source = SqsSourceBuilder::new(SqsSourceConfig {
-            region: SQS_DEFAULT_REGION.to_string(),
-            queue_name: "test-q".to_string(),
-            queue_owner_aws_account_id: "12345678912".to_string(),
+            region: SQS_DEFAULT_REGION,
+            queue_name: "test-q",
+            queue_owner_aws_account_id: "12345678912",
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,

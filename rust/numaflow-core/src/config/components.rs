@@ -116,9 +116,11 @@ pub(crate) mod source {
             }
 
             let sqs_source_config = SqsSourceConfig {
-                queue_name: value.queue_name,
-                region: value.aws_region,
-                queue_owner_aws_account_id: value.queue_owner_aws_account_id,
+                queue_name: Box::leak(value.queue_name.into_boxed_str()),
+                region: Box::leak(value.aws_region.into_boxed_str()),
+                queue_owner_aws_account_id: Box::leak(
+                    value.queue_owner_aws_account_id.into_boxed_str(),
+                ),
                 attribute_names: value.attribute_names.unwrap_or_default(),
                 message_attribute_names: value.message_attribute_names.unwrap_or_default(),
                 max_number_of_messages: Some(value.max_number_of_messages.unwrap_or(10)),
@@ -351,12 +353,13 @@ pub(crate) mod sink {
     const DEFAULT_MAX_SINK_RETRY_ATTEMPTS: u16 = u16::MAX;
     const DEFAULT_SINK_RETRY_INTERVAL_IN_MS: u32 = 1;
 
-    use crate::Result;
-    use crate::error::Error;
+    use std::fmt::Display;
+
     use numaflow_models::models::{Backoff, RetryStrategy, Sink, SqsSink};
     use numaflow_sqs::sink::SqsSinkConfig;
-    use std::fmt::Display;
-    use tracing::info;
+
+    use crate::Result;
+    use crate::error::Error;
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct SinkConfig {
@@ -439,8 +442,6 @@ pub(crate) mod sink {
         type Error = Error;
 
         fn try_from(value: Box<SqsSink>) -> Result<Self> {
-            info!("Sqs sink: {value:?}");
-
             if value.aws_region.is_empty() {
                 return Err(Error::Config(
                     "AWS region is required for SQS sink".to_string(),
@@ -448,13 +449,12 @@ pub(crate) mod sink {
             }
 
             let sqs_sink_config = SqsSinkConfig {
-                queue_name: value.queue_name,
-                region: value.aws_region,
-                queue_owner_aws_account_id: value.queue_owner_aws_account_id,
+                queue_name: Box::leak(value.queue_name.into_boxed_str()),
+                region: Box::leak(value.aws_region.into_boxed_str()),
+                queue_owner_aws_account_id: Box::leak(
+                    value.queue_owner_aws_account_id.into_boxed_str(),
+                ),
             };
-
-            info!("parsed SQS sink config: {sqs_sink_config:?}");
-
             Ok(SinkType::Sqs(sqs_sink_config))
         }
     }
@@ -855,13 +855,15 @@ mod transformer_tests {
 
 #[cfg(test)]
 mod jetstream_tests {
-    use super::source::SourceType;
+    use std::fs;
+    use std::path::Path;
+
     use k8s_openapi::api::core::v1::SecretKeySelector;
     use numaflow_jetstream::NatsAuth;
     use numaflow_models::models::BasicAuth;
     use numaflow_models::models::{JetStreamSource, Tls};
-    use std::fs;
-    use std::path::Path;
+
+    use super::source::SourceType;
 
     const SECRET_BASE_PATH: &str = "/tmp/numaflow";
 

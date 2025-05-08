@@ -75,25 +75,14 @@ impl From<SqsSinkError> for Error {
 }
 
 /// Creates and configures an SQS client based on the provided configuration.
-pub async fn create_sqs_client(config: Option<SqsConfig>) -> Result<Client, Error> {
-    let config = match config {
-        Some(cfg) => cfg,
-        None => {
-            return Err(Error::InvalidConfig(
-                "SQS configuration is required".to_string(),
-            ));
-        }
-    };
-
+pub async fn create_sqs_client(config: SqsConfig) -> Result<Client, Error> {
     // Get the region and validate the configuration based on variant
     let region = match &config {
         SqsConfig::Source(cfg) => {
-            cfg.validate()?;
-            cfg.region.clone()
+            cfg.region
         }
         SqsConfig::Sink(cfg) => {
-            cfg.validate()?;
-            cfg.region.clone()
+            cfg.region
         }
     };
 

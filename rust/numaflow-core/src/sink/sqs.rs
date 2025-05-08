@@ -20,15 +20,15 @@ impl From<numaflow_sqs::SqsSinkError> for Error {
     fn from(value: numaflow_sqs::SqsSinkError) -> Self {
         match value {
             numaflow_sqs::SqsSinkError::Error(numaflow_sqs::Error::Sqs(e)) => {
-                Error::Source(e.to_string())
+                Error::Sink(e.to_string())
             }
             numaflow_sqs::SqsSinkError::Error(numaflow_sqs::Error::ActorTaskTerminated(_)) => {
                 Error::ActorPatternRecv(value.to_string())
             }
             numaflow_sqs::SqsSinkError::Error(numaflow_sqs::Error::InvalidConfig(e)) => {
-                Error::Source(e)
+                Error::Sink(e)
             }
-            numaflow_sqs::SqsSinkError::Error(numaflow_sqs::Error::Other(e)) => Error::Source(e),
+            numaflow_sqs::SqsSinkError::Error(numaflow_sqs::Error::Other(e)) => Error::Sink(e),
         }
     }
 }

@@ -7,7 +7,7 @@ use bytes::Bytes;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::Error::ActorTaskTerminated;
-use crate::{Error, SqsSinkError};
+use crate::{Error, SqsConfig, SqsSinkError};
 
 pub const SQS_DEFAULT_REGION: &str = "us-west-2";
 
@@ -17,59 +17,11 @@ pub type Result<T> = std::result::Result<T, SqsSinkError>;
 #[derive(Clone, Debug, PartialEq)]
 pub struct SqsSinkConfig {
     /// AWS region where the SQS queue is located
-    pub region: String,
+    pub region: &'static str,
     /// Name of the SQS queue
-    pub queue_name: String,
+    pub queue_name: &'static str,
     /// AWS account ID of the queue owner
-    pub queue_owner_aws_account_id: String,
-}
-
-impl SqsSinkConfig {
-    #[allow(clippy::result_large_err)]
-    pub fn validate(&self) -> Result<()> {
-        // Validate required fields
-        if self.region.is_empty() {
-            return Err(SqsSinkError::from(Error::InvalidConfig(
-                "region is required".to_string(),
-            )));
-        }
-
-        if self.queue_name.is_empty() {
-            return Err(SqsSinkError::from(Error::InvalidConfig(
-                "queue name is required".to_string(),
-            )));
-        }
-
-        if self.queue_owner_aws_account_id.is_empty() {
-            return Err(SqsSinkError::from(Error::InvalidConfig(
-                "queue owner AWS account ID is required".to_string(),
-            )));
-        }
-
-        Ok(())
-    }
-}
-
-/// Creates and configures an SQS client for sink based on the provided configuration.
-///
-/// This function validates the configuration and creates an SQS client that can be used
-/// to interact with the specified SQS queue.
-pub async fn create_sqs_client(
-    config: Option<SqsSinkConfig>,
-) -> std::result::Result<Client, Error> {
-    tracing::info!(
-        "Creating SQS sink client for queue {queue_name} in region {region}",
-        region = config
-            .as_ref()
-            .map(|c| c.region.clone())
-            .unwrap_or_default(),
-        queue_name = config
-            .as_ref()
-            .map(|c| c.queue_name.clone())
-            .unwrap_or_default()
-    );
-
-    crate::create_sqs_client(config.map(crate::SqsConfig::Sink)).await
+    pub queue_owner_aws_account_id: &'static str,
 }
 
 enum SqsSinkActorMessage {
@@ -222,9 +174,9 @@ pub struct SqsSinkResponse {
 impl Default for SqsSinkBuilder {
     fn default() -> Self {
         Self::new(SqsSinkConfig {
-            region: SQS_DEFAULT_REGION.to_string(),
-            queue_name: "".to_string(),
-            queue_owner_aws_account_id: "".to_string(),
+            region: SQS_DEFAULT_REGION,
+            queue_name: "",
+            queue_owner_aws_account_id: "",
         })
     }
 }
@@ -250,11 +202,11 @@ impl SqsSinkBuilder {
     pub async fn build(self) -> Result<SqsSink> {
         let sqs_client = match self.client {
             Some(client) => client,
-            None => create_sqs_client(Some(self.config.clone())).await?,
+            None => crate::create_sqs_client(SqsConfig::Sink(self.config.clone())).await?,
         };
 
-        let queue_name = self.config.queue_name.clone();
-        let queue_owner_aws_account_id = self.config.queue_owner_aws_account_id.clone();
+        let queue_name = self.config.queue_name;
+        let queue_owner_aws_account_id = self.config.queue_owner_aws_account_id;
 
         let get_queue_url_output = sqs_client
             .get_queue_url()
@@ -312,54 +264,20 @@ mod tests {
     use bytes::Bytes;
     use test_log::test;
 
-    use crate::sink::{SqsSinkBuilder, SqsSinkConfig, SqsSinkMessage, create_sqs_client};
+    use crate::sink::{SqsSinkBuilder, SqsSinkConfig, SqsSinkMessage};
     use crate::source::SQS_DEFAULT_REGION;
-    use crate::{Error, SqsSinkError};
+    use crate::{Error, SqsConfig, SqsSinkError};
 
     #[test(tokio::test)]
     async fn test_client_creation_with_defaults() {
         let config = SqsSinkConfig {
-            region: "us-west-2".to_string(),
-            queue_name: "test-queue".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
+            region: "us-west-2",
+            queue_name: "test-queue",
+            queue_owner_aws_account_id: "123456789012",
         };
 
-        let result = create_sqs_client(Some(config)).await;
+        let result = crate::create_sqs_client(SqsConfig::Sink(config.clone())).await;
         assert!(result.is_ok());
-    }
-
-    #[test(tokio::test)]
-    async fn test_client_creation_validation_failures() {
-        // Test missing config
-        let result = create_sqs_client(None).await;
-        assert!(matches!(result, Err(Error::InvalidConfig(_))));
-
-        // Test empty region
-        let config = SqsSinkConfig {
-            region: "".to_string(),
-            queue_name: "test-queue".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
-        };
-        let result = create_sqs_client(Some(config)).await;
-        assert!(matches!(result, Err(Error::InvalidConfig(_))));
-
-        // Test empty queue name
-        let config = SqsSinkConfig {
-            region: "us-west-2".to_string(),
-            queue_name: "".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
-        };
-        let result = create_sqs_client(Some(config)).await;
-        assert!(matches!(result, Err(Error::InvalidConfig(_))));
-
-        // Test empty queue owner AWS account ID
-        let config = SqsSinkConfig {
-            region: "us-west-2".to_string(),
-            queue_name: "test-queue".to_string(),
-            queue_owner_aws_account_id: "".to_string(),
-        };
-        let result = create_sqs_client(Some(config)).await;
-        assert!(matches!(result, Err(Error::InvalidConfig(_))));
     }
 
     #[test(tokio::test)]
@@ -379,9 +297,9 @@ mod tests {
             Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
 
         let config = SqsSinkConfig {
-            region: SQS_DEFAULT_REGION.to_string(),
-            queue_name: "test-q".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
+            region: SQS_DEFAULT_REGION,
+            queue_name: "test-q",
+            queue_owner_aws_account_id: "123456789012",
         };
 
         let sink = SqsSinkBuilder::new(config.clone())
@@ -408,9 +326,9 @@ mod tests {
             Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
 
         let config = SqsSinkConfig {
-            region: SQS_DEFAULT_REGION.to_string(),
-            queue_name: "test-q".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
+            region: SQS_DEFAULT_REGION,
+            queue_name: "test-q",
+            queue_owner_aws_account_id: "123456789012",
         };
 
         let sink = SqsSinkBuilder::new(config.clone())
@@ -450,9 +368,9 @@ mod tests {
             Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
 
         let config = SqsSinkConfig {
-            region: SQS_DEFAULT_REGION.to_string(),
-            queue_name: "test-q".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
+            region: SQS_DEFAULT_REGION,
+            queue_name: "test-q",
+            queue_owner_aws_account_id: "123456789012",
         };
 
         let sink = SqsSinkBuilder::new(config.clone())
@@ -495,9 +413,9 @@ mod tests {
             Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
 
         let config = SqsSinkConfig {
-            region: SQS_DEFAULT_REGION.to_string(),
-            queue_name: "test-q".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
+            region: SQS_DEFAULT_REGION,
+            queue_name: "test-q",
+            queue_owner_aws_account_id: "123456789012",
         };
 
         let sink = SqsSinkBuilder::new(config.clone())

@@ -5,7 +5,7 @@ use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use tokio_util::sync::CancellationToken;
-
+use numaflow_sqs::sink::SqsSinkBuilder;
 use crate::config::components::sink::{SinkConfig, SinkType};
 use crate::config::components::source::{SourceConfig, SourceType};
 use crate::config::components::transformer::TransformerConfig;
@@ -22,7 +22,7 @@ use crate::source::Source;
 use crate::source::generator::new_generator;
 use crate::source::jetstream::new_jetstream_source;
 use crate::source::pulsar::new_pulsar_source;
-use crate::source::sqs::{new_sqs_sink, new_sqs_source};
+use crate::source::sqs::{new_sqs_source};
 use crate::source::user_defined::new_source;
 use crate::tracker::TrackerHandle;
 use crate::transformer::Transformer;
@@ -91,7 +91,7 @@ pub(crate) async fn create_sink_writer(
             .retry_config(primary_sink.retry_config.unwrap_or_default())
         }
         SinkType::Sqs(sqs_sink_config) => {
-            let sqs_sink = new_sqs_sink(sqs_sink_config).await?;
+            let sqs_sink = SqsSinkBuilder::new(sqs_sink_config).build().await?;
             SinkWriterBuilder::new(
                 batch_size,
                 read_timeout,
@@ -146,7 +146,7 @@ pub(crate) async fn create_sink_writer(
                     .await?)
             }
             SinkType::Sqs(sqs_sink_config) => {
-                let sqs_sink = new_sqs_sink(sqs_sink_config).await?;
+                let sqs_sink = SqsSinkBuilder::new(sqs_sink_config).build().await?;
                 Ok(sink_writer_builder
                     .fb_sink_client(SinkClientType::Sqs(sqs_sink.clone()))
                     .build()
