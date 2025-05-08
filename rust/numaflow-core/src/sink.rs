@@ -569,12 +569,7 @@ impl SinkWriter {
                 }
 
                 // Calculate exponential backoff delay for the next retry attempt
-                let delay = Self::calculate_exponential_delay(
-                    retry_config,
-                    attempts,
-                    &mut rng,
-                    retry_config.sink_retry_jitter,
-                );
+                let delay = Self::calculate_exponential_delay(retry_config, attempts, &mut rng);
                 // Sleep for the calculated delay
                 sleep(Duration::from_millis(delay as u64)).await;
             }
@@ -922,16 +917,15 @@ impl SinkWriter {
         retry_config: &RetryConfig,
         attempts: u16,
         rng: &mut R,
-        jitter: f64,
     ) -> f64 {
         // Calculate the base delay using the initial retry interval and the retry factor
         // The base delay is calculated as: initial_retry_interval * retry_factor^attempts
         let base_delay = (retry_config.sink_initial_retry_interval_in_ms as f64)
             * retry_config.sink_retry_factor.powi(attempts as i32);
 
+        let jitter = retry_config.sink_retry_jitter;
         // If jitter is 0, return the base delay
         // and cap it to the max retry interval
-        // to avoid exceeding the max retry interval
         if jitter == 0.0 {
             return base_delay.min(retry_config.sink_max_retry_interval_in_ms as f64);
         }
