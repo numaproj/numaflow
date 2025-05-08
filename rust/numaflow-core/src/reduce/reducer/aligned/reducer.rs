@@ -1,8 +1,8 @@
 use crate::error::Error;
 use crate::message::Message;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
-use crate::reduce::pnf::aligned::user_defined::UserDefinedAlignedReduce;
-use crate::reduce::pnf::aligned::windower::{
+use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
+use crate::reduce::reducer::aligned::windower::{
     AlignedWindowMessage, FixedWindowMessage, Window, WindowManager, WindowOperation,
 };
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
@@ -361,9 +361,9 @@ mod tests {
     use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
     use crate::message::{Message, MessageID, Offset, StringOffset};
     use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
-    use crate::reduce::pnf::aligned::user_defined::UserDefinedAlignedReduce;
-    use crate::reduce::pnf::aligned::windower::fixed::FixedWindowManager;
-    use crate::reduce::pnf::aligned::windower::sliding::SlidingWindowManager;
+    use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
+    use crate::reduce::reducer::aligned::windower::fixed::FixedWindowManager;
+    use crate::reduce::reducer::aligned::windower::sliding::SlidingWindowManager;
     use crate::shared::grpc::create_rpc_channel;
     use crate::tracker::TrackerHandle;
 

@@ -1,4 +1,4 @@
-use crate::reduce::pnf::aligned::user_defined;
+use crate::reduce::reducer::aligned::user_defined;
 
 #[derive(Clone)]
 pub(crate) enum ReduceClient {

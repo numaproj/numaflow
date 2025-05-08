@@ -9,7 +9,7 @@ use crate::config::pipeline::map::{MapMode, MapType, MapVtxConfig};
 use crate::config::pipeline::{DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET};
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
-use crate::reduce::pnf::aligned::user_defined::UserDefinedAlignedReduce;
+use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
 use crate::shared::grpc;
 use crate::shared::server_info::{ContainerType, sdk_server_info};
 use crate::sink::serve::ServingStore;

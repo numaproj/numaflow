@@ -4,8 +4,8 @@ use tracing::{error, info};
 use crate::Result;
 use crate::error::Error;
 use crate::reduce::pbq::PBQ;
-use crate::reduce::pnf::aligned::reducer::AlignedReducer;
-use crate::reduce::pnf::aligned::windower::WindowManager;
+use crate::reduce::reducer::aligned::reducer::AlignedReducer;
+use crate::reduce::reducer::aligned::windower::WindowManager;
 
 /// ReduceForwarder is a component which starts a PBQ reader and a ProcessAndForward processor
 /// and manages the lifecycle of these components.

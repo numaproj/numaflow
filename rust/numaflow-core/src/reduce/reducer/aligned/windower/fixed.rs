@@ -6,7 +6,7 @@ use std::time::Duration;
 use chrono::{DateTime, TimeZone, Utc};
 
 use crate::message::Message;
-use crate::reduce::pnf::aligned::windower::{
+use crate::reduce::reducer::aligned::windower::{
     AlignedWindowMessage, FixedWindowMessage, Window, WindowManager, WindowOperation,
 };
 

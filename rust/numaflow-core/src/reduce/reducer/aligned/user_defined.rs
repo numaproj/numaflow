@@ -1,8 +1,8 @@
 use crate::Result;
 use crate::config::get_vertex_name;
 use crate::message::{IntOffset, Message, MessageID, Offset};
-use crate::reduce::pnf::aligned::windower::AlignedWindowMessage;
-use crate::reduce::pnf::aligned::windower::WindowOperation;
+use crate::reduce::reducer::aligned::windower::AlignedWindowMessage;
+use crate::reduce::reducer::aligned::windower::WindowOperation;
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 use chrono::Utc;
 use numaflow_pb::clients::reduce::reduce_client::ReduceClient;
@@ -215,7 +215,7 @@ mod tests {
 
     use super::*;
     use crate::message::{MessageID, StringOffset};
-    use crate::reduce::pnf::aligned::windower::{FixedWindowMessage, Window, WindowOperation};
+    use crate::reduce::reducer::aligned::windower::{FixedWindowMessage, Window, WindowOperation};
     use crate::shared::grpc::create_rpc_channel;
 
     struct Counter {}
