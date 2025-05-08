@@ -228,6 +228,12 @@ func Test_GetPipelineObj(t *testing.T) {
 				},
 			},
 			Serving: ServingSpec{
+				AbstractPodTemplate: AbstractPodTemplate{
+					Metadata: &Metadata{
+						Labels:      map[string]string{"a": "b"},
+						Annotations: map[string]string{"e": "f"},
+					},
+				},
 				Service: true,
 				ContainerTemplate: &ContainerTemplate{
 					Env: []corev1.EnvVar{{Name: "TEST_ENV", Value: "test-value"}},
@@ -271,7 +277,7 @@ func Test_GetPipelineObj(t *testing.T) {
 
 	// Validate environment variables
 	envVars := sourceVertex.ContainerTemplate.Env
-	assert.Contains(t, envVars, corev1.EnvVar{Name: "NUMAFLOW_SERVING_SOURCE_SETTINGS", Value: "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6bnVsbCwiY29udGFpbmVyVGVtcGxhdGUiOnsicmVzb3VyY2VzIjp7InJlcXVlc3RzIjp7Im1lbW9yeSI6IjE5NDJNaSJ9fSwiZW52IjpbeyJuYW1lIjoiVEVTVF9FTlYiLCJ2YWx1ZSI6InRlc3QtdmFsdWUifV19fQ=="})
+	assert.Contains(t, envVars, corev1.EnvVar{Name: "NUMAFLOW_SERVING_SOURCE_SETTINGS", Value: "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6bnVsbCwiY29udGFpbmVyVGVtcGxhdGUiOnsicmVzb3VyY2VzIjp7InJlcXVlc3RzIjp7Im1lbW9yeSI6IjE5NDJNaSJ9fSwiZW52IjpbeyJuYW1lIjoiVEVTVF9FTlYiLCJ2YWx1ZSI6InRlc3QtdmFsdWUifV19LCJtZXRhZGF0YSI6eyJhbm5vdGF0aW9ucyI6eyJlIjoiZiJ9LCJsYWJlbHMiOnsiYSI6ImIifX19"})
 	assert.Contains(t, envVars, corev1.EnvVar{Name: "NUMAFLOW_SERVING_CALLBACK_STORE", Value: "serving-store-test-serving-pipeline_SERVING_CALLBACK_STORE"})
 	assert.Contains(t, envVars, corev1.EnvVar{Name: "NUMAFLOW_SERVING_RESPONSE_STORE", Value: "serving-store-test-serving-pipeline_SERVING_RESPONSE_STORE"})
 	assert.Contains(t, envVars, corev1.EnvVar{Name: "NUMAFLOW_SERVING_STATUS_STORE", Value: "serving-store-test-serving-pipeline_SERVING_STATUS_STORE"})
@@ -285,4 +291,6 @@ func Test_GetPipelineObj(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Contains(t, deploy.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{Name: "TEST_ENV", Value: "test-value"})
 	assert.Equal(t, deploy.Spec.Template.Spec.Containers[0].Resources.Requests.Memory().String(), "1942Mi")
+	assert.Equal(t, "b", deploy.Spec.Template.Labels["a"])
+	assert.Equal(t, "f", deploy.Spec.Template.Annotations["e"])
 }
