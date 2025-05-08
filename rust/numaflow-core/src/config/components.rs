@@ -7,6 +7,7 @@ pub(crate) mod source {
 
     use bytes::Bytes;
     use numaflow_jetstream::{JetstreamSourceConfig, NatsAuth, TlsClientAuthCerts, TlsConfig};
+    use numaflow_kafka::KafkaSourceConfig;
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source, SqsSource};
     use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
     use numaflow_sqs::source::SQSSourceConfig;
@@ -39,6 +40,7 @@ pub(crate) mod source {
         Pulsar(PulsarSourceConfig),
         Jetstream(JetstreamSourceConfig),
         Sqs(SQSSourceConfig),
+        Kafka(KafkaSourceConfig),
     }
 
     impl From<Box<GeneratorSource>> for SourceType {
@@ -266,6 +268,98 @@ pub(crate) mod source {
         }
     }
 
+    impl TryFrom<Box<numaflow_models::models::KafkaSource>> for SourceType {
+        type Error = Error;
+        fn try_from(
+            value: Box<numaflow_models::models::KafkaSource>,
+        ) -> std::result::Result<Self, Self::Error> {
+            let auth: Option<numaflow_kafka::KafkaAuth> = match value.sasl {
+                Some(sasl) => {
+                    todo!("SASL is not supported yet");
+                }
+                None => None,
+            };
+
+            let tls = if let Some(tls_config) = value.tls {
+                let tls_skip_verify = tls_config.insecure_skip_verify.unwrap_or(false);
+                if tls_skip_verify {
+                    Some(numaflow_kafka::TlsConfig {
+                        insecure_skip_verify: true,
+                        ca_cert: None,
+                        client_auth: None,
+                    })
+                } else {
+                    let ca_cert = tls_config
+                        .ca_cert_secret
+                        .map(|ca_cert_secret| {
+                            match crate::shared::create_components::get_secret_from_volume(
+                                &ca_cert_secret.name,
+                                &ca_cert_secret.key,
+                            ) {
+                                Ok(secret) => Ok(secret),
+                                Err(e) => Err(Error::Config(format!(
+                                    "Failed to get CA cert secret: {e:?}"
+                                ))),
+                            }
+                        })
+                        .transpose()?;
+
+                    let tls_client_auth_certs = match tls_config.cert_secret {
+                        Some(client_cert_secret) => {
+                            let client_cert =
+                                crate::shared::create_components::get_secret_from_volume(
+                                    &client_cert_secret.name,
+                                    &client_cert_secret.key,
+                                )
+                                .map_err(|e| {
+                                    Error::Config(format!(
+                                        "Failed to get client cert secret: {e:?}"
+                                    ))
+                                })?;
+
+                            let Some(private_key_secret) = tls_config.key_secret else {
+                                return Err(Error::Config("Client cert is specified for TLS authentication, but private key is not specified".into()));
+                            };
+
+                            let client_cert_private_key =
+                                crate::shared::create_components::get_secret_from_volume(
+                                    &private_key_secret.name,
+                                    &private_key_secret.key,
+                                )
+                                .map_err(|e| {
+                                    Error::Config(format!(
+                                        "Failed to get client cert private key secret: {e:?}"
+                                    ))
+                                })?;
+                            Some(numaflow_kafka::TlsClientAuthCerts {
+                                client_cert,
+                                client_cert_private_key,
+                            })
+                        }
+                        None => None,
+                    };
+
+                    Some(numaflow_kafka::TlsConfig {
+                        insecure_skip_verify: tls_config.insecure_skip_verify.unwrap_or(false),
+                        ca_cert,
+                        client_auth: tls_client_auth_certs,
+                    })
+                }
+            } else {
+                None
+            };
+
+            let kafka_config = numaflow_kafka::KafkaSourceConfig {
+                brokers: value.brokers.unwrap_or_default(),
+                topic: value.topic,
+                consumer_group: value.consumer_group.unwrap_or_default(),
+                auth,
+                tls,
+            };
+            Ok(SourceType::Kafka(kafka_config))
+        }
+    }
+
     impl TryFrom<Box<Source>> for SourceType {
         type Error = Error;
 
@@ -292,6 +386,10 @@ pub(crate) mod source {
 
             if let Some(jetstream) = source.jetstream.take() {
                 return jetstream.try_into();
+            }
+
+            if let Some(kafka) = source.kafka.take() {
+                return kafka.try_into();
             }
 
             Err(Error::Config(format!("Invalid source type: {source:?}")))

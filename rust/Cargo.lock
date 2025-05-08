@@ -2197,6 +2197,7 @@ dependencies = [
  "kube",
  "numaflow 0.2.1",
  "numaflow-jetstream",
+ "numaflow-kafka",
  "numaflow-models",
  "numaflow-monitor",
  "numaflow-pb",

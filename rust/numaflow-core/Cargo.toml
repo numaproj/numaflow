@@ -18,6 +18,7 @@ tracing.workspace = true
 numaflow-pulsar.workspace = true
 numaflow-monitor.workspace = true
 numaflow-jetstream.workspace = true
+numaflow-kafka.workspace = true
 numaflow-sqs.workspace = true
 numaflow-models.workspace = true
 numaflow-pb.workspace = true
