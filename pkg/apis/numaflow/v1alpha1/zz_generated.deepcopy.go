@@ -2545,6 +2545,7 @@ func (in *ServingSpec) DeepCopyInto(out *ServingSpec) {
 		*out = new(int32)
 		**out = **in
 	}
+	in.AbstractPodTemplate.DeepCopyInto(&out.AbstractPodTemplate)
 	return
 }
 
