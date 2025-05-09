@@ -775,6 +775,7 @@ pub(crate) mod reduce {
         pub(crate) max_file_size_mb: u64,
         pub(crate) flush_interval_ms: u64,
         pub(crate) channel_buffer_size: usize,
+        pub(crate) max_segment_age_secs: u64,
     }
 
     impl Default for StorageConfig {
@@ -784,6 +785,7 @@ pub(crate) mod reduce {
                 max_file_size_mb: 10,
                 flush_interval_ms: 100,
                 channel_buffer_size: 500,
+                max_segment_age_secs: 120,
             }
         }
     }

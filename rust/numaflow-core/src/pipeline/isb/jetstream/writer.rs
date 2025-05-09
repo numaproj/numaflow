@@ -270,7 +270,6 @@ impl JetstreamWriter {
                     last_logged_at = Instant::now();
                 }
             }
-            info!("Streaming jetstream writer finished");
             Ok(())
         });
         Ok(handle)

@@ -147,6 +147,7 @@ mod tests {
             1,    // 1MB
             1000, // 1s flush interval
             500,  // channel buffer
+            300,  // 5 minutes
         )
         .await
         .unwrap();
@@ -184,6 +185,7 @@ mod tests {
             1,    // 20MB
             1000, // 1s flush interval
             500,  // channel buffer
+            300,  // 5 minutes
         )
         .await
         .unwrap();
@@ -229,6 +231,7 @@ mod tests {
             1,    // 20MB
             1000, // 1s flush interval
             500,  // channel buffer
+            300,  // max_segment_age_secs
         )
         .await
         .unwrap();
@@ -277,6 +280,7 @@ mod tests {
             1,    // 1MB
             1000, // 1s flush interval
             500,  // channel buffer
+            300,  // 5 minutes
         )
         .await
         .unwrap();
@@ -329,6 +333,7 @@ mod tests {
             1,    // 20MB
             1000, // 1s flush interval
             500,  // channel buffer
+            300,  // 5 minutes
         )
         .await
         .unwrap();
@@ -379,6 +384,7 @@ mod tests {
             1,    // 20MB
             1000, // 1s flush interval
             500,  // channel buffer
+            300,  // max_segment_age_secs
         )
         .await
         .unwrap();

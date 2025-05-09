@@ -420,6 +420,7 @@ async fn start_reduce_forwarder(
             storage_config.max_file_size_mb,
             storage_config.flush_interval_ms,
             storage_config.channel_buffer_size,
+            storage_config.max_segment_age_secs,
         )
         .await?;
 
@@ -429,6 +430,7 @@ async fn start_reduce_forwarder(
             storage_config.max_file_size_mb,
             storage_config.flush_interval_ms,
             storage_config.channel_buffer_size,
+            storage_config.max_segment_age_secs,
         )
         .await?;
 
@@ -438,6 +440,7 @@ async fn start_reduce_forwarder(
             storage_config.max_file_size_mb,
             storage_config.flush_interval_ms,
             storage_config.channel_buffer_size,
+            storage_config.max_segment_age_secs,
         )
         .await?;
 

@@ -7,16 +7,16 @@ use crate::reduce::pbq::PBQ;
 use crate::reduce::reducer::aligned::reducer::AlignedReducer;
 use crate::reduce::reducer::aligned::windower::WindowManager;
 
-/// ReduceForwarder is a component which starts a PBQ reader and a ProcessAndForward processor
+/// ReduceForwarder is a component which starts a PBQ reader and a reducer
 /// and manages the lifecycle of these components.
 pub(crate) struct ReduceForwarder<W: WindowManager> {
     pbq: PBQ,
-    processor: AlignedReducer<W>,
+    reducer: AlignedReducer<W>,
 }
 
 impl<W: WindowManager> ReduceForwarder<W> {
-    pub(crate) fn new(pbq: PBQ, processor: AlignedReducer<W>) -> Self {
-        Self { pbq, processor }
+    pub(crate) fn new(pbq: PBQ, reducer: AlignedReducer<W>) -> Self {
+        Self { pbq, reducer }
     }
 
     pub(crate) async fn start(self, cln_token: CancellationToken) -> Result<()> {
@@ -26,21 +26,18 @@ impl<W: WindowManager> ReduceForwarder<W> {
         let (read_messages_stream, pbq_handle) =
             self.pbq.streaming_read(child_token.clone()).await?;
 
-        // Start the ProcessAndForward
+        // Start the reducer
         let processor_handle = self
-            .processor
+            .reducer
             .start(read_messages_stream, child_token)
             .await?;
 
-        // Join the pbq and pnf
+        // Join the pbq and reducer
         let (pbq_result, processor_result) = tokio::try_join!(pbq_handle, processor_handle)
             .map_err(|e| {
-                error!(
-                    ?e,
-                    "Error while joining PBQ reader and ProcessAndForward processor"
-                );
+                error!(?e, "Error while joining PBQ reader and reducer");
                 Error::Forwarder(format!(
-                    "Error while joining PBQ reader and ProcessAndForward processor: {:?}",
+                    "Error while joining PBQ reader and reducer: {:?}",
                     e
                 ))
             })?;

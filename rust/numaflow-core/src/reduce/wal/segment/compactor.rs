@@ -34,6 +34,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 /// WALs can represent two Kinds of Windows and data is different for each Kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum WindowKind {
     /// Aligned represents Fixed and Sliding Windows.
     Aligned,
@@ -43,6 +44,7 @@ pub(crate) enum WindowKind {
 
 /// A Compactor that compacts based on the GC and Segment WAL files in the given path. It can
 /// compact both [WindowKind] of WALs.
+#[derive(Clone)]
 pub(crate) struct Compactor {
     /// GC WAL
     gc_wal: ReplayWal,
@@ -66,6 +68,7 @@ impl Compactor {
         max_file_size_mb: u64,
         flush_interval_ms: u64,
         channel_buffer_size: usize,
+        max_segment_age_secs: u64,
     ) -> WalResult<Self> {
         let segment_wal = ReplayWal::new(WalType::Data, path.clone());
         let gc_wal = ReplayWal::new(WalType::Gc, path.clone());
@@ -76,6 +79,7 @@ impl Compactor {
             max_file_size_mb,
             flush_interval_ms,
             channel_buffer_size,
+            max_segment_age_secs,
         )
         .await?;
 
@@ -208,7 +212,7 @@ impl Compactor {
         // Get a streaming reader for the WAL
         let (mut rx, handle) = wal.clone().streaming_read()?;
 
-        let (wal_tx, wal_rx) = mpsc::channel(100);
+        let (wal_tx, wal_rx) = mpsc::channel(500);
         let (_result_rx, writer_handle) = self
             .compaction_ao_wal
             .clone()
@@ -247,9 +251,11 @@ impl Compactor {
                         }
                     }
                 }
+
                 SegmentEntry::DataFooter { .. } => {
                     unimplemented!()
                 }
+
                 SegmentEntry::CmdFileSwitch { filename } => {
                     // Send rotate message after processing each file
                     wal_tx
@@ -486,6 +492,7 @@ mod tests {
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             1000, // channel_buffer_size
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -522,6 +529,7 @@ mod tests {
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             100,  // channel_buffer_size
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -579,6 +587,7 @@ mod tests {
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             1000, // channel_buffer_size
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -629,6 +638,7 @@ mod tests {
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             100,  // channel_buffer_size
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -692,6 +702,7 @@ mod tests {
             1,    // 1MB
             1000, // 1s flush interval
             500,  // channel buffer
+            300,  // max_segment_age_secs
         )
         .await
         .unwrap();
@@ -743,6 +754,7 @@ mod tests {
             1,    // 1MB
             1000, // 1s flush interval
             500,  // channel buffer
+            300,  // max_segment_age_secs
         )
         .await
         .unwrap();
@@ -805,6 +817,7 @@ mod tests {
             1,    // 1MB
             1000, // 1s flush interval
             500,  // channel buffer
+            300,  // max_segment_age_secs
         )
         .await
         .unwrap();
@@ -863,6 +876,7 @@ mod tests {
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             100,  // channel_buffer_size
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -911,6 +925,7 @@ mod tests {
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             100,  // channel_buffer_size
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -980,6 +995,7 @@ mod tests {
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             100,  // channel_buffer_size
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -1040,6 +1056,7 @@ mod tests {
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             100,  // channel_buffer_size
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -1105,6 +1122,7 @@ mod tests {
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             100,  // channel_buffer_size
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -1195,6 +1213,7 @@ mod tests {
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             100,  // channel_buffer_size
+            300,  // max_segment_age_secs
         )
         .await?;
 

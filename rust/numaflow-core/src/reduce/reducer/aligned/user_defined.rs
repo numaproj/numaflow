@@ -35,7 +35,6 @@ impl From<AlignedWindowMessage> for ReduceRequest {
             }
         };
 
-        // Create the window object that's common for both Fixed and Sliding
         let window_obj = numaflow_pb::clients::reduce::Window {
             start: Some(prost_timestamp_from_utc(window.start_time)),
             end: Some(prost_timestamp_from_utc(window.end_time)),
@@ -143,8 +142,8 @@ impl UserDefinedAlignedReduce {
         // Convert AlignedWindowMessage stream to ReduceRequest stream
         let (req_tx, req_rx) = tokio::sync::mpsc::channel(100);
 
-        // Spawn a task to convert AlignedWindowMessages to ReduceRequests
-        let conversion_handle = tokio::spawn(async move {
+        // Spawn a task to convert AlignedWindowMessages to ReduceRequests and send them to req_tx
+        let request_handle = tokio::spawn(async move {
             let mut stream = stream;
             while let Some(window_msg) = stream.next().await {
                 let reduce_req: ReduceRequest = window_msg.into();
@@ -190,7 +189,7 @@ impl UserDefinedAlignedReduce {
             index += 1;
         }
 
-        if let Err(e) = conversion_handle.await {
+        if let Err(e) = request_handle.await {
             return Err(crate::Error::Reduce(format!(
                 "conversion task failed: {}",
                 e

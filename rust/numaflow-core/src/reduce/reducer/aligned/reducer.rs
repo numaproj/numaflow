@@ -208,6 +208,9 @@ impl AlignedReduceActor {
             return;
         };
 
+        // we don't need to write the close message to the client, stream closing
+        // is considered as close for aligned windows.
+
         // Drop the sender to signal completion
         drop(active_stream.message_tx);
 
@@ -285,6 +288,8 @@ impl<W: WindowManager> AlignedReducer<W> {
                         let Some(msg) = read_msg else {
                             break;
                         };
+
+                        // TODO: drop late messages, allowed lateness and keyed false
 
                         // If shutting down, drain the stream
                         if self.shutting_down_on_err {

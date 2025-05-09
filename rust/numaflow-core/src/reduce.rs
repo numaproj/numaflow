@@ -10,5 +10,5 @@ mod error;
 /// reading the data it read from ISB or WAL (during replay) to Process and Forward (PNF).
 pub(crate) mod pbq;
 
-/// Process and Forward (PNF) for processing the reduce data and forwarding it to the next vertex.
+/// Reducer for processing the reduce data and forwarding it to the next vertex.
 pub(crate) mod reducer;

@@ -5,6 +5,7 @@ use crate::reduce::wal::WalMessage;
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use crate::reduce::wal::segment::compactor::Compactor;
 use crate::tracker::TrackerHandle;
+use std::time::Duration;
 use tokio::sync::mpsc::{self, Sender};
 use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
@@ -71,7 +72,13 @@ impl PBQ {
 
         let handle = tokio::spawn(async move {
             // Replay messages from WAL
-            Self::replay_wal(wal.compactor, &tx).await?;
+            Self::replay_wal(wal.compactor.clone(), &tx).await?;
+
+            // start the compactor
+            let compaction_handle = wal
+                .compactor
+                .start_compaction(Duration::from_secs(60), cancellation_token.clone())
+                .await?;
 
             // Read from ISB and write to WAL
             Self::read_isb_and_write_wal(
@@ -83,6 +90,7 @@ impl PBQ {
             )
             .await?;
 
+            compaction_handle.await.expect("task failed")?;
             Ok(())
         });
 
@@ -92,7 +100,7 @@ impl PBQ {
     /// Replays messages from the WAL converts them to [crate::message::Message] and sends them to
     /// the tx channel.
     async fn replay_wal(compactor: Compactor, tx: &Sender<Message>) -> Result<()> {
-        let (wal_tx, mut wal_rx) = mpsc::channel(100);
+        let (wal_tx, mut wal_rx) = mpsc::channel(500);
         compactor.compact_with_replay(wal_tx).await?;
 
         while let Some(msg) = wal_rx.recv().await {
@@ -337,11 +345,12 @@ mod tests {
             10,  // 10MB max file size
             100, // 100ms flush interval
             100, // channel buffer
+            300, // max_segment_age_secs
         )
         .await
         .unwrap();
 
-        let compactor = Compactor::new(wal_path.clone(), WindowKind::Aligned, 10, 100, 100)
+        let compactor = Compactor::new(wal_path.clone(), WindowKind::Aligned, 10, 100, 100, 300)
             .await
             .unwrap();
 
@@ -402,9 +411,10 @@ mod tests {
         reader_cancel_token.cancel();
         handle.await.unwrap().unwrap();
 
-        let append_only_wal = AppendOnlyWal::new(WalType::Data, wal_path.clone(), 10, 100, 100)
-            .await
-            .unwrap();
+        let append_only_wal =
+            AppendOnlyWal::new(WalType::Data, wal_path.clone(), 10, 100, 100, 300)
+                .await
+                .unwrap();
 
         let (tx, rx) = mpsc::channel::<SegmentWriteMessage>(10);
         let (_result_rx, writer_handle) = append_only_wal
@@ -498,9 +508,10 @@ mod tests {
             .unwrap();
 
         // First, write some messages directly to WAL
-        let append_only_wal = AppendOnlyWal::new(WalType::Data, wal_path.clone(), 10, 100, 100)
-            .await
-            .unwrap();
+        let append_only_wal =
+            AppendOnlyWal::new(WalType::Data, wal_path.clone(), 10, 100, 100, 300)
+                .await
+                .unwrap();
 
         let (tx, rx) = mpsc::channel::<SegmentWriteMessage>(100);
         let (_result_rx, writer_handle) = append_only_wal
@@ -562,11 +573,12 @@ mod tests {
         .unwrap();
 
         // Create new WAL components for PBQ
-        let append_only_wal = AppendOnlyWal::new(WalType::Data, wal_path.clone(), 10, 100, 100)
-            .await
-            .unwrap();
+        let append_only_wal =
+            AppendOnlyWal::new(WalType::Data, wal_path.clone(), 10, 100, 100, 300)
+                .await
+                .unwrap();
 
-        let compactor = Compactor::new(wal_path.clone(), WindowKind::Aligned, 10, 100, 100)
+        let compactor = Compactor::new(wal_path.clone(), WindowKind::Aligned, 10, 100, 100, 300)
             .await
             .unwrap();
 
