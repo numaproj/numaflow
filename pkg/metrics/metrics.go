@@ -237,14 +237,6 @@ var (
 		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*15, 10),
 	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
 
-	// SourceTransformerConcurrentProcessingTime is a histogram to Observe Source Transformer Processing times as a whole
-	SourceTransformerConcurrentProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Subsystem: "source_forwarder",
-		Name:      "concurrent_transformer_processing_time",
-		Help:      "Processing times of Concurrent source transformer (100 microseconds to 20 minutes)",
-		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*20, 10),
-	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex, LabelPartitionName})
-
 	// SourceTransformerReadMessagesCount is used to indicate the number of messages read by source transformer
 	SourceTransformerReadMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "source_forwarder",
