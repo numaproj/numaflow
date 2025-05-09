@@ -81,6 +81,8 @@ pub(crate) enum WindowOperation {
     Append(Message),
 }
 
+// TODO(vigith): Who creates the AlignedWindowMessage, FixedWindowMessage, SlidingWindowMessage?
+
 /// Aligned Window Message.
 #[derive(Debug, Clone)]
 pub(crate) enum AlignedWindowMessage {

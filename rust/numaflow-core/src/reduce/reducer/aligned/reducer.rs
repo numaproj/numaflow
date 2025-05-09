@@ -16,25 +16,32 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
-/// Represents an active reduce stream for a window
+/// Represents an active reduce stream for a window.
 struct ActiveStream {
-    /// Sender for window messages
+    /// Sender for window messages. Messages are sent to this channel is received by the unique reduce
+    /// task for that window.
     message_tx: mpsc::Sender<AlignedWindowMessage>,
     /// Handle to the task processing the window
     task_handle: JoinHandle<()>,
 }
 
-/// Actor that manages multiple window reduction streams
+/// Actor that manages multiple window reduction streams. It manages [ActiveStream]s and manages the
+/// lifecycle of the reduce tasks.
 struct AlignedReduceActor {
+    /// It multiplexes the messages to the receiver to the reduce tasks through the corresponding
+    /// tx in [ActiveStream].
     receiver: mpsc::Receiver<AlignedWindowMessage>,
+    /// Client for user-defined reduce operations.
     client: UserDefinedAlignedReduce,
-    /// Map of active streams keyed by window ID (pnf_slot)
+    /// Map of [ActiveStream]s keyed by window ID (pnf_slot).
     active_streams: HashMap<Bytes, ActiveStream>,
-    /// JetStream writer for writing results
+    /// JetStream writer for writing results of reduce operation.
     js_writer: JetstreamWriter,
-    /// Sender for error messages
+    /// Sender for error messages.
+    /// TODO(vigith): how is error handled!!
     error_tx: mpsc::Sender<Error>,
-    /// Sender for GC WAL messages
+    /// Sender for GC WAL messages.
+    /// TODO(vigith): why is this optional?
     gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
 }
 
@@ -56,12 +63,14 @@ impl AlignedReduceActor {
         }
     }
 
+    /// Runs the actor, listening for messages and multiplexing them to the reduce tasks.
     async fn run(mut self) {
         while let Some(msg) = self.receiver.recv().await {
             self.handle_message(msg).await;
         }
     }
 
+    // TODO(vigith): this is not right?
     async fn handle_message(&mut self, msg: AlignedWindowMessage) {
         match msg {
             AlignedWindowMessage::Fixed(msg) => {
@@ -83,6 +92,8 @@ impl AlignedReduceActor {
         }
     }
 
+    /// Creates a new reduce task for the window and sends the initial Open command with the
+    /// first message.
     async fn window_open(&mut self, window: Window, window_id: Bytes, msg: Message) {
         // Create a new channel for this window's messages
         let (message_tx, message_rx) = mpsc::channel(100);
@@ -124,11 +135,12 @@ impl AlignedReduceActor {
             },
         );
 
-        // Send the open message
+        // Send the open command with the first message
         let _ = message_tx.send(window_msg).await;
     }
 
-    /// Process a window stream and write results to JetStream
+    /// Starts the reduce task (user-defined) for the window stream.
+    /// Once the reduce is done, it will write the result to the ISB.
     async fn process_window_stream(
         mut client: UserDefinedAlignedReduce,
         message_stream: ReceiverStream<AlignedWindowMessage>,
@@ -153,7 +165,8 @@ impl AlignedReduceActor {
             }
         };
 
-        // Send the window messages to the client for processing
+        // Call the reduce function. This is a blocking call and will return only once the window
+        // is closed (or on error).
         let result = client.reduce_fn(message_stream, result_tx).await;
 
         if let Err(e) = result {
@@ -169,7 +182,9 @@ impl AlignedReduceActor {
             return;
         }
 
+        // now that the processing is done, we can add this window to the GC WAL.
         let Some(gc_wal_tx) = gc_wal_tx else {
+            // return if the GC WAL is not configured
             return;
         };
 
@@ -184,10 +199,11 @@ impl AlignedReduceActor {
             .expect("failed to write gc event to wal");
     }
 
+    /// sends the message to the reduce task for the window.
     async fn window_append(&mut self, window: Window, window_id: Bytes, msg: Message) {
         // Get the existing stream or log error if not found
         let Some(active_stream) = self.active_streams.get(&window_id) else {
-            error!("No active stream found for window {:?}", window_id);
+            error!(?window_id, "No active stream found for window");
             return;
         };
 
@@ -201,6 +217,7 @@ impl AlignedReduceActor {
         let _ = active_stream.message_tx.send(window_msg).await;
     }
 
+    /// Closes the reduce task for the window.
     async fn window_close(&mut self, window_id: Bytes) {
         // Get the existing stream or log error if not found
         let Some(active_stream) = self.active_streams.remove(&window_id) else {
@@ -216,20 +233,20 @@ impl AlignedReduceActor {
 
         // Wait for the task to complete
         if let Err(e) = active_stream.task_handle.await {
-            error!("Reduce task for window {:?} failed: {}", window_id, e);
+            error!(?window_id, err = ?e,"Reduce task for window failed");
         }
     }
 }
 
-/// Processes messages and forwards results to the next stage
+/// Processes messages and forwards results to the next stage.
 #[derive(Clone)]
 pub(crate) struct AlignedReducer<W: WindowManager> {
     client: UserDefinedAlignedReduce,
-    windower: W,
+    window_manager: W,
     js_writer: JetstreamWriter,
-    /// Final state of the component (any error will set this as Err)
+    /// Final state of the component (any error will set this as Err).
     final_result: crate::Result<()>,
-    /// Set to true when shutting down due to an error
+    /// Set to true when shutting down due to an error.
     shutting_down_on_err: bool,
     gc_wal: Option<AppendOnlyWal>,
 }
@@ -237,13 +254,13 @@ pub(crate) struct AlignedReducer<W: WindowManager> {
 impl<W: WindowManager> AlignedReducer<W> {
     pub(crate) async fn new(
         client: UserDefinedAlignedReduce,
-        windower: W,
+        window_manager: W,
         js_writer: JetstreamWriter,
         gc_wal: Option<AppendOnlyWal>,
     ) -> Self {
         Self {
             client,
-            windower,
+            window_manager,
             js_writer,
             final_result: Ok(()),
             shutting_down_on_err: false,
@@ -251,6 +268,7 @@ impl<W: WindowManager> AlignedReducer<W> {
         }
     }
 
+    /// Starts the reduce component and returns a handle to the main task.
     pub(crate) async fn start(
         mut self,
         input_stream: ReceiverStream<Message>,
@@ -271,11 +289,12 @@ impl<W: WindowManager> AlignedReducer<W> {
         )
         .await;
 
+        // start the reduce actor
         tokio::spawn(async move {
             actor.run().await;
         });
 
-        // Spawn the main processing task
+        // Spawn the task that reads from the input stream (PBQ) and sends messages to the actor
         let handle = tokio::spawn(async move {
             let mut input_stream = input_stream;
 
@@ -299,14 +318,14 @@ impl<W: WindowManager> AlignedReducer<W> {
 
                         // check if any windows can be closed using the watermark in the message
                         if let Some(watermark) = msg.watermark {
-                            let window_messages = self.windower.close_windows(watermark);
+                            let window_messages = self.window_manager.close_windows(watermark);
                             for window_msg in window_messages {
                                 actor_tx.send(window_msg).await.expect("Receiver dropped");
                             }
                         }
 
                         // Process the message through the windower
-                        let window_messages = self.windower.assign_windows(msg);
+                        let window_messages = self.window_manager.assign_windows(msg);
 
                         // Send each window message to the actor
                         for window_msg in window_messages {
@@ -316,14 +335,14 @@ impl<W: WindowManager> AlignedReducer<W> {
                 }
             }
 
-            info!(status=?self.final_result, "Reduce component completed");
+            info!(status=?self.final_result, "Reduce component successfully completed");
             self.final_result
         });
 
         Ok(handle)
     }
 
-    /// Set up the GC WAL if configured
+    /// Set up the GC WAL if configured.
     async fn setup_gc_wal(&mut self) -> crate::Result<Option<mpsc::Sender<SegmentWriteMessage>>> {
         if let Some(gc_wal) = self.gc_wal.take() {
             let (gc_tx, gc_rx) = mpsc::channel(100);
@@ -334,7 +353,7 @@ impl<W: WindowManager> AlignedReducer<W> {
         }
     }
 
-    /// Handle an error by canceling the token and updating state
+    /// Handle an error by canceling the token and updating state.
     fn handle_error(&mut self, error: Error, cln_token: &CancellationToken) {
         if self.final_result.is_ok() {
             error!(?error, "Error received while performing reduce operation");

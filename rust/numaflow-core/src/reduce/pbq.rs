@@ -15,7 +15,9 @@ use tokio_util::sync::CancellationToken;
 /// WAL for storing the data. If None, we will not persist the data.
 #[allow(clippy::upper_case_acronyms)]
 pub(crate) struct WAL {
+    /// Segment WAL which is only for appending.
     pub(crate) append_only_wal: AppendOnlyWal,
+    /// Compactor for compacting the Segment WAL with GC WAL.
     pub(crate) compactor: Compactor,
 }
 
@@ -97,8 +99,8 @@ impl PBQ {
         Ok((ReceiverStream::new(rx), handle))
     }
 
-    /// Replays messages from the WAL converts them to [crate::message::Message] and sends them to
-    /// the tx channel.
+    /// Replays messages from the WAL converts them to [Message] and sends them to
+    /// the tx channel. Replay also compacts the WAL.
     async fn replay_wal(compactor: Compactor, tx: &Sender<Message>) -> Result<()> {
         let (wal_tx, mut wal_rx) = mpsc::channel(500);
         compactor.compact_with_replay(wal_tx).await?;

@@ -411,7 +411,7 @@ async fn start_reduce_forwarder(
         create_components::create_aligned_reducer(reduce_vtx_config.reducer_config.clone()).await?;
 
     // Create WAL if configured
-    let (wal, gc_wal) = if let Some(storage_config) = &reduce_vtx_config.storage_config {
+    let (wal, gc_wal) = if let Some(storage_config) = &reduce_vtx_config.wal_storage_config {
         let wal_path = storage_config.path.clone();
 
         let append_only_wal = AppendOnlyWal::new(

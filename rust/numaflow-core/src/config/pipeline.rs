@@ -200,7 +200,7 @@ pub(crate) enum VertexType {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ReduceVtxConfig {
     pub(crate) reducer_config: ReducerConfig,
-    pub(crate) storage_config: Option<StorageConfig>,
+    pub(crate) wal_storage_config: Option<StorageConfig>,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -420,7 +420,7 @@ impl PipelineConfig {
 
                 VertexType::Reduce(ReduceVtxConfig {
                     reducer_config,
-                    storage_config,
+                    wal_storage_config: storage_config,
                 })
             } else {
                 // This is a map vertex

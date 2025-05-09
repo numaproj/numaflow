@@ -80,7 +80,7 @@ impl From<AlignedWindowMessage> for ReduceRequest {
     }
 }
 
-/// Wrapper for ReduceResponse that includes index and vertex name
+/// Wrapper for ReduceResponse that includes index and vertex name.
 struct UdReducerResponse {
     pub response: ReduceResponse,
     pub index: i32,
@@ -124,6 +124,7 @@ impl From<UdReducerResponse> for Message {
     }
 }
 
+/// User-defined aligned reduce client.
 #[derive(Clone)]
 pub(crate) struct UserDefinedAlignedReduce {
     client: ReduceClient<Channel>,
@@ -134,6 +135,7 @@ impl UserDefinedAlignedReduce {
         UserDefinedAlignedReduce { client }
     }
 
+    /// Calls the reduce_fn on the user-defined reducer on a separate tokio task.
     pub(crate) async fn reduce_fn(
         &mut self,
         stream: ReceiverStream<AlignedWindowMessage>,
@@ -153,6 +155,7 @@ impl UserDefinedAlignedReduce {
             }
         });
 
+        // TODO(vigith): this is not blocking, right?
         // Call the gRPC reduce_fn with the converted stream
         let mut response_stream = self
             .client

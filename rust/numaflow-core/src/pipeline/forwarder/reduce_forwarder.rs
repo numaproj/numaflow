@@ -42,6 +42,7 @@ impl<W: WindowManager> ReduceForwarder<W> {
                 ))
             })?;
 
+        // TODO(vigith):
         processor_result.inspect_err(|e| {
             error!(?e, "Error in ProcessAndForward processor");
             cln_token.cancel();
