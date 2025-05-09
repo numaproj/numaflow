@@ -39,22 +39,23 @@ Once these prerequisites are in place, you're ready to proceed with installing a
 
 After completing the prerequisites, follow these steps to install Numaflow and set up the [Inter-Step Buffer Service](./core-concepts/inter-step-buffer-service.md), which facilitates communication between pipeline vertices:
 
-1. Create a namespace for Numaflow:
+### Create a namespace for Numaflow
 
-   ```shell
-   kubectl create ns numaflow-system
-   ```
+```shell
+kubectl create ns numaflow-system
+```
 
-2. Install Numaflow components:
+### Install Numaflow components
 
-   ```shell
-   kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/numaflow/main/config/install.yaml
-   ```
+```shell
+kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/numaflow/main/config/install.yaml
+```
 
-3. Deploy the JetStream-based Inter-Step Buffer Service:
-   ```shell
-   kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/main/examples/0-isbsvc-jetstream.yaml
-   ```
+### Deploy the JetStream-based Inter-Step Buffer Service
+
+```shell
+kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/main/examples/0-isbsvc-jetstream.yaml
+```
 
 Once these steps are complete, Numaflow will be ready for use.
 
@@ -129,11 +130,10 @@ kubectl patch -n kube-system deployment metrics-server --type=json -p '[{"op":"a
 To access the UI, port-forward the Numaflow server:
 
 ```shell
-# Port forward the UI to https://localhost:8443/
 kubectl -n numaflow-system port-forward deployment/numaflow-server 8443:8443
 ```
 
-Visit https://localhost:8443/ to view the UI. Below is an example of the UI for the simple pipeline:
+Visit https://localhost:8443/ to view the UI. Below is the UI for the `simple` pipeline:
 
 #### Namespaces View
 
@@ -237,7 +237,7 @@ kubectl logs -f even-odd-odd-sink-0-xxxxx
 
 ### Accessing the Numaflow UI
 
-To visualize the pipeline, access the Numaflow UI at https://localhost:8443/after port forwarding. Below is an example of the UI for the `even-odd` pipeline:
+To visualize the pipeline, access the Numaflow UI at https://localhost:8443/ after port forwarding. Below is the UI for the `even-odd` pipeline:
 
 ![Numaflow UI](assets/ui-advanced-pipeline.png)
 
@@ -324,10 +324,9 @@ You should see output similar to:
 
 ### Accessing the Numaflow UI
 
-To visualize the MonoVertex, access the Numaflow UI by port-forwarding the server:
+To visualize the MonoVertex, access the Numaflow UI by port-forwarding the Numaflow server:
 
 ```shell
-# Port forward the UI to https://localhost:8443/
 kubectl -n numaflow-system port-forward deployment/numaflow-server 8443:8443
 ```
 
