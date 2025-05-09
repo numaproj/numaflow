@@ -90,6 +90,8 @@ type ServingSpec struct {
 	// Initial replicas of the serving server deployment.
 	// +optional
 	Replicas *int32 `json:"replicas,omitempty" protobuf:"varint,7,opt,name=replicas"`
+	// +optional
+	AbstractPodTemplate `json:",inline" protobuf:"bytes,8,opt,name=abstractPodTemplate"`
 }
 
 // ServingStore defines information of a Serving Store used in a pipeline
@@ -267,7 +269,9 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 	} else {
 		spec.Template.Spec.Containers = append(spec.Template.Spec.Containers, sp.getStoreSidecarContainerSpec(containerRequest)...)
 	}
-	// TODO(spl): add template
+
+	sp.Spec.Serving.AbstractPodTemplate.ApplyToPodTemplateSpec(&spec.Template)
+
 	return &appv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: sp.Namespace,
