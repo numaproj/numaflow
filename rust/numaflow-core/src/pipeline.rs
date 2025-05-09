@@ -453,12 +453,26 @@ async fn start_reduce_forwarder(
     };
 
     // Create PBQ
-    let pbq_builder = PBQBuilder::new(buffer_reader, tracker_handle.clone());
+    let pbq_builder = PBQBuilder::new(buffer_reader.clone(), tracker_handle.clone());
     let pbq = if let Some(wal) = wal {
         pbq_builder.wal(wal).build()
     } else {
         pbq_builder.build()
     };
+
+    let pending_reader = shared::metrics::create_pending_reader(
+        &config.metrics_config,
+        LagReader::ISB(vec![buffer_reader]),
+    )
+    .await;
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
+
+    // Start the metrics server with one of the clients
+    start_metrics_server(
+        config.metrics_config.clone(),
+        ComponentHealthChecks::Pipeline(PipelineComponents::Reduce(reducer_client.clone())),
+    )
+    .await;
 
     // Create windower based on window config
     match &reduce_vtx_config.reducer_config.window_config.window_type {
@@ -484,7 +498,9 @@ async fn start_reduce_forwarder(
             let forwarder = ReduceForwarder::new(pbq, pnf);
             forwarder.start(cln_token).await?;
         }
-        _ => unimplemented!(),
+        WindowType::Session(_) | WindowType::Accumulator(_) => {
+            panic!("Session and Accumulator windows are not supported yet");
+        }
     }
 
     info!("Reduce forwarder has stopped successfully");

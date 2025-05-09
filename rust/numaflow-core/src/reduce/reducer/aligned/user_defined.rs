@@ -199,6 +199,13 @@ impl UserDefinedAlignedReduce {
 
         Ok(())
     }
+
+    pub(crate) async fn ready(&mut self) -> bool {
+        match self.client.is_ready(tonic::Request::new(())).await {
+            Ok(response) => response.into_inner().ready,
+            Err(_) => false,
+        }
+    }
 }
 
 #[cfg(test)]

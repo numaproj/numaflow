@@ -188,7 +188,6 @@ impl JetstreamWriter {
         cln_token: CancellationToken,
     ) -> Result<JoinHandle<Result<()>>> {
         let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
-            info!("Starting streaming Jetstream writer");
             let mut messages_stream = messages_stream;
             let mut hash = DefaultHasher::new();
 

@@ -26,6 +26,7 @@ use crate::Error;
 use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica};
 use crate::mapper::map::MapHandle;
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
+use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
 use crate::sink::SinkWriter;
 use crate::source::Source;
 
@@ -114,6 +115,7 @@ pub(crate) enum PipelineComponents {
     Source(Source),
     Sink(SinkWriter),
     Map(MapHandle),
+    Reduce(UserDefinedAlignedReduce),
 }
 
 /// The global register of all metrics.
@@ -707,6 +709,12 @@ async fn sidecar_livez(State(state): State<ComponentHealthChecks>) -> impl IntoR
             PipelineComponents::Map(mut map) => {
                 if !map.ready().await {
                     error!("Pipeline map component is not ready");
+                    return StatusCode::INTERNAL_SERVER_ERROR;
+                }
+            }
+            PipelineComponents::Reduce(mut reducer) => {
+                if !reducer.ready().await {
+                    error!("Pipeline reduce component is not ready");
                     return StatusCode::INTERNAL_SERVER_ERROR;
                 }
             }

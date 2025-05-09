@@ -79,7 +79,7 @@ impl AlignedReduceActor {
         match operation {
             WindowOperation::Open(msg) => self.window_open(window, window_id, msg).await,
             WindowOperation::Append(msg) => self.window_append(window, window_id, msg).await,
-            WindowOperation::Close => self.window_close(window, window_id).await,
+            WindowOperation::Close => self.window_close(window_id).await,
         }
     }
 
@@ -201,7 +201,7 @@ impl AlignedReduceActor {
         let _ = active_stream.message_tx.send(window_msg).await;
     }
 
-    async fn window_close(&mut self, window: Window, window_id: Bytes) {
+    async fn window_close(&mut self, window_id: Bytes) {
         // Get the existing stream or log error if not found
         let Some(active_stream) = self.active_streams.remove(&window_id) else {
             error!("No active stream found for window {:?}", window_id);
@@ -219,6 +219,7 @@ impl AlignedReduceActor {
 }
 
 /// Processes messages and forwards results to the next stage
+#[derive(Clone)]
 pub(crate) struct AlignedReducer<W: WindowManager> {
     client: UserDefinedAlignedReduce,
     windower: W,
