@@ -2,11 +2,12 @@
 
 ### Overview
 
-The `RetryStrategy` is used to configure the behavior for a sink after encountering failures during a write operation. 
-This structure allows the user to specify how Numaflow should respond to different fail-over scenarios for Sinks, ensuring that the writing can be resilient and handle 
+The `RetryStrategy` is used to configure the behavior for a sink after encountering failures during a write operation.
+This structure allows the user to specify how Numaflow should respond to different fail-over scenarios for Sinks, ensuring that the writing can be resilient and handle
 unexpected issues efficiently.
 
 `RetryStrategy` ONLY gets applied to failed messages. To return a failed messages, use the methods provided by the SDKs.
+
 - `ResponseFailure`for [Golang](https://github.com/numaproj/numaflow-go/blob/main/pkg/sinker/types.go)
 - `responseFailure` for [Java](https://github.com/numaproj/numaflow-java/blob/main/src/main/java/io/numaproj/numaflow/sinker/Response.java#L40)
 - `as_fallback` for [Python](https://github.com/numaproj/numaflow-python/blob/main/pynumaflow/sinker/_dtypes.py)
@@ -18,13 +19,14 @@ unexpected issues efficiently.
 ```yaml
 sink:
   retryStrategy:
-      # Optional
-      backoff:
-        duration: 1s # Optional
-        steps: 3 # Optional, number of retries (including the 1st try)
-      # Optional
-      onFailure: retry|fallback|drop 
+    # Optional
+    backoff:
+      interval: 1s # Optional
+      steps: 3 # Optional, number of retries (including the 1st try)
+    # Optional
+    onFailure: retry|fallback|drop
 ```
+
 Note: If no custom fields are defined for retryStrategy then the **default** values are used.
 
 - `BackOff` - Defines the timing for retries, including the interval and the maximum attempts.
@@ -38,33 +40,32 @@ Note: If no custom fields are defined for retryStrategy then the **default** val
   - drop: any messages left to be processed are dropped
     - Default: _retry_
 
-
 ### Constraints
 
-1) If the `onFailure` is defined as fallback, then there should be a fallback sink specified in the spec.
+1. If the `onFailure` is defined as fallback, then there should be a fallback sink specified in the spec.
 
-2) The steps defined should always be `> 0`
-
+2. The steps defined should always be `> 0`
 
 ## Example
 
 ```yaml
-  sink:
-    retryStrategy:
-      backoff:
-        interval: "500ms"
-        steps: 10
-      onFailure: "fallback"
+sink:
+  retryStrategy:
+    backoff:
+      interval: '500ms'
+      steps: 10
+    onFailure: 'fallback'
+  udsink:
+    container:
+      image: my-sink-image
+  fallback:
     udsink:
       container:
-        image: my-sink-image
-    fallback:
-      udsink:
-        container:
-          image: my-fallback-sink
+        image: my-fallback-sink
 ```
+
 ### Explanation
 
-- Normal Operation: Data is processed by the primary sink container specified by `UDSink`. 
-The system retries up to 10 times for a batch write operation to succeed with an interval of 500 milliseconds between each retry.
+- Normal Operation: Data is processed by the primary sink container specified by `UDSink`.
+  The system retries up to 10 times for a batch write operation to succeed with an interval of 500 milliseconds between each retry.
 - After Maximum Retries: If all retries fail, data is then routed to a fallback sink instead.

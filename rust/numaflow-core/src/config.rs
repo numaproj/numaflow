@@ -258,9 +258,32 @@ mod tests {
                 mvtx_cfg
                     .sink_config
                     .retry_config
+                    .clone()
                     .unwrap()
-                    .sink_retry_interval_in_ms,
+                    .sink_initial_retry_interval_in_ms,
                 1000
+            );
+            assert_eq!(
+                mvtx_cfg
+                    .sink_config
+                    .retry_config
+                    .clone()
+                    .unwrap()
+                    .sink_max_retry_interval_in_ms,
+                4294967295
+            );
+            assert_eq!(
+                mvtx_cfg
+                    .sink_config
+                    .retry_config
+                    .clone()
+                    .unwrap()
+                    .sink_retry_factor,
+                1.0
+            );
+            assert_eq!(
+                mvtx_cfg.sink_config.retry_config.unwrap().sink_retry_jitter,
+                0.0
             );
         }
 
@@ -292,7 +315,10 @@ mod tests {
                         "retryStrategy": {
                             "backoff": {
                                 "interval": "1s",
-                                "steps": 5
+                                "steps": 5,
+                                "cap": "2s",
+                                "jitter": 0.1,
+                                "factor": 1.5
                             },
                             "onFailure": "drop"
                         },
@@ -340,8 +366,30 @@ mod tests {
                     .retry_config
                     .clone()
                     .unwrap()
-                    .sink_retry_interval_in_ms,
+                    .sink_initial_retry_interval_in_ms,
                 1000
+            );
+            assert_eq!(
+                mvtx_cfg
+                    .sink_config
+                    .retry_config
+                    .clone()
+                    .unwrap()
+                    .sink_max_retry_interval_in_ms,
+                2000
+            );
+            assert_eq!(
+                mvtx_cfg
+                    .sink_config
+                    .retry_config
+                    .clone()
+                    .unwrap()
+                    .sink_retry_factor,
+                1.5
+            );
+            assert_eq!(
+                mvtx_cfg.sink_config.retry_config.unwrap().sink_retry_jitter,
+                0.1
             );
         }
         {
@@ -372,7 +420,10 @@ mod tests {
                         "retryStrategy": {
                             "backoff": {
                                 "interval": "1s",
-                                "steps": 5
+                                "steps": 5,
+                                "cap": "10s",
+                                "jitter": 0.05,
+                                "factor": 2.5
                             },
                             "onFailure": "xxxxx"
                         },
@@ -419,8 +470,34 @@ mod tests {
                     .retry_config
                     .clone()
                     .unwrap()
-                    .sink_retry_interval_in_ms,
+                    .sink_initial_retry_interval_in_ms,
                 1000
+            );
+            assert_eq!(
+                mvtx_config
+                    .sink_config
+                    .retry_config
+                    .clone()
+                    .unwrap()
+                    .sink_max_retry_interval_in_ms,
+                10000
+            );
+            assert_eq!(
+                mvtx_config
+                    .sink_config
+                    .retry_config
+                    .clone()
+                    .unwrap()
+                    .sink_retry_factor,
+                2.5
+            );
+            assert_eq!(
+                mvtx_config
+                    .sink_config
+                    .retry_config
+                    .unwrap()
+                    .sink_retry_jitter,
+                0.05
             );
         }
     }
