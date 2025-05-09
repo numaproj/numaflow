@@ -76,13 +76,12 @@ struct KafkaContext;
 
 impl ClientContext for KafkaContext {}
 
-#[allow(elided_lifetimes_in_paths)]
 impl ConsumerContext for KafkaContext {
-    fn pre_rebalance(&self, _: &BaseConsumer<Self>, rebalance: &Rebalance) {
+    fn pre_rebalance(&self, _: &BaseConsumer<Self>, rebalance: &Rebalance<'_>) {
         info!("Pre rebalance {:?}", rebalance);
     }
 
-    fn post_rebalance(&self, _: &BaseConsumer<Self>, rebalance: &Rebalance) {
+    fn post_rebalance(&self, _: &BaseConsumer<Self>, rebalance: &Rebalance<'_>) {
         info!("Post rebalance {:?}", rebalance);
     }
 
@@ -122,6 +121,7 @@ impl KafkaActor {
         handler_rx: mpsc::Receiver<KafkaActorMessage>,
     ) -> Result<()> {
         let mut client_config = ClientConfig::new();
+        // https://docs.confluent.io/platform/current/clients/librdkafka/html/md_CONFIGURATION.html
         client_config
             .set("group.id", &config.consumer_group)
             .set("bootstrap.servers", config.brokers.join(","))
@@ -147,14 +147,15 @@ impl KafkaActor {
         }
 
         if let Some(tls_config) = config.tls {
+            client_config.set("security.protocol", "SSL");
             if tls_config.insecure_skip_verify {
                 warn!(
                     "'insecureSkipVerify' is set to true, certificate validation will not be performed when connecting to Kafka server"
                 );
-                client_config.set("ssl.endpoint.identification.algorithm", "none");
+                client_config.set("enable.ssl.certificate.verification", "false");
             }
             if let Some(ca_cert) = tls_config.ca_cert {
-                client_config.set("ssl.ca.location", ca_cert);
+                client_config.set("ssl.ca.pem", ca_cert);
             }
             if let Some(client_auth) = tls_config.client_auth {
                 client_config
@@ -172,6 +173,10 @@ impl KafkaActor {
                     error: err.to_string(),
                 })?;
 
+        // FIXME: Subscribing to a non-existent topic will not return an error
+        // Library shows error at a later point:
+        // 2025-05-09T02:45:42.239784Z ERROR rdkafka::client: librdkafka: Global error: UnknownTopicOrPartition (Broker: Unknown topic or partition): Subscribed topic not available: test-topic: Broker: Unknown topic or partition
+        // 2025-05-09T02:45:42.239847Z  WARN numaflow_kafka: Kafka error: Message consumption error: UnknownTopicOrPartition (Broker: Unknown topic or partition)
         consumer
             .subscribe(&[&config.topic])
             .map_err(|err| Error::Kafka(format!("Failed to subscribe to topic: {}", err)))?;

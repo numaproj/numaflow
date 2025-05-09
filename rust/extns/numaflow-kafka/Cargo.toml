@@ -4,9 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rdkafka = { version = "0.37.0", default-features = false, features = ["cmake-build", "tokio"] }
-backoff.workspace = true
-async-nats.workspace = true
+rdkafka = { version = "0.37.0", default-features = false, features = ["cmake-build", "tokio", "ssl-vendored"] }
 tokio.workspace = true
 tracing.workspace = true
 thiserror.workspace = true
