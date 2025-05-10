@@ -10,7 +10,7 @@ pub(crate) mod source {
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source, SqsSource};
     use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
     use numaflow_sqs::source::SqsSourceConfig;
-    use tracing::{info, warn};
+    use tracing::{warn};
 
     use crate::Result;
     use crate::error::Error;
@@ -108,11 +108,49 @@ pub(crate) mod source {
         type Error = Error;
 
         fn try_from(value: Box<SqsSource>) -> Result<Self> {
-            info!("Sqs source: {value:?}");
             if value.aws_region.is_empty() {
                 return Err(Error::Config(
-                    "AWS region is required for SQS source".to_string(),
+                    "aws_region is required for SQS source".to_string(),
                 ));
+            }
+
+            if value.queue_name.is_empty() {
+                return Err(Error::Config(
+                    "queue_name is required for SQS source".to_string(),
+                ));
+            }
+
+            if value.queue_owner_aws_account_id.is_empty() {
+                return Err(Error::Config(
+                    "queue_owner_aws_account_id is required for SQS source".to_string(),
+                ));
+            }
+
+            if let Some(timeout) = value.visibility_timeout {
+                if !(0..=43200).contains(&timeout) {
+                    return Err(Error::Config(format!(
+                        "visibility_timeout must be between 0 and 43200 for SQS source, got {}",
+                        timeout
+                    )));
+                }
+            }
+
+            if let Some(wait_time) = value.wait_time_seconds {
+                if !(0..=20).contains(&wait_time) {
+                    return Err(Error::Config(format!(
+                        "wait_time_seconds must be between 0 and 20 for SQS source, got {}",
+                        wait_time
+                    )));
+                }
+            }
+
+            if let Some(max_number_of_messages) = value.max_number_of_messages {
+                if !(1..=10).contains(&max_number_of_messages) {
+                    return Err(Error::Config(format!(
+                        "max_number_of_messages must be between 1 and 10 for SQS source, got {}",
+                        max_number_of_messages
+                    )));
+                }
             }
 
             let sqs_source_config = SqsSourceConfig {
@@ -128,8 +166,6 @@ pub(crate) mod source {
                 visibility_timeout: Some(value.visibility_timeout.unwrap_or(30)),
                 endpoint_url: value.endpoint_url,
             };
-
-            info!("parsed SQS source config: {sqs_source_config:?}");
 
             Ok(SourceType::Sqs(sqs_source_config))
         }
@@ -448,7 +484,17 @@ pub(crate) mod sink {
                 ));
             }
 
-            // TODO: Add other validations for SQS sink
+            if value.queue_name.is_empty() {
+                return Err(Error::Config(
+                    "Queue name is required for SQS sink".to_string(),
+                ));
+            }
+
+            if value.queue_owner_aws_account_id.is_empty() {
+                return Err(Error::Config(
+                    "Queue owner AWS account ID is required for SQS sink".to_string(),
+                ));
+            }
 
             let sqs_sink_config = SqsSinkConfig {
                 queue_name: Box::leak(value.queue_name.into_boxed_str()),
