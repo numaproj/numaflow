@@ -30,6 +30,8 @@ pub struct Sink {
     pub retry_strategy: Option<Box<crate::models::RetryStrategy>>,
     #[serde(rename = "serve", skip_serializing_if = "Option::is_none")]
     pub serve: Option<Box<crate::models::ServeSink>>,
+    #[serde(rename = "sqs", skip_serializing_if = "Option::is_none")]
+    pub sqs: Option<Box<crate::models::SqsSink>>,
     #[serde(rename = "udsink", skip_serializing_if = "Option::is_none")]
     pub udsink: Option<Box<crate::models::UdSink>>,
 }
@@ -43,6 +45,7 @@ impl Sink {
             log: None,
             retry_strategy: None,
             serve: None,
+            sqs: None,
             udsink: None,
         }
     }

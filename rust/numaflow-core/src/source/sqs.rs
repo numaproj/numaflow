@@ -1,17 +1,16 @@
+use numaflow_sqs::source::{SqsMessage, SqsSource, SqsSourceBuilder, SqsSourceConfig};
 use std::sync::Arc;
 use std::time::Duration;
-
-use numaflow_sqs::source::{SQSMessage, SQSSource, SQSSourceConfig, SqsSourceBuilder};
 
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
 use crate::message::{Message, MessageID, Offset, StringOffset};
 use crate::source;
 
-impl TryFrom<SQSMessage> for Message {
+impl TryFrom<SqsMessage> for Message {
     type Error = Error;
 
-    fn try_from(message: SQSMessage) -> crate::Result<Self> {
+    fn try_from(message: SqsMessage) -> crate::Result<Self> {
         let offset = Offset::String(StringOffset::new(message.offset, *get_vertex_replica()));
 
         Ok(Message {
@@ -33,25 +32,29 @@ impl TryFrom<SQSMessage> for Message {
     }
 }
 
-impl From<numaflow_sqs::Error> for Error {
-    fn from(value: numaflow_sqs::Error) -> Self {
+impl From<numaflow_sqs::SqsSourceError> for Error {
+    fn from(value: numaflow_sqs::SqsSourceError) -> Self {
         match value {
-            numaflow_sqs::Error::Sqs(e) => Error::Source(e.to_string()),
-            numaflow_sqs::Error::ActorTaskTerminated(_) => {
+            numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::Sqs(e)) => {
+                Error::Source(e.to_string())
+            }
+            numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::ActorTaskTerminated(_)) => {
                 Error::ActorPatternRecv(value.to_string())
             }
-            numaflow_sqs::Error::InvalidConfig(e) => Error::Source(e),
-            numaflow_sqs::Error::Other(e) => Error::Source(e),
+            numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::InvalidConfig(e)) => {
+                Error::Source(e)
+            }
+            numaflow_sqs::SqsSourceError::Error(numaflow_sqs::Error::Other(e)) => Error::Source(e),
         }
     }
 }
 
 pub(crate) async fn new_sqs_source(
-    cfg: SQSSourceConfig,
+    cfg: SqsSourceConfig,
     batch_size: usize,
     timeout: Duration,
     vertex_replica: u16,
-) -> crate::Result<SQSSource> {
+) -> crate::Result<SqsSource> {
     Ok(SqsSourceBuilder::new(cfg)
         .batch_size(batch_size)
         .timeout(timeout)
@@ -60,9 +63,9 @@ pub(crate) async fn new_sqs_source(
         .await?)
 }
 
-impl source::SourceReader for SQSSource {
+impl source::SourceReader for SqsSource {
     fn name(&self) -> &'static str {
-        "Sqs"
+        "SQS"
     }
 
     async fn read(&mut self) -> crate::Result<Vec<Message>> {
@@ -79,7 +82,7 @@ impl source::SourceReader for SQSSource {
     }
 }
 
-impl source::SourceAcker for SQSSource {
+impl source::SourceAcker for SqsSource {
     async fn ack(&mut self, offsets: Vec<Offset>) -> crate::error::Result<()> {
         let mut sqs_offsets = Vec::with_capacity(offsets.len());
         for offset in offsets {
@@ -94,7 +97,7 @@ impl source::SourceAcker for SQSSource {
     }
 }
 
-impl source::LagReader for SQSSource {
+impl source::LagReader for SqsSource {
     async fn pending(&mut self) -> crate::error::Result<Option<usize>> {
         Ok(self.pending_count().await)
     }
@@ -124,7 +127,7 @@ pub mod tests {
         let mut headers = HashMap::new();
         headers.insert("foo".to_string(), "bar".to_string());
 
-        let sqs_message = SQSMessage {
+        let sqs_message = SqsMessage {
             key: "key".to_string(),
             payload: Bytes::from("value".to_string()),
             offset: "offset".to_string(),
@@ -147,7 +150,7 @@ pub mod tests {
     }
 
     #[tokio::test]
-    async fn test_sqs_e2e() {
+    async fn test_sqs_source_e2e() {
         let queue_url_output = get_queue_url_output();
 
         let receive_message_output = get_receive_message_output();
@@ -166,10 +169,10 @@ pub mod tests {
         let sqs_client =
             aws_sdk_sqs::Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
 
-        let sqs_source = SqsSourceBuilder::new(SQSSourceConfig {
-            region: SQS_DEFAULT_REGION.to_string(),
-            queue_name: "test-q".to_string(),
-            queue_owner_aws_account_id: "12345678912".to_string(),
+        let sqs_source = SqsSourceBuilder::new(SqsSourceConfig {
+            region: SQS_DEFAULT_REGION,
+            queue_name: "test-q",
+            queue_owner_aws_account_id: "12345678912",
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,
@@ -189,7 +192,7 @@ pub mod tests {
         let tracker_handle = TrackerHandle::new(None, None);
         let source = Source::new(
             1,
-            SourceType::SQS(sqs_source),
+            SourceType::Sqs(sqs_source),
             tracker_handle.clone(),
             true,
             None,

@@ -180,6 +180,8 @@ pub mod sliding_window;
 pub use self::sliding_window::SlidingWindow;
 pub mod source;
 pub use self::source::Source;
+pub mod sqs_sink;
+pub use self::sqs_sink::SqsSink;
 pub mod sqs_source;
 pub use self::sqs_source::SqsSource;
 pub mod status;

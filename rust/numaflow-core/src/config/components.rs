@@ -9,8 +9,8 @@ pub(crate) mod source {
     use numaflow_jetstream::{JetstreamSourceConfig, NatsAuth, TlsClientAuthCerts, TlsConfig};
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source, SqsSource};
     use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
-    use numaflow_sqs::source::SQSSourceConfig;
-    use tracing::{info, warn};
+    use numaflow_sqs::source::SqsSourceConfig;
+    use tracing::warn;
 
     use crate::Result;
     use crate::error::Error;
@@ -38,7 +38,7 @@ pub(crate) mod source {
         UserDefined(UserDefinedConfig),
         Pulsar(PulsarSourceConfig),
         Jetstream(JetstreamSourceConfig),
-        Sqs(SQSSourceConfig),
+        Sqs(SqsSourceConfig),
     }
 
     impl From<Box<GeneratorSource>> for SourceType {
@@ -108,17 +108,57 @@ pub(crate) mod source {
         type Error = Error;
 
         fn try_from(value: Box<SqsSource>) -> Result<Self> {
-            info!("Sqs source: {value:?}");
             if value.aws_region.is_empty() {
                 return Err(Error::Config(
-                    "AWS region is required for SQS source".to_string(),
+                    "aws_region is required for SQS source".to_string(),
                 ));
             }
 
-            let sqs_source_config = SQSSourceConfig {
-                queue_name: value.queue_name,
-                region: value.aws_region,
-                queue_owner_aws_account_id: value.queue_owner_aws_account_id,
+            if value.queue_name.is_empty() {
+                return Err(Error::Config(
+                    "queue_name is required for SQS source".to_string(),
+                ));
+            }
+
+            if value.queue_owner_aws_account_id.is_empty() {
+                return Err(Error::Config(
+                    "queue_owner_aws_account_id is required for SQS source".to_string(),
+                ));
+            }
+
+            if let Some(timeout) = value.visibility_timeout {
+                if !(0..=43200).contains(&timeout) {
+                    return Err(Error::Config(format!(
+                        "visibility_timeout must be between 0 and 43200 for SQS source, got {}",
+                        timeout
+                    )));
+                }
+            }
+
+            if let Some(wait_time) = value.wait_time_seconds {
+                if !(0..=20).contains(&wait_time) {
+                    return Err(Error::Config(format!(
+                        "wait_time_seconds must be between 0 and 20 for SQS source, got {}",
+                        wait_time
+                    )));
+                }
+            }
+
+            if let Some(max_number_of_messages) = value.max_number_of_messages {
+                if !(1..=10).contains(&max_number_of_messages) {
+                    return Err(Error::Config(format!(
+                        "max_number_of_messages must be between 1 and 10 for SQS source, got {}",
+                        max_number_of_messages
+                    )));
+                }
+            }
+
+            let sqs_source_config = SqsSourceConfig {
+                queue_name: Box::leak(value.queue_name.into_boxed_str()),
+                region: Box::leak(value.aws_region.into_boxed_str()),
+                queue_owner_aws_account_id: Box::leak(
+                    value.queue_owner_aws_account_id.into_boxed_str(),
+                ),
                 attribute_names: value.attribute_names.unwrap_or_default(),
                 message_attribute_names: value.message_attribute_names.unwrap_or_default(),
                 max_number_of_messages: Some(value.max_number_of_messages.unwrap_or(10)),
@@ -126,8 +166,6 @@ pub(crate) mod source {
                 visibility_timeout: Some(value.visibility_timeout.unwrap_or(30)),
                 endpoint_url: value.endpoint_url,
             };
-
-            info!("parsed SQS source config: {sqs_source_config:?}");
 
             Ok(SourceType::Sqs(sqs_source_config))
         }
@@ -353,7 +391,8 @@ pub(crate) mod sink {
 
     use std::fmt::Display;
 
-    use numaflow_models::models::{Backoff, RetryStrategy, Sink};
+    use numaflow_models::models::{Backoff, RetryStrategy, Sink, SqsSink};
+    use numaflow_sqs::sink::SqsSinkConfig;
 
     use crate::Result;
     use crate::error::Error;
@@ -370,6 +409,7 @@ pub(crate) mod sink {
         Blackhole(BlackholeConfig),
         Serve,
         UserDefined(UserDefinedConfig),
+        Sqs(SqsSinkConfig),
     }
 
     impl SinkType {
@@ -432,6 +472,39 @@ pub(crate) mod sink {
         pub grpc_max_message_size: usize,
         pub socket_path: String,
         pub server_info_path: String,
+    }
+
+    impl TryFrom<Box<SqsSink>> for SinkType {
+        type Error = Error;
+
+        fn try_from(value: Box<SqsSink>) -> Result<Self> {
+            if value.aws_region.is_empty() {
+                return Err(Error::Config(
+                    "AWS region is required for SQS sink".to_string(),
+                ));
+            }
+
+            if value.queue_name.is_empty() {
+                return Err(Error::Config(
+                    "Queue name is required for SQS sink".to_string(),
+                ));
+            }
+
+            if value.queue_owner_aws_account_id.is_empty() {
+                return Err(Error::Config(
+                    "Queue owner AWS account ID is required for SQS sink".to_string(),
+                ));
+            }
+
+            let sqs_sink_config = SqsSinkConfig {
+                queue_name: Box::leak(value.queue_name.into_boxed_str()),
+                region: Box::leak(value.aws_region.into_boxed_str()),
+                queue_owner_aws_account_id: Box::leak(
+                    value.queue_owner_aws_account_id.into_boxed_str(),
+                ),
+            };
+            Ok(SinkType::Sqs(sqs_sink_config))
+        }
     }
 
     #[derive(Debug, Clone, PartialEq)]
@@ -830,13 +903,15 @@ mod transformer_tests {
 
 #[cfg(test)]
 mod jetstream_tests {
-    use super::source::SourceType;
+    use std::fs;
+    use std::path::Path;
+
     use k8s_openapi::api::core::v1::SecretKeySelector;
     use numaflow_jetstream::NatsAuth;
     use numaflow_models::models::BasicAuth;
     use numaflow_models::models::{JetStreamSource, Tls};
-    use std::fs;
-    use std::path::Path;
+
+    use super::source::SourceType;
 
     const SECRET_BASE_PATH: &str = "/tmp/numaflow";
 

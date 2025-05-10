@@ -1,11 +1,5 @@
 use std::time::Duration;
 
-use numaflow_pb::clients::map::map_client::MapClient;
-use numaflow_pb::clients::sink::sink_client::SinkClient;
-use numaflow_pb::clients::source::source_client::SourceClient;
-use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use tokio_util::sync::CancellationToken;
-
 use crate::config::components::sink::{SinkConfig, SinkType};
 use crate::config::components::source::{SourceConfig, SourceType};
 use crate::config::components::transformer::TransformerConfig;
@@ -28,6 +22,12 @@ use crate::tracker::TrackerHandle;
 use crate::transformer::Transformer;
 use crate::watermark::source::SourceWatermarkHandle;
 use crate::{config, error, metrics, source};
+use numaflow_pb::clients::map::map_client::MapClient;
+use numaflow_pb::clients::sink::sink_client::SinkClient;
+use numaflow_pb::clients::source::source_client::SourceClient;
+use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use numaflow_sqs::sink::SqsSinkBuilder;
+use tokio_util::sync::CancellationToken;
 
 /// Creates a sink writer based on the configuration
 pub(crate) async fn create_sink_writer(
@@ -90,6 +90,15 @@ pub(crate) async fn create_sink_writer(
             )
             .retry_config(primary_sink.retry_config.unwrap_or_default())
         }
+        SinkType::Sqs(sqs_sink_config) => {
+            let sqs_sink = SqsSinkBuilder::new(sqs_sink_config).build().await?;
+            SinkWriterBuilder::new(
+                batch_size,
+                read_timeout,
+                SinkClientType::Sqs(sqs_sink.clone()),
+                tracker_handle,
+            )
+        }
     };
 
     if let Some(fb_sink) = fallback_sink {
@@ -133,6 +142,13 @@ pub(crate) async fn create_sink_writer(
 
                 Ok(sink_writer_builder
                     .fb_sink_client(SinkClientType::UserDefined(sink_grpc_client.clone()))
+                    .build()
+                    .await?)
+            }
+            SinkType::Sqs(sqs_sink_config) => {
+                let sqs_sink = SqsSinkBuilder::new(sqs_sink_config).build().await?;
+                Ok(sink_writer_builder
+                    .fb_sink_client(SinkClientType::Sqs(sqs_sink.clone()))
                     .build()
                     .await?)
             }
@@ -339,7 +355,7 @@ pub async fn create_source(
             .await?;
             Ok(Source::new(
                 batch_size,
-                source::SourceType::SQS(sqs),
+                source::SourceType::Sqs(sqs),
                 tracker_handle,
                 source_config.read_ahead,
                 transformer,
