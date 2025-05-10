@@ -94,7 +94,11 @@ impl From<UdReducerResponse> for Message {
 
         // Create offset from window start and end time
         let offset_str = if let (Some(start), Some(end)) = (window.start, window.end) {
-            format!("{}-{}", start.seconds, end.seconds)
+            format!(
+                "{}-{}",
+                utc_from_timestamp(start).timestamp_millis(),
+                utc_from_timestamp(end).timestamp_millis()
+            )
         } else {
             "0-0".to_string()
         };
@@ -145,6 +149,9 @@ impl UserDefinedAlignedReduce {
         let (req_tx, req_rx) = tokio::sync::mpsc::channel(100);
 
         // Spawn a task to convert AlignedWindowMessages to ReduceRequests and send them to req_tx
+        // NOTE: - This is not really required (for client side streaming reduce), we do this because
+        //         `tonic` does not return a stream from the reduce_fn unless there is some output.
+        //       - This implementation works for reduce bidi streaming.
         let request_handle = tokio::spawn(async move {
             let mut stream = stream;
             while let Some(window_msg) = stream.next().await {
@@ -155,7 +162,6 @@ impl UserDefinedAlignedReduce {
             }
         });
 
-        // TODO(vigith): this is not blocking, right?
         // Call the gRPC reduce_fn with the converted stream
         let mut response_stream = self
             .client
@@ -177,13 +183,14 @@ impl UserDefinedAlignedReduce {
                 break;
             }
 
-            let wrapper = UdReducerResponse {
+            // convert to Message so it can be sent to the ISB write channel
+            let message: Message = UdReducerResponse {
                 response,
                 index,
                 vertex_name: vertex_name.clone(),
-            };
+            }
+            .into();
 
-            let message: Message = wrapper.into();
             result_tx
                 .send(message)
                 .await
@@ -192,14 +199,10 @@ impl UserDefinedAlignedReduce {
             index += 1;
         }
 
-        if let Err(e) = request_handle.await {
-            return Err(crate::Error::Reduce(format!(
-                "conversion task failed: {}",
-                e
-            )));
-        }
-
-        Ok(())
+        // wait for the tokio task to complete
+        Ok(request_handle
+            .await
+            .map_err(|e| crate::Error::Reduce(format!("conversion task failed: {}", e)))?)
     }
 
     pub(crate) async fn ready(&mut self) -> bool {
