@@ -448,6 +448,8 @@ pub(crate) mod sink {
                 ));
             }
 
+            // TODO: Add other validations for SQS sink
+
             let sqs_sink_config = SqsSinkConfig {
                 queue_name: Box::leak(value.queue_name.into_boxed_str()),
                 region: Box::leak(value.aws_region.into_boxed_str()),

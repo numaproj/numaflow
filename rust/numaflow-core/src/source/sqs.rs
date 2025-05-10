@@ -150,7 +150,7 @@ pub mod tests {
     }
 
     #[tokio::test]
-    async fn test_sqs_e2e() {
+    async fn test_sqs_source_e2e() {
         let queue_url_output = get_queue_url_output();
 
         let receive_message_output = get_receive_message_output();
