@@ -1,37 +1,38 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
-kind: Pipeline
+kind: ServingPipeline
 metadata:
-  name: simple-serving-pipeline
+  name: serving-pipeline
 spec:
-  vertices:
-    - name: serving-in
-      servingStoreName: default
-      scale:
-        min: 1
-      source:
-        serving: {}
-
-    - name: cat
-      scale:
-        min: 1
-      udf:
-        container:
-          image: quay.io/numaio/numaflow-go/map-forward-message:stable
-          env:
-            - name: RUST_BACKTRACE
-              value: "1"
-
-    - name: serve-sink
-      servingStoreName: default
-      scale:
-        min: 1
-      sink:
-        udsink:
+  serving:
+    metadata:
+      annotations:
+        key1: val1
+      labels:
+        key2: val2
+    service: true
+    msgIDHeaderKey: "X-Numaflow-Id"
+  pipeline:
+    limits:
+      readTimeout: 20ms
+    vertices:
+      - name: in
+        scale:
+          min: 1
+        source:
+          serving: {}
+      - name: cat
+        scale:
+          min: 1
+        udf:
           container:
-            image: quay.io/numaio/numaflow-go/sink-serve:stable
-
-  edges:
-    - from: serving-in
-      to: cat
-    - from: cat
-      to: serve-sink
+            image: quay.io/numaio/numaflow-go/map-forward-message:stable
+      - name: out
+        scale:
+          min: 1
+        sink:
+          serve: {}
+    edges:
+      - from: in
+        to: cat
+      - from: cat
+        to: out
