@@ -1,0 +1,1193 @@
+use crate::error::Error;
+use crate::message::Message;
+use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
+use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
+use crate::reduce::reducer::aligned::windower::{
+    AlignedWindowMessage, FixedWindowMessage, Window, WindowManager, WindowOperation,
+};
+use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
+use bytes::Bytes;
+use numaflow_pb::objects::wal::GcEvent;
+use std::collections::HashMap;
+use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
+use tokio_stream::StreamExt;
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
+use tracing::{error, info, warn};
+
+/// Represents an active reduce stream for a window.
+struct ActiveStream {
+    /// Sender for window messages. Messages are sent to this channel is received by the unique reduce
+    /// task for that window.
+    message_tx: mpsc::Sender<AlignedWindowMessage>,
+    /// Handle to the task processing the window
+    task_handle: JoinHandle<()>,
+}
+
+/// Actor that manages multiple window reduction streams. It manages [ActiveStream]s and manages the
+/// lifecycle of the reduce tasks.
+struct AlignedReduceActor {
+    /// It multiplexes the messages to the receiver to the reduce tasks through the corresponding
+    /// tx in [ActiveStream].
+    receiver: mpsc::Receiver<AlignedWindowMessage>,
+    /// Client for user-defined reduce operations.
+    client: UserDefinedAlignedReduce,
+    /// Map of [ActiveStream]s keyed by window ID (pnf_slot).
+    active_streams: HashMap<Bytes, ActiveStream>,
+    /// JetStream writer for writing results of reduce operation.
+    js_writer: JetstreamWriter,
+    /// Sender for error messages.
+    /// TODO(vigith): how is error handled!!
+    error_tx: mpsc::Sender<Error>,
+    /// Sender for GC WAL messages.
+    /// TODO(vigith): why is this optional?
+    gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
+}
+
+impl AlignedReduceActor {
+    pub(crate) async fn new(
+        client: UserDefinedAlignedReduce,
+        receiver: mpsc::Receiver<AlignedWindowMessage>,
+        js_writer: JetstreamWriter,
+        error_tx: mpsc::Sender<Error>,
+        gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
+    ) -> Self {
+        Self {
+            client,
+            receiver,
+            active_streams: HashMap::new(),
+            js_writer,
+            error_tx,
+            gc_wal_tx,
+        }
+    }
+
+    /// Runs the actor, listening for messages and multiplexing them to the reduce tasks.
+    async fn run(mut self) {
+        while let Some(msg) = self.receiver.recv().await {
+            self.handle_message(msg).await;
+        }
+    }
+
+    // TODO(vigith): this is not right?
+    async fn handle_message(&mut self, msg: AlignedWindowMessage) {
+        match msg {
+            AlignedWindowMessage::Fixed(msg) => {
+                self.handle_window_message(msg.window, msg.operation).await
+            }
+            AlignedWindowMessage::Sliding(msg) => {
+                self.handle_window_message(msg.window, msg.operation).await
+            }
+        }
+    }
+
+    /// Handle a window message based on its operation type
+    async fn handle_window_message(&mut self, window: Window, operation: WindowOperation) {
+        let window_id = window.pnf_slot();
+        match operation {
+            WindowOperation::Open(msg) => self.window_open(window, window_id, msg).await,
+            WindowOperation::Append(msg) => self.window_append(window, window_id, msg).await,
+            WindowOperation::Close => self.window_close(window_id).await,
+        }
+    }
+
+    /// Creates a new reduce task for the window and sends the initial Open command with the
+    /// first message.
+    async fn window_open(&mut self, window: Window, window_id: Bytes, msg: Message) {
+        // Create a new channel for this window's messages
+        let (message_tx, message_rx) = mpsc::channel(100);
+        let message_stream = ReceiverStream::new(message_rx);
+
+        // Clone what we need for the task
+        let client = self.client.clone();
+        let js_writer = self.js_writer.clone();
+        let gc_wal_tx_clone = self.gc_wal_tx.clone();
+        let error_tx = self.error_tx.clone();
+        let window_clone = window.clone();
+
+        // Create the initial window message
+        let window_msg = AlignedWindowMessage::Fixed(FixedWindowMessage {
+            operation: WindowOperation::Open(msg),
+            window: window.clone(),
+        });
+
+        // Spawn a task to process this window's messages
+        let task_handle = tokio::spawn(async move {
+            // Process the window and send results to JetStream
+            Self::process_window_stream(
+                client,
+                message_stream,
+                js_writer,
+                gc_wal_tx_clone,
+                error_tx,
+                window_clone,
+            )
+            .await;
+        });
+
+        // Store the stream and task handle
+        self.active_streams.insert(
+            window_id,
+            ActiveStream {
+                message_tx: message_tx.clone(),
+                task_handle,
+            },
+        );
+
+        // Send the open command with the first message
+        let _ = message_tx.send(window_msg).await;
+    }
+
+    /// Starts the reduce task (user-defined) for the window stream.
+    /// Once the reduce is done, it will write the result to the ISB.
+    async fn process_window_stream(
+        mut client: UserDefinedAlignedReduce,
+        message_stream: ReceiverStream<AlignedWindowMessage>,
+        js_writer: JetstreamWriter,
+        gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
+        error_tx: mpsc::Sender<Error>,
+        window: Window,
+    ) {
+        // Create a local channel for results
+        let (result_tx, result_rx) = mpsc::channel(100);
+        let result_stream = ReceiverStream::new(result_rx);
+
+        // Spawn a task to write results to JetStream
+        let writer_handle = match js_writer
+            .streaming_write(result_stream, CancellationToken::new())
+            .await
+        {
+            Ok(handle) => handle,
+            Err(e) => {
+                error!(?e, "Failed to start JetStream writer");
+                return;
+            }
+        };
+
+        // Call the reduce function. This is a blocking call and will return only once the window
+        // is closed (or on error).
+        let result = client.reduce_fn(message_stream, result_tx).await;
+
+        if let Err(e) = result {
+            error!(?e, "Error while doing reduce operation");
+            let _ = error_tx.send(e).await;
+            return;
+        }
+
+        // Wait for the writer to complete
+        if let Err(e) = writer_handle.await.expect("join failed for js writer task") {
+            error!(?e, "Error while writing results to JetStream");
+            let _ = error_tx.send(e).await;
+            return;
+        }
+
+        // now that the processing is done, we can add this window to the GC WAL.
+        let Some(gc_wal_tx) = gc_wal_tx else {
+            // return if the GC WAL is not configured
+            return;
+        };
+
+        // Send GC event if WAL is configured
+        let gc_event: GcEvent = window.into();
+        gc_wal_tx
+            .send(SegmentWriteMessage::WriteData {
+                offset: None,
+                data: prost::Message::encode_to_vec(&gc_event).into(),
+            })
+            .await
+            .expect("failed to write gc event to wal");
+    }
+
+    /// sends the message to the reduce task for the window.
+    async fn window_append(&mut self, window: Window, window_id: Bytes, msg: Message) {
+        // Get the existing stream or log error if not found
+        let Some(active_stream) = self.active_streams.get(&window_id) else {
+            error!(?window_id, "No active stream found for window");
+            return;
+        };
+
+        // Create the append window message
+        let window_msg = AlignedWindowMessage::Fixed(FixedWindowMessage {
+            operation: WindowOperation::Append(msg),
+            window,
+        });
+
+        // Send the append message
+        let _ = active_stream.message_tx.send(window_msg).await;
+    }
+
+    /// Closes the reduce task for the window.
+    async fn window_close(&mut self, window_id: Bytes) {
+        // Get the existing stream or log error if not found
+        let Some(active_stream) = self.active_streams.remove(&window_id) else {
+            error!("No active stream found for window {:?}", window_id);
+            return;
+        };
+
+        // we don't need to write the close message to the client, stream closing
+        // is considered as close for aligned windows.
+
+        // Drop the sender to signal completion
+        drop(active_stream.message_tx);
+
+        // Wait for the task to complete
+        if let Err(e) = active_stream.task_handle.await {
+            error!(?window_id, err = ?e,"Reduce task for window failed");
+        }
+    }
+}
+
+/// Processes messages and forwards results to the next stage.
+pub(crate) struct AlignedReducer<W> {
+    client: UserDefinedAlignedReduce,
+    window_manager: W,
+    js_writer: JetstreamWriter,
+    /// Final state of the component (any error will set this as Err).
+    final_result: crate::Result<()>,
+    /// Set to true when shutting down due to an error.
+    shutting_down_on_err: bool,
+    gc_wal: Option<AppendOnlyWal>,
+}
+
+impl<W: WindowManager> AlignedReducer<W> {
+    pub(crate) async fn new(
+        client: UserDefinedAlignedReduce,
+        window_manager: W,
+        js_writer: JetstreamWriter,
+        gc_wal: Option<AppendOnlyWal>,
+    ) -> Self {
+        Self {
+            client,
+            window_manager,
+            js_writer,
+            final_result: Ok(()),
+            shutting_down_on_err: false,
+            gc_wal,
+        }
+    }
+
+    /// Starts the reduce component and returns a handle to the main task.
+    pub(crate) async fn start(
+        mut self,
+        input_stream: ReceiverStream<Message>,
+        cln_token: CancellationToken,
+    ) -> crate::Result<JoinHandle<crate::Result<()>>> {
+        // Set up error and GC channels
+        let (error_tx, mut error_rx) = mpsc::channel(10);
+        let gc_wal_handle = self.setup_gc_wal().await?;
+
+        // Create the actor channel and start the actor
+        let (actor_tx, actor_rx) = mpsc::channel(100);
+        let actor = AlignedReduceActor::new(
+            self.client.clone(),
+            actor_rx,
+            self.js_writer.clone(),
+            error_tx.clone(),
+            gc_wal_handle,
+        )
+        .await;
+
+        // start the reduce actor
+        tokio::spawn(async move {
+            actor.run().await;
+        });
+
+        // Spawn the task that reads from the input stream (PBQ) and sends messages to the actor
+        let handle = tokio::spawn(async move {
+            let mut input_stream = input_stream;
+
+            loop {
+                tokio::select! {
+                    Some(error) = error_rx.recv() => {
+                        self.handle_error(error, &cln_token);
+                    },
+                    read_msg = input_stream.next() => {
+                        let Some(msg) = read_msg else {
+                            break;
+                        };
+
+                        // TODO: drop late messages, allowed lateness and keyed false
+
+                        // If shutting down, drain the stream
+                        if self.shutting_down_on_err {
+                            warn!("Reduce component is shutting down due to an error, not accepting the message");
+                            continue;
+                        }
+
+                        // check if any windows can be closed using the watermark in the message
+                        if let Some(watermark) = msg.watermark {
+                            let window_messages = self.window_manager.close_windows(watermark);
+                            for window_msg in window_messages {
+                                actor_tx.send(window_msg).await.expect("Receiver dropped");
+                            }
+                        }
+
+                        // Process the message through the windower
+                        let window_messages = self.window_manager.assign_windows(msg);
+
+                        // Send each window message to the actor
+                        for window_msg in window_messages {
+                            actor_tx.send(window_msg).await.expect("Receiver dropped");
+                        }
+                    }
+                }
+            }
+
+            info!(status=?self.final_result, "Reduce component successfully completed");
+            self.final_result
+        });
+
+        Ok(handle)
+    }
+
+    /// Set up the GC WAL if configured.
+    async fn setup_gc_wal(&mut self) -> crate::Result<Option<mpsc::Sender<SegmentWriteMessage>>> {
+        if let Some(gc_wal) = self.gc_wal.take() {
+            let (gc_tx, gc_rx) = mpsc::channel(100);
+            gc_wal.streaming_write(ReceiverStream::new(gc_rx)).await?;
+            Ok(Some(gc_tx))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Handle an error by canceling the token and updating state.
+    fn handle_error(&mut self, error: Error, cln_token: &CancellationToken) {
+        if self.final_result.is_ok() {
+            error!(?error, "Error received while performing reduce operation");
+            cln_token.cancel();
+            self.final_result = Err(error);
+            self.shutting_down_on_err = true;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use async_nats::jetstream::consumer::PullConsumer;
+    use async_nats::jetstream::{self, consumer, stream};
+    use chrono::{TimeZone, Utc};
+    use numaflow::reduce;
+    use numaflow_pb::clients::reduce::reduce_client::ReduceClient;
+    use prost::Message as ProstMessage;
+    use tempfile::TempDir;
+    use tokio::sync::mpsc;
+    use tokio_stream::wrappers::ReceiverStream;
+    use tokio_util::sync::CancellationToken;
+
+    use super::*;
+    use crate::config::pipeline::ToVertexConfig;
+    use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
+    use crate::message::{Message, MessageID, Offset, StringOffset};
+    use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
+    use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
+    use crate::reduce::reducer::aligned::windower::fixed::FixedWindowManager;
+    use crate::reduce::reducer::aligned::windower::sliding::SlidingWindowManager;
+    use crate::shared::grpc::create_rpc_channel;
+    use crate::tracker::TrackerHandle;
+
+    struct Counter {}
+
+    struct CounterCreator {}
+
+    impl reduce::ReducerCreator for CounterCreator {
+        type R = Counter;
+
+        fn create(&self) -> Self::R {
+            Counter::new()
+        }
+    }
+
+    impl Counter {
+        fn new() -> Self {
+            Self {}
+        }
+    }
+
+    #[tonic::async_trait]
+    impl reduce::Reducer for Counter {
+        async fn reduce(
+            &self,
+            keys: Vec<String>,
+            mut input: mpsc::Receiver<reduce::ReduceRequest>,
+            _md: &reduce::Metadata,
+        ) -> Vec<reduce::Message> {
+            let mut counter = 0;
+            // the loop exits when input is closed which will happen only on close of book.
+            while input.recv().await.is_some() {
+                counter += 1;
+            }
+            vec![reduce::Message::new(counter.to_string().into_bytes()).with_keys(keys.clone())]
+        }
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_aligned_reducer_with_fixed_window() -> crate::Result<()> {
+        // Set up the reducer server
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("reduce_fixed.sock");
+        let server_info_file = tmp_dir.path().join("reduce_fixed-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let server_handle = tokio::spawn(async move {
+            reduce::Server::new(CounterCreator {})
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // Wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Create the client
+        let client =
+            UserDefinedAlignedReduce::new(ReduceClient::new(create_rpc_channel(sock_file).await?))
+                .await;
+
+        // Create a fixed window manager with 60s window length
+        let windower = FixedWindowManager::new(Duration::from_secs(60));
+
+        // Set up JetStream
+        let js_url = "localhost:4222";
+        let nats_client = async_nats::connect(js_url).await.unwrap();
+        let js_context = jetstream::new(nats_client);
+
+        // Create output stream
+        let stream = Stream::new("test_aligned_reducer_fixed", "test", 0);
+        // Delete stream if it exists
+        let _ = js_context.delete_stream(stream.name).await;
+
+        let _stream = js_context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        // Create consumer
+        let _consumer = js_context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        // Create JetstreamWriter
+        let cln_token = CancellationToken::new();
+        let tracker_handle = TrackerHandle::new(None, None);
+        let js_writer = JetstreamWriter::new(
+            vec![ToVertexConfig {
+                name: "test-vertex",
+                partitions: 1,
+                writer_config: BufferWriterConfig {
+                    streams: vec![stream.clone()],
+                    ..Default::default()
+                },
+                conditions: None,
+            }],
+            js_context.clone(),
+            100,
+            tracker_handle.clone(),
+            cln_token.clone(),
+            None,
+        );
+
+        // Create the AlignedReducer
+        let reducer = AlignedReducer::new(
+            client, windower, js_writer, None, // No GC WAL for testing
+        )
+        .await;
+
+        // Create a channel for input messages
+        let (input_tx, input_rx) = mpsc::channel(10);
+        let input_stream = ReceiverStream::new(input_rx);
+
+        // Start the reducer
+        let reducer_handle = reducer.start(input_stream, cln_token.clone()).await?;
+
+        // Create test messages
+        let base_time = Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap();
+
+        // Message 1: Within the first window
+        let msg1 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key1".into()]),
+            tags: None,
+            value: "value1".into(),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
+            event_time: base_time + chrono::Duration::seconds(10),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "0".to_string().into(),
+                index: 0,
+            },
+            headers: Default::default(),
+            metadata: None,
+        };
+
+        // Message 2: Within the first window
+        let msg2 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key1".into()]),
+            tags: None,
+            value: "value2".into(),
+            offset: Offset::String(StringOffset::new("1".to_string(), 1)),
+            event_time: base_time + chrono::Duration::seconds(30),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "1".to_string().into(),
+                index: 1,
+            },
+            headers: Default::default(),
+            metadata: None,
+        };
+
+        // Message 3: Within the first window
+        let msg3 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key1".into()]),
+            tags: None,
+            value: "value3".into(),
+            offset: Offset::String(StringOffset::new("2".to_string(), 2)),
+            event_time: base_time + chrono::Duration::seconds(50),
+            watermark: Some(base_time + chrono::Duration::seconds(40)),
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "2".to_string().into(),
+                index: 2,
+            },
+            headers: Default::default(),
+            metadata: None,
+        };
+
+        // Message 4: Within the first window but with watermark past window end
+        let msg4 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key1".into()]),
+            tags: None,
+            value: "value3".into(),
+            offset: Offset::String(StringOffset::new("2".to_string(), 2)),
+            event_time: base_time + chrono::Duration::seconds(80),
+            watermark: Some(base_time + chrono::Duration::seconds(70)), // Past window end
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "2".to_string().into(),
+                index: 2,
+            },
+            headers: Default::default(),
+            metadata: None,
+        };
+
+        // Send the messages
+        input_tx.send(msg1).await.unwrap();
+        input_tx.send(msg2).await.unwrap();
+
+        // Send message with watermark past window end to trigger window close
+        input_tx.send(msg3).await.unwrap();
+        input_tx.send(msg4).await.unwrap();
+
+        // Create a consumer to read the results
+        let consumer: PullConsumer = js_context
+            .get_consumer_from_stream(&stream.name, &stream.name)
+            .await
+            .unwrap();
+
+        // Read messages from the stream
+        let mut messages = consumer
+            .fetch()
+            .expires(Duration::from_secs(1))
+            .messages()
+            .await
+            .unwrap();
+
+        let mut result_count = 0;
+
+        while let Some(msg) = messages.next().await {
+            let msg = msg.unwrap();
+
+            let data = msg.payload.to_vec();
+
+            // Acknowledge the message
+            msg.ack().await.unwrap();
+
+            // Parse the message
+            let message: numaflow_pb::objects::isb::Message =
+                prost::Message::decode(data.as_ref()).unwrap();
+
+            // Verify the result
+            assert_eq!(message.header.unwrap().keys.to_vec(), vec!["key1"]);
+            assert_eq!(message.body.unwrap().payload.to_vec(), b"3".to_vec());
+
+            result_count += 1;
+        }
+
+        assert_eq!(result_count, 1, "Expected exactly one result message");
+
+        drop(input_tx);
+
+        // Wait for the reducer to complete
+        reducer_handle.await.expect("reducer handle failed")?;
+
+        // Shutdown the server
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Wait for the server to shut down
+        assert!(
+            server_handle.is_finished(),
+            "Expected gRPC server to have shut down"
+        );
+
+        // Clean up JetStream
+        js_context.delete_stream(stream.name).await.unwrap();
+
+        Ok(())
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_aligned_reducer_with_sliding_window() -> crate::Result<()> {
+        // Set up the reducer server
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("reduce_sliding.sock");
+        let server_info_file = tmp_dir.path().join("reduce_sliding-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let server_handle = tokio::spawn(async move {
+            reduce::Server::new(CounterCreator {})
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // Wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Create the client
+        let client =
+            UserDefinedAlignedReduce::new(ReduceClient::new(create_rpc_channel(sock_file).await?))
+                .await;
+
+        // Create a sliding window manager with 60s window length and 20s slide
+        let windower = SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(20));
+
+        // Set up JetStream
+        let js_url = "localhost:4222";
+        let nats_client = async_nats::connect(js_url).await.unwrap();
+        let js_context = jetstream::new(nats_client);
+
+        // Create output stream
+        let stream = Stream::new("test_aligned_reducer_sliding", "test", 0);
+        // Delete stream if it exists
+        let _ = js_context.delete_stream(stream.name).await;
+        let _stream = js_context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        // Create consumer
+        let _consumer = js_context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        // Create JetstreamWriter
+        let cln_token = CancellationToken::new();
+        let tracker_handle = TrackerHandle::new(None, None);
+        let js_writer = JetstreamWriter::new(
+            vec![ToVertexConfig {
+                name: "test-vertex",
+                partitions: 1,
+                writer_config: BufferWriterConfig {
+                    streams: vec![stream.clone()],
+                    ..Default::default()
+                },
+                conditions: None,
+            }],
+            js_context.clone(),
+            100,
+            tracker_handle.clone(),
+            cln_token.clone(),
+            None,
+        );
+
+        // Create the AlignedReducer
+        let reducer = AlignedReducer::new(
+            client, windower, js_writer, None, // No GC WAL for testing
+        )
+        .await;
+
+        // Create a channel for input messages
+        let (input_tx, input_rx) = mpsc::channel(100);
+        let input_stream = ReceiverStream::new(input_rx);
+
+        // Start the reducer
+        let reducer_handle = reducer.start(input_stream, cln_token.clone()).await?;
+
+        // Create test messages
+        let base_time = Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap();
+
+        // Message 1: Within the first set of sliding windows
+        let msg1 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key1".into()]),
+            tags: None,
+            value: "value1".into(),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
+            event_time: base_time,
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "0".to_string().into(),
+                index: 0,
+            },
+            headers: Default::default(),
+            metadata: None,
+        };
+
+        // Message 2: Within the first set of sliding windows
+        let msg2 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key1".into()]),
+            tags: None,
+            value: "value2".into(),
+            offset: Offset::String(StringOffset::new("1".to_string(), 1)),
+            event_time: base_time,
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "1".to_string().into(),
+                index: 1,
+            },
+            headers: Default::default(),
+            metadata: None,
+        };
+
+        // Message 3: Within the first window
+        let msg3 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key1".into()]),
+            tags: None,
+            value: "value3".into(),
+            offset: Offset::String(StringOffset::new("2".to_string(), 2)),
+            event_time: base_time,
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "2".to_string().into(),
+                index: 2,
+            },
+            headers: Default::default(),
+            metadata: None,
+        };
+
+        // Message 4: Within the first window but with watermark past window end
+        let msg4 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key1".into()]),
+            tags: None,
+            value: "value3".into(),
+            offset: Offset::String(StringOffset::new("3".to_string(), 2)),
+            event_time: base_time + chrono::Duration::seconds(80),
+            watermark: Some(base_time + chrono::Duration::seconds(100)), // Past window end
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "3".to_string().into(),
+                index: 3,
+            },
+            headers: Default::default(),
+            metadata: None,
+        };
+
+        // Send the messages
+        input_tx.send(msg1).await.unwrap();
+        input_tx.send(msg2).await.unwrap();
+        input_tx.send(msg3).await.unwrap();
+        // Send message with watermark past window end to trigger window close
+        input_tx.send(msg4).await.unwrap();
+
+        // Create a consumer to read the results
+        let consumer: PullConsumer = js_context
+            .get_consumer_from_stream(&stream.name, &stream.name)
+            .await
+            .unwrap();
+
+        // Read messages from the stream
+        let mut messages = consumer
+            .batch()
+            .expires(Duration::from_secs(1))
+            .max_messages(3)
+            .messages()
+            .await
+            .unwrap();
+
+        let mut result_count = 0;
+
+        while let Some(msg) = messages.next().await {
+            let msg = msg.unwrap();
+            let data = msg.payload.to_vec();
+
+            // Acknowledge the message
+            msg.ack().await.unwrap();
+
+            // Parse the message
+            let proto_message = numaflow_pb::objects::isb::Message::decode(&data[..]).unwrap();
+
+            // Verify the result
+            assert_eq!(proto_message.header.unwrap().keys.to_vec(), vec!["key1"]);
+            assert_eq!(
+                String::from_utf8(proto_message.body.unwrap().payload.to_vec()).unwrap(),
+                "3"
+            ); // Counter should be 3
+
+            result_count += 1;
+        }
+
+        // For sliding windows with 60s length and 20s slide, we expect 3 windows
+        assert_eq!(
+            result_count, 3,
+            "Expected exactly three result messages for sliding windows"
+        );
+
+        drop(input_tx);
+
+        // Wait for the reducer to complete
+        reducer_handle.await.expect("reducer handle failed")?;
+
+        // Shutdown the server
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Wait for the server to shut down
+        assert!(
+            server_handle.is_finished(),
+            "Expected gRPC server to have shut down"
+        );
+
+        // Clean up JetStream
+        js_context.delete_stream(stream.name).await.unwrap();
+
+        Ok(())
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_aligned_reducer_with_multiple_keys() -> crate::Result<()> {
+        // Set up the reducer server
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("reduce_multi_keys.sock");
+        let server_info_file = tmp_dir.path().join("reduce_multi_keys-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let server_handle = tokio::spawn(async move {
+            reduce::Server::new(CounterCreator {})
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // Wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Create the client
+        let client =
+            UserDefinedAlignedReduce::new(ReduceClient::new(create_rpc_channel(sock_file).await?))
+                .await;
+
+        // Create a fixed window manager with 60s window length
+        let windower = FixedWindowManager::new(Duration::from_secs(60));
+
+        // Set up JetStream
+        let js_url = "localhost:4222";
+        let nats_client = async_nats::connect(js_url).await.unwrap();
+        let js_context = jetstream::new(nats_client);
+
+        // Create output stream
+        let stream = Stream::new("test_aligned_reducer_multi_keys", "test", 0);
+        // Delete stream if it exists
+        let _ = js_context.delete_stream(stream.name).await;
+        let _stream = js_context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        // Create consumer
+        let _consumer = js_context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        // Create JetstreamWriter
+        let cln_token = CancellationToken::new();
+        let tracker_handle = TrackerHandle::new(None, None);
+        let js_writer = JetstreamWriter::new(
+            vec![ToVertexConfig {
+                name: "test-vertex",
+                partitions: 1,
+                writer_config: BufferWriterConfig {
+                    streams: vec![stream.clone()],
+                    ..Default::default()
+                },
+                conditions: None,
+            }],
+            js_context.clone(),
+            100,
+            tracker_handle.clone(),
+            cln_token.clone(),
+            None,
+        );
+
+        // Create the AlignedReducer
+        let reducer = AlignedReducer::new(
+            client, windower, js_writer, None, // No GC WAL for testing
+        )
+        .await;
+
+        // Create a channel for input messages
+        let (input_tx, input_rx) = mpsc::channel(100);
+        let input_stream = ReceiverStream::new(input_rx);
+
+        // Start the reducer
+        let reducer_handle = reducer.start(input_stream, cln_token.clone()).await?;
+
+        // Create test messages
+        let base_time = Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap();
+
+        // Message 1: Within the first window for key1
+        let msg1 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key1".into()]),
+            tags: None,
+            value: "value1".into(),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
+            event_time: base_time + chrono::Duration::seconds(10),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "0".to_string().into(),
+                index: 0,
+            },
+            headers: Default::default(),
+            metadata: None,
+        };
+
+        // Message 2: Within the first window for key2
+        let msg2 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key2".into()]),
+            tags: None,
+            value: "value2".into(),
+            offset: Offset::String(StringOffset::new("1".to_string(), 1)),
+            event_time: base_time + chrono::Duration::seconds(20),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "1".to_string().into(),
+                index: 1,
+            },
+            headers: Default::default(),
+            metadata: None,
+        };
+
+        // Message 3: Within the first window for key1
+        let msg3 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key1".into()]),
+            tags: None,
+            value: "value3".into(),
+            offset: Offset::String(StringOffset::new("2".to_string(), 2)),
+            event_time: base_time + chrono::Duration::seconds(30),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "2".to_string().into(),
+                index: 2,
+            },
+            headers: Default::default(),
+            metadata: None,
+        };
+
+        // Message 4: Within the first window for key2
+        let msg4 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key2".into()]),
+            tags: None,
+            value: "value4".into(),
+            offset: Offset::String(StringOffset::new("3".to_string(), 3)),
+            event_time: base_time + chrono::Duration::seconds(40),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "3".to_string().into(),
+                index: 3,
+            },
+            headers: Default::default(),
+            metadata: None,
+        };
+
+        // Message 5: With watermark past the first window end for key1
+        let msg5 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key1".into()]),
+            tags: None,
+            value: "value5".into(),
+            offset: Offset::String(StringOffset::new("4".to_string(), 4)),
+            event_time: base_time + chrono::Duration::seconds(50),
+            watermark: Some(base_time + chrono::Duration::seconds(70)), // Past window end
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "4".to_string().into(),
+                index: 4,
+            },
+            headers: Default::default(),
+            metadata: None,
+        };
+
+        // Message 6: With watermark past the first window end for key2
+        let msg6 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key2".into()]),
+            tags: None,
+            value: "value6".into(),
+            offset: Offset::String(StringOffset::new("5".to_string(), 5)),
+            event_time: base_time + chrono::Duration::seconds(60),
+            watermark: Some(base_time + chrono::Duration::seconds(80)), // Past window end
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "5".to_string().into(),
+                index: 5,
+            },
+            headers: Default::default(),
+            metadata: None,
+        };
+
+        // Send the messages
+        input_tx.send(msg1).await.unwrap();
+        input_tx.send(msg2).await.unwrap();
+        input_tx.send(msg3).await.unwrap();
+        input_tx.send(msg4).await.unwrap();
+        input_tx.send(msg5).await.unwrap();
+        input_tx.send(msg6).await.unwrap();
+
+        // Create a consumer to read the results
+        let consumer: PullConsumer = js_context
+            .get_consumer_from_stream(&stream.name, &stream.name)
+            .await
+            .unwrap();
+
+        // Read messages from the stream
+        // Read messages from the stream
+        let mut messages = consumer
+            .batch()
+            .expires(Duration::from_secs(1))
+            .max_messages(2)
+            .messages()
+            .await
+            .unwrap();
+
+        let mut result_count = 0;
+        let mut received_keys = HashSet::new();
+
+        while let Some(msg) = messages.next().await {
+            let msg = msg.unwrap();
+            let data = msg.payload.to_vec();
+
+            // Acknowledge the message
+            msg.ack().await.unwrap();
+
+            // Parse the message
+            let proto_message = numaflow_pb::objects::isb::Message::decode(&data[..]).unwrap();
+
+            // Extract and store the key
+            let key = proto_message.header.unwrap().keys[0].clone();
+            received_keys.insert(key);
+
+            result_count += 1;
+        }
+
+        // Verify we received results for both keys
+        assert!(received_keys.contains("key1"), "Missing result for key1");
+        assert!(received_keys.contains("key2"), "Missing result for key2");
+        assert_eq!(
+            result_count, 2,
+            "Expected exactly two result messages for two keys"
+        );
+
+        drop(input_tx);
+
+        // Wait for the reducer to complete
+        reducer_handle.await.expect("reducer handle failed")?;
+
+        // Shutdown the server
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Wait for the server to shut down
+        assert!(
+            server_handle.is_finished(),
+            "Expected gRPC server to have shut down"
+        );
+
+        // Clean up JetStream
+        js_context.delete_stream(stream.name).await.unwrap();
+
+        Ok(())
+    }
+}

@@ -87,12 +87,12 @@ impl std::fmt::Display for WalType {
 #[derive(Debug)]
 pub(crate) struct GcEventEntry {
     /// Start time of the Window
-    start_time: DateTime<Utc>,
+    pub(crate) start_time: DateTime<Utc>,
     /// The end time of the Window. Anything after this timestamp has not been processed.
-    end_time: DateTime<Utc>,
+    pub(crate) end_time: DateTime<Utc>,
     /// Keys are used only for Unaligned window since sessions are defined not purely on [crate::watermark]
     /// but also on Keys.
-    keys: Option<Vec<String>>,
+    pub(crate) keys: Option<Vec<String>>,
 }
 
 impl From<GcEvent> for GcEventEntry {
@@ -147,6 +147,7 @@ mod tests {
             1,    // 1MB
             1000, // 1s flush interval
             500,  // channel buffer
+            300,  // 5 minutes
         )
         .await
         .unwrap();
@@ -184,6 +185,7 @@ mod tests {
             1,    // 20MB
             1000, // 1s flush interval
             500,  // channel buffer
+            300,  // 5 minutes
         )
         .await
         .unwrap();
@@ -229,6 +231,7 @@ mod tests {
             1,    // 20MB
             1000, // 1s flush interval
             500,  // channel buffer
+            300,  // max_segment_age_secs
         )
         .await
         .unwrap();
@@ -277,6 +280,7 @@ mod tests {
             1,    // 1MB
             1000, // 1s flush interval
             500,  // channel buffer
+            300,  // 5 minutes
         )
         .await
         .unwrap();
@@ -329,6 +333,7 @@ mod tests {
             1,    // 20MB
             1000, // 1s flush interval
             500,  // channel buffer
+            300,  // 5 minutes
         )
         .await
         .unwrap();
@@ -379,6 +384,7 @@ mod tests {
             1,    // 20MB
             1000, // 1s flush interval
             500,  // channel buffer
+            300,  // max_segment_age_secs
         )
         .await
         .unwrap();

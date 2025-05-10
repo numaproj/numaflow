@@ -1,11 +1,6 @@
 use std::time::Duration;
 
-use numaflow_pb::clients::map::map_client::MapClient;
-use numaflow_pb::clients::sink::sink_client::SinkClient;
-use numaflow_pb::clients::source::source_client::SourceClient;
-use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use tokio_util::sync::CancellationToken;
-
+use crate::config::components::reduce::ReducerType;
 use crate::config::components::sink::{SinkConfig, SinkType};
 use crate::config::components::source::{SourceConfig, SourceType};
 use crate::config::components::transformer::TransformerConfig;
@@ -14,6 +9,7 @@ use crate::config::pipeline::map::{MapMode, MapType, MapVtxConfig};
 use crate::config::pipeline::{DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET};
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
+use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
 use crate::shared::grpc;
 use crate::shared::server_info::{ContainerType, sdk_server_info};
 use crate::sink::serve::ServingStore;
@@ -28,6 +24,12 @@ use crate::tracker::TrackerHandle;
 use crate::transformer::Transformer;
 use crate::watermark::source::SourceWatermarkHandle;
 use crate::{config, error, metrics, source};
+use numaflow_pb::clients::map::map_client::MapClient;
+use numaflow_pb::clients::reduce::reduce_client::ReduceClient;
+use numaflow_pb::clients::sink::sink_client::SinkClient;
+use numaflow_pb::clients::source::source_client::SourceClient;
+use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use tokio_util::sync::CancellationToken;
 
 /// Creates a sink writer based on the configuration
 pub(crate) async fn create_sink_writer(
@@ -357,6 +359,28 @@ pub async fn create_source(
                 transformer,
                 watermark_handle,
             ))
+        }
+    }
+}
+
+/// Creates a user-defined aligned reducer client
+pub(crate) async fn create_aligned_reducer(
+    reducer_config: config::components::reduce::ReducerConfig,
+) -> crate::Result<UserDefinedAlignedReduce> {
+    match reducer_config.reducer_type {
+        ReducerType::UserDefined(config) => {
+            // Create gRPC channel
+            let channel = grpc::create_rpc_channel(config.socket_path.clone().into()).await?;
+
+            // Create client
+            let client = UserDefinedAlignedReduce::new(
+                ReduceClient::new(channel)
+                    .max_encoding_message_size(config.grpc_max_message_size)
+                    .max_decoding_message_size(config.grpc_max_message_size),
+            )
+            .await;
+
+            Ok(client)
         }
     }
 }

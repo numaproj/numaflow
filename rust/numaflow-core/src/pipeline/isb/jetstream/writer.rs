@@ -188,12 +188,8 @@ impl JetstreamWriter {
         cln_token: CancellationToken,
     ) -> Result<JoinHandle<Result<()>>> {
         let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
-            info!("Starting streaming Jetstream writer");
             let mut messages_stream = messages_stream;
             let mut hash = DefaultHasher::new();
-
-            let mut processed_msgs_count: usize = 0;
-            let mut last_logged_at = Instant::now();
 
             while let Some(message) = messages_stream.next().await {
                 // if message needs to be dropped, ack and continue
@@ -259,19 +255,7 @@ impl JetstreamWriter {
                         error!(?e, "Failed to resolve PAFs");
                         cln_token.cancel();
                     })?;
-
-                processed_msgs_count += 1;
-                if last_logged_at.elapsed().as_secs() >= 1 {
-                    info!(
-                        "Processed {} messages in {:?}",
-                        processed_msgs_count,
-                        std::time::Instant::now()
-                    );
-                    processed_msgs_count = 0;
-                    last_logged_at = Instant::now();
-                }
             }
-            info!("Streaming jetstream writer finished");
             Ok(())
         });
         Ok(handle)
