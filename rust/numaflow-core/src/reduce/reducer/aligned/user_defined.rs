@@ -84,7 +84,7 @@ impl From<AlignedWindowMessage> for ReduceRequest {
 struct UdReducerResponse {
     pub response: ReduceResponse,
     pub index: i32,
-    pub vertex_name: String,
+    pub vertex_name: &'static str,
 }
 
 impl From<UdReducerResponse> for Message {
@@ -171,7 +171,7 @@ impl UserDefinedAlignedReduce {
             .into_inner();
 
         // Process the response stream
-        let vertex_name = get_vertex_name().to_string();
+        let vertex_name = get_vertex_name();
         let mut index = 0;
 
         while let Some(response) = response_stream
@@ -187,7 +187,7 @@ impl UserDefinedAlignedReduce {
             let message: Message = UdReducerResponse {
                 response,
                 index,
-                vertex_name: vertex_name.clone(),
+                vertex_name,
             }
             .into();
 
@@ -200,9 +200,9 @@ impl UserDefinedAlignedReduce {
         }
 
         // wait for the tokio task to complete
-        Ok(request_handle
+        request_handle
             .await
-            .map_err(|e| crate::Error::Reduce(format!("conversion task failed: {}", e)))?)
+            .map_err(|e| crate::Error::Reduce(format!("conversion task failed: {}", e)))
     }
 
     pub(crate) async fn ready(&mut self) -> bool {

@@ -405,9 +405,6 @@ impl SinkWriter {
 
                 pin!(chunk_stream);
 
-                let mut processed_msgs_count: usize = 0;
-                let mut last_logged_at = std::time::Instant::now();
-
                 loop {
                     let batch = match chunk_stream.next().await {
                         Some(batch) => batch,
@@ -488,17 +485,6 @@ impl SinkWriter {
                             .dropped_total
                             .get_or_create(pipeline_forward_metric_labels("Sink"))
                             .inc_by((total_msgs - total_valid_msgs) as u64);
-                    }
-
-                    processed_msgs_count += total_msgs;
-                    if last_logged_at.elapsed().as_millis() >= 1000 {
-                        info!(
-                            "Processed {} messages at {:?}",
-                            processed_msgs_count,
-                            time::Instant::now()
-                        );
-                        processed_msgs_count = 0;
-                        last_logged_at = std::time::Instant::now();
                     }
                 }
                 self.final_result.clone()

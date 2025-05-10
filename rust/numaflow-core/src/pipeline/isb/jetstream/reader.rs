@@ -174,6 +174,9 @@ impl JetStreamReader {
             async move {
                 let mut labels = pipeline_forward_metric_labels(&self.vertex_type).clone();
                 let semaphore = Arc::new(Semaphore::new(MAX_ACK_PENDING));
+                let mut processed_msgs_count: usize = 0;
+                let mut last_logged_at = Instant::now();
+
                 labels.push((
                     metrics::PIPELINE_PARTITION_NAME_LABEL.to_string(),
                     self.stream.name.to_string(),
@@ -252,6 +255,17 @@ impl JetStreamReader {
                                 .read_total
                                 .get_or_create(&labels)
                                 .inc();
+
+                            processed_msgs_count += 1;
+                            if last_logged_at.elapsed().as_secs() >= 1 {
+                                info!(
+                                    "Processed {} messages in {:?}",
+                                    processed_msgs_count,
+                                    std::time::Instant::now()
+                                );
+                                processed_msgs_count = 0;
+                                last_logged_at = Instant::now();
+                            }
                         }
                     }
                 }

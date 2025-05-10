@@ -77,7 +77,7 @@ impl PBQ {
             let (wal_tx, mut wal_rx) = mpsc::channel(500);
 
             // Clone the tx for use in the replay handler
-            let replay_tx = tx.clone();
+            let messages_tx = tx.clone();
 
             // Start compaction with both replay and periodic compaction
             let compaction_handle = wal
@@ -90,13 +90,13 @@ impl PBQ {
                 .await?;
 
             // Process replayed messages
-            let _replay_handle = tokio::spawn(async move {
-                while let Some(msg) = wal_rx.recv().await {
-                    let msg: WalMessage = msg.try_into().unwrap();
-                    replay_tx.send(msg.into()).await.expect("Receiver dropped");
-                }
-                Ok::<_, crate::reduce::error::Error>(())
-            });
+            while let Some(msg) = wal_rx.recv().await {
+                let msg: WalMessage = msg.try_into().unwrap();
+                messages_tx
+                    .send(msg.into())
+                    .await
+                    .expect("Receiver dropped");
+            }
 
             // Read from ISB and write to WAL
             Self::read_isb_and_write_wal(

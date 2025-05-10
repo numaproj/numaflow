@@ -111,7 +111,6 @@ impl Compactor {
         interval: Duration,
         cln_token: CancellationToken,
     ) -> WalResult<JoinHandle<WalResult<()>>> {
-        // Case 1: Both replay and periodic compaction
         Ok(tokio::spawn(async move {
             // First do a one-time compaction with replay
             self.compact(Some(replay_tx)).await?;

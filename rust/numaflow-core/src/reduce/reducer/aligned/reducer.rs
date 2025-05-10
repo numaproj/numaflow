@@ -239,7 +239,7 @@ impl AlignedReduceActor {
 }
 
 /// Processes messages and forwards results to the next stage.
-pub(crate) struct AlignedReducer<W: WindowManager> {
+pub(crate) struct AlignedReducer<W> {
     client: UserDefinedAlignedReduce,
     window_manager: W,
     js_writer: JetstreamWriter,
