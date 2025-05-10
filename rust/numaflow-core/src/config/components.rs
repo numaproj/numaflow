@@ -10,7 +10,7 @@ pub(crate) mod source {
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source, SqsSource};
     use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
     use numaflow_sqs::source::SqsSourceConfig;
-    use tracing::{warn};
+    use tracing::warn;
 
     use crate::Result;
     use crate::error::Error;
