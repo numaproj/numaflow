@@ -239,7 +239,6 @@ impl AlignedReduceActor {
 }
 
 /// Processes messages and forwards results to the next stage.
-#[derive(Clone)]
 pub(crate) struct AlignedReducer<W: WindowManager> {
     client: UserDefinedAlignedReduce,
     window_manager: W,

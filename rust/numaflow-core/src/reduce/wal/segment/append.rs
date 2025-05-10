@@ -130,7 +130,7 @@ impl SegmentWriteActor {
         }
 
         info!(?self.wal_type, "Stopping, doing a final flush and rotate!");
-        self.shutdown().await
+        self.rotate_file(false).await
     }
 
     /// Processes each [SegmentWriteMessage] operation. This should only return critical errors, and
@@ -147,7 +147,7 @@ impl SegmentWriteActor {
             SegmentWriteMessage::Rotate { on_size } => {
                 // Rotate if forced (`on_size` is false) OR if size threshold is met
                 if !on_size || self.current_size >= self.max_file_size {
-                    self.rotate_file().await?;
+                    self.rotate_file(true).await?;
                 } else {
                     debug!(
                         current_size = self.current_size,
@@ -173,7 +173,7 @@ impl SegmentWriteActor {
                 max_size = self.max_file_size,
                 "Rotating segment file due to size threshold"
             );
-            self.rotate_file().await?;
+            self.rotate_file(true).await?;
         }
 
         // Check if we need to rotate based on time
@@ -185,7 +185,7 @@ impl SegmentWriteActor {
                     max_age = ?self.max_segment_age,
                     "Rotating segment file due to age threshold"
                 );
-                self.rotate_file().await?;
+                self.rotate_file(true).await?;
             }
         }
 
@@ -243,26 +243,15 @@ impl SegmentWriteActor {
         // if the file has not been rotated in these many seconds, let's rotate
         if Utc::now().signed_duration_since(self.create_time) > ROTATE_IF_STALE_DURATION {
             debug!(duration = ?ROTATE_IF_STALE_DURATION, "Rotating stale file, no entries for a while");
-            self.rotate_file().await
+            self.rotate_file(true).await
         } else {
             self.flush().await
         }
     }
 
-    /// Shutdown the SegmentWriter, flush and rotate the file and delete any newly created file without
-    /// any entries.
-    async fn shutdown(&mut self) -> WalResult<()> {
-        self.flush().await?;
-        self.rotate_file().await?;
-
-        // delete the current/newly created file
-        tokio::fs::remove_file(&self.current_file_name).await?;
-        Ok(())
-    }
-
     /// Rotates the file and opens a new one if `open_new` is `true`. It renames the file on rotation
     /// and resets the internal fields.
-    async fn rotate_file(&mut self) -> WalResult<()> {
+    async fn rotate_file(&mut self, open_new: bool) -> WalResult<()> {
         if self.current_size == 0 {
             return Ok(());
         }
@@ -288,15 +277,17 @@ impl SegmentWriteActor {
         tokio::fs::rename(&self.current_file_name, &to_file_name).await?;
         info!(?self.current_file_name, ?to_file_name, "rename successful");
 
-        self.file_index += 1;
-        let (file_name, buf_file) =
-            Self::open_segment(&self.wal_type, &self.base_path, self.file_index).await?;
+        if open_new {
+            // open new segment
+            self.file_index += 1;
+            let (file_name, buf_file) =
+                Self::open_segment(&self.wal_type, &self.base_path, self.file_index).await?;
 
-        self.current_file_name = file_name;
-        self.current_file_buf = buf_file;
-        self.create_time = Utc::now();
-        self.current_size = 0;
-
+            self.current_file_name = file_name;
+            self.current_file_buf = buf_file;
+            self.create_time = Utc::now();
+            self.current_size = 0;
+        }
         Ok(())
     }
 }

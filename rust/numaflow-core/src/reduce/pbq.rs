@@ -73,14 +73,30 @@ impl PBQ {
         };
 
         let handle = tokio::spawn(async move {
-            // Replay messages from WAL
-            Self::replay_wal(wal.compactor.clone(), &tx).await?;
+            // Create a channel for WAL replay
+            let (wal_tx, mut wal_rx) = mpsc::channel(500);
 
-            // start the compactor
+            // Clone the tx for use in the replay handler
+            let replay_tx = tx.clone();
+
+            // Start compaction with both replay and periodic compaction
             let compaction_handle = wal
                 .compactor
-                .start_compaction(Duration::from_secs(60), cancellation_token.clone())
+                .start_compaction_with_replay(
+                    wal_tx,
+                    Duration::from_secs(60),
+                    cancellation_token.clone(),
+                )
                 .await?;
+
+            // Process replayed messages
+            let _replay_handle = tokio::spawn(async move {
+                while let Some(msg) = wal_rx.recv().await {
+                    let msg: WalMessage = msg.try_into().unwrap();
+                    replay_tx.send(msg.into()).await.expect("Receiver dropped");
+                }
+                Ok::<_, crate::reduce::error::Error>(())
+            });
 
             // Read from ISB and write to WAL
             Self::read_isb_and_write_wal(
@@ -92,25 +108,12 @@ impl PBQ {
             )
             .await?;
 
+            // Wait for compaction to complete
             compaction_handle.await.expect("task failed")?;
             Ok(())
         });
 
         Ok((ReceiverStream::new(rx), handle))
-    }
-
-    /// Replays messages from the WAL converts them to [Message] and sends them to
-    /// the tx channel. Replay also compacts the WAL.
-    async fn replay_wal(compactor: Compactor, tx: &Sender<Message>) -> Result<()> {
-        let (wal_tx, mut wal_rx) = mpsc::channel(500);
-        compactor.compact_with_replay(wal_tx).await?;
-
-        while let Some(msg) = wal_rx.recv().await {
-            let msg: WalMessage = msg.try_into().unwrap();
-            tx.send(msg.into()).await.expect("Receiver dropped");
-        }
-
-        Ok(())
     }
 
     /// Reads from ISB and writes to WAL.
