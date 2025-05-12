@@ -19581,6 +19581,10 @@
           "description": "Serve sink is used to return results when working with a ServingPipeline.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServeSink"
         },
+        "sqs": {
+          "description": "SQS sink is used to write the data to the AWS SQS.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SqsSink"
+        },
         "udsink": {
           "description": "UDSink sink is used to write the data to the user-defined sink.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSink"
@@ -22355,6 +22359,10 @@
           "description": "Serve sink is used to return results when working with a ServingPipeline.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServeSink"
         },
+        "sqs": {
+          "description": "SQS sink is used to write the data to the AWS SQS.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.SqsSink"
+        },
         "udsink": {
           "description": "UDSink sink is used to write the data to the user-defined sink.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSink"
@@ -22411,6 +22419,28 @@
         },
         "udsource": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.UDSource"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.SqsSink": {
+      "type": "object",
+      "required": [
+        "awsRegion",
+        "queueName",
+        "queueOwnerAWSAccountID"
+      ],
+      "properties": {
+        "awsRegion": {
+          "description": "AWSRegion is the AWS Region where the SQS queue is located",
+          "type": "string"
+        },
+        "queueName": {
+          "description": "QueueName is the name of the SQS queue",
+          "type": "string"
+        },
+        "queueOwnerAWSAccountID": {
+          "description": "QueueOwnerAWSAccountID is the queue owner aws account id",
+          "type": "string"
         }
       }
     },

@@ -535,6 +535,26 @@ ServingPipeline.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>sqs</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SqsSink"> SqsSink </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+SQS sink is used to write the data to the AWS SQS.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -11397,6 +11417,101 @@ JetStreamSource </a> </em>
 <td>
 
 <em>(Optional)</em>
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.SqsSink">
+
+SqsSink
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractSink">AbstractSink</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>awsRegion</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+AWSRegion is the AWS Region where the SQS queue is located
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>queueName</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+QueueName is the name of the SQS queue
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>queueOwnerAWSAccountID</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+QueueOwnerAWSAccountID is the queue owner aws account id
+</p>
+
 </td>
 
 </tr>
