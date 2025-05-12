@@ -159,8 +159,8 @@ impl KafkaActor {
             }
             if let Some(client_auth) = tls_config.client_auth {
                 client_config
-                    .set("ssl.certificate.location", client_auth.client_cert)
-                    .set("ssl.key.location", client_auth.client_cert_private_key);
+                    .set("ssl.certificate.pem", client_auth.client_cert)
+                    .set("ssl.key.pem", client_auth.client_cert_private_key);
             }
         }
 
@@ -180,6 +180,13 @@ impl KafkaActor {
         consumer
             .subscribe(&[&config.topic])
             .map_err(|err| Error::Kafka(format!("Failed to subscribe to topic: {}", err)))?;
+
+        /*
+        FIXME: Authentication failure also comes at a later point
+        2025-05-12T05:06:01.214282Z ERROR librdkafka: librdkafka: FAIL [thrd:ssl://kafka:29092/bootstrap]: ssl://kafka:29092/bootstrap: Receive failed: ssl/record/rec_layer_s3.c:911:ssl3_read_bytes error:0A000412:SSL routines::ssl/tls alert bad certificate: SSL alert number 42 (after 0ms in state APIVERSION_QUERY)
+        2025-05-12T05:06:01.214310Z ERROR rdkafka::client: librdkafka: Global error: BrokerTransportFailure (Local: Broker transport failure): ssl://kafka:29092/bootstrap: Receive failed: ssl/record/rec_layer_s3.c:911:ssl3_read_bytes error:0A000412:SSL routines::ssl/tls alert bad certificate: SSL alert number 42 (after 0ms in state APIVERSION_QUERY)
+        2025-05-12T05:06:01.214319Z  WARN numaflow_kafka: Kafka error: Message consumption error: BrokerTransportFailure (Local: Broker transport failure)
+        */
 
         tokio::spawn(async move {
             let mut actor = KafkaActor {
