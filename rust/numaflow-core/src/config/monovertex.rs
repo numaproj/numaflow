@@ -251,6 +251,54 @@ mod tests {
     }
 
     #[test]
+    fn test_load_valid_sqs_sink() {
+        let valid_config = r#"
+        {
+            "metadata": {
+                "name": "test_vertex"
+            },
+            "spec": {
+                "limits": {
+                    "readBatchSize": 1000,
+                    "readTimeout": "2s"
+                },
+                "source": {
+                    "udsource": {
+                        "container": {
+                            "image": "xxxxxxx",
+                            "resources": {}
+                        }
+                    }
+                },
+                "sink": {
+                    "sqs": {
+                        "queueName": "https://sqs.us-east-1.amazonaws.com/123456789012/MyQueue",
+                        "awsRegion": "us-east-1",
+                        "queueOwnerAWSAccountID": "123456789012"
+                    }
+                }
+            }
+        }
+        "#;
+
+        let encoded_valid_config = BASE64_STANDARD.encode(valid_config);
+
+        let mut env_vars = HashMap::new();
+        env_vars.insert(ENV_MONO_VERTEX_OBJ.to_string(), encoded_valid_config);
+
+        let config = MonovertexConfig::load(env_vars).unwrap();
+
+        assert_eq!(config.name, "test_vertex");
+        assert_eq!(config.batch_size, 1000);
+        assert_eq!(config.read_timeout.as_millis(), 2000);
+        assert!(matches!(
+            config.source_config.source_type,
+            SourceType::UserDefined(_)
+        ));
+        assert!(matches!(config.sink_config.sink_type, SinkType::Sqs(_)));
+    }
+
+    #[test]
     fn test_load_missing_source() {
         let invalid_config = r#"
         {
