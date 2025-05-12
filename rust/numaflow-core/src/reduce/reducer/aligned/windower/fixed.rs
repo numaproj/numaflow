@@ -7,7 +7,7 @@ use chrono::{DateTime, TimeZone, Utc};
 
 use crate::message::Message;
 use crate::reduce::reducer::aligned::windower::{
-    AlignedWindowMessage, FixedWindowMessage, Window, WindowManager, WindowOperation,
+    AlignedWindowMessage, Window, WindowManager, WindowOperation,
 };
 
 #[derive(Debug, Clone)]
@@ -49,7 +49,6 @@ impl FixedWindowManager {
 impl WindowManager for FixedWindowManager {
     fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage> {
         let window = self.create_window(&msg);
-        let mut result = Vec::new();
 
         // Check if window already exists
         let mut active_windows = self.active_windows.lock().unwrap();
@@ -63,10 +62,7 @@ impl WindowManager for FixedWindowManager {
         };
 
         // Create window message
-        let window_msg = AlignedWindowMessage::Fixed(FixedWindowMessage { operation, window });
-
-        result.push(window_msg);
-        result
+        vec![AlignedWindowMessage { operation, window }]
     }
 
     fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage> {
@@ -89,10 +85,10 @@ impl WindowManager for FixedWindowManager {
             self.delete_window(window.clone());
 
             // Create close message
-            let window_msg = AlignedWindowMessage::Fixed(FixedWindowMessage {
+            let window_msg = AlignedWindowMessage {
                 operation: WindowOperation::Close,
                 window,
-            });
+            };
 
             result.push(window_msg);
         }
@@ -105,15 +101,10 @@ impl WindowManager for FixedWindowManager {
         active_windows.remove(&window.end_time);
     }
 
-    fn oldest_window_endtime(&self) -> DateTime<Utc> {
+    fn oldest_window(&self) -> Option<Window> {
         let active_windows = self.active_windows.lock().unwrap();
 
-        // Return the oldest window end time or a default if no windows exist
-        active_windows
-            .keys()
-            .next()
-            .cloned()
-            .unwrap_or_else(|| Utc.timestamp_millis_opt(-1).unwrap())
+        active_windows.values().next().cloned()
     }
 }
 
@@ -138,22 +129,17 @@ mod tests {
 
         // Verify results - first message should create a new window with Open operation
         assert_eq!(window_msgs.len(), 1);
-        match &window_msgs[0] {
-            AlignedWindowMessage::Fixed(fixed_msg) => {
-                // Check window boundaries
-                assert_eq!(fixed_msg.window.start_time, base_time);
-                assert_eq!(
-                    fixed_msg.window.end_time,
-                    base_time + chrono::Duration::seconds(60)
-                );
+        // Check window boundaries
+        assert_eq!(window_msgs[0].window.start_time, base_time);
+        assert_eq!(
+            window_msgs[0].window.end_time,
+            base_time + chrono::Duration::seconds(60)
+        );
 
-                // Check operation type
-                match &fixed_msg.operation {
-                    WindowOperation::Open(_) => {}
-                    _ => panic!("Expected Open operation"),
-                }
-            }
-            _ => panic!("Expected Fixed window message"),
+        // Check operation type
+        match &window_msgs[0].operation {
+            WindowOperation::Open(_) => {}
+            _ => panic!("Expected Open operation"),
         }
 
         // Assign another message to the same window (base_time + 1s)
@@ -164,24 +150,17 @@ mod tests {
 
         let window_msgs2 = windower.assign_windows(msg2.clone());
 
-        // Verify it's an Append operation
-        match &window_msgs2[0] {
-            AlignedWindowMessage::Fixed(fixed_msg) => {
-                // Check window boundaries
-                assert_eq!(fixed_msg.window.start_time, base_time);
-                assert_eq!(
-                    fixed_msg.window.end_time,
-                    base_time + chrono::Duration::seconds(60)
-                );
+        assert_eq!(window_msgs2[0].window.start_time, base_time);
+        assert_eq!(
+            window_msgs2[0].window.end_time,
+            base_time + chrono::Duration::seconds(60)
+        );
 
-                match &fixed_msg.operation {
-                    WindowOperation::Append(append_msg) => {
-                        assert_eq!(append_msg.event_time, msg2.event_time);
-                    }
-                    _ => panic!("Expected Append operation"),
-                }
+        match &window_msgs2[0].operation {
+            WindowOperation::Append(append_msg) => {
+                assert_eq!(append_msg.event_time, msg2.event_time);
             }
-            _ => panic!("Expected Fixed window message"),
+            _ => panic!("Expected Append operation"),
         }
     }
 
@@ -270,39 +249,27 @@ mod tests {
         // Should close 2 windows (window1 and window2)
         assert_eq!(closed_msgs.len(), 2);
 
-        // Check first closed window (should be window1)
-        match &closed_msgs[0] {
-            AlignedWindowMessage::Fixed(fixed_msg) => {
-                assert_eq!(fixed_msg.window.start_time, base_time);
-                assert_eq!(
-                    fixed_msg.window.end_time,
-                    base_time + chrono::Duration::seconds(60)
-                );
-                match &fixed_msg.operation {
-                    WindowOperation::Close => {}
-                    _ => panic!("Expected Close operation"),
-                }
-            }
-            _ => panic!("Expected Fixed window message"),
+        assert_eq!(closed_msgs[0].window.start_time, base_time);
+        assert_eq!(
+            closed_msgs[0].window.end_time,
+            base_time + chrono::Duration::seconds(60)
+        );
+        match &closed_msgs[0].operation {
+            WindowOperation::Close => {}
+            _ => panic!("Expected Close operation"),
         }
 
-        // Check second closed window (should be window2)
-        match &closed_msgs[1] {
-            AlignedWindowMessage::Fixed(fixed_msg) => {
-                assert_eq!(
-                    fixed_msg.window.start_time,
-                    base_time + chrono::Duration::seconds(60)
-                );
-                assert_eq!(
-                    fixed_msg.window.end_time,
-                    base_time + chrono::Duration::seconds(120)
-                );
-                match &fixed_msg.operation {
-                    WindowOperation::Close => {}
-                    _ => panic!("Expected Close operation"),
-                }
-            }
-            _ => panic!("Expected Fixed window message"),
+        assert_eq!(
+            closed_msgs[1].window.start_time,
+            base_time + chrono::Duration::seconds(60)
+        );
+        assert_eq!(
+            closed_msgs[1].window.end_time,
+            base_time + chrono::Duration::seconds(120)
+        );
+        match &closed_msgs[1].operation {
+            WindowOperation::Close => {}
+            _ => panic!("Expected Close operation"),
         }
 
         // Verify only window3 remains in active windows
@@ -382,7 +349,7 @@ mod tests {
 
         // Verify the oldest window end time is window1's end time
         assert_eq!(
-            windower.oldest_window_endtime(),
+            windower.oldest_window().unwrap().end_time,
             base_time + chrono::Duration::seconds(60)
         );
 
@@ -391,7 +358,7 @@ mod tests {
 
         // Verify the oldest window end time is now window2's end time
         assert_eq!(
-            windower.oldest_window_endtime(),
+            windower.oldest_window().unwrap().end_time,
             base_time + chrono::Duration::seconds(120)
         );
     }

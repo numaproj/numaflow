@@ -421,7 +421,9 @@ impl ShouldRetain for AlignedCompaction {
             .expect("Failed to extract event time from message");
 
         // Retain the message if its event time is greater than the oldest time
-        Ok(event_time > self.0)
+        // we should only compact the messages with event time strictly less than
+        // the oldest time.
+        Ok(event_time >= self.0)
     }
 }
 
@@ -453,7 +455,9 @@ impl ShouldRetain for UnalignedCompaction {
         // Check if the key exists in the map
         if let Some(oldest_time) = self.0.get(&key) {
             // Retain the message if its event time is greater than the oldest time for this key
-            return Ok(event_time > *oldest_time);
+            // we should only compact the messages with event time strictly less than
+            // the oldest time.
+            return Ok(event_time >= *oldest_time);
         }
 
         // If the key is not in the map, retain the message

@@ -7,7 +7,7 @@ use chrono::{DateTime, TimeZone, Utc};
 
 use crate::message::Message;
 use crate::reduce::reducer::aligned::windower::{
-    AlignedWindowMessage, SlidingWindowMessage, Window, WindowManager, WindowOperation,
+    AlignedWindowMessage, Window, WindowManager, WindowOperation,
 };
 
 #[derive(Debug, Clone)]
@@ -83,11 +83,7 @@ impl WindowManager for SlidingWindowManager {
                 WindowOperation::Append(msg.clone())
             };
 
-            // Create window message
-            let window_msg =
-                AlignedWindowMessage::Sliding(SlidingWindowMessage { operation, window });
-
-            result.push(window_msg);
+            result.push(AlignedWindowMessage { operation, window });
         }
 
         result
@@ -111,10 +107,10 @@ impl WindowManager for SlidingWindowManager {
             active_windows.remove(&window.end_time);
 
             // Create close message
-            let window_msg = AlignedWindowMessage::Sliding(SlidingWindowMessage {
+            let window_msg = AlignedWindowMessage {
                 operation: WindowOperation::Close,
                 window,
-            });
+            };
 
             result.push(window_msg);
         }
@@ -127,15 +123,10 @@ impl WindowManager for SlidingWindowManager {
         active_windows.remove(&window.end_time);
     }
 
-    fn oldest_window_endtime(&self) -> DateTime<Utc> {
+    fn oldest_window(&self) -> Option<Window> {
         let active_windows = self.active_windows.lock().unwrap();
 
-        // Return the oldest window end time or a default if no windows exist
-        active_windows
-            .keys()
-            .next()
-            .cloned()
-            .unwrap_or_else(|| Utc.timestamp_millis_opt(-1).unwrap())
+        active_windows.values().next().cloned()
     }
 }
 
@@ -176,42 +167,25 @@ mod tests {
         assert_eq!(window_msgs.len(), 3);
 
         // Check first window: [60000, 120000)
-        match &window_msgs[0] {
-            AlignedWindowMessage::Sliding(sliding_msg) => {
-                assert_eq!(sliding_msg.window.start_time.timestamp_millis(), 60000);
-                assert_eq!(sliding_msg.window.end_time.timestamp_millis(), 120000);
-                match &sliding_msg.operation {
-                    WindowOperation::Open(_) => {}
-                    _ => panic!("Expected Open operation"),
-                }
-            }
-            AlignedWindowMessage::Fixed(_) => panic!("Expected Sliding window message"),
+        assert_eq!(window_msgs[0].window.start_time.timestamp_millis(), 60000);
+        assert_eq!(window_msgs[0].window.end_time.timestamp_millis(), 120000);
+        match &window_msgs[0].operation {
+            WindowOperation::Open(_) => {}
+            _ => panic!("Expected Open operation"),
         }
 
-        // Check second window: [40000, 100000)
-        match &window_msgs[1] {
-            AlignedWindowMessage::Sliding(sliding_msg) => {
-                assert_eq!(sliding_msg.window.start_time.timestamp_millis(), 40000);
-                assert_eq!(sliding_msg.window.end_time.timestamp_millis(), 100000);
-                match &sliding_msg.operation {
-                    WindowOperation::Open(_) => {}
-                    _ => panic!("Expected Open operation"),
-                }
-            }
-            AlignedWindowMessage::Fixed(_) => panic!("Expected Sliding window message"),
+        assert_eq!(window_msgs[1].window.start_time.timestamp_millis(), 40000);
+        assert_eq!(window_msgs[1].window.end_time.timestamp_millis(), 100000);
+        match &window_msgs[1].operation {
+            WindowOperation::Open(_) => {}
+            _ => panic!("Expected Open operation"),
         }
 
-        // Check third window: [20000, 80000)
-        match &window_msgs[2] {
-            AlignedWindowMessage::Sliding(sliding_msg) => {
-                assert_eq!(sliding_msg.window.start_time.timestamp_millis(), 20000);
-                assert_eq!(sliding_msg.window.end_time.timestamp_millis(), 80000);
-                match &sliding_msg.operation {
-                    WindowOperation::Open(_) => {}
-                    _ => panic!("Expected Open operation"),
-                }
-            }
-            AlignedWindowMessage::Fixed(_) => panic!("Expected Sliding window message"),
+        assert_eq!(window_msgs[2].window.start_time.timestamp_millis(), 20000);
+        assert_eq!(window_msgs[2].window.end_time.timestamp_millis(), 80000);
+        match &window_msgs[2].operation {
+            WindowOperation::Open(_) => {}
+            _ => panic!("Expected Open operation"),
         }
 
         // Assign another message to the same windows
@@ -229,12 +203,9 @@ mod tests {
 
         // All operations should be Append
         for window_msg in &window_msgs2 {
-            match window_msg {
-                AlignedWindowMessage::Sliding(sliding_msg) => match &sliding_msg.operation {
-                    WindowOperation::Append(_) => {}
-                    _ => panic!("Expected Append operation"),
-                },
-                AlignedWindowMessage::Fixed(_) => panic!("Expected Sliding window message"),
+            match &window_msg.operation {
+                WindowOperation::Append(_) => {}
+                _ => panic!("Expected Append operation"),
             }
         }
     }
@@ -267,30 +238,19 @@ mod tests {
         // Verify results - should be assigned to exactly 2 windows
         assert_eq!(window_msgs.len(), 2);
 
-        // Check first window: [600, 660)
-        match &window_msgs[0] {
-            AlignedWindowMessage::Sliding(sliding_msg) => {
-                assert_eq!(sliding_msg.window.start_time.timestamp(), 600);
-                assert_eq!(sliding_msg.window.end_time.timestamp(), 660);
-                match &sliding_msg.operation {
-                    WindowOperation::Open(_) => {}
-                    _ => panic!("Expected Open operation"),
-                }
-            }
-            AlignedWindowMessage::Fixed(_) => panic!("Expected Sliding window message"),
+        assert_eq!(window_msgs[0].window.start_time.timestamp(), 600);
+        assert_eq!(window_msgs[0].window.end_time.timestamp(), 660);
+        match &window_msgs[0].operation {
+            WindowOperation::Open(_) => {}
+            _ => panic!("Expected Open operation"),
         }
 
         // Check second window: [560, 620)
-        match &window_msgs[1] {
-            AlignedWindowMessage::Sliding(sliding_msg) => {
-                assert_eq!(sliding_msg.window.start_time.timestamp(), 560);
-                assert_eq!(sliding_msg.window.end_time.timestamp(), 620);
-                match &sliding_msg.operation {
-                    WindowOperation::Open(_) => {}
-                    _ => panic!("Expected Open operation"),
-                }
-            }
-            AlignedWindowMessage::Fixed(_) => panic!("Expected Sliding window message"),
+        assert_eq!(window_msgs[1].window.start_time.timestamp(), 560);
+        assert_eq!(window_msgs[1].window.end_time.timestamp(), 620);
+        match &window_msgs[1].operation {
+            WindowOperation::Open(_) => {}
+            _ => panic!("Expected Open operation"),
         }
 
         // Assign another message to the same windows
@@ -306,12 +266,9 @@ mod tests {
 
         // All operations should be Append
         for window_msg in &window_msgs2 {
-            match window_msg {
-                AlignedWindowMessage::Sliding(sliding_msg) => match &sliding_msg.operation {
-                    WindowOperation::Append(_) => {}
-                    _ => panic!("Expected Append operation"),
-                },
-                AlignedWindowMessage::Fixed(_) => panic!("Expected Sliding window message"),
+            match &window_msg.operation {
+                WindowOperation::Append(_) => {}
+                _ => panic!("Expected Append operation"),
             }
         }
     }
@@ -352,55 +309,41 @@ mod tests {
         assert_eq!(closed.len(), 3);
 
         // Check that all windows are closed in order of end time
-        match &closed[0] {
-            AlignedWindowMessage::Sliding(sliding_msg) => {
-                assert_eq!(
-                    sliding_msg.window.start_time,
-                    base_time - chrono::Duration::seconds(20)
-                );
-                assert_eq!(
-                    sliding_msg.window.end_time,
-                    base_time + chrono::Duration::seconds(40)
-                );
-                match &sliding_msg.operation {
-                    WindowOperation::Close => {}
-                    _ => panic!("Expected Close operation"),
-                }
-            }
-            AlignedWindowMessage::Fixed(_) => panic!("Expected Sliding window message"),
+
+        assert_eq!(
+            closed[0].window.start_time,
+            base_time - chrono::Duration::seconds(20)
+        );
+        assert_eq!(
+            closed[0].window.end_time,
+            base_time + chrono::Duration::seconds(40)
+        );
+        match &closed[0].operation {
+            WindowOperation::Close => {}
+            _ => panic!("Expected Close operation"),
         }
 
-        match &closed[1] {
-            AlignedWindowMessage::Sliding(sliding_msg) => {
-                assert_eq!(
-                    sliding_msg.window.start_time,
-                    base_time - chrono::Duration::seconds(10)
-                );
-                assert_eq!(
-                    sliding_msg.window.end_time,
-                    base_time + chrono::Duration::seconds(50)
-                );
-                match &sliding_msg.operation {
-                    WindowOperation::Close => {}
-                    _ => panic!("Expected Close operation"),
-                }
-            }
-            AlignedWindowMessage::Fixed(_) => panic!("Expected Sliding window message"),
+        assert_eq!(
+            closed[1].window.start_time,
+            base_time - chrono::Duration::seconds(10)
+        );
+        assert_eq!(
+            closed[1].window.end_time,
+            base_time + chrono::Duration::seconds(50)
+        );
+        match &closed[1].operation {
+            WindowOperation::Close => {}
+            _ => panic!("Expected Close operation"),
         }
 
-        match &closed[2] {
-            AlignedWindowMessage::Sliding(sliding_msg) => {
-                assert_eq!(sliding_msg.window.start_time, base_time);
-                assert_eq!(
-                    sliding_msg.window.end_time,
-                    base_time + chrono::Duration::seconds(60)
-                );
-                match &sliding_msg.operation {
-                    WindowOperation::Close => {}
-                    _ => panic!("Expected Close operation"),
-                }
-            }
-            AlignedWindowMessage::Fixed(_) => panic!("Expected Sliding window message"),
+        assert_eq!(closed[2].window.start_time, base_time);
+        assert_eq!(
+            closed[2].window.end_time,
+            base_time + chrono::Duration::seconds(60)
+        );
+        match &closed[2].operation {
+            WindowOperation::Close => {}
+            _ => panic!("Expected Close operation"),
         }
 
         // Verify all windows are closed
@@ -510,7 +453,11 @@ mod tests {
 
         // Verify oldest window end time
         assert_eq!(
-            windower.oldest_window_endtime().timestamp_millis(),
+            windower
+                .oldest_window()
+                .unwrap()
+                .end_time
+                .timestamp_millis(),
             (base_time + chrono::Duration::seconds(40)).timestamp_millis()
         );
 
@@ -519,7 +466,11 @@ mod tests {
 
         // Verify the oldest window end time is now window2
         assert_eq!(
-            windower.oldest_window_endtime().timestamp_millis(),
+            windower
+                .oldest_window()
+                .unwrap()
+                .end_time
+                .timestamp_millis(),
             (base_time + chrono::Duration::seconds(50)).timestamp_millis()
         );
 
@@ -528,7 +479,11 @@ mod tests {
 
         // Verify oldest window end time is now window1
         assert_eq!(
-            windower.oldest_window_endtime().timestamp_millis(),
+            windower
+                .oldest_window()
+                .unwrap()
+                .end_time
+                .timestamp_millis(),
             (base_time + chrono::Duration::seconds(60)).timestamp_millis()
         );
 
@@ -536,7 +491,14 @@ mod tests {
         windower.delete_window(window1.clone());
 
         // Verify oldest window end time is now default (-1)
-        assert_eq!(windower.oldest_window_endtime().timestamp_millis(), -1);
+        assert_eq!(
+            windower
+                .oldest_window()
+                .unwrap()
+                .end_time
+                .timestamp_millis(),
+            -1
+        );
     }
 
     #[test]
@@ -593,23 +555,18 @@ mod tests {
 
         // Check all windows match expected windows
         for (i, window_msg) in window_msgs.iter().enumerate() {
-            match window_msg {
-                AlignedWindowMessage::Sliding(sliding_msg) => {
-                    // Check operation type
-                    match &sliding_msg.operation {
-                        WindowOperation::Open(open_msg) => {
-                            assert_eq!(open_msg.event_time, msg.event_time);
-                        }
-                        _ => panic!("Expected Open operation"),
-                    }
-
-                    // Verify window matches expected window
-                    let window = &sliding_msg.window;
-                    assert_eq!(window.start_time, expected_windows[i].start_time);
-                    assert_eq!(window.end_time, expected_windows[i].end_time);
+            // Check operation type
+            match &window_msg.operation {
+                WindowOperation::Open(open_msg) => {
+                    assert_eq!(open_msg.event_time, msg.event_time);
                 }
-                AlignedWindowMessage::Fixed(_) => panic!("Expected Sliding window message"),
+                _ => panic!("Expected Open operation"),
             }
+
+            // Verify window matches expected window
+            let window = &window_msg.window;
+            assert_eq!(window.start_time, expected_windows[i].start_time);
+            assert_eq!(window.end_time, expected_windows[i].end_time);
         }
 
         // Assign another message to the same window
@@ -624,13 +581,11 @@ mod tests {
         assert_eq!(window_msgs_two.len(), 6);
 
         for window_msg in &window_msgs_two {
-            if let AlignedWindowMessage::Sliding(sliding_msg) = window_msg {
-                match &sliding_msg.operation {
-                    WindowOperation::Append(append_msg) => {
-                        assert_eq!(append_msg.event_time, msg2.event_time);
-                    }
-                    _ => panic!("Expected Append operation"),
+            match &window_msg.operation {
+                WindowOperation::Append(append_msg) => {
+                    assert_eq!(append_msg.event_time, msg2.event_time);
                 }
+                _ => panic!("Expected Append operation"),
             }
         }
     }

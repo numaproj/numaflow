@@ -477,14 +477,16 @@ async fn start_reduce_forwarder(
     )
     .await;
 
+    let window_type = &reduce_vtx_config.reducer_config.window_config.window_type;
     // Create windower based on window config
-    match &reduce_vtx_config.reducer_config.window_config.window_type {
+    match window_type {
         WindowType::Fixed(fixed_config) => {
             let pnf = AlignedReducer::new(
                 reducer_client,
                 FixedWindowManager::new(fixed_config.length),
                 buffer_writer,
                 gc_wal,
+                window_type.clone(),
             )
             .await;
             let forwarder = ReduceForwarder::new(pbq, pnf);
@@ -496,6 +498,7 @@ async fn start_reduce_forwarder(
                 SlidingWindowManager::new(sliding_config.length, sliding_config.slide),
                 buffer_writer,
                 gc_wal,
+                window_type.clone(),
             )
             .await;
             let forwarder = ReduceForwarder::new(pbq, pnf);

@@ -1,14 +1,16 @@
+use crate::config::components::reduce::WindowType;
 use crate::error::Error;
 use crate::message::Message;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
 use crate::reduce::reducer::aligned::windower::{
-    AlignedWindowMessage, FixedWindowMessage, Window, WindowManager, WindowOperation,
+    AlignedWindowMessage, Window, WindowManager, WindowOperation,
 };
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use bytes::Bytes;
 use numaflow_pb::objects::wal::GcEvent;
 use std::collections::HashMap;
+use std::ops::Sub;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
@@ -25,9 +27,125 @@ struct ActiveStream {
     task_handle: JoinHandle<()>,
 }
 
+/// Configuration and functionality for a reduce task
+struct ReduceTask<W: WindowManager> {
+    client: UserDefinedAlignedReduce,
+    js_writer: JetstreamWriter,
+    gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
+    error_tx: mpsc::Sender<Error>,
+    window: Window,
+    window_type: WindowType,
+    window_manager: W,
+}
+
+impl<W: WindowManager> ReduceTask<W> {
+    /// Creates a new ReduceTask with the given configuration
+    fn new(
+        client: UserDefinedAlignedReduce,
+        js_writer: JetstreamWriter,
+        gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
+        error_tx: mpsc::Sender<Error>,
+        window: Window,
+        window_type: WindowType,
+        window_manager: W,
+    ) -> Self {
+        Self {
+            client,
+            js_writer,
+            gc_wal_tx,
+            error_tx,
+            window,
+            window_type,
+            window_manager,
+        }
+    }
+
+    /// starts a task to process the window stream and returns the task handle
+    async fn start(
+        mut self,
+        message_stream: ReceiverStream<AlignedWindowMessage>,
+    ) -> JoinHandle<()> {
+        tokio::spawn(async move {
+            // Create a local channel for results
+            let (result_tx, result_rx) = mpsc::channel(100);
+            let result_stream = ReceiverStream::new(result_rx);
+
+            // Spawn a task to write results to JetStream
+            let writer_handle = match self
+                .js_writer
+                .streaming_write(result_stream, CancellationToken::new())
+                .await
+            {
+                Ok(handle) => handle,
+                Err(e) => {
+                    error!(?e, "Failed to start JetStream writer");
+                    return;
+                }
+            };
+
+            // Call the reduce function. This is a blocking call and will return only once the window
+            // is closed (or on error).
+            let result = self.client.reduce_fn(message_stream, result_tx).await;
+
+            if let Err(e) = result {
+                error!(?e, "Error while doing reduce operation");
+                let _ = self.error_tx.send(e).await;
+                return;
+            }
+
+            // Wait for the writer to complete
+            if let Err(e) = writer_handle.await.expect("join failed for js writer task") {
+                error!(?e, "Error while writing results to JetStream");
+                let _ = self.error_tx.send(e).await;
+                return;
+            }
+
+            // now that the processing is done, we can add this window to the GC WAL.
+            let Some(gc_wal_tx) = &self.gc_wal_tx else {
+                // return if the GC WAL is not configured
+                return;
+            };
+
+            self.window_manager.delete_window(self.window.clone());
+
+            // Send GC event if WAL is configured
+            let gc_event: GcEvent = if let WindowType::Sliding(_) = self.window_type {
+                // for sliding window a message can be part of multiple windows, we can only delete the
+                // messages that are less than the oldest window's start time.
+                let oldest_window = self
+                    .window_manager
+                    .oldest_window()
+                    .expect("no oldest window found");
+                Window {
+                    start_time: oldest_window
+                        .start_time
+                        .sub(chrono::Duration::milliseconds(1)),
+                    end_time: oldest_window
+                        .start_time
+                        .sub(chrono::Duration::milliseconds(1)),
+                    id: oldest_window.id,
+                }
+                .into()
+            } else {
+                // messages of fixed window are not part of multiple windows, so we can delete all the
+                // messages that are less than the window's end time.
+                self.window.clone().into()
+            };
+
+            gc_wal_tx
+                .send(SegmentWriteMessage::WriteData {
+                    offset: None,
+                    data: prost::Message::encode_to_vec(&gc_event).into(),
+                })
+                .await
+                .expect("failed to write gc event to wal");
+        })
+    }
+}
+
 /// Actor that manages multiple window reduction streams. It manages [ActiveStream]s and manages the
 /// lifecycle of the reduce tasks.
-struct AlignedReduceActor {
+struct AlignedReduceActor<W> {
     /// It multiplexes the messages to the receiver to the reduce tasks through the corresponding
     /// tx in [ActiveStream].
     receiver: mpsc::Receiver<AlignedWindowMessage>,
@@ -43,15 +161,20 @@ struct AlignedReduceActor {
     /// Sender for GC WAL messages.
     /// TODO(vigith): why is this optional?
     gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
+    /// Type of window config.
+    window_type: WindowType,
+    window_manager: W,
 }
 
-impl AlignedReduceActor {
+impl<W: WindowManager> AlignedReduceActor<W> {
     pub(crate) async fn new(
         client: UserDefinedAlignedReduce,
         receiver: mpsc::Receiver<AlignedWindowMessage>,
         js_writer: JetstreamWriter,
         error_tx: mpsc::Sender<Error>,
         gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
+        window_type: WindowType,
+        window_manager: W,
     ) -> Self {
         Self {
             client,
@@ -60,25 +183,15 @@ impl AlignedReduceActor {
             js_writer,
             error_tx,
             gc_wal_tx,
+            window_type,
+            window_manager,
         }
     }
 
     /// Runs the actor, listening for messages and multiplexing them to the reduce tasks.
     async fn run(mut self) {
         while let Some(msg) = self.receiver.recv().await {
-            self.handle_message(msg).await;
-        }
-    }
-
-    // TODO(vigith): this is not right?
-    async fn handle_message(&mut self, msg: AlignedWindowMessage) {
-        match msg {
-            AlignedWindowMessage::Fixed(msg) => {
-                self.handle_window_message(msg.window, msg.operation).await
-            }
-            AlignedWindowMessage::Sliding(msg) => {
-                self.handle_window_message(msg.window, msg.operation).await
-            }
+            self.handle_window_message(msg.window, msg.operation).await;
         }
     }
 
@@ -99,32 +212,25 @@ impl AlignedReduceActor {
         let (message_tx, message_rx) = mpsc::channel(100);
         let message_stream = ReceiverStream::new(message_rx);
 
-        // Clone what we need for the task
-        let client = self.client.clone();
-        let js_writer = self.js_writer.clone();
-        let gc_wal_tx_clone = self.gc_wal_tx.clone();
-        let error_tx = self.error_tx.clone();
-        let window_clone = window.clone();
+        // Create a ReduceTask
+        let reduce_task = ReduceTask::new(
+            self.client.clone(),
+            self.js_writer.clone(),
+            self.gc_wal_tx.clone(),
+            self.error_tx.clone(),
+            window.clone(),
+            self.window_type.clone(),
+            self.window_manager.clone(),
+        );
 
         // Create the initial window message
-        let window_msg = AlignedWindowMessage::Fixed(FixedWindowMessage {
+        let window_msg = AlignedWindowMessage {
             operation: WindowOperation::Open(msg),
             window: window.clone(),
-        });
+        };
 
-        // Spawn a task to process this window's messages
-        let task_handle = tokio::spawn(async move {
-            // Process the window and send results to JetStream
-            Self::process_window_stream(
-                client,
-                message_stream,
-                js_writer,
-                gc_wal_tx_clone,
-                error_tx,
-                window_clone,
-            )
-            .await;
-        });
+        // Spawn the task and get the handle
+        let task_handle = reduce_task.start(message_stream).await;
 
         // Store the stream and task handle
         self.active_streams.insert(
@@ -139,66 +245,6 @@ impl AlignedReduceActor {
         let _ = message_tx.send(window_msg).await;
     }
 
-    /// Starts the reduce task (user-defined) for the window stream.
-    /// Once the reduce is done, it will write the result to the ISB.
-    async fn process_window_stream(
-        mut client: UserDefinedAlignedReduce,
-        message_stream: ReceiverStream<AlignedWindowMessage>,
-        js_writer: JetstreamWriter,
-        gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
-        error_tx: mpsc::Sender<Error>,
-        window: Window,
-    ) {
-        // Create a local channel for results
-        let (result_tx, result_rx) = mpsc::channel(100);
-        let result_stream = ReceiverStream::new(result_rx);
-
-        // Spawn a task to write results to JetStream
-        let writer_handle = match js_writer
-            .streaming_write(result_stream, CancellationToken::new())
-            .await
-        {
-            Ok(handle) => handle,
-            Err(e) => {
-                error!(?e, "Failed to start JetStream writer");
-                return;
-            }
-        };
-
-        // Call the reduce function. This is a blocking call and will return only once the window
-        // is closed (or on error).
-        let result = client.reduce_fn(message_stream, result_tx).await;
-
-        if let Err(e) = result {
-            error!(?e, "Error while doing reduce operation");
-            let _ = error_tx.send(e).await;
-            return;
-        }
-
-        // Wait for the writer to complete
-        if let Err(e) = writer_handle.await.expect("join failed for js writer task") {
-            error!(?e, "Error while writing results to JetStream");
-            let _ = error_tx.send(e).await;
-            return;
-        }
-
-        // now that the processing is done, we can add this window to the GC WAL.
-        let Some(gc_wal_tx) = gc_wal_tx else {
-            // return if the GC WAL is not configured
-            return;
-        };
-
-        // Send GC event if WAL is configured
-        let gc_event: GcEvent = window.into();
-        gc_wal_tx
-            .send(SegmentWriteMessage::WriteData {
-                offset: None,
-                data: prost::Message::encode_to_vec(&gc_event).into(),
-            })
-            .await
-            .expect("failed to write gc event to wal");
-    }
-
     /// sends the message to the reduce task for the window.
     async fn window_append(&mut self, window: Window, window_id: Bytes, msg: Message) {
         // Get the existing stream or log error if not found
@@ -208,10 +254,10 @@ impl AlignedReduceActor {
         };
 
         // Create the append window message
-        let window_msg = AlignedWindowMessage::Fixed(FixedWindowMessage {
+        let window_msg = AlignedWindowMessage {
             operation: WindowOperation::Append(msg),
             window,
-        });
+        };
 
         // Send the append message
         let _ = active_stream.message_tx.send(window_msg).await;
@@ -248,6 +294,8 @@ pub(crate) struct AlignedReducer<W> {
     /// Set to true when shutting down due to an error.
     shutting_down_on_err: bool,
     gc_wal: Option<AppendOnlyWal>,
+    /// Type of window config.
+    window_type: WindowType,
 }
 
 impl<W: WindowManager> AlignedReducer<W> {
@@ -256,6 +304,7 @@ impl<W: WindowManager> AlignedReducer<W> {
         window_manager: W,
         js_writer: JetstreamWriter,
         gc_wal: Option<AppendOnlyWal>,
+        window_type: WindowType,
     ) -> Self {
         Self {
             client,
@@ -264,6 +313,7 @@ impl<W: WindowManager> AlignedReducer<W> {
             final_result: Ok(()),
             shutting_down_on_err: false,
             gc_wal,
+            window_type,
         }
     }
 
@@ -285,6 +335,8 @@ impl<W: WindowManager> AlignedReducer<W> {
             self.js_writer.clone(),
             error_tx.clone(),
             gc_wal_handle,
+            self.window_type.clone(),
+            self.window_manager.clone(),
         )
         .await;
 
@@ -369,6 +421,17 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
 
+    use super::*;
+    use crate::config::components::reduce::{FixedWindowConfig, SlidingWindowConfig};
+    use crate::config::pipeline::ToVertexConfig;
+    use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
+    use crate::message::{Message, MessageID, Offset, StringOffset};
+    use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
+    use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
+    use crate::reduce::reducer::aligned::windower::fixed::FixedWindowManager;
+    use crate::reduce::reducer::aligned::windower::sliding::SlidingWindowManager;
+    use crate::shared::grpc::create_rpc_channel;
+    use crate::tracker::TrackerHandle;
     use async_nats::jetstream::consumer::PullConsumer;
     use async_nats::jetstream::{self, consumer, stream};
     use chrono::{TimeZone, Utc};
@@ -379,17 +442,6 @@ mod tests {
     use tokio::sync::mpsc;
     use tokio_stream::wrappers::ReceiverStream;
     use tokio_util::sync::CancellationToken;
-
-    use super::*;
-    use crate::config::pipeline::ToVertexConfig;
-    use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
-    use crate::message::{Message, MessageID, Offset, StringOffset};
-    use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
-    use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
-    use crate::reduce::reducer::aligned::windower::fixed::FixedWindowManager;
-    use crate::reduce::reducer::aligned::windower::sliding::SlidingWindowManager;
-    use crate::shared::grpc::create_rpc_channel;
-    use crate::tracker::TrackerHandle;
 
     struct Counter {}
 
@@ -511,7 +563,13 @@ mod tests {
 
         // Create the AlignedReducer
         let reducer = AlignedReducer::new(
-            client, windower, js_writer, None, // No GC WAL for testing
+            client,
+            windower,
+            js_writer,
+            None, // No GC WAL for testing
+            WindowType::Fixed(FixedWindowConfig {
+                length: Duration::from_secs(60),
+            }),
         )
         .await;
 
@@ -750,7 +808,14 @@ mod tests {
 
         // Create the AlignedReducer
         let reducer = AlignedReducer::new(
-            client, windower, js_writer, None, // No GC WAL for testing
+            client,
+            windower,
+            js_writer,
+            None, // No GC WAL for testing
+            WindowType::Sliding(SlidingWindowConfig {
+                length: Duration::from_secs(60),
+                slide: Duration::from_secs(20),
+            }),
         )
         .await;
 
@@ -994,7 +1059,13 @@ mod tests {
 
         // Create the AlignedReducer
         let reducer = AlignedReducer::new(
-            client, windower, js_writer, None, // No GC WAL for testing
+            client,
+            windower,
+            js_writer,
+            None, // No GC WAL for testing
+            WindowType::Fixed(FixedWindowConfig {
+                length: Duration::from_secs(60),
+            }),
         )
         .await;
 

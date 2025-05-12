@@ -27,13 +27,8 @@ impl From<&Message> for reduce_request::Payload {
 
 impl From<AlignedWindowMessage> for ReduceRequest {
     fn from(value: AlignedWindowMessage) -> Self {
-        // Extract window and operation based on the message type
-        let (window, operation) = match &value {
-            AlignedWindowMessage::Fixed(fixed_msg) => (&fixed_msg.window, &fixed_msg.operation),
-            AlignedWindowMessage::Sliding(sliding_msg) => {
-                (&sliding_msg.window, &sliding_msg.operation)
-            }
-        };
+        let window = &value.window;
+        let operation = &value.operation;
 
         let window_obj = numaflow_pb::clients::reduce::Window {
             start: Some(prost_timestamp_from_utc(window.start_time)),
@@ -227,7 +222,7 @@ mod tests {
 
     use super::*;
     use crate::message::{MessageID, StringOffset};
-    use crate::reduce::reducer::aligned::windower::{FixedWindowMessage, Window, WindowOperation};
+    use crate::reduce::reducer::aligned::windower::{Window, WindowOperation};
     use crate::shared::grpc::create_rpc_channel;
 
     struct Counter {}
@@ -354,19 +349,19 @@ mod tests {
         // Create window messages
         let window_messages = vec![
             // Open window
-            AlignedWindowMessage::Fixed(FixedWindowMessage {
+            AlignedWindowMessage {
                 window: window.clone(),
                 operation: WindowOperation::Open(messages[0].clone()),
-            }),
+            },
             // Append messages
-            AlignedWindowMessage::Fixed(FixedWindowMessage {
+            AlignedWindowMessage {
                 window: window.clone(),
                 operation: WindowOperation::Append(messages[1].clone()),
-            }),
-            AlignedWindowMessage::Fixed(FixedWindowMessage {
+            },
+            AlignedWindowMessage {
                 window: window.clone(),
                 operation: WindowOperation::Append(messages[2].clone()),
-            }),
+            },
         ];
 
         // Create a channel to send window messages
@@ -540,29 +535,29 @@ mod tests {
         // Create window messages
         let window_messages = vec![
             // Open window for key1
-            AlignedWindowMessage::Fixed(FixedWindowMessage {
+            AlignedWindowMessage {
                 window: window.clone(),
                 operation: WindowOperation::Open(key1_messages[0].clone()),
-            }),
+            },
             // Append message for key1
-            AlignedWindowMessage::Fixed(FixedWindowMessage {
+            AlignedWindowMessage {
                 window: window.clone(),
                 operation: WindowOperation::Append(key1_messages[1].clone()),
-            }),
+            },
             // Open window for key2
-            AlignedWindowMessage::Fixed(FixedWindowMessage {
+            AlignedWindowMessage {
                 window: window.clone(),
                 operation: WindowOperation::Open(key2_messages[0].clone()),
-            }),
+            },
             // Append messages for key2
-            AlignedWindowMessage::Fixed(FixedWindowMessage {
+            AlignedWindowMessage {
                 window: window.clone(),
                 operation: WindowOperation::Append(key2_messages[1].clone()),
-            }),
-            AlignedWindowMessage::Fixed(FixedWindowMessage {
+            },
+            AlignedWindowMessage {
                 window: window.clone(),
                 operation: WindowOperation::Append(key2_messages[2].clone()),
-            }),
+            },
         ];
 
         // Create a channel to send window messages
@@ -713,19 +708,19 @@ mod tests {
         // Create window messages
         let window_messages = vec![
             // Open window
-            AlignedWindowMessage::Fixed(FixedWindowMessage {
+            AlignedWindowMessage {
                 window: window.clone(),
                 operation: WindowOperation::Open(messages[0].clone()),
-            }),
+            },
             // Append messages
-            AlignedWindowMessage::Fixed(FixedWindowMessage {
+            AlignedWindowMessage {
                 window: window.clone(),
                 operation: WindowOperation::Append(messages[1].clone()),
-            }),
-            AlignedWindowMessage::Fixed(FixedWindowMessage {
+            },
+            AlignedWindowMessage {
                 window: window.clone(),
                 operation: WindowOperation::Append(messages[2].clone()),
-            }),
+            },
         ];
 
         // Create a channel to send window messages

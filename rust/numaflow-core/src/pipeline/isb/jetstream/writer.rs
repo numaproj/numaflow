@@ -16,7 +16,7 @@ use tokio::time::{Instant, sleep};
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 
 use crate::Result;
 use crate::config::pipeline::ToVertexConfig;

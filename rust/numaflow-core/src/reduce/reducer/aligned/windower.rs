@@ -21,7 +21,7 @@ pub(crate) trait WindowManager: Send + Sync + Clone + 'static {
     fn delete_window(&self, window: Window);
 
     /// Returns the oldest window yet to be completed. This will be the lowest Watermark in the Vertex.
-    fn oldest_window_endtime(&self) -> DateTime<Utc>;
+    fn oldest_window(&self) -> Option<Window>;
 }
 
 /// A Window is represented by its start and end time. All the data which event time falls within
@@ -81,23 +81,9 @@ pub(crate) enum WindowOperation {
     Append(Message),
 }
 
-// TODO(vigith): Who creates the AlignedWindowMessage, FixedWindowMessage, SlidingWindowMessage?
-
 /// Aligned Window Message.
 #[derive(Debug, Clone)]
-pub(crate) enum AlignedWindowMessage {
-    Fixed(FixedWindowMessage),
-    Sliding(SlidingWindowMessage),
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct FixedWindowMessage {
-    pub(crate) operation: WindowOperation,
-    pub(crate) window: Window,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct SlidingWindowMessage {
+pub(crate) struct AlignedWindowMessage {
     pub(crate) operation: WindowOperation,
     pub(crate) window: Window,
 }
