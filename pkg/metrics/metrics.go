@@ -299,13 +299,6 @@ var (
 		Buckets:   prometheus.ExponentialBucketsRange(1, 100000, 5),
 	}, []string{LabelPipeline, LabelVertex, LabelVertexReplicaIndex})
 
-	// ReducePartitionsInFlight is used to indicate the partitions in flight
-	ReducePartitionsInFlight = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Subsystem: "reduce_pnf",
-		Name:      "partitions_inflight",
-		Help:      "Total number of partitions in flight",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex})
-
 	// ActiveWindowsCount is used to indicate the number of active windows
 	ActiveWindowsCount = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "reduce",
