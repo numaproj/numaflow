@@ -7,8 +7,6 @@ This guide will walk you through the following steps:
 3. [Creating and running an advanced Numaflow Pipeline](#creating-an-advanced-pipeline)
 4. [Creating and running a Numaflow MonoVertex](#creating-a-monovertex)
 
-Follow along to get started with Numaflow and explore its core features.
-
 ## Before You Begin: Prerequisites
 
 To get started with Numaflow, ensure you have the following tools and setups ready:
@@ -147,7 +145,8 @@ Visit https://localhost:8443/ to view the UI. Below is the UI for the `simple` p
 
 ![Simple Pipeline View](assets/ui-simple-pipeline.png)
 
-Note: For more details about the UI features and built-in debugging tools, check out the [UI section](#access-the-numaflow-ui).
+Note: For more details about the UI features and built-in debugging tools, check out the UI section.
+(TODO: add UI section link)
 
 ### Deleting Pipeline
 
@@ -334,7 +333,7 @@ Visit https://localhost:8443/ to view the UI. Below is an example of the UI for 
 
 ![Simple MonoVertex View](assets/ui-simple-monovertex.png)
 
-For more details about the UI features and debugging tools, refer to the [UI section](#access-the-numaflow-ui).
+For more details about the UI features and debugging tools, refer to the UI section.(TODO: add UI section link)
 
 ### Deleting the MonoVertex
 
