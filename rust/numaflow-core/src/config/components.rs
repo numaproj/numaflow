@@ -454,7 +454,7 @@ pub(crate) mod sink {
                             .as_ref()
                             .map(|_| Ok(SinkType::Blackhole(BlackholeConfig::default())))
                     })
-                    .or_else(|| fallback.serve.as_ref().map(|_| Ok(SinkType::Serve)))
+                    .or_else(|| sink.serve.as_ref().map(|_| Ok(SinkType::Serve)))
                     .or_else(|| fallback.sqs.as_ref().map(|sqs| sqs.clone().try_into()))
                     .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
             } else {
