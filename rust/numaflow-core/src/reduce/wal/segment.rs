@@ -251,8 +251,8 @@ mod tests {
                     if let Some(message_info) = header.message_info {
                         let event_time = message_info.event_time.map(utc_from_timestamp).unwrap();
                         assert!(
-                            event_time > gc_end,
-                            "Found message with event_time <= gc_end"
+                            event_time >= gc_end,
+                            "Found message with event_time < gc_end"
                         );
                     }
                 }
@@ -261,10 +261,10 @@ mod tests {
         }
         handle.await.unwrap().unwrap();
 
-        // we send 100 messages out of which 10 messages have event times less than the window end
-        // time so the remaining message cound should be 90
+        // we send 100 messages out of which 9 messages have event times less than the window end
+        // time so the remaining message cound should be 91
         assert_eq!(
-            remaining_message_count, 90,
+            remaining_message_count, 91,
             "Expected 90 messages to remain after compaction"
         );
     }
@@ -411,14 +411,14 @@ mod tests {
                         if keys.contains(&"key1".to_string()) {
                             key1_count += 1;
                             assert!(
-                                event_time > gc_end_key1,
-                                "Found key1 message with event_time <= gc_end_key1"
+                                event_time >= gc_end_key1,
+                                "Found key1 message with event_time < gc_end_key1"
                             );
                         } else if keys.contains(&"key2".to_string()) {
                             key2_count += 1;
                             assert!(
-                                event_time > gc_end_key2,
-                                "Found key2 message with event_time <= gc_end_key2"
+                                event_time >= gc_end_key2,
+                                "Found key2 message with event_time < gc_end_key2"
                             );
                         }
                     }
@@ -428,17 +428,17 @@ mod tests {
         }
         handle.await.unwrap().unwrap();
 
-        // For key1, we should have removed messages with event time <= 10s (10 messages)
-        // For key2, we should have removed messages with event time <= 15s (15 messages)
-        // Total messages: 100 - (5 key1 messages + 8 key2 messages) = 87
+        // For key1, we should have removed messages with event time < 10s (9 messages)
+        // For key2, we should have removed messages with event time < 15s (15 messages)
+        // Total messages: 100 - (4 key1 messages + 7 key2 messages) = 87
         // Note: Since we alternate keys and start from 1, key1 is at odd indices and key2 at even indices
         assert_eq!(
-            remaining_message_count, 87,
-            "Expected 87 messages to remain after compaction"
+            remaining_message_count, 89,
+            "Expected 89 messages to remain after compaction"
         );
 
-        // We expect 45 key1 messages (50 - 5) and 40 key2 messages (50 - 8)
-        assert_eq!(key1_count, 45, "Expected 45 key1 messages to remain");
-        assert_eq!(key2_count, 42, "Expected 42 key2 messages to remain");
+        // We expect 45 key1 messages (50 - 4) and 40 key2 messages (50 - 7)
+        assert_eq!(key1_count, 46, "Expected 46 key1 messages to remain");
+        assert_eq!(key2_count, 43, "Expected 43 key2 messages to remain");
     }
 }

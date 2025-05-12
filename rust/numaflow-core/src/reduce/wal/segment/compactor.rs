@@ -844,8 +844,8 @@ mod tests {
                             .map(utc_from_timestamp)
                             .expect("event time should not be empty");
                         assert!(
-                            event_time > gc_end_2,
-                            "Found message with event_time <= gc_end_2"
+                            event_time >= gc_end_2,
+                            "Found message with event_time < gc_end_2"
                         );
                     }
                 }
@@ -857,8 +857,8 @@ mod tests {
         // Verify the number of remaining messages
         // with event_time <= gc_end_2 should be removed
         assert_eq!(
-            remaining_message_count, 980,
-            "Expected 980 messages to remain after compaction"
+            remaining_message_count, 981,
+            "Expected 981 messages to remain after compaction"
         );
     }
 

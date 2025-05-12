@@ -27,7 +27,7 @@ pub(crate) trait WindowManager: Send + Sync + Clone + 'static {
 /// A Window is represented by its start and end time. All the data which event time falls within
 /// this window will be reduced by the Reduce function associated with it. The association is via the
 /// id.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Window {
     /// Start time of the window.
     pub(in crate::reduce) start_time: DateTime<Utc>,

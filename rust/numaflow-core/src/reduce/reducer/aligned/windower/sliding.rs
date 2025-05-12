@@ -489,16 +489,7 @@ mod tests {
 
         // Delete window1
         windower.delete_window(window1.clone());
-
-        // Verify oldest window end time is now default (-1)
-        assert_eq!(
-            windower
-                .oldest_window()
-                .unwrap()
-                .end_time
-                .timestamp_millis(),
-            -1
-        );
+        assert_eq!(windower.oldest_window(), None);
     }
 
     #[test]
