@@ -12,7 +12,7 @@ resources:
 
 images:
   - name: quay.io/numaproj/numaflow
-    newTag: v1.4.4
+    newTag: v1.4.5
 
 patches:
   - patch: |-
