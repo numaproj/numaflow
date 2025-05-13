@@ -1,14 +1,11 @@
-use std::collections::btree_map::Entry;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use chrono::{DateTime, TimeZone, Utc};
 
 use crate::message::Message;
-use crate::reduce::reducer::aligned::windower::{
-    AlignedWindowMessage, Window, WindowManager, WindowOperation,
-};
+use crate::reduce::reducer::aligned::windower::{AlignedWindowMessage, Window, WindowOperation};
 
 #[derive(Debug, Clone)]
 pub(crate) struct SlidingWindowManager {
@@ -63,10 +60,9 @@ impl SlidingWindowManager {
 
         windows
     }
-}
 
-impl WindowManager for SlidingWindowManager {
-    fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage> {
+    /// Assigns windows to a message
+    pub(crate) fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage> {
         let windows = self.create_windows(&msg);
         let mut result = Vec::new();
 
@@ -89,7 +85,9 @@ impl WindowManager for SlidingWindowManager {
         result
     }
 
-    fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage> {
+    /// Closes any windows that can be closed because the Watermark has advanced beyond the window
+    /// end time.
+    pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage> {
         let mut result = Vec::new();
         let mut windows_to_close = Vec::new();
 
@@ -118,12 +116,14 @@ impl WindowManager for SlidingWindowManager {
         result
     }
 
-    fn delete_window(&self, window: Window) {
+    /// Deletes a window after it is closed and GC is done.
+    pub(crate) fn delete_window(&self, window: Window) {
         let mut active_windows = self.active_windows.lock().unwrap();
         active_windows.remove(&window);
     }
 
-    fn oldest_window(&self) -> Option<Window> {
+    /// Returns the oldest window yet to be completed. This will be the lowest Watermark in the Vertex.
+    pub(crate) fn oldest_window(&self) -> Option<Window> {
         let active_windows = self.active_windows.lock().unwrap();
         active_windows.iter().next().cloned()
     }

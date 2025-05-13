@@ -24,6 +24,7 @@ use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::pipeline::pipeline::isb::BufferReaderConfig;
 use crate::reduce::pbq::PBQBuilder;
 use crate::reduce::reducer::aligned::reducer::AlignedReducer;
+use crate::reduce::reducer::aligned::windower::WindowManager;
 use crate::reduce::reducer::aligned::windower::fixed::FixedWindowManager;
 use crate::reduce::reducer::aligned::windower::sliding::SlidingWindowManager;
 use crate::reduce::wal::segment::WalType;
@@ -82,9 +83,13 @@ pub(crate) async fn start_forwarder(
             info!("Starting sink forwarder");
 
             // create watermark handle, if watermark is enabled
-            let edge_watermark_handle =
-                create_components::create_edge_watermark_handle(&config, &js_context, &cln_token)
-                    .await?;
+            let edge_watermark_handle = create_components::create_edge_watermark_handle(
+                &config,
+                &js_context,
+                &cln_token,
+                None,
+            )
+            .await?;
 
             start_sink_forwarder(
                 cln_token,
@@ -99,9 +104,13 @@ pub(crate) async fn start_forwarder(
             info!("Starting map forwarder");
 
             // create watermark handle, if watermark is enabled
-            let edge_watermark_handle =
-                create_components::create_edge_watermark_handle(&config, &js_context, &cln_token)
-                    .await?;
+            let edge_watermark_handle = create_components::create_edge_watermark_handle(
+                &config,
+                &js_context,
+                &cln_token,
+                None,
+            )
+            .await?;
 
             start_map_forwarder(
                 cln_token,
@@ -114,20 +123,7 @@ pub(crate) async fn start_forwarder(
         }
         pipeline::VertexType::Reduce(reduce) => {
             info!("Starting reduce forwarder");
-
-            // create watermark handle, if watermark is enabled
-            let edge_watermark_handle =
-                create_components::create_edge_watermark_handle(&config, &js_context, &cln_token)
-                    .await?;
-
-            start_reduce_forwarder(
-                cln_token,
-                js_context,
-                config.clone(),
-                reduce.clone(),
-                edge_watermark_handle,
-            )
-            .await?;
+            start_reduce_forwarder(cln_token, js_context, config.clone(), reduce.clone()).await?;
         }
     }
     Ok(())
@@ -330,8 +326,29 @@ async fn start_reduce_forwarder(
     js_context: Context,
     config: PipelineConfig,
     reduce_vtx_config: ReduceVtxConfig,
-    watermark_handle: Option<ISBWatermarkHandle>,
 ) -> Result<()> {
+    let window_manager = match &reduce_vtx_config.reducer_config.window_config.window_type {
+        WindowType::Fixed(fixed_config) => {
+            WindowManager::Fixed(FixedWindowManager::new(fixed_config.length))
+        }
+        WindowType::Sliding(sliding_config) => WindowManager::Sliding(SlidingWindowManager::new(
+            sliding_config.length,
+            sliding_config.slide,
+        )),
+        WindowType::Session(_) | WindowType::Accumulator(_) => {
+            panic!("Session and Accumulator windows are not supported yet");
+        }
+    };
+
+    // create watermark handle, if watermark is enabled
+    let watermark_handle = create_components::create_edge_watermark_handle(
+        &config,
+        &js_context,
+        &cln_token,
+        Some(window_manager.clone()),
+    )
+    .await?;
+
     // Only the reader config of the first "from" vertex is needed
     let reader_config = &config
         .from_vertex_config
@@ -346,8 +363,7 @@ async fn start_reduce_forwarder(
         .cloned()
         .ok_or_else(|| error::Error::Config("No stream found for reduce vertex".to_string()))?;
 
-    let tracker_handle = TrackerHandle::new(watermark_handle.clone(), None);
-
+    let tracker_handle = TrackerHandle::new(None, None);
     // Create buffer reader
     let buffer_reader = create_buffer_reader(
         config.vertex_type_config.to_string(),
@@ -441,37 +457,9 @@ async fn start_reduce_forwarder(
     )
     .await;
 
-    let window_type = &reduce_vtx_config.reducer_config.window_config.window_type;
-    // Create windower based on window config
-    match window_type {
-        WindowType::Fixed(fixed_config) => {
-            let pnf = AlignedReducer::new(
-                reducer_client,
-                FixedWindowManager::new(fixed_config.length),
-                buffer_writer,
-                gc_wal,
-                window_type.clone(),
-            )
-            .await;
-            let forwarder = ReduceForwarder::new(pbq, pnf);
-            forwarder.start(cln_token).await?;
-        }
-        WindowType::Sliding(sliding_config) => {
-            let pnf = AlignedReducer::new(
-                reducer_client,
-                SlidingWindowManager::new(sliding_config.length, sliding_config.slide),
-                buffer_writer,
-                gc_wal,
-                window_type.clone(),
-            )
-            .await;
-            let forwarder = ReduceForwarder::new(pbq, pnf);
-            forwarder.start(cln_token).await?;
-        }
-        WindowType::Session(_) | WindowType::Accumulator(_) => {
-            panic!("Session and Accumulator windows are not supported yet");
-        }
-    }
+    let reducer = AlignedReducer::new(reducer_client, window_manager, buffer_writer, gc_wal).await;
+    let forwarder = ReduceForwarder::new(pbq, reducer);
+    forwarder.start(cln_token).await?;
 
     info!("Reduce forwarder has stopped successfully");
     Ok(())

@@ -5,17 +5,16 @@ use crate::Result;
 use crate::error::Error;
 use crate::reduce::pbq::PBQ;
 use crate::reduce::reducer::aligned::reducer::AlignedReducer;
-use crate::reduce::reducer::aligned::windower::WindowManager;
 
 /// ReduceForwarder is a component which starts a PBQ reader and a reducer
 /// and manages the lifecycle of these components.
-pub(crate) struct ReduceForwarder<W: WindowManager> {
+pub(crate) struct ReduceForwarder {
     pbq: PBQ,
-    reducer: AlignedReducer<W>,
+    reducer: AlignedReducer,
 }
 
-impl<W: WindowManager> ReduceForwarder<W> {
-    pub(crate) fn new(pbq: PBQ, reducer: AlignedReducer<W>) -> Self {
+impl ReduceForwarder {
+    pub(crate) fn new(pbq: PBQ, reducer: AlignedReducer) -> Self {
         Self { pbq, reducer }
     }
 
@@ -44,7 +43,7 @@ impl<W: WindowManager> ReduceForwarder<W> {
 
         // TODO(vigith):
         processor_result.inspect_err(|e| {
-            error!(?e, "Error in ProcessAndForward processor");
+            error!(?e, "Error in reducer");
             cln_token.cancel();
         })?;
 

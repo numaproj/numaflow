@@ -13,6 +13,7 @@ use crate::config::pipeline::{
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
 use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
+use crate::reduce::reducer::aligned::windower::WindowManager;
 use crate::shared::grpc;
 use crate::shared::server_info::{ContainerType, sdk_server_info};
 use crate::sink::serve::ServingStore;
@@ -555,6 +556,7 @@ pub async fn create_edge_watermark_handle(
     config: &PipelineConfig,
     js_context: &Context,
     cln_token: &CancellationToken,
+    window_manager: Option<WindowManager>,
 ) -> error::Result<Option<ISBWatermarkHandle>> {
     match &config.watermark_config {
         Some(WatermarkConfig::Edge(edge_config)) => {
@@ -566,6 +568,7 @@ pub async fn create_edge_watermark_handle(
                 edge_config,
                 &config.to_vertex_config,
                 cln_token.clone(),
+                window_manager,
             )
             .await?;
             Ok(Some(handle))

@@ -10,19 +10,49 @@ pub(crate) mod fixed;
 /// Sliding Window Operations.
 pub(crate) mod sliding;
 
-pub(crate) trait WindowManager: Send + Sync + Clone + 'static {
+use fixed::FixedWindowManager;
+use sliding::SlidingWindowManager;
+
+/// WindowManager enum that can be either a FixedWindowManager or a SlidingWindowManager
+#[derive(Debug, Clone)]
+pub(crate) enum WindowManager {
+    Fixed(FixedWindowManager),
+    Sliding(SlidingWindowManager),
+}
+
+impl WindowManager {
     /// Assigns windows to a message. There can be more than one for Sliding Window.
-    fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage>;
+    pub(crate) fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage> {
+        match self {
+            WindowManager::Fixed(manager) => manager.assign_windows(msg),
+            WindowManager::Sliding(manager) => manager.assign_windows(msg),
+        }
+    }
 
     /// Closes any windows that can be closed because the Watermark has advanced beyond the window
     /// end time.
-    fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage>;
+    pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage> {
+        match self {
+            WindowManager::Fixed(manager) => manager.close_windows(watermark),
+            WindowManager::Sliding(manager) => manager.close_windows(watermark),
+        }
+    }
 
     /// Deletes a window is called after the window is closed and GC is done.
-    fn delete_window(&self, window: Window);
+    pub(crate) fn delete_window(&self, window: Window) {
+        match self {
+            WindowManager::Fixed(manager) => manager.delete_window(window),
+            WindowManager::Sliding(manager) => manager.delete_window(window),
+        }
+    }
 
     /// Returns the oldest window yet to be completed. This will be the lowest Watermark in the Vertex.
-    fn oldest_window(&self) -> Option<Window>;
+    pub(crate) fn oldest_window(&self) -> Option<Window> {
+        match self {
+            WindowManager::Fixed(manager) => manager.oldest_window(),
+            WindowManager::Sliding(manager) => manager.oldest_window(),
+        }
+    }
 }
 
 /// A Window is represented by its start and end time. All the data which event time falls within
@@ -31,11 +61,11 @@ pub(crate) trait WindowManager: Send + Sync + Clone + 'static {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Window {
     /// Start time of the window.
-    pub(in crate::reduce) start_time: DateTime<Utc>,
+    pub(crate) start_time: DateTime<Utc>,
     /// End time of the window.
-    pub(in crate::reduce) end_time: DateTime<Utc>,
+    pub(crate) end_time: DateTime<Utc>,
     /// Unique id of the reduce function for this window.
-    pub(in crate::reduce) id: Bytes,
+    pub(crate) id: Bytes,
 }
 
 impl Ord for Window {

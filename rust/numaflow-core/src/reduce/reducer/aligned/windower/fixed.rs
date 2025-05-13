@@ -5,9 +5,7 @@ use std::time::Duration;
 use chrono::{DateTime, TimeZone, Utc};
 
 use crate::message::Message;
-use crate::reduce::reducer::aligned::windower::{
-    AlignedWindowMessage, Window, WindowManager, WindowOperation,
-};
+use crate::reduce::reducer::aligned::windower::{AlignedWindowMessage, Window, WindowOperation};
 
 #[derive(Debug, Clone)]
 pub(crate) struct FixedWindowManager {
@@ -43,10 +41,9 @@ impl FixedWindowManager {
 
         Window::new(start_time, end_time)
     }
-}
 
-impl WindowManager for FixedWindowManager {
-    fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage> {
+    /// Assigns windows to a message
+    pub(crate) fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage> {
         let window = self.create_window(&msg);
 
         // Check if window already exists
@@ -64,7 +61,9 @@ impl WindowManager for FixedWindowManager {
         vec![AlignedWindowMessage { operation, window }]
     }
 
-    fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage> {
+    /// Closes any windows that can be closed because the Watermark has advanced beyond the window
+    /// end time.
+    pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage> {
         let mut result = Vec::new();
         let mut windows_to_close = Vec::new();
 
@@ -95,12 +94,14 @@ impl WindowManager for FixedWindowManager {
         result
     }
 
-    fn delete_window(&self, window: Window) {
+    /// Deletes a window after it is closed and GC is done.
+    pub(crate) fn delete_window(&self, window: Window) {
         let mut active_windows = self.active_windows.lock().unwrap();
         active_windows.remove(&window);
     }
 
-    fn oldest_window(&self) -> Option<Window> {
+    /// Returns the oldest window yet to be completed. This will be the lowest Watermark in the Vertex.
+    pub(crate) fn oldest_window(&self) -> Option<Window> {
         let active_windows = self.active_windows.lock().unwrap();
         active_windows.iter().next().cloned()
     }

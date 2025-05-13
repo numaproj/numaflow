@@ -1,4 +1,3 @@
-use crate::config::components::reduce::WindowType;
 use crate::error::Error;
 use crate::message::Message;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
@@ -28,17 +27,16 @@ struct ActiveStream {
 }
 
 /// Configuration and functionality for a reduce task
-struct ReduceTask<W: WindowManager> {
+struct ReduceTask {
     client: UserDefinedAlignedReduce,
     js_writer: JetstreamWriter,
     gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
     error_tx: mpsc::Sender<Error>,
     window: Window,
-    window_type: WindowType,
-    window_manager: W,
+    window_manager: WindowManager,
 }
 
-impl<W: WindowManager> ReduceTask<W> {
+impl ReduceTask {
     /// Creates a new ReduceTask with the given configuration
     fn new(
         client: UserDefinedAlignedReduce,
@@ -46,8 +44,7 @@ impl<W: WindowManager> ReduceTask<W> {
         gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
         error_tx: mpsc::Sender<Error>,
         window: Window,
-        window_type: WindowType,
-        window_manager: W,
+        window_manager: WindowManager,
     ) -> Self {
         Self {
             client,
@@ -55,7 +52,6 @@ impl<W: WindowManager> ReduceTask<W> {
             gc_wal_tx,
             error_tx,
             window,
-            window_type,
             window_manager,
         }
     }
@@ -100,16 +96,16 @@ impl<W: WindowManager> ReduceTask<W> {
                 return;
             }
 
+            self.window_manager.delete_window(self.window.clone());
+
             // now that the processing is done, we can add this window to the GC WAL.
             let Some(gc_wal_tx) = &self.gc_wal_tx else {
                 // return if the GC WAL is not configured
                 return;
             };
 
-            self.window_manager.delete_window(self.window.clone());
-
             // Send GC event if WAL is configured
-            let gc_event: GcEvent = if let WindowType::Sliding(_) = self.window_type {
+            let gc_event: GcEvent = if let WindowManager::Sliding(_) = self.window_manager {
                 // for sliding window a message can be part of multiple windows, we can only delete the
                 // messages that are less than the oldest window's start time.
                 let oldest_window = self
@@ -145,7 +141,7 @@ impl<W: WindowManager> ReduceTask<W> {
 
 /// Actor that manages multiple window reduction streams. It manages [ActiveStream]s and manages the
 /// lifecycle of the reduce tasks.
-struct AlignedReduceActor<W> {
+struct AlignedReduceActor {
     /// It multiplexes the messages to the receiver to the reduce tasks through the corresponding
     /// tx in [ActiveStream].
     receiver: mpsc::Receiver<AlignedWindowMessage>,
@@ -161,20 +157,17 @@ struct AlignedReduceActor<W> {
     /// Sender for GC WAL messages.
     /// TODO(vigith): why is this optional?
     gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
-    /// Type of window config.
-    window_type: WindowType,
-    window_manager: W,
+    window_manager: WindowManager,
 }
 
-impl<W: WindowManager> AlignedReduceActor<W> {
+impl AlignedReduceActor {
     pub(crate) async fn new(
         client: UserDefinedAlignedReduce,
         receiver: mpsc::Receiver<AlignedWindowMessage>,
         js_writer: JetstreamWriter,
         error_tx: mpsc::Sender<Error>,
         gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
-        window_type: WindowType,
-        window_manager: W,
+        window_manager: WindowManager,
     ) -> Self {
         Self {
             client,
@@ -183,7 +176,6 @@ impl<W: WindowManager> AlignedReduceActor<W> {
             js_writer,
             error_tx,
             gc_wal_tx,
-            window_type,
             window_manager,
         }
     }
@@ -219,7 +211,6 @@ impl<W: WindowManager> AlignedReduceActor<W> {
             self.gc_wal_tx.clone(),
             self.error_tx.clone(),
             window.clone(),
-            self.window_type.clone(),
             self.window_manager.clone(),
         );
 
@@ -285,26 +276,23 @@ impl<W: WindowManager> AlignedReduceActor<W> {
 }
 
 /// Processes messages and forwards results to the next stage.
-pub(crate) struct AlignedReducer<W> {
+pub(crate) struct AlignedReducer {
     client: UserDefinedAlignedReduce,
-    window_manager: W,
+    window_manager: WindowManager,
     js_writer: JetstreamWriter,
     /// Final state of the component (any error will set this as Err).
     final_result: crate::Result<()>,
     /// Set to true when shutting down due to an error.
     shutting_down_on_err: bool,
     gc_wal: Option<AppendOnlyWal>,
-    /// Type of window config.
-    window_type: WindowType,
 }
 
-impl<W: WindowManager> AlignedReducer<W> {
+impl AlignedReducer {
     pub(crate) async fn new(
         client: UserDefinedAlignedReduce,
-        window_manager: W,
+        window_manager: WindowManager,
         js_writer: JetstreamWriter,
         gc_wal: Option<AppendOnlyWal>,
-        window_type: WindowType,
     ) -> Self {
         Self {
             client,
@@ -313,7 +301,6 @@ impl<W: WindowManager> AlignedReducer<W> {
             final_result: Ok(()),
             shutting_down_on_err: false,
             gc_wal,
-            window_type,
         }
     }
 
@@ -335,7 +322,6 @@ impl<W: WindowManager> AlignedReducer<W> {
             self.js_writer.clone(),
             error_tx.clone(),
             gc_wal_handle,
-            self.window_type.clone(),
             self.window_manager.clone(),
         )
         .await;
@@ -345,15 +331,24 @@ impl<W: WindowManager> AlignedReducer<W> {
             actor.run().await;
         });
 
-        // Spawn the task that reads from the input stream (PBQ) and sends messages to the actor
+        // Start the main task
         let handle = tokio::spawn(async move {
             let mut input_stream = input_stream;
 
             loop {
                 tokio::select! {
-                    Some(error) = error_rx.recv() => {
-                        self.handle_error(error, &cln_token);
-                    },
+                    // Check for errors from reduce tasks
+                    Some(err) = error_rx.recv() => {
+                        self.handle_error(err, &cln_token);
+                    }
+
+                    // Check for cancellation
+                    _ = cln_token.cancelled() => {
+                        info!("Reduce component received cancellation signal");
+                        break;
+                    }
+
+                    // Process input messages
                     read_msg = input_stream.next() => {
                         let Some(msg) = read_msg else {
                             break;
@@ -422,7 +417,6 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
-    use crate::config::components::reduce::{FixedWindowConfig, SlidingWindowConfig};
     use crate::config::pipeline::ToVertexConfig;
     use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
     use crate::message::{Message, MessageID, Offset, StringOffset};
@@ -564,12 +558,9 @@ mod tests {
         // Create the AlignedReducer
         let reducer = AlignedReducer::new(
             client,
-            windower,
+            WindowManager::Fixed(windower),
             js_writer,
             None, // No GC WAL for testing
-            WindowType::Fixed(FixedWindowConfig {
-                length: Duration::from_secs(60),
-            }),
         )
         .await;
 
@@ -809,13 +800,9 @@ mod tests {
         // Create the AlignedReducer
         let reducer = AlignedReducer::new(
             client,
-            windower,
+            WindowManager::Sliding(windower),
             js_writer,
             None, // No GC WAL for testing
-            WindowType::Sliding(SlidingWindowConfig {
-                length: Duration::from_secs(60),
-                slide: Duration::from_secs(20),
-            }),
         )
         .await;
 
@@ -1060,12 +1047,9 @@ mod tests {
         // Create the AlignedReducer
         let reducer = AlignedReducer::new(
             client,
-            windower,
+            WindowManager::Fixed(windower),
             js_writer,
             None, // No GC WAL for testing
-            WindowType::Fixed(FixedWindowConfig {
-                length: Duration::from_secs(60),
-            }),
         )
         .await;
 
