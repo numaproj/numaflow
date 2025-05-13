@@ -275,7 +275,121 @@ pub(crate) mod source {
         ) -> std::result::Result<Self, Self::Error> {
             let auth: Option<numaflow_kafka::KafkaAuth> = match value.sasl {
                 Some(sasl) => {
-                    todo!("SASL is not supported yet");
+                    let mechanism = sasl.mechanism;
+                    match mechanism.as_str() {
+                        "PLAIN" => {
+                            let Some(plain) = sasl.plain else {
+                                return Err(Error::Config(
+                                    "PLAIN mechanism requires plain auth configuration".into(),
+                                ));
+                            };
+                            let username =
+                                crate::shared::create_components::get_secret_from_volume(
+                                    &plain.user_secret.name,
+                                    &plain.user_secret.key,
+                                )
+                                .map_err(|e| {
+                                    Error::Config(format!("Failed to get user secret: {e:?}"))
+                                })?;
+                            let password = if let Some(password_secret) = plain.password_secret {
+                                crate::shared::create_components::get_secret_from_volume(
+                                    &password_secret.name,
+                                    &password_secret.key,
+                                )
+                                .map_err(|e| {
+                                    Error::Config(format!("Failed to get password secret: {e:?}"))
+                                })?
+                            } else {
+                                return Err(Error::Config(
+                                    "PLAIN mechanism requires password".into(),
+                                ));
+                            };
+                            Some(numaflow_kafka::KafkaAuth::Sasl {
+                                mechanism,
+                                username,
+                                password,
+                            })
+                        }
+                        "SCRAM-SHA-256" | "SCRAM-SHA-512" => {
+                            let scram = if mechanism == "SCRAM-SHA-256" {
+                                sasl.scramsha256
+                            } else {
+                                sasl.scramsha512
+                            };
+                            let Some(scram) = scram else {
+                                return Err(Error::Config(format!(
+                                    "{} mechanism requires scram auth configuration",
+                                    mechanism
+                                )));
+                            };
+                            let username =
+                                crate::shared::create_components::get_secret_from_volume(
+                                    &scram.user_secret.name,
+                                    &scram.user_secret.key,
+                                )
+                                .map_err(|e| {
+                                    Error::Config(format!("Failed to get user secret: {e:?}"))
+                                })?;
+                            let password = if let Some(password_secret) = scram.password_secret {
+                                crate::shared::create_components::get_secret_from_volume(
+                                    &password_secret.name,
+                                    &password_secret.key,
+                                )
+                                .map_err(|e| {
+                                    Error::Config(format!("Failed to get password secret: {e:?}"))
+                                })?
+                            } else {
+                                return Err(Error::Config(format!(
+                                    "{} mechanism requires password",
+                                    mechanism
+                                )));
+                            };
+                            Some(numaflow_kafka::KafkaAuth::Sasl {
+                                mechanism,
+                                username,
+                                password,
+                            })
+                        }
+                        "OAUTH" => {
+                            let Some(oauth) = sasl.oauth else {
+                                return Err(Error::Config(
+                                    "OAUTH mechanism requires oauth configuration".into(),
+                                ));
+                            };
+                            let username =
+                                crate::shared::create_components::get_secret_from_volume(
+                                    &oauth.client_id.name,
+                                    &oauth.client_id.key,
+                                )
+                                .map_err(|e| {
+                                    Error::Config(format!("Failed to get client id secret: {e:?}"))
+                                })?;
+                            let password =
+                                crate::shared::create_components::get_secret_from_volume(
+                                    &oauth.client_secret.name,
+                                    &oauth.client_secret.key,
+                                )
+                                .map_err(|e| {
+                                    Error::Config(format!("Failed to get client secret: {e:?}"))
+                                })?;
+                            Some(numaflow_kafka::KafkaAuth::Sasl {
+                                mechanism,
+                                username,
+                                password,
+                            })
+                        }
+                        "GSSAPI" => {
+                            return Err(Error::Config(
+                                "GSSAPI mechanism is not supported yet".into(),
+                            ));
+                        }
+                        _ => {
+                            return Err(Error::Config(format!(
+                                "Unsupported SASL mechanism: {}",
+                                mechanism
+                            )));
+                        }
+                    }
                 }
                 None => None,
             };

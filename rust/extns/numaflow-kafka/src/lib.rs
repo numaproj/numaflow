@@ -137,8 +137,11 @@ impl KafkaActor {
                     username,
                     password,
                 } => {
+                    client_config.set("security.protocol", "SASL_PLAINTEXT");
+                    if config.tls.is_some() {
+                        client_config.set("security.protocol", "SASL_SSL");
+                    }
                     client_config
-                        .set("security.protocol", "SASL_SSL")
                         .set("sasl.mechanisms", mechanism)
                         .set("sasl.username", username)
                         .set("sasl.password", password);
