@@ -6,7 +6,10 @@ use crate::config::components::source::{SourceConfig, SourceType};
 use crate::config::components::transformer::TransformerConfig;
 use crate::config::get_vertex_replica;
 use crate::config::pipeline::map::{MapMode, MapType, MapVtxConfig};
-use crate::config::pipeline::{DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET};
+use crate::config::pipeline::watermark::WatermarkConfig;
+use crate::config::pipeline::{
+    DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET, PipelineConfig,
+};
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
 use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
@@ -22,8 +25,10 @@ use crate::source::sqs::new_sqs_source;
 use crate::source::user_defined::new_source;
 use crate::tracker::TrackerHandle;
 use crate::transformer::Transformer;
+use crate::watermark::isb::ISBWatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
 use crate::{config, error, metrics, source};
+use async_nats::jetstream::Context;
 use numaflow_pb::clients::map::map_client::MapClient;
 use numaflow_pb::clients::reduce::reduce_client::ReduceClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
@@ -542,5 +547,29 @@ mod tests {
         source_server_handle.await.unwrap();
         sink_server_handle.await.unwrap();
         transformer_server_handle.await.unwrap();
+    }
+}
+
+/// Creates an ISBWatermarkHandle if watermark is enabled in the configuration
+pub async fn create_edge_watermark_handle(
+    config: &PipelineConfig,
+    js_context: &Context,
+    cln_token: &CancellationToken,
+) -> error::Result<Option<ISBWatermarkHandle>> {
+    match &config.watermark_config {
+        Some(WatermarkConfig::Edge(edge_config)) => {
+            let handle = ISBWatermarkHandle::new(
+                config.vertex_name,
+                config.replica,
+                config.read_timeout,
+                js_context.clone(),
+                edge_config,
+                &config.to_vertex_config,
+                cln_token.clone(),
+            )
+            .await?;
+            Ok(Some(handle))
+        }
+        _ => Ok(None),
     }
 }

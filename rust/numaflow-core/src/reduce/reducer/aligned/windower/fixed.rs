@@ -1,5 +1,4 @@
-use std::collections::BTreeMap;
-use std::collections::btree_map::Entry;
+use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -15,14 +14,14 @@ pub(crate) struct FixedWindowManager {
     /// Duration of each window
     window_length: Duration,
     /// Active windows sorted by end time
-    active_windows: Arc<Mutex<BTreeMap<DateTime<Utc>, Window>>>,
+    active_windows: Arc<Mutex<BTreeSet<Window>>>,
 }
 
 impl FixedWindowManager {
     pub(crate) fn new(window_length: Duration) -> Self {
         Self {
             window_length,
-            active_windows: Arc::new(Mutex::new(BTreeMap::new())),
+            active_windows: Arc::new(Mutex::new(BTreeSet::new())),
         }
     }
 
@@ -52,13 +51,13 @@ impl WindowManager for FixedWindowManager {
 
         // Check if window already exists
         let mut active_windows = self.active_windows.lock().unwrap();
-        let operation = if let Entry::Vacant(e) = active_windows.entry(window.end_time) {
-            // New window, insert it
-            e.insert(window.clone());
-            WindowOperation::Open(msg)
-        } else {
+        let operation = if active_windows.contains(&window) {
             // Window exists, append message
             WindowOperation::Append(msg)
+        } else {
+            // New window, insert it
+            active_windows.insert(window.clone());
+            WindowOperation::Open(msg)
         };
 
         // Create window message
@@ -72,8 +71,8 @@ impl WindowManager for FixedWindowManager {
         // Find windows that need to be closed
         {
             let active_windows = self.active_windows.lock().unwrap();
-            for (&end_time, window) in active_windows.iter() {
-                if end_time <= watermark {
+            for window in active_windows.iter() {
+                if window.end_time <= watermark {
                     windows_to_close.push(window.clone());
                 }
             }
@@ -98,13 +97,12 @@ impl WindowManager for FixedWindowManager {
 
     fn delete_window(&self, window: Window) {
         let mut active_windows = self.active_windows.lock().unwrap();
-        active_windows.remove(&window.end_time);
+        active_windows.remove(&window);
     }
 
     fn oldest_window(&self) -> Option<Window> {
         let active_windows = self.active_windows.lock().unwrap();
-
-        active_windows.values().next().cloned()
+        active_windows.iter().next().cloned()
     }
 }
 
@@ -176,20 +174,20 @@ mod tests {
         // Insert window manually
         {
             let mut active_windows = windower.active_windows.lock().unwrap();
-            active_windows.insert(window1.end_time, window1.clone());
+            active_windows.insert(window1.clone());
         }
 
         // Verify window exists and count is 1
         {
             let active_windows = windower.active_windows.lock().unwrap();
             assert_eq!(active_windows.len(), 1);
-            assert!(active_windows.contains_key(&window1.end_time));
+            assert!(active_windows.contains(&window1));
         }
 
         // Insert the same window again (should not increase count)
         {
             let mut active_windows = windower.active_windows.lock().unwrap();
-            active_windows.insert(window1.end_time, window1.clone());
+            active_windows.insert(window1.clone());
         }
 
         // Verify count is still 1
@@ -206,7 +204,7 @@ mod tests {
 
         {
             let mut active_windows = windower.active_windows.lock().unwrap();
-            active_windows.insert(window2.end_time, window2.clone());
+            active_windows.insert(window2.clone());
         }
 
         // Verify count is now 2
@@ -238,9 +236,9 @@ mod tests {
         // Insert windows manually
         {
             let mut active_windows = windower.active_windows.lock().unwrap();
-            active_windows.insert(window1.end_time, window1.clone());
-            active_windows.insert(window2.end_time, window2.clone());
-            active_windows.insert(window3.end_time, window3.clone());
+            active_windows.insert(window1.clone());
+            active_windows.insert(window2.clone());
+            active_windows.insert(window3.clone());
         }
 
         // Close windows with watermark at base_time + 120s
@@ -276,7 +274,7 @@ mod tests {
         {
             let active_windows = windower.active_windows.lock().unwrap();
             assert_eq!(active_windows.len(), 1);
-            assert!(active_windows.contains_key(&window3.end_time));
+            assert!(active_windows.contains(&window3));
         }
     }
 
@@ -302,9 +300,9 @@ mod tests {
         // Insert windows manually
         {
             let mut active_windows = windower.active_windows.lock().unwrap();
-            active_windows.insert(window1.end_time, window1.clone());
-            active_windows.insert(window2.end_time, window2.clone());
-            active_windows.insert(window3.end_time, window3.clone());
+            active_windows.insert(window1.clone());
+            active_windows.insert(window2.clone());
+            active_windows.insert(window3.clone());
         }
 
         // Delete window2
@@ -314,9 +312,9 @@ mod tests {
         {
             let active_windows = windower.active_windows.lock().unwrap();
             assert_eq!(active_windows.len(), 2);
-            assert!(active_windows.contains_key(&window1.end_time));
-            assert!(!active_windows.contains_key(&window2.end_time));
-            assert!(active_windows.contains_key(&window3.end_time));
+            assert!(active_windows.contains(&window1));
+            assert!(!active_windows.contains(&window2));
+            assert!(active_windows.contains(&window3));
         }
     }
 
@@ -342,9 +340,9 @@ mod tests {
         // Insert windows manually
         {
             let mut active_windows = windower.active_windows.lock().unwrap();
-            active_windows.insert(window1.end_time, window1.clone());
-            active_windows.insert(window2.end_time, window2.clone());
-            active_windows.insert(window3.end_time, window3.clone());
+            active_windows.insert(window1.clone());
+            active_windows.insert(window2.clone());
+            active_windows.insert(window3.clone());
         }
 
         // Verify the oldest window end time is window1's end time

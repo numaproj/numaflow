@@ -82,21 +82,9 @@ pub(crate) async fn start_forwarder(
             info!("Starting sink forwarder");
 
             // create watermark handle, if watermark is enabled
-            let edge_watermark_handle = match &config.watermark_config {
-                Some(WatermarkConfig::Edge(edge_config)) => Some(
-                    ISBWatermarkHandle::new(
-                        config.vertex_name,
-                        config.replica,
-                        config.read_timeout,
-                        js_context.clone(),
-                        edge_config,
-                        &config.to_vertex_config,
-                        cln_token.clone(),
-                    )
-                    .await?,
-                ),
-                _ => None,
-            };
+            let edge_watermark_handle =
+                create_components::create_edge_watermark_handle(&config, &js_context, &cln_token)
+                    .await?;
 
             start_sink_forwarder(
                 cln_token,
@@ -111,21 +99,9 @@ pub(crate) async fn start_forwarder(
             info!("Starting map forwarder");
 
             // create watermark handle, if watermark is enabled
-            let edge_watermark_handle = match &config.watermark_config {
-                Some(WatermarkConfig::Edge(edge_config)) => Some(
-                    ISBWatermarkHandle::new(
-                        config.vertex_name,
-                        config.replica,
-                        config.read_timeout,
-                        js_context.clone(),
-                        edge_config,
-                        &config.to_vertex_config,
-                        cln_token.clone(),
-                    )
-                    .await?,
-                ),
-                _ => None,
-            };
+            let edge_watermark_handle =
+                create_components::create_edge_watermark_handle(&config, &js_context, &cln_token)
+                    .await?;
 
             start_map_forwarder(
                 cln_token,
@@ -140,21 +116,9 @@ pub(crate) async fn start_forwarder(
             info!("Starting reduce forwarder");
 
             // create watermark handle, if watermark is enabled
-            let edge_watermark_handle = match &config.watermark_config {
-                Some(WatermarkConfig::Edge(edge_config)) => Some(
-                    ISBWatermarkHandle::new(
-                        config.vertex_name,
-                        config.replica,
-                        config.read_timeout,
-                        js_context.clone(),
-                        edge_config,
-                        &config.to_vertex_config,
-                        cln_token.clone(),
-                    )
-                    .await?,
-                ),
-                _ => None,
-            };
+            let edge_watermark_handle =
+                create_components::create_edge_watermark_handle(&config, &js_context, &cln_token)
+                    .await?;
 
             start_reduce_forwarder(
                 cln_token,

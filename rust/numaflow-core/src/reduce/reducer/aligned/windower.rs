@@ -3,6 +3,7 @@ use crate::shared::grpc::prost_timestamp_from_utc;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use numaflow_pb::objects::wal::GcEvent;
+use std::cmp::Ordering;
 
 /// Fixed Window Operations.
 pub(crate) mod fixed;
@@ -27,7 +28,7 @@ pub(crate) trait WindowManager: Send + Sync + Clone + 'static {
 /// A Window is represented by its start and end time. All the data which event time falls within
 /// this window will be reduced by the Reduce function associated with it. The association is via the
 /// id.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Window {
     /// Start time of the window.
     pub(in crate::reduce) start_time: DateTime<Utc>,
@@ -35,6 +36,19 @@ pub(crate) struct Window {
     pub(in crate::reduce) end_time: DateTime<Utc>,
     /// Unique id of the reduce function for this window.
     pub(in crate::reduce) id: Bytes,
+}
+
+impl Ord for Window {
+    fn cmp(&self, other: &Self) -> Ordering {
+        // Compare based on end time
+        self.end_time.cmp(&other.end_time)
+    }
+}
+
+impl PartialOrd for Window {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl From<Window> for GcEvent {
