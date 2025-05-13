@@ -344,11 +344,11 @@ kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/main/examp
 
 ### Additional Notes
 
-<!-- The source code for the user-defined functions used in this MonoVertex is available here:
+The source code for the user-defined functions used in this MonoVertex is available here:
 
 - [UDSource](https://github.com/numaproj/numaflow-rs/blob/main/examples/simple-source/src/main.rs)
 - [Transformer](https://github.com/numaproj/numaflow-rs/blob/main/examples/source-transformer-now/src/main.rs)
-- [UDSink](https://github.com/numaproj/numaflow-rs/blob/main/examples/sink-log/src/main.rs) -->
+- [UDSink](https://github.com/numaproj/numaflow-rs/blob/main/examples/sink-log/src/main.rs)
 
 ## A pipeline with reduce (aggregation)
 
