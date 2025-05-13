@@ -96,3 +96,13 @@ The **Logs View** allows users to inspect the logs of a specific container withi
   ![Error Filter](../../assets/logs/logs-filter-error.png)
 
 ---
+
+## Walkthrough Video
+
+<!-- For a comprehensive understanding of the features discussed above, watch the walkthrough video below:
+
+<video controls>
+
+<source src="../../assets/logs/ui-logs-video.mp4" type="video/mp4">
+Your browser does not support the video tag.
+</video> -->
