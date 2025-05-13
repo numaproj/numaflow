@@ -4,6 +4,8 @@ The **Numaflow UI** provides an **Errors Tab** that lists the recent errors (up 
 
 In this guide, we will simulate a panic in a transformer and demonstrate how the errors are displayed in the Errors Tab for a monovertex.
 
+> **Note**: The Errors Tab and its related functionality are currently available only for MonoVertex. Support for Pipelines is planned for future releases.
+
 ---
 
 ## High-Level Architecture

@@ -135,18 +135,17 @@ Visit https://localhost:8443/ to view the UI. Below is the UI for the `simple` p
 
 #### Namespaces View
 
-![Namespace View](assets/namespace-view.png)
+![Namespace View](assets/quick-start/namespace-view.png)
 
 #### Default Namespace View
 
-![Default Namespace View](assets/default-namespace-view.png)
+![Default Namespace View](assets/quick-start/default-namespace-view.png)
 
 #### Simple Pipeline View
 
-![Simple Pipeline View](assets/ui-simple-pipeline.png)
+![Simple Pipeline View](assets/quick-start/ui-simple-pipeline.png)
 
-Note: For more details about the UI features and built-in debugging tools, check out the UI section.
-(TODO: add UI section link)
+> **Note**: For more details about the UI features and built-in debugging tools, check out the [UI section](./user-guide/UI/).
 
 ### Deleting Pipeline
 
@@ -238,7 +237,7 @@ kubectl logs -f even-odd-odd-sink-0-xxxxx
 
 To visualize the pipeline, access the Numaflow UI at https://localhost:8443/ after port forwarding. Below is the UI for the `even-odd` pipeline:
 
-![Numaflow UI](assets/ui-advanced-pipeline.png)
+![Numaflow UI](assets/quick-start/ui-advanced-pipeline.png)
 
 ### Deleting the Pipeline
 
@@ -331,7 +330,7 @@ kubectl -n numaflow-system port-forward deployment/numaflow-server 8443:8443
 
 Visit https://localhost:8443/ to view the UI. Below is an example of the UI for the MonoVertex:
 
-![Simple MonoVertex View](assets/ui-simple-monovertex.png)
+![Simple MonoVertex View](assets/quick-start/ui-simple-monovertex.png)
 
 For more details about the UI features and debugging tools, refer to the UI section.(TODO: add UI section link)
 
@@ -345,11 +344,11 @@ kubectl delete -f https://raw.githubusercontent.com/numaproj/numaflow/main/examp
 
 ### Additional Notes
 
-The source code for the user-defined functions used in this MonoVertex is available here:
+<!-- The source code for the user-defined functions used in this MonoVertex is available here:
 
 - [UDSource](https://github.com/numaproj/numaflow-rs/blob/main/examples/simple-source/src/main.rs)
 - [Transformer](https://github.com/numaproj/numaflow-rs/blob/main/examples/source-transformer-now/src/main.rs)
-- [UDSink](https://github.com/numaproj/numaflow-rs/blob/main/examples/sink-log/src/main.rs)
+- [UDSink](https://github.com/numaproj/numaflow-rs/blob/main/examples/sink-log/src/main.rs) -->
 
 ## A pipeline with reduce (aggregation)
 
