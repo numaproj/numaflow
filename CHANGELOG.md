@@ -155,6 +155,17 @@
  * dependabot[bot]
  * shrivardhan
 
+## v1.4.5 (2025-05-13)
+
+ * [9090935a](https://github.com/numaproj/numaflow/commit/9090935aafcaf6fc173bc27312c2a09bef22cec4) Update manifests to v1.4.5
+ * [62c45609](https://github.com/numaproj/numaflow/commit/62c4560996e384657009d2230ca925ffec60499b) feat: expose metrics for pipeline/mvtx desired and current phase (#2563)
+ * [6e49fb11](https://github.com/numaproj/numaflow/commit/6e49fb114361f6c451ffd4ab4beac40b63aae259) fix: broken retry strategy in pipeline sink (#2625)
+
+### Contributors
+
+ * Derek Wang
+ * Yashash H L
+
 ## v1.4.4 (2025-04-03)
 
  * [ae9d93ad](https://github.com/numaproj/numaflow/commit/ae9d93ad0aaaf61854696b1638fd7d813dda7cc8) Update manifests to v1.4.4
