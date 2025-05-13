@@ -10,10 +10,6 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Duration;
 
-use crate::Error::ActorTaskTerminated;
-use crate::{Error, Result};
-use aws_config::meta::region::RegionProviderChain;
-use aws_config::{BehaviorVersion, Region};
 use aws_sdk_sqs::Client;
 use aws_sdk_sqs::types::{MessageSystemAttributeName, QueueAttributeName};
 use bytes::Bytes;
@@ -21,17 +17,22 @@ use chrono::{DateTime, TimeZone, Utc};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
 
+use crate::Error::ActorTaskTerminated;
+use crate::{Error, SqsConfig, SqsSourceError};
+
 pub const SQS_DEFAULT_REGION: &str = "us-west-2";
+
+pub type Result<T> = std::result::Result<T, SqsSourceError>;
 
 /// Configuration for an SQS message source.
 ///
 /// Used to initialize the SQS client with region and queue settings.
 #[derive(Debug, Clone, PartialEq)]
-pub struct SQSSourceConfig {
+pub struct SqsSourceConfig {
     // Required fields
-    pub region: String,
-    pub queue_name: String,
-    pub queue_owner_aws_account_id: String,
+    pub region: &'static str,
+    pub queue_name: &'static str,
+    pub queue_owner_aws_account_id: &'static str,
 
     // Optional fields
     pub visibility_timeout: Option<i32>,
@@ -42,92 +43,6 @@ pub struct SQSSourceConfig {
     pub message_attribute_names: Vec<String>,
 }
 
-impl SQSSourceConfig {
-    /// Validates the SQS source configuration
-    #[allow(clippy::result_large_err)]
-    pub fn validate(&self) -> Result<()> {
-        // Validate required fields
-        if self.region.is_empty() {
-            return Err(Error::InvalidConfig("region is required".to_string()));
-        }
-
-        if self.queue_name.is_empty() {
-            return Err(Error::InvalidConfig("queue name is required".to_string()));
-        }
-
-        // Validate optional fields if present
-        if let Some(timeout) = self.visibility_timeout {
-            if !(0..=43200).contains(&timeout) {
-                return Err(Error::InvalidConfig(format!(
-                    "visibility_timeout must be between 0 and 43200, got {}",
-                    timeout
-                )));
-            }
-        }
-
-        if let Some(max_msgs) = self.max_number_of_messages {
-            if !(1..=10).contains(&max_msgs) {
-                return Err(Error::InvalidConfig(format!(
-                    "max_number_of_messages must be between 1 and 10, got {}",
-                    max_msgs
-                )));
-            }
-        }
-
-        if let Some(wait_time) = self.wait_time_seconds {
-            if !(0..=20).contains(&wait_time) {
-                return Err(Error::InvalidConfig(format!(
-                    "wait_time_seconds must be between 0 and 20, got {}",
-                    wait_time
-                )));
-            }
-        }
-
-        Ok(())
-    }
-}
-
-/// Creates and configures an SQS client based on the provided configuration.
-pub async fn create_sqs_client(config: Option<SQSSourceConfig>) -> Result<Client> {
-    let config = match config {
-        Some(cfg) => cfg,
-        None => {
-            return Err(Error::InvalidConfig(
-                "SQS configuration is required".to_string(),
-            ));
-        }
-    };
-
-    // Validate configuration before proceeding
-    config.validate()?;
-
-    tracing::info!(
-        "Creating SQS client for queue {queue_name} in region {region}",
-        region = config.region.clone(),
-        queue_name = config.queue_name.clone()
-    );
-
-    let region_provider = RegionProviderChain::first_try(Region::new(config.region.clone()))
-        .or_default_provider()
-        .or_else(Region::new("us-west-2")); // Default region if none provided
-
-    // recommended to pin behavior version
-    // https://docs.aws.amazon.com/sdk-for-rust/latest/dg/behavior-versions.html
-    let mut config_builder =
-        aws_config::defaults(BehaviorVersion::v2025_01_17()).region(region_provider);
-
-    // Apply endpoint URL if configured
-    if let Some(endpoint_url) = config.endpoint_url {
-        config_builder = config_builder.endpoint_url(endpoint_url);
-    }
-
-    // Load the shared config
-    let shared_config = config_builder.load().await;
-
-    // Create and return the client
-    Ok(Client::new(&shared_config))
-}
-
 /// Internal message types for the actor implementation.
 ///
 /// The actor pattern is used to:
@@ -136,7 +51,7 @@ pub async fn create_sqs_client(config: Option<SQSSourceConfig>) -> Result<Client
 /// - Handle concurrent requests without locks
 enum SQSActorMessage {
     Receive {
-        respond_to: oneshot::Sender<Result<Vec<SQSMessage>>>,
+        respond_to: oneshot::Sender<Result<Vec<SqsMessage>>>,
         count: i32,
         timeout_at: Instant,
     },
@@ -156,7 +71,7 @@ enum SQSActorMessage {
 /// - Includes full message metadata for debugging
 /// - Maintains original SQS attributes and headers
 #[derive(Debug)]
-pub struct SQSMessage {
+pub struct SqsMessage {
     pub key: String,
     pub payload: Bytes,
     pub offset: String,
@@ -174,7 +89,7 @@ struct SqsActor {
     handler_rx: mpsc::Receiver<SQSActorMessage>,
     client: Client,
     queue_url: String,
-    config: SQSSourceConfig,
+    config: SqsSourceConfig,
 }
 
 impl SqsActor {
@@ -182,7 +97,7 @@ impl SqsActor {
         handler_rx: mpsc::Receiver<SQSActorMessage>,
         client: Client,
         queue_url: String,
-        config: SQSSourceConfig,
+        config: SqsSourceConfig,
     ) -> Self {
         Self {
             handler_rx,
@@ -234,7 +149,7 @@ impl SqsActor {
     /// - Respects timeout for long polling
     /// - Processes message attributes and system metadata
     /// - Returns messages in a normalized format
-    async fn get_messages(&mut self, count: i32, timeout_at: Instant) -> Result<Vec<SQSMessage>> {
+    async fn get_messages(&mut self, count: i32, timeout_at: Instant) -> Result<Vec<SqsMessage>> {
         let remaining_time = timeout_at - Instant::now();
 
         // default to one second if remaining time is less than one second
@@ -302,7 +217,7 @@ impl SqsActor {
                     queue_url = self.queue_url,
                     "failed to receive messages from SQS"
                 );
-                return Err(Error::Sqs(err.into()));
+                return Err(SqsSourceError::from(Error::Sqs(err.into())));
             }
         };
 
@@ -343,7 +258,7 @@ impl SqsActor {
                     })
                     .unwrap_or_default();
 
-                SQSMessage {
+                SqsMessage {
                     key,
                     payload,
                     offset,
@@ -364,7 +279,9 @@ impl SqsActor {
                 Ok(offset) => offset,
                 Err(err) => {
                     tracing::error!(?err, "failed to parse offset");
-                    return Err(Error::Other("failed to parse offset".to_string()));
+                    return Err(SqsSourceError::from(Error::Other(
+                        "failed to parse offset".to_string(),
+                    )));
                 }
             };
             if let Err(err) = self
@@ -380,7 +297,7 @@ impl SqsActor {
                     queue_url = ?self.queue_url,
                     "Error while deleting message from SQS"
                 );
-                return Err(Error::Sqs(err.into()));
+                return Err(SqsSourceError::from(Error::Sqs(err.into())));
             }
         }
         Ok(())
@@ -407,7 +324,7 @@ impl SqsActor {
                     queue_url = ?self.queue_url,
                     "failed to get queue attributes from SQS"
                 );
-                return Err(Error::Sqs(err.into()));
+                return Err(SqsSourceError::from(Error::Sqs(err.into())));
             }
         };
 
@@ -425,9 +342,9 @@ impl SqsActor {
             Ok(count) => count,
             Err(err) => {
                 tracing::error!(?err, "failed to parse ApproximateNumberOfMessages");
-                return Err(Error::Other(
+                return Err(SqsSourceError::from(Error::Other(
                     "failed to parse ApproximateNumberOfMessages".to_string(),
-                ));
+                )));
             }
         };
         Ok(Some(approx_pending_messages_count))
@@ -442,7 +359,7 @@ impl SqsActor {
 /// - Clean abstraction of SQS complexity
 /// - Efficient message processing
 #[derive(Clone)]
-pub struct SQSSource {
+pub struct SqsSource {
     batch_size: usize,
     /// timeout for each batch read request
     timeout: Duration,
@@ -456,7 +373,7 @@ pub struct SQSSource {
 /// such as region, queue name, batch size, timeout, and an optional SQS client.
 #[derive(Clone)]
 pub struct SqsSourceBuilder {
-    config: SQSSourceConfig,
+    config: SqsSourceConfig,
     batch_size: usize,
     timeout: Duration,
     client: Option<Client>,
@@ -465,10 +382,10 @@ pub struct SqsSourceBuilder {
 
 impl Default for SqsSourceBuilder {
     fn default() -> Self {
-        Self::new(SQSSourceConfig {
-            region: SQS_DEFAULT_REGION.to_string(),
-            queue_name: "".to_string(),
-            queue_owner_aws_account_id: "".to_string(),
+        Self::new(SqsSourceConfig {
+            region: SQS_DEFAULT_REGION,
+            queue_name: "",
+            queue_owner_aws_account_id: "",
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,
@@ -480,7 +397,7 @@ impl Default for SqsSourceBuilder {
 }
 
 impl SqsSourceBuilder {
-    pub fn new(config: SQSSourceConfig) -> Self {
+    pub fn new(config: SqsSourceConfig) -> Self {
         Self {
             config,
             batch_size: 1,
@@ -489,7 +406,7 @@ impl SqsSourceBuilder {
             vertex_replica: 0,
         }
     }
-    pub fn config(mut self, config: SQSSourceConfig) -> Self {
+    pub fn config(mut self, config: SqsSourceConfig) -> Self {
         self.config = config;
         self
     }
@@ -523,17 +440,14 @@ impl SqsSourceBuilder {
     /// # Returns
     /// - `Ok(SqsSource)` if the source is successfully built.
     /// - `Err(Error)` if there is an error during the initialization process.
-    pub async fn build(self) -> Result<SQSSource> {
-        // Validate the configuration
-        self.config.validate()?;
-
+    pub async fn build(self) -> Result<SqsSource> {
         let sqs_client = match self.client {
             Some(client) => client,
-            None => create_sqs_client(Some(self.config.clone())).await?,
+            None => crate::create_sqs_client(SqsConfig::Source(self.config.clone())).await?,
         };
 
-        let queue_name = self.config.queue_name.clone();
-        let queue_owner_aws_account_id = self.config.queue_owner_aws_account_id.clone();
+        let queue_name = self.config.queue_name;
+        let queue_owner_aws_account_id = self.config.queue_owner_aws_account_id;
 
         let get_queue_url_output = sqs_client
             .get_queue_url()
@@ -555,7 +469,7 @@ impl SqsSourceBuilder {
             actor.run().await;
         });
 
-        Ok(SQSSource {
+        Ok(SqsSource {
             batch_size: self.batch_size,
             timeout: self.timeout,
             actor_tx: handler_tx,
@@ -564,9 +478,9 @@ impl SqsSourceBuilder {
     }
 }
 
-impl SQSSource {
+impl SqsSource {
     /// read messages from SQS, corresponding sqs sdk method is receive_message
-    pub async fn read_messages(&self) -> Result<Vec<SQSMessage>> {
+    pub async fn read_messages(&self) -> Result<Vec<SqsMessage>> {
         tracing::debug!("Reading messages from SQS");
         let start = Instant::now();
         let (tx, rx) = oneshot::channel();
@@ -643,10 +557,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_client_creation_with_defaults() {
-        let config = SQSSourceConfig {
-            region: "us-west-2".to_string(),
-            queue_name: "test-queue".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
+        let config = SqsSourceConfig {
+            region: "us-west-2",
+            queue_name: "test-queue",
+            queue_owner_aws_account_id: "123456789012",
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,
@@ -655,16 +569,16 @@ mod tests {
             message_attribute_names: vec![],
         };
 
-        let result = create_sqs_client(Some(config)).await;
+        let result = crate::create_sqs_client(SqsConfig::Source(config.clone())).await;
         assert!(result.is_ok());
     }
 
     #[tokio::test]
     async fn test_client_creation_with_custom_endpoint() {
-        let mut config = SQSSourceConfig {
-            region: "us-west-2".to_string(),
-            queue_name: "test-queue".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
+        let mut config = SqsSourceConfig {
+            region: "us-west-2",
+            queue_name: "test-queue",
+            queue_owner_aws_account_id: "123456789012",
             visibility_timeout: Some(30),
             max_number_of_messages: Some(5),
             wait_time_seconds: Some(10),
@@ -673,98 +587,13 @@ mod tests {
             message_attribute_names: vec!["All".to_string()],
         };
 
-        let result = create_sqs_client(Some(config.clone())).await;
+        let result = crate::create_sqs_client(SqsConfig::Source(config.clone())).await;
         assert!(result.is_ok());
 
         // Test with invalid endpoint
         config.endpoint_url = Some("invalid-url".to_string());
-        let result = create_sqs_client(Some(config)).await;
+        let result = crate::create_sqs_client(SqsConfig::Source(config)).await;
         assert!(result.is_ok()); // The URL is validated when making requests, not during client creation
-    }
-
-    #[tokio::test]
-    async fn test_client_creation_validation_failures() {
-        // Test missing config
-        let result = create_sqs_client(None).await;
-        assert!(matches!(result, Err(Error::InvalidConfig(_))));
-
-        // Test empty region
-        let config = SQSSourceConfig {
-            region: "".to_string(),
-            queue_name: "test-queue".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
-            visibility_timeout: None,
-            max_number_of_messages: None,
-            wait_time_seconds: None,
-            endpoint_url: None,
-            attribute_names: vec![],
-            message_attribute_names: vec![],
-        };
-        let result = create_sqs_client(Some(config)).await;
-        assert!(matches!(result, Err(Error::InvalidConfig(_))));
-
-        // Test empty queue name
-        let config = SQSSourceConfig {
-            region: "us-west-2".to_string(),
-            queue_name: "".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
-            visibility_timeout: None,
-            max_number_of_messages: None,
-            wait_time_seconds: None,
-            endpoint_url: None,
-            attribute_names: vec![],
-            message_attribute_names: vec![],
-        };
-        let result = create_sqs_client(Some(config)).await;
-        assert!(matches!(result, Err(Error::InvalidConfig(_))));
-
-        // Test invalid max_number_of_messages
-        let config = SQSSourceConfig {
-            region: "us-west-2".to_string(),
-            queue_name: "test-queue".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
-            visibility_timeout: None,
-            max_number_of_messages: Some(20), // Invalid: > 10
-            wait_time_seconds: None,
-            endpoint_url: None,
-            attribute_names: vec![],
-            message_attribute_names: vec![],
-        };
-        let result = create_sqs_client(Some(config)).await;
-        assert!(matches!(result, Err(Error::InvalidConfig(_))));
-
-        // Test invalid wait_time_seconds
-        let config = SQSSourceConfig {
-            region: "us-west-2".to_string(),
-            queue_name: "test-queue".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
-            visibility_timeout: None,
-            max_number_of_messages: None,
-            wait_time_seconds: Some(30), // Invalid: > 20
-            endpoint_url: None,
-            attribute_names: vec![],
-            message_attribute_names: vec![],
-        };
-        let result = create_sqs_client(Some(config)).await;
-        assert!(matches!(result, Err(Error::InvalidConfig(_))));
-    }
-
-    #[tokio::test]
-    async fn test_client_creation_with_invalid_parameters() {
-        let config = SQSSourceConfig {
-            region: "us-west-2".to_string(),
-            queue_name: "test-queue".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
-            visibility_timeout: Some(50000),  // Invalid: > 43200
-            max_number_of_messages: Some(20), // Invalid: > 10
-            wait_time_seconds: Some(30),      // Invalid: > 20
-            endpoint_url: None,
-            attribute_names: vec![],
-            message_attribute_names: vec![],
-        };
-
-        let result = create_sqs_client(Some(config)).await;
-        assert!(matches!(result, Err(Error::InvalidConfig(_))));
     }
 
     #[test(tokio::test)]
@@ -781,10 +610,10 @@ mod tests {
         let sqs_mock_client =
             Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
 
-        let source = SqsSourceBuilder::new(SQSSourceConfig {
-            region: SQS_DEFAULT_REGION.to_string(),
-            queue_name: "test-q".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
+        let source = SqsSourceBuilder::new(SqsSourceConfig {
+            region: SQS_DEFAULT_REGION,
+            queue_name: "test-q",
+            queue_owner_aws_account_id: "123456789012",
             visibility_timeout: Some(300),
             max_number_of_messages: None,
             wait_time_seconds: None,
@@ -823,10 +652,10 @@ mod tests {
             .with_rule(&receive_message_output);
         let sqs_mock_client =
             Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
-        let source = SqsSourceBuilder::new(SQSSourceConfig {
-            region: SQS_DEFAULT_REGION.to_string(),
-            queue_name: "test-q".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
+        let source = SqsSourceBuilder::new(SqsSourceConfig {
+            region: SQS_DEFAULT_REGION,
+            queue_name: "test-q",
+            queue_owner_aws_account_id: "123456789012",
             visibility_timeout: Some(300),
             max_number_of_messages: None,
             wait_time_seconds: None,
@@ -862,10 +691,10 @@ mod tests {
         let sqs_mock_client =
             Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
 
-        let source = SqsSourceBuilder::new(SQSSourceConfig {
-            region: SQS_DEFAULT_REGION.to_string(),
-            queue_name: "test-q".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
+        let source = SqsSourceBuilder::new(SqsSourceConfig {
+            region: SQS_DEFAULT_REGION,
+            queue_name: "test-q",
+            queue_owner_aws_account_id: "123456789012",
             visibility_timeout: Some(300),
             max_number_of_messages: None,
             wait_time_seconds: None,
@@ -888,7 +717,7 @@ mod tests {
             Err(err) => {
                 assert_eq!(
                     err.to_string(),
-                    "Failed with SQS error - unhandled error (InvalidAddress)"
+                    "SQS Source Error: Failed with SQS error - unhandled error (InvalidAddress)"
                 );
             }
         }
@@ -907,10 +736,10 @@ mod tests {
         let sqs_mock_client =
             Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
 
-        let source = SqsSourceBuilder::new(SQSSourceConfig {
-            region: SQS_DEFAULT_REGION.to_string(),
-            queue_name: "test-q".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
+        let source = SqsSourceBuilder::new(SqsSourceConfig {
+            region: SQS_DEFAULT_REGION,
+            queue_name: "test-q",
+            queue_owner_aws_account_id: "123456789012",
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,
@@ -944,10 +773,10 @@ mod tests {
         let sqs_mock_client =
             Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
 
-        let source = SqsSourceBuilder::new(SQSSourceConfig {
-            region: SQS_DEFAULT_REGION.to_string(),
-            queue_name: "test-q".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
+        let source = SqsSourceBuilder::new(SqsSourceConfig {
+            region: SQS_DEFAULT_REGION,
+            queue_name: "test-q",
+            queue_owner_aws_account_id: "123456789012",
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,
@@ -981,10 +810,10 @@ mod tests {
         let sqs_mock_client =
             Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
 
-        let source = SqsSourceBuilder::new(SQSSourceConfig {
-            region: SQS_DEFAULT_REGION.to_string(),
-            queue_name: "test-q".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
+        let source = SqsSourceBuilder::new(SqsSourceConfig {
+            region: SQS_DEFAULT_REGION,
+            queue_name: "test-q",
+            queue_owner_aws_account_id: "123456789012",
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,
@@ -1016,10 +845,10 @@ mod tests {
         let sqs_mock_client =
             Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
 
-        let source = SqsSourceBuilder::new(SQSSourceConfig {
-            region: SQS_DEFAULT_REGION.to_string(),
-            queue_name: "test-q".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
+        let source = SqsSourceBuilder::new(SqsSourceConfig {
+            region: SQS_DEFAULT_REGION,
+            queue_name: "test-q",
+            queue_owner_aws_account_id: "123456789012",
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,
@@ -1048,10 +877,10 @@ mod tests {
         let sqs_mock_client =
             Client::from_conf(get_test_config_with_interceptor(sqs_operation_mocks));
 
-        let source = SqsSourceBuilder::new(SQSSourceConfig {
-            region: SQS_DEFAULT_REGION.to_string(),
-            queue_name: "test-q".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
+        let source = SqsSourceBuilder::new(SqsSourceConfig {
+            region: SQS_DEFAULT_REGION,
+            queue_name: "test-q",
+            queue_owner_aws_account_id: "123456789012",
             visibility_timeout: None,
             max_number_of_messages: None,
             wait_time_seconds: None,
@@ -1069,7 +898,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_partitions_unimplemented() {
-        let source = SQSSource {
+        let source = SqsSource {
             batch_size: 1,
             timeout: Duration::from_secs(0),
             actor_tx: mpsc::channel(1).0,
@@ -1090,10 +919,10 @@ mod tests {
         assert_eq!(builder.vertex_replica, 2);
 
         // test with custom config
-        let config = SQSSourceConfig {
-            region: "us-east-2".to_string(),
-            queue_name: "test-queue-custom".to_string(),
-            queue_owner_aws_account_id: "123456789012".to_string(),
+        let config = SqsSourceConfig {
+            region: "us-east-2",
+            queue_name: "test-queue-custom",
+            queue_owner_aws_account_id: "123456789012",
             visibility_timeout: Some(300),
             max_number_of_messages: Some(2000),
             wait_time_seconds: Some(10),

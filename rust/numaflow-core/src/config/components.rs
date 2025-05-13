@@ -9,8 +9,8 @@ pub(crate) mod source {
     use numaflow_jetstream::{JetstreamSourceConfig, NatsAuth, TlsClientAuthCerts, TlsConfig};
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source, SqsSource};
     use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
-    use numaflow_sqs::source::SQSSourceConfig;
-    use tracing::{info, warn};
+    use numaflow_sqs::source::SqsSourceConfig;
+    use tracing::warn;
 
     use crate::Result;
     use crate::error::Error;
@@ -38,7 +38,7 @@ pub(crate) mod source {
         UserDefined(UserDefinedConfig),
         Pulsar(PulsarSourceConfig),
         Jetstream(JetstreamSourceConfig),
-        Sqs(SQSSourceConfig),
+        Sqs(SqsSourceConfig),
     }
 
     impl From<Box<GeneratorSource>> for SourceType {
@@ -108,17 +108,57 @@ pub(crate) mod source {
         type Error = Error;
 
         fn try_from(value: Box<SqsSource>) -> Result<Self> {
-            info!("Sqs source: {value:?}");
             if value.aws_region.is_empty() {
                 return Err(Error::Config(
-                    "AWS region is required for SQS source".to_string(),
+                    "aws_region is required for SQS source".to_string(),
                 ));
             }
 
-            let sqs_source_config = SQSSourceConfig {
-                queue_name: value.queue_name,
-                region: value.aws_region,
-                queue_owner_aws_account_id: value.queue_owner_aws_account_id,
+            if value.queue_name.is_empty() {
+                return Err(Error::Config(
+                    "queue_name is required for SQS source".to_string(),
+                ));
+            }
+
+            if value.queue_owner_aws_account_id.is_empty() {
+                return Err(Error::Config(
+                    "queue_owner_aws_account_id is required for SQS source".to_string(),
+                ));
+            }
+
+            if let Some(timeout) = value.visibility_timeout {
+                if !(0..=43200).contains(&timeout) {
+                    return Err(Error::Config(format!(
+                        "visibility_timeout must be between 0 and 43200 for SQS source, got {}",
+                        timeout
+                    )));
+                }
+            }
+
+            if let Some(wait_time) = value.wait_time_seconds {
+                if !(0..=20).contains(&wait_time) {
+                    return Err(Error::Config(format!(
+                        "wait_time_seconds must be between 0 and 20 for SQS source, got {}",
+                        wait_time
+                    )));
+                }
+            }
+
+            if let Some(max_number_of_messages) = value.max_number_of_messages {
+                if !(1..=10).contains(&max_number_of_messages) {
+                    return Err(Error::Config(format!(
+                        "max_number_of_messages must be between 1 and 10 for SQS source, got {}",
+                        max_number_of_messages
+                    )));
+                }
+            }
+
+            let sqs_source_config = SqsSourceConfig {
+                queue_name: Box::leak(value.queue_name.into_boxed_str()),
+                region: Box::leak(value.aws_region.into_boxed_str()),
+                queue_owner_aws_account_id: Box::leak(
+                    value.queue_owner_aws_account_id.into_boxed_str(),
+                ),
                 attribute_names: value.attribute_names.unwrap_or_default(),
                 message_attribute_names: value.message_attribute_names.unwrap_or_default(),
                 max_number_of_messages: Some(value.max_number_of_messages.unwrap_or(10)),
@@ -126,8 +166,6 @@ pub(crate) mod source {
                 visibility_timeout: Some(value.visibility_timeout.unwrap_or(30)),
                 endpoint_url: value.endpoint_url,
             };
-
-            info!("parsed SQS source config: {sqs_source_config:?}");
 
             Ok(SourceType::Sqs(sqs_source_config))
         }
@@ -353,7 +391,8 @@ pub(crate) mod sink {
 
     use std::fmt::Display;
 
-    use numaflow_models::models::{Backoff, RetryStrategy, Sink};
+    use numaflow_models::models::{Backoff, RetryStrategy, Sink, SqsSink};
+    use numaflow_sqs::sink::SqsSinkConfig;
 
     use crate::Result;
     use crate::error::Error;
@@ -370,6 +409,7 @@ pub(crate) mod sink {
         Blackhole(BlackholeConfig),
         Serve,
         UserDefined(UserDefinedConfig),
+        Sqs(SqsSinkConfig),
     }
 
     impl SinkType {
@@ -392,6 +432,7 @@ pub(crate) mod sink {
                         .map(|_| Ok(SinkType::Blackhole(BlackholeConfig::default())))
                 })
                 .or_else(|| sink.serve.as_ref().map(|_| Ok(SinkType::Serve)))
+                .or_else(|| sink.sqs.as_ref().map(|sqs| sqs.clone().try_into()))
                 .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
         }
 
@@ -414,6 +455,7 @@ pub(crate) mod sink {
                             .map(|_| Ok(SinkType::Blackhole(BlackholeConfig::default())))
                     })
                     .or_else(|| sink.serve.as_ref().map(|_| Ok(SinkType::Serve)))
+                    .or_else(|| fallback.sqs.as_ref().map(|sqs| sqs.clone().try_into()))
                     .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
             } else {
                 Err(Error::Config("Fallback sink not found".to_string()))
@@ -432,6 +474,39 @@ pub(crate) mod sink {
         pub grpc_max_message_size: usize,
         pub socket_path: String,
         pub server_info_path: String,
+    }
+
+    impl TryFrom<Box<SqsSink>> for SinkType {
+        type Error = Error;
+
+        fn try_from(value: Box<SqsSink>) -> Result<Self> {
+            if value.aws_region.is_empty() {
+                return Err(Error::Config(
+                    "AWS region is required for SQS sink".to_string(),
+                ));
+            }
+
+            if value.queue_name.is_empty() {
+                return Err(Error::Config(
+                    "Queue name is required for SQS sink".to_string(),
+                ));
+            }
+
+            if value.queue_owner_aws_account_id.is_empty() {
+                return Err(Error::Config(
+                    "Queue owner AWS account ID is required for SQS sink".to_string(),
+                ));
+            }
+
+            let sqs_sink_config = SqsSinkConfig {
+                queue_name: Box::leak(value.queue_name.into_boxed_str()),
+                region: Box::leak(value.aws_region.into_boxed_str()),
+                queue_owner_aws_account_id: Box::leak(
+                    value.queue_owner_aws_account_id.into_boxed_str(),
+                ),
+            };
+            Ok(SinkType::Sqs(sqs_sink_config))
+        }
     }
 
     #[derive(Debug, Clone, PartialEq)]
@@ -681,12 +756,12 @@ mod source_tests {
 
 #[cfg(test)]
 mod sink_tests {
-    use numaflow_models::models::{Backoff, RetryStrategy};
-
     use super::sink::{
         BlackholeConfig, LogConfig, OnFailureStrategy, RetryConfig, SinkConfig, SinkType,
         UserDefinedConfig,
     };
+    use numaflow_models::models::{Backoff, RetryStrategy};
+    use numaflow_sqs::sink::SqsSinkConfig;
 
     #[test]
     fn test_default_log_config() {
@@ -793,6 +868,171 @@ mod sink_tests {
             panic!("Expected SinkType::UserDefined");
         }
     }
+
+    #[test]
+    fn test_sink_config_sqs() {
+        let sqs_config = SqsSinkConfig {
+            queue_name: "test-queue",
+            region: "us-west-2",
+            queue_owner_aws_account_id: "123456789012",
+        };
+        let sink_config = SinkConfig {
+            sink_type: SinkType::Sqs(sqs_config.clone()),
+            retry_config: None,
+        };
+        if let SinkType::Sqs(config) = sink_config.sink_type {
+            assert_eq!(config, sqs_config);
+        } else {
+            panic!("Expected SinkType::Sqs");
+        }
+    }
+
+    #[test]
+    fn test_sqs_sink_type_conversion() {
+        use numaflow_models::models::SqsSink;
+
+        // Test case 1: Valid configuration
+        let valid_sqs_sink = Box::new(SqsSink {
+            aws_region: "us-west-2".to_string(),
+            queue_name: "test-queue".to_string(),
+            queue_owner_aws_account_id: "123456789012".to_string(),
+        });
+
+        let result = SinkType::try_from(valid_sqs_sink);
+        assert!(result.is_ok());
+        if let Ok(SinkType::Sqs(config)) = result {
+            assert_eq!(config.region, "us-west-2");
+            assert_eq!(config.queue_name, "test-queue");
+            assert_eq!(config.queue_owner_aws_account_id, "123456789012");
+        } else {
+            panic!("Expected SinkType::Sqs");
+        }
+
+        // Test case 2: Missing required fields
+        let invalid_sqs_sink = Box::new(SqsSink {
+            aws_region: "".to_string(),
+            queue_name: "test-queue".to_string(),
+            queue_owner_aws_account_id: "123456789012".to_string(),
+        });
+
+        let result = SinkType::try_from(invalid_sqs_sink);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Config Error - AWS region is required for SQS sink"
+        );
+    }
+
+    #[test]
+    fn test_sqs_fallback_sink_type() {
+        use numaflow_models::models::{AbstractSink, Sink, SqsSink};
+
+        // Test case 1: Valid SQS fallback configuration
+        let sink = Sink {
+            udsink: None,
+            log: None,
+            blackhole: None,
+            serve: None,
+            sqs: None,
+            fallback: Some(Box::new(AbstractSink {
+                udsink: None,
+                log: None,
+                blackhole: None,
+                serve: None,
+                sqs: Some(Box::new(SqsSink {
+                    aws_region: "us-west-2".to_string(),
+                    queue_name: "fallback-queue".to_string(),
+                    queue_owner_aws_account_id: "123456789012".to_string(),
+                })),
+                kafka: None,
+            })),
+            retry_strategy: None,
+            kafka: None,
+        };
+
+        let result = SinkType::fallback_sinktype(&sink);
+        assert!(result.is_ok());
+        match result {
+            Ok(SinkType::Sqs(config)) => {
+                assert_eq!(config.region, "us-west-2");
+                assert_eq!(config.queue_name, "fallback-queue");
+                assert_eq!(config.queue_owner_aws_account_id, "123456789012");
+            }
+            _ => panic!("Expected SinkType::Sqs for fallback sink"),
+        }
+
+        // Test case 2: Missing fallback configuration
+        let sink_without_fallback = Sink {
+            udsink: None,
+            log: None,
+            blackhole: None,
+            serve: None,
+            sqs: None,
+            fallback: None,
+            retry_strategy: None,
+            kafka: None,
+        };
+        let result = SinkType::fallback_sinktype(&sink_without_fallback);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Config Error - Fallback sink not found"
+        );
+
+        // Test case 3: Missing required AWS region
+        let sink_missing_region = Sink {
+            udsink: None,
+            log: None,
+            blackhole: None,
+            serve: None,
+            sqs: None,
+            fallback: Some(Box::new(AbstractSink {
+                udsink: None,
+                log: None,
+                blackhole: None,
+                serve: None,
+                sqs: Some(Box::new(SqsSink {
+                    aws_region: "".to_string(),
+                    queue_name: "fallback-queue".to_string(),
+                    queue_owner_aws_account_id: "123456789012".to_string(),
+                })),
+                kafka: None,
+            })),
+            retry_strategy: None,
+            kafka: None,
+        };
+        let result = SinkType::fallback_sinktype(&sink_missing_region);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Config Error - AWS region is required for SQS sink"
+        );
+
+        // Test case 4: Empty fallback sink configuration
+        let sink_empty_fallback = Sink {
+            udsink: None,
+            log: None,
+            blackhole: None,
+            serve: None,
+            sqs: None,
+            fallback: Some(Box::new(AbstractSink {
+                udsink: None,
+                log: None,
+                blackhole: None,
+                serve: None,
+                sqs: None,
+                kafka: None,
+            })),
+            retry_strategy: None,
+            kafka: None,
+        };
+        let result = SinkType::fallback_sinktype(&sink_empty_fallback);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Config Error - Sink type not found"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -830,13 +1070,15 @@ mod transformer_tests {
 
 #[cfg(test)]
 mod jetstream_tests {
-    use super::source::SourceType;
+    use std::fs;
+    use std::path::Path;
+
     use k8s_openapi::api::core::v1::SecretKeySelector;
     use numaflow_jetstream::NatsAuth;
     use numaflow_models::models::BasicAuth;
     use numaflow_models::models::{JetStreamSource, Tls};
-    use std::fs;
-    use std::path::Path;
+
+    use super::source::SourceType;
 
     const SECRET_BASE_PATH: &str = "/tmp/numaflow";
 

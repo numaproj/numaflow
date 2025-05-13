@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::env;
 use std::error::Error;
-use std::time::Duration;
 use tracing::{error, info};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -29,8 +28,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     if let Err(e) = run().await {
         error!("{e:?}");
-        tracing::warn!("Sleeping after error");
-        tokio::time::sleep(Duration::from_secs(300)).await;
         return Err(e);
     }
     info!("Exiting...");
