@@ -54,7 +54,7 @@ The `BackOff` configuration defines the timing and limits for retries. Below are
 - **`cap`**: The maximum value for the interval, limiting exponential backoff growth.
 
   - **Type**: String with a timestamp suffix.
-    - **Default**: `indefinite` (no upper limit).
+  - **Default**: `indefinite` (no upper limit).
 
 - **`jitter`**: Adds randomness to the interval to avoid retry collisions.
   - **Type**: Float, must be greater than or equal to 0 and less than 1.

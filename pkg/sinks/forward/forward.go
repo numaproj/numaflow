@@ -577,8 +577,8 @@ func (df *DataForward) getBackOffConditions(isFallbackSink bool) (wait.Backoff, 
 		return wait.Backoff{
 			Duration: dfv1.DefaultRetryInterval,
 			Steps:    dfv1.DefaultRetrySteps,
-			Factor:   1.0,
-			Cap:      dfv1.DefaultRetryInterval,
+			Factor:   dfv1.DefaultFactor,
+			Cap:      dfv1.DefaultMaxRetryInterval,
 		}, dfv1.OnFailureRetry
 	}
 	// Initial interval duration and number of retries are taken from DataForward settings.
