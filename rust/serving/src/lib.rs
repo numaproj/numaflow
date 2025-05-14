@@ -282,8 +282,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-        
-        
+
         let response = reqwest::Client::builder()
             .danger_accept_invalid_certs(true)
             .build()
@@ -293,7 +292,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-        
+
         server_task.abort();
     }
 }
