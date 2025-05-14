@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-rdkafka = { version = "0.37.0", default-features = false, features = ["cmake-build", "tokio", "ssl-vendored"] }
+rdkafka = { git = "https://github.com/BulkBeing/rust-rdkafka.git", rev = "22322af8776b728d7c1de46d38cbbfb8498a8983", default-features = false, features = ["cmake-build", "tokio", "ssl-vendored", "gssapi-vendored", "sasl"] }
 tokio.workspace = true
 tracing.workspace = true
 thiserror.workspace = true

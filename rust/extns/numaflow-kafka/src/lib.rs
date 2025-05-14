@@ -137,6 +137,14 @@ impl KafkaActor {
                     username,
                     password,
                 } => {
+                    let supported_mechanisms = ["PLAIN", "SCRAM-SHA-256", "SCRAM-SHA-512"];
+                    if !supported_mechanisms.contains(&mechanism.as_str()) {
+                        return Err(Error::Kafka(format!(
+                            "Unsupported SASL mechanism: {}. Currently supported mechanisms: {}",
+                            mechanism,
+                            supported_mechanisms.join(", ")
+                        )));
+                    }
                     client_config.set("security.protocol", "SASL_PLAINTEXT");
                     if config.tls.is_some() {
                         client_config.set("security.protocol", "SASL_SSL");
