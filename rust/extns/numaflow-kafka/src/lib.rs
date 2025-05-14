@@ -10,7 +10,7 @@ use rdkafka::error::KafkaResult;
 use rdkafka::message::{Headers, Message};
 use rdkafka::topic_partition_list::TopicPartitionList;
 use tokio::sync::{mpsc, oneshot};
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 pub type Result<T> = core::result::Result<T, Error>;
 
@@ -184,29 +184,31 @@ impl KafkaActor {
                     error: err.to_string(),
                 })?;
 
-        // FIXME: Subscribing to a non-existent topic will not return an error
-        // Library shows error at a later point:
+        // NOTE: Subscribing to a non-existent topic will not return an error
+        // The error happens only when we try to read from the topic
         // 2025-05-09T02:45:42.239784Z ERROR rdkafka::client: librdkafka: Global error: UnknownTopicOrPartition (Broker: Unknown topic or partition): Subscribed topic not available: test-topic: Broker: Unknown topic or partition
-        // 2025-05-09T02:45:42.239847Z  WARN numaflow_kafka: Kafka error: Message consumption error: UnknownTopicOrPartition (Broker: Unknown topic or partition)
+        // Currently, the pending returns Ok(Some(0)) if the topic is not found. When the topic is created,
+        // the consumer starts to pull messages without the need for a restart.
         consumer
             .subscribe(&[&config.topic])
             .map_err(|err| Error::Kafka(format!("Failed to subscribe to topic: {}", err)))?;
 
-        /*
-        FIXME: Authentication failure also comes at a later point
-        2025-05-12T05:06:01.214282Z ERROR librdkafka: librdkafka: FAIL [thrd:ssl://kafka:29092/bootstrap]: ssl://kafka:29092/bootstrap: Receive failed: ssl/record/rec_layer_s3.c:911:ssl3_read_bytes error:0A000412:SSL routines::ssl/tls alert bad certificate: SSL alert number 42 (after 0ms in state APIVERSION_QUERY)
-        2025-05-12T05:06:01.214310Z ERROR rdkafka::client: librdkafka: Global error: BrokerTransportFailure (Local: Broker transport failure): ssl://kafka:29092/bootstrap: Receive failed: ssl/record/rec_layer_s3.c:911:ssl3_read_bytes error:0A000412:SSL routines::ssl/tls alert bad certificate: SSL alert number 42 (after 0ms in state APIVERSION_QUERY)
-        2025-05-12T05:06:01.214319Z  WARN numaflow_kafka: Kafka error: Message consumption error: BrokerTransportFailure (Local: Broker transport failure)
-        */
+        // The consumer.subscribe() will not fail even if the credentials are invalid.
+        // To ensure creds/certificates are valid, we make a call to pending_messages() before starting the actor.
+        let mut actor = KafkaActor {
+            consumer,
+            read_timeout,
+            batch_size,
+            topic: config.topic,
+            handler_rx,
+        };
+
+        actor
+            .pending_messages()
+            .await
+            .map_err(|err| Error::Kafka(format!("Failed to get pending messages: {err:?}")))?;
 
         tokio::spawn(async move {
-            let mut actor = KafkaActor {
-                consumer,
-                read_timeout,
-                batch_size,
-                topic: config.topic,
-                handler_rx,
-            };
             tracing::info!("Starting Kafka consumer...");
             actor.run().await;
         });
@@ -259,7 +261,8 @@ impl KafkaActor {
                     let message = match message {
                         Ok(msg) => msg,
                         Err(e) => {
-                            warn!("Kafka error: {}", e);
+                            error!(?e, "Failed to read messages, will retry after 1 second");
+                            tokio::time::sleep(Duration::from_secs(1)).await;
                             continue;
                         }
                     };
@@ -319,10 +322,10 @@ impl KafkaActor {
             .fetch_metadata(Some(&self.topic), Duration::from_secs(1))
             .map_err(|e| Error::Kafka(format!("Failed to fetch metadata: {}", e)))?;
 
-        let topic_metadata = metadata
-            .topics()
-            .first()
-            .ok_or_else(|| Error::Kafka("No topic metadata found".to_string()))?;
+        let Some(topic_metadata) = metadata.topics().first() else {
+            warn!(topic = self.topic, "No topic metadata found");
+            return Ok(Some(0));
+        };
 
         for partition in 0..topic_metadata.partitions().len() {
             let mut tpl = TopicPartitionList::new();
