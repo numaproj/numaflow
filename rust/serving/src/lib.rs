@@ -218,6 +218,7 @@ mod tests {
         let env_vars = [
             ("NUMAFLOW_POD", "serving-serve-cbdf"),
             ("NUMAFLOW_SERVING_APP_LISTEN_PORT", "32443"),
+            ("NUMAFLOW_SERVING_APP_LISTEN_HTTP_PORT", "32445"),
             (
                 "NUMAFLOW_SERVING_CALLBACK_STORE",
                 "serving-test-run-kv-store",
@@ -281,6 +282,18 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+        
+        
+        let response = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap()
+            .get("http://localhost:32445/health")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        
         server_task.abort();
     }
 }

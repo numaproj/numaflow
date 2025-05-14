@@ -195,6 +195,7 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 		{Name: EnvServingResponseStore, Value: fmt.Sprintf("%s_SERVING_RESPONSE_STORE", sp.GetServingStoreName())},
 		{Name: EnvServingStatusStore, Value: fmt.Sprintf("%s_SERVING_STATUS_STORE", sp.GetServingStoreName())},
 		{Name: EnvServingPort, Value: strconv.Itoa(ServingServicePort)},
+		{Name: EnvServingHttpPort, Value: strconv.Itoa(ServingServiceHttpPort)},
 		{Name: EnvReplica, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + KeyReplica + "']"}}},
 	}
 	envVars = append(envVars, req.Env...)

@@ -152,6 +152,7 @@ const (
 	EnvGoDebug                          = "GODEBUG"
 	EnvServingJetstreamStream           = "NUMAFLOW_SERVING_JETSTREAM_STREAM"
 	EnvServingPort                      = "NUMAFLOW_SERVING_APP_LISTEN_PORT"
+	EnvServingHttpPort                  = "NUMAFLOW_SERVING_APP_LISTEN_HTTP_PORT"
 	EnvServingMinPipelineSpec           = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC"
 	EnvServingHostIP                    = "NUMAFLOW_SERVING_HOST_IP"
 	EnvK8sServerVersion                 = "K8S_SERVER_VERSION"
@@ -176,6 +177,7 @@ const (
 	MonoVertexMonitorPortName   = "monitor"
 	MonoVertexDaemonServicePort = 4327
 	ServingServicePort          = 8443
+	ServingServiceHttpPort      = 8090
 
 	DefaultRequeueAfter = 10 * time.Second
 
