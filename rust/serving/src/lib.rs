@@ -217,7 +217,7 @@ mod tests {
 
         let env_vars = [
             ("NUMAFLOW_POD", "serving-serve-cbdf"),
-            ("NUMAFLOW_SERVING_APP_LISTEN_PORT", "32443"),
+            ("NUMAFLOW_SERVING_APP_LISTEN_HTTPS_PORT", "32443"),
             ("NUMAFLOW_SERVING_APP_LISTEN_HTTP_PORT", "32445"),
             (
                 "NUMAFLOW_SERVING_CALLBACK_STORE",

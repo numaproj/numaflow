@@ -151,7 +151,7 @@ const (
 	EnvMemoryLimit                      = "NUMAFLOW_MEMORY_LIMIT"
 	EnvGoDebug                          = "GODEBUG"
 	EnvServingJetstreamStream           = "NUMAFLOW_SERVING_JETSTREAM_STREAM"
-	EnvServingPort                      = "NUMAFLOW_SERVING_APP_LISTEN_PORT"
+	EnvServingPort                      = "NUMAFLOW_SERVING_APP_LISTEN_HTTPS_PORT"
 	EnvServingHttpPort                  = "NUMAFLOW_SERVING_APP_LISTEN_HTTP_PORT"
 	EnvServingMinPipelineSpec           = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC"
 	EnvServingHostIP                    = "NUMAFLOW_SERVING_HOST_IP"
