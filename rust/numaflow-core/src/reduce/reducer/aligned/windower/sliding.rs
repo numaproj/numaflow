@@ -399,16 +399,21 @@ mod tests {
             assert_eq!(active_windows.len(), 3);
         }
 
+        // Close window1
+        windower.close_windows(base_time + chrono::Duration::seconds(60));
+
         // Delete window1
         windower.delete_window(window1.clone());
 
         // Verify window1 is deleted
         {
             let active_windows = windower.active_windows.lock().unwrap();
-            assert_eq!(active_windows.len(), 2);
-            assert!(!active_windows.contains(&window1));
-            assert!(active_windows.contains(&window2));
-            assert!(active_windows.contains(&window3));
+            assert_eq!(active_windows.len(), 0);
+            let closed_windows = windower.closed_windows.lock().unwrap();
+            assert_eq!(closed_windows.len(), 2);
+            assert!(!closed_windows.contains(&window1));
+            assert!(closed_windows.contains(&window2));
+            assert!(closed_windows.contains(&window3));
         }
 
         // Delete window2
@@ -417,10 +422,10 @@ mod tests {
         // Verify window2 is deleted
         {
             let active_windows = windower.active_windows.lock().unwrap();
-            assert_eq!(active_windows.len(), 1);
+            assert_eq!(active_windows.len(), 0);
             assert!(!active_windows.contains(&window1));
             assert!(!active_windows.contains(&window2));
-            assert!(active_windows.contains(&window3));
+            assert!(!active_windows.contains(&window3));
         }
 
         // Delete window3
@@ -472,6 +477,9 @@ mod tests {
             (base_time + chrono::Duration::seconds(40)).timestamp_millis()
         );
 
+        // Close window3
+        windower.close_windows(base_time + chrono::Duration::seconds(40));
+
         // Delete window3 (the oldest)
         windower.delete_window(window3.clone());
 
@@ -485,6 +493,9 @@ mod tests {
             (base_time + chrono::Duration::seconds(50)).timestamp_millis()
         );
 
+        // Close window2
+        windower.close_windows(base_time + chrono::Duration::seconds(50));
+
         // Delete window2
         windower.delete_window(window2.clone());
 
@@ -497,6 +508,9 @@ mod tests {
                 .timestamp_millis(),
             (base_time + chrono::Duration::seconds(60)).timestamp_millis()
         );
+
+        // Close window1
+        windower.close_windows(base_time + chrono::Duration::seconds(60));
 
         // Delete window1
         windower.delete_window(window1.clone());

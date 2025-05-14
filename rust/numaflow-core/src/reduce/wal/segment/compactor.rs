@@ -832,6 +832,7 @@ mod tests {
         // Verify compacted data
         let compaction_wal = ReplayWal::new(WalType::Compact, test_path);
         let (mut rx, handle) = compaction_wal.streaming_read().unwrap();
+        let mut replayed_event_times = vec![];
 
         let mut remaining_message_count = 0;
         while let Some(entry) = rx.next().await {
@@ -847,6 +848,7 @@ mod tests {
                             event_time >= gc_end_2,
                             "Found message with event_time < gc_end_2"
                         );
+                        replayed_event_times.push(event_time);
                     }
                 }
                 remaining_message_count += 1;
@@ -860,6 +862,15 @@ mod tests {
             remaining_message_count, 981,
             "Expected 981 messages to remain after compaction"
         );
+
+        // Verify that the event times are in increasing order
+        for i in 1..replayed_event_times.len() {
+            assert_eq!(
+                replayed_event_times[i - 1] + chrono::Duration::seconds(1),
+                replayed_event_times[i],
+                "Event times are not in increasing order"
+            );
+        }
     }
 
     #[tokio::test]
@@ -1021,6 +1032,8 @@ mod tests {
 
         // Count the number of messages received through the replay channel
         let mut replayed_count = 0;
+        let mut replayed_event_times = Vec::new();
+
         while let Ok(data) = replay_rx.try_recv() {
             let msg: isb::ReadMessage = prost::Message::decode(data)
                 .map_err(|e| format!("Failed to decode message: {e}"))?;
@@ -1033,6 +1046,9 @@ mod tests {
                         event_time > gc_end,
                         "Found message with event_time <= gc_end"
                     );
+
+                    // Store the event time for later verification
+                    replayed_event_times.push(event_time);
                 }
             }
             replayed_count += 1;
@@ -1043,6 +1059,27 @@ mod tests {
             replayed_count, 1,
             "Expected only one message to be replayed"
         );
+
+        // Verify that the event time is as expected
+        assert_eq!(
+            replayed_event_times.len(),
+            1,
+            "Expected one event time to be recorded"
+        );
+
+        assert_eq!(
+            replayed_event_times[0], after_time,
+            "Event time of replayed message does not match the original message"
+        );
+
+        // check the order of the replayed event by checking if their event time is increasing by 1
+        for i in 1..replayed_event_times.len() {
+            assert_eq!(
+                replayed_event_times[i - 1] + chrono::Duration::seconds(1),
+                replayed_event_times[i],
+                "Event times are not in increasing order"
+            );
+        }
 
         Ok(())
     }

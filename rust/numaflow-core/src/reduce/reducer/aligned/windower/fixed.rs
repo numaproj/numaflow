@@ -314,16 +314,25 @@ mod tests {
             active_windows.insert(window3.clone());
         }
 
+        // close windows so that we can delete them
+        windower.close_windows(base_time + chrono::Duration::seconds(120));
+
+        assert_eq!(windower.closed_windows.lock().unwrap().len(), 2);
+
         // Delete window2
         windower.gc_window(window2.clone());
 
         // Verify window2 was deleted
         {
             let active_windows = windower.active_windows.lock().unwrap();
-            assert_eq!(active_windows.len(), 2);
-            assert!(active_windows.contains(&window1));
+            let closed_windows = windower.closed_windows.lock().unwrap();
+            assert_eq!(active_windows.len(), 1);
+            assert!(!active_windows.contains(&window1));
             assert!(!active_windows.contains(&window2));
             assert!(active_windows.contains(&window3));
+            assert_eq!(closed_windows.len(), 1);
+            assert!(closed_windows.contains(&window1));
+            assert!(!closed_windows.contains(&window2));
         }
     }
 
@@ -359,6 +368,9 @@ mod tests {
             windower.oldest_window().unwrap().end_time,
             base_time + chrono::Duration::seconds(60)
         );
+
+        // Close window1
+        windower.close_windows(base_time + chrono::Duration::seconds(60));
 
         // Delete window1
         windower.gc_window(window1);
