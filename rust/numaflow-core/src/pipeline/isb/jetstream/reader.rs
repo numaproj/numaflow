@@ -7,6 +7,7 @@ use async_nats::jetstream::{
 };
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
+use chrono::Utc;
 use prost::Message as ProtoMessage;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -231,6 +232,7 @@ impl JetStreamReader {
 
                             if let Some(watermark_handle) = self.watermark_handle.as_ref() {
                                 let watermark = watermark_handle.fetch_watermark(message.offset.clone()).await;
+                                info!(watermark = ?watermark.timestamp_millis(), "Fetched watermark");
                                 message.watermark = Some(watermark);
                             }
 
@@ -261,7 +263,7 @@ impl JetStreamReader {
                                 info!(
                                     "Processed {} messages in {:?}",
                                     processed_msgs_count,
-                                    std::time::Instant::now()
+                                    Utc::now()
                                 );
                                 processed_msgs_count = 0;
                                 last_logged_at = Instant::now();

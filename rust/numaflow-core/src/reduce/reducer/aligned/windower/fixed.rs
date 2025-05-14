@@ -2,10 +2,10 @@ use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use chrono::{DateTime, TimeZone, Utc};
-
 use crate::message::Message;
 use crate::reduce::reducer::aligned::windower::{AlignedWindowMessage, Window, WindowOperation};
+use chrono::{DateTime, TimeZone, Utc};
+use tracing::info;
 
 #[derive(Debug, Clone)]
 pub(crate) struct FixedWindowManager {
@@ -13,6 +13,8 @@ pub(crate) struct FixedWindowManager {
     window_length: Duration,
     /// Active windows sorted by end time
     active_windows: Arc<Mutex<BTreeSet<Window>>>,
+    /// Closed windows sorted by end time
+    closed_windows: Arc<Mutex<BTreeSet<Window>>>,
 }
 
 impl FixedWindowManager {
@@ -20,6 +22,7 @@ impl FixedWindowManager {
         Self {
             window_length,
             active_windows: Arc::new(Mutex::new(BTreeSet::new())),
+            closed_windows: Arc::new(Mutex::new(BTreeSet::new())),
         }
     }
 
@@ -65,44 +68,59 @@ impl FixedWindowManager {
     /// end time.
     pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage> {
         let mut result = Vec::new();
+        info!(watermark = ?watermark.timestamp_millis(), "Closing windows");
+
+        let mut active_windows = self.active_windows.lock().unwrap();
+        let mut closed_windows = self.closed_windows.lock().unwrap();
+
         let mut windows_to_close = Vec::new();
 
-        // Find windows that need to be closed
-        {
-            let active_windows = self.active_windows.lock().unwrap();
-            for window in active_windows.iter() {
-                if window.end_time <= watermark {
-                    windows_to_close.push(window.clone());
-                }
+        for window in active_windows.iter() {
+            if window.end_time <= watermark {
+                info!(window = ?window, "Closing window");
+                // Create close message
+                let window_msg = AlignedWindowMessage {
+                    operation: WindowOperation::Close,
+                    window: window.clone(),
+                };
+
+                result.push(window_msg);
+                windows_to_close.push(window.clone());
             }
         }
 
-        // Create close messages for each window
+        // Move windows from active to closed
         for window in windows_to_close {
-            // Remove from active windows
-            self.delete_window(window.clone());
-
-            // Create close message
-            let window_msg = AlignedWindowMessage {
-                operation: WindowOperation::Close,
-                window,
-            };
-
-            result.push(window_msg);
+            active_windows.remove(&window);
+            closed_windows.insert(window);
         }
 
         result
     }
 
     /// Deletes a window after it is closed and GC is done.
-    pub(crate) fn delete_window(&self, window: Window) {
-        let mut active_windows = self.active_windows.lock().unwrap();
-        active_windows.remove(&window);
+    pub(crate) fn gc_window(&self, window: Window) {
+        info!(window = ?window, "Deleting window");
+        let mut closed_windows = self.closed_windows.lock().unwrap();
+        closed_windows.remove(&window);
     }
 
     /// Returns the oldest window yet to be completed. This will be the lowest Watermark in the Vertex.
     pub(crate) fn oldest_window(&self) -> Option<Window> {
+        // First check closed windows
+        let closed_windows = self.closed_windows.lock().unwrap();
+        for window in closed_windows.iter() {
+            info!(window = ?window, "oldest_window closed window");
+        }
+        if !closed_windows.is_empty() {
+            return closed_windows.iter().next().cloned();
+        }
+
+        // If no closed windows, check active windows
         let active_windows = self.active_windows.lock().unwrap();
+        for window in active_windows.iter() {
+            info!(window = ?window, "oldest_window active window");
+        }
         active_windows.iter().next().cloned()
     }
 }
@@ -307,7 +325,7 @@ mod tests {
         }
 
         // Delete window2
-        windower.delete_window(window2.clone());
+        windower.gc_window(window2.clone());
 
         // Verify window2 was deleted
         {
@@ -353,7 +371,7 @@ mod tests {
         );
 
         // Delete window1
-        windower.delete_window(window1);
+        windower.gc_window(window1);
 
         // Verify the oldest window end time is now window2's end time
         assert_eq!(

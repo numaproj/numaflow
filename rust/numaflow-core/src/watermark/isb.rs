@@ -96,6 +96,7 @@ struct ISBWatermarkActor {
     offset_set: HashMap<u16, BTreeSet<OffsetWatermark>>,
     idle_manager: ISBIdleDetector,
     window_manager: Option<WindowManager>,
+    latest_fetched_wm: Watermark,
 }
 
 impl ISBWatermarkActor {
@@ -111,6 +112,8 @@ impl ISBWatermarkActor {
             offset_set: HashMap::new(),
             idle_manager,
             window_manager,
+            latest_fetched_wm: Watermark::from_timestamp_millis(-1)
+                .expect("failed to parse timestamp"),
         }
     }
 
@@ -164,6 +167,12 @@ impl ISBWatermarkActor {
             .fetcher
             .fetch_watermark(offset.offset, offset.partition_idx);
 
+        self.latest_fetched_wm = if self.latest_fetched_wm.timestamp_millis() == -1 {
+            watermark
+        } else {
+            std::cmp::max(watermark, self.latest_fetched_wm)
+        };
+
         oneshot_tx
             .send(Ok(watermark))
             .map_err(|_| Error::Watermark("failed to send response".to_string()))
@@ -183,6 +192,16 @@ impl ISBWatermarkActor {
     // check for idleness and publish idle watermark for those downstream idle partitions
     async fn handle_idle_watermark(&mut self) -> Result<()> {
         let mut min_wm = self.compute_min_watermark();
+
+        info!(
+            "min_wm: {:?}, latest_fetched_wm: {:?}",
+            min_wm.timestamp_millis(),
+            self.latest_fetched_wm.timestamp_millis()
+        );
+
+        // compare the min of latest fetched watermark and the min watermark from inflight messages
+        // and use the min
+        min_wm = min_wm.min(self.latest_fetched_wm);
 
         // if there are no inflight messages or windows, get the head idle watermark
         if min_wm.timestamp_millis() == -1 {

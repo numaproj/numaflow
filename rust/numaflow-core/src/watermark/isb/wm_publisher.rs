@@ -140,6 +140,9 @@ impl ISBWatermarkPublisher {
         watermark: i64,
         idle: bool,
     ) {
+        info!(processor = ?self.processor_name, ?stream, ?offset, ?watermark, ?idle,
+            "Publishing watermark",
+        );
         let last_published_wm_state = self
             .last_published_wm
             .get_mut(stream.vertex)

@@ -17,6 +17,7 @@ use crate::{
     metrics,
     reader::LagReader,
 };
+use chrono::Utc;
 use numaflow_jetstream::JetstreamSource;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pulsar::source::PulsarSource;
@@ -448,7 +449,7 @@ impl Source {
                         info!(
                             "Processed {} messages in {:?}",
                             processed_msgs_count,
-                            std::time::Instant::now()
+                            Utc::now()
                         );
                         processed_msgs_count = 0;
                         last_logged_at = Instant::now();

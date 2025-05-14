@@ -41,7 +41,7 @@ impl WindowManager {
     /// Deletes a window is called after the window is closed and GC is done.
     pub(crate) fn delete_window(&self, window: Window) {
         match self {
-            WindowManager::Fixed(manager) => manager.delete_window(window),
+            WindowManager::Fixed(manager) => manager.gc_window(window),
             WindowManager::Sliding(manager) => manager.delete_window(window),
         }
     }

@@ -15,6 +15,8 @@ pub(crate) struct SlidingWindowManager {
     slide: Duration,
     /// Active windows sorted by end time
     active_windows: Arc<Mutex<BTreeSet<Window>>>,
+    /// Closed windows sorted by end time
+    closed_windows: Arc<Mutex<BTreeSet<Window>>>,
 }
 
 impl SlidingWindowManager {
@@ -23,6 +25,7 @@ impl SlidingWindowManager {
             window_length,
             slide,
             active_windows: Arc::new(Mutex::new(BTreeSet::new())),
+            closed_windows: Arc::new(Mutex::new(BTreeSet::new())),
         }
     }
 
@@ -89,28 +92,29 @@ impl SlidingWindowManager {
     /// end time.
     pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage> {
         let mut result = Vec::new();
-        let mut windows_to_close = Vec::new();
 
         // Find windows that need to be closed
         let mut active_windows = self.active_windows.lock().unwrap();
+        let mut closed_windows = self.closed_windows.lock().unwrap();
+
+        let mut windows_to_close = Vec::new();
+
         for window in active_windows.iter() {
             if window.end_time <= watermark {
+                let window_msg = AlignedWindowMessage {
+                    operation: WindowOperation::Close,
+                    window: window.clone(),
+                };
+
+                result.push(window_msg);
                 windows_to_close.push(window.clone());
             }
         }
 
-        // Create close messages for each window
+        // Move windows from active to closed
         for window in windows_to_close {
-            // Remove from active windows
             active_windows.remove(&window);
-
-            // Create close message
-            let window_msg = AlignedWindowMessage {
-                operation: WindowOperation::Close,
-                window,
-            };
-
-            result.push(window_msg);
+            closed_windows.insert(window);
         }
 
         result
@@ -118,12 +122,19 @@ impl SlidingWindowManager {
 
     /// Deletes a window after it is closed and GC is done.
     pub(crate) fn delete_window(&self, window: Window) {
-        let mut active_windows = self.active_windows.lock().unwrap();
-        active_windows.remove(&window);
+        let mut closed_windows = self.closed_windows.lock().unwrap();
+        closed_windows.remove(&window);
     }
 
     /// Returns the oldest window yet to be completed. This will be the lowest Watermark in the Vertex.
     pub(crate) fn oldest_window(&self) -> Option<Window> {
+        // First check closed windows
+        let closed_windows = self.closed_windows.lock().unwrap();
+        if !closed_windows.is_empty() {
+            return closed_windows.iter().next().cloned();
+        }
+
+        // If no closed windows, check active windows
         let active_windows = self.active_windows.lock().unwrap();
         active_windows.iter().next().cloned()
     }
