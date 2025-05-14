@@ -12,48 +12,74 @@ unexpected issues efficiently.
 - `responseFailure` for [Java](https://github.com/numaproj/numaflow-java/blob/main/src/main/java/io/numaproj/numaflow/sinker/Response.java#L40)
 - `as_fallback` for [Python](https://github.com/numaproj/numaflow-python/blob/main/pynumaflow/sinker/_dtypes.py)
 
-### Struct Explanation
+### Retry Strategy Configuration
 
-`retryStrategy` is optional, and can be added to the Sink spec configurations where retry logic is necessary.
+The `retryStrategy` section allows you to define custom retry behavior for sink operations. If no custom fields are defined, the **default** values are applied.
+
+#### Example Configuration
 
 ```yaml
 sink:
   retryStrategy:
     # Optional
     backoff:
-      interval: 1s # Optional
-      steps: 3 # Optional, number of retries (including the 1st try)
+      interval: 1s # Optional, a string with timestamp suffix
+      steps: 3 # Optional, unsigned int, cannot be 0
+      factor: 1.5 # Optional, float type, >= 1
+      cap: 20s # Optional, a string with timestamp suffix
+      jitter: 0.1 # Optional, float type, >=0 and <1
     # Optional
-    onFailure: retry|fallback|drop
+    onFailure: 'fallback'
 ```
 
-Note: If no custom fields are defined for retryStrategy then the **default** values are used.
+#### BackOff Parameters
 
-- `BackOff` - Defines the timing for retries, including the interval and the maximum attempts.
-  - `duration`: the time interval to wait before retry attempts
-    - Default: _1ms_
-  - `steps`: the limit on the number of times to try the sink write operation including retries
-    - Default: _Infinite_
-- `OnFailure` - Specifies the action to be undertaken if number of retries are exhausted
-  - retry: continue with the retry logic again
-  - fallback: write the leftover messages to a [fallback](https://numaflow.numaproj.io/user-guide/sinks/fallback/) sink
-  - drop: any messages left to be processed are dropped
-    - Default: _retry_
+The `BackOff` configuration defines the timing and limits for retries. Below are the available fields:
 
-### Constraints
+- **`interval`**: The time interval to wait before retry attempts.
 
-1. If the `onFailure` is defined as fallback, then there should be a fallback sink specified in the spec.
+  - **Type**: String with a timestamp suffix.
+  - **Default**: `1ms`.
 
-2. The steps defined should always be `> 0`
+- **`steps`**: The maximum number of retry attempts, including the initial attempt.
 
-## Example
+  - **Type**: Unsigned integer, must be greater than 0.
+  - **Default**: Infinite.
+
+- **`factor`**: A multiplier applied to the interval after each retry attempt.
+
+  - **Type**: Float, must be greater than or equal to 1.
+  - **Default**: `1.0`.
+
+- **`cap`**: The maximum value for the interval, limiting exponential backoff growth.
+
+  - **Type**: String with a timestamp suffix.
+    - **Default**: `indefinite` (no upper limit).
+
+- **`jitter`**: Adds randomness to the interval to avoid retry collisions.
+  - **Type**: Float, must be greater than or equal to 0 and less than 1.
+  - **Default**: `0`.
+
+#### OnFailure Actions
+
+The `onFailure` field specifies the action to take when retries are exhausted. Available options are:
+
+- **`retry`**: Restart the retry logic.
+- **`fallback`**: Route the remaining messages to a [fallback sink](https://numaflow.numaproj.io/user-guide/sinks/fallback/).
+- **`drop`**: Discard any unprocessed messages.
+
+- **Default**: `retry`.
+
+### Sink Example with Retry Strategy
 
 ```yaml
 sink:
   retryStrategy:
     backoff:
-      interval: '500ms'
+      interval: 500ms
       steps: 10
+      factor: 2.2
+      cap: 10s
     onFailure: 'fallback'
   udsink:
     container:
@@ -64,8 +90,8 @@ sink:
         image: my-fallback-sink
 ```
 
-### Explanation
+#### Explanation
 
-- Normal Operation: Data is processed by the primary sink container specified by `UDSink`.
-  The system retries up to 10 times for a batch write operation to succeed with an interval of 500 milliseconds between each retry.
-- After Maximum Retries: If all retries fail, data is then routed to a fallback sink instead.
+- **Primary Sink Processing**: The main sink container (`UDSink`) processes the data. If a batch write operation fails, the system will retry up to 10 times.
+- **Retry Behavior**: The first retry happens after 500 milliseconds. Each subsequent retry interval increases by multiplying the previous interval by 2.2, up to a maximum interval of 10 seconds.
+- **Fallback Handling**: If all retries are exhausted and the operation still fails, the data is routed to a fallback sink.

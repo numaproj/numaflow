@@ -6864,6 +6864,19 @@ spec:
                         type: object
                       serve:
                         type: object
+                      sqs:
+                        properties:
+                          awsRegion:
+                            type: string
+                          queueName:
+                            type: string
+                          queueOwnerAWSAccountID:
+                            type: string
+                        required:
+                        - awsRegion
+                        - queueName
+                        - queueOwnerAWSAccountID
+                        type: object
                       udsink:
                         properties:
                           container:
@@ -7456,6 +7469,19 @@ spec:
                         type: string
                     type: object
                   serve:
+                    type: object
+                  sqs:
+                    properties:
+                      awsRegion:
+                        type: string
+                      queueName:
+                        type: string
+                      queueOwnerAWSAccountID:
+                        type: string
+                    required:
+                    - awsRegion
+                    - queueName
+                    - queueOwnerAWSAccountID
                     type: object
                   udsink:
                     properties:
@@ -18258,6 +18284,19 @@ spec:
                               type: object
                             serve:
                               type: object
+                            sqs:
+                              properties:
+                                awsRegion:
+                                  type: string
+                                queueName:
+                                  type: string
+                                queueOwnerAWSAccountID:
+                                  type: string
+                              required:
+                              - awsRegion
+                              - queueName
+                              - queueOwnerAWSAccountID
+                              type: object
                             udsink:
                               properties:
                                 container:
@@ -18850,6 +18889,19 @@ spec:
                               type: string
                           type: object
                         serve:
+                          type: object
+                        sqs:
+                          properties:
+                            awsRegion:
+                              type: string
+                            queueName:
+                              type: string
+                            queueOwnerAWSAccountID:
+                              type: string
+                          required:
+                          - awsRegion
+                          - queueName
+                          - queueOwnerAWSAccountID
                           type: object
                         udsink:
                           properties:
@@ -30027,6 +30079,19 @@ spec:
                                   type: object
                                 serve:
                                   type: object
+                                sqs:
+                                  properties:
+                                    awsRegion:
+                                      type: string
+                                    queueName:
+                                      type: string
+                                    queueOwnerAWSAccountID:
+                                      type: string
+                                  required:
+                                  - awsRegion
+                                  - queueName
+                                  - queueOwnerAWSAccountID
+                                  type: object
                                 udsink:
                                   properties:
                                     container:
@@ -30619,6 +30684,19 @@ spec:
                                   type: string
                               type: object
                             serve:
+                              type: object
+                            sqs:
+                              properties:
+                                awsRegion:
+                                  type: string
+                                queueName:
+                                  type: string
+                                queueOwnerAWSAccountID:
+                                  type: string
+                              required:
+                              - awsRegion
+                              - queueName
+                              - queueOwnerAWSAccountID
                               type: object
                             udsink:
                               properties:
@@ -37758,6 +37836,19 @@ spec:
                         type: object
                       serve:
                         type: object
+                      sqs:
+                        properties:
+                          awsRegion:
+                            type: string
+                          queueName:
+                            type: string
+                          queueOwnerAWSAccountID:
+                            type: string
+                        required:
+                        - awsRegion
+                        - queueName
+                        - queueOwnerAWSAccountID
+                        type: object
                       udsink:
                         properties:
                           container:
@@ -38350,6 +38441,19 @@ spec:
                         type: string
                     type: object
                   serve:
+                    type: object
+                  sqs:
+                    properties:
+                      awsRegion:
+                        type: string
+                      queueName:
+                        type: string
+                      queueOwnerAWSAccountID:
+                        type: string
+                    required:
+                    - awsRegion
+                    - queueName
+                    - queueOwnerAWSAccountID
                     type: object
                   udsink:
                     properties:
