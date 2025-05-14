@@ -9,11 +9,11 @@ use tracing::info;
 
 pub use self::error::{Error, Result};
 use crate::app::orchestrator::OrchestratorState as CallbackState;
-use crate::app::start_main_server;
 use crate::app::store::cbstore::jetstream_store::JetStreamCallbackStore;
 use crate::app::store::datastore::jetstream::JetStreamDataStore;
 use crate::app::store::datastore::user_defined::UserDefinedStore;
 use crate::app::tracker::MessageGraph;
+use crate::app::{start_main_server_http, start_main_server_https};
 use crate::config::StoreType;
 use crate::config::generate_certs;
 use crate::metrics::start_https_metrics_server;
@@ -75,10 +75,20 @@ where
     ));
 
     // Start the main server, which serves the application.
-    let app_server_handle = tokio::spawn(start_main_server(app, tls_config, cln_token));
+    let app_server_https_handle = tokio::spawn(start_main_server_https(
+        app.clone(),
+        tls_config,
+        cln_token.clone(),
+    ));
+
+    let app_server_http_handle = tokio::spawn(start_main_server_http(app, cln_token));
 
     // TODO: is try_join the best? we need to short-circuit at the first failure
-    tokio::try_join!(flatten(app_server_handle), flatten(metrics_server_handle))?;
+    tokio::try_join!(
+        flatten(app_server_https_handle),
+        flatten(app_server_http_handle),
+        flatten(metrics_server_handle)
+    )?;
 
     Ok(())
 }
