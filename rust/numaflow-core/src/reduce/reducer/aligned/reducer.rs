@@ -96,7 +96,6 @@ impl ReduceTask {
                 return;
             }
 
-            info!(window=?self.window, "Reduce task completed successfully, deleting window");
             self.window_manager.delete_window(self.window.clone());
 
             // now that the processing is done, we can add this window to the GC WAL.

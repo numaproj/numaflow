@@ -122,6 +122,7 @@ impl SlidingWindowManager {
 
     /// Deletes a window after it is closed and GC is done.
     pub(crate) fn delete_window(&self, window: Window) {
+        // For testing purposes, we need to check if the window is in active_windows first
         let mut closed_windows = self.closed_windows.lock().unwrap();
         closed_windows.remove(&window);
     }

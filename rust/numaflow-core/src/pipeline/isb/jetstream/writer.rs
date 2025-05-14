@@ -50,6 +50,7 @@ pub(crate) struct JetstreamWriter {
     tracker_handle: TrackerHandle,
     sem: Arc<Semaphore>,
     watermark_handle: Option<WatermarkHandle>,
+    paf_concurrency: usize,
 }
 
 impl JetstreamWriter {
@@ -80,6 +81,7 @@ impl JetstreamWriter {
             tracker_handle,
             sem: Arc::new(Semaphore::new(paf_concurrency)),
             watermark_handle,
+            paf_concurrency,
         };
 
         // spawn a task for checking whether buffer is_full
@@ -256,6 +258,13 @@ impl JetstreamWriter {
                         cln_token.cancel();
                     })?;
             }
+
+            // wait for all the paf resolvers to complete before returning
+            let _ = Arc::clone(&self.sem)
+                .acquire_many_owned(self.paf_concurrency as u32)
+                .await
+                .expect("Failed to acquire semaphore permit");
+
             Ok(())
         });
         Ok(handle)
@@ -343,7 +352,7 @@ impl JetstreamWriter {
             .await
             .map_err(|_e| Error::ISB("Failed to acquire semaphore permit".to_string()))?;
 
-        let this = self.clone();
+        let mut this = self.clone();
 
         tokio::spawn(async move {
             let _permit = permit;
@@ -391,7 +400,7 @@ impl JetstreamWriter {
 
             // now the pafs have resolved, lets use the offsets to send watermark
             for (stream, offset) in offsets {
-                if let Some(watermark_handle) = this.watermark_handle.as_ref() {
+                if let Some(watermark_handle) = this.watermark_handle.as_mut() {
                     JetstreamWriter::publish_watermark(watermark_handle, stream, offset, &message)
                         .await;
                 }
@@ -461,7 +470,7 @@ impl JetstreamWriter {
 
     /// publishes the watermark for the given stream and offset
     async fn publish_watermark(
-        watermark_handle: &WatermarkHandle,
+        watermark_handle: &mut WatermarkHandle,
         stream: Stream,
         offset: Offset,
         message: &Message,

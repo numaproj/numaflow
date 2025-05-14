@@ -68,7 +68,6 @@ impl FixedWindowManager {
     /// end time.
     pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage> {
         let mut result = Vec::new();
-        info!(watermark = ?watermark.timestamp_millis(), "Closing windows");
 
         let mut active_windows = self.active_windows.lock().unwrap();
         let mut closed_windows = self.closed_windows.lock().unwrap();
@@ -77,7 +76,6 @@ impl FixedWindowManager {
 
         for window in active_windows.iter() {
             if window.end_time <= watermark {
-                info!(window = ?window, "Closing window");
                 // Create close message
                 let window_msg = AlignedWindowMessage {
                     operation: WindowOperation::Close,
@@ -100,7 +98,6 @@ impl FixedWindowManager {
 
     /// Deletes a window after it is closed and GC is done.
     pub(crate) fn gc_window(&self, window: Window) {
-        info!(window = ?window, "Deleting window");
         let mut closed_windows = self.closed_windows.lock().unwrap();
         closed_windows.remove(&window);
     }
@@ -109,18 +106,12 @@ impl FixedWindowManager {
     pub(crate) fn oldest_window(&self) -> Option<Window> {
         // First check closed windows
         let closed_windows = self.closed_windows.lock().unwrap();
-        for window in closed_windows.iter() {
-            info!(window = ?window, "oldest_window closed window");
-        }
         if !closed_windows.is_empty() {
             return closed_windows.iter().next().cloned();
         }
 
         // If no closed windows, check active windows
         let active_windows = self.active_windows.lock().unwrap();
-        for window in active_windows.iter() {
-            info!(window = ?window, "oldest_window active window");
-        }
         active_windows.iter().next().cloned()
     }
 }

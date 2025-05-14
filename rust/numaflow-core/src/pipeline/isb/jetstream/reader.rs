@@ -166,7 +166,7 @@ impl JetStreamReader {
     /// cancellationToken cancellation during the permit reservation and fetching messages,
     /// since rest of the operations should finish immediately.
     pub(crate) async fn streaming_read(
-        self,
+        mut self,
         cancel_token: CancellationToken,
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let (messages_tx, messages_rx) = mpsc::channel(2 * self.batch_size);
@@ -230,9 +230,8 @@ impl JetStreamReader {
                                 continue;
                             }
 
-                            if let Some(watermark_handle) = self.watermark_handle.as_ref() {
+                            if let Some(watermark_handle) = self.watermark_handle.as_mut() {
                                 let watermark = watermark_handle.fetch_watermark(message.offset.clone()).await;
-                                info!(watermark = ?watermark.timestamp_millis(), "Fetched watermark");
                                 message.watermark = Some(watermark);
                             }
 
