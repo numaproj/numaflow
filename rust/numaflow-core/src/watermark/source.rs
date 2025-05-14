@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::sync::Mutex;
+use std::sync::Mutex;
 use tokio::sync::mpsc::Receiver;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
@@ -232,7 +232,10 @@ impl SourceWatermarkHandle {
                 .unwrap_or_else(|e| error!("failed to send message: {:?}", e));
 
             // cache the active input partitions, we need it for publishing isb idle watermark
-            let mut active_input_partitions = self.active_input_partitions.lock().await;
+            let mut active_input_partitions = self
+                .active_input_partitions
+                .lock()
+                .expect("failed to acquire lock");
             active_input_partitions.insert(partition, true);
         }
 
@@ -391,11 +394,17 @@ impl SourceWatermarkHandle {
                 .fetch_idle_offset(stream)
                 .await
                 .unwrap_or(-1);
-            let active_input_partitions = self.active_input_partitions.lock().await;
-            for partition in active_input_partitions.keys() {
+            let active_input_partitions = {
+                let active_input_partitions = self
+                    .active_input_partitions
+                    .lock()
+                    .expect("failed to acquire lock");
+                active_input_partitions.keys().cloned().collect::<Vec<_>>()
+            };
+            for partition in active_input_partitions {
                 self.sender
                     .send(SourceActorMessage::PublishISBWatermark {
-                        input_partition: *partition,
+                        input_partition: partition,
                         stream: stream.clone(),
                         offset,
                         watermark: compute_wm.timestamp_millis(),
@@ -409,7 +418,10 @@ impl SourceWatermarkHandle {
                 .await;
         }
         // clear the cache since we published the idle watermarks
-        let mut active_input_partitions = self.active_input_partitions.lock().await;
+        let mut active_input_partitions = self
+            .active_input_partitions
+            .lock()
+            .expect("failed to acquire lock");
         active_input_partitions.clear();
     }
 }

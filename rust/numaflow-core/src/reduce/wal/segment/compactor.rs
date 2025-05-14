@@ -31,7 +31,7 @@ use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
 use tokio_stream::{StreamExt, wrappers::ReceiverStream};
 use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tracing::{debug, info};
 
 /// WALs can represent two Kinds of Windows and data is different for each Kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -128,11 +128,15 @@ impl Compactor {
                 }
             }
 
-            // drop the compactor append wal tx to signal the writer task to shutdown
+            info!("Cancellation token received, stopping compaction task...");
+            // drop the compactor append wal tx to signal the writer task to shut down
             drop(self.compaction_ao_tx);
 
             // Wait for the writer task to complete and return the result
-            self.writer_task_handle.await.expect("task failed")
+            let result = self.writer_task_handle.await.expect("task failed");
+            info!("Compaction task completed");
+
+            result
         }))
     }
 
@@ -159,6 +163,8 @@ impl Compactor {
     async fn compact_aligned(&self, replay_tx: Option<mpsc::Sender<Bytes>>) -> WalResult<()> {
         // Get the oldest time and scanned GC files
         let (oldest_time, gc_files) = self.build_aligned_compaction().await?;
+
+        debug!(oldest_time = ?oldest_time.timestamp_millis(), "Event time till which the data has been processed");
 
         let compact = AlignedCompaction(oldest_time);
 

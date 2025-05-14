@@ -4,14 +4,15 @@ use crate::message::{IntOffset, Message, MessageID, Offset};
 use crate::reduce::reducer::aligned::windower::AlignedWindowMessage;
 use crate::reduce::reducer::aligned::windower::WindowOperation;
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
-use chrono::Utc;
 use numaflow_pb::clients::reduce::reduce_client::ReduceClient;
 use numaflow_pb::clients::reduce::{ReduceRequest, ReduceResponse, reduce_request};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
+use tracing::info;
 
 impl From<&Message> for reduce_request::Payload {
     fn from(msg: &Message) -> Self {
@@ -108,7 +109,7 @@ impl From<UdReducerResponse> for Message {
             },
             value: result.value.into(),
             offset: Offset::Int(IntOffset::new(0, 0)),
-            event_time: Utc::now(),
+            event_time: utc_from_timestamp(window.end.unwrap()),
             watermark: window
                 .end
                 .map(|ts| utc_from_timestamp(ts) - chrono::Duration::milliseconds(1)),
@@ -135,10 +136,12 @@ impl UserDefinedAlignedReduce {
     }
 
     /// Calls the reduce_fn on the user-defined reducer on a separate tokio task.
+    /// If the cancellation token is triggered, it will stop processing and return early.
     pub(crate) async fn reduce_fn(
         &mut self,
         stream: ReceiverStream<AlignedWindowMessage>,
         result_tx: tokio::sync::mpsc::Sender<Message>,
+        cln_token: CancellationToken,
     ) -> Result<()> {
         // Convert AlignedWindowMessage stream to ReduceRequest stream
         let (req_tx, req_rx) = tokio::sync::mpsc::channel(100);
@@ -157,41 +160,63 @@ impl UserDefinedAlignedReduce {
             }
         });
 
-        // Call the gRPC reduce_fn with the converted stream
-        let mut response_stream = self
-            .client
-            .reduce_fn(ReceiverStream::new(req_rx))
-            .await
-            .map_err(|e| crate::Error::Reduce(format!("failed to call reduce_fn: {}", e)))?
-            .into_inner();
+        // Call the gRPC reduce_fn with the converted stream, but also watch for cancellation
+        let mut response_stream = tokio::select! {
+            // Wait for the gRPC call to complete
+            result = self.client.reduce_fn(ReceiverStream::new(req_rx)) => {
+                result
+                    .map_err(|e| crate::Error::Reduce(format!("failed to call reduce_fn: {}", e)))?
+                    .into_inner()
+            }
+
+            // Check for cancellation
+            _ = cln_token.cancelled() => {
+                info!("Cancellation detected while waiting for reduce_fn response");
+                request_handle.abort();
+                return Err(crate::Error::Cancelled());
+            }
+        };
 
         // Process the response stream
         let vertex_name = get_vertex_name();
         let mut index = 0;
 
-        while let Some(response) = response_stream
-            .message()
-            .await
-            .map_err(|e| crate::Error::Reduce(format!("failed to receive response: {}", e)))?
-        {
-            if response.eof {
-                break;
+        loop {
+            tokio::select! {
+                // Check for cancellation
+                _ = cln_token.cancelled() => {
+                    info!("Cancellation detected while processing responses, stopping");
+                    request_handle.abort();
+                    return Err(crate::Error::Cancelled());
+                }
+
+                // Process next response
+                response = response_stream.message() => {
+                    let response = response.map_err(|e| crate::Error::Reduce(format!("failed to receive response: {}", e)))?;
+                    let Some(response) = response else {
+                        break;
+                    };
+
+                    if response.eof {
+                        break;
+                    }
+
+                    // convert to Message so it can be sent to the ISB write channel
+                    let message: Message = UdReducerResponse {
+                        response,
+                        index,
+                        vertex_name,
+                    }
+                    .into();
+
+                    result_tx
+                        .send(message)
+                        .await
+                        .expect("failed to send response");
+
+                    index += 1;
+                }
             }
-
-            // convert to Message so it can be sent to the ISB write channel
-            let message: Message = UdReducerResponse {
-                response,
-                index,
-                vertex_name,
-            }
-            .into();
-
-            result_tx
-                .send(message)
-                .await
-                .expect("failed to send response");
-
-            index += 1;
         }
 
         // wait for the tokio task to complete
@@ -219,6 +244,7 @@ mod tests {
     use tempfile::TempDir;
     use tokio::sync::mpsc;
     use tokio_stream::wrappers::ReceiverStream;
+    use tokio_util::sync::CancellationToken;
 
     use super::*;
     use crate::message::{MessageID, StringOffset};
@@ -374,10 +400,13 @@ mod tests {
         // Create a channel to receive results
         let (result_tx, mut result_rx) = mpsc::channel(10);
 
+        // Create a cancellation token
+        let cln_token = CancellationToken::new();
+
         // Call reduce_fn
         let reduce_handle = tokio::spawn(async move {
             client
-                .reduce_fn(ReceiverStream::new(window_rx), result_tx)
+                .reduce_fn(ReceiverStream::new(window_rx), result_tx, cln_token)
                 .await
                 .expect("reduce_fn failed");
         });
@@ -570,10 +599,13 @@ mod tests {
         // Create a channel to receive results
         let (result_tx, mut result_rx) = mpsc::channel(100);
 
+        // Create a cancellation token
+        let cln_token = CancellationToken::new();
+
         // Call reduce_fn
         let reduce_handle = tokio::spawn(async move {
             client
-                .reduce_fn(ReceiverStream::new(window_rx), result_tx)
+                .reduce_fn(ReceiverStream::new(window_rx), result_tx, cln_token)
                 .await
                 .expect("reduce_fn failed");
         });
@@ -733,10 +765,13 @@ mod tests {
         // Create a channel to receive results
         let (result_tx, mut result_rx) = mpsc::channel(100);
 
+        // Create a cancellation token
+        let cln_token = CancellationToken::new();
+
         // Call reduce_fn
         let reduce_handle = tokio::spawn(async move {
             client
-                .reduce_fn(ReceiverStream::new(window_rx), result_tx)
+                .reduce_fn(ReceiverStream::new(window_rx), result_tx, cln_token)
                 .await
                 .expect("reduce_fn failed");
         });

@@ -22,9 +22,10 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
+use tokio::sync::mpsc;
 use tokio::sync::mpsc::Receiver;
-use tokio::sync::{Mutex, mpsc};
 use tokio_util::sync::CancellationToken;
 use tracing::error;
 
@@ -282,7 +283,10 @@ impl ISBWatermarkHandle {
                 });
 
                 // Update the latest fetched watermark
-                let mut latest_fetched_wm = self.latest_fetched_wm.lock().await;
+                let mut latest_fetched_wm = self
+                    .latest_fetched_wm
+                    .lock()
+                    .expect("failed to acquire lock");
                 *latest_fetched_wm = std::cmp::max(wm, *latest_fetched_wm);
 
                 wm
@@ -329,7 +333,7 @@ impl ISBWatermarkHandle {
         };
 
         // Remove the offset from the tracked offsets
-        let mut offset_set = self.offset_set.lock().await;
+        let mut offset_set = self.offset_set.lock().expect("failed to acquire lock");
         if let Some(set) = offset_set.get_mut(&offset.partition_idx) {
             if let Some(&OffsetWatermark { watermark, .. }) =
                 set.iter().find(|ow| ow.offset == offset.offset)
@@ -353,7 +357,7 @@ impl ISBWatermarkHandle {
             .unwrap_or(Watermark::from_timestamp_millis(-1).expect("failed to parse time"));
 
         // Insert the offset and watermark to the tracked offsets
-        let mut offset_set = self.offset_set.lock().await;
+        let mut offset_set = self.offset_set.lock().expect("failed to acquire lock");
         let set = offset_set.entry(offset.partition_idx).or_default();
         set.insert(OffsetWatermark {
             offset: offset.offset,
@@ -366,11 +370,15 @@ impl ISBWatermarkHandle {
         // Compute the minimum watermark
         let mut min_wm = self.compute_min_watermark().await;
 
-        let latest_fetched_wm = self.latest_fetched_wm.lock().await;
-
-        // Compare the min of latest fetched watermark and the min watermark from inflight messages
-        // and use the min
-        min_wm = std::cmp::min(min_wm, *latest_fetched_wm);
+        {
+            let latest_fetched_wm = self
+                .latest_fetched_wm
+                .lock()
+                .expect("failed to acquire lock");
+            // Compare the min of latest fetched watermark and the min watermark from inflight messages
+            // and use the min
+            min_wm = std::cmp::min(min_wm, *latest_fetched_wm);
+        }
 
         // If there are no inflight messages or windows, get the head idle watermark
         if min_wm.timestamp_millis() == -1 {
@@ -430,6 +438,7 @@ impl ISBWatermarkHandle {
                 .unwrap_or(Watermark::from_timestamp_millis(-1).unwrap());
             }
         }
+
         self.get_lowest_watermark()
             .await
             .unwrap_or(Watermark::from_timestamp_millis(-1).unwrap())
@@ -437,7 +446,7 @@ impl ISBWatermarkHandle {
 
     /// Gets the lowest watermark among all the inflight requests
     async fn get_lowest_watermark(&self) -> Option<Watermark> {
-        let offset_set = self.offset_set.lock().await;
+        let offset_set = self.offset_set.lock().expect("failed to acquire lock");
         offset_set
             .values()
             .filter_map(|set| set.iter().next().map(|ow| ow.watermark))

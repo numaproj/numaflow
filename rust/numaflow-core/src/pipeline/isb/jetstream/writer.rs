@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use async_nats::jetstream::Context;
 use async_nats::jetstream::consumer::PullConsumer;
-use async_nats::jetstream::context::PublishAckFuture;
+use async_nats::jetstream::context::{Publish, PublishAckFuture};
 use async_nats::jetstream::publish::PublishAck;
 use async_nats::jetstream::stream::RetentionPolicy::Limits;
 use bytes::BytesMut;
@@ -282,6 +282,10 @@ impl JetstreamWriter {
     ) -> Option<PublishAckFuture> {
         let mut log_counter = 500u16;
         let offset = message.offset.clone();
+
+        // message id will be used for deduplication
+        let id = message.id.to_string();
+
         let payload: BytesMut = message
             .try_into()
             .expect("message serialization should not fail");
@@ -315,7 +319,12 @@ impl JetstreamWriter {
                 }
                 Some(false) => match self
                     .js_ctx
-                    .publish(stream.name, payload.clone().freeze())
+                    .send_publish(
+                        stream.name,
+                        Publish::build()
+                            .payload(payload.clone().freeze())
+                            .message_id(&id),
+                    )
                     .await
                 {
                     Ok(paf) => break paf,

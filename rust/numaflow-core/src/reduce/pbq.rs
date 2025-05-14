@@ -11,6 +11,7 @@ use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
+use tracing::info;
 
 /// WAL for storing the data. If None, we will not persist the data.
 #[allow(clippy::upper_case_acronyms)]
@@ -110,6 +111,8 @@ impl PBQ {
 
             // Wait for compaction to complete
             compaction_handle.await.expect("task failed")?;
+
+            info!("PBQ streaming read completed");
             Ok(())
         });
 

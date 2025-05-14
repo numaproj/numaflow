@@ -65,6 +65,9 @@ pub enum Error {
     #[error("Reduce Error - {0}")]
     Reduce(String),
 
+    #[error("Cancelled")]
+    Cancelled(),
+
     #[error("WAL Error - {0}")]
     #[allow(clippy::upper_case_acronyms)]
     WAL(String),

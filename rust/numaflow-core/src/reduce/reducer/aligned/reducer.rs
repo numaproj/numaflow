@@ -60,6 +60,7 @@ impl ReduceTask {
     async fn start(
         mut self,
         message_stream: ReceiverStream<AlignedWindowMessage>,
+        cln_token: CancellationToken,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             // Create a local channel for results
@@ -69,7 +70,7 @@ impl ReduceTask {
             // Spawn a task to write results to JetStream
             let writer_handle = match self
                 .js_writer
-                .streaming_write(result_stream, CancellationToken::new())
+                .streaming_write(result_stream, cln_token.clone())
                 .await
             {
                 Ok(handle) => handle,
@@ -80,10 +81,20 @@ impl ReduceTask {
             };
 
             // Call the reduce function. This is a blocking call and will return only once the window
-            // is closed (or on error).
-            let result = self.client.reduce_fn(message_stream, result_tx).await;
+            // is closed, cancellation is detected, or on error.
+            let result = self
+                .client
+                .reduce_fn(message_stream, result_tx, cln_token)
+                .await;
 
             if let Err(e) = result {
+                // Check if this is a cancellation error
+                if let Error::Cancelled() = &e {
+                    info!("Cancellation detected while doing reduce operation");
+                    return;
+                }
+
+                // For other errors, log and send to error channel
                 error!(?e, "Error while doing reduce operation");
                 let _ = self.error_tx.send(e).await;
                 return;
@@ -158,9 +169,32 @@ struct AlignedReduceActor {
     /// TODO(vigith): why is this optional?
     gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
     window_manager: WindowManager,
+    /// Cancellation token to signal tasks to stop
+    cln_token: CancellationToken,
 }
 
 impl AlignedReduceActor {
+    /// Waits for all active tasks to complete
+    async fn wait_for_all_tasks(&mut self) {
+        info!(
+            "Waiting for {} active reduce tasks to complete",
+            self.active_streams.len()
+        );
+
+        // Collect all active streams to avoid borrowing issues
+        let active_streams: Vec<_> = self.active_streams.drain().collect();
+
+        for (window_id, active_stream) in active_streams {
+            // Wait for the task to complete
+            if let Err(e) = active_stream.task_handle.await {
+                error!(?window_id, err = ?e, "Reduce task for window failed during shutdown");
+            }
+            info!(?window_id, "Reduce task for window completed");
+        }
+
+        info!("All reduce tasks completed");
+    }
+
     pub(crate) async fn new(
         client: UserDefinedAlignedReduce,
         receiver: mpsc::Receiver<AlignedWindowMessage>,
@@ -168,6 +202,7 @@ impl AlignedReduceActor {
         error_tx: mpsc::Sender<Error>,
         gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
         window_manager: WindowManager,
+        cln_token: CancellationToken,
     ) -> Self {
         Self {
             client,
@@ -177,6 +212,7 @@ impl AlignedReduceActor {
             error_tx,
             gc_wal_tx,
             window_manager,
+            cln_token,
         }
     }
 
@@ -185,6 +221,7 @@ impl AlignedReduceActor {
         while let Some(msg) = self.receiver.recv().await {
             self.handle_window_message(msg.window, msg.operation).await;
         }
+        self.wait_for_all_tasks().await;
     }
 
     /// Handle a window message based on its operation type
@@ -221,7 +258,9 @@ impl AlignedReduceActor {
         };
 
         // Spawn the task and get the handle
-        let task_handle = reduce_task.start(message_stream).await;
+        let task_handle = reduce_task
+            .start(message_stream, self.cln_token.clone())
+            .await;
 
         // Store the stream and task handle
         self.active_streams.insert(
@@ -323,11 +362,12 @@ impl AlignedReducer {
             error_tx.clone(),
             gc_wal_handle,
             self.window_manager.clone(),
+            cln_token.clone(),
         )
         .await;
 
         // start the reduce actor
-        tokio::spawn(async move {
+        let actor_handle = tokio::spawn(async move {
             actor.run().await;
         });
 
@@ -340,12 +380,6 @@ impl AlignedReducer {
                     // Check for errors from reduce tasks
                     Some(err) = error_rx.recv() => {
                         self.handle_error(err, &cln_token);
-                    }
-
-                    // Check for cancellation
-                    _ = cln_token.cancelled() => {
-                        info!("Reduce component received cancellation signal");
-                        break;
                     }
 
                     // Process input messages
@@ -379,6 +413,13 @@ impl AlignedReducer {
                         }
                     }
                 }
+            }
+
+            drop(actor_tx);
+
+            // Wait for the actor to complete
+            if let Err(e) = actor_handle.await {
+                error!("Error waiting for actor to complete: {:?}", e);
             }
 
             info!(status=?self.final_result, "Reduce component successfully completed");
