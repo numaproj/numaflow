@@ -13,6 +13,21 @@ pub struct GcEvent {
     pub keys: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct Window {
+    /// start_time of the window
+    #[prost(message, optional, tag = "1")]
+    pub start_time: ::core::option::Option<::prost_types::Timestamp>,
+    /// end time of the window
+    #[prost(message, optional, tag = "2")]
+    pub end_time: ::core::option::Option<::prost_types::Timestamp>,
+}
+/// WindowManagerState is the state of the window manager
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct WindowManagerState {
+    #[prost(message, repeated, tag = "1")]
+    pub windows: ::prost::alloc::vec::Vec<Window>,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct Footer {
     /// the latest event time in the current Segment
     #[prost(message, optional, tag = "1")]

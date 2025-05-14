@@ -1,11 +1,17 @@
 use std::collections::BTreeSet;
+use std::fs::File;
+use std::io::{Read, Write};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use chrono::{DateTime, TimeZone, Utc};
-
 use crate::message::Message;
 use crate::reduce::reducer::aligned::windower::{AlignedWindowMessage, Window, WindowOperation};
+use chrono::{DateTime, TimeZone, Utc};
+use numaflow_pb::objects::wal::Window as ProtoWindow;
+use numaflow_pb::objects::wal::WindowManagerState;
+use prost::Message as ProtoMessage;
+use tracing::info;
 
 #[derive(Debug, Clone)]
 pub(crate) struct SlidingWindowManager {
@@ -17,16 +23,32 @@ pub(crate) struct SlidingWindowManager {
     active_windows: Arc<Mutex<BTreeSet<Window>>>,
     /// Closed windows sorted by end time
     closed_windows: Arc<Mutex<BTreeSet<Window>>>,
+    /// Optional path to save/load window state
+    state_file_path: Option<PathBuf>,
 }
 
 impl SlidingWindowManager {
-    pub(crate) fn new(window_length: Duration, slide: Duration) -> Self {
-        Self {
+    pub(crate) fn new(
+        window_length: Duration,
+        slide: Duration,
+        state_file_path: Option<PathBuf>,
+    ) -> Self {
+        let mut manager = Self {
             window_length,
             slide,
             active_windows: Arc::new(Mutex::new(BTreeSet::new())),
             closed_windows: Arc::new(Mutex::new(BTreeSet::new())),
+            state_file_path,
+        };
+
+        // If state file path is provided, try to load state from file
+        if manager.state_file_path.is_some() {
+            if let Err(e) = manager.load_state() {
+                tracing::warn!("Failed to load window state from file: {}", e);
+            }
         }
+
+        manager
     }
 
     /// Truncates a timestamp to the nearest multiple of the given duration
@@ -65,7 +87,7 @@ impl SlidingWindowManager {
     }
 
     /// Assigns windows to a message
-    pub(crate) fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage> {
+    pub(crate) fn assign_windows_for_message(&self, msg: Message) -> Vec<AlignedWindowMessage> {
         let windows = self.create_windows(&msg);
         let mut result = Vec::new();
 
@@ -139,6 +161,111 @@ impl SlidingWindowManager {
         let active_windows = self.active_windows.lock().unwrap();
         active_windows.iter().next().cloned()
     }
+
+    // The window_to_proto and proto_to_window methods have been replaced by
+    // From<&Window> for ProtoWindow and TryFrom<&ProtoWindow> for Window
+    // trait implementations in the windower.rs file
+
+    /// Saves the current window state to the specified file
+    fn save_state(&self) -> Result<(), Box<dyn std::error::Error>> {
+        if let Some(path) = &self.state_file_path {
+            // Merge active and closed windows into a single sorted vector
+            let active_windows = self.active_windows.lock().unwrap();
+            let closed_windows = self.closed_windows.lock().unwrap();
+
+            let mut all_windows: Vec<ProtoWindow> = Vec::new();
+
+            // Add all windows to the vector
+            for window in active_windows.iter() {
+                all_windows.push(window.into());
+            }
+
+            for window in closed_windows.iter() {
+                all_windows.push(window.into());
+            }
+
+            // Sort windows by start time
+            all_windows.sort_by(|a, b| {
+                let a_start = a.start_time.as_ref().unwrap().seconds;
+                let b_start = b.start_time.as_ref().unwrap().seconds;
+                a_start.cmp(&b_start)
+            });
+
+            // Create the state proto
+            let state = WindowManagerState {
+                windows: all_windows,
+            };
+
+            // Serialize the state
+            let mut buf = Vec::new();
+            state.encode(&mut buf)?;
+
+            // Write to file
+            let mut file = File::create(path)?;
+            file.write_all(&buf)?;
+
+            Ok(())
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Loads window state from the specified file
+    fn load_state(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let Some(path) = &self.state_file_path else {
+            return Ok(());
+        };
+
+        // Check if file exists
+        if !path.exists() {
+            return Ok(());
+        }
+
+        // Read file
+        let mut file = File::open(path)?;
+        let mut buf = Vec::new();
+        file.read_to_end(&mut buf)?;
+
+        // Deserialize the state
+        let state = WindowManagerState::decode(&buf[..])?;
+
+        // Convert proto windows to core windows and add to active_windows
+        let mut active_windows = self.active_windows.lock().unwrap();
+
+        for proto_window in state.windows {
+            if let Ok(window) = Window::try_from(&proto_window) {
+                active_windows.insert(window);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Assigns windows to a message, dropping messages with event time earlier than the oldest window's start time
+    pub(crate) fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage> {
+        // Check if message should be dropped based on event time
+        if let Some(oldest_window) = self.oldest_window() {
+            if msg.event_time < oldest_window.start_time {
+                info!(
+                    "Dropping message with event time {} as it is before the oldest window start time {}",
+                    msg.event_time, oldest_window.start_time
+                );
+                return Vec::new();
+            }
+        }
+
+        // Process normally
+        self.assign_windows_for_message(msg)
+    }
+}
+
+impl Drop for SlidingWindowManager {
+    fn drop(&mut self) {
+        // Save state when the manager is dropped
+        if let Err(e) = self.save_state() {
+            tracing::error!("Failed to save window state: {}", e);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -150,7 +277,8 @@ mod tests {
     #[tokio::test]
     async fn test_assign_windows_length_divisible_by_slide() {
         // Create a sliding windower with 60s window length and 20s slide
-        let windower = SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(20));
+        let windower =
+            SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(20), None);
 
         // Base time: 60000ms (60s)
         let base_time = Utc.timestamp_millis_opt(60000).unwrap();
@@ -224,7 +352,8 @@ mod tests {
     #[tokio::test]
     async fn test_assign_windows_length_not_divisible_by_slide() {
         // Create a sliding windower with 60s window length and 40s slide
-        let windower = SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(40));
+        let windower =
+            SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(40), None);
 
         // Base time: 600s
         let base_time = Utc.timestamp_opt(600, 0).unwrap();
@@ -290,7 +419,8 @@ mod tests {
         let base_time = Utc.timestamp_millis_opt(60000).unwrap();
 
         // Create a sliding windower with 60s window length and 10s slide
-        let windower = SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(10));
+        let windower =
+            SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(10), None);
 
         // Create windows
         let window1 = Window::new(base_time, base_time + chrono::Duration::seconds(60));
@@ -370,7 +500,8 @@ mod tests {
         let base_time = Utc.timestamp_millis_opt(60000).unwrap();
 
         // Create a sliding windower with 60s window length and 10s slide
-        let windower = SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(10));
+        let windower =
+            SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(10), None);
 
         // Create windows
         let window1 = Window::new(base_time, base_time + chrono::Duration::seconds(60));
@@ -444,7 +575,8 @@ mod tests {
         let base_time = Utc.timestamp_millis_opt(60000).unwrap();
 
         // Create a sliding windower with 60s window length and 10s slide
-        let windower = SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(10));
+        let windower =
+            SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(10), None);
 
         // Create windows
         let window1 = Window::new(base_time, base_time + chrono::Duration::seconds(60));
@@ -520,7 +652,8 @@ mod tests {
     #[test]
     fn test_assign_windows_with_small_slide() {
         // Create a sliding windower with 60s window length and 10s slide
-        let windower = SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(10));
+        let windower =
+            SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(10), None);
 
         // Create a test message with event time at 105s
         let msg = Message {
@@ -604,5 +737,181 @@ mod tests {
                 _ => panic!("Expected Append operation"),
             }
         }
+    }
+
+    #[test]
+    fn test_save_and_load_state() {
+        use tempfile::tempdir;
+
+        // Create a temporary directory for the test
+        let temp_dir = tempdir().unwrap();
+        let state_file_path = temp_dir.path().join("window_state.bin");
+
+        // Create a sliding windower with 60s window length and 10s slide
+        let windower = SlidingWindowManager::new(
+            Duration::from_secs(60),
+            Duration::from_secs(10),
+            Some(state_file_path.clone()),
+        );
+
+        // Base time: 60000ms (60s)
+        let base_time = Utc.timestamp_millis_opt(60000).unwrap();
+
+        // Create windows
+        let window1 = Window::new(base_time, base_time + chrono::Duration::seconds(60));
+        let window2 = Window::new(
+            base_time - chrono::Duration::seconds(10),
+            base_time + chrono::Duration::seconds(50),
+        );
+        let window3 = Window::new(
+            base_time - chrono::Duration::seconds(20),
+            base_time + chrono::Duration::seconds(40),
+        );
+
+        // Insert windows manually
+        {
+            let mut active_windows = windower.active_windows.lock().unwrap();
+            active_windows.insert(window1.clone());
+            active_windows.insert(window2.clone());
+            active_windows.insert(window3.clone());
+        }
+
+        // Manually save state
+        windower.save_state().unwrap();
+
+        // Verify file exists
+        assert!(state_file_path.exists());
+
+        // Create a new windower with the same state file
+        let windower2 = SlidingWindowManager::new(
+            Duration::from_secs(60),
+            Duration::from_secs(10),
+            Some(state_file_path.clone()),
+        );
+
+        // Verify windows were loaded
+        {
+            let active_windows = windower2.active_windows.lock().unwrap();
+            assert_eq!(active_windows.len(), 3);
+            assert!(active_windows.contains(&window1));
+            assert!(active_windows.contains(&window2));
+            assert!(active_windows.contains(&window3));
+        }
+
+        // Clean up
+        temp_dir.close().unwrap();
+    }
+
+    #[test]
+    fn test_drop_old_messages() {
+        // Create a sliding windower with 60s window length and 10s slide
+        let windower =
+            SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(10), None);
+
+        // Base time: 60000ms (60s)
+        let base_time = Utc.timestamp_millis_opt(60000).unwrap();
+
+        // Create a message with event time before any window
+        let old_msg = Message {
+            event_time: base_time - chrono::Duration::seconds(70),
+            ..Default::default()
+        };
+
+        // First, create some windows by processing a valid message
+        let valid_msg1 = Message {
+            event_time: base_time + chrono::Duration::seconds(10),
+            ..Default::default()
+        };
+
+        // This will create windows and add them to active_windows
+        windower.assign_windows(valid_msg1.clone());
+
+        // Now try to process a message that's too old
+        let window_msgs = windower.assign_windows(old_msg);
+
+        // Should be dropped (empty vector)
+        assert_eq!(window_msgs.len(), 0);
+
+        // Process the same message again to test append operations
+        let window_msgs = windower.assign_windows(valid_msg1.clone());
+
+        // Should not be dropped - for sliding windows, we expect 6 windows
+        assert_eq!(window_msgs.len(), 6);
+
+        // Check that one of the windows has the expected start time
+        let has_expected_window = window_msgs
+            .iter()
+            .any(|wm| wm.window.start_time == base_time);
+        assert!(
+            has_expected_window,
+            "No window found with expected start time"
+        );
+
+        // Check that all operations are Append (since windows already exist)
+        for window_msg in &window_msgs {
+            match &window_msg.operation {
+                WindowOperation::Append(msg) => {
+                    assert_eq!(msg.event_time, valid_msg1.event_time);
+                }
+                _ => panic!("Expected Append operation"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_drop_trait_implementation() {
+        use tempfile::tempdir;
+
+        // Create a temporary directory for the test
+        let temp_dir = tempdir().unwrap();
+        let state_file_path = temp_dir.path().join("window_state.bin");
+
+        // Create a scope to test Drop implementation
+        {
+            // Create a sliding windower with 60s window length and 10s slide
+            let windower = SlidingWindowManager::new(
+                Duration::from_secs(60),
+                Duration::from_secs(10),
+                Some(state_file_path.clone()),
+            );
+
+            // Base time: 60000ms (60s)
+            let base_time = Utc.timestamp_millis_opt(60000).unwrap();
+
+            // Create windows
+            let window1 = Window::new(base_time, base_time + chrono::Duration::seconds(60));
+            let window2 = Window::new(
+                base_time - chrono::Duration::seconds(10),
+                base_time + chrono::Duration::seconds(50),
+            );
+
+            // Insert windows manually
+            {
+                let mut active_windows = windower.active_windows.lock().unwrap();
+                active_windows.insert(window1.clone());
+                active_windows.insert(window2.clone());
+            }
+
+            // The windower will be dropped at the end of this scope, which should save the state
+        }
+
+        // Verify file exists
+        assert!(state_file_path.exists());
+
+        // Create a new windower with the same state file
+        let windower2 = SlidingWindowManager::new(
+            Duration::from_secs(60),
+            Duration::from_secs(10),
+            Some(state_file_path.clone()),
+        );
+
+        // Verify windows were loaded
+        {
+            let active_windows = windower2.active_windows.lock().unwrap();
+            assert_eq!(active_windows.len(), 2);
+        }
+
+        // Clean up
+        temp_dir.close().unwrap();
     }
 }

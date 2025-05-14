@@ -14,6 +14,18 @@ message GCEvent {
   repeated string keys = 3;
 }
 
+message Window {
+  // start_time of the window
+  google.protobuf.Timestamp start_time = 1;
+  // end time of the window
+  google.protobuf.Timestamp end_time = 2;
+}
+
+// WindowManagerState is the state of the window manager
+message WindowManagerState {
+  repeated Window windows = 1;
+}
+
 message Footer {
   // the latest event time in the current Segment
   google.protobuf.Timestamp latest_event_time = 1;

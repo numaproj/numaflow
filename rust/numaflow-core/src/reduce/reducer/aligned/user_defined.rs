@@ -14,6 +14,18 @@ use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tracing::info;
 
+impl From<Message> for reduce_request::Payload {
+    fn from(msg: Message) -> Self {
+        Self {
+            keys: msg.keys.to_vec(),
+            value: msg.value.to_vec(),
+            event_time: Some(prost_timestamp_from_utc(msg.event_time)),
+            watermark: msg.watermark.map(prost_timestamp_from_utc),
+            headers: msg.headers.clone(),
+        }
+    }
+}
+
 impl From<&Message> for reduce_request::Payload {
     fn from(msg: &Message) -> Self {
         Self {
@@ -56,8 +68,16 @@ impl From<AlignedWindowMessage> for ReduceRequest {
                     windows: vec![window_obj],
                 });
 
+                // For Close operations, we still need to set payload to Some
+                // even though there's no message, to ensure consistent behavior
                 ReduceRequest {
-                    payload: None,
+                    payload: Some(reduce_request::Payload {
+                        keys: vec![],
+                        value: vec![],
+                        event_time: None,
+                        watermark: None,
+                        headers: Default::default(),
+                    }),
                     operation,
                 }
             }

@@ -404,7 +404,7 @@ impl AlignedReducer {
                             }
                         }
 
-                        // Process the message through the windower
+                        // Process the message through the windower, dropping messages with event time earlier than the oldest window's start time
                         let window_messages = self.window_manager.assign_windows(msg);
 
                         // Send each window message to the actor
@@ -785,7 +785,8 @@ mod tests {
                 .await;
 
         // Create a sliding window manager with 60s window length and 20s slide
-        let windower = SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(20));
+        let windower =
+            SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(20), None);
 
         // Set up JetStream
         let js_url = "localhost:4222";

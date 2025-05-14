@@ -327,6 +327,15 @@ async fn start_reduce_forwarder(
     config: PipelineConfig,
     reduce_vtx_config: ReduceVtxConfig,
 ) -> Result<()> {
+    // Determine the state file path for window manager
+    let state_file_path = if let Some(storage_config) = &reduce_vtx_config.wal_storage_config {
+        let mut path = storage_config.path.clone();
+        path.push(format!("{}-window-state.state", config.vertex_name));
+        Some(path)
+    } else {
+        None
+    };
+
     let window_manager = match &reduce_vtx_config.reducer_config.window_config.window_type {
         WindowType::Fixed(fixed_config) => {
             WindowManager::Fixed(FixedWindowManager::new(fixed_config.length))
@@ -334,6 +343,7 @@ async fn start_reduce_forwarder(
         WindowType::Sliding(sliding_config) => WindowManager::Sliding(SlidingWindowManager::new(
             sliding_config.length,
             sliding_config.slide,
+            state_file_path,
         )),
         WindowType::Session(_) | WindowType::Accumulator(_) => {
             panic!("Session and Accumulator windows are not supported yet");

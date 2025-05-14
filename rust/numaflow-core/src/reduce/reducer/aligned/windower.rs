@@ -1,5 +1,5 @@
 use crate::message::Message;
-use crate::shared::grpc::prost_timestamp_from_utc;
+use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use numaflow_pb::objects::wal::GcEvent;
@@ -21,7 +21,7 @@ pub(crate) enum WindowManager {
 }
 
 impl WindowManager {
-    /// Assigns windows to a message. There can be more than one for Sliding Window.
+    /// Assigns windows to a message, dropping messages with event time earlier than the oldest window's start time
     pub(crate) fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage> {
         match self {
             WindowManager::Fixed(manager) => manager.assign_windows(msg),
@@ -87,6 +87,35 @@ impl From<Window> for GcEvent {
             start_time: Some(prost_timestamp_from_utc(value.start_time)),
             end_time: Some(prost_timestamp_from_utc(value.end_time)),
             keys: vec![],
+        }
+    }
+}
+
+impl From<&Window> for numaflow_pb::objects::wal::Window {
+    fn from(window: &Window) -> Self {
+        Self {
+            start_time: Some(prost_timestamp_from_utc(window.start_time)),
+            end_time: Some(prost_timestamp_from_utc(window.end_time)),
+        }
+    }
+}
+
+impl TryFrom<&numaflow_pb::objects::wal::Window> for Window {
+    type Error = &'static str;
+
+    fn try_from(proto: &numaflow_pb::objects::wal::Window) -> Result<Self, Self::Error> {
+        let start_time = proto
+            .start_time
+            .as_ref()
+            .map(|ts| utc_from_timestamp(ts.clone()));
+        let end_time = proto
+            .end_time
+            .as_ref()
+            .map(|ts| utc_from_timestamp(ts.clone()));
+
+        match (start_time, end_time) {
+            (Some(start), Some(end)) => Ok(Window::new(start, end)),
+            _ => Err("Missing start or end time in proto window"),
         }
     }
 }
