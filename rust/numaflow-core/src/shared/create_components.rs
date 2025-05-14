@@ -35,8 +35,8 @@ use numaflow_pb::clients::reduce::reduce_client::ReduceClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
-use tokio_util::sync::CancellationToken;
 use numaflow_sqs::sink::SqsSinkBuilder;
+use tokio_util::sync::CancellationToken;
 
 /// Creates a sink writer based on the configuration
 pub(crate) async fn create_sink_writer(
@@ -151,6 +151,13 @@ pub(crate) async fn create_sink_writer(
 
                 Ok(sink_writer_builder
                     .fb_sink_client(SinkClientType::UserDefined(sink_grpc_client.clone()))
+                    .build()
+                    .await?)
+            }
+            SinkType::Sqs(sqs_sink_config) => {
+                let sqs_sink = SqsSinkBuilder::new(sqs_sink_config).build().await?;
+                Ok(sink_writer_builder
+                    .fb_sink_client(SinkClientType::Sqs(sqs_sink.clone()))
                     .build()
                     .await?)
             }

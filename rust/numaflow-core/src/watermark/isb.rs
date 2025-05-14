@@ -26,7 +26,7 @@ use std::time::Duration;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{Mutex, mpsc};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::error;
 
 use crate::config::pipeline::ToVertexConfig;
 use crate::config::pipeline::isb::Stream;

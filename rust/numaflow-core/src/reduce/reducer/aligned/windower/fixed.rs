@@ -5,7 +5,6 @@ use std::time::Duration;
 use crate::message::Message;
 use crate::reduce::reducer::aligned::windower::{AlignedWindowMessage, Window, WindowOperation};
 use chrono::{DateTime, TimeZone, Utc};
-use tracing::info;
 
 #[derive(Debug, Clone)]
 pub(crate) struct FixedWindowManager {
