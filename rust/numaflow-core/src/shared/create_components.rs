@@ -36,6 +36,7 @@ use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use tokio_util::sync::CancellationToken;
+use numaflow_sqs::sink::SqsSinkBuilder;
 
 /// Creates a sink writer based on the configuration
 pub(crate) async fn create_sink_writer(
@@ -97,6 +98,15 @@ pub(crate) async fn create_sink_writer(
                 tracker_handle,
             )
             .retry_config(primary_sink.retry_config.unwrap_or_default())
+        }
+        SinkType::Sqs(sqs_sink_config) => {
+            let sqs_sink = SqsSinkBuilder::new(sqs_sink_config).build().await?;
+            SinkWriterBuilder::new(
+                batch_size,
+                read_timeout,
+                SinkClientType::Sqs(sqs_sink.clone()),
+                tracker_handle,
+            )
         }
     };
 
@@ -347,7 +357,7 @@ pub async fn create_source(
             .await?;
             Ok(Source::new(
                 batch_size,
-                source::SourceType::SQS(sqs),
+                source::SourceType::Sqs(sqs),
                 tracker_handle,
                 source_config.read_ahead,
                 transformer,

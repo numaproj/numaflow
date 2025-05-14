@@ -21,7 +21,7 @@ use chrono::Utc;
 use numaflow_jetstream::JetstreamSource;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pulsar::source::PulsarSource;
-use numaflow_sqs::source::SQSSource;
+use numaflow_sqs::source::SqsSource;
 use std::sync::Arc;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
@@ -88,9 +88,7 @@ pub(crate) enum SourceType {
         generator::GeneratorLagReader,
     ),
     Pulsar(PulsarSource),
-    #[allow(clippy::upper_case_acronyms)]
-    #[allow(dead_code)] // TODO(SQS): remove it when integrated with controller
-    SQS(SQSSource),
+    Sqs(SqsSource),
     Jetstream(JetstreamSource),
 }
 
@@ -228,7 +226,7 @@ impl Source {
                     actor.run().await;
                 });
             }
-            SourceType::SQS(sqs_source) => {
+            SourceType::Sqs(sqs_source) => {
                 tokio::spawn(async move {
                     let actor = SourceActor::new(
                         receiver,
