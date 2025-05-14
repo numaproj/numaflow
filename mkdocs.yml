@@ -56,6 +56,7 @@ nav:
           - user-guide/sources/pulsar.md
           - user-guide/sources/nats.md
           - user-guide/sources/user-defined-sources.md
+          - user-guide/sources/sqs.md
           - Data Transformer:
               - Overview: "user-guide/sources/transformer/overview.md"
               - Built-in Transformers:
@@ -122,6 +123,11 @@ nav:
       - Use Cases:
           - user-guide/use-cases/overview.md
           - user-guide/use-cases/monitoring-and-observability.md
+      - UI:
+          - user-guide/UI/errors.md
+          - user-guide/UI/logs.md
+          - user-guide/UI/metrics-tab.md
+          - user-guide/UI/pods-view.md
   - Operator Manual:
       - Releases ⧉: "operations/releases.md"
       - operations/installation.md

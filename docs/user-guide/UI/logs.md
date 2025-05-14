@@ -109,5 +109,3 @@ The **Logs View** allows users to inspect the logs of a specific container withi
   ![Error Filter](../../assets/logs/logs-filter-error.png)
 
 ---
-
-## Walkthrough Video
