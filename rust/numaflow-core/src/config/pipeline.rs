@@ -666,7 +666,7 @@ mod tests {
     use numaflow_pulsar::source::PulsarSourceConfig;
 
     use super::*;
-    use crate::config::components::sink::{BlackholeConfig, LogConfig, SinkType};
+    use crate::config::components::sink::{BlackholeConfig, LogConfig, RetryConfig, SinkType};
     use crate::config::components::source::{GeneratorConfig, SourceType};
     use crate::config::pipeline::map::{MapType, UserDefinedConfig};
 
@@ -753,7 +753,7 @@ mod tests {
             vertex_type_config: VertexType::Sink(SinkVtxConfig {
                 sink_config: SinkConfig {
                     sink_type: SinkType::Blackhole(BlackholeConfig {}),
-                    retry_config: None,
+                    retry_config: Some(RetryConfig::default()),
                 },
                 fb_sink_config: None,
                 serving_store_config: Some(ServingStoreType::Nats(NatsStoreConfig {
