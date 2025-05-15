@@ -205,6 +205,35 @@ jobs:
           path: rust/entrypoint-linux-amd64
           if-no-files-found: error
 
+  build-rust-arm64:
+    runs-on: ubuntu-24.04-arm
+    defaults:
+      run:
+        working-directory: ./rust
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update Rust Toolchain Target
+        run: |
+          echo "targets = ['aarch64-unknown-linux-gnu']" >> rust-toolchain.toml
+      - name: Build binary
+        run: |
+          cd ../
+          docker run -v ./rust/:/app/ -w /app --rm ubuntu:24.04 bash build.sh aarch64
+      - name: Rename binary
+        run: |
+          cp -pv target/aarch64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-arm64
+          cp -pv target/aarch64-unknown-linux-gnu/release/entrypoint entrypoint-linux-arm64
+      - name: Upload numaflow binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: numaflow-rs-linux-arm64
+          path: rust/numaflow-rs-linux-arm64
+      - name: Upload entrypoint binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: entrypoint-linux-arm64
+          path: rust/entrypoint-linux-arm64
+
   e2e-tests:
     name: E2E Tests
     runs-on: ubuntu-24.04
