@@ -563,10 +563,10 @@ impl SinkWriter {
                 match status {
                     Ok(true) => break,
                     Ok(false) => {
-                        attempts += 1;
                         warn!(
                             "Retry attempt {} due to retryable error. Errors: {:?}",
-                            attempts, error_map
+                            attempts + 1,
+                            error_map
                         );
                         write_errors_total += error_map.len();
                     }
@@ -587,6 +587,7 @@ impl SinkWriter {
                 let delay = Self::calculate_exponential_delay(retry_config, attempts, &mut rng);
                 // Sleep for the calculated delay
                 sleep(Duration::from_millis(delay as u64)).await;
+                attempts += 1;
             }
 
             // If after the retries we still have messages to process, handle the post retry failures
