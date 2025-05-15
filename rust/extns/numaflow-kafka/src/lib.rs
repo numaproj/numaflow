@@ -128,6 +128,7 @@ impl KafkaActor {
             .set("enable.partition.eof", "false")
             .set("session.timeout.ms", "6000")
             .set("enable.auto.commit", "false")
+            .set("auto.offset.reset", "earliest") // TODO: Make this configurable
             .set_log_level(RDKafkaLogLevel::Debug);
 
         if let Some(auth) = config.auth {
@@ -316,10 +317,11 @@ impl KafkaActor {
 
     async fn pending_messages(&mut self) -> Result<Option<usize>> {
         let mut total_pending = 0;
+        let timeout = Duration::from_secs(5);
 
         let metadata = self
             .consumer
-            .fetch_metadata(Some(&self.topic), Duration::from_secs(1))
+            .fetch_metadata(Some(&self.topic), timeout)
             .map_err(|e| Error::Kafka(format!("Failed to fetch metadata: {}", e)))?;
 
         let Some(topic_metadata) = metadata.topics().first() else {
@@ -332,12 +334,12 @@ impl KafkaActor {
             tpl.add_partition(&self.topic, partition as i32);
             let committed = self
                 .consumer
-                .committed_offsets(tpl, Duration::from_secs(1))
+                .committed_offsets(tpl, timeout)
                 .map_err(|e| Error::Kafka(format!("Failed to get committed offsets: {}", e)))?;
 
             let (low, high) = self
                 .consumer
-                .fetch_watermarks(&self.topic, partition as i32, Duration::from_secs(1))
+                .fetch_watermarks(&self.topic, partition as i32, timeout)
                 .map_err(|e| Error::Kafka(format!("Failed to fetch watermarks: {}", e)))?;
 
             let committed_offset = match committed.elements_for_topic(&self.topic).first() {
@@ -396,5 +398,273 @@ impl KafkaSource {
         let _ = self.actor_tx.send(msg).await;
         rx.await
             .map_err(|_| Error::Other("Actor task terminated".into()))?
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rdkafka::ClientConfig;
+    use rdkafka::message::{Header, OwnedHeaders};
+    use rdkafka::producer::{FutureProducer, FutureRecord};
+    use tokio::time::Instant;
+
+    async fn setup_kafka() -> (FutureProducer, String) {
+        let producer: FutureProducer = ClientConfig::new()
+            .set("bootstrap.servers", "localhost:9092")
+            .create()
+            .expect("Failed to create producer");
+
+        let topic_name = format!(
+            "kafka_source_test_topic_{}",
+            uuid::Uuid::new_v4().to_string().replace("-", "")
+        );
+
+        // Create topic if it doesn't exist
+        let admin_client = ClientConfig::new()
+            .set("bootstrap.servers", "localhost:9092")
+            .create::<rdkafka::admin::AdminClient<_>>()
+            .expect("Failed to create admin client");
+
+        let topic_config = rdkafka::admin::NewTopic::new(
+            topic_name.as_str(),
+            1,
+            rdkafka::admin::TopicReplication::Fixed(1),
+        );
+        let _ = admin_client
+            .create_topics(&[topic_config], &rdkafka::admin::AdminOptions::new())
+            .await
+            .expect("Failed to create topic");
+
+        (producer, topic_name)
+    }
+
+    #[cfg(feature = "kafka-tests")]
+    #[tokio::test]
+    async fn test_kafka_source() {
+        let (producer, topic_name) = setup_kafka().await;
+
+        // Produce 100 messages
+        for i in 0..100 {
+            let payload = format!("message {}", i);
+            let key = format!("key {}", i);
+            let record = FutureRecord::to(&topic_name).payload(&payload).key(&key);
+            producer
+                .send(record, Duration::from_secs(5))
+                .await
+                .expect("Failed to send message");
+        }
+
+        let config = KafkaSourceConfig {
+            brokers: vec!["localhost:9092".to_string()],
+            topic: topic_name.clone(),
+            consumer_group: "test_consumer_group".to_string(),
+            auth: None,
+            tls: None,
+        };
+
+        let read_timeout = Duration::from_secs(5);
+        let source = KafkaSource::connect(config, 30, read_timeout)
+            .await
+            .expect("Failed to connect to Kafka");
+
+        let pending = source
+            .pending_messages()
+            .await
+            .expect("Failed to get pending messages");
+        assert_eq!(
+            pending,
+            Some(100),
+            "Pending messages should include unacknowledged messages"
+        );
+
+        // Read messages
+        let messages = source
+            .read_messages()
+            .await
+            .expect("Failed to read messages");
+        assert_eq!(messages.len(), 30);
+        let pending = source
+            .pending_messages()
+            .await
+            .expect("Failed to get pending messages");
+        assert_eq!(
+            pending,
+            Some(100),
+            "Pending messages should include unacknowledged messages"
+        );
+
+        // Ack messages
+        let offsets: Vec<(i32, i64)> = messages
+            .iter()
+            .map(|msg| (msg.partition, msg.offset))
+            .collect();
+        source
+            .ack_messages(offsets)
+            .await
+            .expect("Failed to ack messages");
+
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        let pending = source
+            .pending_messages()
+            .await
+            .expect("Failed to get pending messages");
+        assert_eq!(
+            pending,
+            Some(70),
+            "Pending messages should be 70 after acking 30 messages"
+        );
+
+        // Read remaining messages
+        let messages = source
+            .read_messages()
+            .await
+            .expect("Failed to read messages");
+        assert_eq!(messages.len(), 30);
+
+        // Ack remaining messages
+        let offsets: Vec<(i32, i64)> = messages
+            .iter()
+            .map(|msg| (msg.partition, msg.offset))
+            .collect();
+        source
+            .ack_messages(offsets)
+            .await
+            .expect("Failed to ack messages");
+
+        // Check pending messages
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        let pending = source
+            .pending_messages()
+            .await
+            .expect("Failed to get pending messages");
+        assert_eq!(
+            pending,
+            Some(40),
+            "Pending messages should be 40 after acking another 30 messages"
+        );
+
+        // Read remaining messages
+        let messages = source
+            .read_messages()
+            .await
+            .expect("Failed to read messages");
+        assert_eq!(messages.len(), 30);
+
+        // Ack remaining messages
+        let offsets: Vec<(i32, i64)> = messages
+            .iter()
+            .map(|msg| (msg.partition, msg.offset))
+            .collect();
+        source
+            .ack_messages(offsets)
+            .await
+            .expect("Failed to ack messages");
+
+        // Check pending messages
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        let pending = source
+            .pending_messages()
+            .await
+            .expect("Failed to get pending messages");
+        assert_eq!(
+            pending,
+            Some(10),
+            "Pending messages should be 10 after acking another 30 messages"
+        );
+
+        // Read remaining messages
+        let messages = source
+            .read_messages()
+            .await
+            .expect("Failed to read messages");
+        assert_eq!(messages.len(), 10);
+
+        // Ack remaining messages
+        let offsets: Vec<(i32, i64)> = messages
+            .iter()
+            .map(|msg| (msg.partition, msg.offset))
+            .collect();
+        source
+            .ack_messages(offsets)
+            .await
+            .expect("Failed to ack messages");
+
+        // Check pending messages
+        tokio::time::sleep(Duration::from_millis(5)).await;
+        let pending = source
+            .pending_messages()
+            .await
+            .expect("Failed to get pending messages");
+        assert_eq!(
+            pending,
+            Some(0),
+            "Pending messages should be 0 after acking all messages"
+        );
+
+        // Ensure read operation returns after the read timeout
+        let start = Instant::now();
+        let messages = source
+            .read_messages()
+            .await
+            .expect("Failed to read messages");
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed < read_timeout + Duration::from_millis(100),
+            "Read operation should return in 1 second"
+        );
+        assert!(
+            messages.is_empty(),
+            "No messages should be returned after all messages are acked"
+        );
+    }
+
+    #[cfg(feature = "kafka-tests")]
+    #[tokio::test]
+    async fn test_kafka_source_with_headers() {
+        let (producer, topic_name) = setup_kafka().await;
+
+        // Produce a message with headers
+        let headers = OwnedHeaders::new()
+            .insert(Header {
+                key: "header1",
+                value: Some("value1"),
+            })
+            .insert(Header {
+                key: "header2",
+                value: Some("value2"),
+            });
+
+        let record = FutureRecord::to(&topic_name)
+            .payload("test message")
+            .key("test key")
+            .headers(headers);
+
+        producer
+            .send(record, Duration::from_secs(5))
+            .await
+            .expect("Failed to send message");
+
+        let config = KafkaSourceConfig {
+            brokers: vec!["localhost:9092".to_string()],
+            topic: topic_name,
+            consumer_group: "test_consumer_group_headers".to_string(),
+            auth: None,
+            tls: None,
+        };
+
+        let source = KafkaSource::connect(config, 1, Duration::from_secs(5))
+            .await
+            .expect("Failed to connect to Kafka");
+
+        let messages = source
+            .read_messages()
+            .await
+            .expect("Failed to read messages");
+        assert_eq!(messages.len(), 1);
+
+        let message = &messages[0];
+        assert_eq!(message.headers.get("header1"), Some(&"value1".to_string()));
+        assert_eq!(message.headers.get("header2"), Some(&"value2".to_string()));
     }
 }

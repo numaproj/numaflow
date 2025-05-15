@@ -5,10 +5,16 @@ edition = "2024"
 
 [dependencies]
 rdkafka = { git = "https://github.com/BulkBeing/rust-rdkafka.git", rev = "22322af8776b728d7c1de46d38cbbfb8498a8983", default-features = false, features = ["cmake-build", "tokio", "ssl-vendored", "gssapi-vendored", "sasl"] }
-tokio.workspace = true
+tokio = { workspace = true, features = ["sync"] }
 tracing.workspace = true
 thiserror.workspace = true
 bytes.workspace = true
+
+[dev-dependencies]
+uuid = { version = "1.16.0", features = ["v4"] }
+
+[features]
+kafka-tests = []
 
 [lints]
 workspace = true
