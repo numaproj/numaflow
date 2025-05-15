@@ -370,16 +370,6 @@ impl ISBWatermarkHandle {
         // Compute the minimum watermark
         let mut min_wm = self.compute_min_watermark().await;
 
-        {
-            let latest_fetched_wm = self
-                .latest_fetched_wm
-                .lock()
-                .expect("failed to acquire lock");
-            // Compare the min of latest fetched watermark and the min watermark from inflight messages
-            // and use the min
-            min_wm = std::cmp::min(min_wm, *latest_fetched_wm);
-        }
-
         // If there are no inflight messages or windows, get the head idle watermark
         if min_wm.timestamp_millis() == -1 {
             // Fetch the head idle watermark from the actor
@@ -429,13 +419,19 @@ impl ISBWatermarkHandle {
 
     /// Computes the minimum watermark based on window manager and inflight messages
     async fn compute_min_watermark(&self) -> Watermark {
-        // If window manager is configured, use oldest window's end time - 1ms
+        // If window manager is configured, use the oldest window's end time - 1ms
         if let Some(window_manager) = &self.window_manager {
             if let Some(oldest_window) = window_manager.oldest_window() {
-                return Watermark::from_timestamp_millis(
-                    oldest_window.end_time.timestamp_millis() - 1,
-                )
-                .unwrap_or(Watermark::from_timestamp_millis(-1).unwrap());
+                let latest_fetched_wm = self
+                    .latest_fetched_wm
+                    .lock()
+                    .expect("failed to acquire lock");
+                // Compare the min of latest fetched watermark and oldest window's end time - 1ms
+                return return std::cmp::min(
+                    *latest_fetched_wm,
+                    Watermark::from_timestamp_millis(oldest_window.end_time.timestamp_millis() - 1)
+                        .expect("failed to parse time"),
+                );
             }
         }
 
@@ -794,7 +790,7 @@ mod tests {
             .unwrap();
     }
 
-    #[cfg(feature = "nats-tests")]
+    // #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_publish_idle_watermark() {
         let client = async_nats::connect("localhost:4222").await.unwrap();
