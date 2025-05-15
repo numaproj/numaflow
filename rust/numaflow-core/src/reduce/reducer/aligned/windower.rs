@@ -100,10 +100,8 @@ impl From<&Window> for numaflow_pb::objects::wal::Window {
     }
 }
 
-impl TryFrom<&numaflow_pb::objects::wal::Window> for Window {
-    type Error = &'static str;
-
-    fn try_from(proto: &numaflow_pb::objects::wal::Window) -> Result<Self, Self::Error> {
+impl From<&numaflow_pb::objects::wal::Window> for Window {
+    fn from(proto: &numaflow_pb::objects::wal::Window) -> Self {
         let start_time = proto
             .start_time
             .as_ref()
@@ -113,10 +111,10 @@ impl TryFrom<&numaflow_pb::objects::wal::Window> for Window {
             .as_ref()
             .map(|ts| utc_from_timestamp(ts.clone()));
 
-        match (start_time, end_time) {
-            (Some(start), Some(end)) => Ok(Window::new(start, end)),
-            _ => Err("Missing start or end time in proto window"),
-        }
+        Self::new(
+            start_time.expect("start time should be present"),
+            end_time.expect("end time should be present"),
+        )
     }
 }
 

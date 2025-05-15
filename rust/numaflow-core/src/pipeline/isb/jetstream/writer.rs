@@ -385,6 +385,7 @@ impl JetstreamWriter {
                     Ok(ack) => {
                         if ack.duplicate {
                             warn!(
+                                message_id = ?message.id,
                                 stream = ?stream,
                                 ack = ?ack,
                                 "Duplicate message detected"

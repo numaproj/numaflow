@@ -6,12 +6,12 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crate::message::Message;
+use crate::reduce::error::{Error, ReduceResult};
 use crate::reduce::reducer::aligned::windower::{AlignedWindowMessage, Window, WindowOperation};
 use chrono::{DateTime, TimeZone, Utc};
 use numaflow_pb::objects::wal::Window as ProtoWindow;
 use numaflow_pb::objects::wal::WindowManagerState;
 use prost::Message as ProtoMessage;
-use tracing::info;
 
 #[derive(Debug, Clone)]
 pub(crate) struct SlidingWindowManager {
@@ -86,30 +86,6 @@ impl SlidingWindowManager {
         windows
     }
 
-    /// Assigns windows to a message
-    pub(crate) fn assign_windows_for_message(&self, msg: Message) -> Vec<AlignedWindowMessage> {
-        let windows = self.create_windows(&msg);
-        let mut result = Vec::new();
-
-        // Check if windows already exist and create appropriate operations
-        let mut active_windows = self.active_windows.lock().unwrap();
-
-        for window in windows {
-            let operation = if active_windows.contains(&window) {
-                // Window exists, append message
-                WindowOperation::Append(msg.clone())
-            } else {
-                // New window, insert it
-                active_windows.insert(window.clone());
-                WindowOperation::Open(msg.clone())
-            };
-
-            result.push(AlignedWindowMessage { operation, window });
-        }
-
-        result
-    }
-
     /// Closes any windows that can be closed because the Watermark has advanced beyond the window
     /// end time.
     pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage> {
@@ -144,7 +120,6 @@ impl SlidingWindowManager {
 
     /// Deletes a window after it is closed and GC is done.
     pub(crate) fn delete_window(&self, window: Window) {
-        // For testing purposes, we need to check if the window is in active_windows first
         let mut closed_windows = self.closed_windows.lock().unwrap();
         closed_windows.remove(&window);
     }
@@ -162,56 +137,41 @@ impl SlidingWindowManager {
         active_windows.iter().next().cloned()
     }
 
-    // The window_to_proto and proto_to_window methods have been replaced by
-    // From<&Window> for ProtoWindow and TryFrom<&ProtoWindow> for Window
-    // trait implementations in the windower.rs file
-
     /// Saves the current window state to the specified file
-    fn save_state(&self) -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(path) = &self.state_file_path {
-            // Merge active and closed windows into a single sorted vector
+    pub(crate) fn save_state(&self) -> ReduceResult<()> {
+        let Some(path) = &self.state_file_path else {
+            return Ok(());
+        };
+
+        let all_windows: Vec<ProtoWindow> = {
             let active_windows = self.active_windows.lock().unwrap();
             let closed_windows = self.closed_windows.lock().unwrap();
 
-            let mut all_windows: Vec<ProtoWindow> = Vec::new();
+            active_windows
+                .iter()
+                .chain(closed_windows.iter())
+                .map(Into::into)
+                .collect()
+        };
 
-            // Add all windows to the vector
-            for window in active_windows.iter() {
-                all_windows.push(window.into());
-            }
+        let state = WindowManagerState {
+            windows: all_windows,
+        };
 
-            for window in closed_windows.iter() {
-                all_windows.push(window.into());
-            }
+        let mut buf = Vec::new();
+        state
+            .encode(&mut buf)
+            .map_err(|e| Error::Other(e.to_string()))?;
 
-            // Sort windows by start time
-            all_windows.sort_by(|a, b| {
-                let a_start = a.start_time.as_ref().unwrap().seconds;
-                let b_start = b.start_time.as_ref().unwrap().seconds;
-                a_start.cmp(&b_start)
-            });
+        File::create(path)
+            .and_then(|mut file| file.write_all(&buf))
+            .map_err(|e| Error::Other(e.to_string()))?;
 
-            // Create the state proto
-            let state = WindowManagerState {
-                windows: all_windows,
-            };
-
-            // Serialize the state
-            let mut buf = Vec::new();
-            state.encode(&mut buf)?;
-
-            // Write to file
-            let mut file = File::create(path)?;
-            file.write_all(&buf)?;
-
-            Ok(())
-        } else {
-            Ok(())
-        }
+        Ok(())
     }
 
     /// Loads window state from the specified file
-    fn load_state(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    fn load_state(&mut self) -> ReduceResult<()> {
         let Some(path) = &self.state_file_path else {
             return Ok(());
         };
@@ -222,49 +182,58 @@ impl SlidingWindowManager {
         }
 
         // Read file
-        let mut file = File::open(path)?;
+        let mut file = File::open(path).map_err(|e| Error::Other(e.to_string()))?;
         let mut buf = Vec::new();
-        file.read_to_end(&mut buf)?;
+        file.read_to_end(&mut buf)
+            .map_err(|e| Error::Other(e.to_string()))?;
 
         // Deserialize the state
-        let state = WindowManagerState::decode(&buf[..])?;
+        let state = WindowManagerState::decode(&buf[..]).expect("Failed to decode window state");
 
         // Convert proto windows to core windows and add to active_windows
-        let mut active_windows = self.active_windows.lock().unwrap();
-
-        for proto_window in state.windows {
-            if let Ok(window) = Window::try_from(&proto_window) {
-                active_windows.insert(window);
-            }
-        }
+        self.active_windows
+            .lock()
+            .unwrap()
+            .extend(state.windows.iter().map(Into::into));
 
         Ok(())
     }
 
     /// Assigns windows to a message, dropping messages with event time earlier than the oldest window's start time
     pub(crate) fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage> {
-        // Check if message should be dropped based on event time
-        if let Some(oldest_window) = self.oldest_window() {
-            if msg.event_time < oldest_window.start_time {
-                info!(
-                    "Dropping message with event time {} as it is before the oldest window start time {}",
-                    msg.event_time, oldest_window.start_time
-                );
-                return Vec::new();
+        let windows = self.create_windows(&msg);
+        let mut result = Vec::new();
+
+        // Check if windows already exist and create appropriate operations
+        let mut active_windows = self.active_windows.lock().unwrap();
+
+        // Only create the forward window (newest) if it doesn't exist
+        // For older windows, only append if they already exist
+        let first_window = windows.first().unwrap();
+        if !active_windows.contains(first_window) {
+            active_windows.insert(first_window.clone());
+            result.push(AlignedWindowMessage {
+                operation: WindowOperation::Open(msg.clone()),
+                window: first_window.clone(),
+            });
+        } else {
+            result.push(AlignedWindowMessage {
+                operation: WindowOperation::Append(msg.clone()),
+                window: first_window.clone(),
+            });
+        };
+
+        for window in windows[1..].iter() {
+            if active_windows.contains(&window) {
+                // Window exists, append message
+                result.push(AlignedWindowMessage {
+                    operation: WindowOperation::Append(msg.clone()),
+                    window: window.clone(),
+                });
             }
         }
 
-        // Process normally
-        self.assign_windows_for_message(msg)
-    }
-}
-
-impl Drop for SlidingWindowManager {
-    fn drop(&mut self) {
-        // Save state when the manager is dropped
-        if let Err(e) = self.save_state() {
-            tracing::error!("Failed to save window state: {}", e);
-        }
+        result
     }
 }
 
@@ -302,27 +271,13 @@ mod tests {
         // Assign windows
         let window_msgs = windower.assign_windows(msg.clone());
 
-        // Verify results - should be assigned to exactly 3 windows
-        assert_eq!(window_msgs.len(), 3);
+        // Verify results - should be assigned to exactly 1 window (the forward-looking one)
+        assert_eq!(window_msgs.len(), 1);
 
         // Check first window: [60000, 120000)
         assert_eq!(window_msgs[0].window.start_time.timestamp_millis(), 60000);
         assert_eq!(window_msgs[0].window.end_time.timestamp_millis(), 120000);
         match &window_msgs[0].operation {
-            WindowOperation::Open(_) => {}
-            _ => panic!("Expected Open operation"),
-        }
-
-        assert_eq!(window_msgs[1].window.start_time.timestamp_millis(), 40000);
-        assert_eq!(window_msgs[1].window.end_time.timestamp_millis(), 100000);
-        match &window_msgs[1].operation {
-            WindowOperation::Open(_) => {}
-            _ => panic!("Expected Open operation"),
-        }
-
-        assert_eq!(window_msgs[2].window.start_time.timestamp_millis(), 20000);
-        assert_eq!(window_msgs[2].window.end_time.timestamp_millis(), 80000);
-        match &window_msgs[2].operation {
             WindowOperation::Open(_) => {}
             _ => panic!("Expected Open operation"),
         }
@@ -337,8 +292,8 @@ mod tests {
 
         let window_msgs2 = windower.assign_windows(msg2.clone());
 
-        // Should also be assigned to 3 windows
-        assert_eq!(window_msgs2.len(), 3);
+        // Should also be assigned to 1 window
+        assert_eq!(window_msgs2.len(), 1);
 
         // All operations should be Append
         for window_msg in &window_msgs2 {
@@ -375,8 +330,8 @@ mod tests {
         // Assign windows
         let window_msgs = windower.assign_windows(msg.clone());
 
-        // Verify results - should be assigned to exactly 2 windows
-        assert_eq!(window_msgs.len(), 2);
+        // Verify results - should be assigned to exactly 1 window (the forward-looking one)
+        assert_eq!(window_msgs.len(), 1);
 
         assert_eq!(window_msgs[0].window.start_time.timestamp(), 600);
         assert_eq!(window_msgs[0].window.end_time.timestamp(), 660);
@@ -385,12 +340,14 @@ mod tests {
             _ => panic!("Expected Open operation"),
         }
 
-        // Check second window: [560, 620)
-        assert_eq!(window_msgs[1].window.start_time.timestamp(), 560);
-        assert_eq!(window_msgs[1].window.end_time.timestamp(), 620);
-        match &window_msgs[1].operation {
-            WindowOperation::Open(_) => {}
-            _ => panic!("Expected Open operation"),
+        // Create and insert the second window manually to test append behavior
+        let window2 = Window::new(
+            Utc.timestamp_opt(560, 0).unwrap(),
+            Utc.timestamp_opt(620, 0).unwrap(),
+        );
+        {
+            let mut active_windows = windower.active_windows.lock().unwrap();
+            active_windows.insert(window2.clone());
         }
 
         // Assign another message to the same windows
@@ -401,15 +358,21 @@ mod tests {
 
         let window_msgs2 = windower.assign_windows(msg2.clone());
 
-        // Should also be assigned to 2 windows
+        // Should now be assigned to 2 windows (one open, one append)
         assert_eq!(window_msgs2.len(), 2);
 
-        // All operations should be Append
-        for window_msg in &window_msgs2 {
-            match &window_msg.operation {
-                WindowOperation::Append(_) => {}
-                _ => panic!("Expected Append operation"),
-            }
+        // First should be append to the forward window
+        match &window_msgs2[0].operation {
+            WindowOperation::Append(_) => {}
+            _ => panic!("Expected Append operation"),
+        }
+
+        // Second should be append to the manually inserted window
+        assert_eq!(window_msgs2[1].window.start_time.timestamp(), 560);
+        assert_eq!(window_msgs2[1].window.end_time.timestamp(), 620);
+        match &window_msgs2[1].operation {
+            WindowOperation::Append(_) => {}
+            _ => panic!("Expected Append operation"),
         }
     }
 
@@ -651,9 +614,40 @@ mod tests {
 
     #[test]
     fn test_assign_windows_with_small_slide() {
+        // prepopulate active windows
+        let active_windows = vec![
+            Window::new(
+                Utc.timestamp_millis_opt(90000).unwrap(),
+                Utc.timestamp_millis_opt(150000).unwrap(),
+            ),
+            Window::new(
+                Utc.timestamp_millis_opt(80000).unwrap(),
+                Utc.timestamp_millis_opt(140000).unwrap(),
+            ),
+            Window::new(
+                Utc.timestamp_millis_opt(70000).unwrap(),
+                Utc.timestamp_millis_opt(130000).unwrap(),
+            ),
+            Window::new(
+                Utc.timestamp_millis_opt(60000).unwrap(),
+                Utc.timestamp_millis_opt(120000).unwrap(),
+            ),
+            Window::new(
+                Utc.timestamp_millis_opt(50000).unwrap(),
+                Utc.timestamp_millis_opt(110000).unwrap(),
+            ),
+        ];
+
         // Create a sliding windower with 60s window length and 10s slide
-        let windower =
-            SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(10), None);
+        let windower = SlidingWindowManager {
+            window_length: Duration::from_secs(60),
+            slide: Duration::from_secs(10),
+            active_windows: Arc::new(Mutex::new(BTreeSet::from_iter(
+                active_windows.iter().cloned(),
+            ))),
+            closed_windows: Arc::new(Mutex::new(BTreeSet::new())),
+            state_file_path: None,
+        };
 
         // Create a test message with event time at 105s
         let msg = Message {
@@ -699,7 +693,7 @@ mod tests {
         // Assign windows
         let window_msgs = windower.assign_windows(msg.clone());
 
-        // Verify results - should be assigned to exactly 6 windows
+        // Should also be assigned to 6 windows (5 are already open, 1 is new)
         assert_eq!(window_msgs.len(), expected_windows.len());
 
         // Check all windows match expected windows
@@ -708,8 +702,21 @@ mod tests {
             match &window_msg.operation {
                 WindowOperation::Open(open_msg) => {
                     assert_eq!(open_msg.event_time, msg.event_time);
+                    assert_eq!(
+                        window_msg.window.start_time,
+                        Utc.timestamp_millis_opt(100000).unwrap()
+                    );
+                    assert_eq!(
+                        window_msg.window.end_time,
+                        Utc.timestamp_millis_opt(160000).unwrap()
+                    );
                 }
-                _ => panic!("Expected Open operation"),
+                WindowOperation::Append(append_msg) => {
+                    assert_eq!(append_msg.event_time, msg.event_time);
+                }
+                WindowOperation::Close => {
+                    panic!("Expected Open or Append operation");
+                }
             }
 
             // Verify window matches expected window
@@ -726,15 +733,18 @@ mod tests {
 
         let window_msgs_two = windower.assign_windows(msg2.clone());
 
-        // Should also be assigned to 6 windows
+        // Should also be assigned to 6 windows, all append
         assert_eq!(window_msgs_two.len(), 6);
 
         for window_msg in &window_msgs_two {
+            // largest window should be open, rest are append
             match &window_msg.operation {
                 WindowOperation::Append(append_msg) => {
                     assert_eq!(append_msg.event_time, msg2.event_time);
                 }
-                _ => panic!("Expected Append operation"),
+                WindowOperation::Close | WindowOperation::Open(_) => {
+                    panic!("Expected Append operation");
+                }
             }
         }
     }
@@ -796,119 +806,6 @@ mod tests {
             assert!(active_windows.contains(&window1));
             assert!(active_windows.contains(&window2));
             assert!(active_windows.contains(&window3));
-        }
-
-        // Clean up
-        temp_dir.close().unwrap();
-    }
-
-    #[test]
-    fn test_drop_old_messages() {
-        // Create a sliding windower with 60s window length and 10s slide
-        let windower =
-            SlidingWindowManager::new(Duration::from_secs(60), Duration::from_secs(10), None);
-
-        // Base time: 60000ms (60s)
-        let base_time = Utc.timestamp_millis_opt(60000).unwrap();
-
-        // Create a message with event time before any window
-        let old_msg = Message {
-            event_time: base_time - chrono::Duration::seconds(70),
-            ..Default::default()
-        };
-
-        // First, create some windows by processing a valid message
-        let valid_msg1 = Message {
-            event_time: base_time + chrono::Duration::seconds(10),
-            ..Default::default()
-        };
-
-        // This will create windows and add them to active_windows
-        windower.assign_windows(valid_msg1.clone());
-
-        // Now try to process a message that's too old
-        let window_msgs = windower.assign_windows(old_msg);
-
-        // Should be dropped (empty vector)
-        assert_eq!(window_msgs.len(), 0);
-
-        // Process the same message again to test append operations
-        let window_msgs = windower.assign_windows(valid_msg1.clone());
-
-        // Should not be dropped - for sliding windows, we expect 6 windows
-        assert_eq!(window_msgs.len(), 6);
-
-        // Check that one of the windows has the expected start time
-        let has_expected_window = window_msgs
-            .iter()
-            .any(|wm| wm.window.start_time == base_time);
-        assert!(
-            has_expected_window,
-            "No window found with expected start time"
-        );
-
-        // Check that all operations are Append (since windows already exist)
-        for window_msg in &window_msgs {
-            match &window_msg.operation {
-                WindowOperation::Append(msg) => {
-                    assert_eq!(msg.event_time, valid_msg1.event_time);
-                }
-                _ => panic!("Expected Append operation"),
-            }
-        }
-    }
-
-    #[test]
-    fn test_drop_trait_implementation() {
-        use tempfile::tempdir;
-
-        // Create a temporary directory for the test
-        let temp_dir = tempdir().unwrap();
-        let state_file_path = temp_dir.path().join("window_state.bin");
-
-        // Create a scope to test Drop implementation
-        {
-            // Create a sliding windower with 60s window length and 10s slide
-            let windower = SlidingWindowManager::new(
-                Duration::from_secs(60),
-                Duration::from_secs(10),
-                Some(state_file_path.clone()),
-            );
-
-            // Base time: 60000ms (60s)
-            let base_time = Utc.timestamp_millis_opt(60000).unwrap();
-
-            // Create windows
-            let window1 = Window::new(base_time, base_time + chrono::Duration::seconds(60));
-            let window2 = Window::new(
-                base_time - chrono::Duration::seconds(10),
-                base_time + chrono::Duration::seconds(50),
-            );
-
-            // Insert windows manually
-            {
-                let mut active_windows = windower.active_windows.lock().unwrap();
-                active_windows.insert(window1.clone());
-                active_windows.insert(window2.clone());
-            }
-
-            // The windower will be dropped at the end of this scope, which should save the state
-        }
-
-        // Verify file exists
-        assert!(state_file_path.exists());
-
-        // Create a new windower with the same state file
-        let windower2 = SlidingWindowManager::new(
-            Duration::from_secs(60),
-            Duration::from_secs(10),
-            Some(state_file_path.clone()),
-        );
-
-        // Verify windows were loaded
-        {
-            let active_windows = windower2.active_windows.lock().unwrap();
-            assert_eq!(active_windows.len(), 2);
         }
 
         // Clean up

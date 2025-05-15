@@ -330,7 +330,7 @@ async fn start_reduce_forwarder(
     // Determine the state file path for window manager
     let state_file_path = if let Some(storage_config) = &reduce_vtx_config.wal_storage_config {
         let mut path = storage_config.path.clone();
-        path.push(format!("{}-window-state.state", config.vertex_name));
+        path.push(format!("{}-window.state", config.vertex_name));
         Some(path)
     } else {
         None

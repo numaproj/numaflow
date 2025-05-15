@@ -165,9 +165,9 @@ struct AlignedReduceActor {
     /// Sender for error messages.
     /// TODO(vigith): how is error handled!!
     error_tx: mpsc::Sender<Error>,
-    /// Sender for GC WAL messages.
-    /// TODO(vigith): why is this optional?
+    /// Sender for GC WAL messages. It is optional since users can specify not to use WAL.
     gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
+    /// WindowManager for assigning windows to messages and closing windows.
     window_manager: WindowManager,
     /// Cancellation token to signal tasks to stop
     cln_token: CancellationToken,
@@ -277,9 +277,9 @@ impl AlignedReduceActor {
 
     /// sends the message to the reduce task for the window.
     async fn window_append(&mut self, window: Window, window_id: Bytes, msg: Message) {
-        // Get the existing stream or log error if not found
+        // Get the existing stream or log error if not found create a new one.
         let Some(active_stream) = self.active_streams.get(&window_id) else {
-            error!(?window_id, "No active stream found for window");
+            self.window_open(window, window_id, msg).await;
             return;
         };
 
@@ -420,6 +420,14 @@ impl AlignedReducer {
             // Wait for the actor to complete
             if let Err(e) = actor_handle.await {
                 error!("Error waiting for actor to complete: {:?}", e);
+            }
+
+            // For sliding: we need to make sure to store the window manager state before exiting
+            // from the reducer component
+            if let WindowManager::Sliding(manager) = self.window_manager {
+                if let Err(e) = manager.save_state() {
+                    error!("Failed to save window state: {:?}", e);
+                }
             }
 
             info!(status=?self.final_result, "Reduce component successfully completed");
