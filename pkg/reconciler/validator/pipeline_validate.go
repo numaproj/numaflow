@@ -628,5 +628,5 @@ func hasValidSinkRetryStrategy(s dfv1.Sink) bool {
 
 // HasValidFallbackSink checks if the Sink vertex has a valid fallback sink configured
 func hasValidFallbackSink(s *dfv1.Sink) bool {
-	return s.Fallback != nil && s.Fallback.UDSink != nil
+	return s.Fallback != nil && s.Fallback.IsAnySinkSpecified()
 }
