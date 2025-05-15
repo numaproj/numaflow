@@ -302,9 +302,13 @@ async fn start_forwarder_with_source(
     fallback_sink: Option<SinkHandle>,
     cln_token: CancellationToken,
 ) -> error::Result<()> {
-    // start the pending reader to publish pending metrics
-    let pending_reader = utils::create_pending_reader(&mvtx_config, source.clone()).await;
-    let _pending_reader_handle = pending_reader.start().await;
+    let _pending_reader_handle = if mvtx_config.replica == 0 {
+        // start the pending reader to publish pending metrics
+        let pending_reader = utils::create_pending_reader(&mvtx_config, source.clone()).await;
+        Some(pending_reader.start().await)
+    } else {
+        None
+    };
 
     let mut forwarder_builder = ForwarderBuilder::new(source, sink, mvtx_config, cln_token);
 
