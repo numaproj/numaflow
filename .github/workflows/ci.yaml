@@ -79,6 +79,9 @@ jobs:
       - name: Start Pulsar standalone container
         run: docker run -d -p 6650:6650 -p 8080:8080 apachepulsar/pulsar:4.0.0 bin/pulsar standalone
 
+      - name: Start Kafka container
+        run: docker run -d -p 9092:9092 --name kafka-broker apache/kafka:4.0.0
+
       - name: Set up Go 1.x
         uses: actions/setup-go@v5
         with:
