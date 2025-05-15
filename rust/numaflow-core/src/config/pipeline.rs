@@ -386,7 +386,7 @@ impl PipelineConfig {
             VertexType::Sink(SinkVtxConfig {
                 sink_config: SinkConfig {
                     sink_type: SinkType::primary_sinktype(&sink)?,
-                    retry_config: None,
+                    retry_config: sink.retry_strategy.clone().map(|retry| retry.into()),
                 },
                 fb_sink_config,
                 serving_store_config,
