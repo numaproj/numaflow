@@ -401,15 +401,13 @@ impl KafkaSource {
     }
 }
 
-#[cfg(test)]
-mod tests {
+#[cfg(feature = "kafka-tests")]
+pub mod test_utils {
     use super::*;
-    use rdkafka::ClientConfig;
-    use rdkafka::message::{Header, OwnedHeaders};
     use rdkafka::producer::{FutureProducer, FutureRecord};
-    use tokio::time::Instant;
+    use std::time::Duration;
 
-    async fn setup_kafka() -> (FutureProducer, String) {
+    pub async fn setup_test_topic() -> (FutureProducer, String) {
         let producer: FutureProducer = ClientConfig::new()
             .set("bootstrap.servers", "localhost:9092")
             .create()
@@ -439,21 +437,33 @@ mod tests {
         (producer, topic_name)
     }
 
-    #[cfg(feature = "kafka-tests")]
-    #[tokio::test]
-    async fn test_kafka_source() {
-        let (producer, topic_name) = setup_kafka().await;
-
-        // Produce 100 messages
-        for i in 0..100 {
+    pub async fn produce_test_messages(producer: &FutureProducer, topic: &str, count: usize) {
+        for i in 0..count {
             let payload = format!("message {}", i);
             let key = format!("key {}", i);
-            let record = FutureRecord::to(&topic_name).payload(&payload).key(&key);
+            let record = FutureRecord::to(topic).payload(&payload).key(&key);
             producer
                 .send(record, Duration::from_secs(5))
                 .await
                 .expect("Failed to send message");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rdkafka::message::{Header, OwnedHeaders};
+    use rdkafka::producer::FutureRecord;
+    use tokio::time::Instant;
+
+    #[cfg(feature = "kafka-tests")]
+    #[tokio::test]
+    async fn test_kafka_source() {
+        let (producer, topic_name) = test_utils::setup_test_topic().await;
+
+        // Produce 100 messages
+        test_utils::produce_test_messages(&producer, &topic_name, 100).await;
 
         let config = KafkaSourceConfig {
             brokers: vec!["localhost:9092".to_string()],
@@ -622,7 +632,7 @@ mod tests {
     #[cfg(feature = "kafka-tests")]
     #[tokio::test]
     async fn test_kafka_source_with_headers() {
-        let (producer, topic_name) = setup_kafka().await;
+        let (producer, topic_name) = test_utils::setup_test_topic().await;
 
         // Produce a message with headers
         let headers = OwnedHeaders::new()

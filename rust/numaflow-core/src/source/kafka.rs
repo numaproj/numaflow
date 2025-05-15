@@ -112,3 +112,107 @@ impl source::LagReader for KafkaSource {
         Ok(self.pending_messages().await?)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::Bytes;
+    use numaflow_kafka::{KafkaMessage, test_utils};
+    use std::collections::HashMap;
+
+    #[tokio::test]
+    async fn test_try_from_kafka_message_success() {
+        let kafka_message = KafkaMessage {
+            value: Bytes::from("test_value"),
+            partition: 1,
+            offset: 42,
+            headers: {
+                let mut headers = HashMap::new();
+                headers.insert("key".to_string(), "value".to_string());
+                headers
+            },
+        };
+
+        let message: Message = kafka_message.try_into().unwrap();
+
+        assert_eq!(message.value, Bytes::from("test_value"));
+        assert_eq!(message.offset.to_string(), "1:42-0");
+        assert_eq!(message.headers.get("key"), Some(&"value".to_string()));
+    }
+
+    #[cfg(feature = "kafka-tests")]
+    #[tokio::test]
+    async fn test_kafka_source_reader_acker_lagreader() {
+        use crate::{
+            reader::LagReader,
+            source::{SourceAcker, SourceReader},
+        };
+
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
+        // Setup Kafka producer and topic
+        let (producer, topic_name) = test_utils::setup_test_topic().await;
+
+        // Publish messages to the topic
+        test_utils::produce_test_messages(&producer, &topic_name, 50).await;
+
+        // Configure KafkaSource
+        let config = numaflow_kafka::KafkaSourceConfig {
+            brokers: vec!["localhost:9092".to_string()],
+            topic: topic_name.clone(),
+            consumer_group: "test_consumer_group".to_string(),
+            auth: None,
+            tls: None,
+        };
+
+        let read_timeout = Duration::from_secs(5);
+        let mut source = super::new_kafka_source(config, 20, read_timeout)
+            .await
+            .unwrap();
+
+        assert_eq!(source.partitions().await.unwrap(), vec![0]);
+
+        // Test SourceReader::read
+        let messages = source.read().await.unwrap();
+        assert_eq!(messages.len(), 20, "Should read 20 messages in a batch");
+        assert_eq!(messages[0].value, Bytes::from("message 0"));
+        assert_eq!(messages[19].value, Bytes::from("message 19"));
+
+        // Test SourceAcker::ack
+        let offsets: Vec<Offset> = messages.iter().map(|msg| msg.offset.clone()).collect();
+        source.ack(offsets).await.unwrap();
+
+        // Test LagReader::pending
+        let pending = source.pending().await.unwrap();
+        assert_eq!(
+            pending,
+            Some(30),
+            "Pending messages should be 30 after acking 20 messages"
+        );
+
+        // Read and ack remaining messages
+        let messages = source.read().await.unwrap();
+        assert_eq!(messages.len(), 20, "Should read another 20 messages");
+        let offsets: Vec<Offset> = messages.iter().map(|msg| msg.offset.clone()).collect();
+        source.ack(offsets).await.unwrap();
+
+        let pending = source.pending().await.unwrap();
+        assert_eq!(
+            pending,
+            Some(10),
+            "Pending messages should be 10 after acking another 20 messages"
+        );
+
+        let messages = source.read().await.unwrap();
+        assert_eq!(messages.len(), 10, "Should read the last 10 messages");
+        let offsets: Vec<Offset> = messages.iter().map(|msg| msg.offset.clone()).collect();
+        source.ack(offsets).await.unwrap();
+
+        let pending = source.pending().await.unwrap();
+        assert_eq!(
+            pending,
+            Some(0),
+            "Pending messages should be 0 after acking all messages"
+        );
+    }
+}
