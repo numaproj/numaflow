@@ -1452,7 +1452,7 @@ mod kafka_tests {
 
     #[test]
     fn test_try_from_kafka_source_with_plain_auth() {
-        let secret_name = "plain-auth-secret";
+        let secret_name = "test_try_from_kafka_source_with_plain_auth_plain-auth-secret";
         let user_key = "username";
         let pass_key = "password";
         setup_secret(secret_name, user_key, "test-user");
@@ -1513,7 +1513,7 @@ mod kafka_tests {
 
     #[test]
     fn test_try_from_kafka_source_with_scram_auth() {
-        let secret_name = "scram-auth-secret";
+        let secret_name = "test_try_from_kafka_source_with_scram_auth_scram-auth-secret";
         let user_key = "username";
         let pass_key = "password";
         setup_secret(secret_name, user_key, "test-user");
@@ -1571,7 +1571,7 @@ mod kafka_tests {
 
     #[test]
     fn test_try_from_kafka_source_with_oauth() {
-        let secret_name = "oauth-auth-secret";
+        let secret_name = "test_try_from_kafka_source_with_oauth_oauth-auth-secret";
         let client_id_key = "client_id";
         let client_secret_key = "client_secret";
         setup_secret(secret_name, client_id_key, "test-client");
@@ -1739,7 +1739,7 @@ mod kafka_tests {
 
     #[test]
     fn test_try_from_kafka_source_with_missing_password() {
-        let secret_name = "plain-auth-secret";
+        let secret_name = "test_try_from_kafka_source_with_missing_password_plain-auth-secret";
         let user_key = "username";
         setup_secret(secret_name, user_key, "test-user");
 
@@ -1781,7 +1781,7 @@ mod kafka_tests {
 
     #[test]
     fn test_try_from_kafka_source_with_missing_client_cert_key() {
-        let cert_name = "tls-cert";
+        let cert_name = "test_try_from_kafka_source_with_missing_client_cert_key_tls-cert";
         setup_secret(cert_name, "cert", "test-cert");
 
         let kafka_source = KafkaSource {
