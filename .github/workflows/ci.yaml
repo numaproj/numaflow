@@ -176,12 +176,10 @@ jobs:
           echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.9
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler cmake
-      - name: Print Protoc version
-        run: protoc --version
       - name: Build binary
-        run: RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target x86_64-unknown-linux-gnu
+        run: |
+          cd ../
+          docker run -v ./rust/:/app/ -w /app --rm ubuntu:24.04 bash build.sh amd64
       - name: Rename binaries
         run: |
           cp -pv target/x86_64-unknown-linux-gnu/release/numaflow ./numaflow-rs-linux-amd64
