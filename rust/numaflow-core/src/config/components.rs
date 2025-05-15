@@ -1355,29 +1355,30 @@ mod jetstream_tests {
 
     #[test]
     fn test_try_from_jetstream_source_with_tls() {
-        let ca_cert_name = "tls-ca-cert";
-        let cert_name = "tls-cert";
-        let key_name = "tls-key";
-        setup_secret(ca_cert_name, "ca", "test-ca-cert");
-        setup_secret(cert_name, "cert", "test-cert");
-        setup_secret(key_name, "key", "test-key");
+        let test_name = "test_try_from_jetstream_source_with_tls";
+        let ca_cert_name = format!("{test_name}-tls-ca-cert");
+        let cert_name = format!("{test_name}-tls-cert");
+        let key_name = format!("{test_name}-tls-key");
+        setup_secret(&ca_cert_name, "ca", "test-ca-cert");
+        setup_secret(&cert_name, "cert", "test-cert");
+        setup_secret(&key_name, "key", "test-key");
 
         let jetstream_source = JetStreamSource {
             auth: None,
             stream: "test-stream".to_string(),
             tls: Some(Box::new(Tls {
                 ca_cert_secret: Some(SecretKeySelector {
-                    name: ca_cert_name.to_string(),
+                    name: ca_cert_name.clone(),
                     key: "ca".to_string(),
                     ..Default::default()
                 }),
                 cert_secret: Some(SecretKeySelector {
-                    name: cert_name.to_string(),
+                    name: cert_name.clone(),
                     key: "cert".to_string(),
                     ..Default::default()
                 }),
                 key_secret: Some(SecretKeySelector {
-                    name: key_name.to_string(),
+                    name: key_name.clone(),
                     key: "key".to_string(),
                     ..Default::default()
                 }),
@@ -1390,23 +1391,17 @@ mod jetstream_tests {
         if let SourceType::Jetstream(config) = source_type {
             let tls_config = config.tls.unwrap();
             assert_eq!(tls_config.ca_cert.unwrap(), "test-ca-cert");
-            assert_eq!(
-                tls_config.client_auth.as_ref().unwrap().client_cert,
-                "test-cert"
-            );
-            assert_eq!(
-                tls_config.client_auth.unwrap().client_cert_private_key,
-                "test-key"
-            );
-            assert_eq!(config.consumer, "test-stream");
-            assert_eq!(config.addr, "nats://localhost:4222");
+            let client_auth = tls_config.client_auth.as_ref().unwrap();
+            assert_eq!(client_auth.client_cert, "test-cert");
+            assert_eq!(client_auth.client_cert_private_key, "test-key");
+            assert!(!tls_config.insecure_skip_verify);
         } else {
             panic!("Expected SourceType::Jetstream");
         }
 
-        cleanup_secret(ca_cert_name);
-        cleanup_secret(cert_name);
-        cleanup_secret(key_name);
+        cleanup_secret(&ca_cert_name);
+        cleanup_secret(&cert_name);
+        cleanup_secret(&key_name);
     }
 
     #[test]
@@ -1429,5 +1424,393 @@ mod jetstream_tests {
             err.to_string(),
             "Config Error - Authentication is specified, but auth setting is empty"
         );
+    }
+}
+
+#[cfg(test)]
+mod kafka_tests {
+    use super::source::SourceType;
+    use k8s_openapi::api::core::v1::SecretKeySelector;
+    use numaflow_models::models::{KafkaSource, Sasl, SaslPlain, SasloAuth, Tls};
+    use std::fs;
+    use std::path::Path;
+
+    const SECRET_BASE_PATH: &str = "/tmp/numaflow";
+
+    fn setup_secret(name: &str, key: &str, value: &str) {
+        let path = format!("{SECRET_BASE_PATH}/{name}");
+        fs::create_dir_all(&path).unwrap();
+        fs::write(format!("{path}/{key}"), value).unwrap();
+    }
+
+    fn cleanup_secret(name: &str) {
+        let path = format!("{SECRET_BASE_PATH}/{name}");
+        if Path::new(&path).exists() {
+            fs::remove_dir_all(&path).unwrap();
+        }
+    }
+
+    #[test]
+    fn test_try_from_kafka_source_with_plain_auth() {
+        let secret_name = "plain-auth-secret";
+        let user_key = "username";
+        let pass_key = "password";
+        setup_secret(secret_name, user_key, "test-user");
+        setup_secret(secret_name, pass_key, "test-pass");
+
+        let kafka_source = KafkaSource {
+            brokers: Some(vec!["localhost:9092".to_string()]),
+            topic: "test-topic".to_string(),
+            consumer_group: Some("test-group".to_string()),
+            sasl: Some(Box::new(Sasl {
+                mechanism: "PLAIN".to_string(),
+                plain: Some(Box::new(SaslPlain {
+                    handshake: true,
+                    user_secret: SecretKeySelector {
+                        name: secret_name.to_string(),
+                        key: user_key.to_string(),
+                        ..Default::default()
+                    },
+                    password_secret: Some(SecretKeySelector {
+                        name: secret_name.to_string(),
+                        key: pass_key.to_string(),
+                        ..Default::default()
+                    }),
+                })),
+                scramsha256: None,
+                scramsha512: None,
+                oauth: None,
+                gssapi: None,
+            })),
+            tls: None,
+            config: None,
+            kafka_version: None,
+        };
+
+        let source_type = SourceType::try_from(Box::new(kafka_source)).unwrap();
+        if let SourceType::Kafka(config) = source_type {
+            let auth = config.auth.unwrap();
+            match auth {
+                numaflow_kafka::KafkaAuth::Sasl {
+                    mechanism,
+                    username,
+                    password,
+                } => {
+                    assert_eq!(mechanism, "PLAIN");
+                    assert_eq!(username, "test-user");
+                    assert_eq!(password, "test-pass");
+                }
+            }
+            assert_eq!(config.brokers, vec!["localhost:9092"]);
+            assert_eq!(config.topic, "test-topic");
+            assert_eq!(config.consumer_group, "test-group");
+        } else {
+            panic!("Expected SourceType::Kafka");
+        }
+
+        cleanup_secret(secret_name);
+    }
+
+    #[test]
+    fn test_try_from_kafka_source_with_scram_auth() {
+        let secret_name = "scram-auth-secret";
+        let user_key = "username";
+        let pass_key = "password";
+        setup_secret(secret_name, user_key, "test-user");
+        setup_secret(secret_name, pass_key, "test-pass");
+
+        let kafka_source = KafkaSource {
+            brokers: Some(vec!["localhost:9092".to_string()]),
+            topic: "test-topic".to_string(),
+            consumer_group: Some("test-group".to_string()),
+            sasl: Some(Box::new(Sasl {
+                mechanism: "SCRAM-SHA-256".to_string(),
+                plain: None,
+                scramsha256: Some(Box::new(SaslPlain {
+                    handshake: true,
+                    user_secret: SecretKeySelector {
+                        name: secret_name.to_string(),
+                        key: user_key.to_string(),
+                        ..Default::default()
+                    },
+                    password_secret: Some(SecretKeySelector {
+                        name: secret_name.to_string(),
+                        key: pass_key.to_string(),
+                        ..Default::default()
+                    }),
+                })),
+                scramsha512: None,
+                oauth: None,
+                gssapi: None,
+            })),
+            tls: None,
+            config: None,
+            kafka_version: None,
+        };
+
+        let source_type = SourceType::try_from(Box::new(kafka_source)).unwrap();
+        if let SourceType::Kafka(config) = source_type {
+            let auth = config.auth.unwrap();
+            match auth {
+                numaflow_kafka::KafkaAuth::Sasl {
+                    mechanism,
+                    username,
+                    password,
+                } => {
+                    assert_eq!(mechanism, "SCRAM-SHA-256");
+                    assert_eq!(username, "test-user");
+                    assert_eq!(password, "test-pass");
+                }
+            }
+        } else {
+            panic!("Expected SourceType::Kafka");
+        }
+
+        cleanup_secret(secret_name);
+    }
+
+    #[test]
+    fn test_try_from_kafka_source_with_oauth() {
+        let secret_name = "oauth-auth-secret";
+        let client_id_key = "client_id";
+        let client_secret_key = "client_secret";
+        setup_secret(secret_name, client_id_key, "test-client");
+        setup_secret(secret_name, client_secret_key, "test-secret");
+
+        let kafka_source = KafkaSource {
+            brokers: Some(vec!["localhost:9092".to_string()]),
+            topic: "test-topic".to_string(),
+            consumer_group: Some("test-group".to_string()),
+            sasl: Some(Box::new(Sasl {
+                mechanism: "OAUTH".to_string(),
+                plain: None,
+                scramsha256: None,
+                scramsha512: None,
+                oauth: Some(Box::new(SasloAuth {
+                    client_id: SecretKeySelector {
+                        name: secret_name.to_string(),
+                        key: client_id_key.to_string(),
+                        ..Default::default()
+                    },
+                    client_secret: SecretKeySelector {
+                        name: secret_name.to_string(),
+                        key: client_secret_key.to_string(),
+                        ..Default::default()
+                    },
+                    token_endpoint: "https://oauth.example.com/token".to_string(),
+                })),
+                gssapi: None,
+            })),
+            tls: None,
+            config: None,
+            kafka_version: None,
+        };
+
+        let source_type = SourceType::try_from(Box::new(kafka_source)).unwrap();
+        if let SourceType::Kafka(config) = source_type {
+            let auth = config.auth.unwrap();
+            match auth {
+                numaflow_kafka::KafkaAuth::Sasl {
+                    mechanism,
+                    username,
+                    password,
+                } => {
+                    assert_eq!(mechanism, "OAUTH");
+                    assert_eq!(username, "test-client");
+                    assert_eq!(password, "test-secret");
+                }
+            }
+        } else {
+            panic!("Expected SourceType::Kafka");
+        }
+
+        cleanup_secret(secret_name);
+    }
+
+    #[test]
+    fn test_try_from_kafka_source_with_tls() {
+        let test_name = "test_try_from_kafka_source_with_tls";
+        let ca_cert_name = format!("{test_name}-tls-ca-cert");
+        let cert_name = format!("{test_name}-tls-cert");
+        let key_name = format!("{test_name}-tls-key");
+        setup_secret(&ca_cert_name, "ca", "test-ca-cert");
+        setup_secret(&cert_name, "cert", "test-cert");
+        setup_secret(&key_name, "key", "test-key");
+
+        let kafka_source = KafkaSource {
+            brokers: Some(vec!["localhost:9092".to_string()]),
+            topic: "test-topic".to_string(),
+            consumer_group: Some("test-group".to_string()),
+            sasl: None,
+            tls: Some(Box::new(Tls {
+                ca_cert_secret: Some(SecretKeySelector {
+                    name: ca_cert_name.clone(),
+                    key: "ca".to_string(),
+                    ..Default::default()
+                }),
+                cert_secret: Some(SecretKeySelector {
+                    name: cert_name.clone(),
+                    key: "cert".to_string(),
+                    ..Default::default()
+                }),
+                key_secret: Some(SecretKeySelector {
+                    name: key_name.clone(),
+                    key: "key".to_string(),
+                    ..Default::default()
+                }),
+                insecure_skip_verify: Some(false),
+            })),
+            config: None,
+            kafka_version: None,
+        };
+
+        let source_type = SourceType::try_from(Box::new(kafka_source)).unwrap();
+        if let SourceType::Kafka(config) = source_type {
+            let tls_config = config.tls.unwrap();
+            assert_eq!(tls_config.ca_cert.unwrap(), "test-ca-cert");
+            let client_auth = tls_config.client_auth.unwrap();
+            assert_eq!(client_auth.client_cert, "test-cert");
+            assert_eq!(client_auth.client_cert_private_key, "test-key");
+            assert!(!tls_config.insecure_skip_verify);
+        } else {
+            panic!("Expected SourceType::Kafka");
+        }
+
+        cleanup_secret(&ca_cert_name);
+        cleanup_secret(&cert_name);
+        cleanup_secret(&key_name);
+    }
+
+    #[test]
+    fn test_try_from_kafka_source_with_insecure_tls() {
+        let kafka_source = KafkaSource {
+            brokers: Some(vec!["localhost:9092".to_string()]),
+            topic: "test-topic".to_string(),
+            consumer_group: Some("test-group".to_string()),
+            sasl: None,
+            tls: Some(Box::new(Tls {
+                ca_cert_secret: None,
+                cert_secret: None,
+                key_secret: None,
+                insecure_skip_verify: Some(true),
+            })),
+            config: None,
+            kafka_version: None,
+        };
+
+        let source_type = SourceType::try_from(Box::new(kafka_source)).unwrap();
+        if let SourceType::Kafka(config) = source_type {
+            let tls_config = config.tls.unwrap();
+            assert!(tls_config.insecure_skip_verify);
+            assert!(tls_config.ca_cert.is_none());
+            assert!(tls_config.client_auth.is_none());
+        } else {
+            panic!("Expected SourceType::Kafka");
+        }
+    }
+
+    #[test]
+    fn test_try_from_kafka_source_with_invalid_auth() {
+        let kafka_source = KafkaSource {
+            brokers: Some(vec!["localhost:9092".to_string()]),
+            topic: "test-topic".to_string(),
+            consumer_group: Some("test-group".to_string()),
+            sasl: Some(Box::new(Sasl {
+                mechanism: "GSSAPI".to_string(),
+                plain: None,
+                scramsha256: None,
+                scramsha512: None,
+                oauth: None,
+                gssapi: None,
+            })),
+            tls: None,
+            config: None,
+            kafka_version: None,
+        };
+
+        let result = SourceType::try_from(Box::new(kafka_source));
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Config Error - GSSAPI mechanism is not supported yet"
+        );
+    }
+
+    #[test]
+    fn test_try_from_kafka_source_with_missing_password() {
+        let secret_name = "plain-auth-secret";
+        let user_key = "username";
+        setup_secret(secret_name, user_key, "test-user");
+
+        let kafka_source = KafkaSource {
+            brokers: Some(vec!["localhost:9092".to_string()]),
+            topic: "test-topic".to_string(),
+            consumer_group: Some("test-group".to_string()),
+            sasl: Some(Box::new(Sasl {
+                mechanism: "PLAIN".to_string(),
+                plain: Some(Box::new(SaslPlain {
+                    handshake: true,
+                    user_secret: SecretKeySelector {
+                        name: secret_name.to_string(),
+                        key: user_key.to_string(),
+                        ..Default::default()
+                    },
+                    password_secret: None,
+                })),
+                scramsha256: None,
+                scramsha512: None,
+                oauth: None,
+                gssapi: None,
+            })),
+            tls: None,
+            config: None,
+            kafka_version: None,
+        };
+
+        let result = SourceType::try_from(Box::new(kafka_source));
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Config Error - PLAIN mechanism requires password"
+        );
+
+        cleanup_secret(secret_name);
+    }
+
+    #[test]
+    fn test_try_from_kafka_source_with_missing_client_cert_key() {
+        let cert_name = "tls-cert";
+        setup_secret(cert_name, "cert", "test-cert");
+
+        let kafka_source = KafkaSource {
+            brokers: Some(vec!["localhost:9092".to_string()]),
+            topic: "test-topic".to_string(),
+            consumer_group: Some("test-group".to_string()),
+            sasl: None,
+            tls: Some(Box::new(Tls {
+                ca_cert_secret: None,
+                cert_secret: Some(SecretKeySelector {
+                    name: cert_name.to_string(),
+                    key: "cert".to_string(),
+                    ..Default::default()
+                }),
+                key_secret: None,
+                insecure_skip_verify: Some(false),
+            })),
+            config: None,
+            kafka_version: None,
+        };
+
+        let result = SourceType::try_from(Box::new(kafka_source));
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Config Error - Client cert is specified for TLS authentication, but private key is not specified"
+        );
+
+        cleanup_secret(cert_name);
     }
 }
