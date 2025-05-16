@@ -161,7 +161,8 @@ func (sp ServingPipeline) GetServingServiceObj() *corev1.Service {
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
-				{Name: "tcp", Port: ServingServicePort, TargetPort: intstr.FromInt32(ServingServicePort)},
+				{Name: "tcp", Port: ServingServiceHttpsPort, TargetPort: intstr.FromInt32(ServingServiceHttpsPort)},
+				{Name: "tcp", Port: ServingServiceHttpPort, TargetPort: intstr.FromInt32(ServingServiceHttpPort)},
 			},
 			Selector: labels,
 		},
@@ -194,7 +195,7 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 		{Name: EnvServingCallbackStore, Value: fmt.Sprintf("%s_SERVING_CALLBACK_STORE", sp.GetServingStoreName())},
 		{Name: EnvServingResponseStore, Value: fmt.Sprintf("%s_SERVING_RESPONSE_STORE", sp.GetServingStoreName())},
 		{Name: EnvServingStatusStore, Value: fmt.Sprintf("%s_SERVING_STATUS_STORE", sp.GetServingStoreName())},
-		{Name: EnvServingPort, Value: strconv.Itoa(ServingServicePort)},
+		{Name: EnvServingPort, Value: strconv.Itoa(ServingServiceHttpsPort)},
 		{Name: EnvServingHttpPort, Value: strconv.Itoa(ServingServiceHttpPort)},
 		{Name: EnvReplica, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + KeyReplica + "']"}}},
 	}
@@ -217,7 +218,10 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 	}
 	volumeMounts := []corev1.VolumeMount{{Name: varVolumeName, MountPath: PathVarRun}}
 	c := corev1.Container{
-		Ports:           []corev1.ContainerPort{{ContainerPort: ServingServicePort}},
+		Ports: []corev1.ContainerPort{
+			{ContainerPort: ServingServiceHttpsPort},
+			{ContainerPort: ServingServiceHttpPort},
+		},
 		Name:            CtrMain,
 		Image:           req.Image,
 		ImagePullPolicy: req.PullPolicy,

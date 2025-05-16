@@ -176,7 +176,7 @@ const (
 	MonoVertexMonitorPort       = 2470
 	MonoVertexMonitorPortName   = "monitor"
 	MonoVertexDaemonServicePort = 4327
-	ServingServicePort          = 8443
+	ServingServiceHttpsPort     = 8443
 	ServingServiceHttpPort      = 8090
 
 	DefaultRequeueAfter = 10 * time.Second
