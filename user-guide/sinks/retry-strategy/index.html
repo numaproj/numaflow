@@ -1003,25 +1003,45 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#struct-explanation" class="md-nav__link">
-    Struct Explanation
+  <a href="#retry-strategy-configuration" class="md-nav__link">
+    Retry Strategy Configuration
   </a>
+  
+    <nav class="md-nav" aria-label="Retry Strategy Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-configuration" class="md-nav__link">
+    Example Configuration
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#backoff-parameters" class="md-nav__link">
+    BackOff Parameters
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#onfailure-actions" class="md-nav__link">
+    OnFailure Actions
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#constraints" class="md-nav__link">
-    Constraints
+  <a href="#sink-example-with-retry-strategy" class="md-nav__link">
+    Sink Example with Retry Strategy
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#example" class="md-nav__link">
-    Example
-  </a>
-  
-    <nav class="md-nav" aria-label="Example">
+    <nav class="md-nav" aria-label="Sink Example with Retry Strategy">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2500,25 +2520,45 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#struct-explanation" class="md-nav__link">
-    Struct Explanation
+  <a href="#retry-strategy-configuration" class="md-nav__link">
+    Retry Strategy Configuration
   </a>
+  
+    <nav class="md-nav" aria-label="Retry Strategy Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-configuration" class="md-nav__link">
+    Example Configuration
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#backoff-parameters" class="md-nav__link">
+    BackOff Parameters
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#onfailure-actions" class="md-nav__link">
+    OnFailure Actions
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#constraints" class="md-nav__link">
-    Constraints
+  <a href="#sink-example-with-retry-strategy" class="md-nav__link">
+    Sink Example with Retry Strategy
   </a>
   
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#example" class="md-nav__link">
-    Example
-  </a>
-  
-    <nav class="md-nav" aria-label="Example">
+    <nav class="md-nav" aria-label="Sink Example with Retry Strategy">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -2553,66 +2593,109 @@
 
 <h1 id="retry-strategy">Retry Strategy<a class="headerlink" href="#retry-strategy" title="Permanent link">&para;</a></h1>
 <h3 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h3>
-<p>The <code>RetryStrategy</code> is used to configure the behavior for a sink after encountering failures during a write operation. 
-This structure allows the user to specify how Numaflow should respond to different fail-over scenarios for Sinks, ensuring that the writing can be resilient and handle 
+<p>The <code>RetryStrategy</code> is used to configure the behavior for a sink after encountering failures during a write operation.
+This structure allows the user to specify how Numaflow should respond to different fail-over scenarios for Sinks, ensuring that the writing can be resilient and handle
 unexpected issues efficiently.</p>
-<p><code>RetryStrategy</code> ONLY gets applied to failed messages. To return a failed messages, use the methods provided by the SDKs.
-- <code>ResponseFailure</code>for <a href="https://github.com/numaproj/numaflow-go/blob/main/pkg/sinker/types.go">Golang</a>
-- <code>responseFailure</code> for <a href="https://github.com/numaproj/numaflow-java/blob/main/src/main/java/io/numaproj/numaflow/sinker/Response.java#L40">Java</a>
-- <code>as_fallback</code> for <a href="https://github.com/numaproj/numaflow-python/blob/main/pynumaflow/sinker/_dtypes.py">Python</a></p>
-<h3 id="struct-explanation">Struct Explanation<a class="headerlink" href="#struct-explanation" title="Permanent link">&para;</a></h3>
-<p><code>retryStrategy</code> is optional, and can be added to the Sink spec configurations where retry logic is necessary.</p>
-<p><div class="highlight"><pre><span></span><code><span class="nt">sink</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">retryStrategy</span><span class="p">:</span>
-<span class="w">      </span><span class="c1"># Optional</span>
-<span class="w">      </span><span class="nt">backoff</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">duration</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1s</span><span class="w"> </span><span class="c1"># Optional</span>
-<span class="w">        </span><span class="nt">steps</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span><span class="w"> </span><span class="c1"># Optional, number of retries (including the 1st try)</span>
-<span class="w">      </span><span class="c1"># Optional</span>
-<span class="w">      </span><span class="nt">onFailure</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">retry|fallback|drop</span><span class="w"> </span>
-</code></pre></div>
-Note: If no custom fields are defined for retryStrategy then the <strong>default</strong> values are used.</p>
+<p><code>RetryStrategy</code> ONLY gets applied to failed messages. To return a failed messages, use the methods provided by the SDKs.</p>
 <ul>
-<li><code>BackOff</code> - Defines the timing for retries, including the interval and the maximum attempts.</li>
-<li><code>duration</code>: the time interval to wait before retry attempts<ul>
-<li>Default: <em>1ms</em></li>
+<li><code>ResponseFailure</code>for <a href="https://github.com/numaproj/numaflow-go/blob/main/pkg/sinker/types.go">Golang</a></li>
+<li><code>responseFailure</code> for <a href="https://github.com/numaproj/numaflow-java/blob/main/src/main/java/io/numaproj/numaflow/sinker/Response.java#L40">Java</a></li>
+<li><code>as_fallback</code> for <a href="https://github.com/numaproj/numaflow-python/blob/main/pynumaflow/sinker/_dtypes.py">Python</a></li>
 </ul>
+<h3 id="retry-strategy-configuration">Retry Strategy Configuration<a class="headerlink" href="#retry-strategy-configuration" title="Permanent link">&para;</a></h3>
+<p>The <code>retryStrategy</code> section allows you to define custom retry behavior for sink operations. If no custom fields are defined, the <strong>default</strong> values are applied.</p>
+<h4 id="example-configuration">Example Configuration<a class="headerlink" href="#example-configuration" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><span class="nt">sink</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">retryStrategy</span><span class="p">:</span>
+<span class="w">    </span><span class="c1"># Optional</span>
+<span class="w">    </span><span class="nt">backoff</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">interval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1s</span><span class="w"> </span><span class="c1"># Optional, a string with timestamp suffix</span>
+<span class="w">      </span><span class="nt">steps</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span><span class="w"> </span><span class="c1"># Optional, unsigned int, cannot be 0</span>
+<span class="w">      </span><span class="nt">factor</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.5</span><span class="w"> </span><span class="c1"># Optional, float type, &gt;= 1</span>
+<span class="w">      </span><span class="nt">cap</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20s</span><span class="w"> </span><span class="c1"># Optional, a string with timestamp suffix</span>
+<span class="w">      </span><span class="nt">jitter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.1</span><span class="w"> </span><span class="c1"># Optional, float type, &gt;=0 and &lt;1</span>
+<span class="w">    </span><span class="c1"># Optional</span>
+<span class="w">    </span><span class="nt">onFailure</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;fallback&#39;</span>
+</code></pre></div>
+<h4 id="backoff-parameters">BackOff Parameters<a class="headerlink" href="#backoff-parameters" title="Permanent link">&para;</a></h4>
+<p>The <code>BackOff</code> configuration defines the timing and limits for retries. Below are the available fields:</p>
+<ul>
+<li>
+<p><strong><code>interval</code></strong>: The time interval to wait before retry attempts.</p>
 </li>
-<li><code>steps</code>: the limit on the number of times to try the sink write operation including retries<ul>
-<li>Default: <em>Infinite</em></li>
-</ul>
+<li>
+<p><strong>Type</strong>: String with a timestamp suffix.</p>
 </li>
-<li><code>OnFailure</code> - Specifies the action to be undertaken if number of retries are exhausted</li>
-<li>retry: continue with the retry logic again</li>
-<li>fallback: write the leftover messages to a <a href="https://numaflow.numaproj.io/user-guide/sinks/fallback/">fallback</a> sink</li>
-<li>drop: any messages left to be processed are dropped<ul>
-<li>Default: <em>retry</em></li>
+<li>
+<p><strong>Default</strong>: <code>1ms</code>.</p>
+</li>
+<li>
+<p><strong><code>steps</code></strong>: The maximum number of retry attempts, including the initial attempt.</p>
+</li>
+<li>
+<p><strong>Type</strong>: Unsigned integer, must be greater than 0.</p>
+</li>
+<li>
+<p><strong>Default</strong>: Infinite.</p>
+</li>
+<li>
+<p><strong><code>factor</code></strong>: A multiplier applied to the interval after each retry attempt.</p>
+</li>
+<li>
+<p><strong>Type</strong>: Float, must be greater than or equal to 1.</p>
+</li>
+<li>
+<p><strong>Default</strong>: <code>1.0</code>.</p>
+</li>
+<li>
+<p><strong><code>cap</code></strong>: The maximum value for the interval, limiting exponential backoff growth.</p>
+</li>
+<li>
+<p><strong>Type</strong>: String with a timestamp suffix.</p>
+</li>
+<li>
+<p><strong>Default</strong>: <code>indefinite</code> (no upper limit).</p>
+</li>
+<li>
+<p><strong><code>jitter</code></strong>: Adds randomness to the interval to avoid retry collisions.</p>
+</li>
+<li><strong>Type</strong>: Float, must be greater than or equal to 0 and less than 1.</li>
+<li><strong>Default</strong>: <code>0</code>.</li>
 </ul>
+<h4 id="onfailure-actions">OnFailure Actions<a class="headerlink" href="#onfailure-actions" title="Permanent link">&para;</a></h4>
+<p>The <code>onFailure</code> field specifies the action to take when retries are exhausted. Available options are:</p>
+<ul>
+<li><strong><code>retry</code></strong>: Restart the retry logic.</li>
+<li><strong><code>fallback</code></strong>: Route the remaining messages to a <a href="https://numaflow.numaproj.io/user-guide/sinks/fallback/">fallback sink</a>.</li>
+<li>
+<p><strong><code>drop</code></strong>: Discard any unprocessed messages.</p>
+</li>
+<li>
+<p><strong>Default</strong>: <code>retry</code>.</p>
 </li>
 </ul>
-<h3 id="constraints">Constraints<a class="headerlink" href="#constraints" title="Permanent link">&para;</a></h3>
-<p>1) If the <code>onFailure</code> is defined as fallback, then there should be a fallback sink specified in the spec.</p>
-<p>2) The steps defined should always be <code>&gt; 0</code></p>
-<h2 id="example">Example<a class="headerlink" href="#example" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code><span class="w">  </span><span class="nt">sink</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">retryStrategy</span><span class="p">:</span>
-<span class="w">      </span><span class="nt">backoff</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">interval</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;500ms&quot;</span>
-<span class="w">        </span><span class="nt">steps</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
-<span class="w">      </span><span class="nt">onFailure</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;fallback&quot;</span>
+<h3 id="sink-example-with-retry-strategy">Sink Example with Retry Strategy<a class="headerlink" href="#sink-example-with-retry-strategy" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">sink</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">retryStrategy</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">backoff</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">interval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">500ms</span>
+<span class="w">      </span><span class="nt">steps</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
+<span class="w">      </span><span class="nt">factor</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2.2</span>
+<span class="w">      </span><span class="nt">cap</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10s</span>
+<span class="w">    </span><span class="nt">onFailure</span><span class="p">:</span><span class="w"> </span><span class="s">&#39;fallback&#39;</span>
+<span class="w">  </span><span class="nt">udsink</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">container</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-sink-image</span>
+<span class="w">  </span><span class="nt">fallback</span><span class="p">:</span>
 <span class="w">    </span><span class="nt">udsink</span><span class="p">:</span>
 <span class="w">      </span><span class="nt">container</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-sink-image</span>
-<span class="w">    </span><span class="nt">fallback</span><span class="p">:</span>
-<span class="w">      </span><span class="nt">udsink</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">container</span><span class="p">:</span>
-<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-fallback-sink</span>
+<span class="w">        </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-fallback-sink</span>
 </code></pre></div>
-<h3 id="explanation">Explanation<a class="headerlink" href="#explanation" title="Permanent link">&para;</a></h3>
+<h4 id="explanation">Explanation<a class="headerlink" href="#explanation" title="Permanent link">&para;</a></h4>
 <ul>
-<li>Normal Operation: Data is processed by the primary sink container specified by <code>UDSink</code>. 
-The system retries up to 10 times for a batch write operation to succeed with an interval of 500 milliseconds between each retry.</li>
-<li>After Maximum Retries: If all retries fail, data is then routed to a fallback sink instead.</li>
+<li><strong>Primary Sink Processing</strong>: The main sink container (<code>UDSink</code>) processes the data. If a batch write operation fails, the system will retry up to 10 times.</li>
+<li><strong>Retry Behavior</strong>: The first retry happens after 500 milliseconds. Each subsequent retry interval increases by multiplying the previous interval by 2.2, up to a maximum interval of 10 seconds.</li>
+<li><strong>Fallback Handling</strong>: If all retries are exhausted and the operation still fails, the data is routed to a fallback sink.</li>
 </ul>
 
               
