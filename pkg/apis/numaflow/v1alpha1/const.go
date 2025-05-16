@@ -259,7 +259,8 @@ const (
 
 	// Retry Strategy
 
-	// DefaultRetryInterval specifies the default initial retry duration.
+	// DefaultRetryInterval specifies the default initial retry duration in case of exponential backoff.
+	// In case of fixed interval retry strategy, it is the default retry interval.
 	// This value can be adjusted depending on the specific requirements
 	// for responsiveness and system load considerations.
 	DefaultRetryInterval = 1 * time.Millisecond
