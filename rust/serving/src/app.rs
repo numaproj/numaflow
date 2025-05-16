@@ -44,7 +44,7 @@ pub(crate) mod store;
 pub(crate) mod tracker;
 
 /// Start the main application Router and the axum server.
-pub(crate) async fn start_main_server<T, U>(
+pub(crate) async fn start_main_server_https<T, U>(
     app: AppState<T, U>,
     tls_config: RustlsConfig,
     cancel_token: CancellationToken,
@@ -53,7 +53,7 @@ where
     T: Clone + Send + Sync + DataStore + 'static,
     U: Clone + Send + Sync + CallbackStore + 'static,
 {
-    let app_addr: SocketAddr = format!("0.0.0.0:{}", &app.settings.app_listen_port)
+    let app_addr: SocketAddr = format!("0.0.0.0:{}", &app.settings.app_listen_https_port)
         .parse()
         .map_err(|e| InitError(format!("{e:?}")))?;
 
@@ -68,6 +68,44 @@ where
     let router = router_with_auth(app).await?;
 
     axum_server::bind_rustls(app_addr, tls_config)
+        .handle(handle)
+        .serve(router.into_make_service())
+        .await
+        .map_err(|e| InitError(format!("Starting web server for metrics: {}", e)))?;
+
+    info!(
+        ?app_addr,
+        "Server stopped, cleanup up the background tasks."
+    );
+    cancel_token.cancel();
+
+    Ok(())
+}
+
+/// Start the main application Router and the axum server.
+pub(crate) async fn start_main_server_http<T, U>(
+    app: AppState<T, U>,
+    cancel_token: CancellationToken,
+) -> crate::Result<()>
+where
+    T: Clone + Send + Sync + DataStore + 'static,
+    U: Clone + Send + Sync + CallbackStore + 'static,
+{
+    let app_addr: SocketAddr = format!("0.0.0.0:{}", &app.settings.app_listen_http_port)
+        .parse()
+        .map_err(|e| InitError(format!("{e:?}")))?;
+
+    let handle = Handle::new();
+    // Spawn a task to gracefully shutdown server.
+    tokio::spawn(graceful_shutdown(
+        handle.clone(),
+        app.settings.drain_timeout_secs,
+    ));
+
+    info!(?app_addr, "Starting application server");
+    let router = router_with_auth(app).await?;
+
+    axum_server::bind(app_addr)
         .handle(handle)
         .serve(router.into_make_service())
         .await
