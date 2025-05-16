@@ -934,7 +934,7 @@ impl SinkWriter {
         rng: &mut StdRng,
     ) -> f64 {
         // Calculate the base delay using the initial retry interval and the retry factor
-        // The base delay is calculated as: initial_retry_interval * retry_factor^attempts
+        // The base delay is calculated as: initial_retry_interval * retry_factor^(attempts-1)
         let base_delay = (retry_config.sink_initial_retry_interval_in_ms as f64)
             * retry_config.sink_retry_factor.powi((attempts - 1) as i32);
 
@@ -1460,5 +1460,56 @@ mod tests {
             results.first().unwrap().status,
             ResponseStatusFromSink::Success
         );
+    }
+
+    #[test]
+    fn test_calculate_exponential_delay_no_jitter() {
+        let retry_config = RetryConfig {
+            sink_initial_retry_interval_in_ms: 100,
+            sink_retry_factor: 2.0,
+            sink_retry_jitter: 0.0,
+            sink_max_retry_interval_in_ms: 1000,
+            ..Default::default()
+        };
+
+        let mut rng = StdRng::from_entropy();
+        let delay = SinkWriter::calculate_exponential_delay(&retry_config, 3, &mut rng);
+        // Base delay: 100 * 2^(3-1) = 400
+        assert_eq!(delay, 400.0);
+    }
+
+    #[test]
+    fn test_calculate_exponential_delay_with_jitter() {
+        let retry_config = RetryConfig {
+            sink_initial_retry_interval_in_ms: 100,
+            sink_retry_factor: 2.0,
+            sink_retry_jitter: 0.5,
+            sink_max_retry_interval_in_ms: 1000,
+            ..Default::default()
+        };
+
+        let mut rng = StdRng::from_entropy();
+        let delay = SinkWriter::calculate_exponential_delay(&retry_config, 3, &mut rng);
+
+        // Base delay: 100 * 2^(3-1) = 400
+        // Jitter range: 400 * (1.0 - 0.5) to 400 * (1.0 + 0.5) = 200 to 600
+        assert!(delay >= 200.0 && delay <= 600.0);
+    }
+
+    #[test]
+    fn test_calculate_exponential_delay_max_cap() {
+        let retry_config = RetryConfig {
+            sink_initial_retry_interval_in_ms: 100,
+            sink_retry_factor: 10.0,
+            sink_retry_jitter: 0.0,
+            sink_max_retry_interval_in_ms: 1000,
+            ..Default::default()
+        };
+
+        let mut rng = StdRng::from_entropy();
+        let delay = SinkWriter::calculate_exponential_delay(&retry_config, 3, &mut rng);
+
+        // Base delay: 100 * 10^(3-1) = 100000, but capped at 1000
+        assert_eq!(delay, 1000.0);
     }
 }
