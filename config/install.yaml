@@ -7451,9 +7451,15 @@ spec:
                     properties:
                       backoff:
                         properties:
+                          cap:
+                            type: string
+                          factor:
+                            type: number
                           interval:
                             default: 1ms
                             type: string
+                          jitter:
+                            type: number
                           steps:
                             format: int32
                             type: integer
@@ -18865,9 +18871,15 @@ spec:
                           properties:
                             backoff:
                               properties:
+                                cap:
+                                  type: string
+                                factor:
+                                  type: number
                                 interval:
                                   default: 1ms
                                   type: string
+                                jitter:
+                                  type: number
                                 steps:
                                   format: int32
                                   type: integer
@@ -30654,9 +30666,15 @@ spec:
                               properties:
                                 backoff:
                                   properties:
+                                    cap:
+                                      type: string
+                                    factor:
+                                      type: number
                                     interval:
                                       default: 1ms
                                       type: string
+                                    jitter:
+                                      type: number
                                     steps:
                                       format: int32
                                       type: integer
@@ -38405,9 +38423,15 @@ spec:
                     properties:
                       backoff:
                         properties:
+                          cap:
+                            type: string
+                          factor:
+                            type: number
                           interval:
                             default: 1ms
                             type: string
+                          jitter:
+                            type: number
                           steps:
                             format: int32
                             type: integer
