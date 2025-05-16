@@ -7,9 +7,9 @@ Please read [map](./map.md) to get the best out of these examples.
 ### Inter-Step Buffer Service (ISB Service)
 
 #### What is ISB Service?
+
 An Inter-Step Buffer Service is described by a [Custom Resource](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/), which is used to pass data between vertices of a numaflow pipeline.
 Please refer to the doc [Inter-Step Buffer Service](../../../core-concepts/inter-step-buffer.md) for more information on ISB.
-
 
 #### How to install the ISB Service
 
@@ -20,7 +20,7 @@ kubectl apply -f https://raw.githubusercontent.com/numaproj/numaflow/stable/exam
 The expected output of the above command is shown below:
 
 ```shell
-$ kubectl get isbsvc 
+$ kubectl get isbsvc
 
 NAME      TYPE        PHASE     MESSAGE   AGE
 default   jetstream   Running             3d19h
@@ -110,7 +110,7 @@ kubectl logs -f even-odd-odd-sink-0-xxxxx
 
 View the UI for a pipeline at https://localhost:8443/.
 
-![Numaflow UI](../../../assets/numaflow-ui-advanced-pipeline.png)
+![Numaflow UI](../../../assets/quick-start/ui-advanced-pipeline.png)
 
 The source code of the `even-odd` [user-defined function](../user-defined-functions.md) can be found [here](https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd). You also can replace the [Log](../../sinks/log.md) Sink with some other sinks like [Kafka](../../sinks/kafka.md) to forward the data to Kafka topics.
 
