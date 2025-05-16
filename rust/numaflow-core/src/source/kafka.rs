@@ -70,7 +70,8 @@ impl source::SourceReader for KafkaSource {
     }
 
     async fn partitions(&mut self) -> crate::error::Result<Vec<u16>> {
-        Ok(vec![*get_vertex_replica()])
+        let partitions = self.partitions_info().await?;
+        Ok(partitions.into_iter().map(|p| p as u16).collect())
     }
 }
 
@@ -101,7 +102,10 @@ impl source::SourceAcker for KafkaSource {
                     "invalid offset id. kafka_offset={offset}, error={e:?}"
                 ))
             })?;
-            kafka_offsets.push((partition, partition_offset));
+            kafka_offsets.push(numaflow_kafka::KafkaOffset {
+                partition,
+                offset: partition_offset,
+            });
         }
         self.ack_messages(kafka_offsets).await.map_err(Into::into)
     }

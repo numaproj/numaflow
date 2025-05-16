@@ -12,6 +12,8 @@ use rdkafka::topic_partition_list::TopicPartitionList;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{error, info, warn};
 
+const KAFKA_TOPIC_HEADER_KEY: &str = "X-NF-Kafka-TopicName";
+
 pub type Result<T> = core::result::Result<T, Error>;
 
 #[derive(thiserror::Error, Debug)]
@@ -29,10 +31,31 @@ pub enum Error {
 /// Represents the authentication method used to connect to Kafka.
 #[derive(Debug, Clone, PartialEq)]
 pub enum KafkaAuth {
-    Sasl {
-        mechanism: String,
+    Plain {
         username: String,
         password: String,
+    },
+    ScramSha256 {
+        username: String,
+        password: String,
+    },
+    ScramSha512 {
+        username: String,
+        password: String,
+    },
+    Gssapi {
+        service_name: String,
+        realm: String,
+        username: String,
+        password: Option<String>,
+        keytab: Option<String>,
+        kerberos_config: Option<String>,
+        auth_type: String,
+    },
+    Oauth {
+        client_id: String,
+        client_secret: String,
+        token_endpoint: String,
     },
 }
 
@@ -67,6 +90,7 @@ pub struct KafkaMessage {
     pub partition: i32,
     /// The offset of the message.
     pub offset: i64,
+    /// The headers of the message.
     pub headers: HashMap<String, String>,
 }
 
@@ -90,23 +114,35 @@ impl ConsumerContext for KafkaContext {
     }
 }
 
-type LoggingConsumer = StreamConsumer<KafkaContext>;
+type NumaflowConsumer = StreamConsumer<KafkaContext>;
+
+/// Represents a Kafka offset for a specific topic.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct KafkaOffset {
+    /// The partition id within a topic
+    pub partition: i32,
+    /// The offset of the message within a partition
+    pub offset: i64,
+}
 
 enum KafkaActorMessage {
     Read {
         respond_to: oneshot::Sender<Result<Vec<KafkaMessage>>>,
     },
     Ack {
-        offsets: Vec<(i32, i64)>,
+        offsets: Vec<KafkaOffset>,
         respond_to: oneshot::Sender<Result<()>>,
     },
     Pending {
         respond_to: oneshot::Sender<Result<Option<usize>>>,
     },
+    PartitionsInfo {
+        respond_to: oneshot::Sender<Result<Vec<i32>>>,
+    },
 }
 
 struct KafkaActor {
-    consumer: LoggingConsumer,
+    consumer: NumaflowConsumer,
     read_timeout: Duration,
     batch_size: usize,
     topic: String,
@@ -129,36 +165,10 @@ impl KafkaActor {
             .set("session.timeout.ms", "6000")
             .set("enable.auto.commit", "false")
             .set("auto.offset.reset", "earliest") // TODO: Make this configurable
-            .set_log_level(RDKafkaLogLevel::Debug);
+            .set_log_level(RDKafkaLogLevel::Warning);
 
-        if let Some(auth) = config.auth {
-            match auth {
-                KafkaAuth::Sasl {
-                    mechanism,
-                    username,
-                    password,
-                } => {
-                    let supported_mechanisms = ["PLAIN", "SCRAM-SHA-256", "SCRAM-SHA-512"];
-                    if !supported_mechanisms.contains(&mechanism.as_str()) {
-                        return Err(Error::Kafka(format!(
-                            "Unsupported SASL mechanism: {}. Currently supported mechanisms: {}",
-                            mechanism,
-                            supported_mechanisms.join(", ")
-                        )));
-                    }
-                    client_config.set("security.protocol", "SASL_PLAINTEXT");
-                    if config.tls.is_some() {
-                        client_config.set("security.protocol", "SASL_SSL");
-                    }
-                    client_config
-                        .set("sasl.mechanisms", mechanism)
-                        .set("sasl.username", username)
-                        .set("sasl.password", password);
-                }
-            }
-        }
-
-        if let Some(tls_config) = config.tls {
+        let has_tls = config.tls.is_some();
+        if let Some(tls_config) = config.tls.clone() {
             client_config.set("security.protocol", "SSL");
             if tls_config.insecure_skip_verify {
                 warn!(
@@ -176,8 +186,68 @@ impl KafkaActor {
             }
         }
 
+        if let Some(auth) = config.auth {
+            client_config.set(
+                "security.protocol",
+                if has_tls {
+                    "SASL_SSL"
+                } else {
+                    "SASL_PLAINTEXT"
+                },
+            );
+            match auth {
+                KafkaAuth::Plain { username, password } => {
+                    client_config
+                        .set("sasl.mechanisms", "PLAIN")
+                        .set("sasl.username", username)
+                        .set("sasl.password", password);
+                }
+                KafkaAuth::ScramSha256 { username, password } => {
+                    client_config
+                        .set("sasl.mechanisms", "SCRAM-SHA-256")
+                        .set("sasl.username", username)
+                        .set("sasl.password", password);
+                }
+                KafkaAuth::ScramSha512 { username, password } => {
+                    client_config
+                        .set("sasl.mechanisms", "SCRAM-SHA-512")
+                        .set("sasl.username", username)
+                        .set("sasl.password", password);
+                }
+                KafkaAuth::Gssapi {
+                    service_name,
+                    realm: _,
+                    username,
+                    password: _,
+                    keytab,
+                    kerberos_config,
+                    auth_type: _,
+                } => {
+                    client_config.set("sasl.mechanisms", "GSSAPI");
+                    client_config.set("sasl.kerberos.service.name", service_name);
+                    client_config.set("sasl.kerberos.principal", username);
+                    if let Some(keytab) = keytab {
+                        client_config.set("sasl.kerberos.keytab", keytab);
+                    }
+                    if let Some(kerberos_config) = kerberos_config {
+                        client_config.set("sasl.kerberos.kinit.cmd", kerberos_config);
+                    }
+                }
+                KafkaAuth::Oauth {
+                    client_id,
+                    client_secret,
+                    token_endpoint,
+                } => {
+                    client_config.set("sasl.mechanisms", "OAUTHBEARER");
+                    client_config.set("sasl.oauthbearer.client.id", client_id);
+                    client_config.set("sasl.oauthbearer.client.secret", client_secret);
+                    client_config.set("sasl.oauthbearer.token.endpoint.url", token_endpoint);
+                }
+            }
+        }
+
         let context = KafkaContext;
-        let consumer: LoggingConsumer =
+        let consumer: NumaflowConsumer =
             client_config
                 .create_with_context(context)
                 .map_err(|err| Error::Connection {
@@ -211,13 +281,15 @@ impl KafkaActor {
 
         tokio::spawn(async move {
             tracing::info!("Starting Kafka consumer...");
+            // This actor terminates when sender end of the handler_rx is closed
             actor.run().await;
         });
 
         Ok(())
     }
 
-    async fn run(&mut self) {
+    // run method will only return when the sender end of the handler_rx is closed.
+    async fn run(mut self) {
         while let Some(msg) = self.handler_rx.recv().await {
             self.handle_message(msg).await;
         }
@@ -227,18 +299,51 @@ impl KafkaActor {
         match msg {
             KafkaActorMessage::Read { respond_to } => {
                 let messages = self.read_messages().await;
-                let _ = respond_to.send(messages);
+                respond_to
+                    .send(messages)
+                    .inspect_err(|e| {
+                        error!(?e, "Failed to send messages from Kafka actor to main task");
+                    })
+                    .expect("Failed to send messages from Kafka actor to main task");
             }
             KafkaActorMessage::Ack {
                 offsets,
                 respond_to,
             } => {
                 let status = self.ack_messages(offsets).await;
-                let _ = respond_to.send(status);
+                respond_to
+                    .send(status)
+                    .inspect_err(|e| {
+                        error!(
+                            ?e,
+                            "Failed to send ack messages from Kafka actor to main task"
+                        );
+                    })
+                    .expect("Failed to send ack messages from Kafka actor to main task");
             }
             KafkaActorMessage::Pending { respond_to } => {
                 let pending = self.pending_messages().await;
-                let _ = respond_to.send(pending);
+                respond_to
+                    .send(pending)
+                    .inspect_err(|e| {
+                        error!(
+                            ?e,
+                            "Failed to send pending messages from Kafka actor to main task"
+                        );
+                    })
+                    .expect("Failed to send pending messages from Kafka actor to main task");
+            }
+            KafkaActorMessage::PartitionsInfo { respond_to } => {
+                let partitions = self.partitions_info().await;
+                respond_to
+                    .send(partitions)
+                    .inspect_err(|e| {
+                        error!(
+                            ?e,
+                            "Failed to send partition count from Kafka actor to main task"
+                        );
+                    })
+                    .expect("Failed to send partition count from Kafka actor to main task");
             }
         }
     }
@@ -247,6 +352,11 @@ impl KafkaActor {
         let mut messages: Vec<KafkaMessage> = vec![];
         let timeout = tokio::time::timeout(self.read_timeout, std::future::pending::<()>());
         tokio::pin!(timeout);
+
+        // Return error if the number of continuous failures exceeds MAX_FAILURE_COUNT
+        // A successful read will reset the failure count
+        const MAX_FAILURE_COUNT: usize = 10;
+        let mut continuous_failure_count = 0;
         loop {
             if messages.len() >= self.batch_size {
                 break;
@@ -260,15 +370,26 @@ impl KafkaActor {
 
                 message = self.consumer.recv() => {
                     let message = match message {
-                        Ok(msg) => msg,
+                        Ok(msg) => {
+                            continuous_failure_count = 0;
+                            msg
+                        }
                         Err(e) => {
-                            error!(?e, "Failed to read messages, will retry after 1 second");
-                            tokio::time::sleep(Duration::from_secs(1)).await;
+                            // TODO: Check the error when topic doesn't exist
+                            continuous_failure_count += 1;
+                            if continuous_failure_count > MAX_FAILURE_COUNT {
+                                return Err(Error::Kafka(format!(
+                                    "Failed to read messages after {} retries: {e:?}",
+                                    MAX_FAILURE_COUNT
+                                )));
+                            }
+                            error!(?e, "Failed to read messages, will retry after 100 milliseconds");
+                            tokio::time::sleep(Duration::from_millis(100)).await;
                             continue;
                         }
                     };
 
-                    let headers = match message.headers() {
+                    let mut headers = match message.headers() {
                         Some(headers) => headers
                             .iter()
                             .map(|header| {
@@ -280,9 +401,11 @@ impl KafkaActor {
                             .collect(),
                         None => HashMap::new(),
                     };
+                    headers.insert(KAFKA_TOPIC_HEADER_KEY.to_string(), message.topic().to_string());
 
                     let value = match message.payload() {
                         Some(payload) => Bytes::copy_from_slice(payload),
+                        // The rdkafka doc says that the payload can be None if there is no payload.
                         None => Bytes::new(),
                     };
 
@@ -301,15 +424,41 @@ impl KafkaActor {
         Ok(messages)
     }
 
-    async fn ack_messages(&mut self, offsets: Vec<(i32, i64)>) -> Result<()> {
-        let mut tpl = TopicPartitionList::new();
-        for (partition, offset) in offsets {
-            tpl.add_partition_offset(&self.topic, partition, Offset::Offset(offset + 1))
-                .map_err(|e| Error::Kafka(format!("Failed to add partition offset: {}", e)))?;
+    async fn ack_messages(&mut self, offsets: Vec<KafkaOffset>) -> Result<()> {
+        use std::collections::HashMap;
+        let mut partition_offsets: HashMap<i32, i64> = HashMap::new();
+
+        // For each partition, keep only the highest offset
+        for kafka_offset in offsets {
+            partition_offsets
+                .entry(kafka_offset.partition)
+                .and_modify(|current| {
+                    if kafka_offset.offset > *current {
+                        *current = kafka_offset.offset;
+                    }
+                })
+                .or_insert(kafka_offset.offset);
         }
 
+        let mut tpl = TopicPartitionList::new();
+        for (partition, offset) in partition_offsets {
+            // Commit offset+1 (as per Kafka semantics)
+            // In Kafka, the offset represents the position of the next message to be read.
+            // When we commit offset N, it means the next message to be read will be at offset N.
+            // Since we've already processed the message at the current offset, we need to commit
+            // offset+1 to indicate we want to read the next message in the partition.
+            tpl.add_partition_offset(&self.topic, partition, Offset::Offset(offset + 1))
+                .map_err(|e| {
+                    Error::Kafka(format!(
+                        "Failed to add partition offset for acknowledging messages: {}",
+                        e
+                    ))
+                })?;
+        }
+
+        // Wait for confirmation from the Kafka broker that the offsets have been committed.
         self.consumer
-            .commit(&tpl, CommitMode::Async)
+            .commit(&tpl, CommitMode::Sync)
             .map_err(|e| Error::Kafka(format!("Failed to commit offsets: {}", e)))?;
 
         Ok(())
@@ -355,6 +504,20 @@ impl KafkaActor {
 
         Ok(Some(total_pending))
     }
+
+    async fn partitions_info(&mut self) -> Result<Vec<i32>> {
+        let timeout = Duration::from_secs(5);
+        let metadata = self
+            .consumer
+            .fetch_metadata(Some(&self.topic), timeout)
+            .map_err(|e| Error::Kafka(format!("Failed to fetch metadata: {}", e)))?;
+
+        let Some(topic_metadata) = metadata.topics().first() else {
+            warn!(topic = self.topic, "No topic metadata found");
+            return Err(Error::Kafka("No topic metadata found".to_string()));
+        };
+        Ok(topic_metadata.partitions().iter().map(|p| p.id()).collect())
+    }
 }
 
 #[derive(Clone)]
@@ -381,7 +544,7 @@ impl KafkaSource {
             .map_err(|_| Error::Other("Actor task terminated".into()))?
     }
 
-    pub async fn ack_messages(&self, offsets: Vec<(i32, i64)>) -> Result<()> {
+    pub async fn ack_messages(&self, offsets: Vec<KafkaOffset>) -> Result<()> {
         let (tx, rx) = oneshot::channel();
         let msg = KafkaActorMessage::Ack {
             offsets,
@@ -395,6 +558,14 @@ impl KafkaSource {
     pub async fn pending_messages(&self) -> Result<Option<usize>> {
         let (tx, rx) = oneshot::channel();
         let msg = KafkaActorMessage::Pending { respond_to: tx };
+        let _ = self.actor_tx.send(msg).await;
+        rx.await
+            .map_err(|_| Error::Other("Actor task terminated".into()))?
+    }
+
+    pub async fn partitions_info(&self) -> Result<Vec<i32>> {
+        let (tx, rx) = oneshot::channel();
+        let msg = KafkaActorMessage::PartitionsInfo { respond_to: tx };
         let _ = self.actor_tx.send(msg).await;
         rx.await
             .map_err(|_| Error::Other("Actor task terminated".into()))?
@@ -505,9 +676,12 @@ mod tests {
         );
 
         // Ack messages
-        let offsets: Vec<(i32, i64)> = messages
+        let offsets: Vec<KafkaOffset> = messages
             .iter()
-            .map(|msg| (msg.partition, msg.offset))
+            .map(|msg| KafkaOffset {
+                partition: msg.partition,
+                offset: msg.offset,
+            })
             .collect();
         source
             .ack_messages(offsets)
@@ -533,9 +707,12 @@ mod tests {
         assert_eq!(messages.len(), 30);
 
         // Ack remaining messages
-        let offsets: Vec<(i32, i64)> = messages
+        let offsets: Vec<KafkaOffset> = messages
             .iter()
-            .map(|msg| (msg.partition, msg.offset))
+            .map(|msg| KafkaOffset {
+                partition: msg.partition,
+                offset: msg.offset,
+            })
             .collect();
         source
             .ack_messages(offsets)
@@ -562,9 +739,12 @@ mod tests {
         assert_eq!(messages.len(), 30);
 
         // Ack remaining messages
-        let offsets: Vec<(i32, i64)> = messages
+        let offsets: Vec<KafkaOffset> = messages
             .iter()
-            .map(|msg| (msg.partition, msg.offset))
+            .map(|msg| KafkaOffset {
+                partition: msg.partition,
+                offset: msg.offset,
+            })
             .collect();
         source
             .ack_messages(offsets)
@@ -591,9 +771,12 @@ mod tests {
         assert_eq!(messages.len(), 10);
 
         // Ack remaining messages
-        let offsets: Vec<(i32, i64)> = messages
+        let offsets: Vec<KafkaOffset> = messages
             .iter()
-            .map(|msg| (msg.partition, msg.offset))
+            .map(|msg| KafkaOffset {
+                partition: msg.partition,
+                offset: msg.offset,
+            })
             .collect();
         source
             .ack_messages(offsets)

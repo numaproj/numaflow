@@ -313,7 +313,7 @@ pub(crate) mod source {
         ) -> std::result::Result<Self, Self::Error> {
             let auth: Option<numaflow_kafka::KafkaAuth> = match value.sasl {
                 Some(sasl) => {
-                    let mechanism = sasl.mechanism;
+                    let mechanism = sasl.mechanism.to_uppercase();
                     match mechanism.as_str() {
                         "PLAIN" => {
                             let Some(plain) = sasl.plain else {
@@ -342,23 +342,13 @@ pub(crate) mod source {
                                     "PLAIN mechanism requires password".into(),
                                 ));
                             };
-                            Some(numaflow_kafka::KafkaAuth::Sasl {
-                                mechanism,
-                                username,
-                                password,
-                            })
+                            Some(numaflow_kafka::KafkaAuth::Plain { username, password })
                         }
-                        "SCRAM-SHA-256" | "SCRAM-SHA-512" => {
-                            let scram = if mechanism == "SCRAM-SHA-256" {
-                                sasl.scramsha256
-                            } else {
-                                sasl.scramsha512
-                            };
-                            let Some(scram) = scram else {
-                                return Err(Error::Config(format!(
-                                    "{} mechanism requires scram auth configuration",
-                                    mechanism
-                                )));
+                        "SCRAM-SHA-256" => {
+                            let Some(scram) = sasl.scramsha256 else {
+                                return Err(Error::Config(
+                                    "SCRAM-SHA-256 mechanism requires scramsha256 auth configuration".into(),
+                                ));
                             };
                             let username =
                                 crate::shared::create_components::get_secret_from_volume(
@@ -377,24 +367,124 @@ pub(crate) mod source {
                                     Error::Config(format!("Failed to get password secret: {e:?}"))
                                 })?
                             } else {
-                                return Err(Error::Config(format!(
-                                    "{} mechanism requires password",
-                                    mechanism
-                                )));
+                                return Err(Error::Config(
+                                    "SCRAM-SHA-256 mechanism requires password".into(),
+                                ));
                             };
-                            Some(numaflow_kafka::KafkaAuth::Sasl {
-                                mechanism,
+                            Some(numaflow_kafka::KafkaAuth::ScramSha256 { username, password })
+                        }
+                        "SCRAM-SHA-512" => {
+                            let Some(scram) = sasl.scramsha512 else {
+                                return Err(Error::Config(
+                                    "SCRAM-SHA-512 mechanism requires scramsha512 auth configuration".into(),
+                                ));
+                            };
+                            let username =
+                                crate::shared::create_components::get_secret_from_volume(
+                                    &scram.user_secret.name,
+                                    &scram.user_secret.key,
+                                )
+                                .map_err(|e| {
+                                    Error::Config(format!("Failed to get user secret: {e:?}"))
+                                })?;
+                            let password = if let Some(password_secret) = scram.password_secret {
+                                crate::shared::create_components::get_secret_from_volume(
+                                    &password_secret.name,
+                                    &password_secret.key,
+                                )
+                                .map_err(|e| {
+                                    Error::Config(format!("Failed to get password secret: {e:?}"))
+                                })?
+                            } else {
+                                return Err(Error::Config(
+                                    "SCRAM-SHA-512 mechanism requires password".into(),
+                                ));
+                            };
+                            Some(numaflow_kafka::KafkaAuth::ScramSha512 { username, password })
+                        }
+                        "GSSAPI" => {
+                            let Some(gssapi) = sasl.gssapi else {
+                                return Err(Error::Config(
+                                    "GSSAPI mechanism requires gssapi configuration".into(),
+                                ));
+                            };
+                            let service_name = gssapi.service_name.clone();
+                            let realm = gssapi.realm.clone();
+                            let username =
+                                crate::shared::create_components::get_secret_from_volume(
+                                    &gssapi.username_secret.name,
+                                    &gssapi.username_secret.key,
+                                )
+                                .map_err(|e| {
+                                    Error::Config(format!(
+                                        "Failed to get gssapi username secret: {e:?}"
+                                    ))
+                                })?;
+                            let password = if let Some(password_secret) = gssapi.password_secret {
+                                Some(
+                                    crate::shared::create_components::get_secret_from_volume(
+                                        &password_secret.name,
+                                        &password_secret.key,
+                                    )
+                                    .map_err(|e| {
+                                        Error::Config(format!(
+                                            "Failed to get gssapi password secret: {e:?}"
+                                        ))
+                                    })?,
+                                )
+                            } else {
+                                None
+                            };
+                            let keytab = if let Some(keytab_secret) = gssapi.keytab_secret {
+                                Some(
+                                    crate::shared::create_components::get_secret_from_volume(
+                                        &keytab_secret.name,
+                                        &keytab_secret.key,
+                                    )
+                                    .map_err(|e| {
+                                        Error::Config(format!(
+                                            "Failed to get gssapi keytab secret: {e:?}"
+                                        ))
+                                    })?,
+                                )
+                            } else {
+                                None
+                            };
+                            let kerberos_config = if let Some(kerberos_config_secret) =
+                                gssapi.kerberos_config_secret
+                            {
+                                Some(
+                                    crate::shared::create_components::get_secret_from_volume(
+                                        &kerberos_config_secret.name,
+                                        &kerberos_config_secret.key,
+                                    )
+                                    .map_err(|e| {
+                                        Error::Config(format!(
+                                            "Failed to get gssapi kerberos config secret: {e:?}"
+                                        ))
+                                    })?,
+                                )
+                            } else {
+                                None
+                            };
+                            let auth_type = format!("{:?}", gssapi.auth_type);
+                            Some(numaflow_kafka::KafkaAuth::Gssapi {
+                                service_name,
+                                realm,
                                 username,
                                 password,
+                                keytab,
+                                kerberos_config,
+                                auth_type,
                             })
                         }
-                        "OAUTH" => {
+                        "OAUTH" | "OAUTHBEARER" => {
                             let Some(oauth) = sasl.oauth else {
                                 return Err(Error::Config(
                                     "OAUTH mechanism requires oauth configuration".into(),
                                 ));
                             };
-                            let username =
+                            let client_id =
                                 crate::shared::create_components::get_secret_from_volume(
                                     &oauth.client_id.name,
                                     &oauth.client_id.key,
@@ -402,7 +492,7 @@ pub(crate) mod source {
                                 .map_err(|e| {
                                     Error::Config(format!("Failed to get client id secret: {e:?}"))
                                 })?;
-                            let password =
+                            let client_secret =
                                 crate::shared::create_components::get_secret_from_volume(
                                     &oauth.client_secret.name,
                                     &oauth.client_secret.key,
@@ -410,16 +500,12 @@ pub(crate) mod source {
                                 .map_err(|e| {
                                     Error::Config(format!("Failed to get client secret: {e:?}"))
                                 })?;
-                            Some(numaflow_kafka::KafkaAuth::Sasl {
-                                mechanism,
-                                username,
-                                password,
+                            let token_endpoint = oauth.token_endpoint.clone();
+                            Some(numaflow_kafka::KafkaAuth::Oauth {
+                                client_id,
+                                client_secret,
+                                token_endpoint,
                             })
-                        }
-                        "GSSAPI" => {
-                            return Err(Error::Config(
-                                "GSSAPI mechanism is not supported yet".into(),
-                            ));
                         }
                         _ => {
                             return Err(Error::Config(format!(
@@ -1491,15 +1577,11 @@ mod kafka_tests {
         if let SourceType::Kafka(config) = source_type {
             let auth = config.auth.unwrap();
             match auth {
-                numaflow_kafka::KafkaAuth::Sasl {
-                    mechanism,
-                    username,
-                    password,
-                } => {
-                    assert_eq!(mechanism, "PLAIN");
+                numaflow_kafka::KafkaAuth::Plain { username, password } => {
                     assert_eq!(username, "test-user");
                     assert_eq!(password, "test-pass");
                 }
+                _ => panic!("Unexpected KafkaAuth variant"),
             }
             assert_eq!(config.brokers, vec!["localhost:9092"]);
             assert_eq!(config.topic, "test-topic");
@@ -1552,15 +1634,11 @@ mod kafka_tests {
         if let SourceType::Kafka(config) = source_type {
             let auth = config.auth.unwrap();
             match auth {
-                numaflow_kafka::KafkaAuth::Sasl {
-                    mechanism,
-                    username,
-                    password,
-                } => {
-                    assert_eq!(mechanism, "SCRAM-SHA-256");
+                numaflow_kafka::KafkaAuth::ScramSha256 { username, password } => {
                     assert_eq!(username, "test-user");
                     assert_eq!(password, "test-pass");
                 }
+                _ => panic!("Unexpected KafkaAuth variant"),
             }
         } else {
             panic!("Expected SourceType::Kafka");
@@ -1610,15 +1688,16 @@ mod kafka_tests {
         if let SourceType::Kafka(config) = source_type {
             let auth = config.auth.unwrap();
             match auth {
-                numaflow_kafka::KafkaAuth::Sasl {
-                    mechanism,
-                    username,
-                    password,
+                numaflow_kafka::KafkaAuth::Oauth {
+                    client_id,
+                    client_secret,
+                    token_endpoint,
                 } => {
-                    assert_eq!(mechanism, "OAUTH");
-                    assert_eq!(username, "test-client");
-                    assert_eq!(password, "test-secret");
+                    assert_eq!(client_id, "test-client");
+                    assert_eq!(client_secret, "test-secret");
+                    assert_eq!(token_endpoint, "https://oauth.example.com/token");
                 }
+                _ => panic!("Unexpected KafkaAuth variant"),
             }
         } else {
             panic!("Expected SourceType::Kafka");
@@ -1668,7 +1747,7 @@ mod kafka_tests {
         if let SourceType::Kafka(config) = source_type {
             let tls_config = config.tls.unwrap();
             assert_eq!(tls_config.ca_cert.unwrap(), "test-ca-cert");
-            let client_auth = tls_config.client_auth.unwrap();
+            let client_auth = tls_config.client_auth.as_ref().unwrap();
             assert_eq!(client_auth.client_cert, "test-cert");
             assert_eq!(client_auth.client_cert_private_key, "test-key");
             assert!(!tls_config.insecure_skip_verify);
