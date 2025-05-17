@@ -17,6 +17,7 @@ use crate::{
     metrics,
     reader::LagReader,
 };
+use chrono::Utc;
 use numaflow_jetstream::JetstreamSource;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pulsar::source::PulsarSource;
@@ -334,6 +335,8 @@ impl Source {
                 false => 1,
             };
             let semaphore = Arc::new(Semaphore::new(max_ack_tasks));
+            let mut processed_msgs_count: usize = 0;
+            let mut last_logged_at = Instant::now();
 
             let mut result = Ok(());
             loop {
@@ -438,6 +441,17 @@ impl Source {
                         .send(message)
                         .await
                         .expect("send should not fail");
+
+                    processed_msgs_count += 1;
+                    if last_logged_at.elapsed().as_secs() >= 1 {
+                        info!(
+                            "Processed {} messages in {:?}",
+                            processed_msgs_count,
+                            Utc::now()
+                        );
+                        processed_msgs_count = 0;
+                        last_logged_at = Instant::now();
+                    }
                 }
             }
             info!(status=?result, "Source stopped, waiting for inflight messages to be acked");

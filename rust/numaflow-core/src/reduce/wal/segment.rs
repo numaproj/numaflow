@@ -87,12 +87,12 @@ impl std::fmt::Display for WalType {
 #[derive(Debug)]
 pub(crate) struct GcEventEntry {
     /// Start time of the Window
-    start_time: DateTime<Utc>,
+    pub(crate) start_time: DateTime<Utc>,
     /// The end time of the Window. Anything after this timestamp has not been processed.
-    end_time: DateTime<Utc>,
+    pub(crate) end_time: DateTime<Utc>,
     /// Keys are used only for Unaligned window since sessions are defined not purely on [crate::watermark]
     /// but also on Keys.
-    keys: Option<Vec<String>>,
+    pub(crate) keys: Option<Vec<String>>,
 }
 
 impl From<GcEvent> for GcEventEntry {
@@ -135,9 +135,15 @@ mod tests {
     use std::sync::Arc;
     use tokio_stream::StreamExt;
     use tokio_stream::wrappers::ReceiverStream;
+    use tracing_subscriber::util::SubscriberInitExt;
 
     #[tokio::test]
     async fn test_gc_wal_and_aligned_compaction() {
+        tracing_subscriber::fmt()
+            .with_test_writer()
+            .finish()
+            .set_default();
+
         let test_path = tempfile::tempdir().unwrap().into_path();
 
         // Create GC WAL
@@ -147,6 +153,7 @@ mod tests {
             1,    // 1MB
             1000, // 1s flush interval
             500,  // channel buffer
+            300,  // 5 minutes
         )
         .await
         .unwrap();
@@ -184,6 +191,7 @@ mod tests {
             1,    // 20MB
             1000, // 1s flush interval
             500,  // channel buffer
+            300,  // 5 minutes
         )
         .await
         .unwrap();
@@ -223,21 +231,15 @@ mod tests {
         handle.await.unwrap().unwrap();
 
         // Create and run compactor
-        let compactor = Compactor::new(
-            test_path.clone(),
-            WindowKind::Aligned,
-            1,    // 20MB
-            1000, // 1s flush interval
-            500,  // channel buffer
-        )
-        .await
-        .unwrap();
+        let compactor = Compactor::new(test_path.clone(), WindowKind::Aligned, 1, 1000, 500, 300)
+            .await
+            .unwrap();
 
         compactor.compact(None).await.unwrap();
 
         // Verify compacted data
-        let compaction_wal = ReplayWal::new(WalType::Compact, test_path);
-        let (mut rx, handle) = compaction_wal.streaming_read().unwrap();
+        let compaction_replay_wal = ReplayWal::new(WalType::Compact, test_path);
+        let (mut rx, handle) = compaction_replay_wal.streaming_read().unwrap();
 
         let mut remaining_message_count = 0;
         while let Some(entry) = rx.next().await {
@@ -248,8 +250,8 @@ mod tests {
                     if let Some(message_info) = header.message_info {
                         let event_time = message_info.event_time.map(utc_from_timestamp).unwrap();
                         assert!(
-                            event_time > gc_end,
-                            "Found message with event_time <= gc_end"
+                            event_time >= gc_end,
+                            "Found message with event_time < gc_end"
                         );
                     }
                 }
@@ -258,16 +260,21 @@ mod tests {
         }
         handle.await.unwrap().unwrap();
 
-        // we send 100 messages out of which 10 messages have event times less than the window end
-        // time so the remaining message cound should be 90
+        // we send 100 messages out of which 9 messages have event times less than the window end
+        // time so the remaining message cound should be 91
         assert_eq!(
-            remaining_message_count, 90,
-            "Expected 90 messages to remain after compaction"
+            remaining_message_count, 91,
+            "Expected 91 messages to remain after compaction"
         );
     }
 
     #[tokio::test]
     async fn test_gc_wal_and_unaligned_compaction() {
+        tracing_subscriber::fmt()
+            .with_test_writer()
+            .finish()
+            .set_default();
+
         let test_path = tempfile::tempdir().unwrap().into_path();
 
         // Create GC WAL
@@ -277,6 +284,7 @@ mod tests {
             1,    // 1MB
             1000, // 1s flush interval
             500,  // channel buffer
+            300,  // 5 minutes
         )
         .await
         .unwrap();
@@ -329,6 +337,7 @@ mod tests {
             1,    // 20MB
             1000, // 1s flush interval
             500,  // channel buffer
+            300,  // 5 minutes
         )
         .await
         .unwrap();
@@ -379,6 +388,7 @@ mod tests {
             1,    // 20MB
             1000, // 1s flush interval
             500,  // channel buffer
+            300,  // max_segment_age_secs
         )
         .await
         .unwrap();
@@ -405,14 +415,14 @@ mod tests {
                         if keys.contains(&"key1".to_string()) {
                             key1_count += 1;
                             assert!(
-                                event_time > gc_end_key1,
-                                "Found key1 message with event_time <= gc_end_key1"
+                                event_time >= gc_end_key1,
+                                "Found key1 message with event_time < gc_end_key1"
                             );
                         } else if keys.contains(&"key2".to_string()) {
                             key2_count += 1;
                             assert!(
-                                event_time > gc_end_key2,
-                                "Found key2 message with event_time <= gc_end_key2"
+                                event_time >= gc_end_key2,
+                                "Found key2 message with event_time < gc_end_key2"
                             );
                         }
                     }
@@ -422,17 +432,17 @@ mod tests {
         }
         handle.await.unwrap().unwrap();
 
-        // For key1, we should have removed messages with event time <= 10s (10 messages)
-        // For key2, we should have removed messages with event time <= 15s (15 messages)
-        // Total messages: 100 - (5 key1 messages + 8 key2 messages) = 87
+        // For key1, we should have removed messages with event time < 10s (9 messages)
+        // For key2, we should have removed messages with event time < 15s (15 messages)
+        // Total messages: 100 - (4 key1 messages + 7 key2 messages) = 87
         // Note: Since we alternate keys and start from 1, key1 is at odd indices and key2 at even indices
         assert_eq!(
-            remaining_message_count, 87,
-            "Expected 87 messages to remain after compaction"
+            remaining_message_count, 89,
+            "Expected 89 messages to remain after compaction"
         );
 
-        // We expect 45 key1 messages (50 - 5) and 40 key2 messages (50 - 8)
-        assert_eq!(key1_count, 45, "Expected 45 key1 messages to remain");
-        assert_eq!(key2_count, 42, "Expected 42 key2 messages to remain");
+        // We expect 45 key1 messages (50 - 4) and 40 key2 messages (50 - 7)
+        assert_eq!(key1_count, 46, "Expected 46 key1 messages to remain");
+        assert_eq!(key2_count, 43, "Expected 43 key2 messages to remain");
     }
 }

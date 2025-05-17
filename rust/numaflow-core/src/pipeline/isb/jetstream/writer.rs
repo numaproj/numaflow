@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use async_nats::jetstream::Context;
 use async_nats::jetstream::consumer::PullConsumer;
-use async_nats::jetstream::context::PublishAckFuture;
+use async_nats::jetstream::context::{Publish, PublishAckFuture};
 use async_nats::jetstream::publish::PublishAck;
 use async_nats::jetstream::stream::RetentionPolicy::Limits;
 use bytes::BytesMut;
@@ -16,7 +16,7 @@ use tokio::time::{Instant, sleep};
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 
 use crate::Result;
 use crate::config::pipeline::ToVertexConfig;
@@ -50,6 +50,7 @@ pub(crate) struct JetstreamWriter {
     tracker_handle: TrackerHandle,
     sem: Arc<Semaphore>,
     watermark_handle: Option<WatermarkHandle>,
+    paf_concurrency: usize,
 }
 
 impl JetstreamWriter {
@@ -80,6 +81,7 @@ impl JetstreamWriter {
             tracker_handle,
             sem: Arc::new(Semaphore::new(paf_concurrency)),
             watermark_handle,
+            paf_concurrency,
         };
 
         // spawn a task for checking whether buffer is_full
@@ -188,12 +190,8 @@ impl JetstreamWriter {
         cln_token: CancellationToken,
     ) -> Result<JoinHandle<Result<()>>> {
         let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
-            info!("Starting streaming Jetstream writer");
             let mut messages_stream = messages_stream;
             let mut hash = DefaultHasher::new();
-
-            let mut processed_msgs_count: usize = 0;
-            let mut last_logged_at = Instant::now();
 
             while let Some(message) = messages_stream.next().await {
                 // if message needs to be dropped, ack and continue
@@ -259,19 +257,14 @@ impl JetstreamWriter {
                         error!(?e, "Failed to resolve PAFs");
                         cln_token.cancel();
                     })?;
-
-                processed_msgs_count += 1;
-                if last_logged_at.elapsed().as_secs() >= 1 {
-                    info!(
-                        "Processed {} messages in {:?}",
-                        processed_msgs_count,
-                        std::time::Instant::now()
-                    );
-                    processed_msgs_count = 0;
-                    last_logged_at = Instant::now();
-                }
             }
-            info!("Streaming jetstream writer finished");
+
+            // wait for all the paf resolvers to complete before returning
+            let _ = Arc::clone(&self.sem)
+                .acquire_many_owned(self.paf_concurrency as u32)
+                .await
+                .expect("Failed to acquire semaphore permit");
+
             Ok(())
         });
         Ok(handle)
@@ -289,6 +282,10 @@ impl JetstreamWriter {
     ) -> Option<PublishAckFuture> {
         let mut log_counter = 500u16;
         let offset = message.offset.clone();
+
+        // message id will be used for deduplication
+        let id = message.id.to_string();
+
         let payload: BytesMut = message
             .try_into()
             .expect("message serialization should not fail");
@@ -322,7 +319,12 @@ impl JetstreamWriter {
                 }
                 Some(false) => match self
                     .js_ctx
-                    .publish(stream.name, payload.clone().freeze())
+                    .send_publish(
+                        stream.name,
+                        Publish::build()
+                            .payload(payload.clone().freeze())
+                            .message_id(&id),
+                    )
                     .await
                 {
                     Ok(paf) => break paf,
@@ -359,7 +361,7 @@ impl JetstreamWriter {
             .await
             .map_err(|_e| Error::ISB("Failed to acquire semaphore permit".to_string()))?;
 
-        let this = self.clone();
+        let mut this = self.clone();
 
         tokio::spawn(async move {
             let _permit = permit;
@@ -383,6 +385,7 @@ impl JetstreamWriter {
                     Ok(ack) => {
                         if ack.duplicate {
                             warn!(
+                                message_id = ?message.id,
                                 stream = ?stream,
                                 ack = ?ack,
                                 "Duplicate message detected"
@@ -407,7 +410,7 @@ impl JetstreamWriter {
 
             // now the pafs have resolved, lets use the offsets to send watermark
             for (stream, offset) in offsets {
-                if let Some(watermark_handle) = this.watermark_handle.as_ref() {
+                if let Some(watermark_handle) = this.watermark_handle.as_mut() {
                     JetstreamWriter::publish_watermark(watermark_handle, stream, offset, &message)
                         .await;
                 }
@@ -477,7 +480,7 @@ impl JetstreamWriter {
 
     /// publishes the watermark for the given stream and offset
     async fn publish_watermark(
-        watermark_handle: &WatermarkHandle,
+        watermark_handle: &mut WatermarkHandle,
         stream: Stream,
         offset: Offset,
         message: &Message,
