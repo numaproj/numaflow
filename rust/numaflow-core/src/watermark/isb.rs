@@ -790,7 +790,7 @@ mod tests {
             .unwrap();
     }
 
-    // #[cfg(feature = "nats-tests")]
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_publish_idle_watermark() {
         let client = async_nats::connect("localhost:4222").await.unwrap();

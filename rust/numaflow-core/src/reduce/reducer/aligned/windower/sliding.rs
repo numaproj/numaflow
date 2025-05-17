@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::fs;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -43,7 +44,7 @@ impl SlidingWindowManager {
             slide,
             active_windows: Arc::new(RwLock::new(BTreeSet::new())),
             closed_windows: Arc::new(RwLock::new(BTreeSet::new())),
-            max_deleted_window_end_time: Arc::new(AtomicI64::new(Utc::now().timestamp_millis())),
+            max_deleted_window_end_time: Arc::new(AtomicI64::new(-1)),
             state_file_path,
         };
 
@@ -213,10 +214,7 @@ impl SlidingWindowManager {
             return Ok(());
         }
 
-        let mut buf = Vec::new();
-        File::open(path)
-            .and_then(|mut file| file.read(&mut buf))
-            .map_err(|e| Error::Other(e.to_string()))?;
+        let buf = fs::read(path).map_err(|e| Error::Other(e.to_string()))?;
 
         let state =
             WindowManagerState::decode(&buf[..]).map_err(|e| Error::Other(e.to_string()))?;
@@ -240,6 +238,7 @@ impl SlidingWindowManager {
     /// Assigns windows to a message, dropping messages with event time earlier than the oldest window's start time
     pub(crate) fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage> {
         let windows = self.create_windows(&msg);
+        println!("windows: {:?}", windows);
         let mut result = Vec::new();
 
         // Check if windows already exist and create appropriate operations
@@ -261,6 +260,12 @@ impl SlidingWindowManager {
                     operation: WindowOperation::Open(msg.clone()),
                     window: window.clone(),
                 });
+            } else {
+                println!("window end time: {:?}", window.end_time.timestamp_millis());
+                println!(
+                    "max deleted window end time: {:?}",
+                    self.max_deleted_window_end_time.load(Ordering::Relaxed)
+                );
             }
         }
 
@@ -302,8 +307,8 @@ mod tests {
         // Assign windows
         let window_msgs = windower.assign_windows(msg.clone());
 
-        // Verify results - should be assigned to exactly 1 window (the forward-looking one)
-        assert_eq!(window_msgs.len(), 1);
+        // Verify results - should be assigned to exactly 3 windows
+        assert_eq!(window_msgs.len(), 3);
 
         // Check first window: [60000, 120000)
         assert_eq!(window_msgs[0].window.start_time.timestamp_millis(), 60000);
@@ -323,8 +328,8 @@ mod tests {
 
         let window_msgs2 = windower.assign_windows(msg2.clone());
 
-        // Should also be assigned to 1 window
-        assert_eq!(window_msgs2.len(), 1);
+        // Verify results - should be assigned to exactly 3 windows
+        assert_eq!(window_msgs2.len(), 3);
 
         // All operations should be Append
         for window_msg in &window_msgs2 {
@@ -361,12 +366,20 @@ mod tests {
         // Assign windows
         let window_msgs = windower.assign_windows(msg.clone());
 
-        // Verify results - should be assigned to exactly 1 window (the forward-looking one)
-        assert_eq!(window_msgs.len(), 1);
+        // Verify results - should be assigned to exactly 2 windows
+        assert_eq!(window_msgs.len(), 2);
 
         assert_eq!(window_msgs[0].window.start_time.timestamp(), 600);
         assert_eq!(window_msgs[0].window.end_time.timestamp(), 660);
         match &window_msgs[0].operation {
+            WindowOperation::Open(_) => {}
+            _ => panic!("Expected Open operation"),
+        }
+
+        // Check second window: [560, 620)
+        assert_eq!(window_msgs[1].window.start_time.timestamp(), 560);
+        assert_eq!(window_msgs[1].window.end_time.timestamp(), 620);
+        match &window_msgs[1].operation {
             WindowOperation::Open(_) => {}
             _ => panic!("Expected Open operation"),
         }
@@ -389,21 +402,15 @@ mod tests {
 
         let window_msgs2 = windower.assign_windows(msg2.clone());
 
-        // Should now be assigned to 2 windows (one open, one append)
+        // Should also be assigned to 2 windows
         assert_eq!(window_msgs2.len(), 2);
 
-        // First should be append to the forward window
-        match &window_msgs2[0].operation {
-            WindowOperation::Append(_) => {}
-            _ => panic!("Expected Append operation"),
-        }
-
-        // Second should be append to the manually inserted window
-        assert_eq!(window_msgs2[1].window.start_time.timestamp(), 560);
-        assert_eq!(window_msgs2[1].window.end_time.timestamp(), 620);
-        match &window_msgs2[1].operation {
-            WindowOperation::Append(_) => {}
-            _ => panic!("Expected Append operation"),
+        // All operations should be Append
+        for window_msg in &window_msgs2 {
+            match &window_msg.operation {
+                WindowOperation::Append(_) => {}
+                _ => panic!("Expected Append operation"),
+            }
         }
     }
 

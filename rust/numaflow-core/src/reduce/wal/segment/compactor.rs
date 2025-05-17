@@ -322,7 +322,6 @@ impl Compactor {
                         .map_err(|e| format!("Failed to decode GC event: {e}"))?;
                     let gc: GcEventEntry = gc.into();
 
-                    info!(start_time = ?gc.start_time.timestamp_millis(), end_time = ?gc.end_time.timestamp_millis(),  "GC event: {:?}", gc);
                     // Update the oldest time if the current GC event's end time is newer.
                     oldest_time = oldest_time.max(gc.end_time);
                 }

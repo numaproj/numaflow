@@ -519,7 +519,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "nats-tests")]
+    // #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_aligned_reducer_with_fixed_window() -> crate::Result<()> {
         // Set up the reducer server
@@ -982,7 +982,7 @@ mod tests {
         }
 
         assert_eq!(
-            result_count, 1,
+            result_count, 3,
             "Expected exactly three result messages for sliding windows"
         );
 
