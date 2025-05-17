@@ -427,7 +427,7 @@ impl ISBWatermarkHandle {
                     .lock()
                     .expect("failed to acquire lock");
                 // Compare the min of latest fetched watermark and oldest window's end time - 1ms
-                return return std::cmp::min(
+                return std::cmp::min(
                     *latest_fetched_wm,
                     Watermark::from_timestamp_millis(oldest_window.end_time.timestamp_millis() - 1)
                         .expect("failed to parse time"),

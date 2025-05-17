@@ -15,7 +15,7 @@ use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 /// Represents an active reduce stream for a window.
 struct ActiveStream {
@@ -107,6 +107,11 @@ impl ReduceTask {
                 return;
             }
 
+            let oldest_window = self
+                .window_manager
+                .oldest_window()
+                .expect("no oldest window found");
+
             self.window_manager.delete_window(self.window.clone());
 
             // now that the processing is done, we can add this window to the GC WAL.
@@ -119,17 +124,9 @@ impl ReduceTask {
             let gc_event: GcEvent = if let WindowManager::Sliding(_) = self.window_manager {
                 // for sliding window a message can be part of multiple windows, we can only delete the
                 // messages that are less than the oldest window's start time.
-                let oldest_window = self
-                    .window_manager
-                    .oldest_window()
-                    .expect("no oldest window found");
                 Window {
-                    start_time: oldest_window
-                        .start_time
-                        .sub(chrono::Duration::milliseconds(1)),
-                    end_time: oldest_window
-                        .start_time
-                        .sub(chrono::Duration::milliseconds(1)),
+                    start_time: oldest_window.start_time,
+                    end_time: oldest_window.start_time,
                     id: oldest_window.id,
                 }
                 .into()
@@ -138,6 +135,8 @@ impl ReduceTask {
                 // messages that are less than the window's end time.
                 self.window.clone().into()
             };
+
+            debug!(?gc_event, "Sending GC event to WAL");
 
             gc_wal_tx
                 .send(SegmentWriteMessage::WriteData {

@@ -2,16 +2,19 @@ use std::collections::BTreeSet;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::Ordering;
+use std::sync::{Arc, Mutex, RwLock, atomic::AtomicI64};
 use std::time::Duration;
 
 use crate::message::Message;
 use crate::reduce::error::{Error, ReduceResult};
 use crate::reduce::reducer::aligned::windower::{AlignedWindowMessage, Window, WindowOperation};
+use crate::shared::grpc::utc_from_timestamp;
 use chrono::{DateTime, TimeZone, Utc};
 use numaflow_pb::objects::wal::Window as ProtoWindow;
 use numaflow_pb::objects::wal::WindowManagerState;
 use prost::Message as ProtoMessage;
+use tracing::{error, info, warn};
 
 #[derive(Debug, Clone)]
 pub(crate) struct SlidingWindowManager {
@@ -20,11 +23,13 @@ pub(crate) struct SlidingWindowManager {
     /// Slide duration
     slide: Duration,
     /// Active windows sorted by end time
-    active_windows: Arc<Mutex<BTreeSet<Window>>>,
+    active_windows: Arc<RwLock<BTreeSet<Window>>>,
     /// Closed windows sorted by end time
-    closed_windows: Arc<Mutex<BTreeSet<Window>>>,
+    closed_windows: Arc<RwLock<BTreeSet<Window>>>,
     /// Optional path to save/load window state
     state_file_path: Option<PathBuf>,
+    /// Last window end time that was deleted
+    max_deleted_window_end_time: Arc<AtomicI64>,
 }
 
 impl SlidingWindowManager {
@@ -36,15 +41,16 @@ impl SlidingWindowManager {
         let mut manager = Self {
             window_length,
             slide,
-            active_windows: Arc::new(Mutex::new(BTreeSet::new())),
-            closed_windows: Arc::new(Mutex::new(BTreeSet::new())),
+            active_windows: Arc::new(RwLock::new(BTreeSet::new())),
+            closed_windows: Arc::new(RwLock::new(BTreeSet::new())),
+            max_deleted_window_end_time: Arc::new(AtomicI64::new(Utc::now().timestamp_millis())),
             state_file_path,
         };
 
         // If state file path is provided, try to load state from file
         if manager.state_file_path.is_some() {
             if let Err(e) = manager.load_state() {
-                tracing::warn!("Failed to load window state from file: {}", e);
+                error!("Failed to load window state from file: {}", e);
             }
         }
 
@@ -120,21 +126,46 @@ impl SlidingWindowManager {
 
     /// Deletes a window after it is closed and GC is done.
     pub(crate) fn delete_window(&self, window: Window) {
+        // Update max_deleted_window_end_time if this window's end time is greater
+        self.max_deleted_window_end_time
+            .fetch_max(window.end_time.timestamp_millis(), Ordering::Relaxed);
+
+        // Remove the window from closed_windows
         let mut closed_windows = self.closed_windows.lock().unwrap();
         closed_windows.remove(&window);
+        info!("Deleted window: {:?}", window);
     }
 
     /// Returns the oldest window yet to be completed. This will be the lowest Watermark in the Vertex.
     pub(crate) fn oldest_window(&self) -> Option<Window> {
         // First check closed windows
-        let closed_windows = self.closed_windows.lock().unwrap();
-        if !closed_windows.is_empty() {
-            return closed_windows.iter().next().cloned();
+        {
+            let closed_windows = self.closed_windows.lock().unwrap();
+            if !closed_windows.is_empty() {
+                return closed_windows.iter().next().cloned();
+            }
         }
 
         // If no closed windows, check active windows
         let active_windows = self.active_windows.lock().unwrap();
         active_windows.iter().next().cloned()
+    }
+
+    /// Helper method to format window information for logging
+    fn format_windows_for_log(windows: &[ProtoWindow]) -> String {
+        let formatted_windows: String = windows
+            .iter()
+            .map(|window| {
+                let start_time =
+                    utc_from_timestamp(window.start_time.clone().unwrap()).timestamp_millis();
+                let end_time =
+                    utc_from_timestamp(window.end_time.clone().unwrap()).timestamp_millis();
+                format!("[{} - {}]", start_time, end_time)
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        format!("{} windows: {}", windows.len(), formatted_windows)
     }
 
     /// Saves the current window state to the specified file
@@ -147,16 +178,22 @@ impl SlidingWindowManager {
             let active_windows = self.active_windows.lock().unwrap();
             let closed_windows = self.closed_windows.lock().unwrap();
 
-            active_windows
+            closed_windows
                 .iter()
-                .chain(closed_windows.iter())
+                .chain(active_windows.iter())
                 .map(Into::into)
                 .collect()
         };
 
         let state = WindowManagerState {
             windows: all_windows,
+            max_deleted_window_end_time: self.max_deleted_window_end_time.load(Ordering::Relaxed),
         };
+
+        info!(
+            "Saving window state: {}",
+            Self::format_windows_for_log(&state.windows)
+        );
 
         let mut buf = Vec::new();
         state
@@ -196,6 +233,14 @@ impl SlidingWindowManager {
             .unwrap()
             .extend(state.windows.iter().map(Into::into));
 
+        self.max_deleted_window_end_time
+            .store(state.max_deleted_window_end_time, Ordering::Relaxed);
+
+        info!(
+            "Loaded window state: {}",
+            Self::format_windows_for_log(&state.windows)
+        );
+
         Ok(())
     }
 
@@ -207,27 +252,25 @@ impl SlidingWindowManager {
         // Check if windows already exist and create appropriate operations
         let mut active_windows = self.active_windows.lock().unwrap();
 
-        // Only create the forward window (newest) if it doesn't exist
-        // For older windows, only append if they already exist
-        let first_window = windows.first().unwrap();
-        if !active_windows.contains(first_window) {
-            active_windows.insert(first_window.clone());
-            result.push(AlignedWindowMessage {
-                operation: WindowOperation::Open(msg.clone()),
-                window: first_window.clone(),
-            });
-        } else {
-            result.push(AlignedWindowMessage {
-                operation: WindowOperation::Append(msg.clone()),
-                window: first_window.clone(),
-            });
-        };
-
-        for window in windows[1..].iter() {
+        for window in windows.iter() {
             if active_windows.contains(&window) {
                 // Window exists, append message
                 result.push(AlignedWindowMessage {
                     operation: WindowOperation::Append(msg.clone()),
+                    window: window.clone(),
+                });
+            } else {
+                // if the window end time is less than the max deleted window end time, skip it
+                // during replay we might create windows that are already deleted
+                if window.end_time.timestamp_millis()
+                    <= self.max_deleted_window_end_time.load(Ordering::Relaxed)
+                {
+                    continue;
+                }
+                // New window, insert it
+                active_windows.insert(window.clone());
+                result.push(AlignedWindowMessage {
+                    operation: WindowOperation::Open(msg.clone()),
                     window: window.clone(),
                 });
             }
@@ -647,6 +690,7 @@ mod tests {
             ))),
             closed_windows: Arc::new(Mutex::new(BTreeSet::new())),
             state_file_path: None,
+            max_deleted_window_end_time: Arc::new(Default::default()),
         };
 
         // Create a test message with event time at 105s

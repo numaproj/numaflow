@@ -23,6 +23,7 @@ use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use numaflow_pb::objects::isb;
 use numaflow_pb::objects::wal::GcEvent;
+use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{Duration, UNIX_EPOCH};
@@ -164,7 +165,7 @@ impl Compactor {
         // Get the oldest time and scanned GC files
         let (oldest_time, gc_files) = self.build_aligned_compaction().await?;
 
-        debug!(oldest_time = ?oldest_time.timestamp_millis(), "Event time till which the data has been processed");
+        info!(oldest_time = ?oldest_time.timestamp_millis(), "Event time till which the data has been processed");
 
         let compact = AlignedCompaction(oldest_time);
 
@@ -322,6 +323,7 @@ impl Compactor {
                         .map_err(|e| format!("Failed to decode GC event: {e}"))?;
                     let gc: GcEventEntry = gc.into();
 
+                    info!(start_time = ?gc.start_time.timestamp_millis(), end_time = ?gc.end_time.timestamp_millis(),  "GC event: {:?}", gc);
                     // Update the oldest time if the current GC event's end time is newer.
                     oldest_time = oldest_time.max(gc.end_time);
                 }

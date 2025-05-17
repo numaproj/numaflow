@@ -74,6 +74,7 @@ impl PBQ {
         };
 
         let handle = tokio::spawn(async move {
+            let start = std::time::Instant::now();
             // Create a channel for WAL replay
             let (wal_tx, mut wal_rx) = mpsc::channel(500);
 
@@ -90,14 +91,27 @@ impl PBQ {
                 )
                 .await?;
 
+            let mut replayed_count = 0;
+            let mut min_event_time_in_ms = u64::MAX;
+
             // Process replayed messages
             while let Some(msg) = wal_rx.recv().await {
                 let msg: WalMessage = msg.try_into().unwrap();
+                let event_time_in_ms = msg.message.event_time.timestamp_millis() as u64;
+                min_event_time_in_ms = min_event_time_in_ms.min(event_time_in_ms);
                 messages_tx
                     .send(msg.into())
                     .await
                     .expect("Receiver dropped");
+                replayed_count += 1;
             }
+
+            info!(
+                time_taken_ms = start.elapsed().as_millis(),
+                ?replayed_count,
+                ?min_event_time_in_ms,
+                "Finished replaying from WAL, starting to read from ISB"
+            );
 
             // Read from ISB and write to WAL
             Self::read_isb_and_write_wal(

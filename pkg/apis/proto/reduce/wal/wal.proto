@@ -23,7 +23,10 @@ message Window {
 
 // WindowManagerState is the state of the window manager
 message WindowManagerState {
+  // list of active windows
   repeated Window windows = 1;
+  // we use int64 for the end time because it will be -1 if there are no windows
+  int64 max_deleted_window_end_time = 2;
 }
 
 message Footer {

@@ -24,8 +24,12 @@ pub struct Window {
 /// WindowManagerState is the state of the window manager
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct WindowManagerState {
+    /// list of active windows
     #[prost(message, repeated, tag = "1")]
     pub windows: ::prost::alloc::vec::Vec<Window>,
+    /// we use int64 for the end time because it will be -1 if there are no windows
+    #[prost(int64, tag = "2")]
+    pub max_deleted_window_end_time: i64,
 }
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct Footer {
