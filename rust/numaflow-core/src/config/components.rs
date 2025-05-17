@@ -387,7 +387,10 @@ pub(crate) mod sink {
     const DEFAULT_FB_SINK_SERVER_INFO_FILE: &str = "/var/run/numaflow/fb-sinker-server-info";
     const DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY: OnFailureStrategy = OnFailureStrategy::Retry;
     const DEFAULT_MAX_SINK_RETRY_ATTEMPTS: u16 = u16::MAX;
-    const DEFAULT_SINK_RETRY_INTERVAL_IN_MS: u32 = 1;
+    const DEFAULT_SINK_INITIAL_RETRY_INTERVAL_IN_MS: u32 = 1;
+    const DEFAULT_SINK_MAX_RETRY_INTERVAL_IN_MS: u32 = u32::MAX;
+    const DEFAULT_SINK_RETRY_FACTOR: f64 = 1.0;
+    const DEFAULT_SINK_RETRY_JITTER: f64 = 0.0;
 
     use std::fmt::Display;
 
@@ -549,7 +552,10 @@ pub(crate) mod sink {
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct RetryConfig {
         pub sink_max_retry_attempts: u16,
-        pub sink_retry_interval_in_ms: u32,
+        pub sink_initial_retry_interval_in_ms: u32,
+        pub sink_retry_factor: f64,
+        pub sink_retry_jitter: f64,
+        pub sink_max_retry_interval_in_ms: u32,
         pub sink_retry_on_fail_strategy: OnFailureStrategy,
         pub sink_default_retry_strategy: RetryStrategy,
     }
@@ -559,15 +565,27 @@ pub(crate) mod sink {
             let default_retry_strategy = RetryStrategy {
                 backoff: Option::from(Box::from(Backoff {
                     interval: Option::from(kube::core::Duration::from(
-                        std::time::Duration::from_millis(DEFAULT_SINK_RETRY_INTERVAL_IN_MS as u64),
+                        std::time::Duration::from_millis(
+                            DEFAULT_SINK_INITIAL_RETRY_INTERVAL_IN_MS as u64,
+                        ),
                     )),
                     steps: Option::from(DEFAULT_MAX_SINK_RETRY_ATTEMPTS as i64),
+                    cap: Option::from(kube::core::Duration::from(
+                        std::time::Duration::from_millis(
+                            DEFAULT_SINK_MAX_RETRY_INTERVAL_IN_MS as u64,
+                        ),
+                    )),
+                    factor: Option::from(DEFAULT_SINK_RETRY_FACTOR),
+                    jitter: Option::from(DEFAULT_SINK_RETRY_JITTER),
                 })),
                 on_failure: Option::from(DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY.to_string()),
             };
             Self {
                 sink_max_retry_attempts: DEFAULT_MAX_SINK_RETRY_ATTEMPTS,
-                sink_retry_interval_in_ms: DEFAULT_SINK_RETRY_INTERVAL_IN_MS,
+                sink_initial_retry_interval_in_ms: DEFAULT_SINK_INITIAL_RETRY_INTERVAL_IN_MS,
+                sink_max_retry_interval_in_ms: DEFAULT_SINK_MAX_RETRY_INTERVAL_IN_MS,
+                sink_retry_factor: DEFAULT_SINK_RETRY_FACTOR,
+                sink_retry_jitter: DEFAULT_SINK_RETRY_JITTER,
                 sink_retry_on_fail_strategy: DEFAULT_SINK_RETRY_ON_FAIL_STRATEGY,
                 sink_default_retry_strategy: default_retry_strategy,
             }
@@ -579,12 +597,25 @@ pub(crate) mod sink {
             let mut retry_config = RetryConfig::default();
             if let Some(backoff) = &retry.backoff {
                 if let Some(interval) = backoff.interval {
-                    retry_config.sink_retry_interval_in_ms =
+                    retry_config.sink_initial_retry_interval_in_ms =
                         std::time::Duration::from(interval).as_millis() as u32;
                 }
 
                 if let Some(steps) = backoff.steps {
                     retry_config.sink_max_retry_attempts = steps as u16;
+                }
+
+                if let Some(factor) = backoff.factor {
+                    retry_config.sink_retry_factor = factor;
+                }
+
+                if let Some(jitter) = backoff.jitter {
+                    retry_config.sink_retry_jitter = jitter;
+                }
+
+                if let Some(cap) = backoff.cap {
+                    retry_config.sink_max_retry_interval_in_ms =
+                        std::time::Duration::from(cap).as_millis() as u32;
                 }
             }
 
@@ -980,12 +1011,20 @@ mod sink_tests {
                     std::time::Duration::from_millis(1u64),
                 )),
                 steps: Option::from(u16::MAX as i64),
+                cap: Option::from(kube::core::Duration::from(
+                    std::time::Duration::from_millis(4294967295u64),
+                )),
+                factor: Option::from(1.0),
+                jitter: Option::from(0.0),
             })),
             on_failure: Option::from(OnFailureStrategy::Retry.to_string()),
         };
         let default_config = RetryConfig::default();
         assert_eq!(default_config.sink_max_retry_attempts, u16::MAX);
-        assert_eq!(default_config.sink_retry_interval_in_ms, 1);
+        assert_eq!(default_config.sink_initial_retry_interval_in_ms, 1);
+        assert_eq!(default_config.sink_max_retry_interval_in_ms, 4294967295);
+        assert_eq!(default_config.sink_retry_factor, 1.0);
+        assert_eq!(default_config.sink_retry_jitter, 0.0);
         assert_eq!(
             default_config.sink_retry_on_fail_strategy,
             OnFailureStrategy::Retry

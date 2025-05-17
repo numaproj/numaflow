@@ -1194,12 +1194,112 @@ func TestValidateSink(t *testing.T) {
 
 func TestIsValidSinkRetryStrategy(t *testing.T) {
 	zeroSteps := uint32(0)
+	invalidFactor := float64(0.5)
+	negativeJitter := float64(-0.5)
+	greaterThanOneJitter := float64(1.1)
+	validJitter := float64(0.5)
+	validFactor := float64(2.0)
+	validInterval := metav1.Duration{Duration: 1 * time.Millisecond}
+	validCap := metav1.Duration{Duration: 10 * time.Millisecond}
+	invalidCap := metav1.Duration{Duration: 500 * time.Microsecond}
 	tests := []struct {
 		name     string
 		sink     dfv1.Sink
 		strategy dfv1.RetryStrategy
 		wantErr  bool
 	}{
+		{
+			name: "valid strategy with cap >= interval",
+			sink: dfv1.Sink{},
+			strategy: dfv1.RetryStrategy{
+				BackOff: &dfv1.Backoff{
+					Interval: &validInterval,
+					Cap:      &validCap,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid strategy with cap < interval",
+			sink: dfv1.Sink{},
+			strategy: dfv1.RetryStrategy{
+				BackOff: &dfv1.Backoff{
+					Interval: &validInterval,
+					Cap:      &invalidCap,
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "valid strategy with jitter >= 0 and less than 1",
+			sink: dfv1.Sink{},
+			strategy: dfv1.RetryStrategy{
+				BackOff: &dfv1.Backoff{
+					Jitter: &validJitter,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid strategy with jitter < 0",
+			sink: dfv1.Sink{},
+			strategy: dfv1.RetryStrategy{
+				BackOff: &dfv1.Backoff{
+					Jitter: &negativeJitter,
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid strategy with jitter >= 1",
+			sink: dfv1.Sink{},
+			strategy: dfv1.RetryStrategy{
+				BackOff: &dfv1.Backoff{
+					Jitter: &greaterThanOneJitter,
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid strategy with factor less than 1",
+			sink: dfv1.Sink{},
+			strategy: dfv1.RetryStrategy{
+				BackOff: &dfv1.Backoff{
+					Factor: &invalidFactor,
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "valid strategy with positive factor",
+			sink: dfv1.Sink{},
+			strategy: dfv1.RetryStrategy{
+				BackOff: &dfv1.Backoff{
+					Factor: &validFactor,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid strategy with cap but no interval",
+			sink: dfv1.Sink{},
+			strategy: dfv1.RetryStrategy{
+				BackOff: &dfv1.Backoff{
+					Cap: &validCap,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid strategy with cap < default interval",
+			sink: dfv1.Sink{},
+			strategy: dfv1.RetryStrategy{
+				BackOff: &dfv1.Backoff{
+					Cap: &invalidCap,
+				},
+			},
+			wantErr: true,
+		},
 		{
 			name: "valid strategy with fallback configured",
 			sink: dfv1.Sink{Fallback: &dfv1.AbstractSink{
@@ -1250,9 +1350,9 @@ func TestIsValidSinkRetryStrategy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.sink.RetryStrategy = tt.strategy
-			ok := hasValidSinkRetryStrategy(tt.sink)
-			if (!ok) != tt.wantErr {
-				t.Errorf("isValidSinkRetryStrategy() got = %v, want %v", ok, tt.wantErr)
+			err := hasValidSinkRetryStrategy(tt.sink)
+			if (err == nil) == tt.wantErr {
+				t.Errorf("isValidSinkRetryStrategy() got = %v, want %v", (err == nil), tt.wantErr)
 			}
 		})
 	}
