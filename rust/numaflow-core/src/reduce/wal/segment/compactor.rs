@@ -31,7 +31,7 @@ use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
 use tokio_stream::{StreamExt, wrappers::ReceiverStream};
 use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tracing::{debug, info};
 
 /// WALs can represent two Kinds of Windows and data is different for each Kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -164,7 +164,7 @@ impl Compactor {
         // Get the oldest time and scanned GC files
         let (oldest_time, gc_files) = self.build_aligned_compaction().await?;
 
-        info!(oldest_time = ?oldest_time.timestamp_millis(), "Event time till which the data has been processed");
+        debug!(oldest_time = ?oldest_time.timestamp_millis(), "Event time till which the data has been processed");
 
         let compact = AlignedCompaction(oldest_time);
 

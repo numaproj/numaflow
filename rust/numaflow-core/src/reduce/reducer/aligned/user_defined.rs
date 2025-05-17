@@ -109,15 +109,11 @@ impl From<UdReducerResponse> for Message {
         let window = wrapper.response.window.unwrap_or_default();
 
         // Create offset from window start and end time
-        let offset_str = if let (Some(start), Some(end)) = (window.start, window.end) {
-            format!(
-                "{}-{}",
-                utc_from_timestamp(start).timestamp_millis(),
-                utc_from_timestamp(end).timestamp_millis()
-            )
-        } else {
-            "0-0".to_string()
-        };
+        let offset_str = format!(
+            "{}-{}",
+            utc_from_timestamp(window.start.expect("window start missing")).timestamp_millis(),
+            utc_from_timestamp(window.end.expect("window end missing")).timestamp_millis()
+        );
 
         Message {
             typ: Default::default(),
@@ -133,6 +129,8 @@ impl From<UdReducerResponse> for Message {
             watermark: window
                 .end
                 .map(|ts| utc_from_timestamp(ts) - chrono::Duration::milliseconds(1)),
+            // this will be unique for each response which will be used for dedup (index is used because
+            // each window can have multiple reduce responses)
             id: MessageID {
                 vertex_name: wrapper.vertex_name.into(),
                 offset: offset_str.into(),

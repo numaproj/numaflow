@@ -370,9 +370,9 @@ impl ISBWatermarkHandle {
         // Compute the minimum watermark
         let mut min_wm = self.compute_min_watermark().await;
 
-        // If there are no inflight messages or windows, get the head idle watermark
+        // if the computed min watermark is -1, means there is no data (no windows and inflight messages)
+        // we should fetch the head idle watermark and publish it to downstream.
         if min_wm.timestamp_millis() == -1 {
-            // Fetch the head idle watermark from the actor
             let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
             if let Err(e) = self
                 .sender
@@ -419,14 +419,17 @@ impl ISBWatermarkHandle {
 
     /// Computes the minimum watermark based on window manager and inflight messages
     async fn compute_min_watermark(&self) -> Watermark {
-        // If window manager is configured, use the oldest window's end time - 1ms
+        // If window manager is configured, we can use the oldest window's end time - 1ms as the
+        // watermark.
         if let Some(window_manager) = &self.window_manager {
             if let Some(oldest_window) = window_manager.oldest_window() {
+                // we should also compare it with the latest fetched watermark because sometimes
+                // the window end time can be greater than the watermark of the messages in the window.
+                // in that case we should use the latest fetched watermark.
                 let latest_fetched_wm = self
                     .latest_fetched_wm
                     .lock()
                     .expect("failed to acquire lock");
-                // Compare the min of latest fetched watermark and oldest window's end time - 1ms
                 return std::cmp::min(
                     *latest_fetched_wm,
                     Watermark::from_timestamp_millis(oldest_window.end_time.timestamp_millis() - 1)
@@ -435,6 +438,8 @@ impl ISBWatermarkHandle {
             }
         }
 
+        // if window manager is not configured, we should use the lowest watermark among all the
+        // inflight messages.
         self.get_lowest_watermark()
             .await
             .unwrap_or(Watermark::from_timestamp_millis(-1).unwrap())

@@ -81,7 +81,8 @@ impl PBQ {
             // Clone the tx for use in the replay handler
             let messages_tx = tx.clone();
 
-            // Start compaction with both replay and periodic compaction
+            // starts the compaction process, for the first time it compacts and replays the
+            // unprocessed data then it does the periodic compaction.
             let compaction_handle = wal
                 .compactor
                 .start_compaction_with_replay(
@@ -92,13 +93,10 @@ impl PBQ {
                 .await?;
 
             let mut replayed_count = 0;
-            let mut min_event_time_in_ms = u64::MAX;
 
             // Process replayed messages
             while let Some(msg) = wal_rx.recv().await {
-                let msg: WalMessage = msg.try_into().unwrap();
-                let event_time_in_ms = msg.message.event_time.timestamp_millis() as u64;
-                min_event_time_in_ms = min_event_time_in_ms.min(event_time_in_ms);
+                let msg: WalMessage = msg.try_into().expect("Failed to parse WAL message");
                 messages_tx
                     .send(msg.into())
                     .await
@@ -109,11 +107,11 @@ impl PBQ {
             info!(
                 time_taken_ms = start.elapsed().as_millis(),
                 ?replayed_count,
-                ?min_event_time_in_ms,
                 "Finished replaying from WAL, starting to read from ISB"
             );
 
-            // Read from ISB and write to WAL
+            // After replaying the unprocessed data, start reading the new set of messages from ISB
+            // and also persist them in WAL.
             Self::read_isb_and_write_wal(
                 self.isb_reader,
                 wal.append_only_wal,
@@ -123,7 +121,7 @@ impl PBQ {
             )
             .await?;
 
-            // Wait for compaction to complete
+            // Wait for compaction task to exit gracefully
             compaction_handle.await.expect("task failed")?;
 
             info!("PBQ streaming read completed");
@@ -174,9 +172,11 @@ impl PBQ {
             tx.send(msg).await.expect("Receiver dropped");
         }
 
+        isb_handle.await.expect("task failed")?;
+
+        // drop the sender to signal the wal eof and wait for the wal task to exit gracefully
         drop(wal_tx);
         wal_handle.await.expect("task failed")?;
-        isb_handle.await.expect("task failed")?;
 
         Ok(())
     }

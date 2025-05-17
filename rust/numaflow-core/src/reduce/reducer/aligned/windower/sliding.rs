@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, RwLock, atomic::AtomicI64};
@@ -15,7 +15,7 @@ use chrono::{DateTime, TimeZone, Utc};
 use numaflow_pb::objects::wal::Window as ProtoWindow;
 use numaflow_pb::objects::wal::WindowManagerState;
 use prost::Message as ProtoMessage;
-use tracing::{info, warn};
+use tracing::{error, info};
 
 #[derive(Debug, Clone)]
 pub(crate) struct SlidingWindowManager {
@@ -29,7 +29,8 @@ pub(crate) struct SlidingWindowManager {
     closed_windows: Arc<RwLock<BTreeSet<Window>>>,
     /// Optional path to save/load window state
     state_file_path: Option<PathBuf>,
-    /// Last window end time that was deleted
+    /// max end time of the deleted windows, used to avoid creating
+    /// windows twice during replay
     max_deleted_window_end_time: Arc<AtomicI64>,
 }
 
@@ -51,7 +52,7 @@ impl SlidingWindowManager {
         // If state file path is provided, try to load state from file
         if let Some(path) = &manager.state_file_path {
             if let Err(e) = manager.load_state(path) {
-                warn!("Failed to load window state from file: {}", e);
+                error!("Failed to load window state from file: {}", e);
             }
         }
 
@@ -71,12 +72,20 @@ impl SlidingWindowManager {
         let event_time_millis = msg.event_time.timestamp_millis();
 
         // Calculate the start time of the largest window that contains the event
+        // use the highest integer multiple of slide length which is less than the eventTime
+        // as the start time for the window. For example, if the eventTime is 810 and slide
+        // length is 70, use 770 as the startTime of the window. In that way, we can guarantee
+        // consistency while assigning the messages to the windows.
         let start_time_millis = Self::truncate_to_duration(event_time_millis, slide_millis);
         let mut current_start = start_time_millis;
         let mut current_end = current_start + window_length_millis;
 
-        // Create all windows that contain this event
-        // Check if event time is within the window: start_time <= event_time < end_time
+        // Create all windows that contain this event for example if the event time of the message
+        // is 25 with length 5 and slide 1 we will have [20, 25), [21, 26), [22, 27), [23, 28), [24, 29)
+        // windows.
+
+        // startTime and endTime will be the largest timestamp window for the given eventTime,
+        // using that we can create other windows by subtracting the slide length
         while current_start <= event_time_millis && event_time_millis < current_end {
             let start_time = Utc.timestamp_millis_opt(current_start).unwrap();
             let end_time = Utc.timestamp_millis_opt(current_end).unwrap();
@@ -168,7 +177,6 @@ impl SlidingWindowManager {
     }
 
     /// Saves the current window state to the specified file
-    /// Saves the current window state to the specified file
     pub(crate) fn save_state(&self) -> ReduceResult<()> {
         let path = match &self.state_file_path {
             Some(path) => path,
@@ -235,10 +243,9 @@ impl SlidingWindowManager {
         Ok(())
     }
 
-    /// Assigns windows to a message, dropping messages with event time earlier than the oldest window's start time
+    /// Assigns windows to a message
     pub(crate) fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage> {
         let windows = self.create_windows(&msg);
-        println!("windows: {:?}", windows);
         let mut result = Vec::new();
 
         // Check if windows already exist and create appropriate operations
@@ -254,18 +261,14 @@ impl SlidingWindowManager {
             } else if window.end_time.timestamp_millis()
                 > self.max_deleted_window_end_time.load(Ordering::Relaxed)
             {
-                // New window, insert it
+                // only create the window if the end time is greater than the max deleted window end
+                // time, during replay we might get the same message again and again, so we need to
+                // avoid creating the materialized window again.
                 active_windows.insert(window.clone());
                 result.push(AlignedWindowMessage {
                     operation: WindowOperation::Open(msg.clone()),
                     window: window.clone(),
                 });
-            } else {
-                println!("window end time: {:?}", window.end_time.timestamp_millis());
-                println!(
-                    "max deleted window end time: {:?}",
-                    self.max_deleted_window_end_time.load(Ordering::Relaxed)
-                );
             }
         }
 

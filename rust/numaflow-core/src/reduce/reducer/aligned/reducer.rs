@@ -14,7 +14,7 @@ use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 
 /// Represents an active reduce stream for a window.
 struct ActiveStream {
@@ -25,7 +25,9 @@ struct ActiveStream {
     task_handle: JoinHandle<()>,
 }
 
-/// Configuration and functionality for a reduce task
+/// Represents a reduce task for a window. It is responsible for calling the user-defined reduce
+/// function for the given window and writing the output to JetStream and publishing the watermark.
+/// Also writes the GC events to the WAL if configured.
 struct ReduceTask {
     client: UserDefinedAlignedReduce,
     js_writer: JetstreamWriter,
@@ -62,7 +64,6 @@ impl ReduceTask {
         cln_token: CancellationToken,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
-            // Create a local channel for results
             let (result_tx, result_rx) = mpsc::channel(100);
             let result_stream = ReceiverStream::new(result_rx);
 
@@ -80,7 +81,8 @@ impl ReduceTask {
             };
 
             // Call the reduce function. This is a blocking call and will return only once the window
-            // is closed, cancellation is detected, or on error.
+            // is closed, cancellation is detected, or on error. The output is sent to the result_tx
+            // channel which is consumed by the writer task and published to JetStream.
             let result = self
                 .client
                 .reduce_fn(message_stream, result_tx, cln_token)
@@ -93,24 +95,30 @@ impl ReduceTask {
                     return;
                 }
 
-                // For other errors, log and send to error channel
+                // For other errors, log and send to error channel to signal the reduce actor to stop
+                // consuming new messages and exit with error.
                 error!(?e, "Error while doing reduce operation");
                 let _ = self.error_tx.send(e).await;
                 return;
             }
 
-            // Wait for the writer to complete
+            // Wait for the writer to complete, write takes care of publishing the watermark.
             if let Err(e) = writer_handle.await.expect("join failed for js writer task") {
                 error!(?e, "Error while writing results to JetStream");
                 let _ = self.error_tx.send(e).await;
                 return;
             }
 
+            // oldest window is used to determine the GC event incase of sliding windows, unlike fixed
+            // messages can be part of multiple windows in sliding, so we can only gc the messages
+            // that are less than the oldest window's start time.
             let oldest_window = self
                 .window_manager
                 .oldest_window()
                 .expect("no oldest window found");
 
+            // we can safely delete the window from the window manager since the results are
+            // successfully written to jetstream and watermark is published.
             self.window_manager.delete_window(self.window.clone());
 
             // now that the processing is done, we can add this window to the GC WAL.
@@ -136,7 +144,6 @@ impl ReduceTask {
             };
 
             debug!(?gc_event, "Sending GC event to WAL");
-
             gc_wal_tx
                 .send(SegmentWriteMessage::WriteData {
                     offset: None,
@@ -255,12 +262,12 @@ impl AlignedReduceActor {
             window: window.clone(),
         };
 
-        // Spawn the task and get the handle
+        // start the reduce task and store the handle and the sender so that we can send messages
+        // and wait for it to complete.
         let task_handle = reduce_task
             .start(message_stream, self.cln_token.clone())
             .await;
 
-        // Store the stream and task handle
         self.active_streams.insert(
             window_id,
             ActiveStream {
@@ -270,13 +277,15 @@ impl AlignedReduceActor {
         );
 
         // Send the open command with the first message
-        let _ = message_tx.send(window_msg).await;
+        message_tx.send(window_msg).await.expect("Receiver dropped");
     }
 
     /// sends the message to the reduce task for the window.
     async fn window_append(&mut self, window: Window, window_id: Bytes, msg: Message) {
         // Get the existing stream or log error if not found create a new one.
         let Some(active_stream) = self.active_streams.get(&window_id) else {
+            // windows may not be found during replay, because the windower doesn't send the open
+            // message for the active windows that got replayed, hence we create a new one.
             self.window_open(window, window_id, msg).await;
             return;
         };
@@ -288,7 +297,11 @@ impl AlignedReduceActor {
         };
 
         // Send the append message
-        let _ = active_stream.message_tx.send(window_msg).await;
+        active_stream
+            .message_tx
+            .send(window_msg)
+            .await
+            .expect("Receiver dropped");
     }
 
     /// Closes the reduce task for the window.
@@ -301,7 +314,6 @@ impl AlignedReduceActor {
 
         // we don't need to write the close message to the client, stream closing
         // is considered as close for aligned windows.
-
         // Drop the sender to signal completion
         drop(active_stream.message_tx);
 
@@ -315,12 +327,15 @@ impl AlignedReduceActor {
 /// Processes messages and forwards results to the next stage.
 pub(crate) struct AlignedReducer {
     client: UserDefinedAlignedReduce,
+    /// Window manager for assigning windows to messages and closing windows.
     window_manager: WindowManager,
+    /// Writer for writing results to JetStream
     js_writer: JetstreamWriter,
     /// Final state of the component (any error will set this as Err).
     final_result: crate::Result<()>,
     /// Set to true when shutting down due to an error.
     shutting_down_on_err: bool,
+    /// WAL for writing GC events
     gc_wal: Option<AppendOnlyWal>,
 }
 
@@ -390,7 +405,7 @@ impl AlignedReducer {
 
                         // If shutting down, drain the stream
                         if self.shutting_down_on_err {
-                            warn!("Reduce component is shutting down due to an error, not accepting the message");
+                            info!("Reduce component is shutting down due to an error, not accepting the message");
                             continue;
                         }
 
@@ -402,10 +417,10 @@ impl AlignedReducer {
                             }
                         }
 
-                        // Process the message through the windower, dropping messages with event time earlier than the oldest window's start time
+                        // assign windows to the message
                         let window_messages = self.window_manager.assign_windows(msg);
 
-                        // Send each window message to the actor
+                        // Send each window message to the actor for processing
                         for window_msg in window_messages {
                             actor_tx.send(window_msg).await.expect("Receiver dropped");
                         }
@@ -413,6 +428,7 @@ impl AlignedReducer {
                 }
             }
 
+            // Drop the sender to signal the actor to stop
             drop(actor_tx);
 
             // Wait for the actor to complete
@@ -446,7 +462,9 @@ impl AlignedReducer {
         }
     }
 
-    /// Handle an error by canceling the token and updating state.
+    /// Handles errors from reduce tasks, cancels the token to signal the upstream to stop sending
+    /// new messages and updates the final result and shutting_down_on_err flags so that we can
+    /// go to shut down mode by draining the input stream and exit.
     fn handle_error(&mut self, error: Error, cln_token: &CancellationToken) {
         if self.final_result.is_ok() {
             error!(?error, "Error received while performing reduce operation");

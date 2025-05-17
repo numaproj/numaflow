@@ -81,45 +81,11 @@ pub(crate) async fn start_forwarder(
         }
         pipeline::VertexType::Sink(sink) => {
             info!("Starting sink forwarder");
-
-            // create watermark handle, if watermark is enabled
-            let edge_watermark_handle = create_components::create_edge_watermark_handle(
-                &config,
-                &js_context,
-                &cln_token,
-                None,
-            )
-            .await?;
-
-            start_sink_forwarder(
-                cln_token,
-                js_context,
-                config.clone(),
-                sink.clone(),
-                edge_watermark_handle,
-            )
-            .await?;
+            start_sink_forwarder(cln_token, js_context, config.clone(), sink.clone()).await?;
         }
         pipeline::VertexType::Map(map) => {
             info!("Starting map forwarder");
-
-            // create watermark handle, if watermark is enabled
-            let edge_watermark_handle = create_components::create_edge_watermark_handle(
-                &config,
-                &js_context,
-                &cln_token,
-                None,
-            )
-            .await?;
-
-            start_map_forwarder(
-                cln_token,
-                js_context,
-                config.clone(),
-                map.clone(),
-                edge_watermark_handle,
-            )
-            .await?;
+            start_map_forwarder(cln_token, js_context, config.clone(), map.clone()).await?;
         }
         pipeline::VertexType::Reduce(reduce) => {
             info!("Starting reduce forwarder");
@@ -208,8 +174,12 @@ async fn start_map_forwarder(
     js_context: Context,
     config: PipelineConfig,
     map_vtx_config: MapVtxConfig,
-    watermark_handle: Option<ISBWatermarkHandle>,
 ) -> Result<()> {
+    // create watermark handle, if watermark is enabled
+    let watermark_handle =
+        create_components::create_edge_watermark_handle(&config, &js_context, &cln_token, None)
+            .await?;
+
     // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
     // to a common buffer, in the case of a join.
     let reader_config = &config
@@ -327,24 +297,28 @@ async fn start_reduce_forwarder(
     config: PipelineConfig,
     reduce_vtx_config: ReduceVtxConfig,
 ) -> Result<()> {
-    // Determine the state file path for window manager
-    let state_file_path = if let Some(storage_config) = &reduce_vtx_config.wal_storage_config {
-        let mut path = storage_config.path.clone();
-        path.push(format!("{}-window.state", config.vertex_name));
-        Some(path)
-    } else {
-        None
-    };
-
     let window_manager = match &reduce_vtx_config.reducer_config.window_config.window_type {
         WindowType::Fixed(fixed_config) => {
             WindowManager::Fixed(FixedWindowManager::new(fixed_config.length))
         }
-        WindowType::Sliding(sliding_config) => WindowManager::Sliding(SlidingWindowManager::new(
-            sliding_config.length,
-            sliding_config.slide,
-            state_file_path,
-        )),
+        WindowType::Sliding(sliding_config) => {
+            // sliding window needs to save state if WAL is configured to avoid duplicate processing
+            // since a message can be part of multiple windows.
+            let state_file_path =
+                if let Some(storage_config) = &reduce_vtx_config.wal_storage_config {
+                    let mut path = storage_config.path.clone();
+                    path.push(format!("{}-window.state", config.vertex_name));
+                    Some(path)
+                } else {
+                    None
+                };
+
+            WindowManager::Sliding(SlidingWindowManager::new(
+                sliding_config.length,
+                sliding_config.slide,
+                state_file_path,
+            ))
+        }
         WindowType::Session(_) | WindowType::Accumulator(_) => {
             panic!("Session and Accumulator windows are not supported yet");
         }
@@ -359,20 +333,21 @@ async fn start_reduce_forwarder(
     )
     .await?;
 
-    // Only the reader config of the first "from" vertex is needed
     let reader_config = &config
         .from_vertex_config
         .first()
         .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
         .reader_config;
 
-    // Create buffer reader for the single stream
+    // reduce pod always reads from a single stream (pod per partition)
     let stream = reader_config
         .streams
         .first()
         .cloned()
         .ok_or_else(|| error::Error::Config("No stream found for reduce vertex".to_string()))?;
 
+    // we don't need to pass the watermark handle to the tracker because in reduce windower is
+    // responsible for identifying the lowest watermark in the pod.
     let tracker_handle = TrackerHandle::new(None, None);
     // Create buffer reader
     let buffer_reader = create_buffer_reader(
@@ -480,8 +455,12 @@ async fn start_sink_forwarder(
     js_context: Context,
     config: PipelineConfig,
     sink: SinkVtxConfig,
-    watermark_handle: Option<ISBWatermarkHandle>,
 ) -> Result<()> {
+    // create watermark handle, if watermark is enabled
+    let watermark_handle =
+        create_components::create_edge_watermark_handle(&config, &js_context, &cln_token, None)
+            .await?;
+
     // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
     // to a common buffer, in the case of a join.
     let reader_config = &config

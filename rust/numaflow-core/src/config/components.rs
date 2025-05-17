@@ -765,16 +765,16 @@ pub(crate) mod reduce {
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct UserDefinedConfig {
         pub grpc_max_message_size: usize,
-        pub socket_path: String,
-        pub server_info_path: String,
+        pub socket_path: &'static str,
+        pub server_info_path: &'static str,
     }
 
     impl Default for UserDefinedConfig {
         fn default() -> Self {
             Self {
                 grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
-                socket_path: DEFAULT_REDUCER_SOCKET.to_string(),
-                server_info_path: DEFAULT_REDUCER_SERVER_INFO_FILE.to_string(),
+                socket_path: DEFAULT_REDUCER_SOCKET,
+                server_info_path: DEFAULT_REDUCER_SERVER_INFO_FILE,
             }
         }
     }

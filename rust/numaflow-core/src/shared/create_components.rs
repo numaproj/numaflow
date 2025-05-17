@@ -393,7 +393,7 @@ pub(crate) async fn create_aligned_reducer(
     match reducer_config.reducer_type {
         ReducerType::UserDefined(config) => {
             // Create gRPC channel
-            let channel = grpc::create_rpc_channel(config.socket_path.clone().into()).await?;
+            let channel = grpc::create_rpc_channel(config.socket_path.into()).await?;
 
             // Create client
             let client = UserDefinedAlignedReduce::new(
