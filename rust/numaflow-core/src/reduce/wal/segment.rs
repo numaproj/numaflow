@@ -138,6 +138,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_gc_wal_and_aligned_compaction() {
+        tracing_subscriber::fmt::init();
         let test_path = tempfile::tempdir().unwrap().into_path();
 
         // Create GC WAL
@@ -225,22 +226,15 @@ mod tests {
         handle.await.unwrap().unwrap();
 
         // Create and run compactor
-        let compactor = Compactor::new(
-            test_path.clone(),
-            WindowKind::Aligned,
-            1,    // 20MB
-            1000, // 1s flush interval
-            500,  // channel buffer
-            300,  // max_segment_age_secs
-        )
-        .await
-        .unwrap();
+        let compactor = Compactor::new(test_path.clone(), WindowKind::Aligned, 1, 1000, 500, 300)
+            .await
+            .unwrap();
 
         compactor.compact(None).await.unwrap();
 
         // Verify compacted data
-        let compaction_wal = ReplayWal::new(WalType::Compact, test_path);
-        let (mut rx, handle) = compaction_wal.streaming_read().unwrap();
+        let compaction_replay_wal = ReplayWal::new(WalType::Compact, test_path);
+        let (mut rx, handle) = compaction_replay_wal.streaming_read().unwrap();
 
         let mut remaining_message_count = 0;
         while let Some(entry) = rx.next().await {
@@ -265,12 +259,13 @@ mod tests {
         // time so the remaining message cound should be 91
         assert_eq!(
             remaining_message_count, 91,
-            "Expected 90 messages to remain after compaction"
+            "Expected 91 messages to remain after compaction"
         );
     }
 
     #[tokio::test]
     async fn test_gc_wal_and_unaligned_compaction() {
+        tracing_subscriber::fmt::init();
         let test_path = tempfile::tempdir().unwrap().into_path();
 
         // Create GC WAL
