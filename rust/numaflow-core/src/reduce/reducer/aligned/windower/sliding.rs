@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, Mutex, RwLock, atomic::AtomicI64};
+use std::sync::{Arc, RwLock, atomic::AtomicI64};
 use std::time::Duration;
 
 use crate::message::Message;
@@ -14,7 +14,7 @@ use chrono::{DateTime, TimeZone, Utc};
 use numaflow_pb::objects::wal::Window as ProtoWindow;
 use numaflow_pb::objects::wal::WindowManagerState;
 use prost::Message as ProtoMessage;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 #[derive(Debug, Clone)]
 pub(crate) struct SlidingWindowManager {
@@ -38,7 +38,7 @@ impl SlidingWindowManager {
         slide: Duration,
         state_file_path: Option<PathBuf>,
     ) -> Self {
-        let mut manager = Self {
+        let manager = Self {
             window_length,
             slide,
             active_windows: Arc::new(RwLock::new(BTreeSet::new())),
@@ -48,9 +48,9 @@ impl SlidingWindowManager {
         };
 
         // If state file path is provided, try to load state from file
-        if manager.state_file_path.is_some() {
-            if let Err(e) = manager.load_state() {
-                error!("Failed to load window state from file: {}", e);
+        if let Some(path) = &manager.state_file_path {
+            if let Err(e) = manager.load_state(path) {
+                warn!("Failed to load window state from file: {}", e);
             }
         }
 
@@ -76,9 +76,7 @@ impl SlidingWindowManager {
 
         // Create all windows that contain this event
         // Check if event time is within the window: start_time <= event_time < end_time
-        while current_start <= msg.event_time.timestamp_millis()
-            && msg.event_time.timestamp_millis() < current_end
-        {
+        while current_start <= event_time_millis && event_time_millis < current_end {
             let start_time = Utc.timestamp_millis_opt(current_start).unwrap();
             let end_time = Utc.timestamp_millis_opt(current_end).unwrap();
 
@@ -93,32 +91,27 @@ impl SlidingWindowManager {
     }
 
     /// Closes any windows that can be closed because the Watermark has advanced beyond the window
-    /// end time.
     pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage> {
         let mut result = Vec::new();
 
         // Find windows that need to be closed
-        let mut active_windows = self.active_windows.lock().unwrap();
-        let mut closed_windows = self.closed_windows.lock().unwrap();
+        let mut active_windows = self.active_windows.write().unwrap();
+        let mut closed_windows = self.closed_windows.write().unwrap();
 
-        let mut windows_to_close = Vec::new();
-
-        for window in active_windows.iter() {
-            if window.end_time <= watermark {
-                let window_msg = AlignedWindowMessage {
-                    operation: WindowOperation::Close,
-                    window: window.clone(),
-                };
-
-                result.push(window_msg);
-                windows_to_close.push(window.clone());
-            }
-        }
+        let windows_to_close: Vec<_> = active_windows
+            .iter()
+            .filter(|window| window.end_time <= watermark)
+            .cloned()
+            .collect();
 
         // Move windows from active to closed
-        for window in windows_to_close {
-            active_windows.remove(&window);
-            closed_windows.insert(window);
+        for window in &windows_to_close {
+            result.push(AlignedWindowMessage {
+                operation: WindowOperation::Close,
+                window: window.clone(),
+            });
+            active_windows.remove(window);
+            closed_windows.insert(window.clone());
         }
 
         result
@@ -131,24 +124,31 @@ impl SlidingWindowManager {
             .fetch_max(window.end_time.timestamp_millis(), Ordering::Relaxed);
 
         // Remove the window from closed_windows
-        let mut closed_windows = self.closed_windows.lock().unwrap();
-        closed_windows.remove(&window);
-        info!("Deleted window: {:?}", window);
+        self.closed_windows
+            .write()
+            .expect("Failed to lock closed_windows")
+            .remove(&window);
     }
 
     /// Returns the oldest window yet to be completed. This will be the lowest Watermark in the Vertex.
     pub(crate) fn oldest_window(&self) -> Option<Window> {
-        // First check closed windows
-        {
-            let closed_windows = self.closed_windows.lock().unwrap();
-            if !closed_windows.is_empty() {
-                return closed_windows.iter().next().cloned();
-            }
-        }
-
-        // If no closed windows, check active windows
-        let active_windows = self.active_windows.lock().unwrap();
-        active_windows.iter().next().cloned()
+        // get the oldest window from closed_windows, if closed_windows is empty, get the oldest
+        // from active_windows
+        // NOTE: closed windows will always have a lower end time than active_windows
+        self.closed_windows
+            .read()
+            .expect("Failed to lock closed_windows")
+            .iter()
+            .next()
+            .cloned()
+            .or_else(|| {
+                self.active_windows
+                    .read()
+                    .expect("Failed to lock active_windows")
+                    .iter()
+                    .next()
+                    .cloned()
+            })
     }
 
     /// Helper method to format window information for logging
@@ -156,10 +156,8 @@ impl SlidingWindowManager {
         let formatted_windows: String = windows
             .iter()
             .map(|window| {
-                let start_time =
-                    utc_from_timestamp(window.start_time.clone().unwrap()).timestamp_millis();
-                let end_time =
-                    utc_from_timestamp(window.end_time.clone().unwrap()).timestamp_millis();
+                let start_time = utc_from_timestamp(window.start_time.unwrap()).timestamp_millis();
+                let end_time = utc_from_timestamp(window.end_time.unwrap()).timestamp_millis();
                 format!("[{} - {}]", start_time, end_time)
             })
             .collect::<Vec<_>>()
@@ -169,14 +167,16 @@ impl SlidingWindowManager {
     }
 
     /// Saves the current window state to the specified file
+    /// Saves the current window state to the specified file
     pub(crate) fn save_state(&self) -> ReduceResult<()> {
-        let Some(path) = &self.state_file_path else {
-            return Ok(());
+        let path = match &self.state_file_path {
+            Some(path) => path,
+            None => return Ok(()),
         };
 
         let all_windows: Vec<ProtoWindow> = {
-            let active_windows = self.active_windows.lock().unwrap();
-            let closed_windows = self.closed_windows.lock().unwrap();
+            let active_windows = self.active_windows.read().unwrap();
+            let closed_windows = self.closed_windows.read().unwrap();
 
             closed_windows
                 .iter()
@@ -208,28 +208,21 @@ impl SlidingWindowManager {
     }
 
     /// Loads window state from the specified file
-    fn load_state(&mut self) -> ReduceResult<()> {
-        let Some(path) = &self.state_file_path else {
-            return Ok(());
-        };
-
-        // Check if file exists
+    fn load_state(&self, path: &PathBuf) -> ReduceResult<()> {
         if !path.exists() {
             return Ok(());
         }
 
-        // Read file
-        let mut file = File::open(path).map_err(|e| Error::Other(e.to_string()))?;
         let mut buf = Vec::new();
-        file.read_to_end(&mut buf)
+        File::open(path)
+            .and_then(|mut file| file.read(&mut buf))
             .map_err(|e| Error::Other(e.to_string()))?;
 
-        // Deserialize the state
-        let state = WindowManagerState::decode(&buf[..]).expect("Failed to decode window state");
+        let state =
+            WindowManagerState::decode(&buf[..]).map_err(|e| Error::Other(e.to_string()))?;
 
-        // Convert proto windows to core windows and add to active_windows
         self.active_windows
-            .lock()
+            .write()
             .unwrap()
             .extend(state.windows.iter().map(Into::into));
 
@@ -250,23 +243,18 @@ impl SlidingWindowManager {
         let mut result = Vec::new();
 
         // Check if windows already exist and create appropriate operations
-        let mut active_windows = self.active_windows.lock().unwrap();
+        let mut active_windows = self.active_windows.write().unwrap();
 
-        for window in windows.iter() {
-            if active_windows.contains(&window) {
+        for window in &windows {
+            if active_windows.contains(window) {
                 // Window exists, append message
                 result.push(AlignedWindowMessage {
                     operation: WindowOperation::Append(msg.clone()),
                     window: window.clone(),
                 });
-            } else {
-                // if the window end time is less than the max deleted window end time, skip it
-                // during replay we might create windows that are already deleted
-                if window.end_time.timestamp_millis()
-                    <= self.max_deleted_window_end_time.load(Ordering::Relaxed)
-                {
-                    continue;
-                }
+            } else if window.end_time.timestamp_millis()
+                > self.max_deleted_window_end_time.load(Ordering::Relaxed)
+            {
                 // New window, insert it
                 active_windows.insert(window.clone());
                 result.push(AlignedWindowMessage {
@@ -389,7 +377,7 @@ mod tests {
             Utc.timestamp_opt(620, 0).unwrap(),
         );
         {
-            let mut active_windows = windower.active_windows.lock().unwrap();
+            let mut active_windows = windower.active_windows.write().unwrap();
             active_windows.insert(window2.clone());
         }
 
@@ -443,7 +431,7 @@ mod tests {
 
         // Insert windows manually
         {
-            let mut active_windows = windower.active_windows.lock().unwrap();
+            let mut active_windows = windower.active_windows.write().unwrap();
             active_windows.insert(window1.clone());
             active_windows.insert(window2.clone());
             active_windows.insert(window3.clone());
@@ -495,7 +483,7 @@ mod tests {
 
         // Verify all windows are closed
         {
-            let active_windows = windower.active_windows.lock().unwrap();
+            let active_windows = windower.active_windows.read().unwrap();
             assert_eq!(active_windows.len(), 0);
         }
     }
@@ -524,7 +512,7 @@ mod tests {
 
         // Insert windows manually
         {
-            let mut active_windows = windower.active_windows.lock().unwrap();
+            let mut active_windows = windower.active_windows.write().unwrap();
             active_windows.insert(window1.clone());
             active_windows.insert(window2.clone());
             active_windows.insert(window3.clone());
@@ -532,7 +520,7 @@ mod tests {
 
         // Verify all windows exist
         {
-            let active_windows = windower.active_windows.lock().unwrap();
+            let active_windows = windower.active_windows.read().unwrap();
             assert_eq!(active_windows.len(), 3);
         }
 
@@ -544,9 +532,9 @@ mod tests {
 
         // Verify window1 is deleted
         {
-            let active_windows = windower.active_windows.lock().unwrap();
+            let active_windows = windower.active_windows.read().unwrap();
             assert_eq!(active_windows.len(), 0);
-            let closed_windows = windower.closed_windows.lock().unwrap();
+            let closed_windows = windower.closed_windows.read().unwrap();
             assert_eq!(closed_windows.len(), 2);
             assert!(!closed_windows.contains(&window1));
             assert!(closed_windows.contains(&window2));
@@ -558,7 +546,7 @@ mod tests {
 
         // Verify window2 is deleted
         {
-            let active_windows = windower.active_windows.lock().unwrap();
+            let active_windows = windower.active_windows.read().unwrap();
             assert_eq!(active_windows.len(), 0);
             assert!(!active_windows.contains(&window1));
             assert!(!active_windows.contains(&window2));
@@ -570,7 +558,7 @@ mod tests {
 
         // Verify window3 is deleted
         {
-            let active_windows = windower.active_windows.lock().unwrap();
+            let active_windows = windower.active_windows.read().unwrap();
             assert_eq!(active_windows.len(), 0);
         }
     }
@@ -599,7 +587,7 @@ mod tests {
 
         // Insert windows manually
         {
-            let mut active_windows = windower.active_windows.lock().unwrap();
+            let mut active_windows = windower.active_windows.write().unwrap();
             active_windows.insert(window1.clone());
             active_windows.insert(window2.clone());
             active_windows.insert(window3.clone());
@@ -685,10 +673,10 @@ mod tests {
         let windower = SlidingWindowManager {
             window_length: Duration::from_secs(60),
             slide: Duration::from_secs(10),
-            active_windows: Arc::new(Mutex::new(BTreeSet::from_iter(
+            active_windows: Arc::new(RwLock::new(BTreeSet::from_iter(
                 active_windows.iter().cloned(),
             ))),
-            closed_windows: Arc::new(Mutex::new(BTreeSet::new())),
+            closed_windows: Arc::new(RwLock::new(BTreeSet::new())),
             state_file_path: None,
             max_deleted_window_end_time: Arc::new(Default::default()),
         };
@@ -824,7 +812,7 @@ mod tests {
 
         // Insert windows manually
         {
-            let mut active_windows = windower.active_windows.lock().unwrap();
+            let mut active_windows = windower.active_windows.write().unwrap();
             active_windows.insert(window1.clone());
             active_windows.insert(window2.clone());
             active_windows.insert(window3.clone());
@@ -845,7 +833,7 @@ mod tests {
 
         // Verify windows were loaded
         {
-            let active_windows = windower2.active_windows.lock().unwrap();
+            let active_windows = windower2.active_windows.read().unwrap();
             assert_eq!(active_windows.len(), 3);
             assert!(active_windows.contains(&window1));
             assert!(active_windows.contains(&window2));

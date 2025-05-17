@@ -102,14 +102,8 @@ impl From<&Window> for numaflow_pb::objects::wal::Window {
 
 impl From<&numaflow_pb::objects::wal::Window> for Window {
     fn from(proto: &numaflow_pb::objects::wal::Window) -> Self {
-        let start_time = proto
-            .start_time
-            .as_ref()
-            .map(|ts| utc_from_timestamp(ts.clone()));
-        let end_time = proto
-            .end_time
-            .as_ref()
-            .map(|ts| utc_from_timestamp(ts.clone()));
+        let start_time = proto.start_time.as_ref().map(|ts| utc_from_timestamp(*ts));
+        let end_time = proto.end_time.as_ref().map(|ts| utc_from_timestamp(*ts));
 
         Self::new(
             start_time.expect("start time should be present"),

@@ -9,7 +9,6 @@ use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use bytes::Bytes;
 use numaflow_pb::objects::wal::GcEvent;
 use std::collections::HashMap;
-use std::ops::Sub;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;

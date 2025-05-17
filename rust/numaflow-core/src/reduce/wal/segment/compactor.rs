@@ -23,7 +23,6 @@ use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use numaflow_pb::objects::isb;
 use numaflow_pb::objects::wal::GcEvent;
-use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{Duration, UNIX_EPOCH};
@@ -32,7 +31,7 @@ use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
 use tokio_stream::{StreamExt, wrappers::ReceiverStream};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info};
+use tracing::info;
 
 /// WALs can represent two Kinds of Windows and data is different for each Kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
