@@ -135,10 +135,15 @@ mod tests {
     use std::sync::Arc;
     use tokio_stream::StreamExt;
     use tokio_stream::wrappers::ReceiverStream;
+    use tracing_subscriber::util::SubscriberInitExt;
 
     #[tokio::test]
     async fn test_gc_wal_and_aligned_compaction() {
-        tracing_subscriber::fmt::init();
+        tracing_subscriber::fmt()
+            .with_test_writer()
+            .finish()
+            .set_default();
+
         let test_path = tempfile::tempdir().unwrap().into_path();
 
         // Create GC WAL
@@ -265,7 +270,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_gc_wal_and_unaligned_compaction() {
-        tracing_subscriber::fmt::init();
+        tracing_subscriber::fmt()
+            .with_test_writer()
+            .finish()
+            .set_default();
+
         let test_path = tempfile::tempdir().unwrap().into_path();
 
         // Create GC WAL

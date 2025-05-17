@@ -164,7 +164,7 @@ impl Compactor {
         // Get the oldest time and scanned GC files
         let (oldest_time, gc_files) = self.build_aligned_compaction().await?;
 
-        debug!(oldest_time = ?oldest_time.timestamp_millis(), "Event time till which the data has been processed");
+        info!(oldest_time = ?oldest_time.timestamp_millis(), "Event time till which the data has been processed");
 
         let compact = AlignedCompaction(oldest_time);
 
