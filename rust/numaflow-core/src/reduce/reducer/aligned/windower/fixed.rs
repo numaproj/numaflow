@@ -1,8 +1,20 @@
+//! In [Fixed Window] each event belongs to exactly one window and we can assign the message to the window
+//! directly using the event time after rounding it to the nearest window [boundary](windower::truncate_to_duration).
+//! The window is defined by the length of the window. The window is aligned to the epoch. For example,
+//! if the window length is 30s, and the event time is 100, then the window this event belongs to will
+//! be `[90, 120)`. There will be a [WAL] for each window. The GC (garbage collection) of WAL is
+//! very simple since each window has its own WAL and the GC can be done by deleting the WAL. During
+//! startup, we will replay the WALs and recreate each per WAL and simply replay the messages to that window.
+//!
+//! [Fixed Window]: https://numaflow.numaproj.io/user-guide/user-defined-functions/reduce/windowing/fixed/
+//! [WAL]: crate::reduce::wal
+
 use std::collections::BTreeSet;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use crate::message::Message;
+use crate::reduce::reducer::aligned::windower;
 use crate::reduce::reducer::aligned::windower::{AlignedWindowMessage, Window, WindowOperation};
 use chrono::{DateTime, TimeZone, Utc};
 
@@ -10,32 +22,31 @@ use chrono::{DateTime, TimeZone, Utc};
 pub(crate) struct FixedWindowManager {
     /// Duration of each window
     window_length: Duration,
-    /// Active windows sorted by end time
-    active_windows: Arc<Mutex<BTreeSet<Window>>>,
-    /// Closed windows sorted by end time
-    closed_windows: Arc<Mutex<BTreeSet<Window>>>,
+    /// Active windows sorted by end time.
+    active_windows: Arc<RwLock<BTreeSet<Window>>>,
+    /// Closed windows sorted by end time. We need to keep track of closed windows so that we can
+    /// find the oldest window computed and forwarded. The watermark is progressed based on the latest
+    /// closed window end time. The oldest window in the active_window will be greater than the latest
+    /// closed window.
+    closed_windows: Arc<RwLock<BTreeSet<Window>>>,
 }
 
 impl FixedWindowManager {
     pub(crate) fn new(window_length: Duration) -> Self {
         Self {
             window_length,
-            active_windows: Arc::new(Mutex::new(BTreeSet::new())),
-            closed_windows: Arc::new(Mutex::new(BTreeSet::new())),
+            active_windows: Arc::new(RwLock::new(BTreeSet::new())),
+            closed_windows: Arc::new(RwLock::new(BTreeSet::new())),
         }
     }
 
-    /// Truncates a timestamp to the nearest multiple of the given duration
-    fn truncate_to_duration(timestamp_millis: i64, duration_millis: i64) -> i64 {
-        (timestamp_millis / duration_millis) * duration_millis
-    }
-
-    /// Creates a new window for the given message
+    /// Creates a new window for the given message.
     fn create_window(&self, msg: &Message) -> Window {
         // Truncate event time to window length
         let window_length_millis = self.window_length.as_millis() as i64;
         let event_time_millis = msg.event_time.timestamp_millis();
-        let start_time_millis = Self::truncate_to_duration(event_time_millis, window_length_millis);
+        let start_time_millis =
+            windower::truncate_to_duration(event_time_millis, window_length_millis);
         let end_time_millis = start_time_millis + window_length_millis;
 
         let start_time = Utc.timestamp_millis_opt(start_time_millis).unwrap();
@@ -49,7 +60,10 @@ impl FixedWindowManager {
         let window = self.create_window(&msg);
 
         // Check if window already exists
-        let mut active_windows = self.active_windows.lock().unwrap();
+        let mut active_windows = self
+            .active_windows
+            .write()
+            .expect("Poisoned lock for active_windows");
         let operation = if active_windows.contains(&window) {
             // Window exists, append message
             WindowOperation::Append(msg)
@@ -68,8 +82,14 @@ impl FixedWindowManager {
     pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage> {
         let mut result = Vec::new();
 
-        let mut active_windows = self.active_windows.lock().unwrap();
-        let mut closed_windows = self.closed_windows.lock().unwrap();
+        let mut active_windows = self
+            .active_windows
+            .write()
+            .expect("Poisoned lock for active_windows");
+        let mut closed_windows = self
+            .closed_windows
+            .write()
+            .expect("Poisoned lock for closed_windows");
 
         let mut windows_to_close = Vec::new();
 
@@ -97,21 +117,32 @@ impl FixedWindowManager {
 
     /// Deletes a window after it is closed and GC is done.
     pub(crate) fn gc_window(&self, window: Window) {
-        let mut closed_windows = self.closed_windows.lock().unwrap();
+        let mut closed_windows = self
+            .closed_windows
+            .write()
+            .expect("Poisoned lock for closed_windows");
         closed_windows.remove(&window);
     }
 
     /// Returns the oldest window yet to be completed. This will be the lowest Watermark in the Vertex.
     pub(crate) fn oldest_window(&self) -> Option<Window> {
-        // First check closed windows
-        let closed_windows = self.closed_windows.lock().unwrap();
-        if !closed_windows.is_empty() {
-            return closed_windows.iter().next().cloned();
-        }
-
-        // If no closed windows, check active windows
-        let active_windows = self.active_windows.lock().unwrap();
-        active_windows.iter().next().cloned()
+        // get the oldest window from closed_windows, if closed_windows is empty, get the oldest
+        // from active_windows
+        // NOTE: closed windows will always have a lower end time than active_windows
+        self.closed_windows
+            .read()
+            .expect("Poisoned lock for closed_windows")
+            .iter()
+            .next()
+            .cloned()
+            .or_else(|| {
+                self.active_windows
+                    .read()
+                    .expect("Poisoned lock for active_windows")
+                    .iter()
+                    .next()
+                    .cloned()
+            })
     }
 }
 
@@ -182,26 +213,26 @@ mod tests {
 
         // Insert window manually
         {
-            let mut active_windows = windower.active_windows.lock().unwrap();
+            let mut active_windows = windower.active_windows.write().unwrap();
             active_windows.insert(window1.clone());
         }
 
         // Verify window exists and count is 1
         {
-            let active_windows = windower.active_windows.lock().unwrap();
+            let active_windows = windower.active_windows.read().unwrap();
             assert_eq!(active_windows.len(), 1);
             assert!(active_windows.contains(&window1));
         }
 
         // Insert the same window again (should not increase count)
         {
-            let mut active_windows = windower.active_windows.lock().unwrap();
+            let mut active_windows = windower.active_windows.write().unwrap();
             active_windows.insert(window1.clone());
         }
 
         // Verify count is still 1
         {
-            let active_windows = windower.active_windows.lock().unwrap();
+            let active_windows = windower.active_windows.read().unwrap();
             assert_eq!(active_windows.len(), 1);
         }
 
@@ -212,13 +243,13 @@ mod tests {
         );
 
         {
-            let mut active_windows = windower.active_windows.lock().unwrap();
+            let mut active_windows = windower.active_windows.write().unwrap();
             active_windows.insert(window2.clone());
         }
 
         // Verify count is now 2
         {
-            let active_windows = windower.active_windows.lock().unwrap();
+            let active_windows = windower.active_windows.read().unwrap();
             assert_eq!(active_windows.len(), 2);
         }
     }
@@ -244,7 +275,7 @@ mod tests {
 
         // Insert windows manually
         {
-            let mut active_windows = windower.active_windows.lock().unwrap();
+            let mut active_windows = windower.active_windows.write().unwrap();
             active_windows.insert(window1.clone());
             active_windows.insert(window2.clone());
             active_windows.insert(window3.clone());
@@ -281,7 +312,7 @@ mod tests {
 
         // Verify only window3 remains in active windows
         {
-            let active_windows = windower.active_windows.lock().unwrap();
+            let active_windows = windower.active_windows.read().unwrap();
             assert_eq!(active_windows.len(), 1);
             assert!(active_windows.contains(&window3));
         }
@@ -308,7 +339,7 @@ mod tests {
 
         // Insert windows manually
         {
-            let mut active_windows = windower.active_windows.lock().unwrap();
+            let mut active_windows = windower.active_windows.write().unwrap();
             active_windows.insert(window1.clone());
             active_windows.insert(window2.clone());
             active_windows.insert(window3.clone());
@@ -317,15 +348,15 @@ mod tests {
         // close windows so that we can delete them
         windower.close_windows(base_time + chrono::Duration::seconds(120));
 
-        assert_eq!(windower.closed_windows.lock().unwrap().len(), 2);
+        assert_eq!(windower.closed_windows.read().unwrap().len(), 2);
 
         // Delete window2
         windower.gc_window(window2.clone());
 
         // Verify window2 was deleted
         {
-            let active_windows = windower.active_windows.lock().unwrap();
-            let closed_windows = windower.closed_windows.lock().unwrap();
+            let active_windows = windower.active_windows.read().unwrap();
+            let closed_windows = windower.closed_windows.read().unwrap();
             assert_eq!(active_windows.len(), 1);
             assert!(!active_windows.contains(&window1));
             assert!(!active_windows.contains(&window2));
@@ -357,7 +388,7 @@ mod tests {
 
         // Insert windows manually
         {
-            let mut active_windows = windower.active_windows.lock().unwrap();
+            let mut active_windows = windower.active_windows.write().unwrap();
             active_windows.insert(window1.clone());
             active_windows.insert(window2.clone());
             active_windows.insert(window3.clone());

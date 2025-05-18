@@ -65,7 +65,7 @@ pub enum Error {
     #[error("Reduce Error - {0}")]
     Reduce(String),
 
-    #[error("Cancelled")]
+    #[error("Cancellation Token Cancelled")]
     Cancelled(),
 
     #[error("WAL Error - {0}")]

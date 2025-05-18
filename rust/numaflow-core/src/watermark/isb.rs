@@ -182,6 +182,7 @@ pub(crate) struct ISBWatermarkHandle {
     /// getting the lowest watermark so BTreeSet is the best choice.
     offset_set: Arc<Mutex<HashMap<u16, BTreeSet<OffsetWatermark>>>>,
     idle_manager: ISBIdleDetector,
+    /// Window manager is used to compute the minimum watermark for the reduce vertex.
     window_manager: Option<WindowManager>,
     latest_fetched_wm: Arc<Mutex<Watermark>>,
 }
@@ -417,7 +418,7 @@ impl ISBWatermarkHandle {
         }
     }
 
-    /// Computes the minimum watermark based on window manager and inflight messages
+    /// Computes the minimum watermark based on window manager and inflight messages.
     async fn compute_min_watermark(&self) -> Watermark {
         // If window manager is configured, we can use the oldest window's end time - 1ms as the
         // watermark.

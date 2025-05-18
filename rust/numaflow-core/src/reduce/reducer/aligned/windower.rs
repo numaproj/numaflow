@@ -1,17 +1,16 @@
 use crate::message::Message;
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 use bytes::Bytes;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, DurationRound, TimeZone, Utc};
+use fixed::FixedWindowManager;
 use numaflow_pb::objects::wal::GcEvent;
+use sliding::SlidingWindowManager;
 use std::cmp::Ordering;
 
 /// Fixed Window Operations.
 pub(crate) mod fixed;
 /// Sliding Window Operations.
 pub(crate) mod sliding;
-
-use fixed::FixedWindowManager;
-use sliding::SlidingWindowManager;
 
 /// WindowManager enum that can be either a FixedWindowManager or a SlidingWindowManager
 #[derive(Debug, Clone)]
@@ -42,7 +41,7 @@ impl WindowManager {
     pub(crate) fn delete_window(&self, window: Window) {
         match self {
             WindowManager::Fixed(manager) => manager.gc_window(window),
-            WindowManager::Sliding(manager) => manager.delete_window(window),
+            WindowManager::Sliding(manager) => manager.gc_window(window),
         }
     }
 
@@ -151,4 +150,44 @@ pub(crate) enum WindowOperation {
 pub(crate) struct AlignedWindowMessage {
     pub(crate) operation: WindowOperation,
     pub(crate) window: Window,
+}
+
+/// Truncates a timestamp to the nearest multiple of the given duration
+pub(crate) fn truncate_to_duration(timestamp_millis: i64, duration_millis: i64) -> i64 {
+    // Convert timestamp to DateTime
+    let dt = Utc.timestamp_millis_opt(timestamp_millis).unwrap();
+    // Convert duration_millis to TimeDelta
+    let duration = chrono::TimeDelta::try_milliseconds(duration_millis)
+        .expect("Failed to convert duration to TimeDelta");
+    // Use DurationRound to truncate
+    let truncated = dt
+        .duration_trunc(duration)
+        .expect("Failed to truncate timestamp");
+
+    // Return as milliseconds
+    truncated.timestamp_millis()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_truncate_to_duration() {
+        // Test with timestamp 100 and duration 30
+        let result = truncate_to_duration(100, 30);
+        // Expected result: 90
+        // Explanation: 100 milliseconds truncated to the nearest multiple of 30 milliseconds
+        // should be 90 (3 * 30 = 90)
+        assert_eq!(result, 90);
+
+        // Additional test cases for verification
+        assert_eq!(truncate_to_duration(59, 30), 30);
+        assert_eq!(truncate_to_duration(60, 30), 60);
+        assert_eq!(truncate_to_duration(61, 30), 60);
+        assert_eq!(truncate_to_duration(89, 30), 60);
+        assert_eq!(truncate_to_duration(90, 30), 90);
+
+        assert_eq!(truncate_to_duration(810, 70), 770);
+    }
 }

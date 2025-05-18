@@ -1,3 +1,50 @@
+//! Implementation of [Sliding Window] requires a bit more bookkeeping than [Fixed Window],
+//! because a single event can belong to multiple windows, but we only have a single [WAL] (we do not
+//! have per window WALs). An example of sliding window with length 5s and slide 1s, and an event
+//! time at 100 will belong to 5 windows `[95, 100)`, `[96, 101)`, `[97, 102)`, `[98, 103)`, `[99, 104)`.
+//! This means that the element has to be to sent to multiple windows. To understand the implementation,
+//! we need to look in how we handle window creation in different scenarios (startup, normal operation,
+//! restart) but the code is oblivious to the scenario.
+//!
+//! ## Startup
+//! During pipeline startup is the very first time a pipeline is started. It has not materialized any
+//! windows yet and just started reading data from the ISB. When we read an element from the ISB with event-time
+//! of `t1`, we need to create all windows that can contain `t1`. For example, if the window length is 30s
+//! and slide is 10s, and the event-time is 100, we need to create windows `[100, 130)`, `[90, 120)`,
+//! and `[80, 110)`.
+//!
+//! ## Normal Operation
+//! During normal operation, when we read an element from the ISB, we need to create all windows that
+//! can contain the event-time of the message. For example, if the window length is 30s and slide is
+//! 10s, and the event-time is 60, we need to create windows `[60, 90)` but we can assume that
+//! the windows `[50, 80)`, and `[40, 70)` has already been created when elements with event-time
+//! 90 and 80 were received.
+//! Out-of-order can cause the assumption to fail, so we make sure that the previous windows are created
+//! if they do not exist. This can happen when we have watermark withholding, and we receive out of order
+//! messages.
+//!
+//! ## Restart
+//! When a pipeline is restarted, we will replay from the WAL to restore the state. Restart is a bit
+//! tricky because we need to make sure that we do not create duplicate windows. To do that we keep
+//! track of the min start time of the active windows. Any window with start time less than this value
+//! should not be created again.
+//! Let me explain this with an example. Let's say we have a window length of 30s and slide of 10s.
+//! and we have already processed elements with event-time 100 and 110 and the watermark has advanced to 110.
+//! So we have created windows `[100, 130)`, `[90, 120)`, `[80, 110)`, `[110, 140)`, `[100, 130)`, now
+//! let's assume that the window `[80, 110)` is closed and deleted (WM is 110). Now when we restart, we will
+//! replay the elements with event-time 100, etc. The reason for replaying element with event-time 100
+//! even if the watermark has progressed to 110, is that there are widows with start time less that the
+//! watermark. E.g., window`[100, 130)` is still open and data has to be sent to this window. This
+//! is the reason why we need the min start time of the active windows.
+//! Now to track the state of active windows across restarted, we write this information to a file on
+//! shutdown and read it on startup. In case of SIGKILL, the state file will not be created, so
+//! we will recreate the closed windows and there will be duplicates causing at-least-once
+//! behavior and not a data-loss scenario.
+//!
+//! [Sliding Window]: (https://numaflow.numaproj.io/user-guide/user-defined-functions/reduce/windowing/sliding/)
+//! [Fixed Window]: crate::reduce::reducer::aligned::windower::fixed
+//! [WAL]: crate::reduce::wal
+
 use std::collections::BTreeSet;
 use std::fs;
 use std::fs::File;
@@ -9,7 +56,9 @@ use std::time::Duration;
 
 use crate::message::Message;
 use crate::reduce::error::{Error, ReduceResult};
-use crate::reduce::reducer::aligned::windower::{AlignedWindowMessage, Window, WindowOperation};
+use crate::reduce::reducer::aligned::windower::{
+    AlignedWindowMessage, Window, WindowOperation, truncate_to_duration,
+};
 use crate::shared::grpc::utc_from_timestamp;
 use chrono::{DateTime, TimeZone, Utc};
 use numaflow_pb::objects::wal::Window as ProtoWindow;
@@ -17,24 +66,32 @@ use numaflow_pb::objects::wal::WindowManagerState;
 use prost::Message as ProtoMessage;
 use tracing::{error, info};
 
+/// Sliding window manager is responsible for managing the sliding windows. It saves the state of the
+/// active windows to a file on shutdown and loads it on startup to avoid duplicate processing.
 #[derive(Debug, Clone)]
 pub(crate) struct SlidingWindowManager {
-    /// Duration of each window
+    /// Duration of each window.
     window_length: Duration,
-    /// Slide duration
+    /// Slide duration.
     slide: Duration,
-    /// Active windows sorted by end time
+    /// Active windows sorted by end time. The state is saved to a file on shutdown and loaded on
+    /// startup.
     active_windows: Arc<RwLock<BTreeSet<Window>>>,
-    /// Closed windows sorted by end time
+    /// Closed windows sorted by end time. We need to keep track of closed windows so that we can
+    /// find the oldest window computed and forwarded. The watermark is progressed based on the latest
+    /// closed window end time. The oldest window in the active_window will be greater than the latest
+    /// closed window.
     closed_windows: Arc<RwLock<BTreeSet<Window>>>,
-    /// Optional path to save/load window state
-    state_file_path: Option<PathBuf>,
+    /// Optional path to save/load window state.
+    active_window_state_file: Option<PathBuf>,
     /// max end time of the deleted windows, used to avoid creating
-    /// windows twice during replay
+    /// windows twice during replay.
     max_deleted_window_end_time: Arc<AtomicI64>,
 }
 
 impl SlidingWindowManager {
+    /// Creates a new SlidingWindowManager and repopulates the active windows from the state file if
+    /// it exists.
     pub(crate) fn new(
         window_length: Duration,
         slide: Duration,
@@ -46,22 +103,17 @@ impl SlidingWindowManager {
             active_windows: Arc::new(RwLock::new(BTreeSet::new())),
             closed_windows: Arc::new(RwLock::new(BTreeSet::new())),
             max_deleted_window_end_time: Arc::new(AtomicI64::new(-1)),
-            state_file_path,
+            active_window_state_file: state_file_path,
         };
 
         // If state file path is provided, try to load state from file
-        if let Some(path) = &manager.state_file_path {
+        if let Some(path) = &manager.active_window_state_file {
             if let Err(e) = manager.load_state(path) {
                 error!("Failed to load window state from file: {}", e);
             }
         }
 
         manager
-    }
-
-    /// Truncates a timestamp to the nearest multiple of the given duration
-    fn truncate_to_duration(timestamp_millis: i64, duration_millis: i64) -> i64 {
-        (timestamp_millis / duration_millis) * duration_millis
     }
 
     /// Creates windows for the given message
@@ -76,12 +128,13 @@ impl SlidingWindowManager {
         // as the start time for the window. For example, if the eventTime is 810 and slide
         // length is 70, use 770 as the startTime of the window. In that way, we can guarantee
         // consistency while assigning the messages to the windows.
-        let start_time_millis = Self::truncate_to_duration(event_time_millis, slide_millis);
+        let start_time_millis = truncate_to_duration(event_time_millis, slide_millis);
         let mut current_start = start_time_millis;
         let mut current_end = current_start + window_length_millis;
 
+        // TODO(vigith): is the first window right?
         // Create all windows that contain this event for example if the event time of the message
-        // is 25 with length 5 and slide 1 we will have [20, 25), [21, 26), [22, 27), [23, 28), [24, 29)
+        // is 25 with length 5s and slide 1s we will have [20, 25), [21, 26), [22, 27), [23, 28), [24, 29)
         // windows.
 
         // startTime and endTime will be the largest timestamp window for the given eventTime,
@@ -105,9 +158,17 @@ impl SlidingWindowManager {
         let mut result = Vec::new();
 
         // Find windows that need to be closed
-        let mut active_windows = self.active_windows.write().unwrap();
-        let mut closed_windows = self.closed_windows.write().unwrap();
+        let mut active_windows = self
+            .active_windows
+            .write()
+            .expect("Poisoned lock in active_windows");
+        let mut closed_windows = self
+            .closed_windows
+            .write()
+            .expect("Poisoned lock in active_windows");
 
+        // get all the windows that have end time less than the watermark
+        // TODO(vigith): can we use <= or should it be <?
         let windows_to_close: Vec<_> = active_windows
             .iter()
             .filter(|window| window.end_time <= watermark)
@@ -115,20 +176,20 @@ impl SlidingWindowManager {
             .collect();
 
         // Move windows from active to closed
-        for window in &windows_to_close {
+        for window in windows_to_close {
             result.push(AlignedWindowMessage {
                 operation: WindowOperation::Close,
                 window: window.clone(),
             });
-            active_windows.remove(window);
-            closed_windows.insert(window.clone());
+            active_windows.remove(&window);
+            closed_windows.insert(window);
         }
 
         result
     }
 
     /// Deletes a window after it is closed and GC is done.
-    pub(crate) fn delete_window(&self, window: Window) {
+    pub(crate) fn gc_window(&self, window: Window) {
         // Update max_deleted_window_end_time if this window's end time is greater
         self.max_deleted_window_end_time
             .fetch_max(window.end_time.timestamp_millis(), Ordering::Relaxed);
@@ -136,7 +197,7 @@ impl SlidingWindowManager {
         // Remove the window from closed_windows
         self.closed_windows
             .write()
-            .expect("Failed to lock closed_windows")
+            .expect("Poisoned lock for closed_windows")
             .remove(&window);
     }
 
@@ -147,21 +208,21 @@ impl SlidingWindowManager {
         // NOTE: closed windows will always have a lower end time than active_windows
         self.closed_windows
             .read()
-            .expect("Failed to lock closed_windows")
+            .expect("Poisoned lock for closed_windows")
             .iter()
             .next()
             .cloned()
             .or_else(|| {
                 self.active_windows
                     .read()
-                    .expect("Failed to lock active_windows")
+                    .expect("Poisoned lock for active_windows")
                     .iter()
                     .next()
                     .cloned()
             })
     }
 
-    /// Helper method to format window information for logging
+    /// Helper method to format sorted window information for logging.
     fn format_windows_for_log(windows: &[ProtoWindow]) -> String {
         let formatted_windows: String = windows
             .iter()
@@ -176,16 +237,22 @@ impl SlidingWindowManager {
         format!("{} windows: {}", windows.len(), formatted_windows)
     }
 
-    /// Saves the current window state to the specified file
+    /// Saves the current window state to the specified file.
     pub(crate) fn save_state(&self) -> ReduceResult<()> {
-        let path = match &self.state_file_path {
+        let path = match &self.active_window_state_file {
             Some(path) => path,
             None => return Ok(()),
         };
 
         let all_windows: Vec<ProtoWindow> = {
-            let active_windows = self.active_windows.read().unwrap();
-            let closed_windows = self.closed_windows.read().unwrap();
+            let active_windows = self
+                .active_windows
+                .read()
+                .expect("Poisoned lock for active_windows");
+            let closed_windows = self
+                .closed_windows
+                .read()
+                .expect("Poisoned lock for closed_windows");
 
             closed_windows
                 .iter()
@@ -200,6 +267,7 @@ impl SlidingWindowManager {
         };
 
         info!(
+            path = %path.display(),
             "Saving window state: {}",
             Self::format_windows_for_log(&state.windows)
         );
@@ -219,6 +287,7 @@ impl SlidingWindowManager {
     /// Loads window state from the specified file
     fn load_state(&self, path: &PathBuf) -> ReduceResult<()> {
         if !path.exists() {
+            info!(path = %path.display(), "Window state file does not exist");
             return Ok(());
         }
 
@@ -229,7 +298,7 @@ impl SlidingWindowManager {
 
         self.active_windows
             .write()
-            .unwrap()
+            .expect("Poisoned lock for active_windows")
             .extend(state.windows.iter().map(Into::into));
 
         self.max_deleted_window_end_time
@@ -240,10 +309,16 @@ impl SlidingWindowManager {
             Self::format_windows_for_log(&state.windows)
         );
 
+        // remove the state file, else we will load the state file on next restart in case of crash (SIGKILL)
+        fs::remove_file(path).map_err(|e| Error::Other(e.to_string()))?;
+        info!("Removed window state file: {}", path.display());
+
         Ok(())
     }
 
-    /// Assigns windows to a message
+    /// Assigns windows to a message. It first figures all the windows that the message belongs to and
+    /// then checks if the window already exists. If it does, it appends the message to the window,
+    /// else it creates a new window and adds the message to it.
     pub(crate) fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage> {
         let windows = self.create_windows(&msg);
         let mut result = Vec::new();
@@ -259,6 +334,7 @@ impl SlidingWindowManager {
                     window: window.clone(),
                 });
             } else if window.end_time.timestamp_millis()
+                // TODO(vigith): can it be > first active_window start time?
                 > self.max_deleted_window_end_time.load(Ordering::Relaxed)
             {
                 // only create the window if the end time is greater than the max deleted window end
@@ -538,7 +614,7 @@ mod tests {
         windower.close_windows(base_time + chrono::Duration::seconds(60));
 
         // Delete window1
-        windower.delete_window(window1.clone());
+        windower.gc_window(window1.clone());
 
         // Verify window1 is deleted
         {
@@ -552,7 +628,7 @@ mod tests {
         }
 
         // Delete window2
-        windower.delete_window(window2.clone());
+        windower.gc_window(window2.clone());
 
         // Verify window2 is deleted
         {
@@ -564,7 +640,7 @@ mod tests {
         }
 
         // Delete window3
-        windower.delete_window(window3.clone());
+        windower.gc_window(window3.clone());
 
         // Verify window3 is deleted
         {
@@ -617,7 +693,7 @@ mod tests {
         windower.close_windows(base_time + chrono::Duration::seconds(40));
 
         // Delete window3 (the oldest)
-        windower.delete_window(window3.clone());
+        windower.gc_window(window3.clone());
 
         // Verify the oldest window end time is now window2
         assert_eq!(
@@ -633,7 +709,7 @@ mod tests {
         windower.close_windows(base_time + chrono::Duration::seconds(50));
 
         // Delete window2
-        windower.delete_window(window2.clone());
+        windower.gc_window(window2.clone());
 
         // Verify oldest window end time is now window1
         assert_eq!(
@@ -649,7 +725,7 @@ mod tests {
         windower.close_windows(base_time + chrono::Duration::seconds(60));
 
         // Delete window1
-        windower.delete_window(window1.clone());
+        windower.gc_window(window1.clone());
         assert_eq!(windower.oldest_window(), None);
     }
 
@@ -687,7 +763,7 @@ mod tests {
                 active_windows.iter().cloned(),
             ))),
             closed_windows: Arc::new(RwLock::new(BTreeSet::new())),
-            state_file_path: None,
+            active_window_state_file: None,
             max_deleted_window_end_time: Arc::new(Default::default()),
         };
 

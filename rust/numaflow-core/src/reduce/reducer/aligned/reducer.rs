@@ -537,7 +537,7 @@ mod tests {
         }
     }
 
-    // #[cfg(feature = "nats-tests")]
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_aligned_reducer_with_fixed_window() -> crate::Result<()> {
         // Set up the reducer server
