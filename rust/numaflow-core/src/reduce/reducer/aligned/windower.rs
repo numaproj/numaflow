@@ -1,3 +1,8 @@
+//! Windower is responsible for managing the windows and exposes functions for assigning windows to
+//! messages and closing windows when the watermark has advanced beyond the window end time.
+//! Windows managed by the Windower are purely based on the event-time and is oblivious of the
+//! keys. The multiplexing of windows to keyed windows is done at the Reduce server (SDK).
+
 use crate::message::Message;
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 use bytes::Bytes;
@@ -12,10 +17,15 @@ pub(crate) mod fixed;
 /// Sliding Window Operations.
 pub(crate) mod sliding;
 
-/// WindowManager enum that can be either a FixedWindowManager or a SlidingWindowManager
+// Technically we can have a trait for WindowManager and implement it for Fixed and Sliding, but
+// the generics are getting in all the way from the bootup code. Also, we do not expect any other
+// window types in the future.
+/// WindowManager enum that can be either a FixedWindowManager or a SlidingWindowManager.
 #[derive(Debug, Clone)]
 pub(crate) enum WindowManager {
+    /// Fixed window manager.
     Fixed(FixedWindowManager),
+    /// Sliding window manager.
     Sliding(SlidingWindowManager),
 }
 
@@ -56,7 +66,7 @@ impl WindowManager {
 
 /// A Window is represented by its start and end time. All the data which event time falls within
 /// this window will be reduced by the Reduce function associated with it. The association is via the
-/// id.
+/// id. The Windows when sorted are sorted by the end time.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Window {
     /// Start time of the window.
@@ -152,7 +162,7 @@ pub(crate) struct AlignedWindowMessage {
     pub(crate) window: Window,
 }
 
-/// Truncates a timestamp to the nearest multiple of the given duration
+/// Truncates a timestamp to the nearest multiple of the given duration.
 pub(crate) fn truncate_to_duration(timestamp_millis: i64, duration_millis: i64) -> i64 {
     // Convert timestamp to DateTime
     let dt = Utc.timestamp_millis_opt(timestamp_millis).unwrap();

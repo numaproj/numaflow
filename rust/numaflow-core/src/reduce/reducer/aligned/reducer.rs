@@ -168,7 +168,6 @@ struct AlignedReduceActor {
     /// JetStream writer for writing results of reduce operation.
     js_writer: JetstreamWriter,
     /// Sender for error messages.
-    /// TODO(vigith): how is error handled!!
     error_tx: mpsc::Sender<Error>,
     /// Sender for GC WAL messages. It is optional since users can specify not to use WAL.
     gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
@@ -286,6 +285,9 @@ impl AlignedReduceActor {
         let Some(active_stream) = self.active_streams.get(&window_id) else {
             // windows may not be found during replay, because the windower doesn't send the open
             // message for the active windows that got replayed, hence we create a new one.
+            // this happens because of out-of-order messages and we have to ensure that the (t+1)th
+            // message is sent to the window that could be created by (t)th message iff (t+1)th message
+            // belongs to that window created by (t)th message.
             self.window_open(window, window_id, msg).await;
             return;
         };
@@ -401,7 +403,7 @@ impl AlignedReducer {
                             break;
                         };
 
-                        // TODO: drop late messages, allowed lateness and keyed false
+                        // TODO: drop late messages, allowed lateness and keyed false (https://github.com/numaproj/numaflow/issues/2646)
 
                         // If shutting down, drain the stream
                         if self.shutting_down_on_err {
@@ -429,6 +431,7 @@ impl AlignedReducer {
             }
 
             // Drop the sender to signal the actor to stop
+            info!("Reduce component is shutting down, waiting for active reduce tasks to complete");
             drop(actor_tx);
 
             // Wait for the actor to complete
