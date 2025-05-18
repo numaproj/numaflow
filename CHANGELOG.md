@@ -169,6 +169,14 @@
  * dependabot[bot]
  * shrivardhan
 
+## v1.4.6 (2025-05-18)
+
+ * [b966b1bb](https://github.com/numaproj/numaflow/commit/b966b1bbc88337fcec8580dea3417fbc3710ce2e) Update manifests to v1.4.6
+
+### Contributors
+
+ * Derek Wang
+
 ## v1.4.5 (2025-05-13)
 
  * [9090935a](https://github.com/numaproj/numaflow/commit/9090935aafcaf6fc173bc27312c2a09bef22cec4) Update manifests to v1.4.5
