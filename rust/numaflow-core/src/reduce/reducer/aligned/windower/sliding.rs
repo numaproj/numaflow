@@ -132,9 +132,8 @@ impl SlidingWindowManager {
         let mut current_start = start_time_millis;
         let mut current_end = current_start + window_length_millis;
 
-        // TODO(vigith): is the first window right?
         // Create all windows that contain this event for example if the event time of the message
-        // is 25 with length 5s and slide 1s we will have [20, 25), [21, 26), [22, 27), [23, 28), [24, 29)
+        // is 25 with length 5s and slide 1s we will have [21, 26), [22, 27), [23, 28), [24, 29), [25, 30)
         // windows.
 
         // startTime and endTime will be the largest timestamp window for the given eventTime,
@@ -168,10 +167,9 @@ impl SlidingWindowManager {
             .expect("Poisoned lock in active_windows");
 
         // get all the windows that have end time less than the watermark
-        // TODO(vigith): can we use <= or should it be <?
         let windows_to_close: Vec<_> = active_windows
             .iter()
-            .filter(|window| window.end_time <= watermark)
+            .filter(|window| window.end_time <= watermark) // window end time is exclusive, hence <=
             .cloned()
             .collect();
 
@@ -334,9 +332,10 @@ impl SlidingWindowManager {
                     window: window.clone(),
                 });
             } else if window.end_time.timestamp_millis()
-                // TODO(vigith): can it be > first active_window start time?
                 > self.max_deleted_window_end_time.load(Ordering::Relaxed)
             {
+                // we cannot use active_window because that could be misaligned due to out-of-order
+                // messages.
                 // only create the window if the end time is greater than the max deleted window end
                 // time, during replay we might get the same message again and again, so we need to
                 // avoid creating the materialized window again.

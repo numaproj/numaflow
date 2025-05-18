@@ -14,6 +14,7 @@ message GCEvent {
   repeated string keys = 3;
 }
 
+// Window represents an aligned window.
 message Window {
   // start_time of the window
   google.protobuf.Timestamp start_time = 1;

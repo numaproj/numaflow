@@ -41,7 +41,6 @@ impl ReduceForwarder {
                 ))
             })?;
 
-        // TODO(vigith):
         processor_result.inspect_err(|e| {
             error!(?e, "Error in reducer");
             cln_token.cancel();

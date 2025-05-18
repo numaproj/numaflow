@@ -12,6 +12,7 @@ pub struct GcEvent {
     #[prost(string, repeated, tag = "3")]
     pub keys: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
+/// Window represents an aligned window.
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct Window {
     /// start_time of the window
