@@ -13,7 +13,7 @@ impl TryFrom<KafkaMessage> for Message {
 
     fn try_from(message: KafkaMessage) -> crate::Result<Self> {
         let offset = Offset::String(StringOffset::new(
-            format!("{}:{}", message.partition, message.offset),
+            format!("{}:{}:{}", message.topic, message.partition, message.offset),
             *get_vertex_replica(),
         ));
 
@@ -87,22 +87,25 @@ impl source::SourceAcker for KafkaSource {
 
             let offset = String::from_utf8_lossy(&string_offset.offset);
             let parts: Vec<&str> = offset.split(':').collect();
-            if parts.len() != 2 {
+            if parts.len() != 3 {
                 return Err(Error::Source(format!(
-                    "Invalid Kafka offset format. Expected format: <partition>:<offset>. offset={offset:?}"
+                    "Invalid Kafka offset format. Expected format: <topic>:<partition>:<offset>. offset={offset:?}"
                 )));
             }
-            let partition = parts[0].parse::<i32>().map_err(|e| {
+            let topic = parts[0].to_string();
+            let partition = parts[1].parse::<i32>().map_err(|e| {
                 Error::Source(format!(
                     "invalid partition id. kafka_offset={offset}, error={e:?}"
                 ))
             })?;
-            let partition_offset = parts[1].parse::<i64>().map_err(|e| {
+
+            let partition_offset = parts[2].parse::<i64>().map_err(|e| {
                 Error::Source(format!(
                     "invalid offset id. kafka_offset={offset}, error={e:?}"
                 ))
             })?;
             kafka_offsets.push(numaflow_kafka::KafkaOffset {
+                topic,
                 partition,
                 offset: partition_offset,
             });
@@ -127,6 +130,7 @@ mod tests {
     #[tokio::test]
     async fn test_try_from_kafka_message_success() {
         let kafka_message = KafkaMessage {
+            topic: "test_topic".to_string(),
             value: Bytes::from("test_value"),
             partition: 1,
             offset: 42,
@@ -163,7 +167,7 @@ mod tests {
         // Configure KafkaSource
         let config = numaflow_kafka::KafkaSourceConfig {
             brokers: vec!["localhost:9092".to_string()],
-            topic: topic_name.clone(),
+            topics: vec![topic_name.clone()],
             consumer_group: "test_consumer_group".to_string(),
             auth: None,
             tls: None,

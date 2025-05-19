@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::{collections::HashMap, time::Duration};
 
 use bytes::Bytes;
@@ -88,9 +89,21 @@ pub enum KafkaSaslAuth {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+/// Configuration for TLS settings when connecting to Kafka brokers.
 pub struct TlsConfig {
+    /// Whether to skip server certificate verification.
+    ///
+    /// When set to `true`, the client will not verify the server's certificate.
     pub insecure_skip_verify: bool,
+
+    /// CA certificate used to verify the server's certificate.
+    /// Note: This will contain the actual certificate, not the path to the certificate.
     pub ca_cert: Option<String>,
+
+    /// Client authentication certificates for mutual TLS (mTLS).
+    ///
+    /// If `Some`, client authentication will be enabled using the provided certificates.
+    /// If `None`, client authentication will be disabled.
     pub client_auth: Option<TlsClientAuthCerts>,
 }
 
@@ -102,16 +115,23 @@ pub struct TlsClientAuthCerts {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct KafkaSourceConfig {
+    /// The list of Kafka brokers to connect to.
     pub brokers: Vec<String>,
-    pub topic: String,
+    /// The Kafka topics to consume messages from.
+    pub topics: Vec<String>,
+    /// The consumer group to use for the Kafka consumer.
     pub consumer_group: String,
+    /// The authentication mechanism to use for the Kafka consumer.
     pub auth: Option<KafkaSaslAuth>,
+    /// The TLS configuration for the Kafka consumer.
     pub tls: Option<TlsConfig>,
 }
 
 /// Message represents a message received from Kafka which can be converted to Numaflow Message.
 #[derive(Debug)]
 pub struct KafkaMessage {
+    /// The topic name.
+    pub topic: String,
     /// The user payload.
     pub value: Bytes,
     /// The partition number.
@@ -142,11 +162,11 @@ impl ConsumerContext for KafkaContext {
     }
 }
 
-type NumaflowConsumer = StreamConsumer<KafkaContext>;
-
 /// Represents a Kafka offset for a specific topic.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct KafkaOffset {
+    /// The topic name
+    pub topic: String,
     /// The partition id within a topic
     pub partition: i32,
     /// The offset of the message within a partition
@@ -169,11 +189,13 @@ enum KafkaActorMessage {
     },
 }
 
+type NumaflowConsumer = StreamConsumer<KafkaContext>;
+
 struct KafkaActor {
-    consumer: NumaflowConsumer,
+    consumer: Arc<NumaflowConsumer>,
     read_timeout: Duration,
     batch_size: usize,
-    topic: String,
+    topics: Vec<String>,
     handler_rx: mpsc::Receiver<KafkaActorMessage>,
 }
 
@@ -195,7 +217,6 @@ impl KafkaActor {
             .set("auto.offset.reset", "earliest") // TODO: Make this configurable
             .set_log_level(RDKafkaLogLevel::Warning);
 
-        let has_tls = config.tls.is_some();
         if let Some(tls_config) = config.tls.clone() {
             client_config.set("security.protocol", "SSL");
             if tls_config.insecure_skip_verify {
@@ -217,7 +238,7 @@ impl KafkaActor {
         if let Some(auth) = config.auth {
             client_config.set(
                 "security.protocol",
-                if has_tls {
+                if config.tls.is_some() {
                     "SASL_SSL"
                 } else {
                     "SASL_PLAINTEXT"
@@ -275,21 +296,22 @@ impl KafkaActor {
         }
 
         let context = KafkaContext;
-        let consumer: NumaflowConsumer =
-            client_config
-                .create_with_context(context)
-                .map_err(|err| Error::Connection {
+        let consumer: Arc<NumaflowConsumer> =
+            Arc::new(client_config.create_with_context(context).map_err(|err| {
+                Error::Connection {
                     server: config.brokers.join(","),
                     error: err.to_string(),
-                })?;
+                }
+            })?);
 
         // NOTE: Subscribing to a non-existent topic will not return an error
         // The error happens only when we try to read from the topic
         // 2025-05-09T02:45:42.239784Z ERROR rdkafka::client: librdkafka: Global error: UnknownTopicOrPartition (Broker: Unknown topic or partition): Subscribed topic not available: test-topic: Broker: Unknown topic or partition
         // Currently, the pending returns Ok(Some(0)) if the topic is not found. When the topic is created,
         // the consumer starts to pull messages without the need for a restart.
+        let topics: Vec<&str> = config.topics.iter().map(|s| s.as_str()).collect();
         consumer
-            .subscribe(&[&config.topic])
+            .subscribe(&topics)
             .map_err(|err| Error::Kafka(format!("Failed to subscribe to topic: {}", err)))?;
 
         // The consumer.subscribe() will not fail even if the credentials are invalid.
@@ -298,7 +320,7 @@ impl KafkaActor {
             consumer,
             read_timeout,
             batch_size,
-            topic: config.topic,
+            topics: config.topics,
             handler_rx,
         };
 
@@ -438,6 +460,7 @@ impl KafkaActor {
                     };
 
                     let message = KafkaMessage {
+                        topic: message.topic().to_string(),
                         value,
                         partition: message.partition(),
                         offset: message.offset(),
@@ -454,11 +477,14 @@ impl KafkaActor {
 
     async fn ack_messages(&mut self, offsets: Vec<KafkaOffset>) -> Result<()> {
         use std::collections::HashMap;
-        let mut partition_offsets: HashMap<i32, i64> = HashMap::new();
+        // topic -> partition -> offset
+        let mut topic_partition_offsets: HashMap<String, HashMap<i32, i64>> = HashMap::new();
 
-        // For each partition, keep only the highest offset
+        // For each topic and partition, keep only the highest offset
         for kafka_offset in offsets {
-            partition_offsets
+            topic_partition_offsets
+                .entry(kafka_offset.topic.clone())
+                .or_default()
                 .entry(kafka_offset.partition)
                 .and_modify(|current| {
                     if kafka_offset.offset > *current {
@@ -468,83 +494,128 @@ impl KafkaActor {
                 .or_insert(kafka_offset.offset);
         }
 
-        let mut tpl = TopicPartitionList::new();
-        for (partition, offset) in partition_offsets {
-            // Commit offset+1 (as per Kafka semantics)
-            // In Kafka, the offset represents the position of the next message to be read.
-            // When we commit offset N, it means the next message to be read will be at offset N.
-            // Since we've already processed the message at the current offset, we need to commit
-            // offset+1 to indicate we want to read the next message in the partition.
-            tpl.add_partition_offset(&self.topic, partition, Offset::Offset(offset + 1))
-                .map_err(|e| {
-                    Error::Kafka(format!(
-                        "Failed to add partition offset for acknowledging messages: {}",
-                        e
-                    ))
-                })?;
+        for (topic, partition_offsets) in topic_partition_offsets {
+            let mut tpl = TopicPartitionList::new();
+            for (partition, offset) in partition_offsets {
+                // Commit offset+1 (as per Kafka semantics)
+                // In Kafka, the offset represents the position of the next message to be read.
+                // When we commit offset N, it means the next message to be read will be at offset N.
+                // Since we've already processed the message at the current offset, we need to commit
+                // offset+1 to indicate we want to read the next message in the partition.
+                tpl.add_partition_offset(&topic, partition, Offset::Offset(offset + 1))
+                    .map_err(|e| {
+                        Error::Kafka(format!(
+                            "Failed to add partition offset for acknowledging messages: {}",
+                            e
+                        ))
+                    })?;
+            }
+            self.consumer
+                .commit(&tpl, CommitMode::Sync)
+                .map_err(|e| Error::Kafka(format!("Failed to commit offsets: {}", e)))?;
         }
-
-        // Wait for confirmation from the Kafka broker that the offsets have been committed.
-        self.consumer
-            .commit(&tpl, CommitMode::Sync)
-            .map_err(|e| Error::Kafka(format!("Failed to commit offsets: {}", e)))?;
-
         Ok(())
     }
 
+    /// Returns the total number of pending messages across all topics and partitions.
+    /// The total pending is calculated as the sum of (high watermark - committed offset)
+    /// for each partition across all topics.
     async fn pending_messages(&mut self) -> Result<Option<usize>> {
-        let mut total_pending = 0;
         let timeout = Duration::from_secs(5);
-
-        let metadata = self
-            .consumer
-            .fetch_metadata(Some(&self.topic), timeout)
-            .map_err(|e| Error::Kafka(format!("Failed to fetch metadata: {}", e)))?;
-
-        let Some(topic_metadata) = metadata.topics().first() else {
-            warn!(topic = self.topic, "No topic metadata found");
-            return Ok(Some(0));
-        };
-
-        for partition in 0..topic_metadata.partitions().len() {
-            let mut tpl = TopicPartitionList::new();
-            tpl.add_partition(&self.topic, partition as i32);
-            let committed = self
-                .consumer
-                .committed_offsets(tpl, timeout)
-                .map_err(|e| Error::Kafka(format!("Failed to get committed offsets: {}", e)))?;
-
-            let (low, high) = self
-                .consumer
-                .fetch_watermarks(&self.topic, partition as i32, timeout)
-                .map_err(|e| Error::Kafka(format!("Failed to fetch watermarks: {}", e)))?;
-
-            let committed_offset = match committed.elements_for_topic(&self.topic).first() {
-                Some(element) => match element.offset() {
-                    Offset::Offset(offset) => offset,
-                    _ => low,
-                },
-                None => low,
-            };
-
-            total_pending += (high - committed_offset) as usize;
+        let mut handles = Vec::new();
+        for topic in &self.topics {
+            let consumer = Arc::clone(&self.consumer);
+            let topic = topic.clone();
+            handles.push(tokio::task::spawn_blocking(move || {
+                let metadata = consumer
+                    .fetch_metadata(Some(&topic), timeout)
+                    .map_err(|e| Error::Kafka(format!("Failed to fetch metadata: {}", e)))?;
+                let Some(topic_metadata) = metadata.topics().first() else {
+                    warn!(topic = topic, "No topic metadata found");
+                    return Ok(0);
+                };
+                let mut topic_pending = 0;
+                for partition in 0..topic_metadata.partitions().len() {
+                    let mut tpl = TopicPartitionList::new();
+                    tpl.add_partition(&topic, partition as i32);
+                    let committed = consumer.committed_offsets(tpl, timeout).map_err(|e| {
+                        Error::Kafka(format!("Failed to get committed offsets: {}", e))
+                    })?;
+                    let (low, high) = consumer
+                        .fetch_watermarks(&topic, partition as i32, timeout)
+                        .map_err(|e| Error::Kafka(format!("Failed to fetch watermarks: {}", e)))?;
+                    let committed_offset = match committed.elements_for_topic(&topic).first() {
+                        Some(element) => match element.offset() {
+                            Offset::Offset(offset) => offset,
+                            _ => low,
+                        },
+                        None => low,
+                    };
+                    topic_pending += (high - committed_offset) as usize;
+                }
+                Ok(topic_pending)
+            }));
         }
-
+        let mut total_pending = 0;
+        for handle in handles {
+            match handle.await {
+                Ok(Ok(count)) => total_pending += count,
+                Ok(Err(e)) => {
+                    error!(?e, "Error fetching pending messages");
+                    return Err(e);
+                }
+                Err(e) => {
+                    error!(?e, "Tokio task join error fetching pending messages");
+                    return Err(Error::Other(format!("Tokio task join error: {e}")));
+                }
+            }
+        }
         Ok(Some(total_pending))
     }
 
+    /// Returns the partition IDs of the topic with the maximum number of partitions.
+    /// Since we support specifying multiple topics, this method returns the Vec of partition IDs
+    /// from the topic that has the most partitions among all configured topics.
     async fn partitions_info(&mut self) -> Result<Vec<i32>> {
         let timeout = Duration::from_secs(5);
-        let metadata = self
-            .consumer
-            .fetch_metadata(Some(&self.topic), timeout)
-            .map_err(|e| Error::Kafka(format!("Failed to fetch metadata: {}", e)))?;
-
-        let Some(topic_metadata) = metadata.topics().first() else {
-            warn!(topic = self.topic, "No topic metadata found");
-            return Err(Error::Kafka("No topic metadata found".to_string()));
-        };
-        Ok(topic_metadata.partitions().iter().map(|p| p.id()).collect())
+        let mut handles = Vec::new();
+        for topic in &self.topics {
+            let consumer = Arc::clone(&self.consumer);
+            let topic = topic.clone();
+            handles.push(tokio::task::spawn_blocking(move || {
+                let metadata = consumer
+                    .fetch_metadata(Some(&topic), timeout)
+                    .map_err(|e| Error::Kafka(format!("Failed to fetch metadata: {}", e)))?;
+                let Some(topic_metadata) = metadata.topics().first() else {
+                    warn!(topic = topic, "No topic metadata found");
+                    return Ok(Vec::new());
+                };
+                let partitions: Vec<i32> =
+                    topic_metadata.partitions().iter().map(|p| p.id()).collect();
+                Ok(partitions)
+            }));
+        }
+        let mut max_partitions = 0;
+        let mut result: Vec<i32> = Vec::new();
+        for handle in handles {
+            match handle.await {
+                Ok(Ok(partitions)) => {
+                    if partitions.len() > max_partitions {
+                        max_partitions = partitions.len();
+                        result = partitions;
+                    }
+                }
+                Ok(Err(e)) => {
+                    error!(?e, "Error fetching partitions info");
+                    return Err(e);
+                }
+                Err(e) => {
+                    error!(?e, "Tokio task join error fetching partitions info");
+                    return Err(Error::Other(format!("Tokio task join error: {e}")));
+                }
+            }
+        }
+        Ok(result)
     }
 }
 
@@ -666,7 +737,7 @@ mod tests {
 
         let config = KafkaSourceConfig {
             brokers: vec!["localhost:9092".to_string()],
-            topic: topic_name.clone(),
+            topics: vec![topic_name.clone()],
             consumer_group: "test_consumer_group".to_string(),
             auth: None,
             tls: None,
@@ -707,6 +778,7 @@ mod tests {
         let offsets: Vec<KafkaOffset> = messages
             .iter()
             .map(|msg| KafkaOffset {
+                topic: topic_name.clone(),
                 partition: msg.partition,
                 offset: msg.offset,
             })
@@ -738,6 +810,7 @@ mod tests {
         let offsets: Vec<KafkaOffset> = messages
             .iter()
             .map(|msg| KafkaOffset {
+                topic: topic_name.clone(),
                 partition: msg.partition,
                 offset: msg.offset,
             })
@@ -770,6 +843,7 @@ mod tests {
         let offsets: Vec<KafkaOffset> = messages
             .iter()
             .map(|msg| KafkaOffset {
+                topic: topic_name.clone(),
                 partition: msg.partition,
                 offset: msg.offset,
             })
@@ -802,6 +876,7 @@ mod tests {
         let offsets: Vec<KafkaOffset> = messages
             .iter()
             .map(|msg| KafkaOffset {
+                topic: topic_name.clone(),
                 partition: msg.partition,
                 offset: msg.offset,
             })
@@ -868,7 +943,7 @@ mod tests {
 
         let config = KafkaSourceConfig {
             brokers: vec!["localhost:9092".to_string()],
-            topic: topic_name,
+            topics: vec![topic_name.clone()],
             consumer_group: "test_consumer_group_headers".to_string(),
             auth: None,
             tls: None,

@@ -589,7 +589,11 @@ pub(crate) mod source {
 
             let kafka_config = numaflow_kafka::KafkaSourceConfig {
                 brokers: value.brokers.unwrap_or_default(),
-                topic: value.topic,
+                topics: value
+                    .topic
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .collect(),
                 consumer_group: value.consumer_group.unwrap_or_default(),
                 auth,
                 tls,
@@ -1623,7 +1627,7 @@ mod kafka_tests {
                 _ => panic!("Unexpected KafkaAuth variant"),
             }
             assert_eq!(config.brokers, vec!["localhost:9092"]);
-            assert_eq!(config.topic, "test-topic");
+            assert_eq!(config.topics, vec!["test-topic"]);
             assert_eq!(config.consumer_group, "test-group");
         } else {
             panic!("Expected SourceType::Kafka");
