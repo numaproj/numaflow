@@ -24,7 +24,7 @@ const cleanText = (text: string) => {
 
 const highlightFilePaths = (rawText: string) => {
   const text = cleanText(rawText);
-  // highlights path part of URL including {http,https} protocols and line anchors as well
+  // highlights file paths including {http,https} protocols and line anchors of URLs
   const filePathRegex = /(https?:\/\/[^\s]+(?:#[^\s]+)?)|((?:\/[^\s]+)+\.[a-zA-Z0-9:]+(?:#[^\s]+)?)|(\bat\s+[^\n]+)/g;
   const exclusionList = ["/google.rpc.DebugInfo", "/debug.Stack"];
 
