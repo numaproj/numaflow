@@ -291,6 +291,21 @@ func (in *Backoff) DeepCopyInto(out *Backoff) {
 		*out = new(uint32)
 		**out = **in
 	}
+	if in.Factor != nil {
+		in, out := &in.Factor, &out.Factor
+		*out = new(float64)
+		**out = **in
+	}
+	if in.Cap != nil {
+		in, out := &in.Cap, &out.Cap
+		*out = new(metav1.Duration)
+		**out = **in
+	}
+	if in.Jitter != nil {
+		in, out := &in.Jitter, &out.Jitter
+		*out = new(float64)
+		**out = **in
+	}
 	return
 }
 
