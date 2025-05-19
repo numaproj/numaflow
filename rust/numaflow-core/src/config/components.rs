@@ -1851,7 +1851,7 @@ mod kafka_tests {
         let err = result.unwrap_err();
         assert_eq!(
             err.to_string(),
-            "Config Error - GSSAPI mechanism is not supported yet"
+            "Config Error - GSSAPI mechanism requires gssapi configuration"
         );
     }
 
