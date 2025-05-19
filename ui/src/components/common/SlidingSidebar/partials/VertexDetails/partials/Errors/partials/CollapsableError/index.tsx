@@ -24,7 +24,8 @@ const cleanText = (text: string) => {
 
 const highlightFilePaths = (rawText: string) => {
   const text = cleanText(rawText);
-  const filePathRegex = /((?:\/[^\s]+)+\.[a-zA-Z0-9:]+)|(\bat\s+[^\n]+)/g;
+  // highlights path part of URL including {http,https} protocols and line anchors as well
+  const filePathRegex = /(https?:\/\/[^\s]+(?:#[^\s]+)?)|((?:\/[^\s]+)+\.[a-zA-Z0-9:]+(?:#[^\s]+)?)|(\bat\s+[^\n]+)/g;
   const exclusionList = ["/google.rpc.DebugInfo", "/debug.Stack"];
 
   return text.split(filePathRegex).map((part, index) => {

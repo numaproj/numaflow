@@ -351,7 +351,12 @@ async fn read_server_info(
     // Infinite loop to keep checking until the file is ready
     loop {
         if cln_token.is_cancelled() {
-            return Err(Error::ServerInfo("Operation cancelled".to_string()));
+            return Err(Error::ServerInfo(format!(
+                "Server info file {:?} is not ready. \
+                This indicates that the server is not started correctly in the user-code. \
+            Eg (simple sink in Java, similarly you can refer language specific SDK examples) https://github.com/numaproj/numaflow-java/blob/2aeaafff1c6dec7fd66e018b142ef6fe4ffcf0a9/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple/SimpleSink.java#L23",
+                file_path
+            )));
         }
 
         // Check if the file exists and has content
@@ -390,9 +395,10 @@ async fn read_server_info(
         retry += 1;
         if retry >= 10 {
             // Return an error if the retry limit is reached
-            return Err(Error::ServerInfo(
-                "server-info reading retry exceeded".to_string(),
-            ));
+            return Err(Error::ServerInfo(format!(
+                "server-info reading retry exceeded for file: {:?}",
+                file_path
+            )));
         }
 
         sleep(Duration::from_millis(100)).await; // Sleep before retrying
