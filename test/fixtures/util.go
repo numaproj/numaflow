@@ -437,6 +437,15 @@ func VertexPodLogNotContains(ctx context.Context, kubeClient kubernetes.Interfac
 	return PodsLogNotContains(ctx, kubeClient, namespace, regex, podList, opts...), nil
 }
 
+func MonoVertexPodLogNotContains(ctx context.Context, kubeClient kubernetes.Interface, namespace, mvName, regex string, opts ...PodLogCheckOption) (bool, error) {
+	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyMonoVertexName, mvName, dfv1.KeyComponent, dfv1.ComponentMonoVertex)
+	podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
+	if err != nil {
+		return false, fmt.Errorf("error getting mono-vertex pods: %w", err)
+	}
+	return PodsLogNotContains(ctx, kubeClient, namespace, regex, podList, opts...), nil
+}
+
 func PodsLogNotContains(ctx context.Context, kubeClient kubernetes.Interface, namespace, regex string, podList *corev1.PodList, opts ...PodLogCheckOption) bool {
 	o := defaultPodLogCheckOptions()
 	for _, opt := range opts {
@@ -626,6 +635,48 @@ func PodLogCheckOptionWithContainer(c string) PodLogCheckOption {
 	return func(o *podLogCheckOptions) {
 		o.container = c
 	}
+}
+
+// GetPodLogs fetches the logs from the specified pod and container and returns them as a string.
+// If follow is true, it will stream logs until the context is done; otherwise, it fetches current logs.
+func GetPodLogs(ctx context.Context, client kubernetes.Interface, namespace, podName, containerName string, follow bool) (string, error) {
+	var retryBackOff = wait.Backoff{
+		Factor:   1,
+		Jitter:   0,
+		Steps:    10,
+		Duration: time.Second * 1,
+	}
+
+	var stream io.ReadCloser
+	err := wait.ExponentialBackoffWithContext(ctx, retryBackOff, func(_ context.Context) (done bool, err error) {
+		stream, err = client.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{
+			Follow:    follow,
+			Container: containerName,
+		}).Stream(ctx)
+		if err == nil {
+			return true, nil
+		}
+		return false, nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to get pod %q logs: %w", podName, err)
+	}
+	defer func() { _ = stream.Close() }()
+
+	var buf bytes.Buffer
+	s := bufio.NewScanner(stream)
+	for s.Scan() {
+		buf.Write(s.Bytes())
+		buf.WriteByte('\n')
+		// If not following, break after reading available logs
+		if !follow && buf.Len() > 0 {
+			break
+		}
+	}
+	if err := s.Err(); err != nil {
+		return buf.String(), err
+	}
+	return buf.String(), nil
 }
 
 func streamPodLogs(ctx context.Context, client kubernetes.Interface, namespace, podName, containerName string, stopCh <-chan struct{}) {

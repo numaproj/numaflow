@@ -535,7 +535,7 @@ impl SinkWriter {
         }
 
         let total_msgs = messages.len();
-        let mut attempts = 1;
+        let mut attempts = 0;
         let mut error_map = HashMap::new();
         let mut fallback_msgs = Vec::new();
         let mut serving_msgs = Vec::new();
@@ -551,7 +551,7 @@ impl SinkWriter {
         let mut rng = StdRng::from_entropy();
 
         loop {
-            while attempts <= retry_config.sink_max_retry_attempts {
+            while attempts < retry_config.sink_max_retry_attempts {
                 let status = self
                     .write_to_sink_once(
                         &mut error_map,
@@ -565,7 +565,8 @@ impl SinkWriter {
                     Ok(false) => {
                         warn!(
                             "Retry attempt {} due to retryable error. Errors: {:?}",
-                            attempts, error_map
+                            attempts + 1,
+                            error_map
                         );
                         write_errors_total += error_map.len();
                     }
@@ -936,7 +937,7 @@ impl SinkWriter {
         // Calculate the base delay using the initial retry interval and the retry factor
         // The base delay is calculated as: initial_retry_interval * retry_factor^(attempts-1)
         let base_delay = (retry_config.sink_initial_retry_interval_in_ms as f64)
-            * retry_config.sink_retry_factor.powi((attempts - 1) as i32);
+            * retry_config.sink_retry_factor.powi(attempts as i32);
 
         let jitter = retry_config.sink_retry_jitter;
         // If jitter is 0, return the base delay

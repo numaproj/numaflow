@@ -169,6 +169,20 @@ func (t *Expect) MonoVertexPodLogContains(regex string, opts ...PodLogCheckOptio
 	return t
 }
 
+func (t *Expect) MonoVertexPodLogNotContains(regex string, opts ...PodLogCheckOption) *Expect {
+	t.t.Helper()
+	ctx := context.Background()
+	yes, err := MonoVertexPodLogNotContains(ctx, t.kubeClient, Namespace, t.monoVertex.Name, regex, opts...)
+	if err != nil {
+		t.t.Fatalf("Failed to check mono-vertex pod logs: %v", err)
+	}
+	if !yes {
+		t.t.Fatalf("Not expected mono-vertex pod log contains %q", regex)
+	}
+	t.t.Logf("Expected mono vertex %q pod to not contain %q", t.monoVertex.Name, regex)
+	return t
+}
+
 func (t *Expect) VertexPodLogNotContains(vertexName, regex string, opts ...PodLogCheckOption) *Expect {
 	t.t.Helper()
 	ctx := context.Background()

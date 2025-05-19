@@ -1,17 +1,19 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
-kind: MonoVertex
+kind: Pipeline
 metadata:
-  name: simple-mono-vertex
+  name: retry-backoff-mvtx
 spec:
   source:
-    generator: {}
+    generator:
+      rpu: 1
+      duration: "1s"
   sink:
     retryStrategy:
       backoff:
-        interval: 2s
+        interval: 1s
         steps: 2
         factor: 2
-        cap: 4s
+        cap: 1s
         jitter: 0
     udsink:
       container:
