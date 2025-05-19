@@ -24,8 +24,14 @@ const cleanText = (text: string) => {
 
 const highlightFilePaths = (rawText: string) => {
   const text = cleanText(rawText);
-  // highlights file paths including {http,https} protocols and line anchors of URLs
-  const filePathRegex = /(https?:\/\/[^\s]+(?:#[^\s]+)?)|((?:\/[^\s]+)+\.[a-zA-Z0-9:]+(?:#[^\s]+)?)|(\bat\s+[^\n]+)/g;
+  // Note: this regex may not cover all edge cases
+  // but it should work for most common cases
+  // It matches:
+  // - URLs (http/https) with or without anchors
+  // - file paths (e.g. /path/to/file) with or without extensions
+  // - lines starting with "at" (e.g. stack traces)
+  const filePathRegex =
+    /(https?:\/\/[^\s]+(?:#[^\s]+)?)|((?:\/[^\s]+)+)|(\bat\s+[^\n]+)/g;
   const exclusionList = ["/google.rpc.DebugInfo", "/debug.Stack"];
 
   return text.split(filePathRegex).map((part, index) => {
