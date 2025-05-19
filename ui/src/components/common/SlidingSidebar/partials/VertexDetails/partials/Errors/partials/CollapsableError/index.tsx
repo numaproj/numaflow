@@ -30,8 +30,7 @@ const highlightFilePaths = (rawText: string) => {
   // - URLs (http/https) with or without anchors
   // - file paths (e.g. /path/to/file) with or without extensions
   // - lines starting with "at" (e.g. stack traces)
-  const filePathRegex =
-    /(https?:\/\/[^\s]+(?:#[^\s]+)?)|((?:\/[^\s]+)+)|(\bat\s+[^\n]+)/g;
+  const filePathRegex = /(https?:\/\/[^\s]+(?:#[^\s]+)?)|((?:\/[^\s]+)+)|(\bat\s+[^\n]+)/g;
   const exclusionList = ["/google.rpc.DebugInfo", "/debug.Stack"];
 
   return text.split(filePathRegex).map((part, index) => {

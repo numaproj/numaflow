@@ -353,8 +353,8 @@ async fn read_server_info(
         if cln_token.is_cancelled() {
             return Err(Error::ServerInfo(format!(
                 "Server info file {:?} is not ready. \
-                This indicates that the server is not started correctly in the user-code. \
-            Eg (simple sink in Java, similarly you can refer language specific SDK examples) https://github.com/numaproj/numaflow-java/blob/2aeaafff1c6dec7fd66e018b142ef6fe4ffcf0a9/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple/SimpleSink.java#L23",
+                This indicates that the server has not started. \
+                For more details https://github.com/numaproj/numaflow/discussions/2655",
                 file_path
             )));
         }
