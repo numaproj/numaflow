@@ -133,17 +133,12 @@ mod tests {
     use bytes::Bytes;
     use chrono::{TimeZone, Utc};
     use std::sync::Arc;
+    use test_log::test;
     use tokio_stream::StreamExt;
     use tokio_stream::wrappers::ReceiverStream;
-    use tracing_subscriber::util::SubscriberInitExt;
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn test_gc_wal_and_aligned_compaction() {
-        tracing_subscriber::fmt()
-            .with_test_writer()
-            .finish()
-            .set_default();
-
         let test_path = tempfile::tempdir().unwrap().into_path();
 
         // Create GC WAL
@@ -268,13 +263,8 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[test(tokio::test)]
     async fn test_gc_wal_and_unaligned_compaction() {
-        tracing_subscriber::fmt()
-            .with_test_writer()
-            .finish()
-            .set_default();
-
         let test_path = tempfile::tempdir().unwrap().into_path();
 
         // Create GC WAL

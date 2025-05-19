@@ -165,6 +165,10 @@ impl Compactor {
         let (oldest_time, gc_files) = self.build_aligned_compaction().await?;
 
         info!(oldest_time = ?oldest_time.timestamp_millis(), "Event time till which the data has been processed");
+        println!(
+            "Oldest aligned window gc end time: {}",
+            oldest_time.timestamp_millis()
+        );
 
         let compact = AlignedCompaction(oldest_time);
 
@@ -199,6 +203,8 @@ impl Compactor {
     async fn compact_unaligned(&self, replay_tx: Option<mpsc::Sender<Bytes>>) -> WalResult<()> {
         // Get the oldest time map and scanned GC files
         let (oldest_time_map, gc_files) = self.build_unaligned_compaction().await?;
+
+        info!(oldest_time_map = ?oldest_time_map, "Event time map till which the data has been processed");
 
         let compact = UnalignedCompaction(oldest_time_map);
 
@@ -320,6 +326,7 @@ impl Compactor {
                     // Decode the GC event.
                     let gc: GcEvent = prost::Message::decode(data)
                         .map_err(|e| format!("Failed to decode GC event: {e}"))?;
+                    println!("GC event: {:?}", gc);
                     let gc: GcEventEntry = gc.into();
 
                     // Update the oldest time if the current GC event's end time is newer.
