@@ -144,7 +144,7 @@ mod tests {
         let message: Message = kafka_message.try_into().unwrap();
 
         assert_eq!(message.value, Bytes::from("test_value"));
-        assert_eq!(message.offset.to_string(), "1:42-0");
+        assert_eq!(message.offset.to_string(), "test_topic:1:42-0");
         assert_eq!(message.headers.get("key"), Some(&"value".to_string()));
     }
 
