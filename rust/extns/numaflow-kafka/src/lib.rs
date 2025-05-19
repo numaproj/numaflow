@@ -28,33 +28,61 @@ pub enum Error {
     Other(String),
 }
 
-/// Represents the authentication method used to connect to Kafka.
+/// Represents the SASL authentication mechanism for connecting to Kafka.
+///
+/// See the [Kafka Security documentation](https://kafka.apache.org/documentation/#security_sasl) for more details on each mechanism.
 #[derive(Debug, Clone, PartialEq)]
-pub enum KafkaAuth {
-    Plain {
-        username: String,
-        password: String,
-    },
-    ScramSha256 {
-        username: String,
-        password: String,
-    },
-    ScramSha512 {
-        username: String,
-        password: String,
-    },
+pub enum KafkaSaslAuth {
+    /// SASL/PLAIN authentication mechanism.
+    ///
+    /// See: <https://kafka.apache.org/documentation/#security_sasl_plain>
+    ///
+    /// Requires a username and password.
+    Plain { username: String, password: String },
+    /// SASL/SCRAM-SHA-256 authentication mechanism.
+    ///
+    /// See: <https://kafka.apache.org/documentation/#security_sasl_scram>
+    ///
+    /// Requires a username and password.
+    ScramSha256 { username: String, password: String },
+    /// SASL/SCRAM-SHA-512 authentication mechanism.
+    ///
+    /// See: <https://kafka.apache.org/documentation/#security_sasl_scram>
+    ///
+    /// Requires a username and password.
+    ScramSha512 { username: String, password: String },
+    /// SASL/GSSAPI (Kerberos) authentication mechanism.
+    ///
+    /// See: <https://kafka.apache.org/documentation/#security_sasl_gssapi>
+    ///
+    /// Requires Kerberos configuration and credentials.
     Gssapi {
+        /// Kerberos service name (e.g., "kafka").
         service_name: String,
+        /// Kerberos realm (optional, may be required by some setups).
         realm: String,
+        /// Kerberos principal (username).
         username: String,
+        /// Kerberos password (optional, if not using keytab).
         password: Option<String>,
+        /// Path to the keytab file (optional).
         keytab: Option<String>,
+        /// Path to the Kerberos configuration file (optional).
         kerberos_config: Option<String>,
+        /// Authentication type (e.g., "kinit").
         auth_type: String,
     },
+    /// SASL/OAUTHBEARER authentication mechanism.
+    ///
+    /// See: <https://kafka.apache.org/documentation/#security_sasl_oauthbearer>
+    ///
+    /// Requires OAuth2 client credentials and token endpoint.
     Oauth {
+        /// OAuth2 client ID.
         client_id: String,
+        /// OAuth2 client secret.
         client_secret: String,
+        /// OAuth2 token endpoint URL.
         token_endpoint: String,
     },
 }
@@ -77,7 +105,7 @@ pub struct KafkaSourceConfig {
     pub brokers: Vec<String>,
     pub topic: String,
     pub consumer_group: String,
-    pub auth: Option<KafkaAuth>,
+    pub auth: Option<KafkaSaslAuth>,
     pub tls: Option<TlsConfig>,
 }
 
@@ -196,25 +224,25 @@ impl KafkaActor {
                 },
             );
             match auth {
-                KafkaAuth::Plain { username, password } => {
+                KafkaSaslAuth::Plain { username, password } => {
                     client_config
                         .set("sasl.mechanisms", "PLAIN")
                         .set("sasl.username", username)
                         .set("sasl.password", password);
                 }
-                KafkaAuth::ScramSha256 { username, password } => {
+                KafkaSaslAuth::ScramSha256 { username, password } => {
                     client_config
                         .set("sasl.mechanisms", "SCRAM-SHA-256")
                         .set("sasl.username", username)
                         .set("sasl.password", password);
                 }
-                KafkaAuth::ScramSha512 { username, password } => {
+                KafkaSaslAuth::ScramSha512 { username, password } => {
                     client_config
                         .set("sasl.mechanisms", "SCRAM-SHA-512")
                         .set("sasl.username", username)
                         .set("sasl.password", password);
                 }
-                KafkaAuth::Gssapi {
+                KafkaSaslAuth::Gssapi {
                     service_name,
                     realm: _,
                     username,
@@ -233,7 +261,7 @@ impl KafkaActor {
                         client_config.set("sasl.kerberos.kinit.cmd", kerberos_config);
                     }
                 }
-                KafkaAuth::Oauth {
+                KafkaSaslAuth::Oauth {
                     client_id,
                     client_secret,
                     token_endpoint,

@@ -311,7 +311,7 @@ pub(crate) mod source {
         fn try_from(
             value: Box<numaflow_models::models::KafkaSource>,
         ) -> std::result::Result<Self, Self::Error> {
-            let auth: Option<numaflow_kafka::KafkaAuth> = match value.sasl {
+            let auth: Option<numaflow_kafka::KafkaSaslAuth> = match value.sasl {
                 Some(sasl) => {
                     let mechanism = sasl.mechanism.to_uppercase();
                     match mechanism.as_str() {
@@ -342,7 +342,7 @@ pub(crate) mod source {
                                     "PLAIN mechanism requires password".into(),
                                 ));
                             };
-                            Some(numaflow_kafka::KafkaAuth::Plain { username, password })
+                            Some(numaflow_kafka::KafkaSaslAuth::Plain { username, password })
                         }
                         "SCRAM-SHA-256" => {
                             let Some(scram) = sasl.scramsha256 else {
@@ -371,7 +371,7 @@ pub(crate) mod source {
                                     "SCRAM-SHA-256 mechanism requires password".into(),
                                 ));
                             };
-                            Some(numaflow_kafka::KafkaAuth::ScramSha256 { username, password })
+                            Some(numaflow_kafka::KafkaSaslAuth::ScramSha256 { username, password })
                         }
                         "SCRAM-SHA-512" => {
                             let Some(scram) = sasl.scramsha512 else {
@@ -400,7 +400,7 @@ pub(crate) mod source {
                                     "SCRAM-SHA-512 mechanism requires password".into(),
                                 ));
                             };
-                            Some(numaflow_kafka::KafkaAuth::ScramSha512 { username, password })
+                            Some(numaflow_kafka::KafkaSaslAuth::ScramSha512 { username, password })
                         }
                         "GSSAPI" => {
                             let Some(gssapi) = sasl.gssapi else {
@@ -468,7 +468,7 @@ pub(crate) mod source {
                                 None
                             };
                             let auth_type = format!("{:?}", gssapi.auth_type);
-                            Some(numaflow_kafka::KafkaAuth::Gssapi {
+                            Some(numaflow_kafka::KafkaSaslAuth::Gssapi {
                                 service_name,
                                 realm,
                                 username,
@@ -501,7 +501,7 @@ pub(crate) mod source {
                                     Error::Config(format!("Failed to get client secret: {e:?}"))
                                 })?;
                             let token_endpoint = oauth.token_endpoint.clone();
-                            Some(numaflow_kafka::KafkaAuth::Oauth {
+                            Some(numaflow_kafka::KafkaSaslAuth::Oauth {
                                 client_id,
                                 client_secret,
                                 token_endpoint,
@@ -1616,7 +1616,7 @@ mod kafka_tests {
         if let SourceType::Kafka(config) = source_type {
             let auth = config.auth.unwrap();
             match auth {
-                numaflow_kafka::KafkaAuth::Plain { username, password } => {
+                numaflow_kafka::KafkaSaslAuth::Plain { username, password } => {
                     assert_eq!(username, "test-user");
                     assert_eq!(password, "test-pass");
                 }
@@ -1673,7 +1673,7 @@ mod kafka_tests {
         if let SourceType::Kafka(config) = source_type {
             let auth = config.auth.unwrap();
             match auth {
-                numaflow_kafka::KafkaAuth::ScramSha256 { username, password } => {
+                numaflow_kafka::KafkaSaslAuth::ScramSha256 { username, password } => {
                     assert_eq!(username, "test-user");
                     assert_eq!(password, "test-pass");
                 }
@@ -1727,7 +1727,7 @@ mod kafka_tests {
         if let SourceType::Kafka(config) = source_type {
             let auth = config.auth.unwrap();
             match auth {
-                numaflow_kafka::KafkaAuth::Oauth {
+                numaflow_kafka::KafkaSaslAuth::Oauth {
                     client_id,
                     client_secret,
                     token_endpoint,
