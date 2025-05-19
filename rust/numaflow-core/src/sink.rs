@@ -535,7 +535,7 @@ impl SinkWriter {
         }
 
         let total_msgs = messages.len();
-        let mut attempts = 1;
+        let mut retry_attempts = 0;
         let mut error_map = HashMap::new();
         let mut fallback_msgs = Vec::new();
         let mut serving_msgs = Vec::new();
@@ -551,7 +551,7 @@ impl SinkWriter {
         let mut rng = StdRng::from_entropy();
 
         loop {
-            while attempts <= retry_config.sink_max_retry_attempts {
+            while retry_attempts <= retry_config.sink_max_retry_attempts {
                 let status = self
                     .write_to_sink_once(
                         &mut error_map,
@@ -563,11 +563,25 @@ impl SinkWriter {
                 match status {
                     Ok(true) => break,
                     Ok(false) => {
-                        warn!(
-                            "Retry attempt {} due to retryable error. Errors: {:?}",
-                            attempts, error_map
-                        );
-                        write_errors_total += error_map.len();
+                        // Increment retry attempt only if we will retry again
+                        // otherwise we will break out of the loop
+                        // sleep for the calculated delay only if we are retrying
+                        if retry_attempts < retry_config.sink_max_retry_attempts {
+                            retry_attempts += 1;
+                            write_errors_total += error_map.len();
+                            warn!(
+                                "Retry attempt {} due to retryable error. Errors: {:?}",
+                                retry_attempts, error_map
+                            );
+                            let delay = Self::calculate_exponential_delay(
+                                retry_config,
+                                retry_attempts,
+                                &mut rng,
+                            );
+                            sleep(Duration::from_millis(delay as u64)).await;
+                        } else {
+                            break;
+                        }
                     }
                     Err(e) => Err(e)?,
                 }
@@ -581,17 +595,11 @@ impl SinkWriter {
                             .to_string(),
                     ));
                 }
-
-                // Calculate exponential backoff delay for the next retry attempt
-                let delay = Self::calculate_exponential_delay(retry_config, attempts, &mut rng);
-                // Sleep for the calculated delay
-                sleep(Duration::from_millis(delay as u64)).await;
-                attempts += 1;
             }
 
             // If after the retries we still have messages to process, handle the post retry failures
             let need_retry = Self::handle_sink_post_retry(
-                &mut attempts,
+                &mut retry_attempts,
                 &mut error_map,
                 &mut fallback_msgs,
                 &mut messages_to_send,
@@ -601,9 +609,9 @@ impl SinkWriter {
             match need_retry {
                 // if we are done with the messages, break the loop
                 Ok(false) => break,
-                // if we need to retry, reset the attempts and error_map
+                // if we need to retry, reset the retry_attempts and error_map
                 Ok(true) => {
-                    attempts = 0;
+                    retry_attempts = 0;
                     error_map.clear();
                 }
                 Err(e) => Err(e)?,
@@ -650,7 +658,7 @@ impl SinkWriter {
     /// Handles the post retry failures based on the configured strategy,
     /// returns true if we need to retry, else false.
     fn handle_sink_post_retry(
-        attempts: &mut u16,
+        retry_attempts: &mut u16,
         error_map: &mut HashMap<String, i32>,
         fallback_msgs: &mut Vec<Message>,
         messages_to_send: &mut Vec<Message>,
@@ -667,7 +675,7 @@ impl SinkWriter {
             OnFailureStrategy::Retry => {
                 warn!(
                     "Using onFailure Retry, Retry attempts {} completed",
-                    attempts
+                    retry_attempts
                 );
                 return Ok(true);
             }
@@ -675,8 +683,8 @@ impl SinkWriter {
             OnFailureStrategy::Drop => {
                 // log that we are dropping the messages as requested
                 warn!(
-                    "Dropping messages after {} attempts. Errors: {:?}",
-                    attempts, error_map
+                    "Dropping messages after {} retry attempts. Errors: {:?}",
+                    retry_attempts, error_map
                 );
                 if is_mono_vertex() {
                     // update the drop metric count with the messages left for sink
@@ -691,8 +699,8 @@ impl SinkWriter {
             OnFailureStrategy::Fallback => {
                 // log that we are moving the messages to the fallback as requested
                 warn!(
-                    "Moving messages to fallback after {} attempts. Errors: {:?}",
-                    attempts, error_map
+                    "Moving messages to fallback after {} retry attempts. Errors: {:?}",
+                    retry_attempts, error_map
                 );
                 // move the messages to the fallback messages
                 fallback_msgs.append(messages_to_send);
@@ -770,7 +778,7 @@ impl SinkWriter {
             ));
         }
 
-        let mut attempts = 0;
+        let mut retry_attempts = 0;
         let mut fallback_error_map = HashMap::new();
         // start with the original set of message to be sent.
         // we will overwrite this vec with failed messages and will keep retrying.
@@ -781,10 +789,11 @@ impl SinkWriter {
             .clone()
             .backoff
             .unwrap();
-        let max_attempts = default_retry.steps.unwrap();
+        // steps is the maximum number of retry attempts, excluding the initial attempt
+        let max_retry_attempts = default_retry.steps.unwrap();
         let sleep_interval = default_retry.interval.unwrap();
 
-        while attempts < max_attempts {
+        while retry_attempts <= max_retry_attempts {
             match self.fb_sink(messages_to_send.clone()).await {
                 Ok(fb_response) => {
                     // create a map of id to result, since there is no strict requirement
@@ -840,26 +849,32 @@ impl SinkWriter {
                         ));
                     }
 
-                    attempts += 1;
-
                     if messages_to_send.is_empty() {
                         break;
                     }
 
-                    warn!(
-                        "Retry attempt {} due to retryable error. Errors: {:?}",
-                        attempts, fallback_error_map
-                    );
-                    sleep(tokio::time::Duration::from(sleep_interval)).await;
+                    // increment retry attempt only if we will retry
+                    // otherwise break out of the loop
+                    // sleep for the calculated delay only if we are retrying
+                    if retry_attempts < max_retry_attempts {
+                        retry_attempts += 1;
+                        warn!(
+                            "Fallback sink Retry attempt {} due to retryable error. Errors: {:?}",
+                            retry_attempts, fallback_error_map
+                        );
+                        sleep(tokio::time::Duration::from(sleep_interval)).await;
+                    } else {
+                        break;
+                    }
                 }
                 Err(e) => return Err(e),
             }
         }
         if !messages_to_send.is_empty() {
             return Err(Error::FbSink(format!(
-                "Failed to write messages to fallback sink after {} attempts. \
+                "Failed to write messages to fallback sink after {} retry attempts. \
                 Max Attempts configured: {} Errors: {:?}",
-                attempts, max_attempts, fallback_error_map
+                retry_attempts, max_retry_attempts, fallback_error_map
             )));
         }
         Ok(())
@@ -930,13 +945,15 @@ impl SinkWriter {
 
     fn calculate_exponential_delay(
         retry_config: &RetryConfig,
-        attempts: u16,
+        retry_attempts: u16,
         rng: &mut StdRng,
     ) -> f64 {
         // Calculate the base delay using the initial retry interval and the retry factor
-        // The base delay is calculated as: initial_retry_interval * retry_factor^(attempts-1)
+        // The base delay is calculated as: initial_retry_interval * retry_factor^(retry_attempts-1)
         let base_delay = (retry_config.sink_initial_retry_interval_in_ms as f64)
-            * retry_config.sink_retry_factor.powi((attempts - 1) as i32);
+            * retry_config
+                .sink_retry_factor
+                .powi((retry_attempts - 1) as i32);
 
         let jitter = retry_config.sink_retry_jitter;
         // If jitter is 0, return the base delay
