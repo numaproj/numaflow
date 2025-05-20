@@ -656,8 +656,7 @@ mod tests {
                 offset: "0".to_string().into(),
                 index: 0,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Message 2: Within the first window
@@ -674,8 +673,7 @@ mod tests {
                 offset: "1".to_string().into(),
                 index: 1,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Message 3: Within the first window
@@ -692,8 +690,7 @@ mod tests {
                 offset: "2".to_string().into(),
                 index: 2,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Message 4: Within the first window but with watermark past window end
@@ -710,8 +707,7 @@ mod tests {
                 offset: "2".to_string().into(),
                 index: 2,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Send the messages
@@ -900,8 +896,7 @@ mod tests {
                 offset: "0".to_string().into(),
                 index: 0,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Message 2: Within the first set of sliding windows
@@ -918,8 +913,7 @@ mod tests {
                 offset: "1".to_string().into(),
                 index: 1,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Message 3: Within the first window
@@ -936,8 +930,7 @@ mod tests {
                 offset: "2".to_string().into(),
                 index: 2,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Message 4: Within the first window but with watermark past window end
@@ -954,8 +947,7 @@ mod tests {
                 offset: "3".to_string().into(),
                 index: 3,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Send the messages
@@ -1147,8 +1139,7 @@ mod tests {
                 offset: "0".to_string().into(),
                 index: 0,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Message 2: Within the first window for key2
@@ -1165,8 +1156,7 @@ mod tests {
                 offset: "1".to_string().into(),
                 index: 1,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Message 3: Within the first window for key1
@@ -1183,8 +1173,7 @@ mod tests {
                 offset: "2".to_string().into(),
                 index: 2,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Message 4: Within the first window for key2
@@ -1201,8 +1190,7 @@ mod tests {
                 offset: "3".to_string().into(),
                 index: 3,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Message 5: With watermark past the first window end for key1
@@ -1219,8 +1207,7 @@ mod tests {
                 offset: "4".to_string().into(),
                 index: 4,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Message 6: With watermark past the first window end for key2
@@ -1237,8 +1224,7 @@ mod tests {
                 offset: "5".to_string().into(),
                 index: 5,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Send the messages

@@ -849,6 +849,7 @@ mod tests {
                 },
                 headers: HashMap::new(),
                 metadata: None,
+                is_late: false,
             };
             let message: bytes::BytesMut = message.try_into().unwrap();
 
@@ -1045,6 +1046,7 @@ mod tests {
                 },
                 headers: HashMap::new(),
                 metadata: None,
+                is_late: false,
             };
             let message: bytes::BytesMut = message.try_into().unwrap();
 

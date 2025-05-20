@@ -504,7 +504,6 @@ impl JetstreamWriter {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
     use std::time::Instant;
 
     use async_nats::jetstream;
@@ -583,8 +582,7 @@ mod tests {
                 offset: "offset_0".to_string().into(),
                 index: 0,
             },
-            headers: HashMap::new(),
-            metadata: None,
+            ..Default::default()
         };
 
         let paf = writer
@@ -646,8 +644,7 @@ mod tests {
                 offset: "offset_0".to_string().into(),
                 index: 0,
             },
-            headers: HashMap::new(),
-            metadata: None,
+            ..Default::default()
         };
 
         let writer = JetstreamWriter::new(
@@ -746,9 +743,7 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                headers: HashMap::new(),
-                watermark: None,
-                metadata: None,
+                ..Default::default()
             };
             let paf = writer
                 .write(
@@ -776,8 +771,7 @@ mod tests {
                 offset: "offset_11".to_string().into(),
                 index: 11,
             },
-            headers: HashMap::new(),
-            metadata: None,
+            ..Default::default()
         };
         let paf = writer
             .write(
@@ -1051,8 +1045,7 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                headers: HashMap::new(),
-                metadata: None,
+                ..Default::default()
             };
             let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
             tracker_handle.insert(&message, ack_tx).await.unwrap();
@@ -1144,8 +1137,7 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                headers: HashMap::new(),
-                metadata: None,
+                ..Default::default()
             };
             let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
             tracker_handle.insert(&message, ack_tx).await.unwrap();
@@ -1174,8 +1166,7 @@ mod tests {
                 offset: "offset_101".to_string().into(),
                 index: 101,
             },
-            headers: HashMap::new(),
-            metadata: None,
+            ..Default::default()
         };
         let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
         tracker_handle.insert(&message, ack_tx).await.unwrap();
@@ -1288,8 +1279,7 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                headers: HashMap::new(),
-                metadata: None,
+                ..Default::default()
             };
             let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
             tracker_handle.insert(&message, ack_tx).await.unwrap();

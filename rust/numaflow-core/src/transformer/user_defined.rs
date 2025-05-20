@@ -21,6 +21,7 @@ type ResponseSenderMap =
 // fields which will not be changed
 struct ParentMessageInfo {
     offset: Offset,
+    is_late: bool,
     headers: HashMap<String, String>,
 }
 
@@ -150,6 +151,7 @@ impl UserDefinedTransformer {
                         headers: msg_info.headers.clone(),
                         watermark: None,
                         metadata: None,
+                        is_late: msg_info.is_late,
                     };
                     response_messages.push(message);
                 }
@@ -171,6 +173,7 @@ impl UserDefinedTransformer {
         let msg_info = ParentMessageInfo {
             offset: message.offset.clone(),
             headers: message.headers.clone(),
+            is_late: message.is_late,
         };
 
         self.senders
@@ -251,8 +254,7 @@ mod tests {
                 offset: "0".to_string().into(),
                 index: 0,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         let (tx, rx) = oneshot::channel();
@@ -298,8 +300,7 @@ mod tests {
                 offset: "123".to_string().into(),
                 index: 0,
             },
-            headers: HashMap::new(),
-            metadata: None,
+            ..Default::default()
         };
 
         let request: SourceTransformRequest = message.into();

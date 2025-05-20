@@ -1051,6 +1051,7 @@ mod tests {
                 },
                 headers: HashMap::new(),
                 metadata: None,
+                is_late: false,
             })
             .collect();
 
@@ -1088,6 +1089,7 @@ mod tests {
                 },
                 headers: HashMap::new(),
                 metadata: None,
+                is_late: false,
             })
             .collect();
 
@@ -1166,6 +1168,7 @@ mod tests {
                 },
                 headers: HashMap::new(),
                 metadata: None,
+                is_late: false,
             })
             .collect();
 
@@ -1254,6 +1257,7 @@ mod tests {
                 },
                 headers: HashMap::new(),
                 metadata: None,
+                is_late: false,
             })
             .collect();
 
@@ -1367,6 +1371,7 @@ mod tests {
                     },
                     headers,
                     metadata: None,
+                    is_late: false,
                 }
             })
             .collect();
@@ -1415,6 +1420,7 @@ mod tests {
             },
             headers: HashMap::new(),
             metadata: None,
+            is_late: false,
         };
 
         let request: SinkRequest = message.into();

@@ -24,6 +24,7 @@ type StreamResponseSenderMap =
 struct ParentMessageInfo {
     offset: Offset,
     event_time: DateTime<Utc>,
+    is_late: bool,
     headers: HashMap<String, String>,
 }
 
@@ -118,6 +119,7 @@ impl UserDefinedUnaryMap {
             offset: message.offset.clone(),
             event_time: message.event_time,
             headers: message.headers.clone(),
+            is_late: message.is_late,
         };
 
         self.senders
@@ -212,6 +214,7 @@ impl UserDefinedBatchMap {
                 offset: message.offset.clone(),
                 event_time: message.event_time,
                 headers: message.headers.clone(),
+                is_late: message.is_late,
             };
 
             self.senders
@@ -390,6 +393,7 @@ impl UserDefinedStreamMap {
             offset: message.offset.clone(),
             event_time: message.event_time,
             headers: message.headers.clone(),
+            is_late: message.is_late,
         };
 
         self.senders
@@ -423,6 +427,7 @@ impl From<UserDefinedMessage<'_>> for Message {
             headers: value.1.headers.clone(),
             watermark: None,
             metadata: None,
+            is_late: value.1.is_late,
         }
     }
 }
@@ -495,8 +500,7 @@ mod tests {
                 offset: "0".to_string().into(),
                 index: 0,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -585,8 +589,7 @@ mod tests {
                     offset: "0".to_string().into(),
                     index: 0,
                 },
-                headers: Default::default(),
-                metadata: None,
+                ..Default::default()
             },
             crate::message::Message {
                 typ: Default::default(),
@@ -601,8 +604,7 @@ mod tests {
                     offset: "1".to_string().into(),
                     index: 1,
                 },
-                headers: Default::default(),
-                metadata: None,
+                ..Default::default()
             },
         ];
 
@@ -700,8 +702,7 @@ mod tests {
                 offset: "0".to_string().into(),
                 index: 0,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         let (tx, mut rx) = tokio::sync::mpsc::channel(3);
