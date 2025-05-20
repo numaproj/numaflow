@@ -399,7 +399,7 @@ spec:
               key: server.daemon.client.protocol
               name: numaflow-cmd-params-config
               optional: true
-        image: quay.io/numaproj/numaflow:v1.5.0-rc3
+        image: quay.io/numaproj/numaflow:v1.5.0-rc4
         imagePullPolicy: Always
         livenessProbe:
           httpGet:
@@ -437,7 +437,7 @@ spec:
               key: server.base.href
               name: numaflow-cmd-params-config
               optional: true
-        image: quay.io/numaproj/numaflow:v1.5.0-rc3
+        image: quay.io/numaproj/numaflow:v1.5.0-rc4
         imagePullPolicy: Always
         name: server-init
         volumeMounts:
@@ -456,7 +456,7 @@ spec:
               key: server.disable.auth
               name: numaflow-cmd-params-config
               optional: true
-        image: quay.io/numaproj/numaflow:v1.5.0-rc3
+        image: quay.io/numaproj/numaflow:v1.5.0-rc4
         imagePullPolicy: Always
         name: server-secrets-init
       securityContext:
