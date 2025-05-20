@@ -282,8 +282,6 @@ impl PipelineConfig {
             })
             .collect();
 
-        info!("Env vars found - {:#?}", env_vars);
-
         let get_var = |var: &str| -> Result<String> {
             Ok(env_vars
                 .get(var)
