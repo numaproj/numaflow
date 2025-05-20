@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.5.0-rc4 (2025-05-20)
+
+ * [9f52ffc6](https://github.com/numaproj/numaflow/commit/9f52ffc6a4bba38f077fcaeb04b4e3080006935c) Update manifests to v1.5.0-rc4
+
+### Contributors
+
+ * Derek Wang
+
 ## v1.5.0-rc3 (2025-05-18)
 
  * [40839123](https://github.com/numaproj/numaflow/commit/408391237923536f482099a1040f02b104832375) Update manifests to v1.5.0-rc3
