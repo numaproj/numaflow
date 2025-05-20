@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, HashMap};
-use std::{env, iter};
 use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
+use std::{env, iter};
 
 use axum::body::Body;
 use axum::extract::State;
