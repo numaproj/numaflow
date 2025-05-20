@@ -25,7 +25,7 @@ RUN chmod +x /bin/entrypoint
 FROM lukemathwalker/cargo-chef:latest-rust-1.86 AS chef
 ARG TARGETPLATFORM
 WORKDIR /numaflow
-RUN apt-get update && apt-get install -y protobuf-compiler
+RUN apt-get update && apt-get install -y protobuf-compiler cmake
 
 FROM chef AS planner
 COPY ./rust/ .
