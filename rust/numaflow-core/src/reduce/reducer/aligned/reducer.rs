@@ -7,8 +7,11 @@ use crate::reduce::reducer::aligned::windower::{
 };
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use bytes::Bytes;
+use chrono::{DateTime, Utc};
 use numaflow_pb::objects::wal::GcEvent;
 use std::collections::HashMap;
+use std::ops::Sub;
+use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
@@ -339,6 +342,10 @@ pub(crate) struct AlignedReducer {
     shutting_down_on_err: bool,
     /// WAL for writing GC events
     gc_wal: Option<AppendOnlyWal>,
+    /// Allowed lateness for the messages to be accepted and delay the close of book.
+    allowed_lateness: Duration,
+    /// current watermark for the reduce vertex.
+    current_watermark: DateTime<Utc>,
 }
 
 impl AlignedReducer {
@@ -347,6 +354,7 @@ impl AlignedReducer {
         window_manager: WindowManager,
         js_writer: JetstreamWriter,
         gc_wal: Option<AppendOnlyWal>,
+        allowed_lateness: Duration,
     ) -> Self {
         Self {
             client,
@@ -355,6 +363,8 @@ impl AlignedReducer {
             final_result: Ok(()),
             shutting_down_on_err: false,
             gc_wal,
+            allowed_lateness,
+            current_watermark: DateTime::from_timestamp_millis(-1).expect("Invalid timestamp"),
         }
     }
 
@@ -403,7 +413,13 @@ impl AlignedReducer {
                             break;
                         };
 
-                        // TODO: drop late messages, allowed lateness and keyed false (https://github.com/numaproj/numaflow/issues/2646)
+                        self.current_watermark = self.current_watermark.max(msg.watermark.unwrap_or_default());
+
+                        // only drop the message if it is late and the event time is before the watermark - allowed lateness
+                        if msg.is_late && msg.event_time < self.current_watermark.sub(self.allowed_lateness) {
+                            // TODO(ajain): add a metric for this
+                            continue;
+                        }
 
                         // If shutting down, drain the stream
                         if self.shutting_down_on_err {
@@ -411,12 +427,10 @@ impl AlignedReducer {
                             continue;
                         }
 
-                        // check if any windows can be closed using the watermark in the message
-                        if let Some(watermark) = msg.watermark {
-                            let window_messages = self.window_manager.close_windows(watermark);
-                            for window_msg in window_messages {
-                                actor_tx.send(window_msg).await.expect("Receiver dropped");
-                            }
+                        // check if any windows can be closed
+                        let window_messages = self.window_manager.close_windows(self.current_watermark.sub(self.allowed_lateness));
+                        for window_msg in window_messages {
+                            actor_tx.send(window_msg).await.expect("Receiver dropped");
                         }
 
                         // assign windows to the message
@@ -629,6 +643,7 @@ mod tests {
             WindowManager::Fixed(windower),
             js_writer,
             None, // No GC WAL for testing
+            Duration::from_secs(0),
         )
         .await;
 
@@ -869,6 +884,7 @@ mod tests {
             WindowManager::Sliding(windower),
             js_writer,
             None, // No GC WAL for testing
+            Duration::from_secs(0),
         )
         .await;
 
@@ -1112,6 +1128,7 @@ mod tests {
             WindowManager::Fixed(windower),
             js_writer,
             None, // No GC WAL for testing
+            Duration::from_secs(0),
         )
         .await;
 

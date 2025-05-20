@@ -156,11 +156,6 @@ impl PBQ {
         });
 
         while let Some(msg) = isb_stream.next().await {
-            // skip late data
-            // Do we need to get the message in if there is an open window?
-            if msg.is_late {
-                continue;
-            }
             wal_tx
                 .send(SegmentWriteMessage::WriteData {
                     offset: Some(msg.offset.clone()),
