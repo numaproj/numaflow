@@ -79,7 +79,6 @@ jobs:
           echo "targets = ['aarch64-unknown-linux-gnu']" >> rust/rust-toolchain.toml
       - name: Build binary
         run: |
-          cd ../
           docker run -v ./rust/:/app/ -w /app --rm ubuntu:24.04 bash build.sh aarch64
       - name: Rename binary
         run: |
