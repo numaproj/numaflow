@@ -17,6 +17,9 @@ use crate::Result;
 use crate::config::ENV_NUMAFLOW_SERVING_CALLBACK_STORE;
 use crate::config::ENV_NUMAFLOW_SERVING_SOURCE_SETTINGS;
 use crate::config::components::metrics::MetricsConfig;
+use crate::config::components::reduce::{
+    ReducerConfig, ReducerType, StorageConfig, UserDefinedConfig,
+};
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::sink::SinkType;
 use crate::config::components::source::SourceConfig;
@@ -191,6 +194,13 @@ pub(crate) enum VertexType {
     Source(SourceVtxConfig),
     Sink(SinkVtxConfig),
     Map(MapVtxConfig),
+    Reduce(ReduceVtxConfig),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct ReduceVtxConfig {
+    pub(crate) reducer_config: ReducerConfig,
+    pub(crate) wal_storage_config: Option<StorageConfig>,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -228,6 +238,7 @@ impl std::fmt::Display for VertexType {
             VertexType::Source(_) => write!(f, "Source"),
             VertexType::Sink(_) => write!(f, "Sink"),
             VertexType::Map(_) => write!(f, "Map"),
+            VertexType::Reduce(_) => write!(f, "Reduce"),
         }
     }
 }
@@ -391,15 +402,37 @@ impl PipelineConfig {
                 fb_sink_config,
                 serving_store_config,
             })
-        } else if let Some(map) = vertex_obj.spec.udf {
-            VertexType::Map(MapVtxConfig {
-                concurrency: batch_size as usize,
-                map_type: map.try_into()?,
-                map_mode: MapMode::Unary,
-            })
+        } else if let Some(udf) = vertex_obj.spec.udf {
+            if let Some(group_by) = &udf.group_by {
+                // This is a reduce vertex
+                let reducer_config = ReducerConfig {
+                    reducer_type: ReducerType::UserDefined(UserDefinedConfig::default()),
+                    window_config: group_by.try_into()?,
+                };
+
+                let storage_config = group_by.storage.as_ref().and_then(|storage| {
+                    if storage.no_store.is_some() {
+                        None
+                    } else {
+                        Some(Default::default())
+                    }
+                });
+
+                VertexType::Reduce(ReduceVtxConfig {
+                    reducer_config,
+                    wal_storage_config: storage_config,
+                })
+            } else {
+                // This is a map vertex
+                VertexType::Map(MapVtxConfig {
+                    concurrency: batch_size as usize,
+                    map_type: udf.try_into()?,
+                    map_mode: MapMode::Unary,
+                })
+            }
         } else {
             return Err(Error::Config(
-                "Only source and sink are supported ATM".to_string(),
+                "Only source, sink, map, and reduce are supported".to_string(),
             ));
         };
 
@@ -610,7 +643,7 @@ impl PipelineConfig {
                     .collect(),
                 idle_config,
             })),
-            VertexType::Sink(_) | VertexType::Map(_) => {
+            VertexType::Sink(_) | VertexType::Map(_) | VertexType::Reduce(_) => {
                 Some(WatermarkConfig::Edge(EdgeWatermarkConfig {
                     from_vertex_config: from_vertex_config
                         .iter()

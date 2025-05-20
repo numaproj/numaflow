@@ -20,6 +20,7 @@ use tracing::warn;
 use crate::config::pipeline::watermark::IdleConfig;
 
 /// Responsible for detecting the idle state of the source and publishing idle watermarks.
+#[derive(Clone)]
 pub(crate) struct SourceIdleDetector {
     config: IdleConfig,
     /// last_idle_wm_published_time is for comparing with the step interval
