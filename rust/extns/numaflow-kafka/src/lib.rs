@@ -494,6 +494,7 @@ impl KafkaActor {
                 .or_insert(kafka_offset.offset);
         }
 
+        let mut ack_tasks = vec![];
         for (topic, partition_offsets) in topic_partition_offsets {
             let mut tpl = TopicPartitionList::new();
             for (partition, offset) in partition_offsets {
@@ -510,9 +511,20 @@ impl KafkaActor {
                         ))
                     })?;
             }
-            self.consumer
-                .commit(&tpl, CommitMode::Sync)
-                .map_err(|e| Error::Kafka(format!("Failed to commit offsets: {}", e)))?;
+            // commit internally calls [rd_kafka_offset_store](https://docs.confluent.io/platform/current/clients/librdkafka/html/rdkafka_8h.html#ab96539928328f14c3c9177ea0c896c87)
+            // This may be a blocking call, so we spawn a new task to run it.
+            let consumer = Arc::clone(&self.consumer);
+            let task = tokio::task::spawn_blocking(move || {
+                consumer
+                    .commit(&tpl, CommitMode::Sync)
+                    .map_err(|e| Error::Kafka(format!("Failed to commit offsets: {}", e)))
+            });
+            ack_tasks.push(task);
+        }
+        for task in ack_tasks {
+            task.await.map_err(|e| {
+                Error::Kafka(format!("Waiting for spawned ack tasks to complete: {e:?}"))
+            })??;
         }
         Ok(())
     }
@@ -526,6 +538,9 @@ impl KafkaActor {
         for topic in &self.topics {
             let consumer = Arc::clone(&self.consumer);
             let topic = topic.clone();
+
+            // fetch_metadata internally calls [rd_kafka_metadata](https://docs.confluent.io/platform/current/clients/librdkafka/html/rdkafka_8h.html#a84bba4a4b13fdb515f1a22d6fd4f7344)
+            // This may be a blocking call, so we spawn a new task to run it.
             handles.push(tokio::task::spawn_blocking(move || {
                 let metadata = consumer
                     .fetch_metadata(Some(&topic), timeout)
@@ -582,6 +597,9 @@ impl KafkaActor {
         for topic in &self.topics {
             let consumer = Arc::clone(&self.consumer);
             let topic = topic.clone();
+
+            // fetch_metadata internally calls [rd_kafka_metadata](https://docs.confluent.io/platform/current/clients/librdkafka/html/rdkafka_8h.html#a84bba4a4b13fdb515f1a22d6fd4f7344)
+            // This may be a blocking call, so we spawn a new task to run it.
             handles.push(tokio::task::spawn_blocking(move || {
                 let metadata = consumer
                     .fetch_metadata(Some(&topic), timeout)

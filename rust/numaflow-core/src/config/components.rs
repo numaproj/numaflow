@@ -1560,7 +1560,8 @@ mod jetstream_tests {
 mod kafka_tests {
     use super::source::SourceType;
     use k8s_openapi::api::core::v1::SecretKeySelector;
-    use numaflow_models::models::{KafkaSource, Sasl, SaslPlain, SasloAuth, Tls};
+    use numaflow_models::models::gssapi::AuthType;
+    use numaflow_models::models::{Gssapi, KafkaSource, Sasl, SaslPlain, SasloAuth, Tls};
     use std::fs;
     use std::path::Path;
 
@@ -1934,5 +1935,205 @@ mod kafka_tests {
         );
 
         cleanup_secret(cert_name);
+    }
+
+    #[test]
+    fn test_try_from_kafka_source_with_scram_sha512_auth() {
+        let secret_name = "test_try_from_kafka_source_with_scram_sha512_auth_scram-auth-secret";
+        let user_key = "username";
+        let pass_key = "password";
+        setup_secret(secret_name, user_key, "test-user");
+        setup_secret(secret_name, pass_key, "test-pass");
+
+        let kafka_source = KafkaSource {
+            brokers: Some(vec!["localhost:9092".to_string()]),
+            topic: "test-topic".to_string(),
+            consumer_group: Some("test-group".to_string()),
+            sasl: Some(Box::new(Sasl {
+                mechanism: "SCRAM-SHA-512".to_string(),
+                plain: None,
+                scramsha256: None,
+                scramsha512: Some(Box::new(SaslPlain {
+                    handshake: true,
+                    user_secret: SecretKeySelector {
+                        name: secret_name.to_string(),
+                        key: user_key.to_string(),
+                        ..Default::default()
+                    },
+                    password_secret: Some(SecretKeySelector {
+                        name: secret_name.to_string(),
+                        key: pass_key.to_string(),
+                        ..Default::default()
+                    }),
+                })),
+                oauth: None,
+                gssapi: None,
+            })),
+            tls: None,
+            config: None,
+            kafka_version: None,
+        };
+
+        let source_type = SourceType::try_from(Box::new(kafka_source)).unwrap();
+        if let SourceType::Kafka(config) = source_type {
+            let auth = config.auth.unwrap();
+            match auth {
+                numaflow_kafka::KafkaSaslAuth::ScramSha512 { username, password } => {
+                    assert_eq!(username, "test-user");
+                    assert_eq!(password, "test-pass");
+                }
+                _ => panic!("Unexpected KafkaAuth variant"),
+            }
+        } else {
+            panic!("Expected SourceType::Kafka");
+        }
+
+        cleanup_secret(secret_name);
+    }
+
+    #[test]
+    fn test_try_from_kafka_source_with_gssapi_auth_password() {
+        let secret_name = "test_try_from_kafka_source_with_gssapi_auth_password_gssapi-secret";
+        let user_key = "username";
+        let pass_key = "password";
+        setup_secret(secret_name, user_key, "test-user");
+        setup_secret(secret_name, pass_key, "test-pass");
+
+        let gssapi = Gssapi {
+            auth_type: AuthType::UserAuth,
+            kerberos_config_secret: None,
+            keytab_secret: None,
+            password_secret: Some(SecretKeySelector {
+                name: secret_name.to_string(),
+                key: pass_key.to_string(),
+                ..Default::default()
+            }),
+            realm: "EXAMPLE.COM".to_string(),
+            service_name: "kafka".to_string(),
+            username_secret: SecretKeySelector {
+                name: secret_name.to_string(),
+                key: user_key.to_string(),
+                ..Default::default()
+            },
+        };
+
+        let kafka_source = KafkaSource {
+            brokers: Some(vec!["localhost:9092".to_string()]),
+            topic: "test-topic".to_string(),
+            consumer_group: Some("test-group".to_string()),
+            sasl: Some(Box::new(Sasl {
+                mechanism: "GSSAPI".to_string(),
+                plain: None,
+                scramsha256: None,
+                scramsha512: None,
+                oauth: None,
+                gssapi: Some(Box::new(gssapi)),
+            })),
+            tls: None,
+            config: None,
+            kafka_version: None,
+        };
+
+        let source_type = SourceType::try_from(Box::new(kafka_source)).unwrap();
+        if let SourceType::Kafka(config) = source_type {
+            let auth = config.auth.unwrap();
+            match auth {
+                numaflow_kafka::KafkaSaslAuth::Gssapi {
+                    service_name,
+                    realm,
+                    username,
+                    password,
+                    keytab,
+                    kerberos_config,
+                    auth_type,
+                } => {
+                    assert_eq!(service_name, "kafka");
+                    assert_eq!(realm, "EXAMPLE.COM");
+                    assert_eq!(username, "test-user");
+                    assert_eq!(password, Some("test-pass".to_string()));
+                    assert!(keytab.is_none());
+                    assert!(kerberos_config.is_none());
+                    assert_eq!(auth_type, "UserAuth");
+                }
+                _ => panic!("Unexpected KafkaAuth variant"),
+            }
+        } else {
+            panic!("Expected SourceType::Kafka");
+        }
+
+        cleanup_secret(secret_name);
+    }
+
+    #[test]
+    fn test_try_from_kafka_source_with_gssapi_auth_keytab() {
+        let secret_name = "test_try_from_kafka_source_with_gssapi_auth_keytab_gssapi-secret";
+        let user_key = "username";
+        let keytab_key = "keytab";
+        setup_secret(secret_name, user_key, "test-user");
+        setup_secret(secret_name, keytab_key, "test-keytab");
+
+        let gssapi = Gssapi {
+            auth_type: AuthType::KeytabAuth,
+            kerberos_config_secret: None,
+            keytab_secret: Some(SecretKeySelector {
+                name: secret_name.to_string(),
+                key: keytab_key.to_string(),
+                ..Default::default()
+            }),
+            password_secret: None,
+            realm: "EXAMPLE.COM".to_string(),
+            service_name: "kafka".to_string(),
+            username_secret: SecretKeySelector {
+                name: secret_name.to_string(),
+                key: user_key.to_string(),
+                ..Default::default()
+            },
+        };
+
+        let kafka_source = KafkaSource {
+            brokers: Some(vec!["localhost:9092".to_string()]),
+            topic: "test-topic".to_string(),
+            consumer_group: Some("test-group".to_string()),
+            sasl: Some(Box::new(Sasl {
+                mechanism: "GSSAPI".to_string(),
+                plain: None,
+                scramsha256: None,
+                scramsha512: None,
+                oauth: None,
+                gssapi: Some(Box::new(gssapi)),
+            })),
+            tls: None,
+            config: None,
+            kafka_version: None,
+        };
+
+        let source_type = SourceType::try_from(Box::new(kafka_source)).unwrap();
+        if let SourceType::Kafka(config) = source_type {
+            let auth = config.auth.unwrap();
+            match auth {
+                numaflow_kafka::KafkaSaslAuth::Gssapi {
+                    service_name,
+                    realm,
+                    username,
+                    password,
+                    keytab,
+                    kerberos_config,
+                    auth_type,
+                } => {
+                    assert_eq!(service_name, "kafka");
+                    assert_eq!(realm, "EXAMPLE.COM");
+                    assert_eq!(username, "test-user");
+                    assert!(password.is_none());
+                    assert_eq!(keytab, Some("test-keytab".to_string()));
+                    assert!(kerberos_config.is_none());
+                    assert_eq!(auth_type, "KeytabAuth");
+                }
+                _ => panic!("Unexpected KafkaAuth variant"),
+            }
+        } else {
+            panic!("Expected SourceType::Kafka");
+        }
+
+        cleanup_secret(secret_name);
     }
 }
