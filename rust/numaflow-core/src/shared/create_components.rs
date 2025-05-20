@@ -9,7 +9,7 @@ use crate::config::pipeline::{DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKE
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
 use crate::shared::grpc;
-use crate::shared::server_info::{ContainerType, sdk_server_info};
+use crate::shared::server_info::{ContainerType, Protocol, sdk_server_info};
 use crate::sink::serve::ServingStore;
 use crate::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
 use crate::source::Source;
@@ -222,46 +222,70 @@ pub(crate) async fn create_mapper(
             let server_info =
                 sdk_server_info(config.server_info_path.clone().into(), cln_token.clone()).await?;
 
-            // based on the map mode that is set in the server info, we will override the socket path
-            // so that the clients can connect to the appropriate socket.
-            let config = match server_info.get_map_mode().unwrap_or(MapMode::Unary) {
-                MapMode::Unary => config,
-                MapMode::Batch => {
-                    config.socket_path = DEFAULT_BATCH_MAP_SOCKET.into();
-                    config
-                }
-                MapMode::Stream => {
-                    config.socket_path = DEFAULT_STREAM_MAP_SOCKET.into();
-                    config
-                }
-            };
+            match server_info.get_protocol() {
+                Protocol::TCP => {
+                    // tcp is only used for multi proc mode in python
+                    let endpoints = server_info.get_http_endpoints();
+                    let channel = grpc::create_multi_rpc_channel(endpoints).await?;
 
-            let metric_labels = metrics::sdk_info_labels(
-                config::get_component_type().to_string(),
-                config::get_vertex_name().to_string(),
-                server_info.language.clone(),
-                server_info.version.clone(),
-                ContainerType::Sourcer.to_string(),
-            );
-            metrics::global_metrics()
-                .sdk_info
-                .get_or_create(&metric_labels)
-                .set(1);
+                    let map_grpc_client = MapClient::new(channel)
+                        .max_encoding_message_size(config.grpc_max_message_size)
+                        .max_decoding_message_size(config.grpc_max_message_size);
+                    Ok(MapHandle::new(
+                        server_info.get_map_mode().unwrap_or(MapMode::Unary),
+                        batch_size,
+                        read_timeout,
+                        map_config.concurrency,
+                        map_grpc_client.clone(),
+                        tracker_handle,
+                    )
+                    .await?)
+                }
+                Protocol::UDS => {
+                    // based on the map mode that is set in the server info, we will override the socket path
+                    // so that the clients can connect to the appropriate socket.
+                    let config = match server_info.get_map_mode().unwrap_or(MapMode::Unary) {
+                        MapMode::Unary => config,
+                        MapMode::Batch => {
+                            config.socket_path = DEFAULT_BATCH_MAP_SOCKET.into();
+                            config
+                        }
+                        MapMode::Stream => {
+                            config.socket_path = DEFAULT_STREAM_MAP_SOCKET.into();
+                            config
+                        }
+                    };
 
-            let mut map_grpc_client =
-                MapClient::new(grpc::create_rpc_channel(config.socket_path.clone().into()).await?)
+                    let metric_labels = metrics::sdk_info_labels(
+                        config::get_component_type().to_string(),
+                        config::get_vertex_name().to_string(),
+                        server_info.language.clone(),
+                        server_info.version.clone(),
+                        ContainerType::Sourcer.to_string(),
+                    );
+                    metrics::global_metrics()
+                        .sdk_info
+                        .get_or_create(&metric_labels)
+                        .set(1);
+
+                    let mut map_grpc_client = MapClient::new(
+                        grpc::create_rpc_channel(config.socket_path.clone().into()).await?,
+                    )
                     .max_encoding_message_size(config.grpc_max_message_size)
                     .max_decoding_message_size(config.grpc_max_message_size);
-            grpc::wait_until_mapper_ready(&cln_token, &mut map_grpc_client).await?;
-            Ok(MapHandle::new(
-                server_info.get_map_mode().unwrap_or(MapMode::Unary),
-                batch_size,
-                read_timeout,
-                map_config.concurrency,
-                map_grpc_client.clone(),
-                tracker_handle,
-            )
-            .await?)
+
+                    grpc::wait_until_mapper_ready(&cln_token, &mut map_grpc_client).await?;
+                    Ok(MapHandle::new(
+                        server_info.get_map_mode().unwrap_or(MapMode::Unary),
+                        batch_size,
+                        read_timeout,
+                        map_config.concurrency,
+                        map_grpc_client.clone(),
+                        tracker_handle,
+                    )
+                    .await?)
+                }
+            }
         }
         MapType::Builtin(_) => Err(Error::Mapper("Builtin mapper is not supported".to_string())),
     }
