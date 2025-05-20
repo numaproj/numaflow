@@ -520,7 +520,7 @@ impl Source {
                 .inc_by(n as u64);
             pipeline_metrics()
                 .forwarder
-                .read_time
+                .read_processing_time
                 .get_or_create(pipeline_labels)
                 .observe(read_start_time.elapsed().as_micros() as f64);
         }
@@ -545,7 +545,7 @@ impl Source {
         } else {
             pipeline_metrics()
                 .forwarder
-                .ack_time
+                .ack_processing_time
                 .get_or_create(pipeline_isb_metric_labels())
                 .observe(start.elapsed().as_micros() as f64);
 
@@ -557,7 +557,7 @@ impl Source {
 
             pipeline_metrics()
                 .forwarder
-                .processed_time
+                .forward_chunk_processing_time
                 .get_or_create(pipeline_isb_metric_labels())
                 .observe(e2e_start_time.elapsed().as_micros() as f64);
         }

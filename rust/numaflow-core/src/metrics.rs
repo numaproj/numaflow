@@ -48,6 +48,7 @@ const PIPELINE_REPLICA_LABEL: &str = "replica";
 pub(crate) const PIPELINE_PARTITION_NAME_LABEL: &str = "partition_name";
 const PIPELINE_VERTEX_LABEL: &str = "vertex";
 const PIPELINE_VERTEX_TYPE_LABEL: &str = "vertex_type";
+const PIPELINE_DROP_REASON_LABEL: &str = "reason";
 
 // The top-level metric registry is created with the GLOBAL_PREFIX
 const MVTX_REGISTRY_GLOBAL_PREFIX: &str = "monovtx";
@@ -64,14 +65,37 @@ const TRANSFORMER_REGISTRY_PREFIX: &str = "transformer";
 
 // counters (please note the prefix _total, and read above link)
 const READ_TOTAL: &str = "read";
+const DATA_READ_TOTAL: &str = "data_read";
 const READ_BYTES_TOTAL: &str = "read_bytes";
+const DATA_READ_BYTES_TOTAL: &str = "data_read_bytes";
+const READ_ERROR_TOTAL: &str = "read_error";
+const UDF_READ_TOTAL: &str = "udf_read";
+
+const WRITE_TOTAL: &str = "write";
+const UDF_WRITE_TOTAL: &str = "udf_write";
+const WRITE_BYTES_TOTAL: &str = "write_bytes";
+const WRITE_ERROR_TOTAL: &str = "write_error";
 const ACK_TOTAL: &str = "ack";
+const ACK_ERROR_TOTAL: &str = "ack_error";
+const UDF_ERROR_TOTAL: &str = "udf_error";
+
 const SINK_WRITE_TOTAL: &str = "write";
 const SINK_WRITE_ERRORS_TOTAL: &str = "write_errors";
+const FALLBACK_SINK_WRITE_ERRORS_TOTAL: &str = "fbsink_write_errors";
+
 const SINK_DROPPED_TOTAL: &str = "dropped";
 const DROPPED_TOTAL: &str = "dropped";
+const PIPELINE_FORWARDER_DROP_TOTAL: &str = "drop";
+const PIPELINE_FORWARDER_DROP_BYTES_TOTAL: &str = "drop_bytes";
+const UDF_DROP_TOTAL: &str = "ud_drop";
+
 const FALLBACK_SINK_WRITE_TOTAL: &str = "write";
+const PIPELINE_FALLBACK_SINK_WRITE_TOTAL: &str = "fbsink_write";
+const PIPELINE_FALLBACK_SINK_WRITE_BYTES_TOTAL: &str = "fbsink_write_bytes";
 const TRANSFORMER_DROPPED_TOTAL: &str = "dropped";
+const TRANSFORMER_ERROR_TOTAL: &str = "transformer_error";
+const TRANSFORMER_READ_TOTAL: &str = "transformer_read";
+const TRANSFORMER_WRITE_TOTAL: &str = "transformer_write";
 
 // pending as gauge for mvtx (these metric names are hardcoded in the auto-scaler)
 const PENDING: &str = "pending";
@@ -83,13 +107,19 @@ const VERTEX_PENDING_RAW: &str = "pending_messages_raw";
 // processing times as timers
 const E2E_TIME: &str = "processing_time";
 const READ_TIME: &str = "read_time";
+const READ_PROCESSING_TIME: &str = "read_processing_time";
+const WRITE_PROCESSING_TIME: &str = "write_processing_time";
+const ACK_PROCESSING_TIME: &str = "ack_processing_time";
+const TRANSFORMER_PROCESSING_TIME: &str = "transformer_processing_time";
+const FORWARD_CHUNK_PROCESSING_TIME: &str = "forward_chunk_processing_time";
+const UDF_PROCESSING_TIME: &str = "udf_processing_time";
+const CONCURRENT_UDF_PROCESSING_TIME: &str = "concurrent_udf_processing_time";
+const FALLBACK_SINK_WRITE_PROCESSING_TIME: &str = "fbsink_write_processing_time";
 const WRITE_TIME: &str = "write_time";
 const TRANSFORM_TIME: &str = "time";
 const ACK_TIME: &str = "ack_time";
 const SINK_TIME: &str = "time";
 const FALLBACK_SINK_TIME: &str = "time";
-
-const PIPELINE_FORWARDER_READ_TOTAL: &str = "data_read";
 
 /// A deep healthcheck for components. Each component should implement IsReady for both builtins and
 /// user-defined containers.
@@ -200,9 +230,13 @@ pub(crate) struct MonoVtxMetrics {
 }
 
 /// PipelineMetrics is a struct which is used for storing the metrics related to the Pipeline
-// TODO: Add the metrics for the pipeline
 pub(crate) struct PipelineMetrics {
+    // generic forwarder metrics
     pub(crate) forwarder: PipelineForwarderMetrics,
+    // source forwarder specific metrics
+    pub(crate) source_forwarder: SourceForwarderMetrics,
+    // sink forwarder specific metrics
+    pub(crate) sink_forwarder: SinkForwarderMetrics,
     pub(crate) isb: PipelineISBMetrics,
     pub(crate) pending: Family<Vec<(String, String)>, Gauge>,
     // TODO(lookback) - using new implementation only for monovertex right now,
@@ -232,16 +266,69 @@ pub(crate) struct TransformerMetrics {
     pub(crate) dropped_total: Family<Vec<(String, String)>, Counter>,
 }
 
+/// Generic forwarder metrics
 pub(crate) struct PipelineForwarderMetrics {
+    // read counters
     pub(crate) read_total: Family<Vec<(String, String)>, Counter>,
-    pub(crate) read_time: Family<Vec<(String, String)>, Histogram>,
-    pub(crate) ack_total: Family<Vec<(String, String)>, Counter>,
-    pub(crate) ack_time: Family<Vec<(String, String)>, Histogram>,
-    pub(crate) write_total: Family<Vec<(String, String)>, Counter>,
-    pub(crate) write_time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) data_read_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) read_bytes_total: Family<Vec<(String, String)>, Counter>,
-    pub(crate) processed_time: Family<Vec<(String, String)>, Histogram>,
-    pub(crate) dropped_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) data_read_bytes_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) read_error_total: Family<Vec<(String, String)>, Counter>,
+
+    // write counters
+    pub(crate) write_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) write_bytes_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) write_error_total: Family<Vec<(String, String)>, Counter>,
+
+    // drop counters
+    pub(crate) drop_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) drop_bytes_total: Family<Vec<(String, String)>, Counter>,
+
+    // ack counters
+    pub(crate) ack_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) ack_error_total: Family<Vec<(String, String)>, Counter>,
+
+    // udf specific counters
+    pub(crate) udf_read_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) udf_write_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) udf_drop_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) udf_error_total: Family<Vec<(String, String)>, Counter>,
+
+    // read histograms
+    pub(crate) read_processing_time: Family<Vec<(String, String)>, Histogram>,
+
+    // write histograms
+    pub(crate) write_processing_time: Family<Vec<(String, String)>, Histogram>,
+
+    // ack histograms
+    pub(crate) ack_processing_time: Family<Vec<(String, String)>, Histogram>,
+
+    // forwarder histograms
+    pub(crate) forward_chunk_processing_time: Family<Vec<(String, String)>, Histogram>,
+
+    // udf histograms
+    pub(crate) udf_processing_time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) concurrent_udf_processing_time: Family<Vec<(String, String)>, Histogram>,
+}
+
+pub(crate) struct SourceForwarderMetrics {
+    // source transformer counters
+    pub(crate) transformer_read_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) transformer_write_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) transformer_error_total: Family<Vec<(String, String)>, Counter>,
+
+    // source transformer histogram
+    pub(crate) transformer_processing_time: Family<Vec<(String, String)>, Histogram>,
+}
+
+pub(crate) struct SinkForwarderMetrics {
+    // fallback sink counters
+    pub(crate) fbsink_write_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) fbsink_write_bytes_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) fbsink_write_error_total: Family<Vec<(String, String)>, Counter>,
+
+    // fallback sink histograms
+    pub(crate) fbsink_write_processing_time: Family<Vec<(String, String)>, Histogram>,
 }
 
 pub(crate) struct PipelineISBMetrics {
@@ -430,22 +517,63 @@ impl PipelineMetrics {
         let metrics = Self {
             forwarder: PipelineForwarderMetrics {
                 read_total: Family::<Vec<(String, String)>, Counter>::default(),
-                processed_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
-                    || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10)),
-                ),
-                read_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                    Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
-                }),
+                data_read_total: Family::<Vec<(String, String)>, Counter>::default(),
                 read_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
-                ack_total: Family::<Vec<(String, String)>, Counter>::default(),
-                ack_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                    Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
-                }),
+                data_read_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
+                read_error_total: Family::<Vec<(String, String)>, Counter>::default(),
                 write_total: Family::<Vec<(String, String)>, Counter>::default(),
-                write_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
-                    || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10)),
-                ),
-                dropped_total: Family::<Vec<(String, String)>, Counter>::default(),
+                write_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
+                write_error_total: Family::<Vec<(String, String)>, Counter>::default(),
+                drop_total: Family::<Vec<(String, String)>, Counter>::default(),
+                drop_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
+                ack_total: Family::<Vec<(String, String)>, Counter>::default(),
+                ack_error_total: Family::<Vec<(String, String)>, Counter>::default(),
+                udf_read_total: Family::<Vec<(String, String)>, Counter>::default(),
+                udf_drop_total: Family::<Vec<(String, String)>, Counter>::default(),
+                udf_error_total: Family::<Vec<(String, String)>, Counter>::default(),
+                udf_write_total: Family::<Vec<(String, String)>, Counter>::default(),
+                read_processing_time:
+                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 10.0, 10))
+                    }),
+                write_processing_time:
+                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10))
+                    }),
+                ack_processing_time:
+                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 10.0, 10))
+                    }),
+                udf_processing_time:
+                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
+                    }),
+                concurrent_udf_processing_time:
+                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10))
+                    }),
+                forward_chunk_processing_time:
+                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10))
+                    }),
+            },
+            source_forwarder: SourceForwarderMetrics {
+                transformer_read_total: Family::<Vec<(String, String)>, Counter>::default(),
+                transformer_write_total: Family::<Vec<(String, String)>, Counter>::default(),
+                transformer_error_total: Family::<Vec<(String, String)>, Counter>::default(),
+                transformer_processing_time:
+                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
+                    }),
+            },
+            sink_forwarder: SinkForwarderMetrics {
+                fbsink_write_total: Family::<Vec<(String, String)>, Counter>::default(),
+                fbsink_write_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
+                fbsink_write_error_total: Family::<Vec<(String, String)>, Counter>::default(),
+                fbsink_write_processing_time:
+                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10))
+                    }),
             },
             isb: PipelineISBMetrics {
                 paf_resolution_time:
@@ -464,14 +592,9 @@ impl PipelineMetrics {
         // Pipeline forwarder sub-registry
         let forwarder_registry = registry.sub_registry_with_prefix("forwarder");
         forwarder_registry.register(
-            PIPELINE_FORWARDER_READ_TOTAL,
-            "Total number of Data Messages Read",
+            READ_TOTAL,
+            "Total number of Messages Read",
             metrics.forwarder.read_total.clone(),
-        );
-        forwarder_registry.register(
-            READ_TIME,
-            "Time taken to read data",
-            metrics.forwarder.read_time.clone(),
         );
         forwarder_registry.register(
             READ_BYTES_TOTAL,
@@ -479,34 +602,152 @@ impl PipelineMetrics {
             metrics.forwarder.read_bytes_total.clone(),
         );
         forwarder_registry.register(
-            E2E_TIME,
-            "Time taken to process data",
-            metrics.forwarder.processed_time.clone(),
+            DATA_READ_TOTAL,
+            "Total number of Data Messages Read",
+            metrics.forwarder.data_read_total.clone(),
         );
         forwarder_registry.register(
-            ACK_TOTAL,
-            "Total number of Ack Messages",
-            metrics.forwarder.ack_total.clone(),
+            DATA_READ_BYTES_TOTAL,
+            "Total number of Data message bytes read",
+            metrics.forwarder.data_read_bytes_total.clone(),
         );
         forwarder_registry.register(
-            ACK_TIME,
-            "Time taken to ack data",
-            metrics.forwarder.ack_time.clone(),
+            READ_ERROR_TOTAL,
+            "Total number of Read Errors",
+            metrics.forwarder.read_error_total.clone(),
         );
         forwarder_registry.register(
-            SINK_WRITE_TOTAL,
-            "Total number of Data Messages Written",
+            READ_PROCESSING_TIME,
+            "Processing times of read operations (100 microseconds to 10 minutes)",
+            metrics.forwarder.read_processing_time.clone(),
+        );
+        forwarder_registry.register(
+            WRITE_TOTAL,
+            "Total number of Messages Written",
             metrics.forwarder.write_total.clone(),
         );
         forwarder_registry.register(
-            DROPPED_TOTAL,
-            "Total number of dropped messages",
-            metrics.forwarder.dropped_total.clone(),
+            WRITE_BYTES_TOTAL,
+            "Total number of Messages Written",
+            metrics.forwarder.write_bytes_total.clone(),
         );
         forwarder_registry.register(
-            WRITE_TIME,
-            "Time taken to write data",
-            metrics.forwarder.write_time.clone(),
+            WRITE_ERROR_TOTAL,
+            "Total number of Write Errors",
+            metrics.forwarder.write_error_total.clone(),
+        );
+        forwarder_registry.register(
+            WRITE_PROCESSING_TIME,
+            "Processing times of write operations (100 microseconds to 20 minutes)",
+            metrics.forwarder.write_processing_time.clone(),
+        );
+        forwarder_registry.register(
+            PIPELINE_FORWARDER_DROP_TOTAL,
+            "Total number of Messages Dropped",
+            metrics.forwarder.drop_total.clone(),
+        );
+        forwarder_registry.register(
+            PIPELINE_FORWARDER_DROP_BYTES_TOTAL,
+            "Total number of Bytes Dropped",
+            metrics.forwarder.drop_bytes_total.clone(),
+        );
+        forwarder_registry.register(
+            ACK_TOTAL,
+            "Total number of Messages Acknowledged",
+            metrics.forwarder.ack_total.clone(),
+        );
+        forwarder_registry.register(
+            ACK_PROCESSING_TIME,
+            "Processing times of acknowledgment operations (100 microseconds to 10 minutes)",
+            metrics.forwarder.ack_processing_time.clone(),
+        );
+        forwarder_registry.register(
+            ACK_ERROR_TOTAL,
+            "Total number of Acknowledged Errors",
+            metrics.forwarder.ack_error_total.clone(),
+        );
+        forwarder_registry.register(
+            UDF_ERROR_TOTAL,
+            "Total number of UDF Errors",
+            metrics.forwarder.udf_error_total.clone(),
+        );
+        forwarder_registry.register(
+            FORWARD_CHUNK_PROCESSING_TIME,
+            "Processing times of the entire forward a chunk (100 microseconds to 20 minutes)",
+            metrics.forwarder.forward_chunk_processing_time.clone(),
+        );
+        forwarder_registry.register(
+            UDF_PROCESSING_TIME,
+            "Processing times of UDF (100 microseconds to 15 minutes)",
+            metrics.forwarder.udf_processing_time.clone(),
+        );
+        forwarder_registry.register(
+            CONCURRENT_UDF_PROCESSING_TIME,
+            "Processing times of Concurrent UDF (100 microseconds to 20 minutes)",
+            metrics.forwarder.concurrent_udf_processing_time.clone(),
+        );
+        forwarder_registry.register(
+            UDF_READ_TOTAL,
+            "Total number of Messages Read by UDF",
+            metrics.forwarder.udf_read_total.clone(),
+        );
+        forwarder_registry.register(
+            UDF_WRITE_TOTAL,
+            "Total number of Messages Written by UDF",
+            metrics.forwarder.udf_write_total.clone(),
+        );
+        forwarder_registry.register(
+            UDF_DROP_TOTAL,
+            "Total messages dropped by the user",
+            metrics.forwarder.udf_drop_total.clone(),
+        );
+
+        // Pipeline source forwarder sub-registry
+        let source_forwarder_registry = registry.sub_registry_with_prefix("source_forwarder");
+
+        source_forwarder_registry.register(
+            TRANSFORMER_ERROR_TOTAL,
+            "Total number of source transformer Errors",
+            metrics.source_forwarder.transformer_error_total.clone(),
+        );
+        source_forwarder_registry.register(
+            TRANSFORMER_READ_TOTAL,
+            "Total number of Messages Read by source transformer",
+            metrics.source_forwarder.transformer_read_total.clone(),
+        );
+        source_forwarder_registry.register(
+            TRANSFORMER_WRITE_TOTAL,
+            "Total number of Messages Written by source transformer",
+            metrics.source_forwarder.transformer_write_total.clone(),
+        );
+        source_forwarder_registry.register(
+            TRANSFORMER_PROCESSING_TIME,
+            "Processing times of source transformer (100 microseconds to 15 minutes)",
+            metrics.source_forwarder.transformer_processing_time.clone(),
+        );
+
+        // Pipeline sink forwarder sub-registry
+        let sink_forwarder_registry = registry.sub_registry_with_prefix("forwarder");
+
+        sink_forwarder_registry.register(
+            FALLBACK_SINK_WRITE_ERRORS_TOTAL,
+            "Total number of Write Errors while writing to a fallback sink",
+            metrics.sink_forwarder.fbsink_write_error_total.clone(),
+        );
+        sink_forwarder_registry.register(
+            PIPELINE_FALLBACK_SINK_WRITE_TOTAL,
+            "Total number of Messages written to a fallback sink",
+            metrics.sink_forwarder.fbsink_write_total.clone(),
+        );
+        sink_forwarder_registry.register(
+            PIPELINE_FALLBACK_SINK_WRITE_BYTES_TOTAL,
+            "Total number of bytes written to a fallback sink",
+            metrics.sink_forwarder.fbsink_write_bytes_total.clone(),
+        );
+        sink_forwarder_registry.register(
+            FALLBACK_SINK_WRITE_PROCESSING_TIME,
+            "Processing times of write operations to a fallback sink (100 microseconds to 20 minutes)",
+            metrics.sink_forwarder.fbsink_write_processing_time.clone(),
         );
 
         let vertex_registry = registry.sub_registry_with_prefix("vertex");
@@ -527,7 +768,7 @@ impl PipelineMetrics {
 /// MONOVTX_METRICS is the MonoVtxMetrics object which stores the metrics
 static MONOVTX_METRICS: OnceLock<MonoVtxMetrics> = OnceLock::new();
 
-// forward_metrics is a helper function used to fetch the
+// monovertex_metrics is a helper function used to fetch the
 // MonoVtxMetrics object
 pub(crate) fn monovertex_metrics() -> &'static MonoVtxMetrics {
     MONOVTX_METRICS.get_or_init(MonoVtxMetrics::new)
@@ -575,10 +816,13 @@ pub(crate) fn mvtx_forward_metric_labels() -> &'static Vec<(String, String)> {
     })
 }
 
-static PIPELINE_READ_METRICS_LABELS: OnceLock<Vec<(String, String)>> = OnceLock::new();
+static PIPELINE_FORWARD_METRICS_LABELS: OnceLock<Vec<(String, String)>> = OnceLock::new();
+static PIPELINE_METRIC_LABELS_WITH_PARTITION: OnceLock<Vec<(String, String)>> = OnceLock::new();
+static PIPELINE_METRIC_LABELS: OnceLock<Vec<(String, String)>> = OnceLock::new();
+static PIPELINE_DROP_METRIC_LABELS: OnceLock<Vec<(String, String)>> = OnceLock::new();
 
 pub(crate) fn pipeline_forward_metric_labels(vertex_type: &str) -> &'static Vec<(String, String)> {
-    PIPELINE_READ_METRICS_LABELS.get_or_init(|| {
+    PIPELINE_FORWARD_METRICS_LABELS.get_or_init(|| {
         vec![
             (
                 PIPELINE_NAME_LABEL.to_string(),
@@ -596,6 +840,91 @@ pub(crate) fn pipeline_forward_metric_labels(vertex_type: &str) -> &'static Vec<
                 PIPELINE_VERTEX_LABEL.to_string(),
                 get_vertex_name().to_string(),
             ),
+        ]
+    })
+}
+
+pub(crate) fn pipeline_metric_labels(vertex_type: &str) -> &'static Vec<(String, String)> {
+    PIPELINE_METRIC_LABELS.get_or_init(|| {
+        vec![
+            (
+                PIPELINE_VERTEX_LABEL.to_string(),
+                get_vertex_name().to_string(),
+            ),
+            (
+                PIPELINE_NAME_LABEL.to_string(),
+                get_pipeline_name().to_string(),
+            ),
+            (
+                PIPELINE_VERTEX_TYPE_LABEL.to_string(),
+                vertex_type.to_string(),
+            ),
+            (
+                PIPELINE_REPLICA_LABEL.to_string(),
+                get_vertex_replica().to_string(),
+            ),
+        ]
+    })
+}
+
+pub(crate) fn pipeline_metric_labels_with_partition(
+    vertex_type: &str,
+    partition_name: &str,
+) -> &'static Vec<(String, String)> {
+    PIPELINE_METRIC_LABELS_WITH_PARTITION.get_or_init(|| {
+        vec![
+            (
+                PIPELINE_VERTEX_LABEL.to_string(),
+                get_vertex_name().to_string(),
+            ),
+            (
+                PIPELINE_NAME_LABEL.to_string(),
+                get_pipeline_name().to_string(),
+            ),
+            (
+                PIPELINE_VERTEX_TYPE_LABEL.to_string(),
+                vertex_type.to_string(),
+            ),
+            (
+                PIPELINE_REPLICA_LABEL.to_string(),
+                get_vertex_replica().to_string(),
+            ),
+            (
+                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                partition_name.to_string(),
+            ),
+        ]
+    })
+}
+
+pub(crate) fn pipeline_drop_metric_labels(
+    vertex_type: &str,
+    partition_name: &str,
+    reason: &str,
+) -> &'static Vec<(String, String)> {
+    PIPELINE_DROP_METRIC_LABELS.get_or_init(|| {
+        vec![
+            (
+                PIPELINE_VERTEX_LABEL.to_string(),
+                get_vertex_name().to_string(),
+            ),
+            (
+                PIPELINE_NAME_LABEL.to_string(),
+                get_pipeline_name().to_string(),
+            ),
+            (
+                PIPELINE_VERTEX_TYPE_LABEL.to_string(),
+                vertex_type.to_string(),
+            ),
+            (
+                PIPELINE_REPLICA_LABEL.to_string(),
+                get_vertex_replica().to_string(),
+            ),
+            (
+                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                partition_name.to_string(),
+            ),
+            (PIPELINE_DROP_REASON_LABEL.to_string(), reason.to_string()),
         ]
     })
 }

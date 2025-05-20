@@ -316,7 +316,7 @@ impl JetStreamReader {
 
                     pipeline_metrics()
                         .forwarder
-                        .ack_time
+                        .ack_processing_time
                         .get_or_create(pipeline_isb_metric_labels())
                         .observe(start.elapsed().as_micros() as f64);
 

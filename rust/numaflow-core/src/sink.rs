@@ -497,12 +497,12 @@ impl SinkWriter {
                     } else {
                         pipeline_metrics()
                             .forwarder
-                            .write_time
+                            .write_processing_time
                             .get_or_create(pipeline_forward_metric_labels("Sink"))
                             .observe(sink_start.elapsed().as_micros() as f64);
                         pipeline_metrics()
                             .forwarder
-                            .dropped_total
+                            .drop_total
                             .get_or_create(pipeline_forward_metric_labels("Sink"))
                             .inc_by((total_msgs - total_valid_msgs) as u64);
                     }
