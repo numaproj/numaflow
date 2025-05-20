@@ -40,67 +40,61 @@ jobs:
 
   build-rust-amd64:
     runs-on: ubuntu-24.04
-    defaults:
-      run:
-        working-directory: ./rust
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Rust toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@v1.9.0
-        with:
-          rustflags: ""
-      - name: Install dependencies
-        run: sudo apt-get install -y protobuf-compiler
       - name: Build binary
-        run: RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target x86_64-unknown-linux-gnu
-      - name: Rename binary
         run: |
-          cp -pv target/x86_64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-amd64
-          cp -pv target/x86_64-unknown-linux-gnu/release/entrypoint entrypoint-linux-amd64
+          docker run -v ./rust/:/app/ -w /app --rm ubuntu:24.04 bash build.sh amd64
+      - name: Rename binaries
+        run: |
+          cp -pv rust/target/x86_64-unknown-linux-gnu/release/numaflow ./numaflow-rs-linux-amd64
+          cp -pv rust/target/x86_64-unknown-linux-gnu/release/entrypoint ./entrypoint-linux-amd64
+      - name: Verify numaflow binary is Statically Linked
+        run: |
+          file ./numaflow-rs-linux-amd64
+          file ./numaflow-rs-linux-amd64 | grep -q 'static-pie linked'
+      - name: Verify entrypoint binary is Statically Linked
+        run: |
+          file ./entrypoint-linux-amd64
+          file ./entrypoint-linux-amd64 | grep -q 'static-pie linked'
       - name: Upload numaflow binary
         uses: actions/upload-artifact@v4
         with:
           name: numaflow-rs-linux-amd64
-          path: rust/numaflow-rs-linux-amd64
+          path: numaflow-rs-linux-amd64
+          if-no-files-found: error
       - name: Upload entrypoint binary
         uses: actions/upload-artifact@v4
         with:
           name: entrypoint-linux-amd64
-          path: rust/entrypoint-linux-amd64
+          path: entrypoint-linux-amd64
           if-no-files-found: error
 
   build-rust-arm64:
-    runs-on: ubuntu-24.04
-    defaults:
-      run:
-        working-directory: ./rust
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
       - name: Update Rust Toolchain Target
         run: |
-          echo "targets = ['aarch64-unknown-linux-gnu']" >> rust-toolchain.toml
-      - name: Setup Rust toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@v1.9.0
-        with:
-          rustflags: ""
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu protobuf-compiler
+          echo "targets = ['aarch64-unknown-linux-gnu']" >> rust/rust-toolchain.toml
       - name: Build binary
-        run: RUSTFLAGS='-C target-feature=+crt-static -C linker=aarch64-linux-gnu-gcc' cargo build --release --target aarch64-unknown-linux-gnu
+        run: |
+          cd ../
+          docker run -v ./rust/:/app/ -w /app --rm ubuntu:24.04 bash build.sh aarch64
       - name: Rename binary
         run: |
-          cp -pv target/aarch64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-arm64
-          cp -pv target/aarch64-unknown-linux-gnu/release/entrypoint entrypoint-linux-arm64
+          cp -pv rust/target/aarch64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-arm64
+          cp -pv rust/target/aarch64-unknown-linux-gnu/release/entrypoint entrypoint-linux-arm64
       - name: Upload numaflow binary
         uses: actions/upload-artifact@v4
         with:
           name: numaflow-rs-linux-arm64
-          path: rust/numaflow-rs-linux-arm64
+          path: numaflow-rs-linux-arm64
       - name: Upload entrypoint binary
         uses: actions/upload-artifact@v4
         with:
           name: entrypoint-linux-arm64
-          path: rust/entrypoint-linux-arm64
+          path: entrypoint-linux-arm64
 
   build-push-linux-multi:
     name: Build & push linux/amd64 and linux/arm64

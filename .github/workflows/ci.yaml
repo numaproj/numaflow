@@ -160,20 +160,16 @@ jobs:
 
   build-rust-amd64:
     runs-on: ubuntu-24.04
-    defaults:
-      run:
-        working-directory: ./rust
     steps:
       - uses: actions/checkout@v4
       # TODO: Use actions/cache@v4 to cache target/ directory
       - name: Build binary
         run: |
-          cd ../
           docker run -v ./rust/:/app/ -w /app --rm ubuntu:24.04 bash build.sh amd64
       - name: Rename binaries
         run: |
-          cp -pv target/x86_64-unknown-linux-gnu/release/numaflow ./numaflow-rs-linux-amd64
-          cp -pv target/x86_64-unknown-linux-gnu/release/entrypoint ./entrypoint-linux-amd64
+          cp -pv rust/target/x86_64-unknown-linux-gnu/release/numaflow ./numaflow-rs-linux-amd64
+          cp -pv rust/target/x86_64-unknown-linux-gnu/release/entrypoint ./entrypoint-linux-amd64
       - name: Verify numaflow binary is Statically Linked
         run: |
           file ./numaflow-rs-linux-amd64
@@ -186,13 +182,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: numaflow-rs-linux-amd64
-          path: rust/numaflow-rs-linux-amd64
+          path: numaflow-rs-linux-amd64
           if-no-files-found: error
       - name: Upload entrypoint binary
         uses: actions/upload-artifact@v4
         with:
           name: entrypoint-linux-amd64
-          path: rust/entrypoint-linux-amd64
+          path: entrypoint-linux-amd64
           if-no-files-found: error
 
   e2e-tests:
