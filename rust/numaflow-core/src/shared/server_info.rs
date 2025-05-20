@@ -354,7 +354,7 @@ async fn read_server_info(
             return Err(Error::ServerInfo(format!(
                 "Server info file {:?} is not ready. \
                 This indicates that the server has not started. \
-                For more details https://github.com/numaproj/numaflow/discussions/2655",
+                For more details https://numaflow.numaproj.io/user-guide/FAQ/#4-i-see-server-info-file-not-ready-log-in-the-numa-container-what-does-this-mean",
                 file_path
             )));
         }
