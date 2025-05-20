@@ -133,11 +133,13 @@ mod tests {
     use bytes::Bytes;
     use chrono::{TimeZone, Utc};
     use std::sync::Arc;
+    use std::time::Duration;
     use test_log::test;
     use tokio_stream::StreamExt;
     use tokio_stream::wrappers::ReceiverStream;
+    use tokio_util::sync::CancellationToken;
 
-    #[test(tokio::test)]
+    #[tokio::test]
     async fn test_gc_wal_and_aligned_compaction() {
         let test_path = tempfile::tempdir().unwrap().into_path();
 
@@ -230,7 +232,17 @@ mod tests {
             .await
             .unwrap();
 
-        compactor.compact(None).await.unwrap();
+        let (replay_tx, _replay_rx) = tokio::sync::mpsc::channel(1000);
+        let cln_token = CancellationToken::new();
+
+        let handle = compactor
+            .start_compaction_with_replay(replay_tx, Duration::from_secs(60), cln_token.clone())
+            .await
+            .unwrap();
+
+        // signal the compaction task to stop and wait for it to complete
+        cln_token.cancel();
+        handle.await.unwrap().unwrap();
 
         // Verify compacted data
         let compaction_replay_wal = ReplayWal::new(WalType::Compact, test_path);
@@ -263,7 +275,7 @@ mod tests {
         );
     }
 
-    #[test(tokio::test)]
+    #[tokio::test]
     async fn test_gc_wal_and_unaligned_compaction() {
         let test_path = tempfile::tempdir().unwrap().into_path();
 
@@ -383,7 +395,17 @@ mod tests {
         .await
         .unwrap();
 
-        compactor.compact(None).await.unwrap();
+        let cln_token = CancellationToken::new();
+        let (replay_tx, _replay_rx) = tokio::sync::mpsc::channel(1000);
+
+        let handle = compactor
+            .start_compaction_with_replay(replay_tx, Duration::from_secs(60), cln_token.clone())
+            .await
+            .unwrap();
+
+        // signal the compaction task to stop and wait for it to complete
+        cln_token.cancel();
+        handle.await.unwrap().unwrap();
 
         // Verify compacted data
         let compaction_wal = ReplayWal::new(WalType::Compact, test_path);

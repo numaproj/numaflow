@@ -142,7 +142,7 @@ impl Compactor {
 
     /// Compact first needs to get all the GC files and build a compaction map. This map will have
     /// the oldest data before which all can be deleted.
-    pub(crate) async fn compact(&self, replay_tx: Option<Sender<Bytes>>) -> WalResult<()> {
+    async fn compact(&self, replay_tx: Option<Sender<Bytes>>) -> WalResult<()> {
         match self.kind {
             WindowKind::Aligned => self.compact_aligned(replay_tx.clone()).await?,
             WindowKind::Unaligned => self.compact_unaligned(replay_tx).await?,
@@ -164,11 +164,7 @@ impl Compactor {
         // Get the oldest time and scanned GC files
         let (oldest_time, gc_files) = self.build_aligned_compaction().await?;
 
-        info!(oldest_time = ?oldest_time.timestamp_millis(), "Event time till which the data has been processed");
-        println!(
-            "Oldest aligned window gc end time: {}",
-            oldest_time.timestamp_millis()
-        );
+        debug!(oldest_time = ?oldest_time.timestamp_millis(), "Event time till which the data has been processed");
 
         let compact = AlignedCompaction(oldest_time);
 
@@ -182,7 +178,7 @@ impl Compactor {
 
         // Delete the GC files
         for gc_file in gc_files {
-            info!(gc_file = %gc_file.display(), "removing segment file");
+            debug!(gc_file = %gc_file.display(), "removing segment file");
             tokio::fs::remove_file(gc_file).await?;
         }
 
@@ -291,7 +287,7 @@ impl Compactor {
                         )
                     })?;
 
-                    info!(filename = %filename.display(), "removing segment file");
+                    debug!(filename = %filename.display(), "removing segment file");
                 }
             }
         }

@@ -177,16 +177,14 @@ impl SegmentWriteActor {
         }
 
         // Check if we need to rotate based on time
-        if self.current_size > 0 {
-            let segment_age = Utc::now().signed_duration_since(self.create_time);
-            if segment_age >= self.max_segment_age {
-                debug!(
-                    age = ?segment_age,
-                    max_age = ?self.max_segment_age,
-                    "Rotating segment file due to age threshold"
-                );
-                self.rotate_file(true).await?;
-            }
+        if self.current_size > 0
+            && Utc::now().signed_duration_since(self.create_time) > self.max_segment_age
+        {
+            debug!(
+                max_age = ?self.max_segment_age,
+                "Rotating segment file due to age threshold"
+            );
+            self.rotate_file(true).await?;
         }
 
         let data_len = data.len() as u64;
@@ -212,7 +210,7 @@ impl SegmentWriteActor {
         base_path: &Path,
         idx: usize,
     ) -> WalResult<(String, BufWriter<File>)> {
-        let timestamp = Utc::now().timestamp_millis();
+        let timestamp = Utc::now().timestamp_micros();
 
         // the name is important. sorting is based on the timestamp and then on file-index.
         let filename = format!(
