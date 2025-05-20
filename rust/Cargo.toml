@@ -11,6 +11,7 @@ members = [
     "extns/numaflow-jetstream",
     "numaflow",
     "numaflow-monitor",
+    "extns/numaflow-kafka",
 ]
 
 [workspace.lints.rust]
@@ -62,6 +63,7 @@ backoff = { path = "backoff" }
 numaflow-pb = { path = "numaflow-pb" }
 numaflow-pulsar = { path = "extns/numaflow-pulsar" }
 numaflow-jetstream = { path = "extns/numaflow-jetstream" }
+numaflow-kafka = { path = "extns/numaflow-kafka" }
 numaflow-sqs = { path = "extns/numaflow-sqs" }
 tokio = { version = "1.44.2", features = ["macros", "rt-multi-thread"] }
 bytes = "1.9.0"
@@ -86,3 +88,4 @@ reqwest = { version = "0.12.12", default-features = false, features = [
     "rustls-tls",
     "json",
 ] }
+uuid = "1.16.0"

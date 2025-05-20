@@ -18,6 +18,7 @@ use crate::{
     reader::LagReader,
 };
 use numaflow_jetstream::JetstreamSource;
+use numaflow_kafka::KafkaSource;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pulsar::source::PulsarSource;
 use numaflow_sqs::source::SqsSource;
@@ -51,6 +52,8 @@ pub(crate) mod pulsar;
 pub(crate) mod jetstream;
 
 pub(crate) mod sqs;
+
+pub(crate) mod kafka;
 
 use crate::transformer::Transformer;
 use crate::watermark::source::SourceWatermarkHandle;
@@ -89,6 +92,7 @@ pub(crate) enum SourceType {
     Pulsar(PulsarSource),
     Sqs(SqsSource),
     Jetstream(JetstreamSource),
+    Kafka(KafkaSource),
 }
 
 enum ActorMessage {
@@ -240,6 +244,12 @@ impl Source {
                 tokio::spawn(async move {
                     let actor =
                         SourceActor::new(receiver, jetstream.clone(), jetstream.clone(), jetstream);
+                    actor.run().await;
+                });
+            }
+            SourceType::Kafka(kafka) => {
+                tokio::spawn(async move {
+                    let actor = SourceActor::new(receiver, kafka.clone(), kafka.clone(), kafka);
                     actor.run().await;
                 });
             }
