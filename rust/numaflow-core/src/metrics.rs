@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
-use std::iter;
+use std::{env, iter};
 use std::net::SocketAddr;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
@@ -678,6 +678,13 @@ async fn livez() -> impl IntoResponse {
 }
 
 async fn sidecar_livez(State(state): State<ComponentHealthChecks>) -> impl IntoResponse {
+    // Check if health checks are disabled via the environment variable
+    if env::var("NUMAFLOW_HEALTH_CHECK_DISABLED")
+        .map(|v| v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+    {
+        return StatusCode::NO_CONTENT;
+    }
     match state {
         ComponentHealthChecks::Monovertex(mut monovertex_state) => {
             // this call also check the health of transformer if it is configured in the Source.
