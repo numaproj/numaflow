@@ -134,7 +134,6 @@ mod tests {
     use chrono::{TimeZone, Utc};
     use std::sync::Arc;
     use std::time::Duration;
-    use test_log::test;
     use tokio_stream::StreamExt;
     use tokio_stream::wrappers::ReceiverStream;
     use tokio_util::sync::CancellationToken;
