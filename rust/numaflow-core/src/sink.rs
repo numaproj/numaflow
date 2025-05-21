@@ -600,9 +600,10 @@ impl SinkWriter {
         // If there are fallback messages, write them to the fallback sink
         if !fallback_msgs.is_empty() {
             let fallback_sink_start = time::Instant::now();
+            let fb_msgs_bytes_total: usize = fallback_msgs.iter().map(|msg| msg.value.len()).sum();
             self.handle_fallback_messages(fallback_msgs, retry_config)
                 .await?;
-            Self::send_fb_sink_metrics(fb_msgs_total, fallback_sink_start);
+            Self::send_fb_sink_metrics(fb_msgs_total, fb_msgs_bytes_total, fallback_sink_start);
         }
 
         let serving_msgs_total = serving_msgs.len();
@@ -793,6 +794,17 @@ impl SinkWriter {
                                 ResponseStatusFromSink::Success => false,
                                 ResponseStatusFromSink::Failed(err_msg) => {
                                     *fallback_error_map.entry(err_msg.clone()).or_insert(0) += 1;
+                                    // increment fb sink error metric for pipeline
+                                    if !is_mono_vertex() {
+                                        pipeline_metrics()
+                                            .sink_forwarder
+                                            .fbsink_write_error_total
+                                            .get_or_create(pipeline_metric_labels_with_partition(
+                                                "Sink",
+                                                get_vertex_name(),
+                                            ))
+                                            .inc_by(1);
+                                    }
                                     true
                                 }
                                 ResponseStatusFromSink::Fallback => {
@@ -899,7 +911,11 @@ impl SinkWriter {
         self.health_check_clients.ready().await
     }
 
-    fn send_fb_sink_metrics(fb_msgs_total: usize, fallback_sink_start: time::Instant) {
+    fn send_fb_sink_metrics(
+        fb_msgs_total: usize,
+        fb_msgs_bytes_total: usize,
+        fallback_sink_start: time::Instant,
+    ) {
         if is_mono_vertex() {
             monovertex_metrics()
                 .fb_sink
@@ -920,6 +936,23 @@ impl SinkWriter {
                     get_vertex_name(),
                 ))
                 .inc_by(fb_msgs_total as u64);
+            pipeline_metrics()
+                .sink_forwarder
+                .fbsink_write_bytes_total
+                .get_or_create(pipeline_metric_labels_with_partition(
+                    "Sink",
+                    get_vertex_name(),
+                ))
+                .inc_by(fb_msgs_bytes_total as u64);
+
+            pipeline_metrics()
+                .sink_forwarder
+                .fbsink_write_processing_time
+                .get_or_create(pipeline_metric_labels_with_partition(
+                    "Sink",
+                    get_vertex_name(),
+                ))
+                .observe(fallback_sink_start.elapsed().as_micros() as f64);
         }
     }
 
