@@ -189,10 +189,10 @@ impl UserDefinedSessionReduce {
         result_tx: tokio::sync::mpsc::Sender<Message>,
         cln_token: CancellationToken,
     ) -> crate::error::Result<()> {
-        // Convert AlignedWindowMessage stream to ReduceRequest stream
+        // Convert UnalignedWindowMessage stream to ReduceRequest stream
         let (req_tx, req_rx) = tokio::sync::mpsc::channel(100);
 
-        // Spawn a task to convert AlignedWindowMessages to ReduceRequests and send them to req_tx
+        // Spawn a task to convert UnalignedWindowMessages to ReduceRequests and send them to req_tx
         // NOTE: - This is not really required (for client side streaming reduce), we do this because
         //         `tonic` does not return a stream from the reduce_fn unless there is some output.
         //       - This implementation works for reduce bidi streaming.

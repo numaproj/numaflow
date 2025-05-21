@@ -77,11 +77,6 @@ pub(crate) struct SlidingWindowManager {
     /// Active windows sorted by end time. The state is saved to a file on shutdown and loaded on
     /// startup.
     active_windows: Arc<RwLock<BTreeSet<Window>>>,
-    /// Closed windows sorted by end time. We need to keep track of closed windows so that we can
-    /// find the oldest window computed and forwarded. The watermark is progressed based on the latest
-    /// closed window end time. The oldest window in the active_window will be greater than the latest
-    /// closed window.
-    closed_windows: Arc<RwLock<BTreeSet<Window>>>,
     /// Optional path to save/load window state.
     active_window_state_file: Option<PathBuf>,
     /// max end time of the deleted windows, used to avoid creating
@@ -101,7 +96,6 @@ impl SlidingWindowManager {
             window_length,
             slide,
             active_windows: Arc::new(RwLock::new(BTreeSet::new())),
-            closed_windows: Arc::new(RwLock::new(BTreeSet::new())),
             max_deleted_window_end_time: Arc::new(AtomicI64::new(-1)),
             active_window_state_file: state_file_path,
         };
@@ -154,34 +148,21 @@ impl SlidingWindowManager {
 
     /// Closes any windows that can be closed because the Watermark has advanced beyond the window
     pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage> {
-        let mut result = Vec::new();
-
         // Find windows that need to be closed
-        let mut active_windows = self
+        let active_windows = self
             .active_windows
-            .write()
-            .expect("Poisoned lock in active_windows");
-        let mut closed_windows = self
-            .closed_windows
             .write()
             .expect("Poisoned lock in active_windows");
 
         // get all the windows that have end time less than the watermark
-        let windows_to_close: Vec<_> = active_windows
+        let result: Vec<_> = active_windows
             .iter()
             .filter(|window| window.end_time <= watermark) // window end time is exclusive, hence <=
-            .cloned()
-            .collect();
-
-        // Move windows from active to closed
-        for window in windows_to_close {
-            result.push(AlignedWindowMessage {
+            .map(|window| AlignedWindowMessage {
                 operation: WindowOperation::Close,
                 window: window.clone(),
-            });
-            active_windows.remove(&window);
-            closed_windows.insert(window);
-        }
+            })
+            .collect();
 
         result
     }
@@ -192,32 +173,21 @@ impl SlidingWindowManager {
         self.max_deleted_window_end_time
             .fetch_max(window.end_time.timestamp_millis(), Ordering::Relaxed);
 
-        // Remove the window from closed_windows
-        self.closed_windows
+        // Remove the window from active_windows
+        self.active_windows
             .write()
-            .expect("Poisoned lock for closed_windows")
+            .expect("Poisoned lock for active_windows")
             .remove(&window);
     }
 
     /// Returns the oldest window yet to be completed. This will be the lowest Watermark in the Vertex.
     pub(crate) fn oldest_window(&self) -> Option<Window> {
-        // get the oldest window from closed_windows, if closed_windows is empty, get the oldest
-        // from active_windows
-        // NOTE: closed windows will always have a lower end time than active_windows
-        self.closed_windows
+        self.active_windows
             .read()
-            .expect("Poisoned lock for closed_windows")
+            .expect("Poisoned lock for active_windows")
             .iter()
             .next()
             .cloned()
-            .or_else(|| {
-                self.active_windows
-                    .read()
-                    .expect("Poisoned lock for active_windows")
-                    .iter()
-                    .next()
-                    .cloned()
-            })
     }
 
     /// Helper method to format sorted window information for logging.
@@ -247,16 +217,8 @@ impl SlidingWindowManager {
                 .active_windows
                 .read()
                 .expect("Poisoned lock for active_windows");
-            let closed_windows = self
-                .closed_windows
-                .read()
-                .expect("Poisoned lock for closed_windows");
 
-            closed_windows
-                .iter()
-                .chain(active_windows.iter())
-                .map(Into::into)
-                .collect()
+            active_windows.iter().map(Into::into).collect()
         };
 
         let state = WindowManagerState {
@@ -618,12 +580,10 @@ mod tests {
         // Verify window1 is deleted
         {
             let active_windows = windower.active_windows.read().unwrap();
-            assert_eq!(active_windows.len(), 0);
-            let closed_windows = windower.closed_windows.read().unwrap();
-            assert_eq!(closed_windows.len(), 2);
-            assert!(!closed_windows.contains(&window1));
-            assert!(closed_windows.contains(&window2));
-            assert!(closed_windows.contains(&window3));
+            assert_eq!(active_windows.len(), 2);
+            assert!(!active_windows.contains(&window1));
+            assert!(active_windows.contains(&window2));
+            assert!(active_windows.contains(&window3));
         }
 
         // Delete window2
@@ -761,7 +721,6 @@ mod tests {
             active_windows: Arc::new(RwLock::new(BTreeSet::from_iter(
                 active_windows.iter().cloned(),
             ))),
-            closed_windows: Arc::new(RwLock::new(BTreeSet::new())),
             active_window_state_file: None,
             max_deleted_window_end_time: Arc::new(Default::default()),
         };
