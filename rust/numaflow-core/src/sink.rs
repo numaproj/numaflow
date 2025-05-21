@@ -3,6 +3,7 @@
 //!
 //! [Sink]: https://numaflow.numaproj.io/user-guide/sinks/overview/
 
+use numaflow_kafka::sink::KafkaSink;
 use numaflow_pb::clients::serving::serving_store_client::ServingStoreClient;
 use numaflow_pb::clients::sink::Status::{Failure, Fallback, Serve, Success};
 use numaflow_pb::clients::sink::sink_client::SinkClient;
@@ -52,6 +53,8 @@ mod log;
 pub mod serve;
 
 mod sqs;
+
+mod kafka;
 /// [User-Defined Sink] extends Numaflow to add custom sources supported outside the builtins.
 ///
 /// [User-Defined Sink]: https://numaflow.numaproj.io/user-guide/sinks/user-defined-sinks/
@@ -108,6 +111,7 @@ pub(crate) enum SinkClientType {
     Serve,
     UserDefined(SinkClient<Channel>),
     Sqs(SqsSink),
+    Kafka(KafkaSink),
 }
 
 /// User defined clients which will be used for doing sidecar health checks.
@@ -306,6 +310,13 @@ impl SinkWriterBuilder {
                     actor.run().await;
                 });
             }
+            SinkClientType::Kafka(kafka_sink) => {
+                todo!();
+                tokio::spawn(async {
+                    let actor = SinkActor::new(receiver, kafka_sink);
+                    actor.run().await;
+                });
+            }
         };
 
         // start fallback sinks
@@ -344,6 +355,12 @@ impl SinkWriterBuilder {
                 SinkClientType::Sqs(sqs_sink) => {
                     tokio::spawn(async {
                         let actor = SinkActor::new(fb_receiver, sqs_sink);
+                        actor.run().await;
+                    });
+                }
+                SinkClientType::Kafka(kafka_sink) => {
+                    tokio::spawn(async {
+                        let actor = SinkActor::new(fb_receiver, kafka_sink);
                         actor.run().await;
                     });
                 }

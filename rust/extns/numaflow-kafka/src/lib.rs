@@ -13,6 +13,8 @@ use rdkafka::topic_partition_list::TopicPartitionList;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{error, info, warn};
 
+pub mod sink;
+
 const KAFKA_TOPIC_HEADER_KEY: &str = "X-NF-Kafka-TopicName";
 
 pub type Result<T> = core::result::Result<T, Error>;

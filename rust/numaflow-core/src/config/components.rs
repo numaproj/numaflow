@@ -696,7 +696,8 @@ pub(crate) mod sink {
 
     use std::fmt::Display;
 
-    use numaflow_models::models::{Backoff, RetryStrategy, Sink, SqsSink};
+    use numaflow_kafka::sink::KafkaSinkConfig;
+    use numaflow_models::models::{Backoff, KafkaSink, RetryStrategy, Sink, SqsSink};
     use numaflow_sqs::sink::SqsSinkConfig;
 
     use crate::Result;
@@ -715,6 +716,7 @@ pub(crate) mod sink {
         Serve,
         UserDefined(UserDefinedConfig),
         Sqs(SqsSinkConfig),
+        Kafka(KafkaSinkConfig),
     }
 
     impl SinkType {
@@ -811,6 +813,24 @@ pub(crate) mod sink {
                 ),
             };
             Ok(SinkType::Sqs(sqs_sink_config))
+        }
+    }
+
+    impl TryFrom<Box<KafkaSink>> for SinkType {
+        type Error = Error;
+
+        fn try_from(kafka_config: Box<KafkaSink>) -> Result<Self> {
+            let Some(brokers) = kafka_config.brokers else {
+                return Err(Error::Config(
+                    "Brokers must be specified in the Kafka sink config".to_string(),
+                ));
+            };
+            if brokers.is_empty() {
+                return Err(Error::Config(
+                    "At-least 1 broker URL must be specified in Kafka sink config".to_string(),
+                ));
+            }
+            Ok(SinkType::Kafka(KafkaSinkConfig { brokers }))
         }
     }
 
