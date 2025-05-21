@@ -32,7 +32,7 @@ use crate::error::Error;
 use crate::message::Message;
 use crate::metrics::{
     monovertex_metrics, mvtx_forward_metric_labels, pipeline_forward_metric_labels,
-    pipeline_metrics,
+    pipeline_metric_labels_with_partition, pipeline_metrics,
 };
 use crate::sink::serve::{ServingStore, StoreEntry};
 use crate::tracker::TrackerHandle;
@@ -422,9 +422,6 @@ impl SinkWriter {
 
                 pin!(chunk_stream);
 
-                let mut processed_msgs_count: usize = 0;
-                let mut last_logged_at = std::time::Instant::now();
-
                 loop {
                     let batch = match chunk_stream.next().await {
                         Some(batch) => batch,
@@ -505,17 +502,6 @@ impl SinkWriter {
                             .drop_total
                             .get_or_create(pipeline_forward_metric_labels("Sink"))
                             .inc_by((total_msgs - total_valid_msgs) as u64);
-                    }
-
-                    processed_msgs_count += total_msgs;
-                    if last_logged_at.elapsed().as_millis() >= 1000 {
-                        info!(
-                            "Processed {} messages at {:?}",
-                            processed_msgs_count,
-                            time::Instant::now()
-                        );
-                        processed_msgs_count = 0;
-                        last_logged_at = std::time::Instant::now();
                     }
                 }
                 self.final_result.clone()
@@ -925,6 +911,15 @@ impl SinkWriter {
                 .time
                 .get_or_create(mvtx_forward_metric_labels())
                 .observe(fallback_sink_start.elapsed().as_micros() as f64);
+        } else {
+            pipeline_metrics()
+                .sink_forwarder
+                .fbsink_write_total
+                .get_or_create(pipeline_metric_labels_with_partition(
+                    "Sink",
+                    get_vertex_name(),
+                ))
+                .inc_by(fb_msgs_total as u64);
         }
     }
 

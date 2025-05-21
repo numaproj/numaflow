@@ -82,7 +82,7 @@ pub(crate) mod source {
             let auth: Option<PulsarAuth> = match value.auth {
                 Some(auth) => 'out: {
                     let Some(token) = auth.token else {
-                        tracing::warn!("JWT Token authentication is specified, but token is empty");
+                        warn!("JWT Token authentication is specified, but token is empty");
                         break 'out None;
                     };
                     let secret = crate::shared::create_components::get_secret_from_volume(
@@ -1022,6 +1022,192 @@ pub(crate) mod metrics {
             MetricsConfig {
                 lookback_window_in_secs,
                 ..Default::default()
+            }
+        }
+    }
+}
+
+pub(crate) mod reduce {
+    const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
+    const DEFAULT_REDUCER_SOCKET: &str = "/var/run/numaflow/reduce.sock";
+    const DEFAULT_REDUCER_SERVER_INFO_FILE: &str = "/var/run/numaflow/reducer-server-info";
+
+    use std::time::Duration;
+
+    use numaflow_models::models::{
+        AccumulatorWindow, FixedWindow, GroupBy, PbqStorage, SessionWindow, SlidingWindow, Udf,
+    };
+
+    use crate::Result;
+    use crate::error::Error;
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) struct ReducerConfig {
+        pub(crate) reducer_type: ReducerType,
+        pub(crate) window_config: WindowConfig,
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) enum ReducerType {
+        UserDefined(UserDefinedConfig),
+    }
+
+    impl TryFrom<(&Box<Udf>, &Box<GroupBy>)> for ReducerType {
+        type Error = Error;
+        fn try_from(value: (&Box<Udf>, &Box<GroupBy>)) -> Result<Self> {
+            let (udf, _group_by) = value;
+            if udf.container.is_some() {
+                Ok(ReducerType::UserDefined(UserDefinedConfig::default()))
+            } else {
+                Err(Error::Config("Invalid UDF for reducer".to_string()))
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) struct UserDefinedConfig {
+        pub grpc_max_message_size: usize,
+        pub socket_path: &'static str,
+        pub server_info_path: &'static str,
+    }
+
+    impl Default for UserDefinedConfig {
+        fn default() -> Self {
+            Self {
+                grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                socket_path: DEFAULT_REDUCER_SOCKET,
+                server_info_path: DEFAULT_REDUCER_SERVER_INFO_FILE,
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) struct WindowConfig {
+        pub(crate) window_type: WindowType,
+        pub(crate) allowed_lateness: Duration,
+        pub(crate) is_keyed: bool,
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) enum WindowType {
+        Fixed(FixedWindowConfig),
+        Sliding(SlidingWindowConfig),
+        Session(SessionWindowConfig),
+        Accumulator(AccumulatorWindowConfig),
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) struct FixedWindowConfig {
+        pub(crate) length: Duration,
+    }
+
+    impl From<Box<FixedWindow>> for FixedWindowConfig {
+        fn from(value: Box<FixedWindow>) -> Self {
+            Self {
+                length: value.length.map(Duration::from).unwrap_or_default(),
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) struct SlidingWindowConfig {
+        pub(crate) length: Duration,
+        pub(crate) slide: Duration,
+    }
+
+    impl From<Box<SlidingWindow>> for SlidingWindowConfig {
+        fn from(value: Box<SlidingWindow>) -> Self {
+            Self {
+                length: value.length.map(Duration::from).unwrap_or_default(),
+                slide: value.slide.map(Duration::from).unwrap_or_default(),
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) struct SessionWindowConfig {
+        pub(crate) timeout: Duration,
+    }
+
+    impl From<Box<SessionWindow>> for SessionWindowConfig {
+        fn from(value: Box<SessionWindow>) -> Self {
+            Self {
+                timeout: value.timeout.map(Duration::from).unwrap_or_default(),
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) struct AccumulatorWindowConfig {
+        pub(crate) timeout: Duration,
+    }
+
+    impl From<Box<AccumulatorWindow>> for AccumulatorWindowConfig {
+        fn from(value: Box<AccumulatorWindow>) -> Self {
+            Self {
+                timeout: value.timeout.map(Duration::from).unwrap_or_default(),
+            }
+        }
+    }
+
+    impl TryFrom<&Box<GroupBy>> for WindowConfig {
+        type Error = Error;
+        fn try_from(group_by: &Box<GroupBy>) -> Result<Self> {
+            let window = group_by.window.as_ref();
+
+            let window_type = if let Some(fixed) = &window.fixed {
+                WindowType::Fixed(fixed.clone().into())
+            } else if let Some(sliding) = &window.sliding {
+                WindowType::Sliding(sliding.clone().into())
+            } else if let Some(session) = &window.session {
+                WindowType::Session(session.clone().into())
+            } else if let Some(accumulator) = &window.accumulator {
+                WindowType::Accumulator(accumulator.clone().into())
+            } else {
+                return Err(Error::Config("No window type specified".to_string()));
+            };
+
+            Ok(WindowConfig {
+                window_type,
+                allowed_lateness: group_by
+                    .allowed_lateness
+                    .map_or(Duration::from_secs(0), Duration::from),
+                is_keyed: group_by.keyed.unwrap_or(false),
+            })
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) struct StorageConfig {
+        pub(crate) path: std::path::PathBuf,
+        pub(crate) max_file_size_mb: u64,
+        pub(crate) flush_interval_ms: u64,
+        pub(crate) channel_buffer_size: usize,
+        pub(crate) max_segment_age_secs: u64,
+    }
+
+    impl Default for StorageConfig {
+        fn default() -> Self {
+            Self {
+                path: std::path::PathBuf::from("/var/numaflow/pbq/wals"),
+                max_file_size_mb: 10,
+                flush_interval_ms: 100,
+                channel_buffer_size: 500,
+                max_segment_age_secs: 120,
+            }
+        }
+    }
+
+    impl TryFrom<PbqStorage> for StorageConfig {
+        type Error = crate::error::Error;
+
+        fn try_from(storage: PbqStorage) -> Result<Self> {
+            if storage.persistent_volume_claim.is_some() {
+                Err(Error::Config(
+                    "Persistent volume claim is not supported".to_string(),
+                ))
+            } else {
+                Ok(StorageConfig::default())
             }
         }
     }
@@ -2135,5 +2321,222 @@ mod kafka_tests {
         }
 
         cleanup_secret(secret_name);
+    }
+}
+
+#[cfg(test)]
+mod reducer_tests {
+    use std::time::Duration;
+
+    use numaflow_models::models::{
+        AccumulatorWindow, Container, FixedWindow, GroupBy, SessionWindow, SlidingWindow, Udf,
+        Window,
+    };
+
+    use super::reduce::{ReducerType, UserDefinedConfig, WindowConfig, WindowType};
+
+    #[test]
+    fn test_default_user_defined_config() {
+        let default_config = UserDefinedConfig::default();
+        assert_eq!(default_config.grpc_max_message_size, 64 * 1024 * 1024);
+        assert_eq!(default_config.socket_path, "/var/run/numaflow/reduce.sock");
+        assert_eq!(
+            default_config.server_info_path,
+            "/var/run/numaflow/reducer-server-info"
+        );
+    }
+
+    #[test]
+    fn test_reducer_type_from_udf_and_group_by() {
+        let udf = Box::new(Udf {
+            builtin: None,
+            container: Some(Box::new(Container {
+                args: None,
+                command: None,
+                env: None,
+                env_from: None,
+                image: Some("reducer-image".to_string()),
+                image_pull_policy: None,
+                liveness_probe: None,
+                ports: None,
+                readiness_probe: None,
+                resources: None,
+                security_context: None,
+                volume_mounts: None,
+            })),
+            group_by: None,
+        });
+
+        let window = Window {
+            fixed: Some(Box::new(FixedWindow {
+                length: Some(kube::core::Duration::from(Duration::from_secs(60))),
+                streaming: None,
+            })),
+            sliding: None,
+            session: None,
+            accumulator: None,
+        };
+
+        let group_by = Box::new(GroupBy {
+            allowed_lateness: Some(kube::core::Duration::from(Duration::from_secs(10))),
+            keyed: Some(true),
+            storage: None,
+            window: Box::new(window),
+        });
+
+        let reducer_type = ReducerType::try_from((&udf, &group_by)).unwrap();
+        match reducer_type {
+            ReducerType::UserDefined(config) => {
+                assert_eq!(config, UserDefinedConfig::default());
+            }
+        }
+    }
+
+    #[test]
+    fn test_window_config_from_group_by_fixed() {
+        let window = Window {
+            fixed: Some(Box::new(FixedWindow {
+                length: Some(kube::core::Duration::from(Duration::from_secs(60))),
+                streaming: None,
+            })),
+            sliding: None,
+            session: None,
+            accumulator: None,
+        };
+
+        let group_by = Box::new(GroupBy {
+            allowed_lateness: Some(kube::core::Duration::from(Duration::from_secs(10))),
+            keyed: Some(true),
+            storage: None,
+            window: Box::new(window),
+        });
+
+        let window_config = WindowConfig::try_from(&group_by).unwrap();
+        assert_eq!(window_config.allowed_lateness, Duration::from_secs(10));
+        assert!(window_config.is_keyed);
+
+        match window_config.window_type {
+            WindowType::Fixed(config) => {
+                assert_eq!(config.length, Duration::from_secs(60));
+            }
+            _ => panic!("Expected fixed window type"),
+        }
+    }
+
+    #[test]
+    fn test_window_config_from_group_by_sliding() {
+        let window = Window {
+            fixed: None,
+            sliding: Some(Box::new(SlidingWindow {
+                length: Some(kube::core::Duration::from(Duration::from_secs(60))),
+                slide: Some(kube::core::Duration::from(Duration::from_secs(30))),
+                streaming: None,
+            })),
+            session: None,
+            accumulator: None,
+        };
+
+        let group_by = Box::new(GroupBy {
+            allowed_lateness: None,
+            keyed: None,
+            storage: None,
+            window: Box::new(window),
+        });
+
+        let window_config = WindowConfig::try_from(&group_by).unwrap();
+        assert_eq!(window_config.allowed_lateness, Duration::from_secs(0));
+        assert!(!window_config.is_keyed);
+
+        match window_config.window_type {
+            WindowType::Sliding(config) => {
+                assert_eq!(config.length, Duration::from_secs(60));
+                assert_eq!(config.slide, Duration::from_secs(30));
+            }
+            _ => panic!("Expected sliding window type"),
+        }
+    }
+
+    #[test]
+    fn test_window_config_from_group_by_session() {
+        let window = Window {
+            fixed: None,
+            sliding: None,
+            session: Some(Box::new(SessionWindow {
+                timeout: Some(kube::core::Duration::from(Duration::from_secs(300))),
+            })),
+            accumulator: None,
+        };
+
+        let group_by = Box::new(GroupBy {
+            allowed_lateness: None,
+            keyed: Some(true),
+            storage: None,
+            window: Box::new(window),
+        });
+
+        let window_config = WindowConfig::try_from(&group_by).unwrap();
+        assert_eq!(window_config.allowed_lateness, Duration::from_secs(0));
+        assert!(window_config.is_keyed);
+
+        match window_config.window_type {
+            WindowType::Session(config) => {
+                assert_eq!(config.timeout, Duration::from_secs(300));
+            }
+            _ => panic!("Expected session window type"),
+        }
+    }
+
+    #[test]
+    fn test_window_config_from_group_by_accumulator() {
+        let window = Window {
+            fixed: None,
+            sliding: None,
+            session: None,
+            accumulator: Some(Box::new(AccumulatorWindow {
+                timeout: Some(kube::core::Duration::from(Duration::from_secs(600))),
+            })),
+        };
+
+        let group_by = Box::new(GroupBy {
+            allowed_lateness: None,
+            keyed: Some(true),
+            storage: None,
+            window: Box::new(window),
+        });
+
+        let window_config = WindowConfig::try_from(&group_by).unwrap();
+        assert_eq!(window_config.allowed_lateness, Duration::from_secs(0));
+        assert!(window_config.is_keyed);
+
+        match window_config.window_type {
+            WindowType::Accumulator(config) => {
+                assert_eq!(config.timeout, Duration::from_secs(600));
+            }
+            _ => panic!("Expected accumulator window type"),
+        }
+    }
+
+    #[test]
+    fn test_window_config_from_group_by_no_window_type() {
+        let window = Window {
+            fixed: None,
+            sliding: None,
+            session: None,
+            accumulator: None,
+        };
+
+        let group_by = Box::new(GroupBy {
+            allowed_lateness: None,
+            keyed: None,
+            storage: None,
+            window: Box::new(window),
+        });
+
+        let result = WindowConfig::try_from(&group_by);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Config Error - No window type specified"
+        );
     }
 }

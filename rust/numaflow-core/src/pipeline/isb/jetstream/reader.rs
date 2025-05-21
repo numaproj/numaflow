@@ -7,6 +7,7 @@ use async_nats::jetstream::{
 };
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
+use chrono::Utc;
 use prost::Message as ProtoMessage;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -165,7 +166,7 @@ impl JetStreamReader {
     /// cancellationToken cancellation during the permit reservation and fetching messages,
     /// since rest of the operations should finish immediately.
     pub(crate) async fn streaming_read(
-        self,
+        mut self,
         cancel_token: CancellationToken,
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let (messages_tx, messages_rx) = mpsc::channel(2 * self.batch_size);
@@ -174,6 +175,9 @@ impl JetStreamReader {
             async move {
                 let mut labels = pipeline_forward_metric_labels(&self.vertex_type).clone();
                 let semaphore = Arc::new(Semaphore::new(MAX_ACK_PENDING));
+                let mut processed_msgs_count: usize = 0;
+                let mut last_logged_at = Instant::now();
+
                 labels.push((
                     metrics::PIPELINE_PARTITION_NAME_LABEL.to_string(),
                     self.stream.name.to_string(),
@@ -226,7 +230,7 @@ impl JetStreamReader {
                                 continue;
                             }
 
-                            if let Some(watermark_handle) = self.watermark_handle.as_ref() {
+                            if let Some(watermark_handle) = self.watermark_handle.as_mut() {
                                 let watermark = watermark_handle.fetch_watermark(message.offset.clone()).await;
                                 message.watermark = Some(watermark);
                             }
@@ -252,6 +256,17 @@ impl JetStreamReader {
                                 .read_total
                                 .get_or_create(&labels)
                                 .inc();
+
+                            processed_msgs_count += 1;
+                            if last_logged_at.elapsed().as_secs() >= 1 {
+                                info!(
+                                    "Processed {} messages in {:?}",
+                                    processed_msgs_count,
+                                    Utc::now()
+                                );
+                                processed_msgs_count = 0;
+                                last_logged_at = Instant::now();
+                            }
                         }
                     }
                 }
