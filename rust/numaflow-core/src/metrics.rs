@@ -114,7 +114,6 @@ const ACK_PROCESSING_TIME: &str = "ack_processing_time";
 const TRANSFORMER_PROCESSING_TIME: &str = "transformer_processing_time";
 const FORWARD_CHUNK_PROCESSING_TIME: &str = "forward_chunk_processing_time";
 const UDF_PROCESSING_TIME: &str = "udf_processing_time";
-const CONCURRENT_UDF_PROCESSING_TIME: &str = "concurrent_udf_processing_time";
 const FALLBACK_SINK_WRITE_PROCESSING_TIME: &str = "fbsink_write_processing_time";
 const WRITE_TIME: &str = "write_time";
 const TRANSFORM_TIME: &str = "time";
@@ -309,7 +308,6 @@ pub(crate) struct PipelineForwarderMetrics {
 
     // udf histograms
     pub(crate) udf_processing_time: Family<Vec<(String, String)>, Histogram>,
-    pub(crate) concurrent_udf_processing_time: Family<Vec<(String, String)>, Histogram>,
 }
 
 pub(crate) struct SourceForwarderMetrics {
@@ -549,10 +547,6 @@ impl PipelineMetrics {
                     Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                         Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
                     }),
-                concurrent_udf_processing_time:
-                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10))
-                    }),
                 forward_chunk_processing_time:
                     Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                         Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10))
@@ -677,11 +671,6 @@ impl PipelineMetrics {
             UDF_PROCESSING_TIME,
             "Processing times of UDF (100 microseconds to 15 minutes)",
             metrics.forwarder.udf_processing_time.clone(),
-        );
-        forwarder_registry.register(
-            CONCURRENT_UDF_PROCESSING_TIME,
-            "Processing times of Concurrent UDF (100 microseconds to 20 minutes)",
-            metrics.forwarder.concurrent_udf_processing_time.clone(),
         );
         forwarder_registry.register(
             UDF_READ_TOTAL,

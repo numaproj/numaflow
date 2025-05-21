@@ -23,7 +23,7 @@ use crate::config::pipeline::ToVertexConfig;
 use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, Offset};
-use crate::metrics::{pipeline_isb_metric_labels, pipeline_metrics};
+use crate::metrics::{pipeline_drop_metric_labels, pipeline_isb_metric_labels, pipeline_metrics};
 use crate::shared::forward;
 use crate::tracker::TrackerHandle;
 use crate::watermark::WatermarkHandle;
@@ -194,6 +194,7 @@ impl JetstreamWriter {
             let mut hash = DefaultHasher::new();
 
             while let Some(message) = messages_stream.next().await {
+                let write_processing_start = Instant::now();
                 // if message needs to be dropped, ack and continue
                 // TODO: add metric for dropped count
                 if message.dropped() {
@@ -202,6 +203,11 @@ impl JetstreamWriter {
                         .delete(message.offset)
                         .await
                         .expect("Failed to delete offset from tracker");
+                    pipeline_metrics()
+                        .forwarder
+                        .udf_drop_total
+                        .get_or_create(pipeline_isb_metric_labels())
+                        .inc();
                     continue;
                 }
 
@@ -241,11 +247,18 @@ impl JetstreamWriter {
                     }
                 }
 
+                // ToDo: we need vertex_type and partition_name
+                // for parity with Go Metrics
                 pipeline_metrics()
                     .forwarder
                     .write_total
                     .get_or_create(pipeline_isb_metric_labels())
                     .inc();
+                pipeline_metrics()
+                    .forwarder
+                    .write_bytes_total
+                    .get_or_create(pipeline_isb_metric_labels())
+                    .inc_by(message.value.len() as u64);
 
                 if pafs.is_empty() {
                     continue;
@@ -257,6 +270,11 @@ impl JetstreamWriter {
                         error!(?e, "Failed to resolve PAFs");
                         cln_token.cancel();
                     })?;
+                pipeline_metrics()
+                    .forwarder
+                    .write_processing_time
+                    .get_or_create(pipeline_isb_metric_labels())
+                    .observe(write_processing_start.elapsed().as_micros() as f64);
             }
 
             // wait for all the paf resolvers to complete before returning
@@ -285,6 +303,7 @@ impl JetstreamWriter {
 
         // message id will be used for deduplication
         let id = message.id.to_string();
+        let msg_bytes = message.value.len();
 
         let payload: BytesMut = message
             .try_into()
@@ -312,6 +331,18 @@ impl JetstreamWriter {
                                 .delete(offset.clone())
                                 .await
                                 .expect("Failed to delete offset from tracker");
+                            // increment drop metric if buffer is full and
+                            // Buffer full strategy is DiscardLatest
+                            pipeline_metrics()
+                                .forwarder
+                                .drop_total
+                                .get_or_create(pipeline_isb_metric_labels())
+                                .inc();
+                            pipeline_metrics()
+                                .forwarder
+                                .drop_bytes_total
+                                .get_or_create(pipeline_isb_metric_labels())
+                                .inc_by(msg_bytes as u64);
                             return None;
                         }
                         BufferFullStrategy::RetryUntilSuccess => {}

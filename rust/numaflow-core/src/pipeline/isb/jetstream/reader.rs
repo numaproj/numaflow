@@ -171,7 +171,7 @@ impl JetStreamReader {
 
         let handle: JoinHandle<Result<()>> = tokio::spawn({
             async move {
-                let mut labels =
+                let labels =
                     pipeline_metric_labels_with_partition(&self.vertex_type, self.stream.name)
                         .clone();
 

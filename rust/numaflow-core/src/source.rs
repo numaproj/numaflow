@@ -373,7 +373,14 @@ impl Source {
                 };
 
                 let msgs_len = messages.len();
-                Self::send_read_metrics(&pipeline_labels, mvtx_labels, read_start_time, msgs_len);
+                let msgs_bytes = messages.iter().map(|msg| msg.value.len()).sum();
+                Self::send_read_metrics(
+                    &pipeline_labels,
+                    mvtx_labels,
+                    read_start_time,
+                    msgs_len,
+                    msgs_bytes,
+                );
 
                 // attempt to publish idle watermark since we are not able to read any message from
                 // the source.
@@ -516,6 +523,7 @@ impl Source {
         mvtx_labels: &Vec<(String, String)>,
         read_start_time: Instant,
         n: usize,
+        msgs_bytes: usize,
     ) {
         if is_mono_vertex() {
             monovertex_metrics()
@@ -532,6 +540,21 @@ impl Source {
                 .read_total
                 .get_or_create(pipeline_labels)
                 .inc_by(n as u64);
+            pipeline_metrics()
+                .forwarder
+                .data_read_total
+                .get_or_create(pipeline_labels)
+                .inc_by(n as u64);
+            pipeline_metrics()
+                .forwarder
+                .read_bytes_total
+                .get_or_create(pipeline_labels)
+                .inc_by(msgs_bytes as u64);
+            pipeline_metrics()
+                .forwarder
+                .data_read_bytes_total
+                .get_or_create(pipeline_labels)
+                .inc_by(msgs_bytes as u64);
             pipeline_metrics()
                 .forwarder
                 .read_processing_time
