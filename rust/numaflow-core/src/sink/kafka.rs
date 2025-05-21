@@ -29,14 +29,14 @@ impl From<KafkaSinkResponse> for ResponseFromSink {
                 id: resp.id,
                 status: ResponseStatusFromSink::Failed(e.to_string()),
                 serve_response: None,
-            }
+            },
         }
     }
 }
 
 impl Sink for KafkaSink {
     async fn sink(&mut self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>> {
-        let mut kafka_messages: Vec<KafkaSinkMessage> = messages
+        let kafka_messages: Vec<KafkaSinkMessage> = messages
             .into_iter()
             .map(TryInto::try_into)
             .collect::<Result<_>>()?;

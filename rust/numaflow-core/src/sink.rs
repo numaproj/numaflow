@@ -311,7 +311,6 @@ impl SinkWriterBuilder {
                 });
             }
             SinkClientType::Kafka(kafka_sink) => {
-                todo!();
                 tokio::spawn(async {
                     let actor = SinkActor::new(receiver, kafka_sink);
                     actor.run().await;

@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use bytes::Bytes;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct KafkaSinkConfig {
@@ -15,7 +15,7 @@ pub struct KafkaSinkResponse {
     pub status: crate::Result<()>,
 }
 
-pub struct KafkaSinkMessage{
+pub struct KafkaSinkMessage {
     pub id: String,
     pub headers: HashMap<String, String>,
     pub payload: Bytes,
@@ -26,7 +26,10 @@ pub fn new_sink(config: KafkaSinkConfig) -> KafkaSink {
 }
 
 impl KafkaSink {
-    pub async fn sink_messages(&mut self, messges: Vec<KafkaSinkMessage>) -> crate::Result<Vec<KafkaSinkResponse>> {
+    pub async fn sink_messages(
+        &mut self,
+        messges: Vec<KafkaSinkMessage>,
+    ) -> crate::Result<Vec<KafkaSinkResponse>> {
         todo!();
     }
 }
