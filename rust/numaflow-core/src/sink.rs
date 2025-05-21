@@ -611,7 +611,7 @@ impl SinkWriter {
             pipeline_metrics()
                 .forwarder
                 .write_total
-                .get_or_create(pipeline_metric_labels_with_partition(
+                .get_or_create(&pipeline_metric_labels_with_partition(
                     "Sink",
                     get_vertex_name(),
                 ))
@@ -619,7 +619,7 @@ impl SinkWriter {
             pipeline_metrics()
                 .forwarder
                 .write_bytes_total
-                .get_or_create(pipeline_metric_labels_with_partition(
+                .get_or_create(&pipeline_metric_labels_with_partition(
                     "Sink",
                     get_vertex_name(),
                 ))
@@ -627,7 +627,7 @@ impl SinkWriter {
             pipeline_metrics()
                 .forwarder
                 .write_processing_time
-                .get_or_create(pipeline_metric_labels_with_partition(
+                .get_or_create(&pipeline_metric_labels_with_partition(
                     "Sink",
                     get_vertex_name(),
                 ))
@@ -635,7 +635,7 @@ impl SinkWriter {
             pipeline_metrics()
                 .forwarder
                 .write_error_total
-                .get_or_create(pipeline_metric_labels_with_partition(
+                .get_or_create(&pipeline_metric_labels_with_partition(
                     "Sink",
                     get_vertex_name(),
                 ))
@@ -687,7 +687,7 @@ impl SinkWriter {
                     pipeline_metrics()
                         .forwarder
                         .drop_total
-                        .get_or_create(pipeline_drop_metric_labels(
+                        .get_or_create(&pipeline_drop_metric_labels(
                             "Sink",
                             get_vertex_name(),
                             "retries exhausted in the Sink",
@@ -820,7 +820,7 @@ impl SinkWriter {
                                         pipeline_metrics()
                                             .sink_forwarder
                                             .fbsink_write_error_total
-                                            .get_or_create(pipeline_metric_labels_with_partition(
+                                            .get_or_create(&pipeline_metric_labels_with_partition(
                                                 "Sink",
                                                 get_vertex_name(),
                                             ))
@@ -952,7 +952,7 @@ impl SinkWriter {
             pipeline_metrics()
                 .sink_forwarder
                 .fbsink_write_total
-                .get_or_create(pipeline_metric_labels_with_partition(
+                .get_or_create(&pipeline_metric_labels_with_partition(
                     "Sink",
                     get_vertex_name(),
                 ))
@@ -960,7 +960,7 @@ impl SinkWriter {
             pipeline_metrics()
                 .sink_forwarder
                 .fbsink_write_bytes_total
-                .get_or_create(pipeline_metric_labels_with_partition(
+                .get_or_create(&pipeline_metric_labels_with_partition(
                     "Sink",
                     get_vertex_name(),
                 ))
@@ -969,7 +969,7 @@ impl SinkWriter {
             pipeline_metrics()
                 .sink_forwarder
                 .fbsink_write_processing_time
-                .get_or_create(pipeline_metric_labels_with_partition(
+                .get_or_create(&pipeline_metric_labels_with_partition(
                     "Sink",
                     get_vertex_name(),
                 ))

@@ -808,9 +808,7 @@ pub(crate) fn mvtx_forward_metric_labels() -> &'static Vec<(String, String)> {
 }
 
 static PIPELINE_FORWARD_METRICS_LABELS: OnceLock<Vec<(String, String)>> = OnceLock::new();
-static PIPELINE_METRIC_LABELS_WITH_PARTITION: OnceLock<Vec<(String, String)>> = OnceLock::new();
 static PIPELINE_METRIC_LABELS: OnceLock<Vec<(String, String)>> = OnceLock::new();
-static PIPELINE_DROP_METRIC_LABELS: OnceLock<Vec<(String, String)>> = OnceLock::new();
 
 pub(crate) fn pipeline_forward_metric_labels(vertex_type: &str) -> &'static Vec<(String, String)> {
     PIPELINE_FORWARD_METRICS_LABELS.get_or_init(|| {
@@ -858,66 +856,63 @@ pub(crate) fn pipeline_metric_labels(vertex_type: &str) -> &'static Vec<(String,
     })
 }
 
+// Do not use OnceLock here as partition_name can be different for same vertex type
 pub(crate) fn pipeline_metric_labels_with_partition(
     vertex_type: &str,
     partition_name: &str,
-) -> &'static Vec<(String, String)> {
-    PIPELINE_METRIC_LABELS_WITH_PARTITION.get_or_init(|| {
-        vec![
-            (
-                PIPELINE_VERTEX_LABEL.to_string(),
-                get_vertex_name().to_string(),
-            ),
-            (
-                PIPELINE_NAME_LABEL.to_string(),
-                get_pipeline_name().to_string(),
-            ),
-            (
-                PIPELINE_VERTEX_TYPE_LABEL.to_string(),
-                vertex_type.to_string(),
-            ),
-            (
-                PIPELINE_REPLICA_LABEL.to_string(),
-                get_vertex_replica().to_string(),
-            ),
-            (
-                PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                partition_name.to_string(),
-            ),
-        ]
-    })
+) -> Vec<(String, String)> {
+    vec![
+        (
+            PIPELINE_VERTEX_LABEL.to_string(),
+            get_vertex_name().to_string(),
+        ),
+        (
+            PIPELINE_NAME_LABEL.to_string(),
+            get_pipeline_name().to_string(),
+        ),
+        (
+            PIPELINE_VERTEX_TYPE_LABEL.to_string(),
+            vertex_type.to_string(),
+        ),
+        (
+            PIPELINE_REPLICA_LABEL.to_string(),
+            get_vertex_replica().to_string(),
+        ),
+        (
+            PIPELINE_PARTITION_NAME_LABEL.to_string(),
+            partition_name.to_string(),
+        ),
+    ]
 }
 
 pub(crate) fn pipeline_drop_metric_labels(
     vertex_type: &str,
     partition_name: &str,
     reason: &str,
-) -> &'static Vec<(String, String)> {
-    PIPELINE_DROP_METRIC_LABELS.get_or_init(|| {
-        vec![
-            (
-                PIPELINE_VERTEX_LABEL.to_string(),
-                get_vertex_name().to_string(),
-            ),
-            (
-                PIPELINE_NAME_LABEL.to_string(),
-                get_pipeline_name().to_string(),
-            ),
-            (
-                PIPELINE_VERTEX_TYPE_LABEL.to_string(),
-                vertex_type.to_string(),
-            ),
-            (
-                PIPELINE_REPLICA_LABEL.to_string(),
-                get_vertex_replica().to_string(),
-            ),
-            (
-                PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                partition_name.to_string(),
-            ),
-            (PIPELINE_DROP_REASON_LABEL.to_string(), reason.to_string()),
-        ]
-    })
+) -> Vec<(String, String)> {
+    vec![
+        (
+            PIPELINE_VERTEX_LABEL.to_string(),
+            get_vertex_name().to_string(),
+        ),
+        (
+            PIPELINE_NAME_LABEL.to_string(),
+            get_pipeline_name().to_string(),
+        ),
+        (
+            PIPELINE_VERTEX_TYPE_LABEL.to_string(),
+            vertex_type.to_string(),
+        ),
+        (
+            PIPELINE_REPLICA_LABEL.to_string(),
+            get_vertex_replica().to_string(),
+        ),
+        (
+            PIPELINE_PARTITION_NAME_LABEL.to_string(),
+            partition_name.to_string(),
+        ),
+        (PIPELINE_DROP_REASON_LABEL.to_string(), reason.to_string()),
+    ]
 }
 
 static PIPELINE_ISB_METRICS_LABELS: OnceLock<Vec<(String, String)>> = OnceLock::new();

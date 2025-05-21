@@ -23,7 +23,10 @@ use crate::config::pipeline::ToVertexConfig;
 use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, Offset};
-use crate::metrics::{pipeline_drop_metric_labels, pipeline_isb_metric_labels, pipeline_metrics};
+use crate::metrics::{
+    pipeline_drop_metric_labels, pipeline_isb_metric_labels, pipeline_metric_labels,
+    pipeline_metric_labels_with_partition, pipeline_metrics,
+};
 use crate::shared::forward;
 use crate::tracker::TrackerHandle;
 use crate::watermark::WatermarkHandle;
@@ -51,6 +54,7 @@ pub(crate) struct JetstreamWriter {
     sem: Arc<Semaphore>,
     watermark_handle: Option<WatermarkHandle>,
     paf_concurrency: usize,
+    vertex_type: String,
 }
 
 impl JetstreamWriter {
@@ -63,6 +67,7 @@ impl JetstreamWriter {
         tracker_handle: TrackerHandle,
         cancel_token: CancellationToken,
         watermark_handle: Option<WatermarkHandle>,
+        vertex_type: String,
     ) -> Self {
         let to_vertex_streams = config
             .iter()
@@ -82,6 +87,7 @@ impl JetstreamWriter {
             sem: Arc::new(Semaphore::new(paf_concurrency)),
             watermark_handle,
             paf_concurrency,
+            vertex_type,
         };
 
         // spawn a task for checking whether buffer is_full
@@ -196,7 +202,6 @@ impl JetstreamWriter {
             while let Some(message) = messages_stream.next().await {
                 let write_processing_start = Instant::now();
                 // if message needs to be dropped, ack and continue
-                // TODO: add metric for dropped count
                 if message.dropped() {
                     // delete the entry from tracker
                     self.tracker_handle
@@ -206,7 +211,7 @@ impl JetstreamWriter {
                     pipeline_metrics()
                         .forwarder
                         .udf_drop_total
-                        .get_or_create(pipeline_isb_metric_labels())
+                        .get_or_create(pipeline_metric_labels(&self.vertex_type))
                         .inc();
                     continue;
                 }
@@ -243,22 +248,16 @@ impl JetstreamWriter {
                         )
                         .await
                     {
+                        let partition_name = stream.name;
+                        Self::send_write_metrics(
+                            partition_name,
+                            &self.vertex_type,
+                            message.clone(),
+                            write_processing_start,
+                        );
                         pafs.push((stream, paf));
                     }
                 }
-
-                // ToDo: we need vertex_type and partition_name
-                // for parity with Go Metrics
-                pipeline_metrics()
-                    .forwarder
-                    .write_total
-                    .get_or_create(pipeline_isb_metric_labels())
-                    .inc();
-                pipeline_metrics()
-                    .forwarder
-                    .write_bytes_total
-                    .get_or_create(pipeline_isb_metric_labels())
-                    .inc_by(message.value.len() as u64);
 
                 if pafs.is_empty() {
                     continue;
@@ -270,11 +269,6 @@ impl JetstreamWriter {
                         error!(?e, "Failed to resolve PAFs");
                         cln_token.cancel();
                     })?;
-                pipeline_metrics()
-                    .forwarder
-                    .write_processing_time
-                    .get_or_create(pipeline_isb_metric_labels())
-                    .observe(write_processing_start.elapsed().as_micros() as f64);
             }
 
             // wait for all the paf resolvers to complete before returning
@@ -286,6 +280,38 @@ impl JetstreamWriter {
             Ok(())
         });
         Ok(handle)
+    }
+
+    fn send_write_metrics(
+        partition_name: &str,
+        vertex_type: &String,
+        message: Message,
+        write_processing_start: Instant,
+    ) {
+        pipeline_metrics()
+            .forwarder
+            .write_total
+            .get_or_create(&pipeline_metric_labels_with_partition(
+                vertex_type,
+                partition_name,
+            ))
+            .inc();
+        pipeline_metrics()
+            .forwarder
+            .write_bytes_total
+            .get_or_create(&pipeline_metric_labels_with_partition(
+                vertex_type,
+                partition_name,
+            ))
+            .inc_by(message.value.len() as u64);
+        pipeline_metrics()
+            .forwarder
+            .write_processing_time
+            .get_or_create(&pipeline_metric_labels_with_partition(
+                vertex_type,
+                partition_name,
+            ))
+            .observe(write_processing_start.elapsed().as_micros() as f64);
     }
 
     /// Writes the message to the JetStream ISB and returns a future which can be

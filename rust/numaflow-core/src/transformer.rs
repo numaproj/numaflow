@@ -160,7 +160,7 @@ impl Transformer {
             pipeline_metrics()
                 .source_forwarder
                 .transformer_read_total
-                .get_or_create(pipeline_metric_labels_with_partition(
+                .get_or_create(&pipeline_metric_labels_with_partition(
                     "Source",
                     get_vertex_name(),
                 ))
@@ -216,7 +216,7 @@ impl Transformer {
                         pipeline_metrics()
                             .source_forwarder
                             .transformer_error_total
-                            .get_or_create(pipeline_metric_labels_with_partition(
+                            .get_or_create(&pipeline_metric_labels_with_partition(
                                 "Source",
                                 get_vertex_name(),
                             ))
@@ -259,7 +259,7 @@ impl Transformer {
             pipeline_metrics()
                 .source_forwarder
                 .transformer_processing_time
-                .get_or_create(pipeline_metric_labels_with_partition(
+                .get_or_create(&pipeline_metric_labels_with_partition(
                     "Source",
                     get_vertex_name(),
                 ))
@@ -267,7 +267,7 @@ impl Transformer {
             pipeline_metrics()
                 .source_forwarder
                 .transformer_drop_total
-                .get_or_create(pipeline_metric_labels_with_partition(
+                .get_or_create(&pipeline_metric_labels_with_partition(
                     "Source",
                     get_vertex_name(),
                 ))
@@ -275,7 +275,7 @@ impl Transformer {
             pipeline_metrics()
                 .source_forwarder
                 .transformer_write_total
-                .get_or_create(pipeline_metric_labels_with_partition(
+                .get_or_create(&pipeline_metric_labels_with_partition(
                     "Source",
                     get_vertex_name(),
                 ))
