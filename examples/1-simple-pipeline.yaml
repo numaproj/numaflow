@@ -10,7 +10,7 @@ spec:
       # A self data generating source
       source:
         generator:
-          rpu: 100
+          rpu: 5
           duration: 1s
     - name: cat
       scale:
@@ -20,7 +20,7 @@ spec:
           image: quay.io/numaio/numaflow-go/map-forward-message:stable
     - name: out
       scale:
-        min: 2
+        min: 1
       sink:
         log: {}
   edges:

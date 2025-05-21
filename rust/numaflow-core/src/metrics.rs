@@ -97,6 +97,7 @@ const TRANSFORMER_DROPPED_TOTAL: &str = "dropped";
 const TRANSFORMER_ERROR_TOTAL: &str = "transformer_error";
 const TRANSFORMER_READ_TOTAL: &str = "transformer_read";
 const TRANSFORMER_WRITE_TOTAL: &str = "transformer_write";
+const PIPELINE_TRANSFORMER_DROP_TOTAL: &str = "transformer_drop";
 
 // pending as gauge for mvtx (these metric names are hardcoded in the auto-scaler)
 const PENDING: &str = "pending";
@@ -318,6 +319,7 @@ pub(crate) struct SourceForwarderMetrics {
     pub(crate) transformer_read_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) transformer_write_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) transformer_error_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) transformer_drop_total: Family<Vec<(String, String)>, Counter>,
 
     // source transformer histogram
     pub(crate) transformer_processing_time: Family<Vec<(String, String)>, Histogram>,
@@ -562,6 +564,7 @@ impl PipelineMetrics {
             source_forwarder: SourceForwarderMetrics {
                 transformer_read_total: Family::<Vec<(String, String)>, Counter>::default(),
                 transformer_write_total: Family::<Vec<(String, String)>, Counter>::default(),
+                transformer_drop_total: Family::<Vec<(String, String)>, Counter>::default(),
                 transformer_error_total: Family::<Vec<(String, String)>, Counter>::default(),
                 transformer_processing_time:
                     Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
@@ -721,6 +724,11 @@ impl PipelineMetrics {
             TRANSFORMER_WRITE_TOTAL,
             "Total number of Messages Written by source transformer",
             metrics.source_forwarder.transformer_write_total.clone(),
+        );
+        source_forwarder_registry.register(
+            PIPELINE_TRANSFORMER_DROP_TOTAL,
+            "Total number of Messages Dropped by source transformer",
+            metrics.source_forwarder.transformer_drop_total.clone(),
         );
         source_forwarder_registry.register(
             TRANSFORMER_PROCESSING_TIME,
