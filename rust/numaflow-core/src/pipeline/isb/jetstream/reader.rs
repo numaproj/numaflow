@@ -18,17 +18,15 @@ use tokio_util::sync::CancellationToken;
 use tracing::warn;
 use tracing::{error, info};
 
+use crate::Result;
 use crate::config::get_vertex_name;
 use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, MessageID, MessageType, Metadata, Offset, ReadAck};
-use crate::metrics::{
-    pipeline_forward_metric_labels, pipeline_isb_metric_labels, pipeline_metrics,
-};
+use crate::metrics::{PIPELINE_PARTITION_NAME_LABEL, pipeline_metric_labels, pipeline_metrics};
 use crate::shared::grpc::utc_from_timestamp;
 use crate::tracker::TrackerHandle;
 use crate::watermark::isb::ISBWatermarkHandle;
-use crate::{Result, metrics};
 
 const ACK_RETRY_INTERVAL: u64 = 100;
 const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
@@ -173,15 +171,15 @@ impl JetStreamReader {
 
         let handle: JoinHandle<Result<()>> = tokio::spawn({
             async move {
-                let mut labels = pipeline_forward_metric_labels(&self.vertex_type).clone();
+                let mut labels = pipeline_metric_labels(&self.vertex_type).clone();
+                labels.push((
+                    PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                    self.stream.name.to_string(),
+                ));
+
                 let semaphore = Arc::new(Semaphore::new(MAX_ACK_PENDING));
                 let mut processed_msgs_count: usize = 0;
                 let mut last_logged_at = Instant::now();
-
-                labels.push((
-                    metrics::PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                    self.stream.name.to_string(),
-                ));
 
                 let mut message_stream = self.consumer.messages().await.map_err(|e| {
                     Error::ISB(format!(
@@ -202,7 +200,6 @@ impl JetStreamReader {
                                 info!(stream=?self.stream, "Stream has been closed");
                                 break;
                             };
-
                             let jetstream_message = match message {
                                 Ok(message) => message,
                                 Err(e) => {
@@ -210,6 +207,7 @@ impl JetStreamReader {
                                     continue;
                                 }
                             };
+                            let message_processing_start = Instant::now();
 
                             let js_message = JSWrappedMessage {
                                 partition_idx: self.stream.partition,
@@ -242,6 +240,7 @@ impl JetStreamReader {
                             // Reserve a permit before sending the message to the channel.
                             let permit = Arc::clone(&semaphore).acquire_owned().await.expect("Failed to acquire semaphore permit");
                             tokio::spawn(Self::start_work_in_progress(
+                                labels.clone(),
                                 message.offset.clone(),
                                 jetstream_message,
                                 ack_rx,
@@ -250,12 +249,35 @@ impl JetStreamReader {
                                 cancel_token.clone(),
                             ));
 
+                            let message_bytes = message.value.len();
                             messages_tx.send(message).await.expect("Failed to send message to channel");
+                            // increment read metrics for pipeline
                             pipeline_metrics()
                                 .forwarder
                                 .read_total
                                 .get_or_create(&labels)
                                 .inc();
+                            // since wmb messages are already ignored
+                            pipeline_metrics()
+                                .forwarder
+                                .data_read_total
+                                .get_or_create(&labels)
+                                .inc();
+                            pipeline_metrics()
+                                .forwarder
+                                .read_bytes_total
+                                .get_or_create(&labels)
+                                .inc_by(message_bytes as u64);
+                            pipeline_metrics()
+                                .forwarder
+                                .data_read_bytes_total
+                                .get_or_create(&labels)
+                                .inc_by(message_bytes as u64);
+                            pipeline_metrics()
+                                .forwarder
+                                .read_processing_time
+                                .get_or_create(&labels)
+                                .observe(message_processing_start.elapsed().as_micros() as f64);
 
                             processed_msgs_count += 1;
                             if last_logged_at.elapsed().as_secs() >= 1 {
@@ -287,6 +309,7 @@ impl JetStreamReader {
     // We will continuously retry if there is an error in acknowledging the message as work-in-progress.
     // If the sender end of the ack_rx channel was dropped before sending a final Ack or Nak (due to some unhandled/unknown failure), we will send a Nak to Jetstream.
     async fn start_work_in_progress(
+        labels: Vec<(String, String)>,
         offset: Offset,
         msg: JetstreamMessage,
         mut ack_rx: oneshot::Receiver<ReadAck>,
@@ -331,14 +354,14 @@ impl JetStreamReader {
 
                     pipeline_metrics()
                         .forwarder
-                        .ack_time
-                        .get_or_create(pipeline_isb_metric_labels())
+                        .ack_processing_time
+                        .get_or_create(&labels)
                         .observe(start.elapsed().as_micros() as f64);
 
                     pipeline_metrics()
                         .forwarder
                         .ack_total
-                        .get_or_create(pipeline_isb_metric_labels())
+                        .get_or_create(&labels)
                         .inc();
                     return;
                 }

@@ -123,6 +123,7 @@ async fn start_source_forwarder(
         tracker_handle.clone(),
         cln_token.clone(),
         source_watermark_handle.clone().map(WatermarkHandle::Source),
+        config.vertex_type_config.to_string(),
     )
     .await;
 
@@ -217,6 +218,7 @@ async fn start_map_forwarder(
         tracker_handle.clone(),
         cln_token.clone(),
         watermark_handle.clone().map(WatermarkHandle::ISB),
+        config.vertex_type_config.to_string(),
     )
     .await;
 
@@ -368,6 +370,7 @@ async fn start_reduce_forwarder(
         tracker_handle.clone(),
         cln_token.clone(),
         watermark_handle.clone().map(WatermarkHandle::ISB),
+        config.vertex_type_config.to_string(),
     )
     .await;
 
@@ -579,6 +582,7 @@ async fn create_buffer_writer(
     tracker_handle: TrackerHandle,
     cln_token: CancellationToken,
     watermark_handle: Option<WatermarkHandle>,
+    vertex_type: String,
 ) -> JetstreamWriter {
     JetstreamWriter::new(
         config.to_vertex_config.clone(),
@@ -587,6 +591,7 @@ async fn create_buffer_writer(
         tracker_handle,
         cln_token,
         watermark_handle,
+        vertex_type,
     )
 }
 

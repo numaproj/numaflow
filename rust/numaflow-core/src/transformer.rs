@@ -1,4 +1,5 @@
 use bytes::Bytes;
+use kube::core::labels;
 use numaflow_monitor::runtime;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use std::sync::Arc;
@@ -9,9 +10,13 @@ use tonic::{Code, Status};
 use tracing::error;
 
 use crate::Result;
+use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
 use crate::message::Message;
-use crate::metrics::{monovertex_metrics, mvtx_forward_metric_labels};
+use crate::metrics::{
+    PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
+    pipeline_metric_labels, pipeline_metrics,
+};
 use crate::tracker::TrackerHandle;
 use crate::transformer::user_defined::UserDefinedTransformer;
 
@@ -100,8 +105,6 @@ impl Transformer {
         read_msg: Message,
         cln_token: CancellationToken,
     ) -> Result<Vec<Message>> {
-        let start_time = tokio::time::Instant::now();
-
         let (sender, receiver) = oneshot::channel();
         let msg = TransformerActorMessage {
             message: read_msg,
@@ -139,12 +142,6 @@ impl Transformer {
             futures::future::pending::<()>().await;
         }
 
-        monovertex_metrics()
-            .transformer
-            .time
-            .get_or_create(mvtx_forward_metric_labels())
-            .observe(start_time.elapsed().as_micros() as f64);
-
         Ok(response)
     }
 
@@ -154,9 +151,24 @@ impl Transformer {
         messages: Vec<Message>,
         cln_token: CancellationToken,
     ) -> Result<Vec<Message>> {
+        let batch_start_time = tokio::time::Instant::now();
         let transform_handle = self.sender.clone();
         let tracker_handle = self.tracker_handle.clone();
         let semaphore = Arc::new(Semaphore::new(self.concurrency));
+        let mut labels = pipeline_metric_labels("Source").clone();
+        labels.push((
+            PIPELINE_PARTITION_NAME_LABEL.to_string(),
+            get_vertex_name().to_string(),
+        ));
+
+        // increment read message count for pipeline
+        if !is_mono_vertex() {
+            pipeline_metrics()
+                .source_forwarder
+                .transformer_read_total
+                .get_or_create(&labels)
+                .inc_by(messages.len() as u64);
+        }
 
         let tasks: Vec<_> = messages
             .into_iter()
@@ -200,23 +212,72 @@ impl Transformer {
         for task in tasks {
             match task.await {
                 Ok(Ok(mut msgs)) => transformed_messages.append(&mut msgs),
-                Ok(Err(e)) => return Err(e),
+                Ok(Err(e)) => {
+                    // increment transform error metric for pipeline
+                    // error here indicates that there was some problem in transformation
+                    if !is_mono_vertex() {
+                        pipeline_metrics()
+                            .source_forwarder
+                            .transformer_error_total
+                            .get_or_create(&labels)
+                            .inc();
+                    }
+                    return Err(e);
+                }
                 Err(e) => return Err(Error::Transformer(format!("task join failed: {}", e))),
             }
         }
+        // batch transformation was successful
+        // send transformer metrics
         let dropped_messages_count = transformed_messages
             .iter()
             .filter(|message| message.dropped())
             .count();
+        let elapsed_time = batch_start_time.elapsed().as_micros() as f64;
+        let write_messages_count = transformed_messages.len() - dropped_messages_count;
+        Self::send_transformer_metrics(
+            dropped_messages_count,
+            elapsed_time,
+            write_messages_count,
+            &labels,
+        );
+        Ok(transformed_messages)
+    }
 
-        if dropped_messages_count > 0 {
+    fn send_transformer_metrics(
+        dropped_messages_count: usize,
+        elapsed_time: f64,
+        write_messages_count: usize,
+        labels: &Vec<(String, String)>,
+    ) {
+        if is_mono_vertex() {
+            monovertex_metrics()
+                .transformer
+                .time
+                .get_or_create(mvtx_forward_metric_labels())
+                .observe(elapsed_time);
             monovertex_metrics()
                 .transformer
                 .dropped_total
                 .get_or_create(mvtx_forward_metric_labels())
                 .inc_by(dropped_messages_count as u64);
+        } else {
+            pipeline_metrics()
+                .source_forwarder
+                .transformer_processing_time
+                .get_or_create(labels)
+                .observe(elapsed_time);
+            pipeline_metrics()
+                .source_forwarder
+                .transformer_drop_total
+                .get_or_create(labels)
+                .inc_by(dropped_messages_count as u64);
+            pipeline_metrics()
+                .source_forwarder
+                .transformer_write_total
+                .get_or_create(labels)
+                .inc_by(write_messages_count as u64);
         }
-        Ok(transformed_messages)
     }
 
     pub(crate) async fn ready(&mut self) -> bool {
