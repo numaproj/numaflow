@@ -77,7 +77,6 @@ const UDF_WRITE_TOTAL: &str = "udf_write";
 const WRITE_BYTES_TOTAL: &str = "write_bytes";
 const WRITE_ERROR_TOTAL: &str = "write_error";
 const ACK_TOTAL: &str = "ack";
-const ACK_ERROR_TOTAL: &str = "ack_error";
 const UDF_ERROR_TOTAL: &str = "udf_error";
 
 const SINK_WRITE_TOTAL: &str = "write";
@@ -289,7 +288,6 @@ pub(crate) struct PipelineForwarderMetrics {
 
     // ack counters
     pub(crate) ack_total: Family<Vec<(String, String)>, Counter>,
-    pub(crate) ack_error_total: Family<Vec<(String, String)>, Counter>,
 
     // udf specific counters
     pub(crate) udf_read_total: Family<Vec<(String, String)>, Counter>,
@@ -531,7 +529,6 @@ impl PipelineMetrics {
                 drop_total: Family::<Vec<(String, String)>, Counter>::default(),
                 drop_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
                 ack_total: Family::<Vec<(String, String)>, Counter>::default(),
-                ack_error_total: Family::<Vec<(String, String)>, Counter>::default(),
                 udf_read_total: Family::<Vec<(String, String)>, Counter>::default(),
                 udf_drop_total: Family::<Vec<(String, String)>, Counter>::default(),
                 udf_error_total: Family::<Vec<(String, String)>, Counter>::default(),
@@ -665,11 +662,6 @@ impl PipelineMetrics {
             ACK_PROCESSING_TIME,
             "Processing times of acknowledgment operations (100 microseconds to 10 minutes)",
             metrics.forwarder.ack_processing_time.clone(),
-        );
-        forwarder_registry.register(
-            ACK_ERROR_TOTAL,
-            "Total number of Acknowledged Errors",
-            metrics.forwarder.ack_error_total.clone(),
         );
         forwarder_registry.register(
             UDF_ERROR_TOTAL,

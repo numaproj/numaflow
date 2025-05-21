@@ -31,7 +31,7 @@ use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
 use crate::message::Message;
 use crate::metrics::{
-    monovertex_metrics, mvtx_forward_metric_labels, pipeline_forward_metric_labels,
+    monovertex_metrics, mvtx_forward_metric_labels, pipeline_drop_metric_labels,
     pipeline_metric_labels_with_partition, pipeline_metrics,
 };
 use crate::sink::serve::{ServingStore, StoreEntry};
@@ -451,15 +451,11 @@ impl SinkWriter {
                         .map(|msg| msg.offset.clone())
                         .collect::<Vec<_>>();
 
-                    let total_msgs = batch.len();
                     // filter out the messages which needs to be dropped
                     let batch = batch
                         .into_iter()
                         .filter(|msg| !msg.dropped())
                         .collect::<Vec<_>>();
-
-                    let sink_start = time::Instant::now();
-                    let total_valid_msgs = batch.len();
                     match self.write(batch.clone(), cln_token.clone()).await {
                         Ok(_) => {
                             for offset in offsets {
@@ -483,26 +479,6 @@ impl SinkWriter {
                             self.shutting_down = true;
                         }
                     }
-
-                    // publish sink metrics
-                    if is_mono_vertex() {
-                        monovertex_metrics()
-                            .sink
-                            .time
-                            .get_or_create(mvtx_forward_metric_labels())
-                            .observe(sink_start.elapsed().as_micros() as f64);
-                    } else {
-                        pipeline_metrics()
-                            .forwarder
-                            .write_processing_time
-                            .get_or_create(pipeline_forward_metric_labels("Sink"))
-                            .observe(sink_start.elapsed().as_micros() as f64);
-                        pipeline_metrics()
-                            .forwarder
-                            .drop_total
-                            .get_or_create(pipeline_forward_metric_labels("Sink"))
-                            .inc_by((total_msgs - total_valid_msgs) as u64);
-                    }
                 }
                 self.final_result.clone()
             }
@@ -520,7 +496,9 @@ impl SinkWriter {
             return Ok(());
         }
 
+        let write_start_time = tokio::time::Instant::now();
         let total_msgs = messages.len();
+        let total_msgs_bytes: usize = messages.iter().map(|msg| msg.value.len()).sum();
         let mut attempts = 1;
         let mut error_map = HashMap::new();
         let mut fallback_msgs = Vec::new();
@@ -597,16 +575,17 @@ impl SinkWriter {
         }
 
         let fb_msgs_total = fallback_msgs.len();
+        let fb_msgs_bytes_total: usize = fallback_msgs.iter().map(|msg| msg.value.len()).sum();
         // If there are fallback messages, write them to the fallback sink
         if !fallback_msgs.is_empty() {
             let fallback_sink_start = time::Instant::now();
-            let fb_msgs_bytes_total: usize = fallback_msgs.iter().map(|msg| msg.value.len()).sum();
             self.handle_fallback_messages(fallback_msgs, retry_config)
                 .await?;
             Self::send_fb_sink_metrics(fb_msgs_total, fb_msgs_bytes_total, fallback_sink_start);
         }
 
         let serving_msgs_total = serving_msgs.len();
+        let serving_msgs_bytes_total: usize = serving_msgs.iter().map(|msg| msg.value.len()).sum();
         // If there are serving messages, write them to the serving store
         if !serving_msgs.is_empty() {
             self.handle_serving_messages(serving_msgs).await?;
@@ -615,9 +594,14 @@ impl SinkWriter {
         if is_mono_vertex() {
             monovertex_metrics()
                 .sink
+                .time
+                .get_or_create(mvtx_forward_metric_labels())
+                .observe(write_start_time.elapsed().as_micros() as f64);
+            monovertex_metrics()
+                .sink
                 .write_total
                 .get_or_create(mvtx_forward_metric_labels())
-                .inc_by((total_msgs - fb_msgs_total - serving_msgs_total) as u64);
+                .inc_by((total_msgs - fb_msgs_total) as u64);
             monovertex_metrics()
                 .sink
                 .write_errors_total
@@ -627,8 +611,35 @@ impl SinkWriter {
             pipeline_metrics()
                 .forwarder
                 .write_total
-                .get_or_create(pipeline_forward_metric_labels("Sink"))
-                .inc_by(total_msgs as u64);
+                .get_or_create(pipeline_metric_labels_with_partition(
+                    "Sink",
+                    get_vertex_name(),
+                ))
+                .inc_by((total_msgs - fb_msgs_total - serving_msgs_total) as u64);
+            pipeline_metrics()
+                .forwarder
+                .write_bytes_total
+                .get_or_create(pipeline_metric_labels_with_partition(
+                    "Sink",
+                    get_vertex_name(),
+                ))
+                .inc_by((total_msgs_bytes - fb_msgs_bytes_total - serving_msgs_bytes_total) as u64);
+            pipeline_metrics()
+                .forwarder
+                .write_processing_time
+                .get_or_create(pipeline_metric_labels_with_partition(
+                    "Sink",
+                    get_vertex_name(),
+                ))
+                .observe(write_start_time.elapsed().as_micros() as f64);
+            pipeline_metrics()
+                .forwarder
+                .write_error_total
+                .get_or_create(pipeline_metric_labels_with_partition(
+                    "Sink",
+                    get_vertex_name(),
+                ))
+                .inc_by((write_errors_total) as u64);
         }
 
         Ok(())
@@ -671,6 +682,16 @@ impl SinkWriter {
                         .sink
                         .dropped_total
                         .get_or_create(mvtx_forward_metric_labels())
+                        .inc_by((messages_to_send.len()) as u64);
+                } else {
+                    pipeline_metrics()
+                        .forwarder
+                        .drop_total
+                        .get_or_create(pipeline_drop_metric_labels(
+                            "Sink",
+                            get_vertex_name(),
+                            "retries exhausted in the Sink",
+                        ))
                         .inc_by((messages_to_send.len()) as u64);
                 }
             }
