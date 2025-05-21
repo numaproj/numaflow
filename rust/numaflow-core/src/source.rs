@@ -9,8 +9,7 @@ use crate::error::{Error, Result};
 use crate::message::ReadAck;
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
-    pipeline_forward_metric_labels, pipeline_isb_metric_labels, pipeline_metric_labels,
-    pipeline_metrics,
+    pipeline_isb_metric_labels, pipeline_metric_labels, pipeline_metrics,
 };
 use crate::tracker::TrackerHandle;
 use crate::{

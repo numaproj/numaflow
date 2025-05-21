@@ -807,31 +807,7 @@ pub(crate) fn mvtx_forward_metric_labels() -> &'static Vec<(String, String)> {
     })
 }
 
-static PIPELINE_FORWARD_METRICS_LABELS: OnceLock<Vec<(String, String)>> = OnceLock::new();
 static PIPELINE_METRIC_LABELS: OnceLock<Vec<(String, String)>> = OnceLock::new();
-
-pub(crate) fn pipeline_forward_metric_labels(vertex_type: &str) -> &'static Vec<(String, String)> {
-    PIPELINE_FORWARD_METRICS_LABELS.get_or_init(|| {
-        vec![
-            (
-                PIPELINE_NAME_LABEL.to_string(),
-                get_pipeline_name().to_string(),
-            ),
-            (
-                PIPELINE_REPLICA_LABEL.to_string(),
-                get_vertex_replica().to_string(),
-            ),
-            (
-                PIPELINE_VERTEX_TYPE_LABEL.to_string(),
-                vertex_type.to_string(),
-            ),
-            (
-                PIPELINE_VERTEX_LABEL.to_string(),
-                get_vertex_name().to_string(),
-            ),
-        ]
-    })
-}
 
 pub(crate) fn pipeline_metric_labels(vertex_type: &str) -> &'static Vec<(String, String)> {
     PIPELINE_METRIC_LABELS.get_or_init(|| {
@@ -1216,8 +1192,7 @@ async fn expose_pending_metrics_(
                                 .get_or_create(&metric_labels)
                                 .set(pending);
                         } else {
-                            let mut metric_labels =
-                                pipeline_forward_metric_labels("source").clone();
+                            let mut metric_labels = pipeline_metric_labels("source").clone();
                             metric_labels.push((
                                 PIPELINE_PARTITION_NAME_LABEL.to_string(),
                                 "source".to_string(),
@@ -1240,7 +1215,7 @@ async fn expose_pending_metrics_(
                             if pending != -1 {
                                 info!("Pending messages {:?}", pending);
                                 let mut metric_labels =
-                                    pipeline_forward_metric_labels(reader.name()).clone();
+                                    pipeline_metric_labels(reader.name()).clone();
                                 metric_labels.push((
                                     PIPELINE_PARTITION_NAME_LABEL.to_string(),
                                     reader.name().to_string(),
@@ -1376,7 +1351,7 @@ async fn expose_pending_metrics(
                             .get_or_create(&metric_labels)
                             .set(pending);
                     } else {
-                        let mut metric_labels = pipeline_forward_metric_labels(name).clone();
+                        let mut metric_labels = pipeline_metric_labels(name).clone();
                         metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
                         metric_labels
                             .push((PIPELINE_PARTITION_NAME_LABEL.to_string(), name.to_string()));
@@ -1749,7 +1724,7 @@ mod tests {
 
         {
             for (i, (label, _)) in lookback_seconds_map.iter().enumerate() {
-                let mut metric_labels = pipeline_forward_metric_labels("stream1").clone();
+                let mut metric_labels = pipeline_metric_labels("stream1").clone();
                 metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
                 metric_labels.push((
                     PIPELINE_PARTITION_NAME_LABEL.to_string(),
@@ -1761,7 +1736,7 @@ mod tests {
                     .get();
                 stored_values_stream_one[i] = guage;
 
-                let mut metric_labels = pipeline_forward_metric_labels("stream2").clone();
+                let mut metric_labels = pipeline_metric_labels("stream2").clone();
                 metric_labels.push((PENDING_PERIOD_LABEL.to_string(), (*label).to_string()));
                 metric_labels.push((
                     PIPELINE_PARTITION_NAME_LABEL.to_string(),
