@@ -856,35 +856,6 @@ pub(crate) fn pipeline_metric_labels(vertex_type: &str) -> &'static Vec<(String,
     })
 }
 
-// Do not use OnceLock here as partition_name can be different for same vertex type
-pub(crate) fn pipeline_metric_labels_with_partition(
-    vertex_type: &str,
-    partition_name: &str,
-) -> Vec<(String, String)> {
-    vec![
-        (
-            PIPELINE_VERTEX_LABEL.to_string(),
-            get_vertex_name().to_string(),
-        ),
-        (
-            PIPELINE_NAME_LABEL.to_string(),
-            get_pipeline_name().to_string(),
-        ),
-        (
-            PIPELINE_VERTEX_TYPE_LABEL.to_string(),
-            vertex_type.to_string(),
-        ),
-        (
-            PIPELINE_REPLICA_LABEL.to_string(),
-            get_vertex_replica().to_string(),
-        ),
-        (
-            PIPELINE_PARTITION_NAME_LABEL.to_string(),
-            partition_name.to_string(),
-        ),
-    ]
-}
-
 pub(crate) fn pipeline_drop_metric_labels(
     vertex_type: &str,
     partition_name: &str,

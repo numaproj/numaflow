@@ -24,8 +24,8 @@ use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, Offset};
 use crate::metrics::{
-    pipeline_drop_metric_labels, pipeline_isb_metric_labels, pipeline_metric_labels,
-    pipeline_metric_labels_with_partition, pipeline_metrics,
+    PIPELINE_PARTITION_NAME_LABEL, pipeline_drop_metric_labels, pipeline_isb_metric_labels,
+    pipeline_metric_labels, pipeline_metrics,
 };
 use crate::shared::forward;
 use crate::tracker::TrackerHandle;
@@ -288,29 +288,25 @@ impl JetstreamWriter {
         message: Message,
         write_processing_start: Instant,
     ) {
+        let mut labels = pipeline_metric_labels(vertex_type).clone();
+        labels.push((
+            PIPELINE_PARTITION_NAME_LABEL.to_string(),
+            partition_name.to_string(),
+        ));
         pipeline_metrics()
             .forwarder
             .write_total
-            .get_or_create(&pipeline_metric_labels_with_partition(
-                vertex_type,
-                partition_name,
-            ))
+            .get_or_create(&labels)
             .inc();
         pipeline_metrics()
             .forwarder
             .write_bytes_total
-            .get_or_create(&pipeline_metric_labels_with_partition(
-                vertex_type,
-                partition_name,
-            ))
+            .get_or_create(&labels)
             .inc_by(message.value.len() as u64);
         pipeline_metrics()
             .forwarder
             .write_processing_time
-            .get_or_create(&pipeline_metric_labels_with_partition(
-                vertex_type,
-                partition_name,
-            ))
+            .get_or_create(&labels)
             .observe(write_processing_start.elapsed().as_micros() as f64);
     }
 

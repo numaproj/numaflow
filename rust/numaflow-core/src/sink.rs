@@ -31,8 +31,8 @@ use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
 use crate::message::Message;
 use crate::metrics::{
-    monovertex_metrics, mvtx_forward_metric_labels, pipeline_drop_metric_labels,
-    pipeline_metric_labels_with_partition, pipeline_metrics,
+    PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
+    pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics,
 };
 use crate::sink::serve::{ServingStore, StoreEntry};
 use crate::tracker::TrackerHandle;
@@ -608,37 +608,30 @@ impl SinkWriter {
                 .get_or_create(mvtx_forward_metric_labels())
                 .inc_by((write_errors_total) as u64);
         } else {
+            let mut labels = pipeline_metric_labels("Sink").clone();
+            labels.push((
+                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                get_vertex_name().to_string(),
+            ));
             pipeline_metrics()
                 .forwarder
                 .write_total
-                .get_or_create(&pipeline_metric_labels_with_partition(
-                    "Sink",
-                    get_vertex_name(),
-                ))
+                .get_or_create(&labels)
                 .inc_by((total_msgs - fb_msgs_total - serving_msgs_total) as u64);
             pipeline_metrics()
                 .forwarder
                 .write_bytes_total
-                .get_or_create(&pipeline_metric_labels_with_partition(
-                    "Sink",
-                    get_vertex_name(),
-                ))
+                .get_or_create(&labels)
                 .inc_by((total_msgs_bytes - fb_msgs_bytes_total - serving_msgs_bytes_total) as u64);
             pipeline_metrics()
                 .forwarder
                 .write_processing_time
-                .get_or_create(&pipeline_metric_labels_with_partition(
-                    "Sink",
-                    get_vertex_name(),
-                ))
+                .get_or_create(&labels)
                 .observe(write_start_time.elapsed().as_micros() as f64);
             pipeline_metrics()
                 .forwarder
                 .write_error_total
-                .get_or_create(&pipeline_metric_labels_with_partition(
-                    "Sink",
-                    get_vertex_name(),
-                ))
+                .get_or_create(&labels)
                 .inc_by((write_errors_total) as u64);
         }
 
@@ -817,13 +810,15 @@ impl SinkWriter {
                                     *fallback_error_map.entry(err_msg.clone()).or_insert(0) += 1;
                                     // increment fb sink error metric for pipeline
                                     if !is_mono_vertex() {
+                                        let mut labels = pipeline_metric_labels("Sink").clone();
+                                        labels.push((
+                                            PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                                            get_vertex_name().to_string(),
+                                        ));
                                         pipeline_metrics()
                                             .sink_forwarder
                                             .fbsink_write_error_total
-                                            .get_or_create(&pipeline_metric_labels_with_partition(
-                                                "Sink",
-                                                get_vertex_name(),
-                                            ))
+                                            .get_or_create(&labels)
                                             .inc_by(1);
                                     }
                                     true
@@ -949,30 +944,26 @@ impl SinkWriter {
                 .get_or_create(mvtx_forward_metric_labels())
                 .observe(fallback_sink_start.elapsed().as_micros() as f64);
         } else {
+            let mut labels = pipeline_metric_labels("Sink").clone();
+            labels.push((
+                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                get_vertex_name().to_string(),
+            ));
             pipeline_metrics()
                 .sink_forwarder
                 .fbsink_write_total
-                .get_or_create(&pipeline_metric_labels_with_partition(
-                    "Sink",
-                    get_vertex_name(),
-                ))
+                .get_or_create(&labels)
                 .inc_by(fb_msgs_total as u64);
             pipeline_metrics()
                 .sink_forwarder
                 .fbsink_write_bytes_total
-                .get_or_create(&pipeline_metric_labels_with_partition(
-                    "Sink",
-                    get_vertex_name(),
-                ))
+                .get_or_create(&labels)
                 .inc_by(fb_msgs_bytes_total as u64);
 
             pipeline_metrics()
                 .sink_forwarder
                 .fbsink_write_processing_time
-                .get_or_create(&pipeline_metric_labels_with_partition(
-                    "Sink",
-                    get_vertex_name(),
-                ))
+                .get_or_create(&labels)
                 .observe(fallback_sink_start.elapsed().as_micros() as f64);
         }
     }

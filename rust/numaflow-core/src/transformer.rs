@@ -1,4 +1,5 @@
 use bytes::Bytes;
+use kube::core::labels;
 use numaflow_monitor::runtime;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use std::sync::Arc;
@@ -13,8 +14,8 @@ use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
 use crate::message::Message;
 use crate::metrics::{
-    monovertex_metrics, mvtx_forward_metric_labels, pipeline_metric_labels_with_partition,
-    pipeline_metrics,
+    PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
+    pipeline_metric_labels, pipeline_metrics,
 };
 use crate::tracker::TrackerHandle;
 use crate::transformer::user_defined::UserDefinedTransformer;
@@ -154,16 +155,18 @@ impl Transformer {
         let transform_handle = self.sender.clone();
         let tracker_handle = self.tracker_handle.clone();
         let semaphore = Arc::new(Semaphore::new(self.concurrency));
+        let mut labels = pipeline_metric_labels("Source").clone();
+        labels.push((
+            PIPELINE_PARTITION_NAME_LABEL.to_string(),
+            get_vertex_name().to_string(),
+        ));
 
         // increment read message count for pipeline
         if !is_mono_vertex() {
             pipeline_metrics()
                 .source_forwarder
                 .transformer_read_total
-                .get_or_create(&pipeline_metric_labels_with_partition(
-                    "Source",
-                    get_vertex_name(),
-                ))
+                .get_or_create(&labels)
                 .inc_by(messages.len() as u64);
         }
 
@@ -216,10 +219,7 @@ impl Transformer {
                         pipeline_metrics()
                             .source_forwarder
                             .transformer_error_total
-                            .get_or_create(&pipeline_metric_labels_with_partition(
-                                "Source",
-                                get_vertex_name(),
-                            ))
+                            .get_or_create(&labels)
                             .inc();
                     }
                     return Err(e);
@@ -235,7 +235,12 @@ impl Transformer {
             .count();
         let elapsed_time = batch_start_time.elapsed().as_micros() as f64;
         let write_messages_count = transformed_messages.len() - dropped_messages_count;
-        Self::send_transformer_metrics(dropped_messages_count, elapsed_time, write_messages_count);
+        Self::send_transformer_metrics(
+            dropped_messages_count,
+            elapsed_time,
+            write_messages_count,
+            &labels,
+        );
         Ok(transformed_messages)
     }
 
@@ -243,6 +248,7 @@ impl Transformer {
         dropped_messages_count: usize,
         elapsed_time: f64,
         write_messages_count: usize,
+        labels: &Vec<(String, String)>,
     ) {
         if is_mono_vertex() {
             monovertex_metrics()
@@ -259,26 +265,17 @@ impl Transformer {
             pipeline_metrics()
                 .source_forwarder
                 .transformer_processing_time
-                .get_or_create(&pipeline_metric_labels_with_partition(
-                    "Source",
-                    get_vertex_name(),
-                ))
+                .get_or_create(labels)
                 .observe(elapsed_time);
             pipeline_metrics()
                 .source_forwarder
                 .transformer_drop_total
-                .get_or_create(&pipeline_metric_labels_with_partition(
-                    "Source",
-                    get_vertex_name(),
-                ))
+                .get_or_create(labels)
                 .inc_by(dropped_messages_count as u64);
             pipeline_metrics()
                 .source_forwarder
                 .transformer_write_total
-                .get_or_create(&pipeline_metric_labels_with_partition(
-                    "Source",
-                    get_vertex_name(),
-                ))
+                .get_or_create(labels)
                 .inc_by(write_messages_count as u64);
         }
     }

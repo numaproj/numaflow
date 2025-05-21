@@ -23,7 +23,7 @@ use crate::config::get_vertex_name;
 use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, MessageID, MessageType, Metadata, Offset, ReadAck};
-use crate::metrics::{pipeline_metric_labels_with_partition, pipeline_metrics};
+use crate::metrics::{PIPELINE_PARTITION_NAME_LABEL, pipeline_metric_labels, pipeline_metrics};
 use crate::shared::grpc::utc_from_timestamp;
 use crate::tracker::TrackerHandle;
 use crate::watermark::isb::ISBWatermarkHandle;
@@ -171,9 +171,11 @@ impl JetStreamReader {
 
         let handle: JoinHandle<Result<()>> = tokio::spawn({
             async move {
-                let labels =
-                    pipeline_metric_labels_with_partition(&self.vertex_type, self.stream.name)
-                        .clone();
+                let mut labels = pipeline_metric_labels(&self.vertex_type).clone();
+                labels.push((
+                    PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                    self.stream.name.to_string(),
+                ));
 
                 let semaphore = Arc::new(Semaphore::new(MAX_ACK_PENDING));
                 let mut processed_msgs_count: usize = 0;

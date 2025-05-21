@@ -8,8 +8,9 @@ use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
 use crate::message::ReadAck;
 use crate::metrics::{
-    monovertex_metrics, mvtx_forward_metric_labels, pipeline_forward_metric_labels,
-    pipeline_isb_metric_labels, pipeline_metric_labels_with_partition, pipeline_metrics,
+    PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
+    pipeline_forward_metric_labels, pipeline_isb_metric_labels, pipeline_metric_labels,
+    pipeline_metrics,
 };
 use crate::tracker::TrackerHandle;
 use crate::{
@@ -326,8 +327,11 @@ impl Source {
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let (messages_tx, messages_rx) = mpsc::channel(2 * self.read_batch_size);
 
-        let pipeline_labels =
-            pipeline_metric_labels_with_partition("Source", get_vertex_name()).clone();
+        let mut pipeline_labels = pipeline_metric_labels("Source").clone();
+        pipeline_labels.push((
+            PIPELINE_PARTITION_NAME_LABEL.to_string(),
+            get_vertex_name().to_string(),
+        ));
 
         let mvtx_labels = mvtx_forward_metric_labels();
 
