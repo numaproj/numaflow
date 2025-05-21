@@ -34,7 +34,7 @@ use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::EdgeWatermarkConfig;
 use crate::error::{Error, Result};
 use crate::message::{IntOffset, Offset};
-use crate::reduce::reducer::aligned::windower::WindowManager;
+use crate::reduce::reducer::aligned::windower::AlignedWindowManager;
 use crate::watermark::idle::isb::ISBIdleDetector;
 use crate::watermark::isb::wm_fetcher::ISBWatermarkFetcher;
 use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
@@ -183,7 +183,7 @@ pub(crate) struct ISBWatermarkHandle {
     offset_set: Arc<Mutex<HashMap<u16, BTreeSet<OffsetWatermark>>>>,
     idle_manager: ISBIdleDetector,
     /// Window manager is used to compute the minimum watermark for the reduce vertex.
-    window_manager: Option<WindowManager>,
+    window_manager: Option<AlignedWindowManager>,
     latest_fetched_wm: Arc<Mutex<Watermark>>,
 }
 
@@ -198,7 +198,7 @@ impl ISBWatermarkHandle {
         config: &EdgeWatermarkConfig,
         to_vertex_configs: &[ToVertexConfig],
         cln_token: CancellationToken,
-        window_manager: Option<WindowManager>,
+        window_manager: Option<AlignedWindowManager>,
     ) -> Result<Self> {
         let (sender, receiver) = mpsc::channel(100);
 

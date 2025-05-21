@@ -24,7 +24,7 @@ use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::pipeline::pipeline::isb::BufferReaderConfig;
 use crate::reduce::pbq::PBQBuilder;
 use crate::reduce::reducer::aligned::reducer::AlignedReducer;
-use crate::reduce::reducer::aligned::windower::WindowManager;
+use crate::reduce::reducer::aligned::windower::AlignedWindowManager;
 use crate::reduce::reducer::aligned::windower::fixed::FixedWindowManager;
 use crate::reduce::reducer::aligned::windower::sliding::SlidingWindowManager;
 use crate::reduce::wal::segment::WalType;
@@ -299,7 +299,7 @@ async fn start_reduce_forwarder(
 ) -> Result<()> {
     let window_manager = match &reduce_vtx_config.reducer_config.window_config.window_type {
         WindowType::Fixed(fixed_config) => {
-            WindowManager::Fixed(FixedWindowManager::new(fixed_config.length))
+            AlignedWindowManager::Fixed(FixedWindowManager::new(fixed_config.length))
         }
         WindowType::Sliding(sliding_config) => {
             // sliding window needs to save state if WAL is configured to avoid duplicate processing
@@ -313,7 +313,7 @@ async fn start_reduce_forwarder(
                     None
                 };
 
-            WindowManager::Sliding(SlidingWindowManager::new(
+            AlignedWindowManager::Sliding(SlidingWindowManager::new(
                 sliding_config.length,
                 sliding_config.slide,
                 state_file_path,

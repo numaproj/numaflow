@@ -17,24 +17,24 @@ pub(crate) mod fixed;
 /// Sliding Window Operations.
 pub(crate) mod sliding;
 
-// Technically we can have a trait for WindowManager and implement it for Fixed and Sliding, but
+// Technically we can have a trait for AlignedWindowManager and implement it for Fixed and Sliding, but
 // the generics are getting in all the way from the bootup code. Also, we do not expect any other
 // window types in the future.
-/// WindowManager enum that can be either a FixedWindowManager or a SlidingWindowManager.
+/// AlignedWindowManager enum that can be either a FixedWindowManager or a SlidingWindowManager.
 #[derive(Debug, Clone)]
-pub(crate) enum WindowManager {
+pub(crate) enum AlignedWindowManager {
     /// Fixed window manager.
     Fixed(FixedWindowManager),
     /// Sliding window manager.
     Sliding(SlidingWindowManager),
 }
 
-impl WindowManager {
+impl AlignedWindowManager {
     /// Assigns windows to a message, dropping messages with event time earlier than the oldest window's start time
     pub(crate) fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage> {
         match self {
-            WindowManager::Fixed(manager) => manager.assign_windows(msg),
-            WindowManager::Sliding(manager) => manager.assign_windows(msg),
+            AlignedWindowManager::Fixed(manager) => manager.assign_windows(msg),
+            AlignedWindowManager::Sliding(manager) => manager.assign_windows(msg),
         }
     }
 
@@ -42,24 +42,24 @@ impl WindowManager {
     /// end time.
     pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage> {
         match self {
-            WindowManager::Fixed(manager) => manager.close_windows(watermark),
-            WindowManager::Sliding(manager) => manager.close_windows(watermark),
+            AlignedWindowManager::Fixed(manager) => manager.close_windows(watermark),
+            AlignedWindowManager::Sliding(manager) => manager.close_windows(watermark),
         }
     }
 
     /// Deletes a window is called after the window is closed and GC is done.
     pub(crate) fn delete_window(&self, window: Window) {
         match self {
-            WindowManager::Fixed(manager) => manager.gc_window(window),
-            WindowManager::Sliding(manager) => manager.gc_window(window),
+            AlignedWindowManager::Fixed(manager) => manager.gc_window(window),
+            AlignedWindowManager::Sliding(manager) => manager.gc_window(window),
         }
     }
 
     /// Returns the oldest window yet to be completed. This will be the lowest Watermark in the Vertex.
     pub(crate) fn oldest_window(&self) -> Option<Window> {
         match self {
-            WindowManager::Fixed(manager) => manager.oldest_window(),
-            WindowManager::Sliding(manager) => manager.oldest_window(),
+            AlignedWindowManager::Fixed(manager) => manager.oldest_window(),
+            AlignedWindowManager::Sliding(manager) => manager.oldest_window(),
         }
     }
 }
