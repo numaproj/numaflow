@@ -17,7 +17,9 @@ use crate::{
     metrics,
     reader::LagReader,
 };
+use chrono::Utc;
 use numaflow_jetstream::JetstreamSource;
+use numaflow_kafka::KafkaSource;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pulsar::source::PulsarSource;
 use numaflow_sqs::source::SqsSource;
@@ -51,6 +53,8 @@ pub(crate) mod pulsar;
 pub(crate) mod jetstream;
 
 pub(crate) mod sqs;
+
+pub(crate) mod kafka;
 
 use crate::transformer::Transformer;
 use crate::watermark::source::SourceWatermarkHandle;
@@ -89,6 +93,7 @@ pub(crate) enum SourceType {
     Pulsar(PulsarSource),
     Sqs(SqsSource),
     Jetstream(JetstreamSource),
+    Kafka(KafkaSource),
 }
 
 enum ActorMessage {
@@ -243,6 +248,12 @@ impl Source {
                     actor.run().await;
                 });
             }
+            SourceType::Kafka(kafka) => {
+                tokio::spawn(async move {
+                    let actor = SourceActor::new(receiver, kafka.clone(), kafka.clone(), kafka);
+                    actor.run().await;
+                });
+            }
         };
 
         Self {
@@ -334,6 +345,8 @@ impl Source {
                 false => 1,
             };
             let semaphore = Arc::new(Semaphore::new(max_ack_tasks));
+            let mut processed_msgs_count: usize = 0;
+            let mut last_logged_at = Instant::now();
 
             let mut result = Ok(());
             loop {
@@ -438,6 +451,17 @@ impl Source {
                         .send(message)
                         .await
                         .expect("send should not fail");
+
+                    processed_msgs_count += 1;
+                    if last_logged_at.elapsed().as_secs() >= 1 {
+                        info!(
+                            "Processed {} messages in {:?}",
+                            processed_msgs_count,
+                            Utc::now()
+                        );
+                        processed_msgs_count = 0;
+                        last_logged_at = Instant::now();
+                    }
                 }
             }
             info!(status=?result, "Source stopped, waiting for inflight messages to be acked");

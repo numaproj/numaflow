@@ -42,9 +42,7 @@ message KeyedWindow {
   repeated string keys = 4;
 }
 
-/**
- * SessionReduceRequest represents a request element.
- */
+// SessionReduceRequest represents a request element.
 message SessionReduceRequest {
   // WindowOperation represents a window operation.
   // For Aligned window values can be one of OPEN, CLOSE, EXPAND, MERGE and APPEND.
@@ -74,9 +72,8 @@ message SessionReduceRequest {
   WindowOperation operation = 2;
 }
 
-/**
- * SessionReduceResponse represents a response element.
- */
+
+// SessionReduceResponse represents a response element.
 message SessionReduceResponse {
   // Result represents a result element. It contains the result of the reduce function.
   message Result {
@@ -94,9 +91,8 @@ message SessionReduceResponse {
   bool EOF = 3;
 }
 
-/**
- * ReadyResponse is the health check result.
- */
+
+// ReadyResponse is the health check result.
 message ReadyResponse {
   bool ready = 1;
 }

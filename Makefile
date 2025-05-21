@@ -205,7 +205,7 @@ build-rust-in-docker:
 .PHONY: build-rust-in-docker-multi
 build-rust-in-docker-multi:
 	mkdir -p dist
-	docker run -v ./dist/cargo:/root/.cargo -v ./rust/:/app/ -w /app --rm ubuntu:24.04 bash build.sh
+	docker run -v ./dist/cargo:/root/.cargo -v ./rust/:/app/ -w /app --rm ubuntu:24.04 bash build.sh all
 	cp -pv rust/target/aarch64-unknown-linux-gnu/release/numaflow dist/numaflow-rs-linux-arm64
 	cp -pv rust/target/x86_64-unknown-linux-gnu/release/numaflow dist/numaflow-rs-linux-amd64
 	cp -pv rust/target/aarch64-unknown-linux-gnu/release/entrypoint dist/entrypoint-linux-arm64

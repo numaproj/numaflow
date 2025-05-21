@@ -1,13 +1,19 @@
 use std::time::Duration;
 
+use crate::config::components::reduce::ReducerType;
 use crate::config::components::sink::{SinkConfig, SinkType};
 use crate::config::components::source::{SourceConfig, SourceType};
 use crate::config::components::transformer::TransformerConfig;
 use crate::config::get_vertex_replica;
 use crate::config::pipeline::map::{MapMode, MapType, MapVtxConfig};
-use crate::config::pipeline::{DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET};
+use crate::config::pipeline::watermark::WatermarkConfig;
+use crate::config::pipeline::{
+    DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET, PipelineConfig,
+};
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
+use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
+use crate::reduce::reducer::aligned::windower::WindowManager;
 use crate::shared::grpc;
 use crate::shared::server_info::{ContainerType, Protocol, sdk_server_info};
 use crate::sink::serve::ServingStore;
@@ -15,14 +21,18 @@ use crate::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
 use crate::source::Source;
 use crate::source::generator::new_generator;
 use crate::source::jetstream::new_jetstream_source;
+use crate::source::kafka::new_kafka_source;
 use crate::source::pulsar::new_pulsar_source;
 use crate::source::sqs::new_sqs_source;
 use crate::source::user_defined::new_source;
 use crate::tracker::TrackerHandle;
 use crate::transformer::Transformer;
+use crate::watermark::isb::ISBWatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
 use crate::{config, error, metrics, source};
+use async_nats::jetstream::Context;
 use numaflow_pb::clients::map::map_client::MapClient;
+use numaflow_pb::clients::reduce::reduce_client::ReduceClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
@@ -408,6 +418,39 @@ pub async fn create_source(
                 watermark_handle,
             ))
         }
+        SourceType::Kafka(kafka_config) => {
+            let kafka = new_kafka_source(kafka_config.clone(), batch_size, read_timeout).await?;
+            Ok(Source::new(
+                batch_size,
+                source::SourceType::Kafka(kafka),
+                tracker_handle,
+                source_config.read_ahead,
+                transformer,
+                watermark_handle,
+            ))
+        }
+    }
+}
+
+/// Creates a user-defined aligned reducer client
+pub(crate) async fn create_aligned_reducer(
+    reducer_config: config::components::reduce::ReducerConfig,
+) -> crate::Result<UserDefinedAlignedReduce> {
+    match reducer_config.reducer_type {
+        ReducerType::UserDefined(config) => {
+            // Create gRPC channel
+            let channel = grpc::create_rpc_channel(config.socket_path.into()).await?;
+
+            // Create client
+            let client = UserDefinedAlignedReduce::new(
+                ReduceClient::new(channel)
+                    .max_encoding_message_size(config.grpc_max_message_size)
+                    .max_decoding_message_size(config.grpc_max_message_size),
+            )
+            .await;
+
+            Ok(client)
+        }
     }
 }
 
@@ -568,5 +611,31 @@ mod tests {
         source_server_handle.await.unwrap();
         sink_server_handle.await.unwrap();
         transformer_server_handle.await.unwrap();
+    }
+}
+
+/// Creates an ISBWatermarkHandle if watermark is enabled in the configuration
+pub async fn create_edge_watermark_handle(
+    config: &PipelineConfig,
+    js_context: &Context,
+    cln_token: &CancellationToken,
+    window_manager: Option<WindowManager>,
+) -> error::Result<Option<ISBWatermarkHandle>> {
+    match &config.watermark_config {
+        Some(WatermarkConfig::Edge(edge_config)) => {
+            let handle = ISBWatermarkHandle::new(
+                config.vertex_name,
+                config.replica,
+                config.read_timeout,
+                js_context.clone(),
+                edge_config,
+                &config.to_vertex_config,
+                cln_token.clone(),
+                window_manager,
+            )
+            .await?;
+            Ok(Some(handle))
+        }
+        _ => Ok(None),
     }
 }

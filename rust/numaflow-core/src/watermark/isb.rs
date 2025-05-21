@@ -21,8 +21,10 @@
 //! ```
 use std::cmp::Ordering;
 use std::collections::{BTreeSet, HashMap};
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
-
+use tokio::sync::mpsc;
 use tokio::sync::mpsc::Receiver;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
@@ -32,6 +34,7 @@ use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::EdgeWatermarkConfig;
 use crate::error::{Error, Result};
 use crate::message::{IntOffset, Offset};
+use crate::reduce::reducer::aligned::windower::WindowManager;
 use crate::watermark::idle::isb::ISBIdleDetector;
 use crate::watermark::isb::wm_fetcher::ISBWatermarkFetcher;
 use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
@@ -43,24 +46,23 @@ pub(crate) mod wm_publisher;
 
 /// Messages that can be sent to the [ISBWatermarkActor].
 enum ISBWaterMarkActorMessage {
-    FetchWatermark {
+    Fetch {
         offset: IntOffset,
         oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
     },
-    PublishWatermark {
-        offset: IntOffset,
+    Publish {
         stream: Stream,
+        offset: i64,
+        watermark: i64,
+        is_idle: bool,
     },
-    RemoveOffset(IntOffset),
-    InsertOffset {
-        offset: IntOffset,
-        watermark: Watermark,
+    FetchHeadIdle {
+        oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
     },
-    CheckAndPublishIdleWatermark,
 }
 
 /// Tuple of offset and watermark. We will use this to track the inflight messages.
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Eq, PartialEq, Debug, Clone)]
 struct OffsetWatermark {
     /// offset can be -1 if watermark cannot be derived.
     offset: i64,
@@ -81,158 +83,113 @@ impl PartialOrd for OffsetWatermark {
 }
 
 /// EdgeWatermarkActor comprises EdgeFetcher and EdgePublisher.
-/// Tracks the watermarks of all the inflight messages for each partition, and publishes
-/// the lowest watermark.
+/// Only responsible for the actual fetch and publish operations.
 struct ISBWatermarkActor {
     fetcher: ISBWatermarkFetcher,
     publisher: ISBWatermarkPublisher,
-    /// BTreeSet is used to track the watermarks of the inflight messages because we frequently
-    /// need to get the lowest watermark among the inflight messages and BTreeSet provides O(1)
-    /// time complexity for getting the lowest watermark, even though insertion and deletion are
-    /// O(log n). If we use map or hashset, our lowest watermark fetch call would be O(n) even
-    /// though insertion and deletion are O(1). We do almost same amount insertion, deletion and
-    /// getting the lowest watermark so BTreeSet is the best choice.
-    offset_set: HashMap<u16, BTreeSet<OffsetWatermark>>,
-    idle_manager: ISBIdleDetector,
 }
 
 impl ISBWatermarkActor {
-    fn new(
-        fetcher: ISBWatermarkFetcher,
-        publisher: ISBWatermarkPublisher,
-        idle_manager: ISBIdleDetector,
-    ) -> Self {
-        Self {
-            fetcher,
-            publisher,
-            offset_set: HashMap::new(),
-            idle_manager,
-        }
+    fn new(fetcher: ISBWatermarkFetcher, publisher: ISBWatermarkPublisher) -> Self {
+        Self { fetcher, publisher }
     }
 
     /// run listens for messages and handles them
     async fn run(mut self, mut receiver: Receiver<ISBWaterMarkActorMessage>) {
         while let Some(message) = receiver.recv().await {
             if let Err(e) = self.handle_message(message).await {
-                error!("error handling message: {:?}", e);
+                error!("error handling watermark actor message: {:?}", e);
             }
         }
     }
 
-    /// handle_message handles the incoming actor message.
     async fn handle_message(&mut self, message: ISBWaterMarkActorMessage) -> Result<()> {
         match message {
             // fetches the watermark for the given offset
-            ISBWaterMarkActorMessage::FetchWatermark { offset, oneshot_tx } => {
-                let watermark = self
-                    .fetcher
-                    .fetch_watermark(offset.offset, offset.partition_idx);
-
-                oneshot_tx
-                    .send(Ok(watermark))
-                    .map_err(|_| Error::Watermark("failed to send response".to_string()))?;
+            ISBWaterMarkActorMessage::Fetch { offset, oneshot_tx } => {
+                self.handle_fetch_watermark(offset, oneshot_tx).await
             }
 
-            // gets the lowest watermark among the inflight requests and publishes the watermark
-            // for the offset and stream
-            ISBWaterMarkActorMessage::PublishWatermark { offset, stream } => {
-                let min_wm = self
-                    .get_lowest_watermark()
-                    .unwrap_or(Watermark::from_timestamp_millis(-1).unwrap());
-
-                self.publisher
-                    .publish_watermark(&stream, offset.offset, min_wm.timestamp_millis(), false)
-                    .await;
-
-                self.idle_manager.reset_idle(&stream).await;
+            // publishes the watermark for the given stream and offset
+            ISBWaterMarkActorMessage::Publish {
+                stream,
+                offset,
+                watermark,
+                is_idle,
+            } => {
+                self.handle_publish_watermark(stream, offset, watermark, is_idle)
+                    .await
             }
 
-            // removes the offset from the tracked offsets
-            ISBWaterMarkActorMessage::RemoveOffset(offset) => {
-                self.remove_offset(offset.partition_idx, offset.offset)?;
-            }
-
-            // inserts the offset to the tracked offsets
-            ISBWaterMarkActorMessage::InsertOffset { offset, watermark } => {
-                self.insert_offset(offset.partition_idx, offset.offset, watermark);
-            }
-
-            // check for idleness and publish idle watermark for those downstream idle partitions
-            ISBWaterMarkActorMessage::CheckAndPublishIdleWatermark => {
-                // if there are any inflight messages, consider the lowest watermark among them
-                let mut min_wm = self
-                    .get_lowest_watermark()
-                    .unwrap_or(Watermark::from_timestamp_millis(-1).expect("failed to parse time"));
-
-                // if there are no inflight messages, use the head idle watermark
-                if min_wm.timestamp_millis() == -1 {
-                    min_wm = self.fetcher.fetch_head_idle_watermark();
-                }
-
-                // we are not able to compute WM, pod restarts, etc.
-                if min_wm.timestamp_millis() == -1 {
-                    return Ok(());
-                }
-
-                // identify the streams that are idle.
-                let idle_streams = self.idle_manager.fetch_idle_streams().await;
-
-                // publish the idle watermark for the idle partitions
-                for stream in idle_streams.iter() {
-                    let offset = match self.idle_manager.fetch_idle_offset(stream).await {
-                        Ok(offset) => offset,
-                        Err(e) => {
-                            error!("failed to fetch idle offset: {:?}", e);
-                            continue;
-                        }
-                    };
-                    self.publisher
-                        .publish_watermark(stream, offset, min_wm.timestamp_millis(), true)
-                        .await;
-                    self.idle_manager.update_idle_metadata(stream, offset).await;
-                }
+            // fetches the head idle watermark
+            ISBWaterMarkActorMessage::FetchHeadIdle { oneshot_tx } => {
+                self.handle_fetch_head_idle_watermark(oneshot_tx).await
             }
         }
+    }
 
+    // fetches the watermark for the given offset and sends the response back via oneshot channel
+    async fn handle_fetch_watermark(
+        &mut self,
+        offset: IntOffset,
+        oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
+    ) -> Result<()> {
+        let watermark = self
+            .fetcher
+            .fetch_watermark(offset.offset, offset.partition_idx);
+
+        oneshot_tx
+            .send(Ok(watermark))
+            .map_err(|_| Error::Watermark("failed to send response".to_string()))
+    }
+
+    // publishes the watermark for the given stream and offset
+    async fn handle_publish_watermark(
+        &mut self,
+        stream: Stream,
+        offset: i64,
+        watermark: i64,
+        is_idle: bool,
+    ) -> Result<()> {
+        self.publisher
+            .publish_watermark(&stream, offset, watermark, is_idle)
+            .await;
         Ok(())
     }
 
-    /// insert the offset and watermark for inflight requests set
-    fn insert_offset(&mut self, partition_id: u16, offset: i64, watermark: Watermark) {
-        let set = self.offset_set.entry(partition_id).or_default();
-        set.insert(OffsetWatermark { offset, watermark });
-    }
-
-    /// removes the offset from the inflight offsets set of the partition
-    fn remove_offset(&mut self, partition_id: u16, offset: i64) -> Result<()> {
-        if let Some(set) = self.offset_set.get_mut(&partition_id) {
-            if let Some(&OffsetWatermark { watermark, .. }) =
-                set.iter().find(|ow| ow.offset == offset)
-            {
-                set.remove(&OffsetWatermark { offset, watermark });
-            }
-        }
-        Ok(())
-    }
-
-    /// gets the lowest watermark among all the inflight requests
-    fn get_lowest_watermark(&self) -> Option<Watermark> {
-        self.offset_set
-            .values()
-            .filter_map(|set| set.iter().next().map(|ow| ow.watermark))
-            .min()
+    // fetches the head idle watermark and sends the response back via oneshot channel
+    async fn handle_fetch_head_idle_watermark(
+        &mut self,
+        oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
+    ) -> Result<()> {
+        let watermark = self.fetcher.fetch_head_idle_watermark();
+        oneshot_tx
+            .send(Ok(watermark))
+            .map_err(|_| Error::Watermark("failed to send response".to_string()))
     }
 }
 
 /// Handle to interact with the EdgeWatermarkActor, exposes methods to fetch and publish watermarks
-/// for the edges
+/// for the edges. Contains all the computation logic.
 #[derive(Clone)]
 pub(crate) struct ISBWatermarkHandle {
-    sender: tokio::sync::mpsc::Sender<ISBWaterMarkActorMessage>,
+    sender: mpsc::Sender<ISBWaterMarkActorMessage>,
+    /// BTreeSet is used to track the watermarks of the inflight messages because we frequently
+    /// need to get the lowest watermark among the inflight messages and BTreeSet provides O(1)
+    /// time complexity for getting the lowest watermark, even though insertion and deletion are
+    /// O(log n). If we use map or hashset, our lowest watermark fetch call would be O(n) even
+    /// though insertion and deletion are O(1). We do almost same amount insertion, deletion and
+    /// getting the lowest watermark so BTreeSet is the best choice.
+    offset_set: Arc<Mutex<HashMap<u16, BTreeSet<OffsetWatermark>>>>,
+    idle_manager: ISBIdleDetector,
+    /// Window manager is used to compute the minimum watermark for the reduce vertex.
+    window_manager: Option<WindowManager>,
+    latest_fetched_wm: Arc<Mutex<Watermark>>,
 }
 
 impl ISBWatermarkHandle {
     /// new creates a new [ISBWatermarkHandle]. We also start a background task to detect WM idleness.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn new(
         vertex_name: &'static str,
         vertex_replica: u16,
@@ -241,8 +198,9 @@ impl ISBWatermarkHandle {
         config: &EdgeWatermarkConfig,
         to_vertex_configs: &[ToVertexConfig],
         cln_token: CancellationToken,
+        window_manager: Option<WindowManager>,
     ) -> Result<Self> {
-        let (sender, receiver) = tokio::sync::mpsc::channel(100);
+        let (sender, receiver) = mpsc::channel(100);
 
         // create a processor manager map (from_vertex -> ProcessorManager)
         let mut processor_managers = HashMap::new();
@@ -265,14 +223,22 @@ impl ISBWatermarkHandle {
         let idle_manager =
             ISBIdleDetector::new(idle_timeout, to_vertex_configs, js_context.clone()).await;
 
-        let actor = ISBWatermarkActor::new(fetcher, publisher, idle_manager);
+        let actor = ISBWatermarkActor::new(fetcher, publisher);
         tokio::spawn(async move { actor.run(receiver).await });
 
-        let isb_watermark_handle = Self { sender };
+        let isb_watermark_handle = Self {
+            sender,
+            offset_set: Arc::new(Mutex::new(HashMap::new())),
+            idle_manager,
+            window_manager,
+            latest_fetched_wm: Arc::new(Mutex::new(
+                Watermark::from_timestamp_millis(-1).expect("failed to parse timestamp"),
+            )),
+        };
 
         // start a task to keep publishing idle watermarks every idle_timeout
         tokio::spawn({
-            let isb_watermark_handle = isb_watermark_handle.clone();
+            let mut isb_watermark_handle = isb_watermark_handle.clone();
             let mut interval_ticker = tokio::time::interval(idle_timeout);
             let cln_token = cln_token.clone();
             async move {
@@ -294,89 +260,199 @@ impl ISBWatermarkHandle {
 
     /// Fetches the watermark for the given offset, if we are not able to compute the watermark we
     /// return -1.
-    pub(crate) async fn fetch_watermark(&self, offset: Offset) -> Watermark {
-        if let Offset::Int(offset) = offset {
+    pub(crate) async fn fetch_watermark(&mut self, offset: Offset) -> Watermark {
+        let Offset::Int(offset) = offset else {
+            error!(?offset, "Invalid offset type, cannot compute watermark");
+            return Watermark::from_timestamp_millis(-1).expect("failed to parse time");
+        };
+
+        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
+        if let Err(e) = self
+            .sender
+            .send(ISBWaterMarkActorMessage::Fetch { offset, oneshot_tx })
+            .await
+        {
+            error!(?e, "Failed to send message");
+            return Watermark::from_timestamp_millis(-1).expect("failed to parse time");
+        }
+
+        match oneshot_rx.await {
+            Ok(watermark) => {
+                let wm = watermark.unwrap_or_else(|e| {
+                    error!(?e, "Failed to fetch watermark");
+                    Watermark::from_timestamp_millis(-1).expect("failed to parse time")
+                });
+
+                // Update the latest fetched watermark
+                let mut latest_fetched_wm = self
+                    .latest_fetched_wm
+                    .lock()
+                    .expect("failed to acquire lock");
+                *latest_fetched_wm = std::cmp::max(wm, *latest_fetched_wm);
+
+                wm
+            }
+            Err(e) => {
+                error!(?e, "Failed to receive response");
+                Watermark::from_timestamp_millis(-1).expect("failed to parse time")
+            }
+        }
+    }
+
+    /// publish_watermark publishes the watermark for the given stream and offset.
+    pub(crate) async fn publish_watermark(&mut self, stream: Stream, offset: Offset) {
+        let Offset::Int(offset) = offset else {
+            error!(?offset, "Invalid offset type, cannot publish watermark");
+            return;
+        };
+
+        // Compute the minimum watermark
+        let min_wm = self.compute_min_watermark().await;
+
+        // Send the publish watermark message to the actor
+        self.sender
+            .send(ISBWaterMarkActorMessage::Publish {
+                stream: stream.clone(),
+                offset: offset.offset,
+                watermark: min_wm.timestamp_millis(),
+                is_idle: false,
+            })
+            .await
+            .unwrap_or_else(|e| {
+                error!("Failed to send message: {:?}", e);
+            });
+
+        // Reset idle state for this stream
+        self.idle_manager.reset_idle(&stream).await;
+    }
+
+    /// remove_offset removes the offset from the tracked offsets.
+    pub(crate) async fn remove_offset(&mut self, offset: Offset) {
+        let Offset::Int(offset) = offset else {
+            error!(?offset, "Invalid offset type, cannot remove offset");
+            return;
+        };
+
+        // Remove the offset from the tracked offsets
+        let mut offset_set = self.offset_set.lock().expect("failed to acquire lock");
+        if let Some(set) = offset_set.get_mut(&offset.partition_idx) {
+            if let Some(&OffsetWatermark { watermark, .. }) =
+                set.iter().find(|ow| ow.offset == offset.offset)
+            {
+                set.remove(&OffsetWatermark {
+                    offset: offset.offset,
+                    watermark,
+                });
+            }
+        }
+    }
+
+    /// insert_offset inserts the offset to the tracked offsets.
+    pub(crate) async fn insert_offset(&mut self, offset: Offset, watermark: Option<Watermark>) {
+        let Offset::Int(offset) = offset else {
+            error!(?offset, "Invalid offset type, cannot insert offset");
+            return;
+        };
+
+        let wm = watermark
+            .unwrap_or(Watermark::from_timestamp_millis(-1).expect("failed to parse time"));
+
+        // Insert the offset and watermark to the tracked offsets
+        let mut offset_set = self.offset_set.lock().expect("failed to acquire lock");
+        let set = offset_set.entry(offset.partition_idx).or_default();
+        set.insert(OffsetWatermark {
+            offset: offset.offset,
+            watermark: wm,
+        });
+    }
+
+    /// publishes the idle watermark for the downstream idle partitions.
+    pub(crate) async fn publish_idle_watermark(&mut self) {
+        // Compute the minimum watermark
+        let mut min_wm = self.compute_min_watermark().await;
+
+        // if the computed min watermark is -1, means there is no data (no windows and inflight messages)
+        // we should fetch the head idle watermark and publish it to downstream.
+        if min_wm.timestamp_millis() == -1 {
             let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
             if let Err(e) = self
                 .sender
-                .send(ISBWaterMarkActorMessage::FetchWatermark { offset, oneshot_tx })
+                .send(ISBWaterMarkActorMessage::FetchHeadIdle { oneshot_tx })
                 .await
             {
                 error!(?e, "Failed to send message");
-                return Watermark::from_timestamp_millis(-1).expect("failed to parse time");
+                return;
             }
 
-            match oneshot_rx.await {
+            min_wm = match oneshot_rx.await {
                 Ok(watermark) => watermark.unwrap_or_else(|e| {
-                    error!(?e, "Failed to fetch watermark");
+                    error!(?e, "Failed to fetch head idle watermark");
                     Watermark::from_timestamp_millis(-1).expect("failed to parse time")
                 }),
                 Err(e) => {
                     error!(?e, "Failed to receive response");
                     Watermark::from_timestamp_millis(-1).expect("failed to parse time")
                 }
+            };
+        }
+
+        // Identify the streams that are idle and publish the idle watermark
+        let idle_streams = self.idle_manager.fetch_idle_streams().await;
+        for stream in idle_streams.iter() {
+            if let Ok(offset) = self.idle_manager.fetch_idle_offset(stream).await {
+                // publish the watermark
+                self.sender
+                    .send(ISBWaterMarkActorMessage::Publish {
+                        stream: stream.clone(),
+                        offset,
+                        watermark: min_wm.timestamp_millis(),
+                        is_idle: true,
+                    })
+                    .await
+                    .unwrap_or_else(|e| {
+                        error!("Failed to send message: {:?}", e);
+                    });
+
+                self.idle_manager.update_idle_metadata(stream, offset).await;
             }
-        } else {
-            error!(?offset, "Invalid offset type, cannot compute watermark");
-            Watermark::from_timestamp_millis(-1).expect("failed to parse time")
         }
     }
 
-    /// publish_watermark publishes the watermark for the given stream and offset.
-    pub(crate) async fn publish_watermark(&self, stream: Stream, offset: Offset) {
-        if let Offset::Int(offset) = offset {
-            self.sender
-                .send(ISBWaterMarkActorMessage::PublishWatermark { offset, stream })
-                .await
-                .unwrap_or_else(|e| {
-                    error!("Failed to send message: {:?}", e);
-                });
-        } else {
-            error!(?offset, "Invalid offset type, cannot publish watermark");
+    /// Computes the minimum watermark based on window manager and inflight messages.
+    async fn compute_min_watermark(&self) -> Watermark {
+        // If window manager is configured, we can use the oldest window's end time - 1ms as the
+        // watermark.
+        if let Some(window_manager) = &self.window_manager {
+            if let Some(oldest_window) = window_manager.oldest_window() {
+                // we should also compare it with the latest fetched watermark because sometimes
+                // the window end time can be greater than the watermark of the messages in the window.
+                // in that case we should use the latest fetched watermark.
+                let latest_fetched_wm = self
+                    .latest_fetched_wm
+                    .lock()
+                    .expect("failed to acquire lock");
+                return std::cmp::min(
+                    *latest_fetched_wm,
+                    Watermark::from_timestamp_millis(oldest_window.end_time.timestamp_millis() - 1)
+                        .expect("failed to parse time"),
+                );
+            }
         }
-    }
 
-    /// remove_offset removes the offset from the tracked offsets.
-    pub(crate) async fn remove_offset(&self, offset: Offset) {
-        if let Offset::Int(offset) = offset {
-            self.sender
-                .send(ISBWaterMarkActorMessage::RemoveOffset(offset))
-                .await
-                .unwrap_or_else(|e| {
-                    error!("Failed to send message: {:?}", e);
-                });
-        } else {
-            error!(?offset, "Invalid offset type, cannot remove offset");
-        }
-    }
-
-    /// insert_offset inserts the offset to the tracked offsets.
-    pub(crate) async fn insert_offset(&self, offset: Offset, watermark: Option<Watermark>) {
-        if let Offset::Int(offset) = offset {
-            self.sender
-                .send(ISBWaterMarkActorMessage::InsertOffset {
-                    offset,
-                    watermark: watermark.unwrap_or(
-                        Watermark::from_timestamp_millis(-1).expect("failed to parse time"),
-                    ),
-                })
-                .await
-                .unwrap_or_else(|e| {
-                    error!("Failed to send message: {:?}", e);
-                });
-        } else {
-            error!(?offset, "Invalid offset type, cannot insert offset");
-        }
-    }
-
-    /// publishes the idle watermark for the downstream idle partitions.
-    pub(crate) async fn publish_idle_watermark(&self) {
-        self.sender
-            .send(ISBWaterMarkActorMessage::CheckAndPublishIdleWatermark)
+        // if window manager is not configured, we should use the lowest watermark among all the
+        // inflight messages.
+        self.get_lowest_watermark()
             .await
-            .unwrap_or_else(|e| {
-                error!("Failed to send message: {:?}", e);
-            });
+            .unwrap_or(Watermark::from_timestamp_millis(-1).unwrap())
+    }
+
+    /// Gets the lowest watermark among all the inflight requests
+    async fn get_lowest_watermark(&self) -> Option<Watermark> {
+        let offset_set = self.offset_set.lock().expect("failed to acquire lock");
+        offset_set
+            .values()
+            .filter_map(|set| set.iter().next().map(|ow| ow.watermark))
+            .min()
     }
 }
 
@@ -461,7 +537,7 @@ mod tests {
             to_vertex_config: vec![to_bucket_config.clone()],
         };
 
-        let handle = ISBWatermarkHandle::new(
+        let mut handle = ISBWatermarkHandle::new(
             vertex_name,
             0,
             Duration::from_millis(100),
@@ -477,6 +553,7 @@ mod tests {
                 conditions: None,
             }],
             CancellationToken::new(),
+            None,
         )
         .await
         .expect("Failed to create ISBWatermarkHandle");
@@ -641,7 +718,7 @@ mod tests {
             to_vertex_config: vec![from_bucket_config.clone()],
         };
 
-        let handle = ISBWatermarkHandle::new(
+        let mut handle = ISBWatermarkHandle::new(
             vertex_name,
             0,
             Duration::from_millis(100),
@@ -657,6 +734,7 @@ mod tests {
                 conditions: None,
             }],
             CancellationToken::new(),
+            None,
         )
         .await
         .expect("Failed to create ISBWatermarkHandle");
@@ -787,7 +865,7 @@ mod tests {
             to_vertex_config: vec![to_bucket_config.clone()],
         };
 
-        let handle = ISBWatermarkHandle::new(
+        let mut handle = ISBWatermarkHandle::new(
             vertex_name,
             0,
             Duration::from_millis(10), // Set idle timeout to a very short duration
@@ -803,6 +881,7 @@ mod tests {
                 conditions: None,
             }],
             CancellationToken::new(),
+            None,
         )
         .await
         .expect("Failed to create ISBWatermarkHandle");
