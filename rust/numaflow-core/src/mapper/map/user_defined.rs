@@ -1,8 +1,8 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::Mutex;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
@@ -13,6 +13,7 @@ use tracing::error;
 use crate::config::get_vertex_name;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageID, Offset};
+use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
 use crate::shared::grpc::prost_timestamp_from_utc;
 
 type ResponseSenderMap =
@@ -25,6 +26,7 @@ struct ParentMessageInfo {
     offset: Offset,
     event_time: DateTime<Utc>,
     headers: HashMap<String, String>,
+    start_time: Instant,
 }
 
 impl From<Message> for MapRequest {
@@ -99,6 +101,11 @@ impl UserDefinedUnaryMap {
                 let mut senders = sender_map.lock().await;
                 for (_, (_, sender)) in senders.drain() {
                     let _ = sender.send(Err(Error::Grpc(e.clone())));
+                    pipeline_metrics()
+                        .forwarder
+                        .udf_error_total
+                        .get_or_create(pipeline_metric_labels("Map"))
+                        .inc();
                 }
                 None
             }
@@ -118,6 +125,7 @@ impl UserDefinedUnaryMap {
             offset: message.offset.clone(),
             event_time: message.event_time,
             headers: message.headers.clone(),
+            start_time: Instant::now(),
         };
 
         self.senders
@@ -185,6 +193,11 @@ impl UserDefinedBatchMap {
                     sender
                         .send(Err(Error::Grpc(e.clone())))
                         .expect("failed to send error response");
+                    pipeline_metrics()
+                        .forwarder
+                        .udf_error_total
+                        .get_or_create(pipeline_metric_labels("Map"))
+                        .inc();
                 }
                 None
             }
@@ -193,9 +206,19 @@ impl UserDefinedBatchMap {
                 if !sender_map.lock().await.is_empty() {
                     error!("received EOT but not all responses have been received");
                 }
+                pipeline_metrics()
+                    .forwarder
+                    .udf_processing_time
+                    .get_or_create(pipeline_metric_labels("Map"))
+                    .observe(Instant::now().elapsed().as_micros() as f64);
                 continue;
             }
 
+            pipeline_metrics()
+                .forwarder
+                .udf_write_total
+                .get_or_create(pipeline_metric_labels("Map"))
+                .inc();
             process_response(&sender_map, resp).await
         }
     }
@@ -212,7 +235,14 @@ impl UserDefinedBatchMap {
                 offset: message.offset.clone(),
                 event_time: message.event_time,
                 headers: message.headers.clone(),
+                start_time: Instant::now(),
             };
+
+            pipeline_metrics()
+                .forwarder
+                .udf_read_total
+                .get_or_create(pipeline_metric_labels("Map"))
+                .inc();
 
             self.senders
                 .lock()
@@ -246,6 +276,19 @@ async fn process_response(sender_map: &ResponseSenderMap, resp: MapResponse) {
         for (i, result) in resp.results.into_iter().enumerate() {
             response_messages.push(UserDefinedMessage(result, &msg_info, i as i32).into());
         }
+
+        pipeline_metrics()
+            .forwarder
+            .udf_write_total
+            .get_or_create(pipeline_metric_labels("Map"))
+            .inc_by(response_messages.len() as u64);
+
+        pipeline_metrics()
+            .forwarder
+            .udf_processing_time
+            .get_or_create(pipeline_metric_labels("Map"))
+            .observe(msg_info.start_time.elapsed().as_micros() as f64);
+
         sender
             .send(Ok(response_messages))
             .expect("failed to send response");
@@ -345,6 +388,11 @@ impl UserDefinedStreamMap {
                 let mut senders = sender_map.lock().await;
                 for (_, (_, sender)) in senders.drain() {
                     let _ = sender.send(Err(Error::Grpc(e.clone()))).await;
+                    pipeline_metrics()
+                        .forwarder
+                        .udf_error_total
+                        .get_or_create(pipeline_metric_labels("Map"))
+                        .inc();
                 }
                 None
             }
@@ -355,9 +403,20 @@ impl UserDefinedStreamMap {
                 .remove(&resp.id)
                 .expect("map entry should always be present");
 
+            pipeline_metrics()
+                .forwarder
+                .udf_write_total
+                .get_or_create(pipeline_metric_labels("Map"))
+                .inc();
+
             // once we get eot, we can drop the sender to let the callee
             // know that we are done sending responses
             if let Some(map::TransmissionStatus { eot: true }) = resp.status {
+                pipeline_metrics()
+                    .forwarder
+                    .udf_processing_time
+                    .get_or_create(pipeline_metric_labels("Map"))
+                    .observe(message_info.start_time.elapsed().as_micros() as f64);
                 continue;
             }
 
@@ -390,7 +449,14 @@ impl UserDefinedStreamMap {
             offset: message.offset.clone(),
             event_time: message.event_time,
             headers: message.headers.clone(),
+            start_time: Instant::now(),
         };
+
+        pipeline_metrics()
+            .forwarder
+            .udf_read_total
+            .get_or_create(pipeline_metric_labels("Map"))
+            .inc();
 
         self.senders
             .lock()

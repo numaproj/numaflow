@@ -24,8 +24,8 @@ use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, Offset};
 use crate::metrics::{
-    PIPELINE_PARTITION_NAME_LABEL, pipeline_drop_metric_labels, pipeline_isb_metric_labels,
-    pipeline_metric_labels, pipeline_metrics,
+    PIPELINE_PARTITION_NAME_LABEL, pipeline_isb_metric_labels, pipeline_metric_labels,
+    pipeline_metrics,
 };
 use crate::shared::forward;
 use crate::tracker::TrackerHandle;
@@ -621,6 +621,7 @@ mod tests {
             tracker_handle,
             cln_token.clone(),
             None,
+            "Source".to_string(),
         );
 
         let message = Message {
@@ -718,6 +719,7 @@ mod tests {
             TrackerHandle::new(None, None),
             cln_token.clone(),
             None,
+            "Source".to_string(),
         );
 
         let result = writer
@@ -782,6 +784,7 @@ mod tests {
             tracker_handle,
             cancel_token.clone(),
             None,
+            "Map".to_string(),
         );
 
         let mut result_receivers = Vec::new();
@@ -993,6 +996,7 @@ mod tests {
             tracker_handle,
             cancel_token.clone(),
             None,
+            "Source".to_string(),
         );
 
         let mut js_writer = writer.clone();
@@ -1085,6 +1089,7 @@ mod tests {
             tracker_handle.clone(),
             cln_token.clone(),
             None,
+            "Source".to_string(),
         );
 
         let (messages_tx, messages_rx) = tokio::sync::mpsc::channel(500);
@@ -1178,6 +1183,7 @@ mod tests {
             tracker_handle.clone(),
             cancel_token.clone(),
             None,
+            "Source".to_string(),
         );
 
         let (tx, rx) = tokio::sync::mpsc::channel(500);
@@ -1323,6 +1329,7 @@ mod tests {
             tracker_handle.clone(),
             cln_token.clone(),
             None,
+            "Source".to_string(),
         );
 
         let (messages_tx, messages_rx) = tokio::sync::mpsc::channel(500);

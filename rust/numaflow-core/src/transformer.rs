@@ -1,5 +1,4 @@
 use bytes::Bytes;
-use kube::core::labels;
 use numaflow_monitor::runtime;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use std::sync::Arc;

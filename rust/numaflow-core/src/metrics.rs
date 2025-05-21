@@ -115,7 +115,6 @@ const TRANSFORMER_PROCESSING_TIME: &str = "transformer_processing_time";
 const FORWARD_CHUNK_PROCESSING_TIME: &str = "forward_chunk_processing_time";
 const UDF_PROCESSING_TIME: &str = "udf_processing_time";
 const FALLBACK_SINK_WRITE_PROCESSING_TIME: &str = "fbsink_write_processing_time";
-const WRITE_TIME: &str = "write_time";
 const TRANSFORM_TIME: &str = "time";
 const ACK_TIME: &str = "ack_time";
 const SINK_TIME: &str = "time";

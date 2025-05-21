@@ -14,7 +14,6 @@ use crate::metrics::{
 use crate::tracker::TrackerHandle;
 use crate::{
     message::{Message, Offset},
-    metrics,
     reader::LagReader,
 };
 use chrono::Utc;
