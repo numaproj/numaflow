@@ -28,6 +28,7 @@ use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use numaflow_sqs::sink::SqsSinkBuilder;
 use tokio_util::sync::CancellationToken;
+use tracing::info;
 
 /// Creates a sink writer based on the configuration
 pub(crate) async fn create_sink_writer(
@@ -226,6 +227,15 @@ pub(crate) async fn create_mapper(
                 Protocol::TCP => {
                     // tcp is only used for multi proc mode in python
                     let endpoints = server_info.get_http_endpoints();
+
+                    // Bug in tonic, https://github.com/hyperium/tonic/issues/2257 we will enable it
+                    // once it's fixed.
+                    if endpoints.len() > 1 {
+                        return Err(Error::Mapper(
+                            "Multi proc mode is not supported".to_string(),
+                        ));
+                    }
+
                     let channel = grpc::create_multi_rpc_channel(endpoints).await?;
 
                     let map_grpc_client = MapClient::new(channel)
