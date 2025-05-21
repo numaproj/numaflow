@@ -39,7 +39,8 @@ pub(crate) struct Message {
     pub(crate) headers: HashMap<String, String>,
     /// Additional metadata that could be passed per message between the vertices.
     pub(crate) metadata: Option<Metadata>,
-    /// is_late is used to indicate if the message is a late data
+    /// is_late is used to indicate if the message is a late data. Late data is data that arrives
+    /// after the watermark has passed. This is set only at source.
     pub(crate) is_late: bool,
 }
 
