@@ -104,7 +104,7 @@ impl UserDefinedUnaryMap {
                     pipeline_metrics()
                         .forwarder
                         .udf_error_total
-                        .get_or_create(pipeline_metric_labels("Map"))
+                        .get_or_create(pipeline_metric_labels("MapUDF"))
                         .inc();
                 }
                 None
@@ -131,7 +131,7 @@ impl UserDefinedUnaryMap {
         pipeline_metrics()
             .forwarder
             .udf_read_total
-            .get_or_create(pipeline_metric_labels("Map"))
+            .get_or_create(pipeline_metric_labels("MapUDF"))
             .inc();
 
         self.senders
@@ -202,7 +202,7 @@ impl UserDefinedBatchMap {
                     pipeline_metrics()
                         .forwarder
                         .udf_error_total
-                        .get_or_create(pipeline_metric_labels("Map"))
+                        .get_or_create(pipeline_metric_labels("MapUDF"))
                         .inc();
                 }
                 None
@@ -215,7 +215,7 @@ impl UserDefinedBatchMap {
                 pipeline_metrics()
                     .forwarder
                     .udf_processing_time
-                    .get_or_create(pipeline_metric_labels("Map"))
+                    .get_or_create(pipeline_metric_labels("MapUDF"))
                     .observe(Instant::now().elapsed().as_micros() as f64);
                 continue;
             }
@@ -241,7 +241,7 @@ impl UserDefinedBatchMap {
             pipeline_metrics()
                 .forwarder
                 .udf_read_total
-                .get_or_create(pipeline_metric_labels("Map"))
+                .get_or_create(pipeline_metric_labels("MapUDF"))
                 .inc();
 
             self.senders
@@ -280,13 +280,13 @@ async fn process_response(sender_map: &ResponseSenderMap, resp: MapResponse) {
         pipeline_metrics()
             .forwarder
             .udf_write_total
-            .get_or_create(pipeline_metric_labels("Map"))
+            .get_or_create(pipeline_metric_labels("MapUDF"))
             .inc_by(response_messages.len() as u64);
 
         pipeline_metrics()
             .forwarder
             .udf_processing_time
-            .get_or_create(pipeline_metric_labels("Map"))
+            .get_or_create(pipeline_metric_labels("MapUDF"))
             .observe(msg_info.start_time.elapsed().as_micros() as f64);
 
         sender
@@ -391,7 +391,7 @@ impl UserDefinedStreamMap {
                     pipeline_metrics()
                         .forwarder
                         .udf_error_total
-                        .get_or_create(pipeline_metric_labels("Map"))
+                        .get_or_create(pipeline_metric_labels("MapUDF"))
                         .inc();
                 }
                 None
@@ -406,7 +406,7 @@ impl UserDefinedStreamMap {
             pipeline_metrics()
                 .forwarder
                 .udf_write_total
-                .get_or_create(pipeline_metric_labels("Map"))
+                .get_or_create(pipeline_metric_labels("MapUDF"))
                 .inc();
 
             // once we get eot, we can drop the sender to let the callee
@@ -415,7 +415,7 @@ impl UserDefinedStreamMap {
                 pipeline_metrics()
                     .forwarder
                     .udf_processing_time
-                    .get_or_create(pipeline_metric_labels("Map"))
+                    .get_or_create(pipeline_metric_labels("MapUDF"))
                     .observe(message_info.start_time.elapsed().as_micros() as f64);
                 continue;
             }
@@ -455,7 +455,7 @@ impl UserDefinedStreamMap {
         pipeline_metrics()
             .forwarder
             .udf_read_total
-            .get_or_create(pipeline_metric_labels("Map"))
+            .get_or_create(pipeline_metric_labels("MapUDF"))
             .inc();
 
         self.senders

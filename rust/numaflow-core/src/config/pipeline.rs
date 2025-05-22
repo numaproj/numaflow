@@ -237,8 +237,8 @@ impl std::fmt::Display for VertexType {
         match self {
             VertexType::Source(_) => write!(f, "Source"),
             VertexType::Sink(_) => write!(f, "Sink"),
-            VertexType::Map(_) => write!(f, "Map"),
-            VertexType::Reduce(_) => write!(f, "Reduce"),
+            VertexType::Map(_) => write!(f, "MapUDF"),
+            VertexType::Reduce(_) => write!(f, "ReduceUDF"),
         }
     }
 }
