@@ -9,6 +9,7 @@ use tonic::{Code, Status};
 use tracing::error;
 
 use crate::Result;
+use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
 use crate::message::Message;
@@ -154,7 +155,7 @@ impl Transformer {
         let transform_handle = self.sender.clone();
         let tracker_handle = self.tracker_handle.clone();
         let semaphore = Arc::new(Semaphore::new(self.concurrency));
-        let mut labels = pipeline_metric_labels("Source").clone();
+        let mut labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
         labels.push((
             PIPELINE_PARTITION_NAME_LABEL.to_string(),
             get_vertex_name().to_string(),

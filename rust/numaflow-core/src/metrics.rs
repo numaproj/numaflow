@@ -23,6 +23,7 @@ use tokio::time;
 use tracing::{debug, error, info};
 
 use crate::Error;
+use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica};
 use crate::mapper::map::MapHandle;
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
@@ -1191,10 +1192,11 @@ async fn expose_pending_metrics_(
                                 .get_or_create(&metric_labels)
                                 .set(pending);
                         } else {
-                            let mut metric_labels = pipeline_metric_labels("source").clone();
+                            let mut metric_labels =
+                                pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
                             metric_labels.push((
                                 PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                                "source".to_string(),
+                                "Source".to_string(),
                             ));
                             pipeline_metrics()
                                 .pending_raw

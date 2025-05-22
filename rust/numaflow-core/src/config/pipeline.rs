@@ -47,6 +47,10 @@ pub(crate) const DEFAULT_STREAM_MAP_SOCKET: &str = "/var/run/numaflow/mapstream.
 const DEFAULT_MAP_SERVER_INFO_FILE: &str = "/var/run/numaflow/mapper-server-info";
 const DEFAULT_SERVING_STORE_SOCKET: &str = "/var/run/numaflow/serving.sock";
 const DEFAULT_SERVING_STORE_SERVER_INFO_FILE: &str = "/var/run/numaflow/serving-server-info";
+pub(crate) const VERTEX_TYPE_SOURCE: &str = "Source";
+pub(crate) const VERTEX_TYPE_SINK: &str = "Sink";
+pub(crate) const VERTEX_TYPE_MAP_UDF: &str = "MapUDF";
+pub(crate) const VERTEX_TYPE_REDUCE_UDF: &str = "ReduceUDF";
 
 pub(crate) mod isb;
 pub(crate) mod watermark;
@@ -235,10 +239,10 @@ impl Default for UserDefinedStoreConfig {
 impl std::fmt::Display for VertexType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match self {
-            VertexType::Source(_) => write!(f, "Source"),
-            VertexType::Sink(_) => write!(f, "Sink"),
-            VertexType::Map(_) => write!(f, "MapUDF"),
-            VertexType::Reduce(_) => write!(f, "ReduceUDF"),
+            VertexType::Source(_) => write!(f, "{}", VERTEX_TYPE_SOURCE),
+            VertexType::Sink(_) => write!(f, "{}", VERTEX_TYPE_SINK),
+            VertexType::Map(_) => write!(f, "{}", VERTEX_TYPE_MAP_UDF),
+            VertexType::Reduce(_) => write!(f, "{}", VERTEX_TYPE_REDUCE_UDF),
         }
     }
 }

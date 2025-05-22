@@ -27,6 +27,7 @@ use user_defined::UserDefinedSink;
 
 use crate::Result;
 use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
+use crate::config::pipeline::VERTEX_TYPE_SINK;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
 use crate::message::Message;
@@ -608,7 +609,7 @@ impl SinkWriter {
                 .get_or_create(mvtx_forward_metric_labels())
                 .inc_by((write_errors_total) as u64);
         } else {
-            let mut labels = pipeline_metric_labels("Sink").clone();
+            let mut labels = pipeline_metric_labels(VERTEX_TYPE_SINK).clone();
             labels.push((
                 PIPELINE_PARTITION_NAME_LABEL.to_string(),
                 get_vertex_name().to_string(),
@@ -681,7 +682,7 @@ impl SinkWriter {
                         .forwarder
                         .drop_total
                         .get_or_create(&pipeline_drop_metric_labels(
-                            "Sink",
+                            VERTEX_TYPE_SINK,
                             get_vertex_name(),
                             "retries exhausted in the Sink",
                         ))
@@ -810,7 +811,8 @@ impl SinkWriter {
                                     *fallback_error_map.entry(err_msg.clone()).or_insert(0) += 1;
                                     // increment fb sink error metric for pipeline
                                     if !is_mono_vertex() {
-                                        let mut labels = pipeline_metric_labels("Sink").clone();
+                                        let mut labels =
+                                            pipeline_metric_labels(VERTEX_TYPE_SINK).clone();
                                         labels.push((
                                             PIPELINE_PARTITION_NAME_LABEL.to_string(),
                                             get_vertex_name().to_string(),
@@ -944,7 +946,7 @@ impl SinkWriter {
                 .get_or_create(mvtx_forward_metric_labels())
                 .observe(fallback_sink_start.elapsed().as_micros() as f64);
         } else {
-            let mut labels = pipeline_metric_labels("Sink").clone();
+            let mut labels = pipeline_metric_labels(VERTEX_TYPE_SINK).clone();
             labels.push((
                 PIPELINE_PARTITION_NAME_LABEL.to_string(),
                 get_vertex_name().to_string(),

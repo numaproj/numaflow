@@ -11,6 +11,7 @@ use tonic::{Request, Streaming};
 use tracing::error;
 
 use crate::config::get_vertex_name;
+use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageID, Offset};
 use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
@@ -104,7 +105,7 @@ impl UserDefinedUnaryMap {
                     pipeline_metrics()
                         .forwarder
                         .udf_error_total
-                        .get_or_create(pipeline_metric_labels("MapUDF"))
+                        .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
                         .inc();
                 }
                 None
@@ -131,7 +132,7 @@ impl UserDefinedUnaryMap {
         pipeline_metrics()
             .forwarder
             .udf_read_total
-            .get_or_create(pipeline_metric_labels("MapUDF"))
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
             .inc();
 
         self.senders
@@ -202,7 +203,7 @@ impl UserDefinedBatchMap {
                     pipeline_metrics()
                         .forwarder
                         .udf_error_total
-                        .get_or_create(pipeline_metric_labels("MapUDF"))
+                        .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
                         .inc();
                 }
                 None
@@ -215,7 +216,7 @@ impl UserDefinedBatchMap {
                 pipeline_metrics()
                     .forwarder
                     .udf_processing_time
-                    .get_or_create(pipeline_metric_labels("MapUDF"))
+                    .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
                     .observe(Instant::now().elapsed().as_micros() as f64);
                 continue;
             }
@@ -241,7 +242,7 @@ impl UserDefinedBatchMap {
             pipeline_metrics()
                 .forwarder
                 .udf_read_total
-                .get_or_create(pipeline_metric_labels("MapUDF"))
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
                 .inc();
 
             self.senders
@@ -280,13 +281,13 @@ async fn process_response(sender_map: &ResponseSenderMap, resp: MapResponse) {
         pipeline_metrics()
             .forwarder
             .udf_write_total
-            .get_or_create(pipeline_metric_labels("MapUDF"))
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
             .inc_by(response_messages.len() as u64);
 
         pipeline_metrics()
             .forwarder
             .udf_processing_time
-            .get_or_create(pipeline_metric_labels("MapUDF"))
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
             .observe(msg_info.start_time.elapsed().as_micros() as f64);
 
         sender
@@ -391,7 +392,7 @@ impl UserDefinedStreamMap {
                     pipeline_metrics()
                         .forwarder
                         .udf_error_total
-                        .get_or_create(pipeline_metric_labels("MapUDF"))
+                        .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
                         .inc();
                 }
                 None
@@ -406,7 +407,7 @@ impl UserDefinedStreamMap {
             pipeline_metrics()
                 .forwarder
                 .udf_write_total
-                .get_or_create(pipeline_metric_labels("MapUDF"))
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
                 .inc();
 
             // once we get eot, we can drop the sender to let the callee
@@ -415,7 +416,7 @@ impl UserDefinedStreamMap {
                 pipeline_metrics()
                     .forwarder
                     .udf_processing_time
-                    .get_or_create(pipeline_metric_labels("MapUDF"))
+                    .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
                     .observe(message_info.start_time.elapsed().as_micros() as f64);
                 continue;
             }
@@ -455,7 +456,7 @@ impl UserDefinedStreamMap {
         pipeline_metrics()
             .forwarder
             .udf_read_total
-            .get_or_create(pipeline_metric_labels("MapUDF"))
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
             .inc();
 
         self.senders

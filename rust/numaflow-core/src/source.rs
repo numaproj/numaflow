@@ -4,6 +4,7 @@
 //! [Source]: https://numaflow.numaproj.io/user-guide/sources/overview/
 //! [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 
+use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
 use crate::message::ReadAck;
@@ -325,7 +326,7 @@ impl Source {
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let (messages_tx, messages_rx) = mpsc::channel(2 * self.read_batch_size);
 
-        let mut pipeline_labels = pipeline_metric_labels("Source").clone();
+        let mut pipeline_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
         pipeline_labels.push((
             PIPELINE_PARTITION_NAME_LABEL.to_string(),
             get_vertex_name().to_string(),
