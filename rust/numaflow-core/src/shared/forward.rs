@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use numaflow_models::models::ForwardConditions;
 
-/// Checks if the message should to written to downstream vertex based the conditions
-/// and message tags. If not tags are provided by there are edge conditions present, we will
+/// Checks if the message should be written to downstream vertex based on the conditions
+/// and message tags. If no tags are provided but there are edge conditions present, we will
 /// still forward to all vertices.
 pub(crate) fn should_forward(
     tags: Option<Arc<[String]>>,
