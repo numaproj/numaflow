@@ -531,22 +531,22 @@ impl SinkWriter {
                         // Increment retry attempt only if we will retry again
                         // otherwise we will break out of the loop
                         // sleep for the calculated delay only if we are retrying
-                        if retry_attempts < retry_config.sink_max_retry_attempts {
-                            retry_attempts += 1;
-                            write_errors_total += error_map.len();
-                            warn!(
-                                "Retry attempt {} due to retryable error. Errors: {:?}",
-                                retry_attempts, error_map
-                            );
-                            let delay = Self::calculate_exponential_delay(
-                                retry_config,
-                                retry_attempts,
-                                &mut rng,
-                            );
-                            sleep(Duration::from_millis(delay as u64)).await;
-                        } else {
+                        if retry_attempts >= retry_config.sink_max_retry_attempts {
                             break;
                         }
+                        retry_attempts += 1;
+                        write_errors_total += error_map.len();
+                        warn!(
+                            retry_attempt = retry_attempts,
+                            ?error_map,
+                            "Retrying due to retryable error."
+                        );
+                        let delay = Self::calculate_exponential_delay(
+                            retry_config,
+                            retry_attempts,
+                            &mut rng,
+                        );
+                        sleep(Duration::from_millis(delay as u64)).await;
                     }
                     Err(e) => Err(e)?,
                 }
@@ -675,8 +675,9 @@ impl SinkWriter {
             OnFailureStrategy::Drop => {
                 // log that we are dropping the messages as requested
                 warn!(
-                    "Dropping messages after {} retry attempts. Errors: {:?}",
-                    retry_attempts, error_map
+                    retry_attempts = *retry_attempts,
+                    errors = ?error_map,
+                    "Dropping messages."
                 );
                 if is_mono_vertex() {
                     // update the drop metric count with the messages left for sink
