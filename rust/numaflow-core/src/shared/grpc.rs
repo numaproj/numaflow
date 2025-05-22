@@ -153,7 +153,7 @@ pub(crate) fn utc_from_timestamp(t: Timestamp) -> DateTime<Utc> {
     DateTime::from_timestamp(t.seconds, t.nanos as u32).unwrap_or(Utc.timestamp_nanos(-1))
 }
 
-/// Creates a load-balanced channel across multiple Unix domain sockets
+/// Creates a load-balanced channel across multiple HTTP endpoints.
 pub(crate) async fn create_multi_rpc_channel(endpoints: Vec<String>) -> error::Result<Channel> {
     if endpoints.is_empty() {
         return Err(Error::Connection("No endpoints provided".to_string()));
