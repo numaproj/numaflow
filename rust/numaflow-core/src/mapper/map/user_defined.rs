@@ -128,6 +128,12 @@ impl UserDefinedUnaryMap {
             start_time: Instant::now(),
         };
 
+        pipeline_metrics()
+            .forwarder
+            .udf_read_total
+            .get_or_create(pipeline_metric_labels("Map"))
+            .inc();
+
         self.senders
             .lock()
             .await
@@ -213,12 +219,6 @@ impl UserDefinedBatchMap {
                     .observe(Instant::now().elapsed().as_micros() as f64);
                 continue;
             }
-
-            pipeline_metrics()
-                .forwarder
-                .udf_write_total
-                .get_or_create(pipeline_metric_labels("Map"))
-                .inc();
             process_response(&sender_map, resp).await
         }
     }
