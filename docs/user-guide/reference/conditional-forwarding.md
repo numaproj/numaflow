@@ -7,8 +7,29 @@ Below is a list of different logic operations that can be done on tags.
 - **or** - forwards the message if one of the tags specified is present in Message's tags.
 - **not** - forwards the message if all the tags specified are not present in Message's tags.
 
-For example, there's a UDF used to process numbers, and forward the result to different vertices based on the number is even or odd. In this case, you can set the `tag` to `even-tag` or `odd-tag` in each of the returned messages,
+For example, there's a UDF used to process numbers, and forward the result to different vertices based on the number is 
+even or odd. In this case, you can set the `tag` to `even-tag` or `odd-tag` in each of the returned messages,
 and define the edges as below:
+
+## Default Behavior
+
+* If no `conditions` are specified in the spec, the message will be forwarded to all the downstream vertices.
+* In the code, if the `Messages` are not tagged, the message will be forwarded to all the downstream vertices.
+
+## Syntax
+
+```yaml
+edges:
+  - from: ...
+    to: ...
+    conditions:
+      tags:
+        operator: ...
+        values:
+          - ...
+```
+
+## Example
 
 ```yaml
 edges:
