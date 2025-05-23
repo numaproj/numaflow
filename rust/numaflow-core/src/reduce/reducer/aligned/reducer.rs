@@ -635,6 +635,7 @@ mod tests {
             tracker_handle.clone(),
             cln_token.clone(),
             None,
+            "Reduce".to_string(),
         );
 
         // Create the AlignedReducer
@@ -876,6 +877,7 @@ mod tests {
             tracker_handle.clone(),
             cln_token.clone(),
             None,
+            "Reduce".to_string(),
         );
 
         // Create the AlignedReducer
@@ -1120,6 +1122,7 @@ mod tests {
             tracker_handle.clone(),
             cln_token.clone(),
             None,
+            "Reduce".to_string(),
         );
 
         // Create the AlignedReducer
