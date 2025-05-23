@@ -424,7 +424,7 @@ impl AlignedReducer {
                             continue;
                         }
 
-                        if self.current_watermark < msg.event_time {
+                        if self.current_watermark > msg.event_time {
                             error!(current_watermark=?self.current_watermark, message_event_time=?msg.event_time, "Old message popped up, Watermark is behind the event time");
                             continue;
                         }
