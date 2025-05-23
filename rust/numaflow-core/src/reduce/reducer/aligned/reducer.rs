@@ -966,7 +966,7 @@ mod tests {
             tags: None,
             value: "value3".into(),
             offset: Offset::String(StringOffset::new("3".to_string(), 2)),
-            event_time: base_time + chrono::Duration::seconds(80),
+            event_time: base_time + chrono::Duration::seconds(120),
             watermark: Some(base_time + chrono::Duration::seconds(100)), // Past window end
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
@@ -1228,7 +1228,7 @@ mod tests {
             tags: None,
             value: "value5".into(),
             offset: Offset::String(StringOffset::new("4".to_string(), 4)),
-            event_time: base_time + chrono::Duration::seconds(50),
+            event_time: base_time + chrono::Duration::seconds(90),
             watermark: Some(base_time + chrono::Duration::seconds(70)), // Past window end
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
@@ -1245,7 +1245,7 @@ mod tests {
             tags: None,
             value: "value6".into(),
             offset: Offset::String(StringOffset::new("5".to_string(), 5)),
-            event_time: base_time + chrono::Duration::seconds(60),
+            event_time: base_time + chrono::Duration::seconds(90),
             watermark: Some(base_time + chrono::Duration::seconds(80)), // Past window end
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
