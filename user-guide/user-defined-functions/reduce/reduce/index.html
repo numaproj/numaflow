@@ -2710,10 +2710,12 @@ the last timestamp that belongs to a window.</p>
 So for the example above, the value of the watermark will be set to the last timestamp, i.e., <code>2031-09-29T18:47:59.999Z</code>.</p>
 <p>This applies to all the window types regardless of whether they are keyed or non-keyed windows.</p>
 <h2 id="allowed-lateness">Allowed Lateness<a class="headerlink" href="#allowed-lateness" title="Permanent link">&para;</a></h2>
-<p><code>allowedLateness</code> flag on the Reduce vertex will allow late data to be
-processed by slowing the down the close-of-book operation of the Reduce vertex. Late data will be included for
-the Reduce operation as long as the late data is not later than <code>(CurrentWatermark - AllowedLateness)</code>.
-Without <code>allowedLateness</code>, late data will be rejected and dropped. Each Reduce vertex can have its own <code>allowedLateness</code>.</p>
+<p><code>allowedLateness</code> flag on the Reduce vertex will allow late data to be processed by slowing the down the close-of-book 
+operation of the Reduce vertex. Late data will be included for the Reduce operation as long as the late data is not 
+later than <code>(CurrentWatermark - AllowedLateness)</code>. Without <code>allowedLateness</code>, late data will be rejected and dropped. 
+The key reason for introducing <code>allowedLateness</code> is to support further out-of-order data beyond the watermark 
+withholding, esp. when there are multiple reducers in the pipeline. Each Reduce vertex can have its own <code>allowedLateness</code>,
+but the watermark delay is additive.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">vertices</span><span class="p">:</span>
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-udf</span>
 <span class="w">    </span><span class="nt">udf</span><span class="p">:</span>
