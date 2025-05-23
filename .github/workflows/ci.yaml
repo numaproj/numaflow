@@ -123,7 +123,7 @@ jobs:
       - name: Test Rust
         working-directory: ./rust
         run: |
-          CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='./target/debug/coverage/cargo-test-%p-%m.profraw' cargo test --all-features --workspace --all -- --nocapture
+          CARGO_INCREMENTAL=0 RUSTFLAGS='-Cinstrument-coverage' LLVM_PROFILE_FILE='./target/debug/coverage/cargo-test-%p-%m.profraw' cargo test --all-features --workspace --all
           grcov . -s ./target/debug/coverage/ --binary-path ./target/debug/ -t lcov --branch --ignore-not-existing -o ./target/debug/coverage/lcov.info
 
       - name: Check Rust formatting
