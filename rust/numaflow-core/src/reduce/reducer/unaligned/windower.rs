@@ -74,9 +74,17 @@ impl Window {
 
 /// Unaligned Window Message.
 #[derive(Debug, Clone)]
-pub(crate) struct UnalignedWindowMessage {
-    pub(crate) operation: WindowOperation,
-    pub(crate) windows: Vec<Window>,
+pub(crate) enum UnalignedWindowMessage {
+    // Opening a new window
+    Open { msg: Message, window: Window },
+    // Closing a window
+    Close(Window),
+    // Appending to an existing window
+    Append { msg: Message, window: Window },
+    // Merging windows
+    Merge { msg: Message, windows: Vec<Window> },
+    // Expanding a window
+    Expand { msg: Message, windows: Vec<Window> },
 }
 
 #[derive(Debug, Clone)]

@@ -235,7 +235,6 @@ impl UnalignedReduceActor {
     async fn handle_window_message(&mut self, msg: UnalignedWindowMessage) -> crate::Result<()> {
         match &msg.operation {
             WindowOperation::Open(_) => {
-                // For Open operations, we need to create a new reduce task
                 let window = &msg.windows[0];
                 self.window_open(window.clone(), msg).await?;
             }
