@@ -201,6 +201,91 @@ struct KafkaActor {
     handler_rx: mpsc::Receiver<KafkaActorMessage>,
 }
 
+fn update_auth_config(
+    client_config: &mut ClientConfig,
+    tls_config: Option<TlsConfig>,
+    auth_config: Option<KafkaSaslAuth>,
+) {
+    let tls_enabled = tls_config.is_some();
+    if let Some(tls_config) = tls_config {
+        client_config.set("security.protocol", "SSL");
+        if tls_config.insecure_skip_verify {
+            warn!(
+                "'insecureSkipVerify' is set to true, certificate validation will not be performed when connecting to Kafka server"
+            );
+            client_config.set("enable.ssl.certificate.verification", "false");
+        }
+        if let Some(ca_cert) = tls_config.ca_cert {
+            client_config.set("ssl.ca.pem", ca_cert);
+        }
+        if let Some(client_auth) = tls_config.client_auth {
+            client_config
+                .set("ssl.certificate.pem", client_auth.client_cert)
+                .set("ssl.key.pem", client_auth.client_cert_private_key);
+        }
+    }
+
+    if let Some(auth) = auth_config {
+        client_config.set(
+            "security.protocol",
+            if tls_enabled {
+                "SASL_SSL"
+            } else {
+                "SASL_PLAINTEXT"
+            },
+        );
+        match auth {
+            KafkaSaslAuth::Plain { username, password } => {
+                client_config
+                    .set("sasl.mechanisms", "PLAIN")
+                    .set("sasl.username", username)
+                    .set("sasl.password", password);
+            }
+            KafkaSaslAuth::ScramSha256 { username, password } => {
+                client_config
+                    .set("sasl.mechanisms", "SCRAM-SHA-256")
+                    .set("sasl.username", username)
+                    .set("sasl.password", password);
+            }
+            KafkaSaslAuth::ScramSha512 { username, password } => {
+                client_config
+                    .set("sasl.mechanisms", "SCRAM-SHA-512")
+                    .set("sasl.username", username)
+                    .set("sasl.password", password);
+            }
+            KafkaSaslAuth::Gssapi {
+                service_name,
+                realm: _,
+                username,
+                password: _,
+                keytab,
+                kerberos_config,
+                auth_type: _,
+            } => {
+                client_config.set("sasl.mechanisms", "GSSAPI");
+                client_config.set("sasl.kerberos.service.name", service_name);
+                client_config.set("sasl.kerberos.principal", username);
+                if let Some(keytab) = keytab {
+                    client_config.set("sasl.kerberos.keytab", keytab);
+                }
+                if let Some(kerberos_config) = kerberos_config {
+                    client_config.set("sasl.kerberos.kinit.cmd", kerberos_config);
+                }
+            }
+            KafkaSaslAuth::Oauth {
+                client_id,
+                client_secret,
+                token_endpoint,
+            } => {
+                client_config.set("sasl.mechanisms", "OAUTHBEARER");
+                client_config.set("sasl.oauthbearer.client.id", client_id);
+                client_config.set("sasl.oauthbearer.client.secret", client_secret);
+                client_config.set("sasl.oauthbearer.token.endpoint.url", token_endpoint);
+            }
+        }
+    }
+}
+
 impl KafkaActor {
     async fn start(
         config: KafkaSourceConfig,
@@ -219,83 +304,7 @@ impl KafkaActor {
             .set("auto.offset.reset", "earliest") // TODO: Make this configurable
             .set_log_level(RDKafkaLogLevel::Warning);
 
-        if let Some(tls_config) = config.tls.clone() {
-            client_config.set("security.protocol", "SSL");
-            if tls_config.insecure_skip_verify {
-                warn!(
-                    "'insecureSkipVerify' is set to true, certificate validation will not be performed when connecting to Kafka server"
-                );
-                client_config.set("enable.ssl.certificate.verification", "false");
-            }
-            if let Some(ca_cert) = tls_config.ca_cert {
-                client_config.set("ssl.ca.pem", ca_cert);
-            }
-            if let Some(client_auth) = tls_config.client_auth {
-                client_config
-                    .set("ssl.certificate.pem", client_auth.client_cert)
-                    .set("ssl.key.pem", client_auth.client_cert_private_key);
-            }
-        }
-
-        if let Some(auth) = config.auth {
-            client_config.set(
-                "security.protocol",
-                if config.tls.is_some() {
-                    "SASL_SSL"
-                } else {
-                    "SASL_PLAINTEXT"
-                },
-            );
-            match auth {
-                KafkaSaslAuth::Plain { username, password } => {
-                    client_config
-                        .set("sasl.mechanisms", "PLAIN")
-                        .set("sasl.username", username)
-                        .set("sasl.password", password);
-                }
-                KafkaSaslAuth::ScramSha256 { username, password } => {
-                    client_config
-                        .set("sasl.mechanisms", "SCRAM-SHA-256")
-                        .set("sasl.username", username)
-                        .set("sasl.password", password);
-                }
-                KafkaSaslAuth::ScramSha512 { username, password } => {
-                    client_config
-                        .set("sasl.mechanisms", "SCRAM-SHA-512")
-                        .set("sasl.username", username)
-                        .set("sasl.password", password);
-                }
-                KafkaSaslAuth::Gssapi {
-                    service_name,
-                    realm: _,
-                    username,
-                    password: _,
-                    keytab,
-                    kerberos_config,
-                    auth_type: _,
-                } => {
-                    client_config.set("sasl.mechanisms", "GSSAPI");
-                    client_config.set("sasl.kerberos.service.name", service_name);
-                    client_config.set("sasl.kerberos.principal", username);
-                    if let Some(keytab) = keytab {
-                        client_config.set("sasl.kerberos.keytab", keytab);
-                    }
-                    if let Some(kerberos_config) = kerberos_config {
-                        client_config.set("sasl.kerberos.kinit.cmd", kerberos_config);
-                    }
-                }
-                KafkaSaslAuth::Oauth {
-                    client_id,
-                    client_secret,
-                    token_endpoint,
-                } => {
-                    client_config.set("sasl.mechanisms", "OAUTHBEARER");
-                    client_config.set("sasl.oauthbearer.client.id", client_id);
-                    client_config.set("sasl.oauthbearer.client.secret", client_secret);
-                    client_config.set("sasl.oauthbearer.token.endpoint.url", token_endpoint);
-                }
-            }
-        }
+        update_auth_config(&mut client_config, config.tls, config.auth);
 
         let context = KafkaContext;
         let consumer: Arc<NumaflowConsumer> =
