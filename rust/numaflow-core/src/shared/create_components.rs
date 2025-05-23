@@ -15,7 +15,7 @@ use crate::mapper::map::MapHandle;
 use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
 use crate::reduce::reducer::aligned::windower::WindowManager;
 use crate::shared::grpc;
-use crate::shared::server_info::{ContainerType, sdk_server_info};
+use crate::shared::server_info::{ContainerType, Protocol, sdk_server_info};
 use crate::sink::serve::ServingStore;
 use crate::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
 use crate::source::Source;
@@ -38,6 +38,7 @@ use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use numaflow_sqs::sink::SqsSinkBuilder;
 use tokio_util::sync::CancellationToken;
+use tracing::info;
 
 /// Creates a sink writer based on the configuration
 pub(crate) async fn create_sink_writer(
@@ -78,7 +79,7 @@ pub(crate) async fn create_sink_writer(
                 config::get_vertex_name().to_string(),
                 sink_server_info.language,
                 sink_server_info.version,
-                ContainerType::Sourcer.to_string(),
+                ContainerType::Sinker.to_string(),
             );
 
             metrics::global_metrics()
@@ -135,7 +136,7 @@ pub(crate) async fn create_sink_writer(
                     config::get_vertex_name().to_string(),
                     fb_server_info.language,
                     fb_server_info.version,
-                    ContainerType::Sourcer.to_string(),
+                    ContainerType::FbSinker.to_string(),
                 );
 
                 metrics::global_metrics()
@@ -193,7 +194,7 @@ pub(crate) async fn create_transformer(
                 config::get_vertex_name().to_string(),
                 server_info.language,
                 server_info.version,
-                ContainerType::Sourcer.to_string(),
+                ContainerType::SourceTransformer.to_string(),
             );
             metrics::global_metrics()
                 .sdk_info
@@ -232,46 +233,81 @@ pub(crate) async fn create_mapper(
             let server_info =
                 sdk_server_info(config.server_info_path.clone().into(), cln_token.clone()).await?;
 
-            // based on the map mode that is set in the server info, we will override the socket path
-            // so that the clients can connect to the appropriate socket.
-            let config = match server_info.get_map_mode().unwrap_or(MapMode::Unary) {
-                MapMode::Unary => config,
-                MapMode::Batch => {
-                    config.socket_path = DEFAULT_BATCH_MAP_SOCKET.into();
-                    config
-                }
-                MapMode::Stream => {
-                    config.socket_path = DEFAULT_STREAM_MAP_SOCKET.into();
-                    config
-                }
-            };
-
+            // add sdk info metric
             let metric_labels = metrics::sdk_info_labels(
                 config::get_component_type().to_string(),
                 config::get_vertex_name().to_string(),
                 server_info.language.clone(),
                 server_info.version.clone(),
-                ContainerType::Sourcer.to_string(),
+                ContainerType::Mapper.to_string(),
             );
             metrics::global_metrics()
                 .sdk_info
                 .get_or_create(&metric_labels)
                 .set(1);
 
-            let mut map_grpc_client =
-                MapClient::new(grpc::create_rpc_channel(config.socket_path.clone().into()).await?)
+            match server_info.get_protocol() {
+                Protocol::TCP => {
+                    // tcp is only used for multi proc mode in python
+                    let endpoints = server_info.get_http_endpoints();
+
+                    // Bug in tonic, https://github.com/hyperium/tonic/issues/2257 we will enable it
+                    // once it's fixed.
+                    if endpoints.len() > 1 {
+                        return Err(Error::Mapper(
+                            "Multi proc mode is not supported".to_string(),
+                        ));
+                    }
+
+                    let channel = grpc::create_multi_rpc_channel(endpoints).await?;
+
+                    let map_grpc_client = MapClient::new(channel)
+                        .max_encoding_message_size(config.grpc_max_message_size)
+                        .max_decoding_message_size(config.grpc_max_message_size);
+
+                    Ok(MapHandle::new(
+                        server_info.get_map_mode().unwrap_or(MapMode::Unary),
+                        batch_size,
+                        read_timeout,
+                        map_config.concurrency,
+                        map_grpc_client.clone(),
+                        tracker_handle,
+                    )
+                    .await?)
+                }
+                Protocol::UDS => {
+                    // based on the map mode that is set in the server info, we will override the socket path
+                    // so that the clients can connect to the appropriate socket.
+                    let config = match server_info.get_map_mode().unwrap_or(MapMode::Unary) {
+                        MapMode::Unary => config,
+                        MapMode::Batch => {
+                            config.socket_path = DEFAULT_BATCH_MAP_SOCKET.into();
+                            config
+                        }
+                        MapMode::Stream => {
+                            config.socket_path = DEFAULT_STREAM_MAP_SOCKET.into();
+                            config
+                        }
+                    };
+
+                    let mut map_grpc_client = MapClient::new(
+                        grpc::create_rpc_channel(config.socket_path.clone().into()).await?,
+                    )
                     .max_encoding_message_size(config.grpc_max_message_size)
                     .max_decoding_message_size(config.grpc_max_message_size);
-            grpc::wait_until_mapper_ready(&cln_token, &mut map_grpc_client).await?;
-            Ok(MapHandle::new(
-                server_info.get_map_mode().unwrap_or(MapMode::Unary),
-                batch_size,
-                read_timeout,
-                map_config.concurrency,
-                map_grpc_client.clone(),
-                tracker_handle,
-            )
-            .await?)
+
+                    grpc::wait_until_mapper_ready(&cln_token, &mut map_grpc_client).await?;
+                    Ok(MapHandle::new(
+                        server_info.get_map_mode().unwrap_or(MapMode::Unary),
+                        batch_size,
+                        read_timeout,
+                        map_config.concurrency,
+                        map_grpc_client.clone(),
+                        tracker_handle,
+                    )
+                    .await?)
+                }
+            }
         }
         MapType::Builtin(_) => Err(Error::Mapper("Builtin mapper is not supported".to_string())),
     }
@@ -402,6 +438,7 @@ pub async fn create_source(
 pub(crate) async fn create_aligned_reducer(
     reducer_config: config::components::reduce::ReducerConfig,
 ) -> crate::Result<UserDefinedAlignedReduce> {
+    // TODO: add server-info metric and check compatibility
     match reducer_config.reducer_type {
         ReducerType::UserDefined(config) => {
             // Create gRPC channel

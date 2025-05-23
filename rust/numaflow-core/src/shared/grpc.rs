@@ -152,3 +152,19 @@ pub(crate) async fn connect_with_uds(uds_path: PathBuf) -> error::Result<Channel
 pub(crate) fn utc_from_timestamp(t: Timestamp) -> DateTime<Utc> {
     DateTime::from_timestamp(t.seconds, t.nanos as u32).unwrap_or(Utc.timestamp_nanos(-1))
 }
+
+/// Creates a load-balanced channel across multiple HTTP endpoints.
+pub(crate) async fn create_multi_rpc_channel(endpoints: Vec<String>) -> error::Result<Channel> {
+    if endpoints.is_empty() {
+        return Err(Error::Connection("No endpoints provided".to_string()));
+    }
+
+    let endpoints: Vec<Endpoint> = endpoints
+        .into_iter()
+        .map(|a| Channel::from_shared(a).expect("valid address"))
+        .collect();
+
+    let channel = Channel::balance_list(endpoints.into_iter());
+
+    Ok(channel)
+}
