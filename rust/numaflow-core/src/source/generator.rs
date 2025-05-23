@@ -184,6 +184,7 @@ mod stream_generator {
                 },
                 headers: Default::default(),
                 metadata: None,
+                is_late: false,
             }
         }
 

@@ -84,10 +84,12 @@ This applies to all the window types regardless of whether they are keyed or non
 
 ## Allowed Lateness
 
-`allowedLateness` flag on the Reduce vertex will allow late data to be
-processed by slowing the down the close-of-book operation of the Reduce vertex. Late data will be included for
-the Reduce operation as long as the late data is not later than `(CurrentWatermark - AllowedLateness)`.
-Without `allowedLateness`, late data will be rejected and dropped. Each Reduce vertex can have its own `allowedLateness`.
+`allowedLateness` flag on the Reduce vertex will allow late data to be processed by slowing the down the close-of-book 
+operation of the Reduce vertex. Late data will be included for the Reduce operation as long as the late data is not 
+later than `(CurrentWatermark - AllowedLateness)`. Without `allowedLateness`, late data will be rejected and dropped. 
+The key reason for introducing `allowedLateness` is to support further out-of-order data beyond the watermark 
+withholding, esp. when there are multiple reducers in the pipeline. Each Reduce vertex can have its own `allowedLateness`,
+but the watermark delay is additive.
 
 ```yaml
 vertices:

@@ -7,8 +7,11 @@ use crate::reduce::reducer::aligned::windower::{
 };
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use bytes::Bytes;
+use chrono::{DateTime, Utc};
 use numaflow_pb::objects::wal::GcEvent;
 use std::collections::HashMap;
+use std::ops::Sub;
+use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
@@ -339,6 +342,10 @@ pub(crate) struct AlignedReducer {
     shutting_down_on_err: bool,
     /// WAL for writing GC events
     gc_wal: Option<AppendOnlyWal>,
+    /// Allowed lateness for the messages to be accepted and delay the close of book.
+    allowed_lateness: Duration,
+    /// current watermark for the reduce vertex.
+    current_watermark: DateTime<Utc>,
 }
 
 impl AlignedReducer {
@@ -347,6 +354,7 @@ impl AlignedReducer {
         window_manager: WindowManager,
         js_writer: JetstreamWriter,
         gc_wal: Option<AppendOnlyWal>,
+        allowed_lateness: Duration,
     ) -> Self {
         Self {
             client,
@@ -355,6 +363,8 @@ impl AlignedReducer {
             final_result: Ok(()),
             shutting_down_on_err: false,
             gc_wal,
+            allowed_lateness,
+            current_watermark: DateTime::from_timestamp_millis(-1).expect("Invalid timestamp"),
         }
     }
 
@@ -403,7 +413,21 @@ impl AlignedReducer {
                             break;
                         };
 
-                        // TODO: drop late messages, allowed lateness and keyed false (https://github.com/numaproj/numaflow/issues/2646)
+                        // update the watermark.
+                        // we cannot simply assign incoming message's watermark as the current watermark,
+                        // because it can be -1. watermark will never regress, so use max.
+                        self.current_watermark = self.current_watermark.max(msg.watermark.unwrap_or_default());
+
+                        // only drop the message if it is late and the event time is before the watermark - allowed lateness
+                        if msg.is_late && msg.event_time < self.current_watermark.sub(self.allowed_lateness) {
+                            // TODO(ajain): add a metric for this
+                            continue;
+                        }
+
+                        if self.current_watermark > msg.event_time {
+                            error!(current_watermark=?self.current_watermark, message_event_time=?msg.event_time, "Old message popped up, Watermark is behind the event time");
+                            continue;
+                        }
 
                         // If shutting down, drain the stream
                         if self.shutting_down_on_err {
@@ -411,12 +435,10 @@ impl AlignedReducer {
                             continue;
                         }
 
-                        // check if any windows can be closed using the watermark in the message
-                        if let Some(watermark) = msg.watermark {
-                            let window_messages = self.window_manager.close_windows(watermark);
-                            for window_msg in window_messages {
-                                actor_tx.send(window_msg).await.expect("Receiver dropped");
-                            }
+                        // check if any windows can be closed
+                        let window_messages = self.window_manager.close_windows(self.current_watermark.sub(self.allowed_lateness));
+                        for window_msg in window_messages {
+                            actor_tx.send(window_msg).await.expect("Receiver dropped");
                         }
 
                         // assign windows to the message
@@ -630,6 +652,7 @@ mod tests {
             WindowManager::Fixed(windower),
             js_writer,
             None, // No GC WAL for testing
+            Duration::from_secs(0),
         )
         .await;
 
@@ -657,8 +680,7 @@ mod tests {
                 offset: "0".to_string().into(),
                 index: 0,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Message 2: Within the first window
@@ -675,8 +697,7 @@ mod tests {
                 offset: "1".to_string().into(),
                 index: 1,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Message 3: Within the first window
@@ -693,8 +714,7 @@ mod tests {
                 offset: "2".to_string().into(),
                 index: 2,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Message 4: Within the first window but with watermark past window end
@@ -711,8 +731,7 @@ mod tests {
                 offset: "2".to_string().into(),
                 index: 2,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Send the messages
@@ -875,6 +894,7 @@ mod tests {
             WindowManager::Sliding(windower),
             js_writer,
             None, // No GC WAL for testing
+            Duration::from_secs(0),
         )
         .await;
 
@@ -902,8 +922,7 @@ mod tests {
                 offset: "0".to_string().into(),
                 index: 0,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Message 2: Within the first set of sliding windows
@@ -920,8 +939,7 @@ mod tests {
                 offset: "1".to_string().into(),
                 index: 1,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Message 3: Within the first window
@@ -938,8 +956,7 @@ mod tests {
                 offset: "2".to_string().into(),
                 index: 2,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Message 4: Within the first window but with watermark past window end
@@ -949,15 +966,14 @@ mod tests {
             tags: None,
             value: "value3".into(),
             offset: Offset::String(StringOffset::new("3".to_string(), 2)),
-            event_time: base_time + chrono::Duration::seconds(80),
+            event_time: base_time + chrono::Duration::seconds(120),
             watermark: Some(base_time + chrono::Duration::seconds(100)), // Past window end
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "3".to_string().into(),
                 index: 3,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Send the messages
@@ -1123,6 +1139,7 @@ mod tests {
             WindowManager::Fixed(windower),
             js_writer,
             None, // No GC WAL for testing
+            Duration::from_secs(0),
         )
         .await;
 
@@ -1150,8 +1167,7 @@ mod tests {
                 offset: "0".to_string().into(),
                 index: 0,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Message 2: Within the first window for key2
@@ -1168,8 +1184,7 @@ mod tests {
                 offset: "1".to_string().into(),
                 index: 1,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Message 3: Within the first window for key1
@@ -1186,8 +1201,7 @@ mod tests {
                 offset: "2".to_string().into(),
                 index: 2,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Message 4: Within the first window for key2
@@ -1204,8 +1218,7 @@ mod tests {
                 offset: "3".to_string().into(),
                 index: 3,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Message 5: With watermark past the first window end for key1
@@ -1215,15 +1228,14 @@ mod tests {
             tags: None,
             value: "value5".into(),
             offset: Offset::String(StringOffset::new("4".to_string(), 4)),
-            event_time: base_time + chrono::Duration::seconds(50),
+            event_time: base_time + chrono::Duration::seconds(90),
             watermark: Some(base_time + chrono::Duration::seconds(70)), // Past window end
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "4".to_string().into(),
                 index: 4,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Message 6: With watermark past the first window end for key2
@@ -1233,15 +1245,14 @@ mod tests {
             tags: None,
             value: "value6".into(),
             offset: Offset::String(StringOffset::new("5".to_string(), 5)),
-            event_time: base_time + chrono::Duration::seconds(60),
+            event_time: base_time + chrono::Duration::seconds(90),
             watermark: Some(base_time + chrono::Duration::seconds(80)), // Past window end
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
                 offset: "5".to_string().into(),
                 index: 5,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Send the messages
