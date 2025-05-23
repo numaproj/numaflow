@@ -9,13 +9,14 @@ use crate::reduce::reducer::unaligned::windower::{
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use bytes::Bytes;
 use numaflow_pb::objects::wal::GcEvent;
+use prost::Message as ProstMessage;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info};
+use tracing::{error, info};
 
 /// Represents an active reduce stream for a window.
 struct ActiveStream {
@@ -37,7 +38,7 @@ struct ReduceTask {
     /// Sender for GC WAL messages. It is optional since users can specify not to use WAL.
     gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
     /// Sender for error messages.
-    error_tx: mpsc::Sender<e>,
+    error_tx: mpsc::Sender<Error>,
     /// Window being processed by this task.
     window: Window,
     /// Window manager for assigning windows to messages and closing windows.
@@ -46,35 +47,16 @@ struct ReduceTask {
 
 impl ReduceTask {
     /// Creates a new ReduceTask with the given configuration for Accumulator
-    fn new_accumulator(
-        client: UserDefinedAccumulator,
+    fn new(
+        client: UnalignedReduceClientType,
         js_writer: JetstreamWriter,
         gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
-        error_tx: mpsc::Sender<e>,
+        error_tx: mpsc::Sender<Error>,
         window: Window,
         window_manager: UnalignedWindowManager,
     ) -> Self {
         Self {
-            client_type: UnalignedReduceClientType::Accumulator(client),
-            js_writer,
-            gc_wal_tx,
-            error_tx,
-            window,
-            window_manager,
-        }
-    }
-
-    /// Creates a new ReduceTask with the given configuration for Session
-    fn new_session(
-        client: UserDefinedSessionReduce,
-        js_writer: JetstreamWriter,
-        gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
-        error_tx: mpsc::Sender<e>,
-        window: Window,
-        window_manager: UnalignedWindowManager,
-    ) -> Self {
-        Self {
-            client_type: UnalignedReduceClientType::Session(client),
+            client_type: client,
             js_writer,
             gc_wal_tx,
             error_tx,
@@ -108,16 +90,10 @@ impl ReduceTask {
                         .await
                 }
             };
-            
-            // Extract the fields we need for the rest of the function
-            let js_writer = self.js_writer;
-            let gc_wal_tx = self.gc_wal_tx;
-            let error_tx = self.error_tx;
-            let window = self.window;
-            let window_manager = self.window_manager;
 
             // Spawn a task to write results to JetStream
-            let writer_handle = match js_writer
+            let writer_handle = match self
+                .js_writer
                 .streaming_write(result_stream, cln_token.clone())
                 .await
             {
@@ -138,30 +114,32 @@ impl ReduceTask {
                 // For other errors, log and send to error channel to signal the reduce actor to stop
                 // consuming new messages and exit with error.
                 error!(?e, "Error while doing reduce operation");
-                let _ = error_tx.send(e).await;
+                let _ = self.error_tx.send(e).await;
                 return;
             }
 
             // Write GC event to WAL if configured
-            if let Some(gc_wal_tx) = gc_wal_tx {
+            if let Some(gc_wal_tx) = self.gc_wal_tx {
                 let gc_event = GcEvent {
-                    window_end_time: Some(prost_types::Timestamp {
-                        seconds: window.end_time.timestamp(),
-                        nanos: window.end_time.timestamp_subsec_nanos() as i32,
+                    start_time: None,
+                    end_time: Some(prost_types::Timestamp {
+                        seconds: self.window.end_time.timestamp(),
+                        nanos: self.window.end_time.timestamp_subsec_nanos() as i32,
                     }),
-                    keys: window.keys.to_vec(),
+                    keys: self.window.keys.to_vec(),
                 };
 
                 let gc_event_bytes = gc_event.encode_to_vec();
                 let _ = gc_wal_tx
-                    .send(SegmentWriteMessage {
-                        data: gc_event_bytes,
+                    .send(SegmentWriteMessage::WriteData {
+                        offset: None,
+                        data: gc_event_bytes.into(),
                     })
                     .await;
             }
 
             // Delete the window from the window manager
-            window_manager.delete_closed_window(window);
+            self.window_manager.delete_closed_window(self.window);
 
             // Wait for the writer to complete
             if let Err(e) = writer_handle.await {
@@ -184,7 +162,7 @@ struct UnalignedReduceActor {
     /// JetStream writer for writing results of reduce operation.
     js_writer: JetstreamWriter,
     /// Sender for error messages.
-    error_tx: mpsc::Sender<e>,
+    error_tx: mpsc::Sender<Error>,
     /// Sender for GC WAL messages. It is optional since users can specify not to use WAL.
     gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
     /// WindowManager for assigning windows to messages and closing windows.
@@ -226,7 +204,7 @@ impl UnalignedReduceActor {
         client_type: UnalignedReduceClientType,
         receiver: mpsc::Receiver<UnalignedWindowMessage>,
         js_writer: JetstreamWriter,
-        error_tx: mpsc::Sender<e>,
+        error_tx: mpsc::Sender<Error>,
         gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
         window_manager: UnalignedWindowManager,
         cln_token: CancellationToken,
@@ -295,24 +273,14 @@ impl UnalignedReduceActor {
         let message_stream = ReceiverStream::new(message_rx);
 
         // Create a ReduceTask based on the client type
-        let reduce_task = match &self.client_type {
-            UnalignedReduceClientType::Accumulator(client) => ReduceTask::new_accumulator(
-                client.clone(),
-                self.js_writer.clone(),
-                self.gc_wal_tx.clone(),
-                self.error_tx.clone(),
-                window.clone(),
-                self.window_manager.clone(),
-            ),
-            UnalignedReduceClientType::Session(client) => ReduceTask::new_session(
-                client.clone(),
-                self.js_writer.clone(),
-                self.gc_wal_tx.clone(),
-                self.error_tx.clone(),
-                window.clone(),
-                self.window_manager.clone(),
-            ),
-        };
+        let reduce_task = ReduceTask::new(
+            self.client_type.clone(),
+            self.js_writer.clone(),
+            self.gc_wal_tx.clone(),
+            self.error_tx.clone(),
+            window.clone(),
+            self.window_manager.clone(),
+        );
 
         // Start the reduce task and store the handle and the sender
         let task_handle = reduce_task
@@ -342,20 +310,19 @@ impl UnalignedReduceActor {
         window_id: Bytes,
         msg: UnalignedWindowMessage,
     ) -> crate::Result<()> {
-        // Get the existing stream or create a new one if not found
-        if let Some(active_stream) = self.active_streams.get(&window_id) {
-            // Send the append message
-            active_stream.message_tx.send(msg).await.map_err(|_| {
-                Error::Reduce("Failed to send append message to reduce task".to_string())
-            })?;
-        } else {
-            // This can happen if the window was closed or if we're receiving messages out of order
+        let Some(active_stream) = self.active_streams.get(&window_id) else {
             error!(
                 ?window_id,
                 "No active stream found for window during append"
             );
-            // We could potentially create a new window here, but for now we'll just log an error
-        }
+            return Ok(());
+        };
+
+        // Get the existing stream or create a new one if not found
+        // Send the append message
+        active_stream.message_tx.send(msg).await.map_err(|_| {
+            Error::Reduce("Failed to send append message to reduce task".to_string())
+        })?;
 
         Ok(())
     }
@@ -379,35 +346,7 @@ impl UnalignedReduceActor {
 
     /// Handles merging windows (specific to session windows)
     async fn window_merge(&mut self, msg: UnalignedWindowMessage) -> crate::Result<()> {
-        // For merge operations, we need to:
-        // 1. Create a new window for the merged result
-        // 2. Close the windows being merged
-        // 3. Send the merge message to the new window
-
-        // The first window in the list is the target window (result of merge)
-        let target_window = &msg.windows[0];
-
-        // Create a new window for the merged result if it doesn't exist
-        if !self.active_streams.contains_key(&target_window.id) {
-            self.window_open(target_window.clone(), msg.clone()).await?;
-        } else {
-            // If the target window already exists, just send the merge message
-            let active_stream = self.active_streams.get(&target_window.id).unwrap();
-            active_stream
-                .message_tx
-                .send(msg.clone())
-                .await
-                .map_err(|_| {
-                    Error::Reduce("Failed to send merge message to reduce task".to_string())
-                })?;
-        }
-
-        // Close the windows being merged (all except the first one)
-        for window in msg.windows.iter().skip(1) {
-            self.window_close(window.id.clone()).await;
-        }
-
-        Ok(())
+        unimplemented!("Merge operation not implemented for unaligned reduce")
     }
 
     /// Handles expanding windows (specific to session windows)
@@ -416,19 +355,7 @@ impl UnalignedReduceActor {
         window_id: Bytes,
         msg: UnalignedWindowMessage,
     ) -> crate::Result<()> {
-        // For expand operations, we just need to send the message to the existing window
-        if let Some(active_stream) = self.active_streams.get(&window_id) {
-            active_stream.message_tx.send(msg).await.map_err(|_| {
-                Error::Reduce("Failed to send expand message to reduce task".to_string())
-            })?;
-        } else {
-            error!(
-                ?window_id,
-                "No active stream found for window during expand"
-            );
-        }
-
-        Ok(())
+        unimplemented!("Expand operation not implemented for unaligned reduce")
     }
 }
 
@@ -555,7 +482,7 @@ impl UnalignedReducer {
         cln_token: &CancellationToken,
     ) -> crate::Result<()> {
         // Convert the message to UnalignedWindowMessage
-        let window_messages = self.window_manager.assign_windows(&msg).await?;
+        let window_messages = self.window_manager.assign_windows(msg);
         for window_msg in window_messages {
             // Send the message to the actor
             actor_tx
@@ -566,11 +493,11 @@ impl UnalignedReducer {
         Ok(())
     }
 
-    /// Set up the GC WAL if needed
+    /// Set up the GC WAL if configured.
     async fn setup_gc_wal(&mut self) -> crate::Result<Option<mpsc::Sender<SegmentWriteMessage>>> {
-        if let Some(wal) = &self.gc_wal {
+        if let Some(gc_wal) = self.gc_wal.take() {
             let (gc_tx, gc_rx) = mpsc::channel(100);
-            let gc_handle = wal.start_gc_writer(gc_rx, cln_token.clone()).await?;
+            gc_wal.streaming_write(ReceiverStream::new(gc_rx)).await?;
             Ok(Some(gc_tx))
         } else {
             Ok(None)

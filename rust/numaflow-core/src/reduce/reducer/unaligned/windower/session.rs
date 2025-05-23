@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::message::Message;
-use crate::reduce::reducer::unaligned::windower::UnalignedWindowMessage;
+use crate::reduce::reducer::unaligned::windower::{UnalignedWindowMessage, Window};
 use chrono::{DateTime, Utc};
 
 /// SessionWindowManager manages session windows.
@@ -14,18 +14,18 @@ impl SessionWindowManager {
     }
 
     pub(crate) fn assign_windows(&self, msg: Message) -> Vec<UnalignedWindowMessage> {
-        todo!()
+        unimplemented!()
     }
 
     pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<UnalignedWindowMessage> {
-        todo!()
+        unimplemented!()
     }
 
-    pub(crate) fn delete_closed_windows(&self, watermark: DateTime<Utc>) {
-        todo!()
+    pub(crate) fn delete_closed_window(&self, window: Window) {
+        unimplemented!()
     }
 
     pub(crate) fn oldest_window_end_time(&self) -> Option<DateTime<Utc>> {
-        todo!()
+        unimplemented!()
     }
 }

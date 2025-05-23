@@ -79,53 +79,6 @@ pub(crate) struct UnalignedWindowMessage {
     pub(crate) windows: Vec<Window>,
 }
 
-// Technically we can have a trait for AlignedWindowManager and implement it for Fixed and Sliding, but
-// the generics are getting in all the way from the bootup code. Also, we do not expect any other
-// window types in the future.
-/// AlignedWindowManager enum that can be either a FixedWindowManager or a SlidingWindowManager.
-#[derive(Debug, Clone)]
-pub(crate) enum AlignedWindowManager {
-    /// Fixed window manager.
-    Fixed(FixedWindowManager),
-    /// Sliding window manager.
-    Sliding(SlidingWindowManager),
-}
-
-impl AlignedWindowManager {
-    /// Assigns windows to a message, dropping messages with event time earlier than the oldest window's start time
-    pub(crate) fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage> {
-        match self {
-            AlignedWindowManager::Fixed(manager) => manager.assign_windows(msg),
-            AlignedWindowManager::Sliding(manager) => manager.assign_windows(msg),
-        }
-    }
-
-    /// Closes any windows that can be closed because the Watermark has advanced beyond the window
-    /// end time.
-    pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage> {
-        match self {
-            AlignedWindowManager::Fixed(manager) => manager.close_windows(watermark),
-            AlignedWindowManager::Sliding(manager) => manager.close_windows(watermark),
-        }
-    }
-
-    /// Deletes a window is called after the window is closed and GC is done.
-    pub(crate) fn delete_window(&self, window: Window) {
-        match self {
-            AlignedWindowManager::Fixed(manager) => manager.gc_window(window),
-            AlignedWindowManager::Sliding(manager) => manager.gc_window(window),
-        }
-    }
-
-    /// Returns the oldest window yet to be completed. This will be the lowest Watermark in the Vertex.
-    pub(crate) fn oldest_window(&self) -> Option<Window> {
-        match self {
-            AlignedWindowManager::Fixed(manager) => manager.oldest_window(),
-            AlignedWindowManager::Sliding(manager) => manager.oldest_window(),
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub(crate) enum UnalignedWindowManager {
     Accumulator(AccumulatorWindowManager),
