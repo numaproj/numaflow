@@ -311,7 +311,7 @@ docs-serve: docs
 
 .PHONY: docs-linkcheck
 docs-linkcheck: /usr/local/bin/lychee
-	lychee --exclude-path=CHANGELOG.md *.md --include "https://github.com/numaproj/*" $(shell find ./test -type f) $(wildcard ./docs/*.md) --accept 200,429
+	lychee --exclude-path=CHANGELOG.md *.md --include "https://github.com/numaproj/*" $(shell find ./test -type f) $(shell find ./docs -name '*.md')
 
 # pre-push checks
 

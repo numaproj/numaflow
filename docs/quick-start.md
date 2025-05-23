@@ -133,9 +133,9 @@ kubectl -n numaflow-system port-forward deployment/numaflow-server 8443:8443
 
 Visit https://localhost:8443/ to view the UI. Below is the UI for the `simple` pipeline:
 
-#### Namespaces View
+#### Cluster View
 
-![Namespace View](assets/quick-start/namespace-view.png)
+![Cluster View](assets/quick-start/namespace-view.png)
 
 #### Default Namespace View
 
