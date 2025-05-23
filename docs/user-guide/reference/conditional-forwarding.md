@@ -13,8 +13,9 @@ and define the edges as below:
 
 ## Default Behavior
 
-* If no `conditions` are specified in the spec, the message will be forwarded to all the downstream vertices.
-* In the code, if the `Messages` are not tagged, the message will be forwarded to all the downstream vertices.
+* If no `conditions` are specified in the spec, the message will be forwarded to all the downstream vertices (independent
+  of the `tags` in the `Messages`).
+* In the code, if the `Messages` are not tagged but conditions are configured, we will still honour the edge conditions.
 
 ## Syntax
 

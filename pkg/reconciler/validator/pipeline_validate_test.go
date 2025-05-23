@@ -520,6 +520,17 @@ func TestValidatePipeline(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
+	t.Run("no tag values conditional forwarding", func(t *testing.T) {
+		testObj := testPipeline.DeepCopy()
+		operatorOr := dfv1.LogicOperatorOr
+		testObj.Spec.Edges[1].Conditions = &dfv1.ForwardConditions{Tags: &dfv1.TagConditions{
+			Operator: &operatorOr,
+			Values:   []string{}}}
+		err := ValidatePipeline(testObj)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid edge: conditional forwarding requires at least one tag value")
+	})
+
 	t.Run("allow conditional forwarding from source vertex or udf vertex", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
 		operatorOr := dfv1.LogicOperatorOr
