@@ -413,11 +413,19 @@ impl AlignedReducer {
                             break;
                         };
 
+                        // update the watermark.
+                        // we cannot simply assign incoming message's watermark as the current watermark,
+                        // because it can be -1. watermark will never regress, so use max.
                         self.current_watermark = self.current_watermark.max(msg.watermark.unwrap_or_default());
 
                         // only drop the message if it is late and the event time is before the watermark - allowed lateness
                         if msg.is_late && msg.event_time < self.current_watermark.sub(self.allowed_lateness) {
                             // TODO(ajain): add a metric for this
+                            continue;
+                        }
+
+                        if self.current_watermark < msg.event_time {
+                            error!(current_watermark=?self.current_watermark, message_event_time=?msg.event_time, "Old message popped up, Watermark is behind the event time");
                             continue;
                         }
 
