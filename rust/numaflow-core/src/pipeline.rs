@@ -445,7 +445,18 @@ async fn start_reduce_forwarder(
     )
     .await;
 
-    let reducer = AlignedReducer::new(reducer_client, window_manager, buffer_writer, gc_wal).await;
+    let reducer = AlignedReducer::new(
+        reducer_client,
+        window_manager,
+        buffer_writer,
+        gc_wal,
+        reduce_vtx_config
+            .reducer_config
+            .window_config
+            .allowed_lateness,
+    )
+    .await;
+
     let forwarder = ReduceForwarder::new(pbq, reducer);
     forwarder.start(cln_token).await?;
 
@@ -854,6 +865,7 @@ mod tests {
                 },
                 headers: HashMap::new(),
                 metadata: None,
+                is_late: false,
             };
             let message: bytes::BytesMut = message.try_into().unwrap();
 
@@ -1050,6 +1062,7 @@ mod tests {
                 },
                 headers: HashMap::new(),
                 metadata: None,
+                is_late: false,
             };
             let message: bytes::BytesMut = message.try_into().unwrap();
 

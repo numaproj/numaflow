@@ -364,6 +364,7 @@ mod tests {
             },
             headers: Default::default(),
             metadata: None,
+            is_late: false,
         };
 
         let transformed_messages = Transformer::transform(
@@ -435,6 +436,7 @@ mod tests {
                 },
                 headers: Default::default(),
                 metadata: None,
+                is_late: false,
             };
             messages.push(message);
         }
@@ -513,6 +515,7 @@ mod tests {
             },
             headers: Default::default(),
             metadata: None,
+            is_late: false,
         };
 
         let result = transformer
