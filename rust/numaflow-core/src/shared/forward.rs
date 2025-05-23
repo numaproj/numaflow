@@ -15,11 +15,6 @@ pub(crate) fn should_forward(
         return true;
     };
 
-    // we should forward the message to downstream vertex if there is no operator in the condition
-    let Some(operator) = &conditions.tags.operator else {
-        return true;
-    };
-
     // Return true if there are no tags in the edge condition
     if conditions.tags.values.is_empty() {
         return true;
@@ -27,6 +22,8 @@ pub(crate) fn should_forward(
 
     // Treat missing tags as empty and check the condition
     let tags = tags.unwrap_or_else(|| Arc::from(vec![]));
+    // Default operator is "or", if not specified
+    let operator = conditions.tags.operator.as_deref().unwrap_or("or");
     check_operator_condition(operator, &conditions.tags.values, &tags)
 }
 
@@ -159,5 +156,14 @@ mod tests {
         // None tags
         let result = should_forward(None, Some(Box::new(conditions)));
         assert!(result, "NOT condition should pass with None tags");
+    }
+
+    #[tokio::test]
+    async fn test_default_operator() {
+        let tag_conditions = TagConditions::new(vec!["tag1".to_string(), "tag2".to_string()]);
+        let conditions = ForwardConditions::new(tag_conditions);
+        let tags = Some(Arc::from(vec!["tag1".to_string(), "tag2".to_string()]));
+        let result = should_forward(tags, Some(Box::new(conditions)));
+        assert!(result);
     }
 }
