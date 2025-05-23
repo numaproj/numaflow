@@ -38,7 +38,6 @@ use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use numaflow_sqs::sink::SqsSinkBuilder;
 use tokio_util::sync::CancellationToken;
-use tracing::info;
 
 /// Creates a sink writer based on the configuration
 pub(crate) async fn create_sink_writer(

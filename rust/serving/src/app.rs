@@ -8,7 +8,7 @@ use axum::response::Response;
 use axum::{Router, body::Body, http::Request, middleware, response::IntoResponse, routing::get};
 use axum_server::Handle;
 use axum_server::tls_rustls::RustlsConfig;
-use http::{HeaderName, status};
+use http::HeaderName;
 use hyper_util::client::legacy::connect::HttpConnector;
 use hyper_util::rt::TokioExecutor;
 use serde::Deserialize;
