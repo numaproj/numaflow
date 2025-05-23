@@ -1,5 +1,41 @@
 # Changelog
 
+## v1.5.0-rc3 (2025-05-18)
+
+ * [40839123](https://github.com/numaproj/numaflow/commit/408391237923536f482099a1040f02b104832375) Update manifests to v1.5.0-rc3
+ * [abc72d3b](https://github.com/numaproj/numaflow/commit/abc72d3bb4e1f70d990ee07dcc5dc51030b5d768) fix: potential incorrect k8s minor version (#2647)
+ * [f3968694](https://github.com/numaproj/numaflow/commit/f396869467d3b78ced4dfcc23267d082155911d4) feat: exponential backoff retry strategy for sink (#2614)
+ * [b3a691a4](https://github.com/numaproj/numaflow/commit/b3a691a414241e6a74016f0a7cebd224b924c078) fix: honour retry config in case of Pipeline in Rust (#2638)
+ * [35c80b14](https://github.com/numaproj/numaflow/commit/35c80b14f2edc74dfb1cc078393776703e1231de) fix: broken retry strategy in sink (#2626)
+
+### Contributors
+
+ * Adarsh Jain
+ * Derek Wang
+ * Yashash H L
+
+## v1.5.0-rc2 (2025-05-12)
+
+ * [bec31d7f](https://github.com/numaproj/numaflow/commit/bec31d7fd7fd444b3db33f7a97ca71fe19b96675) Update manifests to v1.5.0-rc2
+ * [89e1d4f7](https://github.com/numaproj/numaflow/commit/89e1d4f724168864541bf09c9493088b03f88d68) fix: sink instantiation (#2627)
+ * [ee713734](https://github.com/numaproj/numaflow/commit/ee7137347ed091179bdc64bef4523e9d85a81b40) feat: sqs sink (#2615)
+ * [8ede89a7](https://github.com/numaproj/numaflow/commit/8ede89a7c4ea73fc7878148a839c6f42df6eaf31) fix: source and transformer metrics (#2584)
+ * [10f7bd2b](https://github.com/numaproj/numaflow/commit/10f7bd2b0be9aa5fff596c3599bf2f3ca8354623) feat: enable pod template support for serving deployment (#2620)
+ * [532c236d](https://github.com/numaproj/numaflow/commit/532c236d42878228dafeaa2c0f268e7067738005) fix: serving example (#2619)
+ * [9430f277](https://github.com/numaproj/numaflow/commit/9430f277bf40b26b1af82cf69d67c252e5850013) fix: take only the base filename while sorting (#2616)
+ * [4bd05a7f](https://github.com/numaproj/numaflow/commit/4bd05a7f01be010961af2408c343fbc696905b0f) fix: idle watermark severity (#2613)
+ * [868addb0](https://github.com/numaproj/numaflow/commit/868addb02c7da8b40a5d7b81aa89a3aedec37db2) doc: minor typo in accum doc (#2611)
+ * [af29f159](https://github.com/numaproj/numaflow/commit/af29f15900a91d9ecca05abb8ed731ae0432aa13) doc: accumulator doc (#2609)
+ * [224c8a4e](https://github.com/numaproj/numaflow/commit/224c8a4e6cdae5e2cd2195d2f6d82bca5c8fcaf7) feat: PBQ for Reduce Async Data Movement (#2601)
+
+### Contributors
+
+ * Derek Wang
+ * Shrivardhan Rao
+ * Takashi Menjo
+ * Vigith Maurice
+ * shrivardhan
+
 ## v1.5.0-rc1 (2025-04-30)
 
  * [834446ff](https://github.com/numaproj/numaflow/commit/834446ff701f1dd9ef2cdc347179e0544ce1c14a) Update manifests to v1.5.0-rc1
@@ -132,6 +168,25 @@
  * Yashash H L
  * dependabot[bot]
  * shrivardhan
+
+## v1.4.6 (2025-05-18)
+
+ * [b966b1bb](https://github.com/numaproj/numaflow/commit/b966b1bbc88337fcec8580dea3417fbc3710ce2e) Update manifests to v1.4.6
+
+### Contributors
+
+ * Derek Wang
+
+## v1.4.5 (2025-05-13)
+
+ * [9090935a](https://github.com/numaproj/numaflow/commit/9090935aafcaf6fc173bc27312c2a09bef22cec4) Update manifests to v1.4.5
+ * [62c45609](https://github.com/numaproj/numaflow/commit/62c4560996e384657009d2230ca925ffec60499b) feat: expose metrics for pipeline/mvtx desired and current phase (#2563)
+ * [6e49fb11](https://github.com/numaproj/numaflow/commit/6e49fb114361f6c451ffd4ab4beac40b63aae259) fix: broken retry strategy in pipeline sink (#2625)
+
+### Contributors
+
+ * Derek Wang
+ * Yashash H L
 
 ## v1.4.4 (2025-04-03)
 

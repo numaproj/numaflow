@@ -162,7 +162,7 @@ mod tests {
         }
     }
 
-    // #[cfg(feature = "nats-tests")]
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_source_forwarder() {
         let tracker_handle = TrackerHandle::new(None, None);
@@ -277,6 +277,7 @@ mod tests {
             tracker_handle.clone(),
             cln_token.clone(),
             None,
+            "Source".to_string(),
         );
 
         // create the forwarder with the source, transformer, and writer

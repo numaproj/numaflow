@@ -20,9 +20,17 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Backoff {
+    #[serde(rename = "cap", skip_serializing_if = "Option::is_none")]
+    pub cap: Option<kube::core::Duration>,
+    /// Interval is multiplied by factor each iteration, if factor is not zero and the limits imposed by Steps and Cap have not been reached.
+    #[serde(rename = "factor", skip_serializing_if = "Option::is_none")]
+    pub factor: Option<f64>,
     #[serde(rename = "interval", skip_serializing_if = "Option::is_none")]
     pub interval: Option<kube::core::Duration>,
-    /// Steps defines the number of times to try writing to a sink including retries
+    /// The sleep at each iteration is the interval plus an additional amount chosen uniformly at random from the interval between zero and `jitter*interval`.
+    #[serde(rename = "jitter", skip_serializing_if = "Option::is_none")]
+    pub jitter: Option<f64>,
+    /// Steps defines the maximum number of retry attempts
     #[serde(rename = "steps", skip_serializing_if = "Option::is_none")]
     pub steps: Option<i64>,
 }
@@ -31,7 +39,10 @@ impl Backoff {
     /// Backoff defines parameters used to systematically configure the retry strategy.
     pub fn new() -> Backoff {
         Backoff {
+            cap: None,
+            factor: None,
             interval: None,
+            jitter: None,
             steps: None,
         }
     }

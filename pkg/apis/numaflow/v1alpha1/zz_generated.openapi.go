@@ -117,6 +117,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink":                             schema_pkg_apis_numaflow_v1alpha1_Sink(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SlidingWindow":                    schema_pkg_apis_numaflow_v1alpha1_SlidingWindow(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source":                           schema_pkg_apis_numaflow_v1alpha1_Source(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SqsSink":                          schema_pkg_apis_numaflow_v1alpha1_SqsSink(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SqsSource":                        schema_pkg_apis_numaflow_v1alpha1_SqsSource(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Status":                           schema_pkg_apis_numaflow_v1alpha1_Status(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS":                              schema_pkg_apis_numaflow_v1alpha1_TLS(ref),
@@ -330,11 +331,17 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractSink(ref common.ReferenceCallback
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServeSink"),
 						},
 					},
+					"sqs": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SQS sink is used to write the data to the AWS SQS.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SqsSink"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServeSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServeSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SqsSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"},
 	}
 }
 
@@ -668,15 +675,35 @@ func schema_pkg_apis_numaflow_v1alpha1_Backoff(ref common.ReferenceCallback) com
 				Properties: map[string]spec.Schema{
 					"interval": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Interval sets the delay to wait before retry, after a failure occurs.",
+							Description: "Interval sets the initial retry duration, after a failure occurs.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
 					"steps": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Steps defines the number of times to try writing to a sink including retries",
+							Description: "Steps defines the maximum number of retry attempts",
 							Type:        []string{"integer"},
 							Format:      "int64",
+						},
+					},
+					"factor": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Interval is multiplied by factor each iteration, if factor is not zero and the limits imposed by Steps and Cap have not been reached.",
+							Type:        []string{"number"},
+							Format:      "double",
+						},
+					},
+					"cap": {
+						SchemaProps: spec.SchemaProps{
+							Description: "A limit on revised values of the interval parameter. If a multiplication by the factor parameter would make the interval exceed the cap then the interval is set to the cap and the steps parameter is set to zero.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
+					"jitter": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The sleep at each iteration is the interval plus an additional amount chosen uniformly at random from the interval between zero and `jitter*interval`.",
+							Type:        []string{"number"},
+							Format:      "double",
 						},
 					},
 				},
@@ -4605,12 +4632,12 @@ func schema_pkg_apis_numaflow_v1alpha1_RetryStrategy(ref common.ReferenceCallbac
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "RetryStrategy struct encapsulates the settings for retrying operations in the event of failures. It includes a BackOff strategy to manage the timing of retries and defines the action to take upon failure.",
+				Description: "The RetryStrategy struct defines the configuration for handling operation retries in case of failures. It incorporates an Exponential BackOff strategy to control retry timing and specifies the actions to take upon failure.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"backoff": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BackOff specifies the parameters for the backoff strategy, controlling how delays between retries should increase.",
+							Description: "BackOff specifies the parameters for the exponential backoff strategy, controlling how delays between retries should increase.",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Backoff"),
 						},
 					},
@@ -5583,6 +5610,12 @@ func schema_pkg_apis_numaflow_v1alpha1_Sink(ref common.ReferenceCallback) common
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServeSink"),
 						},
 					},
+					"sqs": {
+						SchemaProps: spec.SchemaProps{
+							Description: "SQS sink is used to write the data to the AWS SQS.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SqsSink"),
+						},
+					},
 					"fallback": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Fallback sink can be imagined as DLQ for primary Sink. The writes to Fallback sink will only be initiated if the ud-sink response field sets it.",
@@ -5600,7 +5633,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Sink(ref common.ReferenceCallback) common
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RetryStrategy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServeSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RetryStrategy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServeSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SqsSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"},
 	}
 }
 
@@ -5699,6 +5732,43 @@ func schema_pkg_apis_numaflow_v1alpha1_Source(ref common.ReferenceCallback) comm
 		},
 		Dependencies: []string{
 			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GeneratorSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.HTTPSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SqsSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSource", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDTransformer"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_SqsSink(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"awsRegion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "AWSRegion is the AWS Region where the SQS queue is located",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"queueName": {
+						SchemaProps: spec.SchemaProps{
+							Description: "QueueName is the name of the SQS queue",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"queueOwnerAWSAccountID": {
+						SchemaProps: spec.SchemaProps{
+							Description: "QueueOwnerAWSAccountID is the queue owner aws account id",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"awsRegion", "queueName", "queueOwnerAWSAccountID"},
+			},
+		},
 	}
 }
 

@@ -536,6 +536,26 @@ ServingPipeline.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>sqs</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.SqsSink"> SqsSink </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+SQS sink is used to write the data to the AWS SQS.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -1079,7 +1099,7 @@ Kubernetes meta/v1.Duration </a> </em>
 <em>(Optional)</em>
 <p>
 
-Interval sets the delay to wait before retry, after a failure occurs.
+Interval sets the initial retry duration, after a failure occurs.
 </p>
 
 </td>
@@ -1098,8 +1118,71 @@ Interval sets the delay to wait before retry, after a failure occurs.
 <em>(Optional)</em>
 <p>
 
-Steps defines the number of times to try writing to a sink including
-retries
+Steps defines the maximum number of retry attempts
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>factor</code></br> <em> float64 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Interval is multiplied by factor each iteration, if factor is not zero
+and the limits imposed by Steps and Cap have not been reached.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>cap</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+A limit on revised values of the interval parameter. If a multiplication
+by the factor parameter would make the interval exceed the cap then the
+interval is set to the cap and the steps parameter is set to zero.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>jitter</code></br> <em> float64 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The sleep at each iteration is the interval plus an additional amount
+chosen uniformly at random from the interval between zero and
+<code>jitter\*interval</code>.
 </p>
 
 </td>
@@ -9218,9 +9301,10 @@ RetryStrategy
 
 <p>
 
-RetryStrategy struct encapsulates the settings for retrying operations
-in the event of failures. It includes a BackOff strategy to manage the
-timing of retries and defines the action to take upon failure.
+The RetryStrategy struct defines the configuration for handling
+operation retries in case of failures. It incorporates an Exponential
+BackOff strategy to control retry timing and specifies the actions to
+take upon failure.
 </p>
 
 </p>
@@ -9260,8 +9344,8 @@ Description
 <em>(Optional)</em>
 <p>
 
-BackOff specifies the parameters for the backoff strategy, controlling
-how delays between retries should increase.
+BackOff specifies the parameters for the exponential backoff strategy,
+controlling how delays between retries should increase.
 </p>
 
 </td>
@@ -11420,6 +11504,101 @@ JetStreamSource </a> </em>
 <td>
 
 <em>(Optional)</em>
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.SqsSink">
+
+SqsSink
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractSink">AbstractSink</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>awsRegion</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+AWSRegion is the AWS Region where the SQS queue is located
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>queueName</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+QueueName is the name of the SQS queue
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>queueOwnerAWSAccountID</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+QueueOwnerAWSAccountID is the queue owner aws account id
+</p>
+
 </td>
 
 </tr>

@@ -6864,6 +6864,19 @@ spec:
                         type: object
                       serve:
                         type: object
+                      sqs:
+                        properties:
+                          awsRegion:
+                            type: string
+                          queueName:
+                            type: string
+                          queueOwnerAWSAccountID:
+                            type: string
+                        required:
+                        - awsRegion
+                        - queueName
+                        - queueOwnerAWSAccountID
+                        type: object
                       udsink:
                         properties:
                           container:
@@ -7438,9 +7451,15 @@ spec:
                     properties:
                       backoff:
                         properties:
+                          cap:
+                            type: string
+                          factor:
+                            type: number
                           interval:
                             default: 1ms
                             type: string
+                          jitter:
+                            type: number
                           steps:
                             format: int32
                             type: integer
@@ -7450,6 +7469,19 @@ spec:
                         type: string
                     type: object
                   serve:
+                    type: object
+                  sqs:
+                    properties:
+                      awsRegion:
+                        type: string
+                      queueName:
+                        type: string
+                      queueOwnerAWSAccountID:
+                        type: string
+                    required:
+                    - awsRegion
+                    - queueName
+                    - queueOwnerAWSAccountID
                     type: object
                   udsink:
                     properties:
@@ -18252,6 +18284,19 @@ spec:
                               type: object
                             serve:
                               type: object
+                            sqs:
+                              properties:
+                                awsRegion:
+                                  type: string
+                                queueName:
+                                  type: string
+                                queueOwnerAWSAccountID:
+                                  type: string
+                              required:
+                              - awsRegion
+                              - queueName
+                              - queueOwnerAWSAccountID
+                              type: object
                             udsink:
                               properties:
                                 container:
@@ -18826,9 +18871,15 @@ spec:
                           properties:
                             backoff:
                               properties:
+                                cap:
+                                  type: string
+                                factor:
+                                  type: number
                                 interval:
                                   default: 1ms
                                   type: string
+                                jitter:
+                                  type: number
                                 steps:
                                   format: int32
                                   type: integer
@@ -18838,6 +18889,19 @@ spec:
                               type: string
                           type: object
                         serve:
+                          type: object
+                        sqs:
+                          properties:
+                            awsRegion:
+                              type: string
+                            queueName:
+                              type: string
+                            queueOwnerAWSAccountID:
+                              type: string
+                          required:
+                          - awsRegion
+                          - queueName
+                          - queueOwnerAWSAccountID
                           type: object
                         udsink:
                           properties:
@@ -30015,6 +30079,19 @@ spec:
                                   type: object
                                 serve:
                                   type: object
+                                sqs:
+                                  properties:
+                                    awsRegion:
+                                      type: string
+                                    queueName:
+                                      type: string
+                                    queueOwnerAWSAccountID:
+                                      type: string
+                                  required:
+                                  - awsRegion
+                                  - queueName
+                                  - queueOwnerAWSAccountID
+                                  type: object
                                 udsink:
                                   properties:
                                     container:
@@ -30589,9 +30666,15 @@ spec:
                               properties:
                                 backoff:
                                   properties:
+                                    cap:
+                                      type: string
+                                    factor:
+                                      type: number
                                     interval:
                                       default: 1ms
                                       type: string
+                                    jitter:
+                                      type: number
                                     steps:
                                       format: int32
                                       type: integer
@@ -30601,6 +30684,19 @@ spec:
                                   type: string
                               type: object
                             serve:
+                              type: object
+                            sqs:
+                              properties:
+                                awsRegion:
+                                  type: string
+                                queueName:
+                                  type: string
+                                queueOwnerAWSAccountID:
+                                  type: string
+                              required:
+                              - awsRegion
+                              - queueName
+                              - queueOwnerAWSAccountID
                               type: object
                             udsink:
                               properties:
@@ -37740,6 +37836,19 @@ spec:
                         type: object
                       serve:
                         type: object
+                      sqs:
+                        properties:
+                          awsRegion:
+                            type: string
+                          queueName:
+                            type: string
+                          queueOwnerAWSAccountID:
+                            type: string
+                        required:
+                        - awsRegion
+                        - queueName
+                        - queueOwnerAWSAccountID
+                        type: object
                       udsink:
                         properties:
                           container:
@@ -38314,9 +38423,15 @@ spec:
                     properties:
                       backoff:
                         properties:
+                          cap:
+                            type: string
+                          factor:
+                            type: number
                           interval:
                             default: 1ms
                             type: string
+                          jitter:
+                            type: number
                           steps:
                             format: int32
                             type: integer
@@ -38326,6 +38441,19 @@ spec:
                         type: string
                     type: object
                   serve:
+                    type: object
+                  sqs:
+                    properties:
+                      awsRegion:
+                        type: string
+                      queueName:
+                        type: string
+                      queueOwnerAWSAccountID:
+                        type: string
+                    required:
+                    - awsRegion
+                    - queueName
+                    - queueOwnerAWSAccountID
                     type: object
                   udsink:
                     properties:

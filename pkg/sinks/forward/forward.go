@@ -372,7 +372,7 @@ func (df *DataForward) ackFromBuffer(ctx context.Context, offsets []isb.Offset) 
 	return ctxClosedErr
 }
 
-// writeToSink forwards an array of messages to a sink and it is a blocking call it keeps retrying
+// writeToSink forwards an array of messages to a sink, and it is a blocking call it keeps retrying
 // until shutdown has been initiated. The function also evaluates whether to use a fallback sink based
 // on the error and configuration.
 func (df *DataForward) writeToSink(ctx context.Context, sinkWriter sinker.SinkWriter, messagesToTry []isb.Message, isFbSinkWriter bool) ([]isb.Offset, []isb.Message, error) {
@@ -462,9 +462,10 @@ func (df *DataForward) writeToSink(ctx context.Context, sinkWriter sinker.SinkWr
 			return true, nil
 		})
 
-		if err != nil {
+		if ok, _ := df.IsShuttingDown(); err != nil && ok {
 			return nil, nil, err
 		}
+
 		// Check what actions are required once the writing loop is completed
 		// Break if no further action is required
 		if !df.handlePostRetryFailures(&messagesToTry, failStrategy, &fallbackMessages, sinkWriter) {
@@ -484,10 +485,8 @@ func (df *DataForward) handlePostRetryFailures(messagesToTry *[]isb.Message, fai
 
 	// Check if we still have messages left to be processed
 	if len(*messagesToTry) > 0 {
-
 		df.opts.logger.Infof("Retries exhausted in sink, messagesLeft %d, Next strategy %s",
 			len(*messagesToTry), failStrategy)
-
 		// Check what is the failure strategy to be followed after retry exhaustion
 		switch failStrategy {
 		case dfv1.OnFailureRetry:
@@ -578,6 +577,8 @@ func (df *DataForward) getBackOffConditions(isFallbackSink bool) (wait.Backoff, 
 		return wait.Backoff{
 			Duration: dfv1.DefaultRetryInterval,
 			Steps:    dfv1.DefaultRetrySteps,
+			Factor:   dfv1.DefaultFactor,
+			Cap:      dfv1.DefaultMaxRetryInterval,
 		}, dfv1.OnFailureRetry
 	}
 	// Initial interval duration and number of retries are taken from DataForward settings.

@@ -259,10 +259,14 @@ const (
 
 	// Retry Strategy
 
-	// DefaultRetryInterval specifies the default time interval between retry attempts.
+	// DefaultRetryInterval specifies the default initial retry duration in case of exponential backoff.
+	// In case of fixed interval retry strategy, it is the default retry interval.
 	// This value can be adjusted depending on the specific requirements
 	// for responsiveness and system load considerations.
 	DefaultRetryInterval = 1 * time.Millisecond
+
+	// DefaultMaxRetryInterval specifies the default max retry duration.
+	DefaultMaxRetryInterval = math.MaxUint32 * time.Millisecond
 
 	// DefaultRetrySteps is defined to dictate how many times the platform should attempt to retry
 	// a write operation to a sink following a failure. The value is set to math.MaxInt32 - 1,
@@ -271,6 +275,11 @@ const (
 	// configured otherwise. This approach can be useful in environments where loss of data
 	// due to intermittent failures is unacceptable.
 	DefaultRetrySteps = math.MaxInt32 - 1
+
+	// DefaultFactor is the default multiplier for exponential backoff cases.
+	// It is set to 1.0 to honor the default behaviour of fixed interval retries unless explicitly
+	// configured otherwise.
+	DefaultFactor = 1.0
 
 	// DefaultOnFailureRetryStrategy specifies the strategy to be used when the write to a sink fails and
 	// the retries count specified are exhausted.

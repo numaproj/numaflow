@@ -33,9 +33,7 @@ service Reduce {
   rpc IsReady(google.protobuf.Empty) returns (ReadyResponse);
 }
 
-/**
- * ReduceRequest represents a request element.
- */
+// ReduceRequest represents a request element.
 message ReduceRequest {
   // WindowOperation represents a window operation.
   // For Aligned windows, OPEN, APPEND and CLOSE events are sent.
@@ -71,9 +69,8 @@ message Window {
   string slot = 3;
 }
 
-/**
- * ReduceResponse represents a response element.
- */
+
+// ReduceResponse represents a response element.
 message ReduceResponse {
   // Result represents a result element. It contains the result of the reduce function.
   message Result {
@@ -91,9 +88,7 @@ message ReduceResponse {
   bool EOF = 3;
 }
 
-/**
- * ReadyResponse is the health check result.
- */
+// ReadyResponse is the health check result.
 message ReadyResponse {
   bool ready = 1;
 }

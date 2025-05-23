@@ -20,6 +20,7 @@ use crate::shared::server_info::version::SdkConstraints;
 // Equivalent to U+005C__END__.
 const END: &str = "U+005C__END__";
 const MAP_MODE_KEY: &str = "MAP_MODE";
+const HTTP_ENDPOINTS_KEY: &str = "MULTIPROC_ENDPOINTS";
 
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub enum ContainerType {
@@ -90,6 +91,12 @@ pub(crate) struct ServerInfo {
     pub(crate) metadata: Option<HashMap<String, String>>, // Metadata is optional
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub(crate) enum Protocol {
+    TCP,
+    UDS,
+}
+
 impl ServerInfo {
     pub(crate) fn get_map_mode(&self) -> Option<MapMode> {
         if let Some(metadata) = &self.metadata {
@@ -98,6 +105,24 @@ impl ServerInfo {
             }
         }
         None
+    }
+
+    // get_http_endpoints returns the list of http endpoints for multi proc mode
+    // from the metadata.
+    pub(crate) fn get_http_endpoints(&self) -> Vec<String> {
+        if let Some(metadata) = &self.metadata {
+            if let Some(endpoints) = metadata.get(HTTP_ENDPOINTS_KEY) {
+                return endpoints.split(',').map(|s| s.to_string()).collect();
+            }
+        }
+        vec![]
+    }
+
+    pub(crate) fn get_protocol(&self) -> Protocol {
+        match self.protocol.as_str() {
+            "tcp" => Protocol::TCP,
+            _ => Protocol::UDS,
+        }
     }
 }
 
@@ -351,7 +376,12 @@ async fn read_server_info(
     // Infinite loop to keep checking until the file is ready
     loop {
         if cln_token.is_cancelled() {
-            return Err(Error::ServerInfo("Operation cancelled".to_string()));
+            return Err(Error::ServerInfo(format!(
+                "Server info file {:?} is not ready. \
+                This indicates that the server has not started. \
+                For more details https://numaflow.numaproj.io/user-guide/FAQ/#4-i-see-server-info-file-not-ready-log-in-the-numa-container-what-does-this-mean",
+                file_path
+            )));
         }
 
         // Check if the file exists and has content
@@ -390,9 +420,10 @@ async fn read_server_info(
         retry += 1;
         if retry >= 10 {
             // Return an error if the retry limit is reached
-            return Err(Error::ServerInfo(
-                "server-info reading retry exceeded".to_string(),
-            ));
+            return Err(Error::ServerInfo(format!(
+                "server-info reading retry exceeded for file: {:?}",
+                file_path
+            )));
         }
 
         sleep(Duration::from_millis(100)).await; // Sleep before retrying
