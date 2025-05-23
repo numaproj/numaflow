@@ -110,7 +110,7 @@ pub(crate) async fn create_sink_writer(
             )
         }
         SinkType::Kafka(sink_config) => {
-            let kafka_sink = numaflow_kafka::sink::new_sink(sink_config);
+            let kafka_sink = numaflow_kafka::sink::new_sink(sink_config)?;
             SinkWriterBuilder::new(
                 batch_size,
                 read_timeout,
@@ -172,7 +172,7 @@ pub(crate) async fn create_sink_writer(
                     .await?)
             }
             SinkType::Kafka(sink_config) => {
-                let kafka_sink = numaflow_kafka::sink::new_sink(sink_config);
+                let kafka_sink = numaflow_kafka::sink::new_sink(sink_config)?;
                 Ok(sink_writer_builder
                     .fb_sink_client(SinkClientType::Kafka(kafka_sink))
                     .build()

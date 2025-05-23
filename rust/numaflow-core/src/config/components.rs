@@ -740,6 +740,7 @@ pub(crate) mod sink {
                 })
                 .or_else(|| sink.serve.as_ref().map(|_| Ok(SinkType::Serve)))
                 .or_else(|| sink.sqs.as_ref().map(|sqs| sqs.clone().try_into()))
+                .or_else(|| sink.kafka.as_ref().map(|kafka| kafka.clone().try_into()))
                 .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
         }
 
@@ -830,7 +831,11 @@ pub(crate) mod sink {
                     "At-least 1 broker URL must be specified in Kafka sink config".to_string(),
                 ));
             }
-            Ok(SinkType::Kafka(KafkaSinkConfig { brokers }))
+
+            Ok(SinkType::Kafka(KafkaSinkConfig {
+                brokers,
+                topic: kafka_config.topic,
+            }))
         }
     }
 

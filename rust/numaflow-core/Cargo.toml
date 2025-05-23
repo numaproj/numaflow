@@ -32,6 +32,7 @@ serde.workspace = true
 rustls.workspace = true
 tower.workspace = true
 async-nats.workspace = true
+futures.workspace = true
 tonic = { version = "0.13.0" }
 thiserror = "2.0.3"
 tokio-util = "0.7.11"
@@ -49,7 +50,6 @@ pep440_rs = "0.6.6"
 parking_lot = "0.12.3"
 prometheus-client = "0.22.3"
 kube = "0.99.0"
-futures = "0.3.30"
 pin-project = "1.1.5"
 rand = "0.8.5"
 
