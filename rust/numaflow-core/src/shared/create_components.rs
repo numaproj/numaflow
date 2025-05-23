@@ -79,7 +79,7 @@ pub(crate) async fn create_sink_writer(
                 config::get_vertex_name().to_string(),
                 sink_server_info.language,
                 sink_server_info.version,
-                ContainerType::Sourcer.to_string(),
+                ContainerType::Sinker.to_string(),
             );
 
             metrics::global_metrics()
@@ -136,7 +136,7 @@ pub(crate) async fn create_sink_writer(
                     config::get_vertex_name().to_string(),
                     fb_server_info.language,
                     fb_server_info.version,
-                    ContainerType::Sourcer.to_string(),
+                    ContainerType::FbSinker.to_string(),
                 );
 
                 metrics::global_metrics()
@@ -194,7 +194,7 @@ pub(crate) async fn create_transformer(
                 config::get_vertex_name().to_string(),
                 server_info.language,
                 server_info.version,
-                ContainerType::Sourcer.to_string(),
+                ContainerType::SourceTransformer.to_string(),
             );
             metrics::global_metrics()
                 .sdk_info
@@ -233,6 +233,19 @@ pub(crate) async fn create_mapper(
             let server_info =
                 sdk_server_info(config.server_info_path.clone().into(), cln_token.clone()).await?;
 
+            // add sdk info metric
+            let metric_labels = metrics::sdk_info_labels(
+                config::get_component_type().to_string(),
+                config::get_vertex_name().to_string(),
+                server_info.language.clone(),
+                server_info.version.clone(),
+                ContainerType::Mapper.to_string(),
+            );
+            metrics::global_metrics()
+                .sdk_info
+                .get_or_create(&metric_labels)
+                .set(1);
+
             match server_info.get_protocol() {
                 Protocol::TCP => {
                     // tcp is only used for multi proc mode in python
@@ -251,6 +264,7 @@ pub(crate) async fn create_mapper(
                     let map_grpc_client = MapClient::new(channel)
                         .max_encoding_message_size(config.grpc_max_message_size)
                         .max_decoding_message_size(config.grpc_max_message_size);
+
                     Ok(MapHandle::new(
                         server_info.get_map_mode().unwrap_or(MapMode::Unary),
                         batch_size,
@@ -275,18 +289,6 @@ pub(crate) async fn create_mapper(
                             config
                         }
                     };
-
-                    let metric_labels = metrics::sdk_info_labels(
-                        config::get_component_type().to_string(),
-                        config::get_vertex_name().to_string(),
-                        server_info.language.clone(),
-                        server_info.version.clone(),
-                        ContainerType::Sourcer.to_string(),
-                    );
-                    metrics::global_metrics()
-                        .sdk_info
-                        .get_or_create(&metric_labels)
-                        .set(1);
 
                     let mut map_grpc_client = MapClient::new(
                         grpc::create_rpc_channel(config.socket_path.clone().into()).await?,
@@ -436,6 +438,7 @@ pub async fn create_source(
 pub(crate) async fn create_aligned_reducer(
     reducer_config: config::components::reduce::ReducerConfig,
 ) -> crate::Result<UserDefinedAlignedReduce> {
+    // TODO: add server-info metric and check compatibility
     match reducer_config.reducer_type {
         ReducerType::UserDefined(config) => {
             // Create gRPC channel
