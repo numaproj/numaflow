@@ -226,27 +226,27 @@ impl AlignedReduceActor {
     /// Runs the actor, listening for messages and multiplexing them to the reduce tasks.
     async fn run(mut self) {
         while let Some(msg) = self.receiver.recv().await {
-            self.handle_window_message(msg.window, msg.operation).await;
+            self.handle_window_message(msg).await;
         }
         self.wait_for_all_tasks().await;
     }
 
     /// Handle a window message based on its operation type
-    async fn handle_window_message(&mut self, window: Window, operation: WindowOperation) {
-        let window_id = window.pnf_slot();
-        match operation {
-            WindowOperation::Open(msg) => self.window_open(window, window_id, msg).await,
-            WindowOperation::Append(msg) => self.window_append(window, window_id, msg).await,
-            WindowOperation::Close => self.window_close(window_id).await,
+    async fn handle_window_message(&mut self, window_msg: AlignedWindowMessage) {
+        match &window_msg.operation {
+            WindowOperation::Open(_) => self.window_open(window_msg).await,
+            WindowOperation::Append(_) => self.window_append(window_msg).await,
+            WindowOperation::Close => self.window_close(window_msg).await,
         }
     }
 
     /// Creates a new reduce task for the window and sends the initial Open command with the
     /// first message.
-    async fn window_open(&mut self, window: Window, window_id: Bytes, msg: Message) {
+    async fn window_open(&mut self, window_msg: AlignedWindowMessage) {
         // Create a new channel for this window's messages
         let (message_tx, message_rx) = mpsc::channel(100);
         let message_stream = ReceiverStream::new(message_rx);
+        let window = window_msg.window.clone();
 
         // Create a ReduceTask
         let reduce_task = ReduceTask::new(
@@ -258,12 +258,6 @@ impl AlignedReduceActor {
             self.window_manager.clone(),
         );
 
-        // Create the initial window message
-        let window_msg = AlignedWindowMessage {
-            operation: WindowOperation::Open(msg),
-            window: window.clone(),
-        };
-
         // start the reduce task and store the handle and the sender so that we can send messages
         // and wait for it to complete.
         let task_handle = reduce_task
@@ -271,7 +265,7 @@ impl AlignedReduceActor {
             .await;
 
         self.active_streams.insert(
-            window_id,
+            window.pnf_slot(),
             ActiveStream {
                 message_tx: message_tx.clone(),
                 task_handle,
@@ -283,7 +277,10 @@ impl AlignedReduceActor {
     }
 
     /// sends the message to the reduce task for the window.
-    async fn window_append(&mut self, window: Window, window_id: Bytes, msg: Message) {
+    async fn window_append(&mut self, window_msg: AlignedWindowMessage) {
+        let window = window_msg.window.clone();
+        let window_id = window.pnf_slot();
+
         // Get the existing stream or log error if not found create a new one.
         let Some(active_stream) = self.active_streams.get(&window_id) else {
             // windows may not be found during replay, because the windower doesn't send the open
@@ -291,14 +288,8 @@ impl AlignedReduceActor {
             // this happens because of out-of-order messages and we have to ensure that the (t+1)th
             // message is sent to the window that could be created by (t)th message iff (t+1)th message
             // belongs to that window created by (t)th message.
-            self.window_open(window, window_id, msg).await;
+            self.window_open(window_msg).await;
             return;
-        };
-
-        // Create the append window message
-        let window_msg = AlignedWindowMessage {
-            operation: WindowOperation::Append(msg),
-            window,
         };
 
         // Send the append message
@@ -310,7 +301,9 @@ impl AlignedReduceActor {
     }
 
     /// Closes the reduce task for the window.
-    async fn window_close(&mut self, window_id: Bytes) {
+    async fn window_close(&mut self, window_msg: AlignedWindowMessage) {
+        let window_id = window_msg.window.pnf_slot();
+
         // Get the existing stream or log error if not found
         let Some(active_stream) = self.active_streams.remove(&window_id) else {
             error!("No active stream found for window {:?}", window_id);
