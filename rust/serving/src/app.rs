@@ -204,24 +204,21 @@ const PUBLISH_ENDPOINTS: [&str; 3] = ["/v1/process/sync", "/v1/process/async", "
 /// validate the request before passing it to the handler
 pub(crate) async fn validate_request(request: axum::extract::Request, next: Next) -> Response {
     // check if the request id contains "."
-    match request.headers().get("X-Numaflow-Id") {
-        Some(header) => {
-            // make sure value does not contain "."
-            if header
-                .to_str()
-                .expect("header should be a string")
-                .contains(".")
-            {
-                return Response::builder()
-                    .status(StatusCode::BAD_REQUEST)
-                    .body(Body::from(format!(
-                        "Header-ID should not contain '.', found {}",
-                        header.to_str().expect("header should be a string")
-                    )))
-                    .expect("failed to build response");
-            }
+    if let Some(header) = request.headers().get("X-Numaflow-Id") {
+        // make sure value does not contain "."
+        if header
+            .to_str()
+            .expect("header should be a string")
+            .contains(".")
+        {
+            return Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body(Body::from(format!(
+                    "Header-ID should not contain '.', found {}",
+                    header.to_str().expect("header should be a string")
+                )))
+                .expect("failed to build response");
         }
-        None => {}
     };
 
     next.run(request).await
