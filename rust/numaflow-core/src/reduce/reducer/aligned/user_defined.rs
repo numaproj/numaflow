@@ -6,7 +6,6 @@ use crate::reduce::reducer::aligned::windower::WindowOperation;
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 use numaflow_pb::clients::reduce::reduce_client::ReduceClient;
 use numaflow_pb::clients::reduce::{ReduceRequest, ReduceResponse, reduce_request};
-use std::collections::HashMap;
 use std::sync::Arc;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
@@ -136,8 +135,7 @@ impl From<UdReducerResponse> for Message {
                 offset: offset_str.into(),
                 index: wrapper.index,
             },
-            headers: HashMap::new(),
-            metadata: None,
+            ..Default::default()
         }
     }
 }
@@ -353,8 +351,7 @@ mod tests {
                     offset: "0".to_string().into(),
                     index: 0,
                 },
-                headers: Default::default(),
-                metadata: None,
+                ..Default::default()
             },
             Message {
                 typ: Default::default(),
@@ -369,8 +366,7 @@ mod tests {
                     offset: "1".to_string().into(),
                     index: 1,
                 },
-                headers: Default::default(),
-                metadata: None,
+                ..Default::default()
             },
             Message {
                 typ: Default::default(),
@@ -385,8 +381,7 @@ mod tests {
                     offset: "2".to_string().into(),
                     index: 2,
                 },
-                headers: Default::default(),
-                metadata: None,
+                ..Default::default()
             },
         ];
 
@@ -506,8 +501,7 @@ mod tests {
                     offset: "0".to_string().into(),
                     index: 0,
                 },
-                headers: Default::default(),
-                metadata: None,
+                ..Default::default()
             },
             Message {
                 typ: Default::default(),
@@ -522,8 +516,7 @@ mod tests {
                     offset: "1".to_string().into(),
                     index: 1,
                 },
-                headers: Default::default(),
-                metadata: None,
+                ..Default::default()
             },
         ];
 
@@ -542,8 +535,7 @@ mod tests {
                     offset: "2".to_string().into(),
                     index: 2,
                 },
-                headers: Default::default(),
-                metadata: None,
+                ..Default::default()
             },
             Message {
                 typ: Default::default(),
@@ -558,8 +550,7 @@ mod tests {
                     offset: "3".to_string().into(),
                     index: 3,
                 },
-                headers: Default::default(),
-                metadata: None,
+                ..Default::default()
             },
             Message {
                 typ: Default::default(),
@@ -574,8 +565,7 @@ mod tests {
                     offset: "4".to_string().into(),
                     index: 4,
                 },
-                headers: Default::default(),
-                metadata: None,
+                ..Default::default()
             },
         ];
 
@@ -718,8 +708,7 @@ mod tests {
                     offset: "0".to_string().into(),
                     index: 0,
                 },
-                headers: Default::default(),
-                metadata: None,
+                ..Default::default()
             },
             Message {
                 typ: Default::default(),
@@ -734,8 +723,7 @@ mod tests {
                     offset: "1".to_string().into(),
                     index: 1,
                 },
-                headers: Default::default(),
-                metadata: None,
+                ..Default::default()
             },
             Message {
                 typ: Default::default(),
@@ -750,8 +738,7 @@ mod tests {
                     offset: "2".to_string().into(),
                     index: 2,
                 },
-                headers: Default::default(),
-                metadata: None,
+                ..Default::default()
             },
         ];
 

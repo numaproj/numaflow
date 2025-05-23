@@ -422,7 +422,7 @@ impl Source {
 
                 // transform the batch if the transformer is present, this need not
                 // be streaming because transformation should be fast operation.
-                let messages = match self.transformer.as_mut() {
+                let mut messages = match self.transformer.as_mut() {
                     None => messages,
                     Some(transformer) => match transformer
                         .transform_batch(messages, cln_token.clone())
@@ -450,6 +450,12 @@ impl Source {
                     watermark_handle
                         .generate_and_publish_source_watermark(&messages)
                         .await;
+
+                    let watermark = watermark_handle.fetch_source_watermark().await;
+                    // compare with the event time of the message and set is_late
+                    for message in messages.iter_mut() {
+                        message.is_late = message.event_time < watermark;
+                    }
                 }
 
                 // write the messages to downstream.
