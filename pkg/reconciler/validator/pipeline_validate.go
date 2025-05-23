@@ -133,6 +133,14 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 		} else {
 			toFromEdge[e.From+e.To] = true
 		}
+
+		if e.Conditions != nil {
+			if e.Conditions.Tags != nil {
+				if len(e.Conditions.Tags.Values) == 0 {
+					return fmt.Errorf("invalid edge: conditional forwarding requires at least one tag value")
+				}
+			}
+		}
 	}
 
 	if len(namesInEdges) != len(names) {
