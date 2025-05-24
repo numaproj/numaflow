@@ -158,7 +158,7 @@ impl StatusTracker {
                 Ok(())
             }
             Err(e) if e.kind() == CreateErrorKind::AlreadyExists => {
-                warn!(id, status_key, "Request ID already exists.");
+                warn!(%id, %status_key, "Request ID already exists.");
                 let existing_status = self.get_status(&status_key).await?;
                 self.handle_existing_status(id, &status_key, existing_status)
             }
@@ -206,14 +206,14 @@ impl StatusTracker {
         match existing_status {
             ProcessingStatus::InProgress { pod_hash } => {
                 if pod_hash == self.pod_hash {
-                    warn!(id, status_key, "Request is getting processed");
+                    warn!(%id, %status_key, "Request is getting processed");
                     Err(Error::Duplicate(id.to_string()))
                 } else {
                     // TODO: There can be a case where the pod terminates without updating the request
                     //  status(SIGKILL). Return with a body asking for retrying with a different ID.
                     warn!(
-                        id,
-                        status_key, "Request is getting processed in another pod"
+                        %id,
+                        %status_key, "Request is getting processed in another pod"
                     );
                     Err(Error::Other(
                         "Request is getting processed in another pod".to_string(),
@@ -222,13 +222,13 @@ impl StatusTracker {
             }
             ProcessingStatus::Completed { .. } => {
                 warn!(
-                    id,
-                    status_key, "Request already completed, returning as duplicate."
+                    %id,
+                    %status_key, "Request already completed, returning as duplicate."
                 );
                 Err(Error::Duplicate(id.to_string()))
             }
             ProcessingStatus::Failed { error, pod_hash } => {
-                warn!(id, status_key, error = ?error, "Request had failed, retrying...");
+                warn!(%id, %status_key, %error, "Request had failed, retrying...");
                 Err(Error::Cancelled {
                     err: error,
                     previous_pod_hash: pod_hash,

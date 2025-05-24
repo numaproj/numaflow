@@ -70,13 +70,13 @@ where
                     previous_pod_hash,
                 } => {
                     warn!(
-                        ?err,
+                        error = %err,
                         "Request was cancelled, fetching callbacks and responses again"
                     );
                     Some(previous_pod_hash)
                 }
                 status::Error::Duplicate(msg) => {
-                    warn!(error = ?msg, "Request already exists in the store");
+                    warn!(error = %msg, "Request already exists in the store");
                     serving_metrics().request_register_duplicate_count.inc();
                     return Err(Error::Duplicate(msg));
                 }
@@ -149,7 +149,8 @@ where
             }
             ProcessingStatus::Failed { error, pod_hash } => {
                 warn!(
-                    "Request was failed because of {error}, processing and fetching the responses again"
+                    %error,
+                    "Request was failed, processing and fetching the responses again"
                 );
                 let notify = self.process_request(id, request_type).await?;
                 notify.await.expect("sender was dropped")?;
@@ -184,13 +185,13 @@ where
                     previous_pod_hash,
                 } => {
                     warn!(
-                        ?err,
+                        error = %err,
                         "Request was cancelled, fetching callbacks and responses again"
                     );
                     Some(previous_pod_hash)
                 }
                 status::Error::Duplicate(msg) => {
-                    warn!(error = ?msg, "Request already exists in the tracker");
+                    warn!(error = %msg, "Request already exists in the tracker");
                     serving_metrics().request_register_duplicate_count.inc();
                     return Err(Error::Duplicate(msg));
                 }
