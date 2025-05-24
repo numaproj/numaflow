@@ -46,7 +46,7 @@ impl Default for Configuration {
     fn default() -> Self {
         Configuration {
             base_path: "http://localhost".to_owned(),
-            user_agent: Some("OpenAPI-Generator/v1.5.0-rc4/rust".to_owned()),
+            user_agent: Some("OpenAPI-Generator/v1.5.0-rc5/rust".to_owned()),
             client: reqwest::Client::new(),
             basic_auth: None,
             oauth_access_token: None,

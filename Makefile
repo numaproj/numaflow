@@ -31,8 +31,8 @@ endif
 DOCKER_PUSH?=false
 DOCKER_BUILD_ARGS?=
 IMAGE_NAMESPACE?=quay.io/numaproj
-VERSION?=v1.5.0-rc4
-BASE_VERSION:=v1.5.0-rc4
+VERSION?=v1.5.0-rc5
+BASE_VERSION:=v1.5.0-rc5
 
 override LDFLAGS += \
   -X ${PACKAGE}.version=${VERSION} \
