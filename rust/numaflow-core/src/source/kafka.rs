@@ -32,6 +32,7 @@ impl TryFrom<KafkaMessage> for Message {
             },
             headers: message.headers,
             metadata: None,
+            is_late: false,
         })
     }
 }

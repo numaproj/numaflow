@@ -277,7 +277,7 @@ impl SourceWatermarkHandle {
     }
 
     /// Fetches the source watermark.
-    async fn fetch_source_watermark(&mut self) -> Watermark {
+    pub(crate) async fn fetch_source_watermark(&mut self) -> Watermark {
         let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
         if let Err(e) = self
             .sender

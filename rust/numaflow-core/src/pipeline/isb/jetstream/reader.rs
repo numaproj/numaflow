@@ -112,6 +112,7 @@ impl TryFrom<JSWrappedMessage> for Message {
                     .ok_or(Error::Proto("Missing id".to_string()))?
                     .vertex_name,
             }),
+            is_late: message_info.is_late,
         })
     }
 }
@@ -445,7 +446,6 @@ impl fmt::Display for JetStreamReader {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
     use std::sync::Arc;
 
     use async_nats::jetstream;
@@ -530,8 +530,7 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                headers: HashMap::new(),
-                metadata: None,
+                ..Default::default()
             };
             let message_bytes: BytesMut = message.try_into().unwrap();
             context
@@ -635,8 +634,7 @@ mod tests {
                     offset: format!("{}-0", i + 1).into(),
                     index: i as i32,
                 },
-                headers: HashMap::new(),
-                metadata: None,
+                ..Default::default()
             };
             offsets.push(message.offset.clone());
             let message_bytes: BytesMut = message.try_into().unwrap();

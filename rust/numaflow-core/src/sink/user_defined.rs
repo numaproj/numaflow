@@ -233,8 +233,7 @@ mod tests {
                     offset: "1".to_string().into(),
                     index: 0,
                 },
-                watermark: None,
-                metadata: None,
+                ..Default::default()
             },
             Message {
                 typ: Default::default(),
@@ -249,8 +248,7 @@ mod tests {
                     offset: "2".to_string().into(),
                     index: 1,
                 },
-                watermark: None,
-                metadata: None,
+                ..Default::default()
             },
         ];
 

@@ -354,7 +354,6 @@ impl SlidingWindowManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use std::sync::Arc;
 
     #[tokio::test]
@@ -376,10 +375,7 @@ mod tests {
             event_time: Utc
                 .timestamp_millis_opt(base_time.timestamp_millis() + 10000)
                 .unwrap(),
-            watermark: None,
-            id: Default::default(),
-            headers: HashMap::new(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Assign windows
@@ -435,10 +431,7 @@ mod tests {
             value: "test_value".as_bytes().to_vec().into(),
             offset: Default::default(),
             event_time: Utc.timestamp_opt(base_time.timestamp() + 10, 0).unwrap(),
-            watermark: None,
-            id: Default::default(),
-            headers: HashMap::new(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Assign windows
