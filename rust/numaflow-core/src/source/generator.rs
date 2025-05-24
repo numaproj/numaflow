@@ -81,7 +81,7 @@ mod stream_generator {
                     key_count = cfg.key_count,
                     rpu = cfg.rpu,
                     new_key_count = key_count,
-                    "Specified KeyCount is higher than RPU. KeyCount is changed."
+                    "Specified KeyCount is higher than RPU. KeyCount has changed."
                 );
             }
             if key_count > 0 && rpu % key_count as usize != 0 {
