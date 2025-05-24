@@ -395,7 +395,7 @@ impl JetStreamReader {
                 let result = match msg.ack_with(ack_kind).await {
                     Ok(_) => Ok(()),
                     Err(e) => {
-                        warn!(?e, "Failed to send {:?} to Jetstream for message", ack_kind);
+                        warn!(error = ?e, ?ack_kind, "Failed to send ack to Jetstream for message");
                         Err(Error::Connection(format!(
                             "Failed to send {:?}: {:?}",
                             ack_kind, e

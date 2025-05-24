@@ -666,8 +666,9 @@ impl SinkWriter {
             // if we need to retry, return true
             OnFailureStrategy::Retry => {
                 warn!(
-                    "Using onFailure Retry, Retry attempts {} completed",
-                    retry_attempts
+                    retry_attempts = *retry_attempts,
+                    errors = ?error_map,
+                    "Using onFailure Retry, retry attempts completed"
                 );
                 return Ok(true);
             }
@@ -702,8 +703,9 @@ impl SinkWriter {
             OnFailureStrategy::Fallback => {
                 // log that we are moving the messages to the fallback as requested
                 warn!(
-                    "Moving messages to fallback after {} retry attempts. Errors: {:?}",
-                    retry_attempts, error_map
+                    retry_attempts = *retry_attempts,
+                    errors = ?error_map,
+                    "Moving messages to fallback after retry attempts.",
                 );
                 // move the messages to the fallback messages
                 fallback_msgs.append(messages_to_send);
@@ -876,8 +878,9 @@ impl SinkWriter {
                     if retry_attempts < max_retry_attempts {
                         retry_attempts += 1;
                         warn!(
-                            "Fallback sink Retry attempt {} due to retryable error. Errors: {:?}",
-                            retry_attempts, fallback_error_map
+                            retry_attempts,
+                            ?fallback_error_map,
+                            "Retrying due to retryable error in Fallback Sink"
                         );
                         sleep(tokio::time::Duration::from(sleep_interval)).await;
                     } else {

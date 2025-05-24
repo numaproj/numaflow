@@ -342,7 +342,7 @@ impl JetstreamWriter {
                 Some(true) => {
                     // FIXME: add metrics
                     if log_counter >= 500 {
-                        warn!(stream=?stream, "stream is full (throttled logging)");
+                        warn!(?stream, "stream is full (throttled logging)");
                         log_counter = 0;
                     }
                     log_counter += 1;
@@ -439,8 +439,8 @@ impl JetstreamWriter {
                         if ack.duplicate {
                             warn!(
                                 message_id = ?message.id,
-                                stream = ?stream,
-                                ack = ?ack,
+                                ?stream,
+                                ?ack,
                                 "Duplicate message detected"
                             );
                         }

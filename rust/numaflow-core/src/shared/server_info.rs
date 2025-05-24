@@ -236,8 +236,8 @@ fn check_sdk_compatibility(
     } else {
         // Language not found in the supported SDK versions
         warn!(
-            "SDK version constraint not found for language: {}, container type: {}",
-            sdk_language, container_type
+            %sdk_language,
+            %container_type, "SDK version constraint not found for language and container type"
         );
 
         // Return error indicating the language
@@ -377,12 +377,11 @@ async fn read_server_info(
                     // If the file ends with the END marker, trim it and break out of the loop
                     contents = data.trim_end_matches(END).to_string();
                     break;
-                } else {
-                    warn!("Server info file is incomplete, EOF is missing...");
                 }
+                warn!("Server info file is incomplete, EOF is missing...");
             }
             Err(e) => {
-                warn!("Failed to read file: {}", e);
+                warn!(error = ?e, ?file_path, "Failed to read server info file");
             }
         }
 
