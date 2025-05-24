@@ -135,7 +135,7 @@ Visit https://localhost:8443/ to view the UI. Below is the UI for the `simple` p
 
 #### Cluster View
 
-![Cluster View](assets/quick-start/namespace-view.png)
+![Cluster View](assets/quick-start/cluster-view.png)
 
 #### Default Namespace View
 

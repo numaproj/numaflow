@@ -16,43 +16,55 @@ Once port-forwarding is active, open your browser and navigate to [https://local
 
 We have already walked through some of the views of UI to monitor pipelines in the [Quick Start](../../quick-start.md) guide.
 
-- [**Cluster View**](../../quick-start/#cluster-view)
-- [**Namespace View**](../../quick-start/#default-namespace-view)
-- [**Simple Pipeline View**](../../quick-start/#simple-pipeline-view)
+- **Cluster View**
+- **Namespace View**
+- **Simple Pipeline View**
 
 ### Vertex View
 
 Vertex View provides detailed insights into each pipeline vertex. The following features are available:
 
-1. **[Pods View](./pods-view.md):** Inspect the status and details of pods running in your pipelines.
+#### **[Pods View](./pods-view.md)**
 
-2. **Spec:** View the specification of the vertex.
+Inspect the status and details of pods running in your pipelines.
 
-   ![spec view](../../assets/ui-overview/spec-view.png)
+#### **Spec**
 
-3. **Processing Rates:** See the last 1m, 5m, and 15m processing rates for each partition of the vertex.
-   If a Prometheus server is configured, you can click on the number to see more details in the Metrics tab.
+View the specification of the vertex.
 
-   ![Processing Rates](../../assets/ui-overview/processing-rates.png)
+![spec view](../../assets/ui-overview/spec-view.png)
 
-4. **Kubernetes Events:**
-   View Kubernetes events related to the vertex.
+#### **Processing Rates**
 
-   ![k8s events](../../assets/ui-overview/k8s-events.png)
+See the last 1m, 5m, and 15m processing rates for each partition of the vertex.
 
-5. **[Errors](./errors.md):**
-   Review errors detected in your pipelines for quick debugging.
+If a Prometheus server is configured, you can click on the number to see more details in the Metrics tab.
 
-6. **Buffers:**
-   See buffer details for every partition, including buffer length, usage, and number of pending messages.
-   Click on the pending number to view complete pending metrics in the [Metrics tab](./metrics-tab.md).
+![Processing Rates](../../assets/ui-overview/processing-rates.png)
 
-   ![Buffer](../../assets/ui-overview/buffer-info.png)
+#### **Kubernetes Events**
 
-7. **[Logs](./logs.md):**
-   View logs for different containers of pods to help diagnose issues.
+View Kubernetes events related to the vertex.
 
-8. **[Metrics](./metrics-tab.md):**
-   Monitor pipeline metrics for performance.
+![k8s events](../../assets/ui-overview/k8s-events.png)
+
+#### **[Errors](./errors.md)**
+
+Review errors detected in your pipelines for quick debugging.
+
+#### **Buffers**
+
+See buffer details for every partition, including buffer length, usage, and number of pending messages.
+Click on the pending number to view complete pending metrics in the [Metrics tab](./metrics-tab.md).
+
+![Buffer](../../assets/ui-overview/buffer-info.png)
+
+#### **[Logs](./logs.md)**
+
+View logs for different containers of pods to help diagnose issues.
+
+#### **[Metrics](./metrics-tab.md)**
+
+Monitor pipeline metrics for performance.
 
 ---

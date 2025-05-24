@@ -28,9 +28,9 @@ type AssignEventTime struct {
 
 func (a *AssignEventTime) Transform(ctx context.Context, keys []string, d sourcetransformer.Datum) sourcetransformer.Messages {
     newCount := atomic.AddUint64(&a.counter, 1)
-    // Trigger a panic if the counter is a multiple of 50
-    if newCount%50 == 0 {
-        panic("Counter reached a multiple of 50")
+    // Trigger a panic if the counter is a multiple of 5
+    if newCount%5 == 0 {
+        panic("Counter reached a multiple of 5")
     }
     // Update the message's event time to the current time
     eventTime := time.Now()
@@ -50,14 +50,16 @@ In this example, the code triggers a panic whenever the counter reaches a multip
 
 The Errors Tab provides the following features:
 
-- **Error Count**: Displays the total number of errors across all pods and containers at the top level.
-- **Pod and Container Filters**: Allows users to filter errors by selecting a specific pod or container for more focused debugging.
-- **Tabulated Errors**: Errors are displayed in a tabular format with the following columns:
-  - `Pod Name`
-  - `Container`
-  - `Message`
-  - `Last Occurred`
-- **Details**: Expanding an error entry reveals a `Details` section that includes the stack trace of the error, providing deeper insights for debugging.
+-   **Error Count**: Displays the total number of errors across all pods and containers at the top level.
+-   **Pod and Container Filters**: Allows users to filter errors by selecting a specific pod or container for more focused debugging.
+-   **Tabulated Errors**: Errors are displayed in a tabular format with the following columns:
+
+    -   `Pod Name`
+    -   `Container`
+    -   `Message`
+    -   `Last Occurred`
+
+-   **Details**: Expanding an error entry reveals a `Details` section that includes the stack trace of the error, providing deeper insights for debugging.
 
 ---
 
@@ -73,12 +75,12 @@ Any exception that occurs within the user-defined function (UDF) code will be ca
 
 Errors may occur when the user code sends partial or incorrect responses. For example:
 
-- Returning `null` instead of `Message.toDrop` in a UDSink when a message needs to be dropped.
+-   Returning `null` instead of `Message.toDrop` in a UDSink when a message needs to be dropped.
 
 ### 3. Critical Errors Persisted by the User
 
 Users can invoke the `PersistCriticalError` utility function to log critical errors in the `emptyDir` volume. This is useful for capturing severe issues that require immediate attention. Below are links to the implementations in different SDKs:
 
-- [Go Implementation](https://github.com/numaproj/numaflow-go/blob/47460a1854b8f58a0e918056ef4d169949193ebe/pkg/errors/errors.go)
-- [Java Implementation](https://github.com/numaproj/numaflow-java/blob/2aeaafff1c6dec7fd66e018b142ef6fe4ffcf0a9/src/main/java/io/numaproj/numaflow/errors/PersistCriticalError.java)
-- [Python Implementation](https://github.com/numaproj/numaflow-python/blob/6ccd49ef09ad11eac9b0bb9a6b0f5517d858bea4/pynumaflow/errors/errors.py)
+-   [Go Implementation](https://github.com/numaproj/numaflow-go/blob/47460a1854b8f58a0e918056ef4d169949193ebe/pkg/errors/errors.go)
+-   [Java Implementation](https://github.com/numaproj/numaflow-java/blob/2aeaafff1c6dec7fd66e018b142ef6fe4ffcf0a9/src/main/java/io/numaproj/numaflow/errors/PersistCriticalError.java)
+-   [Python Implementation](https://github.com/numaproj/numaflow-python/blob/6ccd49ef09ad11eac9b0bb9a6b0f5517d858bea4/pynumaflow/errors/errors.py)
