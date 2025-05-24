@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.5.0-rc5 (2025-05-24)
+
+ * [7a8d496a](https://github.com/numaproj/numaflow/commit/7a8d496a3acd375180ffe2023e373e418528441e) Update manifests to v1.5.0-rc5
+ * [4389a6f6](https://github.com/numaproj/numaflow/commit/4389a6f6fed4a31bec5802d2411a1e08ab95ac45) fix: return 400 if serving ID header contains '.' (#2669)
+ * [690ea0dd](https://github.com/numaproj/numaflow/commit/690ea0dd68da068b20fc53febccf6c62c67b387a) fix: conditional forwarding in Async Dataplane (#2668)
+ * [954cc5bb](https://github.com/numaproj/numaflow/commit/954cc5bb037dd354d698fdd1c59f4eb9385e5ce5) feat: Rust pipeline metrics (#2666)
+ * [e053a5ce](https://github.com/numaproj/numaflow/commit/e053a5cec6004cc9afee928fa5f752a0d889a1d5) feat: Aligned Window for Reduce Async Data Movement  (#2618)
+ * [5a3d3201](https://github.com/numaproj/numaflow/commit/5a3d320147ed84bcd30251cd15de6692e298d736) feat: Kafka source - Rust implementation (#2636)
+
+### Contributors
+
+ * Adarsh Jain
+ * Derek Wang
+ * Sreekanth
+ * Vigith Maurice
+ * Yashash H L
+
+## v1.5.0-rc4 (2025-05-20)
+
+ * [9f52ffc6](https://github.com/numaproj/numaflow/commit/9f52ffc6a4bba38f077fcaeb04b4e3080006935c) Update manifests to v1.5.0-rc4
+
+### Contributors
+
+ * Derek Wang
+
 ## v1.5.0-rc3 (2025-05-18)
 
  * [40839123](https://github.com/numaproj/numaflow/commit/408391237923536f482099a1040f02b104832375) Update manifests to v1.5.0-rc3
