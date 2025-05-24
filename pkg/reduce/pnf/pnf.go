@@ -142,6 +142,13 @@ func (pf *ProcessAndForward) AsyncSchedulePnF(ctx context.Context, partitionID *
 // invokeUDF reads requests from the supplied PBQ, invokes the UDF to gets the response and writes the response to the
 // main channel.
 func (pf *ProcessAndForward) invokeUDF(ctx context.Context, done chan struct{}, pid *partition.ID, pbqReader pbq.Reader) {
+	metricLabels := map[string]string{
+		metrics.LabelVertex:             pf.vertexName,
+		metrics.LabelPipeline:           pf.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(pf.vertexReplica)),
+	}
+	start := time.Now()
+
 	defer func() {
 		pf.mu.Lock()
 		delete(pf.pnfRoutines, pid.String())
@@ -174,6 +181,8 @@ outerLoop:
 			pf.responseCh <- response
 		}
 	}
+
+	metrics.ReduceProcessTime.With(metricLabels).Observe(float64(time.Since(start).Microseconds()))
 }
 
 // forwardResponses forwards the writeMessages to the ISBs. It also publishes the watermark and invokes GC on PBQ.
@@ -431,6 +440,7 @@ func (pf *ProcessAndForward) writeToBuffer(ctx context.Context, edgeName string,
 		metrics.LabelPartitionName:      pf.toBuffers[edgeName][partition].GetName(),
 	}
 
+	writeStart := time.Now()
 	writeMessages := resultMessages
 
 	// write to isb with infinite exponential backoff (until shutdown is triggered)
@@ -486,6 +496,7 @@ func (pf *ProcessAndForward) writeToBuffer(ctx context.Context, edgeName string,
 		return nil, ctxClosedErr
 	}
 
+	metrics.WriteProcessingTime.With(metricLabelsWithPartition).Observe(float64(time.Since(writeStart).Microseconds()))
 	metrics.WriteMessagesCount.With(metricLabelsWithPartition).Add(float64(writeCount))
 	metrics.WriteBytesCount.With(metricLabelsWithPartition).Add(writeBytes)
 	return offsets, nil
