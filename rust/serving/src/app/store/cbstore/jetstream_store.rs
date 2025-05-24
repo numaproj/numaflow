@@ -208,7 +208,10 @@ impl JetStreamCallbackStore {
                         Ok(callback_obj) => {
                             let callback = Arc::new(callback_obj);
                             if tx.send(callback).await.is_err() {
-                                warn!(request_id = ?id, "Receiver dropped during historical send. Stopping scan stream.");
+                                warn!(
+                                    request_id = %id,
+                                    "Receiver dropped during historical send. Stopping scan stream."
+                                );
                                 break;
                             }
                         }
