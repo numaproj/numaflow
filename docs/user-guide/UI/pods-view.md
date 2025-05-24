@@ -80,14 +80,6 @@ Provides detailed information about the selected pod, including:
 ### 7. Metrics Tab
 
 -   The **Pods View** includes a **Metrics Tab** located next to the Logs Tab.
--   For a detailed discussion about the Metrics Tab, refer to the [Metrics](./logs.md) section.
-
----
-
-## Use Cases
-
--   **Monitoring**: Track the health and phase of all pods in your application.
--   **Debugging**: Inspect logs and container details to troubleshoot issues with specific pods.
--   **Resource Optimization**: Analyze CPU and memory usage to optimize resource allocation.
+-   For a detailed discussion about the Metrics Tab, refer to the [Metrics](./metrics-tab.md) section.
 
 ---

@@ -18,8 +18,8 @@ Refer to the compatibility matrix [here](../user-guide/sdks/compatibility.md) to
 
 ### 3. Where can I learn about the latest releases of Numaflow?
 
-- Visit the [Numaflow Releases page](https://github.com/numaproj/numaflow/releases) for the latest updates.
-- Join our [Slack channel](https://join.slack.com/t/numaproj/shared_invite/zt-19svuv47m-YKHhsQ~~KK9mBv1E7pNzfg) to stay up to date with announcements and community discussions.
+-   Visit the [Numaflow Releases page](https://github.com/numaproj/numaflow/releases) for the latest updates.
+-   Join our [Slack channel](https://join.slack.com/t/numaproj/shared_invite/zt-19svuv47m-YKHhsQ~~KK9mBv1E7pNzfg) to stay up to date with announcements and community discussions.
 
 ---
 
@@ -27,12 +27,12 @@ Refer to the compatibility matrix [here](../user-guide/sdks/compatibility.md) to
 
 This message indicates that the server has not started yet. Common reasons include:
 
-- The server was not started correctly in the `udcontainer`.
-- The server is still initializing (for example, the application code is downloading cache files or performing setup tasks).
+-   The server was not started correctly in the `udcontainer`.
+-   The server is still initializing (for example, the application code is downloading cache files or performing setup tasks).
 
 ### 5. What is `partitions` in Numaflow?
 
 The field `partitions` is the number of streams between the vertices. Larger the parition number, higher the TPS that vertex can take. Note that partitions are owned by the vertex reading the data, to create a
 multi-partitioed edge we need to configure the vertex reading the data to have multiple partitions.
 
-If you have additional questions, please refer to the [documentation](../README.md) or reach out on Slack!
+If you have additional questions, please refer to the [documentation](../README.md) or reach out on [Slack](https://join.slack.com/t/numaproj/shared_invite/zt-19svuv47m-YKHhsQ~~KK9mBv1E7pNzfg)!
