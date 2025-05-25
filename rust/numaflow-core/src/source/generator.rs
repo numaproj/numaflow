@@ -78,8 +78,10 @@ mod stream_generator {
             let key_count = std::cmp::min(cfg.key_count as usize, cfg.rpu) as u8;
             if key_count != cfg.key_count {
                 warn!(
-                    "Specified KeyCount({}) is higher than RPU ({}). KeyCount is changed to {}",
-                    cfg.key_count, cfg.rpu, key_count
+                    key_count = cfg.key_count,
+                    rpu = cfg.rpu,
+                    new_key_count = key_count,
+                    "Specified KeyCount is higher than RPU. KeyCount has changed."
                 );
             }
             if key_count > 0 && rpu % key_count as usize != 0 {
@@ -87,8 +89,8 @@ mod stream_generator {
                 warn!(
                     rpu,
                     key_count,
-                    "Specified RPU is not a multiple of the KeyCount. This may lead to uneven distribution of messages across keys. RPUs will be adjusted to {}",
-                    new_rpu
+                    new_rpu,
+                    "Specified RPU is not a multiple of the KeyCount. This may lead to uneven distribution of messages across keys. RPUs will be adjusted."
                 );
                 rpu = new_rpu;
             }

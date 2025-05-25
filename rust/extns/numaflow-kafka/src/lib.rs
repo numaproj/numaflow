@@ -546,7 +546,7 @@ impl KafkaActor {
                     .fetch_metadata(Some(&topic), timeout)
                     .map_err(|e| Error::Kafka(format!("Failed to fetch metadata: {}", e)))?;
                 let Some(topic_metadata) = metadata.topics().first() else {
-                    warn!(topic = topic, "No topic metadata found");
+                    warn!(%topic, "No topic metadata found");
                     return Ok(0);
                 };
                 let mut topic_pending = 0;
@@ -605,7 +605,7 @@ impl KafkaActor {
                     .fetch_metadata(Some(&topic), timeout)
                     .map_err(|e| Error::Kafka(format!("Failed to fetch metadata: {}", e)))?;
                 let Some(topic_metadata) = metadata.topics().first() else {
-                    warn!(topic = topic, "No topic metadata found");
+                    warn!(%topic, "No topic metadata found");
                     return Ok(Vec::new());
                 };
                 let partitions: Vec<i32> =

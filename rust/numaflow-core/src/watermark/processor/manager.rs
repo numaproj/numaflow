@@ -226,7 +226,7 @@ impl ProcessorManager {
                 .await
                 .unwrap_or_else(|_| Vec::new()),
             Err(e) => {
-                warn!(?e, "Failed to get keys from ot bucket");
+                warn!(error = ?e, "Failed to get keys from ot bucket");
                 Vec::new()
             }
         };
@@ -303,7 +303,7 @@ impl ProcessorManager {
             let kv = match val {
                 Ok(kv) => kv,
                 Err(e) => {
-                    warn!(?e, "Failed to get next kv entry, recreating watcher");
+                    warn!(error = ?e, "Failed to get next kv entry, recreating watcher");
                     ot_watcher = Self::create_watcher(ot_bucket.clone()).await;
                     continue;
                 }
@@ -353,7 +353,7 @@ impl ProcessorManager {
             let kv = match val {
                 Ok(kv) => kv,
                 Err(e) => {
-                    warn!(?e, "Failed to get next kv entry, recreating watcher");
+                    warn!(error = ?e, "Failed to get next kv entry, recreating watcher");
                     hb_watcher = Self::create_watcher(hb_bucket.clone()).await;
                     continue;
                 }
