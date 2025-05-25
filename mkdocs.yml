@@ -55,6 +55,7 @@ nav:
           - user-guide/sources/kafka.md
           - user-guide/sources/pulsar.md
           - user-guide/sources/nats.md
+          - SQS Source: user-guide/sources/sqs.md
           - user-guide/sources/user-defined-sources.md
           - Data Transformer:
               - Overview: "user-guide/sources/transformer/overview.md"
@@ -122,6 +123,13 @@ nav:
       - Use Cases:
           - user-guide/use-cases/overview.md
           - user-guide/use-cases/monitoring-and-observability.md
+      - UI:
+          - Overview: "user-guide/UI/overview.md"
+          - Errors: "user-guide/UI/errors.md"
+          - Logs: "user-guide/UI/logs.md"
+          - Metrics: "user-guide/UI/metrics-tab.md"
+          - Pods View: "user-guide/UI/pods-view.md"
+      - FAQs: user-guide/FAQ.md
   - Operator Manual:
       - Releases ⧉: "operations/releases.md"
       - operations/installation.md
