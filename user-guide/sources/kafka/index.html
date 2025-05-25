@@ -763,6 +763,20 @@
   
   
     <li class="md-nav__item">
+      <a href="../sqs/" class="md-nav__link">
+        SQS Source
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../user-defined-sources/" class="md-nav__link">
         User-defined Sources
       </a>
@@ -780,18 +794,18 @@
     <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_8" type="checkbox" id="__nav_3_2_8" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_9" type="checkbox" id="__nav_3_2_9" >
       
       
       
       
-        <label class="md-nav__link" for="__nav_3_2_8">
+        <label class="md-nav__link" for="__nav_3_2_9">
           Data Transformer
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <nav class="md-nav" aria-label="Data Transformer" data-md-level="3">
-        <label class="md-nav__title" for="__nav_3_2_8">
+        <label class="md-nav__title" for="__nav_3_2_9">
           <span class="md-nav__icon md-icon"></span>
           Data Transformer
         </label>
@@ -820,18 +834,18 @@
     <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_8_2" type="checkbox" id="__nav_3_2_8_2" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2_9_2" type="checkbox" id="__nav_3_2_9_2" >
       
       
       
       
-        <label class="md-nav__link" for="__nav_3_2_8_2">
+        <label class="md-nav__link" for="__nav_3_2_9_2">
           Built-in Transformers
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <nav class="md-nav" aria-label="Built-in Transformers" data-md-level="4">
-        <label class="md-nav__title" for="__nav_3_2_8_2">
+        <label class="md-nav__title" for="__nav_3_2_9_2">
           <span class="md-nav__icon md-icon"></span>
           Built-in Transformers
         </label>
@@ -1930,6 +1944,123 @@
 
             
           
+            
+              
+  
+  
+  
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+      
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_8" type="checkbox" id="__nav_3_8" >
+      
+      
+      
+      
+        <label class="md-nav__link" for="__nav_3_8">
+          UI
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <nav class="md-nav" aria-label="UI" data-md-level="2">
+        <label class="md-nav__title" for="__nav_3_8">
+          <span class="md-nav__icon md-icon"></span>
+          UI
+        </label>
+        <ul class="md-nav__list" data-md-scrollfix>
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../UI/overview/" class="md-nav__link">
+        Overview
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../UI/errors/" class="md-nav__link">
+        Errors
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../UI/logs/" class="md-nav__link">
+        Logs
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../UI/metrics-tab/" class="md-nav__link">
+        Metrics
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../UI/pods-view/" class="md-nav__link">
+        Pods View
+      </a>
+    </li>
+  
+
+            
+          
+        </ul>
+      </nav>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../FAQ/" class="md-nav__link">
+        FAQs
+      </a>
+    </li>
+  
+
+            
+          
         </ul>
       </nav>
     </li>
@@ -2642,7 +2773,7 @@ for integrating Kafka as a data source into your Numaflow pipeline.</p>
 <h2 id="faq">FAQ<a class="headerlink" href="#faq" title="Permanent link">&para;</a></h2>
 <h3 id="how-to-start-the-kafka-source-from-a-specific-offset-based-on-datetime">How to start the Kafka Source from a specific offset based on datetime?<a class="headerlink" href="#how-to-start-the-kafka-source-from-a-specific-offset-based-on-datetime" title="Permanent link">&para;</a></h3>
 <p>In order to start the Kafka Source from a specific offset based on datetime, we need to reset the offset before we start the pipeline.</p>
-<p>For example, we have a topic <code>quickstart-events</code> with 3 partitions and a consumer group <code>console-consumer-94457</code>. This example uses <a href="https://downloads.apache.org/kafka/3.6.1/RELEASE_NOTES.html">Kafka 3.6.1</a> and localhost.
+<p>For example, we have a topic <code>quickstart-events</code> with 3 partitions and a consumer group <code>console-consumer-94457</code>. This example uses <a href="https://archive.apache.org/dist/kafka/3.6.1/RELEASE_NOTES.html">Kafka 3.6.1</a> and localhost.
 <div class="highlight"><pre><span></span><code>➜<span class="w">  </span>kafka_2.13-3.6.1<span class="w"> </span>bin/kafka-topics.sh<span class="w"> </span>--bootstrap-server<span class="w"> </span>localhost:9092<span class="w"> </span>--describe<span class="w"> </span>--topic<span class="w"> </span>quickstart-events<span class="w">            </span>
 Topic:<span class="w"> </span>quickstart-events<span class="w">    </span>TopicId:<span class="w"> </span>WqIN6j7hTQqGZUQWdF7AdA<span class="w"> </span>PartitionCount:<span class="w"> </span><span class="m">3</span><span class="w">   </span>ReplicationFactor:<span class="w"> </span><span class="m">1</span><span class="w">    </span>Configs:<span class="w"> </span>
 <span class="w">    </span>Topic:<span class="w"> </span>quickstart-events<span class="w">    </span>Partition:<span class="w"> </span><span class="m">0</span><span class="w">    </span>Leader:<span class="w"> </span><span class="m">0</span><span class="w">   </span>Replicas:<span class="w"> </span><span class="m">0</span><span class="w"> </span>Isr:<span class="w"> </span><span class="m">0</span>
