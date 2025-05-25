@@ -40,7 +40,7 @@ func (a *AssignEventTime) Transform(ctx context.Context, keys []string, d source
 }
 ```
 
-In this example, the code triggers a panic whenever the counter reaches a multiple of 50. This simulates an error scenario that will be captured and displayed in the Errors Tab.
+In this example, the code triggers a panic whenever the counter reaches a multiple of 5. This simulates an error scenario that will be captured and displayed in the Errors Tab.
 
 ---
 
@@ -50,16 +50,16 @@ In this example, the code triggers a panic whenever the counter reaches a multip
 
 The Errors Tab provides the following features:
 
--   **Error Count**: Displays the total number of errors across all pods and containers at the top level.
--   **Pod and Container Filters**: Allows users to filter errors by selecting a specific pod or container for more focused debugging.
--   **Tabulated Errors**: Errors are displayed in a tabular format with the following columns:
+- **Error Count**: Displays the total number of errors across all pods and containers at the top level.
+- **Pod and Container Filters**: Allows users to filter errors by selecting a specific pod or container for more focused debugging.
+- **Tabulated Errors**: Errors are displayed in a tabular format with the following columns:
 
-    -   `Pod Name`
-    -   `Container`
-    -   `Message`
-    -   `Last Occurred`
+    - `Pod Name`
+    - `Container`
+    - `Message`
+    - `Last Occurred`
 
--   **Details**: Expanding an error entry reveals a `Details` section that includes the stack trace of the error, providing deeper insights for debugging.
+- **Details**: Expanding an error entry reveals a `Details` section that includes the **stack trace** of the error, providing deeper insights for debugging.
 
 ---
 

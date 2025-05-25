@@ -8,9 +8,9 @@ Numaflow provides a comprehensive [set of Prometheus metrics](../../operations/m
 
 Before visualizing metrics in the UI, ensure the following requirements are met:
 
--   **Prometheus Server Setup**: A Prometheus server must be configured and running. Refer to the [Prometheus Operator Installation Guide](https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/getting-started/installation.md) for detailed instructions.
--   **Service Monitors**: Configure Service/Pod Monitors for scraping pipeline/monovertex metrics. Refer to [this section](../../operations/metrics/metrics.md#configure-the-below-servicepod-monitors-for-scraping-your-pipelinemonovertex-metrics) for configuration details.
--   **Basic Knowledge of PromQL**: Familiarity with PromQL (Prometheus Query Language) is recommended to effectively query and interpret the metrics.
+- **Prometheus Server Setup**: A Prometheus server must be configured and running. Refer to the [Prometheus Operator Installation Guide](https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/getting-started/installation.md) for detailed instructions.
+- **Service Monitors**: Configure Service/Pod Monitors for scraping pipeline/monovertex metrics. Refer to [this section](../../operations/metrics/metrics.md#configure-the-below-servicepod-monitors-for-scraping-your-pipelinemonovertex-metrics) for configuration details.
+- **Basic Knowledge of PromQL**: Familiarity with PromQL (Prometheus Query Language) is recommended to effectively query and interpret the metrics.
 
 Meeting these prerequisites will help you make the most of the metrics visualization and monitoring features in Numaflow.
 
@@ -76,39 +76,39 @@ data:
 
 Prometheus metrics are categorized into three main types: Histogram, Gauge, and Counter. The configuration provided above groups metrics of a similar type under a single pattern, making it more generic and easier to manage.
 
-1. **url**
+1. **url:**
    The `url` is a required field that specifies the Prometheus service endpoint to which the metrics proxy will connect. If the `url` is not set or is incorrectly configured, the Metrics Tab will not be displayed in the UI.
 
--   **Example**: If you set up a local Prometheus operator using [Helm](https://bitnami.com/stack/prometheus-operator/helm), the `url` would look like this:
-    `http://my-release-kube-prometheus-prometheus.default.svc.cluster.local:9090`
+    - **Example**: If you set up a local Prometheus operator using [Helm](https://bitnami.com/stack/prometheus-operator/helm), the `url` would look like this:
+        `http://my-release-kube-prometheus-prometheus.default.svc.cluster.local:9090`
 
-2. **patterns**
+2. **patterns:**
    A list of patterns that group metrics of a similar type.
 
--   **name**: The name of the pattern.
--   **objects**: Specifies the object type, which can either be `vertex` or `mono-vertex`. For pipelines, the object is `vertex`, and for MonoVertex, the object is `mono-vertex`.
--   **title**: The title of the pattern.
--   **description**: A description of the pattern.
--   **expr**: The PromQL expression used to construct queries, with placeholders for dynamic values.
--   **params**: Common parameters for all metrics within the pattern. These may include:
+    - **name**: The name of the pattern.
+    - **objects**: Specifies the object type, which can either be `vertex` or `mono-vertex`. For pipelines, the object is `vertex`, and for MonoVertex, the object is `mono-vertex`.
+    - **title**: The title of the pattern.
+    - **description**: A description of the pattern.
+    - **expr**: The PromQL expression used to construct queries, with placeholders for dynamic values.
+    - **params**: Common parameters for all metrics within the pattern. These may include:
 
-    -   **start_time**: The start time for the PromQL query (optional).
-    -   **end_time**: The end time for the PromQL query (optional).
-    -   **duration**: The query window (required for histograms).
-    -   **quantile**: The quantile value (required for histograms). The quantiles can be 0.99, 0.95, 0.90, or 0.50.
+        - **start_time**: The start time for the PromQL query (optional).
+        - **end_time**: The end time for the PromQL query (optional).
+        - **duration**: The query window (required for histograms).
+        - **quantile**: The quantile value (required for histograms). The quantiles can be 0.99, 0.95, 0.90, or 0.50.
 
--   **metrics**:
-    A list of metrics defined within the pattern.
-    -   **metric_name**: The actual name of the metric.
-    -   **display_name**: A user-friendly name for the metric. Avoid editing this for existing metrics.
-    -   **metric_description**: A detailed description of the metric, displayed as an info icon next to the metric name in the UI.
-    -   **required_filters**: Filters that must be included in the PromQL request body.
-    -   **dimensions**: Dimensions allow users to drill down into specific components, such as pods or containers, for more granular data.
-        -   **name**: The name of the dimension (e.g., pod, vertex).
-        -   **filters**: Filters applied to the data for a specific key.
-            -   **name**: The name of the filter.
-            -   **required**: If set to `true`, the filter is automatically added to `$filters`. If `false`, users can select a value for the filter key, which is then added to `$filters`.
-            -   **expr**: (Optional) Overrides the top-level `expr` for a specific metric and dimension.
+    - **metrics**:
+      A list of metrics defined within the pattern.
+        - **metric_name**: The actual name of the metric.
+        - **display_name**: A user-friendly name for the metric. Avoid editing this for existing metrics.
+        - **metric_description**: A detailed description of the metric, displayed as an info icon next to the metric name in the UI.
+        - **required_filters**: Filters that must be included in the PromQL request body.
+        - **dimensions**: Dimensions allow users to drill down into specific components, such as pods or containers, for more granular data.
+            - **name**: The name of the dimension (e.g., pod, vertex).
+            - **filters**: Filters applied to the data for a specific key.
+                - **name**: The name of the filter.
+                - **required**: If set to `true`, the filter is automatically added to `$filters`. If `false`, users can select a value for the filter key, which is then added to `$filters`.
+                - **expr**: (Optional) Overrides the top-level `expr` for a specific metric and dimension.
 
 This structured configuration ensures flexibility and ease of use when visualizing and analyzing metrics in the Numaflow UI.
 
@@ -183,28 +183,28 @@ The above configuration might seem complex at first glance. Let’s break it dow
 
 Below are examples of how the placeholders are replaced to form the final PromQL expressions:
 
--   **Dimension**: `mono-vertex`
-    **Quantile**: `0.99`
-    **Namespace**: `default`
-    **MonoVertex Name**: `simple-mono-vertex`
-    **Duration**: `5m`
-    **Resultant Expression**:
+- **Dimension**: `mono-vertex`
+  **Quantile**: `0.99`
+  **Namespace**: `default`
+  **MonoVertex Name**: `simple-mono-vertex`
+  **Duration**: `5m`
+  **Resultant Expression**:
 
-    ```promql
-    histogram_quantile(0.99, sum by(mvtx_name,le) (rate(monovtx_processing_time_bucket{namespace="default",mvtx_name="simple-mono-vertex"}[5m])))
-    ```
+  ```promql
+  histogram_quantile(0.99, sum by(mvtx_name,le) (rate(monovtx_processing_time_bucket{namespace="default",mvtx_name="simple-mono-vertex"}[5m])))
+  ```
 
--   **Dimension**: `pod`
-    **Quantile**: `0.99`
-    **Namespace**: `default`
-    **MonoVertex Name**: `simple-mono-vertex`
-    **Pod**: `simple-mono-vertex-mv-0-edj2s`
-    **Duration**: `1m`
-    **Resultant Expression**:
+- **Dimension**: `pod`
+  **Quantile**: `0.99`
+  **Namespace**: `default`
+  **MonoVertex Name**: `simple-mono-vertex`
+  **Pod**: `simple-mono-vertex-mv-0-edj2s`
+  **Duration**: `1m`
+  **Resultant Expression**:
 
-    ```promql
-    histogram_quantile(0.99, sum by(pod,le) (rate(monovtx_processing_time_bucket{namespace="default",mvtx_name="simple-mono-vertex",pod="simple-mono-vertex-mv-0-edj2s"}[1m])))
-    ```
+  ```promql
+  histogram_quantile(0.99, sum by(pod,le) (rate(monovtx_processing_time_bucket{namespace="default",mvtx_name="simple-mono-vertex",pod="simple-mono-vertex-mv-0-edj2s"}[1m])))
+  ```
 
 This example demonstrates how the configuration translates into actionable PromQL queries, making it easier to understand and customize.
 
