@@ -2,16 +2,19 @@
 resolver = "2"
 members = [
     "backoff",
-    "numaflow-models",
     "serving",
     "numaflow-core",
-    "numaflow-pb",
+    "numaflow",
+    "numaflow-monitor",
+    # extensions
     "extns/numaflow-pulsar",
     "extns/numaflow-sqs",
     "extns/numaflow-jetstream",
-    "numaflow",
-    "numaflow-monitor",
     "extns/numaflow-kafka",
+    "extns/numaflow-http",
+    # generated
+    "numaflow-pb",
+    "numaflow-models",
 ]
 
 [workspace.lints.rust]
