@@ -516,7 +516,7 @@ impl KafkaSource {
 }
 
 /// Expose methods so that numaflow-core crate doesn't have to depend on rdkafka.
-#[cfg(feature = "kafka-tests")]
+#[cfg(feature = "kafka-tests-utils")]
 pub mod test_utils {
     use super::*;
     use rdkafka::producer::{FutureProducer, FutureRecord};
@@ -572,7 +572,7 @@ mod tests {
     use rdkafka::producer::FutureRecord;
     use tokio::time::Instant;
 
-    #[cfg(feature = "kafka-tests")]
+    #[cfg(all(feature = "kafka-tests", feature = "kafka-tests-utils"))]
     #[tokio::test]
     async fn test_kafka_source() {
         let (producer, topic_name) = test_utils::setup_test_topic().await;
@@ -760,7 +760,7 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "kafka-tests")]
+    #[cfg(all(feature = "kafka-tests", feature = "kafka-tests-utils"))]
     #[tokio::test]
     async fn test_kafka_source_with_headers() {
         let (producer, topic_name) = test_utils::setup_test_topic().await;

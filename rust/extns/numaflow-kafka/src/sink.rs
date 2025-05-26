@@ -130,7 +130,7 @@ impl KafkaSink {
 }
 
 /// Expose methods so that numaflow-core crate doesn't have to depend on rdkafka.
-#[cfg(feature = "kafka-tests")]
+#[cfg(feature = "kafka-tests-utils")]
 pub mod test_utils {
     use rdkafka::ClientConfig;
     use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
@@ -211,7 +211,7 @@ mod tests {
     use bytes::Bytes;
     use std::collections::HashMap;
 
-    #[cfg(feature = "kafka-tests")]
+    #[cfg(all(feature = "kafka-tests", feature = "kafka-tests-utils"))]
     #[tokio::test]
     async fn test_kafka_sink_send_and_consume() {
         let (_producer, topic_name) = test_utils::setup_test_topic().await;
