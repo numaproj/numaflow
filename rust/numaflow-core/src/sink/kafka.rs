@@ -9,16 +9,19 @@ impl TryFrom<Message> for KafkaSinkMessage {
 
     fn try_from(mut msg: Message) -> Result<Self> {
         let id = msg.id.to_string();
+        // Add all message keys to the Kafka headers
         msg.headers
             .insert(format!("__key_len"), msg.keys.len().to_string());
         for (i, key) in msg.keys.iter().enumerate() {
             msg.headers.insert(format!("__key_{i}"), key.to_string());
         }
+
         let partition_key = if msg.keys.is_empty() {
             None
         } else {
             Some(msg.keys.join(":"))
         };
+
         Ok(Self {
             id,
             partition_key,
@@ -58,5 +61,66 @@ impl Sink for KafkaSink {
             .into_iter()
             .map(|msg| msg.into())
             .collect::<Vec<ResponseFromSink>>())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::message::{IntOffset, Message, MessageID, Offset};
+    use bytes::Bytes;
+    use chrono::Utc;
+    use numaflow_kafka::sink::test_utils;
+    use numaflow_kafka::sink::{KafkaSinkConfig, new_sink};
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    #[cfg(feature = "kafka-tests")]
+    #[tokio::test]
+    async fn test_kafka_sink_multiple_messages() {
+        let (_producer, topic_name) = test_utils::setup_test_topic().await;
+        let config = KafkaSinkConfig {
+            brokers: vec!["localhost:9092".to_string()],
+            topic: topic_name.clone(),
+            auth: None,
+            tls: None,
+            set_partition_key: false,
+        };
+        let mut sink = new_sink(config).expect("Failed to create KafkaSink");
+        let mut messages = Vec::new();
+        for i in 0..5 {
+            let mut headers = HashMap::new();
+            headers.insert("header".to_string(), format!("value{}", i));
+            messages.push(Message {
+                typ: Default::default(),
+                keys: Arc::from(vec![]),
+                tags: None,
+                value: Bytes::from(format!("payload-{}", i)),
+                offset: Offset::Int(IntOffset::new(i, 0)),
+                event_time: Utc::now(),
+                watermark: None,
+                id: MessageID {
+                    vertex_name: "vertex".to_string().into(),
+                    offset: i.to_string().into(),
+                    index: i as i32,
+                },
+                headers,
+                metadata: None,
+            });
+        }
+        let responses = sink.sink(messages).await.expect("Failed to send messages");
+        assert_eq!(responses.len(), 5);
+        for resp in responses {
+            assert!(matches!(resp.status, ResponseStatusFromSink::Success));
+        }
+        // Consume all messages
+        let messages = test_utils::consume_messages_from_topic(&topic_name, 5).await;
+        let mut seen_payloads = std::collections::HashSet::new();
+        for msg in messages {
+            seen_payloads.insert(String::from_utf8_lossy(&msg.payload).to_string());
+        }
+        for i in 0..5 {
+            assert!(seen_payloads.contains(&format!("payload-{}", i)));
+        }
     }
 }

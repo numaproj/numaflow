@@ -1,3 +1,5 @@
+use std::{collections::HashMap, time::Duration};
+
 use bytes::Bytes;
 use futures::{StreamExt, stream::FuturesUnordered};
 use rdkafka::{
@@ -6,28 +8,31 @@ use rdkafka::{
     message::{Header, OwnedHeaders},
     producer::{FutureProducer, FutureRecord},
 };
-use std::{collections::HashMap, time::Duration};
 
 use crate::{KafkaSaslAuth, TlsConfig};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct KafkaSinkConfig {
+    /// The Kafka brokers to connect to.
     pub brokers: Vec<String>,
+    /// The Kafka topic to send messages to.
     pub topic: String,
     /// The authentication mechanism to use for the Kafka consumer.
     pub auth: Option<KafkaSaslAuth>,
     /// The TLS configuration for the Kafka consumer.
     pub tls: Option<TlsConfig>,
-    /// Whether to set the partition key for the Kafka sink.
+    /// Whether to set the partition key when sending the messages to Kafka.
     pub set_partition_key: bool,
 }
 
+/// The Kafka sink client.
 pub struct KafkaSink {
     topic: String,
     producer: FutureProducer,
     set_partition_key: bool,
 }
 
+/// The result of a sink operation corresponding to a [KafkaSinkMessage] with same id.
 pub struct KafkaSinkResponse {
     /// ID of the message that was sent
     pub id: String,
@@ -35,13 +40,20 @@ pub struct KafkaSinkResponse {
     pub status: crate::Result<()>,
 }
 
+/// The message to send to Kafka. Input to [KafkaSink::sink_messages].
 pub struct KafkaSinkMessage {
+    /// ID of the message
     pub id: String,
+    /// The partition key for the message. If not provided, the message will be sent to a random partition.
+    /// This is only used if [KafkaSinkConfig::set_partition_key] is true.
     pub partition_key: Option<String>,
+    /// The headers to send with the message.
     pub headers: HashMap<String, String>,
+    /// The message payload
     pub payload: Bytes,
 }
 
+/// Create a new Kafka sink client.
 pub fn new_sink(config: KafkaSinkConfig) -> crate::Result<KafkaSink> {
     let mut client_config = ClientConfig::new();
     client_config
@@ -64,6 +76,7 @@ pub fn new_sink(config: KafkaSinkConfig) -> crate::Result<KafkaSink> {
 }
 
 impl KafkaSink {
+    /// Send the messages to Kafka.
     pub async fn sink_messages(
         &mut self,
         messages: Vec<KafkaSinkMessage>,
@@ -116,11 +129,18 @@ impl KafkaSink {
     }
 }
 
-#[cfg(test)]
-mod test_utils {
+/// Expose methods so that numaflow-core crate doesn't have to depend on rdkafka.
+#[cfg(feature = "kafka-tests")]
+pub mod test_utils {
     use rdkafka::ClientConfig;
     use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
+    use rdkafka::consumer::{Consumer, StreamConsumer};
+    use rdkafka::message::Headers;
+    use rdkafka::message::Message;
     use rdkafka::producer::FutureProducer;
+    use std::collections::HashMap;
+    use std::time::Duration;
+    use tokio::time::timeout;
     use uuid::Uuid;
 
     pub async fn setup_test_topic() -> (FutureProducer, String) {
@@ -148,19 +168,48 @@ mod test_utils {
 
         (producer, topic_name)
     }
+
+    /// The message received from Kafka.
+    pub struct TestKafkaMessage {
+        pub headers: HashMap<String, String>,
+        pub payload: Vec<u8>,
+    }
+
+    pub async fn consume_messages_from_topic(topic: &str, count: usize) -> Vec<TestKafkaMessage> {
+        let consumer: StreamConsumer = ClientConfig::new()
+            .set("bootstrap.servers", "localhost:9092")
+            .set("group.id", format!("test-consumer-{}", Uuid::new_v4()))
+            .set("auto.offset.reset", "earliest")
+            .create()
+            .expect("Failed to create consumer");
+        consumer.subscribe(&[topic]).expect("Failed to subscribe");
+        let mut messages = Vec::with_capacity(count);
+        let mut received = 0;
+        while received < count {
+            let result = timeout(Duration::from_secs(10), consumer.recv()).await;
+            assert!(result.is_ok(), "Did not receive message from Kafka");
+            let msg = result.unwrap().expect("Kafka error");
+            let payload = msg.payload().unwrap_or(&[]).to_vec();
+            let mut headers = HashMap::new();
+            if let Some(kafka_headers) = msg.headers() {
+                for header in kafka_headers.iter() {
+                    if let (Some(value), key) = (header.value, header.key) {
+                        headers.insert(key.to_string(), String::from_utf8_lossy(value).to_string());
+                    }
+                }
+            }
+            messages.push(TestKafkaMessage { headers, payload });
+            received += 1;
+        }
+        messages
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use bytes::Bytes;
-    use rdkafka::ClientConfig;
-    use rdkafka::consumer::{Consumer, StreamConsumer};
-    use rdkafka::message::Headers;
-    use rdkafka::message::Message;
     use std::collections::HashMap;
-    use std::time::Duration;
-    use tokio::time::timeout;
 
     #[cfg(feature = "kafka-tests")]
     #[tokio::test]
@@ -191,33 +240,11 @@ mod tests {
         assert!(responses[0].status.is_ok());
 
         // Now consume the message from Kafka to verify
-        let consumer: StreamConsumer = ClientConfig::new()
-            .set("bootstrap.servers", "localhost:9092")
-            .set(
-                "group.id",
-                format!("test-consumer-{}", uuid::Uuid::new_v4()),
-            )
-            .set("auto.offset.reset", "earliest")
-            .create()
-            .expect("Failed to create consumer");
-        consumer
-            .subscribe(&[&topic_name])
-            .expect("Failed to subscribe");
-        let result = timeout(Duration::from_secs(10), consumer.recv()).await;
-        assert!(result.is_ok(), "Did not receive message from Kafka");
-        let msg = result.unwrap().expect("Kafka error");
-        assert_eq!(msg.payload().unwrap(), b"test-payload");
-        assert_eq!(msg.key().unwrap(), b"key1");
-        let kafka_headers = msg.headers().unwrap();
-        let mut found_headers = HashMap::new();
-        for header in kafka_headers.iter() {
-            found_headers.insert(
-                header.key,
-                String::from_utf8_lossy(header.value.unwrap()).to_string(),
-            );
-        }
-        assert_eq!(found_headers.get("header1"), Some(&"value1".to_string()));
-        assert_eq!(found_headers.get("header2"), Some(&"value2".to_string()));
+        let messages = test_utils::consume_messages_from_topic(&topic_name, 1).await;
+        let msg = &messages[0];
+        assert_eq!(msg.payload, b"test-payload");
+        assert_eq!(msg.headers.get("header1"), Some(&"value1".to_string()));
+        assert_eq!(msg.headers.get("header2"), Some(&"value2".to_string()));
     }
 
     #[cfg(feature = "kafka-tests")]
@@ -252,26 +279,10 @@ mod tests {
             assert!(resp.status.is_ok());
         }
         // Consume all messages
-        let consumer: StreamConsumer = ClientConfig::new()
-            .set("bootstrap.servers", "localhost:9092")
-            .set(
-                "group.id",
-                format!("test-consumer-{}", uuid::Uuid::new_v4()),
-            )
-            .set("auto.offset.reset", "earliest")
-            .create()
-            .expect("Failed to create consumer");
-        consumer
-            .subscribe(&[&topic_name])
-            .expect("Failed to subscribe");
-        let mut received = 0;
+        let messages = test_utils::consume_messages_from_topic(&topic_name, 5).await;
         let mut seen_payloads = std::collections::HashSet::new();
-        while received < 5 {
-            let result = timeout(Duration::from_secs(10), consumer.recv()).await;
-            assert!(result.is_ok(), "Did not receive message from Kafka");
-            let msg = result.unwrap().expect("Kafka error");
-            seen_payloads.insert(String::from_utf8_lossy(msg.payload().unwrap()).to_string());
-            received += 1;
+        for msg in messages {
+            seen_payloads.insert(String::from_utf8_lossy(&msg.payload).to_string());
         }
         for i in 0..5 {
             assert!(seen_payloads.contains(&format!("payload-{}", i)));

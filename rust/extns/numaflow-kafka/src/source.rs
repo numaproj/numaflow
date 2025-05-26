@@ -515,6 +515,7 @@ impl KafkaSource {
     }
 }
 
+/// Expose methods so that numaflow-core crate doesn't have to depend on rdkafka.
 #[cfg(feature = "kafka-tests")]
 pub mod test_utils {
     use super::*;
