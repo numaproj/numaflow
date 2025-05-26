@@ -19,7 +19,7 @@ use crate::{
 };
 use chrono::Utc;
 use numaflow_jetstream::JetstreamSource;
-use numaflow_kafka::KafkaSource;
+use numaflow_kafka::source::KafkaSource;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pulsar::source::PulsarSource;
 use numaflow_sqs::source::SqsSource;

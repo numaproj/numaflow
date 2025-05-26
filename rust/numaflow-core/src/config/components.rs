@@ -12,7 +12,7 @@ pub(crate) mod source {
 
     use bytes::Bytes;
     use numaflow_jetstream::{JetstreamSourceConfig, NatsAuth, TlsClientAuthCerts, TlsConfig};
-    use numaflow_kafka::KafkaSourceConfig;
+    use numaflow_kafka::source::KafkaSourceConfig;
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source, SqsSource};
     use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
     use numaflow_sqs::source::SqsSourceConfig;
@@ -320,7 +320,7 @@ pub(crate) mod source {
         ) -> std::result::Result<Self, Self::Error> {
             let (auth, tls) = parse_kafka_auth_config(value.sasl.clone(), value.tls.clone())?;
 
-            let kafka_config = numaflow_kafka::KafkaSourceConfig {
+            let kafka_config = numaflow_kafka::source::KafkaSourceConfig {
                 brokers: value.brokers.unwrap_or_default(),
                 topics: value
                     .topic

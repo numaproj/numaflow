@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use numaflow_kafka::{KafkaMessage, KafkaSource, KafkaSourceConfig};
+use numaflow_kafka::source::{KafkaMessage, KafkaSource, KafkaSourceConfig};
 
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
@@ -104,7 +104,7 @@ impl source::SourceAcker for KafkaSource {
                     "invalid offset id. kafka_offset={offset}, error={e:?}"
                 ))
             })?;
-            kafka_offsets.push(numaflow_kafka::KafkaOffset {
+            kafka_offsets.push(numaflow_kafka::source::KafkaOffset {
                 topic,
                 partition,
                 offset: partition_offset,
@@ -124,7 +124,7 @@ impl source::LagReader for KafkaSource {
 mod tests {
     use super::*;
     use bytes::Bytes;
-    use numaflow_kafka::{KafkaMessage, test_utils};
+    use numaflow_kafka::source::{KafkaMessage, test_utils};
     use std::collections::HashMap;
 
     #[tokio::test]
@@ -165,7 +165,7 @@ mod tests {
         test_utils::produce_test_messages(&producer, &topic_name, 50).await;
 
         // Configure KafkaSource
-        let config = numaflow_kafka::KafkaSourceConfig {
+        let config = numaflow_kafka::source::KafkaSourceConfig {
             brokers: vec!["localhost:9092".to_string()],
             topics: vec![topic_name.clone()],
             consumer_group: "test_consumer_group".to_string(),
