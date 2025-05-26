@@ -31,21 +31,8 @@ impl From<Message> for accumulator::Payload {
     }
 }
 
-impl From<&Message> for accumulator::Payload {
-    fn from(msg: &Message) -> Self {
-        Self {
-            keys: msg.keys.to_vec(),
-            value: msg.value.to_vec(),
-            event_time: Some(prost_timestamp_from_utc(msg.event_time)),
-            watermark: msg.watermark.map(prost_timestamp_from_utc),
-            id: msg.id.to_string(),
-            headers: msg.headers.clone(),
-        }
-    }
-}
-
-impl From<&Window> for accumulator::KeyedWindow {
-    fn from(window: &Window) -> Self {
+impl From<Window> for accumulator::KeyedWindow {
+    fn from(window: Window) -> Self {
         Self {
             start: Some(prost_timestamp_from_utc(window.start_time)),
             end: Some(prost_timestamp_from_utc(window.end_time)),
@@ -57,28 +44,43 @@ impl From<&Window> for accumulator::KeyedWindow {
 
 impl From<UnalignedWindowMessage> for AccumulatorRequest {
     fn from(value: UnalignedWindowMessage) -> Self {
-        let window = &value.windows[0];
-        let operation = Some(accumulator_request::WindowOperation {
-            event: accumulator_request::window_operation::Event::Open as i32,
-            keyed_window: Some(window.into()),
-        });
-        // Process the operation
-        match &value.operation {
-            WindowOperation::Open(msg) => AccumulatorRequest {
-                payload: Some(msg.into()),
-                operation,
-                handshake: None,
-            },
-            WindowOperation::Close => AccumulatorRequest {
-                payload: None,
-                operation,
-                handshake: None,
-            },
-            WindowOperation::Append(msg) => AccumulatorRequest {
-                payload: Some(msg.into()),
-                operation,
-                handshake: None,
-            },
+        match value {
+            UnalignedWindowMessage::Open { message, window } => {
+                let operation = Some(accumulator_request::WindowOperation {
+                    event: accumulator_request::window_operation::Event::Open as i32,
+                    keyed_window: Some(window.into()),
+                });
+
+                AccumulatorRequest {
+                    payload: Some(message.into()),
+                    operation,
+                    handshake: None,
+                }
+            }
+            UnalignedWindowMessage::Close(window) => {
+                let operation = Some(accumulator_request::WindowOperation {
+                    event: accumulator_request::window_operation::Event::Close as i32,
+                    keyed_window: Some(window.into()),
+                });
+
+                AccumulatorRequest {
+                    payload: None,
+                    operation,
+                    handshake: None,
+                }
+            }
+            UnalignedWindowMessage::Append { message, window } => {
+                let operation = Some(accumulator_request::WindowOperation {
+                    event: accumulator_request::window_operation::Event::Append as i32,
+                    keyed_window: Some(window.into()),
+                });
+
+                AccumulatorRequest {
+                    payload: Some(message.into()),
+                    operation,
+                    handshake: None,
+                }
+            }
             _ => panic!("Unsupported operation for accumulator window"),
         }
     }

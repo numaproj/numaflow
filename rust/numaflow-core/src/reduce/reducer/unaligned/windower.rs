@@ -76,15 +76,27 @@ impl Window {
 #[derive(Debug, Clone)]
 pub(crate) enum UnalignedWindowMessage {
     // Opening a new window
-    Open { msg: Message, window: Window },
+    Open {
+        message: Message,
+        window: Window,
+    },
     // Closing a window
     Close(Window),
     // Appending to an existing window
-    Append { msg: Message, window: Window },
+    Append {
+        message: Message,
+        window: Window,
+    },
     // Merging windows
-    Merge { msg: Message, windows: Vec<Window> },
+    Merge {
+        message: Message,
+        windows: Vec<Window>,
+    },
     // Expanding a window
-    Expand { msg: Message, windows: Vec<Window> },
+    Expand {
+        message: Message,
+        windows: Vec<Window>,
+    },
 }
 
 #[derive(Debug, Clone)]

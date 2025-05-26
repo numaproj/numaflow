@@ -29,20 +29,8 @@ impl From<Message> for session_reduce_request::Payload {
     }
 }
 
-impl From<&Message> for session_reduce_request::Payload {
-    fn from(msg: &Message) -> Self {
-        Self {
-            keys: msg.keys.to_vec(),
-            value: msg.value.to_vec(),
-            event_time: Some(prost_timestamp_from_utc(msg.event_time)),
-            watermark: msg.watermark.map(prost_timestamp_from_utc),
-            headers: msg.headers.clone(),
-        }
-    }
-}
-
-impl From<&Window> for sessionreduce::KeyedWindow {
-    fn from(window: &Window) -> Self {
+impl From<Window> for sessionreduce::KeyedWindow {
+    fn from(window: Window) -> Self {
         Self {
             start: Some(prost_timestamp_from_utc(window.start_time)),
             end: Some(prost_timestamp_from_utc(window.end_time)),
@@ -54,69 +42,59 @@ impl From<&Window> for sessionreduce::KeyedWindow {
 
 impl From<UnalignedWindowMessage> for SessionReduceRequest {
     fn from(value: UnalignedWindowMessage) -> Self {
-        let operation = &value.operation;
-
-        // Process the operation
-        match operation {
-            WindowOperation::Open(msg) => {
-                let window = &value.windows[0];
+        match value {
+            UnalignedWindowMessage::Open { message, window } => {
                 let operation = Some(session_reduce_request::WindowOperation {
                     event: session_reduce_request::window_operation::Event::Open as i32,
                     keyed_windows: vec![window.into()],
                 });
 
                 SessionReduceRequest {
-                    payload: Some(msg.into()),
+                    payload: Some(message.into()),
                     operation,
                 }
             }
-            WindowOperation::Close => {
-                let window = &value.windows[0];
+            UnalignedWindowMessage::Close(window) => {
                 let operation = Some(session_reduce_request::WindowOperation {
                     event: session_reduce_request::window_operation::Event::Close as i32,
                     keyed_windows: vec![window.into()],
                 });
 
-                // For Close operations, we still need to set payload to Some
-                // even though there's no message, to ensure consistent behavior
                 SessionReduceRequest {
                     payload: None,
                     operation,
                 }
             }
-            WindowOperation::Append(msg) => {
-                let window = &value.windows[0];
+            UnalignedWindowMessage::Append { message, window } => {
                 let operation = Some(session_reduce_request::WindowOperation {
                     event: session_reduce_request::window_operation::Event::Append as i32,
                     keyed_windows: vec![window.into()],
                 });
 
                 SessionReduceRequest {
-                    payload: Some(msg.into()),
+                    payload: Some(message.into()),
                     operation,
                 }
             }
-            WindowOperation::Expand(msg) => {
-                let windows = &value.windows;
-                let operation = Some(session_reduce_request::WindowOperation {
-                    event: session_reduce_request::window_operation::Event::Expand as i32,
-                    keyed_windows: windows.iter().map(Into::into).collect(),
-                });
-
-                SessionReduceRequest {
-                    payload: Some(msg.into()),
-                    operation,
-                }
-            }
-            WindowOperation::Merge(msg) => {
-                let windows = &value.windows;
+            UnalignedWindowMessage::Merge { message, windows } => {
                 let operation = Some(session_reduce_request::WindowOperation {
                     event: session_reduce_request::window_operation::Event::Merge as i32,
-                    keyed_windows: windows.iter().map(Into::into).collect(),
+                    keyed_windows: windows.into_iter().map(Into::into).collect(),
                 });
 
                 SessionReduceRequest {
-                    payload: Some(msg.into()),
+                    payload: Some(message.into()),
+                    operation,
+                }
+            }
+            UnalignedWindowMessage::Expand { message, windows } => {
+                let operation = Some(session_reduce_request::WindowOperation {
+                    event: session_reduce_request::window_operation::Event::Expand as i32,
+                    keyed_windows: windows.into_iter().map(Into::into).collect(),
+                });
+
+                SessionReduceRequest {
+                    payload: Some(message.into()),
                     operation,
                 }
             }

@@ -5,9 +5,7 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 
 use crate::message::Message;
-use crate::reduce::reducer::unaligned::windower::{
-    UnalignedWindowMessage, Window, WindowOperation,
-};
+use crate::reduce::reducer::unaligned::windower::{UnalignedWindowMessage, Window};
 
 /// Represents the state of an accumulator window, tracking message timestamps
 #[derive(Debug, Clone)]
@@ -103,9 +101,9 @@ impl AccumulatorWindowManager {
             // Window exists, append message
             window_state.append_timestamp(msg.event_time);
 
-            result.push(UnalignedWindowMessage {
-                operation: WindowOperation::Append(msg),
-                windows: vec![window_state.window.clone()],
+            result.push(UnalignedWindowMessage::Append {
+                message: msg.clone(),
+                window: window_state.window.clone(),
             });
         } else {
             // Create a new window for this key
@@ -120,9 +118,9 @@ impl AccumulatorWindowManager {
 
             active_windows.insert(combined_key, window_state);
 
-            result.push(UnalignedWindowMessage {
-                operation: WindowOperation::Open(msg),
-                windows: vec![window.clone()],
+            result.push(UnalignedWindowMessage::Open {
+                message: msg.clone(),
+                window,
             });
         }
 
@@ -145,11 +143,7 @@ impl AccumulatorWindowManager {
 
             // If the last event time plus timeout is before current time, close the window
             if current_time > last_seen + chrono::Duration::from_std(self.timeout).unwrap() {
-                result.push(UnalignedWindowMessage {
-                    operation: WindowOperation::Close,
-                    windows: vec![window_state.window.clone()],
-                });
-
+                result.push(UnalignedWindowMessage::Close(window_state.window.clone()));
                 keys_to_delete.push(key.clone());
             }
         }
@@ -229,12 +223,10 @@ mod tests {
 
         // Verify results - should be assigned to exactly 1 window with Open operation
         assert_eq!(window_msgs.len(), 1);
-        assert_eq!(window_msgs[0].windows.len(), 1);
-        assert_eq!(window_msgs[0].windows[0].keys, msg.keys);
-
-        match &window_msgs[0].operation {
-            WindowOperation::Open(_) => {}
-            _ => panic!("Expected Open operation"),
+        if let UnalignedWindowMessage::Open { message, window } = &window_msgs[0] {
+            assert_eq!(window.keys, msg.keys);
+        } else {
+            panic!("Expected Open message");
         }
     }
 
@@ -265,11 +257,10 @@ mod tests {
 
         // Verify results - should be assigned to exactly 1 window with Append operation
         assert_eq!(window_msgs.len(), 1);
-        assert_eq!(window_msgs[0].windows.len(), 1);
-
-        match &window_msgs[0].operation {
-            WindowOperation::Append(_) => {}
-            _ => panic!("Expected Append operation"),
+        if let UnalignedWindowMessage::Append { message, window } = &window_msgs[0] {
+            assert_eq!(window.keys, msg.keys);
+        } else {
+            panic!("Expected Append message");
         }
     }
 
@@ -299,13 +290,10 @@ mod tests {
         let closed = windower.close_windows(Utc::now());
 
         // Should close 1 window
-        assert_eq!(closed.len(), 1);
-        assert_eq!(closed[0].windows.len(), 1);
-        assert_eq!(closed[0].windows[0].keys, msg.keys);
-
-        match &closed[0].operation {
-            WindowOperation::Close => {}
-            _ => panic!("Expected Close operation"),
+        if let UnalignedWindowMessage::Close(window) = &closed[0] {
+            assert_eq!(window.keys, msg.keys);
+        } else {
+            panic!("Expected Close message");
         }
 
         // Verify window was removed

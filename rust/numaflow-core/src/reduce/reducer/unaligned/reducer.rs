@@ -233,40 +233,20 @@ impl UnalignedReduceActor {
 
     /// Handle a window message
     async fn handle_window_message(&mut self, msg: UnalignedWindowMessage) -> crate::Result<()> {
-        match &msg.operation {
-            WindowOperation::Open(_) => {
-                let window = &msg.windows[0];
-                self.window_open(window.clone(), msg).await?;
+        match msg.clone() {
+            UnalignedWindowMessage::Open { .. } => {
+                self.window_open(msg).await?;
             }
-            WindowOperation::Close => {
-                // For Close operations, we need to close the reduce task
-                let window = &msg.windows[0];
-                self.window_close(window.id.clone()).await;
-            }
-            WindowOperation::Append(_) => {
-                // For Append operations, we need to send the message to the existing reduce task
-                let window = &msg.windows[0];
-                self.window_append(window.id.clone(), msg).await?;
-            }
-            WindowOperation::Merge(_) => {
-                // For Merge operations, we need to handle merging windows
-                self.window_merge(msg).await?;
-            }
-            WindowOperation::Expand(_) => {
-                // For Expand operations, we need to handle expanding windows
-                let window = &msg.windows[0];
-                self.window_expand(window.id.clone(), msg).await?;
-            }
+            UnalignedWindowMessage::Close(_) => {}
+            UnalignedWindowMessage::Append { .. } => {}
+            UnalignedWindowMessage::Merge { .. } => {}
+            UnalignedWindowMessage::Expand { .. } => {}
         }
         Ok(())
     }
 
     /// Creates a new reduce task for the window and sends the initial Open command
-    async fn window_open(
-        &mut self,
-        window: Window,
-        msg: UnalignedWindowMessage,
-    ) -> crate::Result<()> {
+    async fn window_open(&mut self, msg: UnalignedWindowMessage) -> crate::Result<()> {
         // Create a new channel for this window's messages
         let (message_tx, message_rx) = mpsc::channel(100);
         let message_stream = ReceiverStream::new(message_rx);
