@@ -28,12 +28,13 @@ use user_defined::UserDefinedSink;
 
 use crate::Result;
 use crate::config::components::sink::{OnFailureStrategy, RetryConfig};
+use crate::config::pipeline::VERTEX_TYPE_SINK;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::Error;
 use crate::message::Message;
 use crate::metrics::{
-    monovertex_metrics, mvtx_forward_metric_labels, pipeline_forward_metric_labels,
-    pipeline_metrics,
+    PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
+    pipeline_drop_metric_labels, pipeline_metric_labels, pipeline_metrics,
 };
 use crate::sink::serve::{ServingStore, StoreEntry};
 use crate::tracker::TrackerHandle;
@@ -467,15 +468,11 @@ impl SinkWriter {
                         .map(|msg| msg.offset.clone())
                         .collect::<Vec<_>>();
 
-                    let total_msgs = batch.len();
                     // filter out the messages which needs to be dropped
                     let batch = batch
                         .into_iter()
                         .filter(|msg| !msg.dropped())
                         .collect::<Vec<_>>();
-
-                    let sink_start = time::Instant::now();
-                    let total_valid_msgs = batch.len();
                     match self.write(batch.clone(), cln_token.clone()).await {
                         Ok(_) => {
                             for offset in offsets {
@@ -499,26 +496,6 @@ impl SinkWriter {
                             self.shutting_down = true;
                         }
                     }
-
-                    // publish sink metrics
-                    if is_mono_vertex() {
-                        monovertex_metrics()
-                            .sink
-                            .time
-                            .get_or_create(mvtx_forward_metric_labels())
-                            .observe(sink_start.elapsed().as_micros() as f64);
-                    } else {
-                        pipeline_metrics()
-                            .forwarder
-                            .write_time
-                            .get_or_create(pipeline_forward_metric_labels("Sink"))
-                            .observe(sink_start.elapsed().as_micros() as f64);
-                        pipeline_metrics()
-                            .forwarder
-                            .dropped_total
-                            .get_or_create(pipeline_forward_metric_labels("Sink"))
-                            .inc_by((total_msgs - total_valid_msgs) as u64);
-                    }
                 }
                 self.final_result.clone()
             }
@@ -536,8 +513,10 @@ impl SinkWriter {
             return Ok(());
         }
 
+        let write_start_time = tokio::time::Instant::now();
         let total_msgs = messages.len();
-        let mut attempts = 1;
+        let mut retry_attempts = 0;
+        let total_msgs_bytes: usize = messages.iter().map(|msg| msg.value.len()).sum();
         let mut error_map = HashMap::new();
         let mut fallback_msgs = Vec::new();
         let mut serving_msgs = Vec::new();
@@ -553,7 +532,7 @@ impl SinkWriter {
         let mut rng = StdRng::from_entropy();
 
         loop {
-            while attempts <= retry_config.sink_max_retry_attempts {
+            while retry_attempts <= retry_config.sink_max_retry_attempts {
                 let status = self
                     .write_to_sink_once(
                         &mut error_map,
@@ -565,11 +544,25 @@ impl SinkWriter {
                 match status {
                     Ok(true) => break,
                     Ok(false) => {
-                        warn!(
-                            "Retry attempt {} due to retryable error. Errors: {:?}",
-                            attempts, error_map
-                        );
+                        // Increment retry attempt only if we will retry again
+                        // otherwise we will break out of the loop
+                        // sleep for the calculated delay only if we are retrying
+                        if retry_attempts >= retry_config.sink_max_retry_attempts {
+                            break;
+                        }
+                        retry_attempts += 1;
                         write_errors_total += error_map.len();
+                        warn!(
+                            retry_attempt = retry_attempts,
+                            ?error_map,
+                            "Retrying due to retryable error."
+                        );
+                        let delay = Self::calculate_exponential_delay(
+                            retry_config,
+                            retry_attempts,
+                            &mut rng,
+                        );
+                        sleep(Duration::from_millis(delay as u64)).await;
                     }
                     Err(e) => Err(e)?,
                 }
@@ -583,17 +576,11 @@ impl SinkWriter {
                             .to_string(),
                     ));
                 }
-
-                // Calculate exponential backoff delay for the next retry attempt
-                let delay = Self::calculate_exponential_delay(retry_config, attempts, &mut rng);
-                // Sleep for the calculated delay
-                sleep(Duration::from_millis(delay as u64)).await;
-                attempts += 1;
             }
 
             // If after the retries we still have messages to process, handle the post retry failures
             let need_retry = Self::handle_sink_post_retry(
-                &mut attempts,
+                &mut retry_attempts,
                 &mut error_map,
                 &mut fallback_msgs,
                 &mut messages_to_send,
@@ -603,9 +590,9 @@ impl SinkWriter {
             match need_retry {
                 // if we are done with the messages, break the loop
                 Ok(false) => break,
-                // if we need to retry, reset the attempts and error_map
+                // if we need to retry, reset the retry_attempts and error_map
                 Ok(true) => {
-                    attempts = 0;
+                    retry_attempts = 0;
                     error_map.clear();
                 }
                 Err(e) => Err(e)?,
@@ -613,15 +600,17 @@ impl SinkWriter {
         }
 
         let fb_msgs_total = fallback_msgs.len();
+        let fb_msgs_bytes_total: usize = fallback_msgs.iter().map(|msg| msg.value.len()).sum();
         // If there are fallback messages, write them to the fallback sink
         if !fallback_msgs.is_empty() {
             let fallback_sink_start = time::Instant::now();
             self.handle_fallback_messages(fallback_msgs, retry_config)
                 .await?;
-            Self::send_fb_sink_metrics(fb_msgs_total, fallback_sink_start);
+            Self::send_fb_sink_metrics(fb_msgs_total, fb_msgs_bytes_total, fallback_sink_start);
         }
 
         let serving_msgs_total = serving_msgs.len();
+        let serving_msgs_bytes_total: usize = serving_msgs.iter().map(|msg| msg.value.len()).sum();
         // If there are serving messages, write them to the serving store
         if !serving_msgs.is_empty() {
             self.handle_serving_messages(serving_msgs).await?;
@@ -630,20 +619,45 @@ impl SinkWriter {
         if is_mono_vertex() {
             monovertex_metrics()
                 .sink
+                .time
+                .get_or_create(mvtx_forward_metric_labels())
+                .observe(write_start_time.elapsed().as_micros() as f64);
+            monovertex_metrics()
+                .sink
                 .write_total
                 .get_or_create(mvtx_forward_metric_labels())
-                .inc_by((total_msgs - fb_msgs_total - serving_msgs_total) as u64);
+                .inc_by((total_msgs - fb_msgs_total) as u64);
             monovertex_metrics()
                 .sink
                 .write_errors_total
                 .get_or_create(mvtx_forward_metric_labels())
                 .inc_by((write_errors_total) as u64);
         } else {
+            let mut labels = pipeline_metric_labels(VERTEX_TYPE_SINK).clone();
+            labels.push((
+                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                get_vertex_name().to_string(),
+            ));
             pipeline_metrics()
                 .forwarder
                 .write_total
-                .get_or_create(pipeline_forward_metric_labels("Sink"))
-                .inc_by(total_msgs as u64);
+                .get_or_create(&labels)
+                .inc_by((total_msgs - fb_msgs_total - serving_msgs_total) as u64);
+            pipeline_metrics()
+                .forwarder
+                .write_bytes_total
+                .get_or_create(&labels)
+                .inc_by((total_msgs_bytes - fb_msgs_bytes_total - serving_msgs_bytes_total) as u64);
+            pipeline_metrics()
+                .forwarder
+                .write_processing_time
+                .get_or_create(&labels)
+                .observe(write_start_time.elapsed().as_micros() as f64);
+            pipeline_metrics()
+                .forwarder
+                .write_error_total
+                .get_or_create(&labels)
+                .inc_by((write_errors_total) as u64);
         }
 
         Ok(())
@@ -652,7 +666,7 @@ impl SinkWriter {
     /// Handles the post retry failures based on the configured strategy,
     /// returns true if we need to retry, else false.
     fn handle_sink_post_retry(
-        attempts: &mut u16,
+        retry_attempts: &mut u16,
         error_map: &mut HashMap<String, i32>,
         fallback_msgs: &mut Vec<Message>,
         messages_to_send: &mut Vec<Message>,
@@ -668,8 +682,9 @@ impl SinkWriter {
             // if we need to retry, return true
             OnFailureStrategy::Retry => {
                 warn!(
-                    "Using onFailure Retry, Retry attempts {} completed",
-                    attempts
+                    retry_attempts = *retry_attempts,
+                    errors = ?error_map,
+                    "Using onFailure Retry, retry attempts completed"
                 );
                 return Ok(true);
             }
@@ -677,8 +692,9 @@ impl SinkWriter {
             OnFailureStrategy::Drop => {
                 // log that we are dropping the messages as requested
                 warn!(
-                    "Dropping messages after {} attempts. Errors: {:?}",
-                    attempts, error_map
+                    retry_attempts = *retry_attempts,
+                    errors = ?error_map,
+                    "Dropping messages."
                 );
                 if is_mono_vertex() {
                     // update the drop metric count with the messages left for sink
@@ -687,14 +703,25 @@ impl SinkWriter {
                         .dropped_total
                         .get_or_create(mvtx_forward_metric_labels())
                         .inc_by((messages_to_send.len()) as u64);
+                } else {
+                    pipeline_metrics()
+                        .forwarder
+                        .drop_total
+                        .get_or_create(&pipeline_drop_metric_labels(
+                            VERTEX_TYPE_SINK,
+                            get_vertex_name(),
+                            "retries exhausted in the Sink",
+                        ))
+                        .inc_by((messages_to_send.len()) as u64);
                 }
             }
             // if we need to move the messages to the fallback, return false
             OnFailureStrategy::Fallback => {
                 // log that we are moving the messages to the fallback as requested
                 warn!(
-                    "Moving messages to fallback after {} attempts. Errors: {:?}",
-                    attempts, error_map
+                    retry_attempts = *retry_attempts,
+                    errors = ?error_map,
+                    "Moving messages to fallback after retry attempts.",
                 );
                 // move the messages to the fallback messages
                 fallback_msgs.append(messages_to_send);
@@ -772,7 +799,7 @@ impl SinkWriter {
             ));
         }
 
-        let mut attempts = 0;
+        let mut retry_attempts = 0;
         let mut fallback_error_map = HashMap::new();
         // start with the original set of message to be sent.
         // we will overwrite this vec with failed messages and will keep retrying.
@@ -783,10 +810,11 @@ impl SinkWriter {
             .clone()
             .backoff
             .unwrap();
-        let max_attempts = default_retry.steps.unwrap();
+        // steps is the maximum number of retry attempts, excluding the initial attempt
+        let max_retry_attempts = default_retry.steps.unwrap();
         let sleep_interval = default_retry.interval.unwrap();
 
-        while attempts < max_attempts {
+        while retry_attempts <= max_retry_attempts {
             match self.fb_sink(messages_to_send.clone()).await {
                 Ok(fb_response) => {
                     // create a map of id to result, since there is no strict requirement
@@ -809,6 +837,20 @@ impl SinkWriter {
                                 ResponseStatusFromSink::Success => false,
                                 ResponseStatusFromSink::Failed(err_msg) => {
                                     *fallback_error_map.entry(err_msg.clone()).or_insert(0) += 1;
+                                    // increment fb sink error metric for pipeline
+                                    if !is_mono_vertex() {
+                                        let mut labels =
+                                            pipeline_metric_labels(VERTEX_TYPE_SINK).clone();
+                                        labels.push((
+                                            PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                                            get_vertex_name().to_string(),
+                                        ));
+                                        pipeline_metrics()
+                                            .sink_forwarder
+                                            .fbsink_write_error_total
+                                            .get_or_create(&labels)
+                                            .inc_by(1);
+                                    }
                                     true
                                 }
                                 ResponseStatusFromSink::Fallback => {
@@ -842,26 +884,33 @@ impl SinkWriter {
                         ));
                     }
 
-                    attempts += 1;
-
                     if messages_to_send.is_empty() {
                         break;
                     }
 
-                    warn!(
-                        "Retry attempt {} due to retryable error. Errors: {:?}",
-                        attempts, fallback_error_map
-                    );
-                    sleep(tokio::time::Duration::from(sleep_interval)).await;
+                    // increment retry attempt only if we will retry
+                    // otherwise break out of the loop
+                    // sleep for the calculated delay only if we are retrying
+                    if retry_attempts < max_retry_attempts {
+                        retry_attempts += 1;
+                        warn!(
+                            retry_attempts,
+                            ?fallback_error_map,
+                            "Retrying due to retryable error in Fallback Sink"
+                        );
+                        sleep(tokio::time::Duration::from(sleep_interval)).await;
+                    } else {
+                        break;
+                    }
                 }
                 Err(e) => return Err(e),
             }
         }
         if !messages_to_send.is_empty() {
             return Err(Error::FbSink(format!(
-                "Failed to write messages to fallback sink after {} attempts. \
+                "Failed to write messages to fallback sink after {} retry attempts. \
                 Max Attempts configured: {} Errors: {:?}",
-                attempts, max_attempts, fallback_error_map
+                retry_attempts, max_retry_attempts, fallback_error_map
             )));
         }
         Ok(())
@@ -915,7 +964,11 @@ impl SinkWriter {
         self.health_check_clients.ready().await
     }
 
-    fn send_fb_sink_metrics(fb_msgs_total: usize, fallback_sink_start: time::Instant) {
+    fn send_fb_sink_metrics(
+        fb_msgs_total: usize,
+        fb_msgs_bytes_total: usize,
+        fallback_sink_start: time::Instant,
+    ) {
         if is_mono_vertex() {
             monovertex_metrics()
                 .fb_sink
@@ -927,18 +980,42 @@ impl SinkWriter {
                 .time
                 .get_or_create(mvtx_forward_metric_labels())
                 .observe(fallback_sink_start.elapsed().as_micros() as f64);
+        } else {
+            let mut labels = pipeline_metric_labels(VERTEX_TYPE_SINK).clone();
+            labels.push((
+                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                get_vertex_name().to_string(),
+            ));
+            pipeline_metrics()
+                .sink_forwarder
+                .fbsink_write_total
+                .get_or_create(&labels)
+                .inc_by(fb_msgs_total as u64);
+            pipeline_metrics()
+                .sink_forwarder
+                .fbsink_write_bytes_total
+                .get_or_create(&labels)
+                .inc_by(fb_msgs_bytes_total as u64);
+
+            pipeline_metrics()
+                .sink_forwarder
+                .fbsink_write_processing_time
+                .get_or_create(&labels)
+                .observe(fallback_sink_start.elapsed().as_micros() as f64);
         }
     }
 
     fn calculate_exponential_delay(
         retry_config: &RetryConfig,
-        attempts: u16,
+        retry_attempts: u16,
         rng: &mut StdRng,
     ) -> f64 {
         // Calculate the base delay using the initial retry interval and the retry factor
-        // The base delay is calculated as: initial_retry_interval * retry_factor^(attempts-1)
+        // The base delay is calculated as: initial_retry_interval * retry_factor^(retry_attempts-1)
         let base_delay = (retry_config.sink_initial_retry_interval_in_ms as f64)
-            * retry_config.sink_retry_factor.powi((attempts - 1) as i32);
+            * retry_config
+                .sink_retry_factor
+                .powi((retry_attempts - 1) as i32);
 
         let jitter = retry_config.sink_retry_jitter;
         // If jitter is 0, return the base delay
@@ -1067,6 +1144,7 @@ mod tests {
                 },
                 headers: HashMap::new(),
                 metadata: None,
+                is_late: false,
             })
             .collect();
 
@@ -1104,6 +1182,7 @@ mod tests {
                 },
                 headers: HashMap::new(),
                 metadata: None,
+                is_late: false,
             })
             .collect();
 
@@ -1182,6 +1261,7 @@ mod tests {
                 },
                 headers: HashMap::new(),
                 metadata: None,
+                is_late: false,
             })
             .collect();
 
@@ -1270,6 +1350,7 @@ mod tests {
                 },
                 headers: HashMap::new(),
                 metadata: None,
+                is_late: false,
             })
             .collect();
 
@@ -1383,6 +1464,7 @@ mod tests {
                     },
                     headers,
                     metadata: None,
+                    is_late: false,
                 }
             })
             .collect();
@@ -1431,6 +1513,7 @@ mod tests {
             },
             headers: HashMap::new(),
             metadata: None,
+            is_late: false,
         };
 
         let request: SinkRequest = message.into();

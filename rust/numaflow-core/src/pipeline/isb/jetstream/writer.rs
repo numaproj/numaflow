@@ -23,7 +23,10 @@ use crate::config::pipeline::ToVertexConfig;
 use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, Offset};
-use crate::metrics::{pipeline_isb_metric_labels, pipeline_metrics};
+use crate::metrics::{
+    PIPELINE_PARTITION_NAME_LABEL, pipeline_isb_metric_labels, pipeline_metric_labels,
+    pipeline_metrics,
+};
 use crate::shared::forward;
 use crate::tracker::TrackerHandle;
 use crate::watermark::WatermarkHandle;
@@ -51,6 +54,7 @@ pub(crate) struct JetstreamWriter {
     sem: Arc<Semaphore>,
     watermark_handle: Option<WatermarkHandle>,
     paf_concurrency: usize,
+    vertex_type: String,
 }
 
 impl JetstreamWriter {
@@ -63,6 +67,7 @@ impl JetstreamWriter {
         tracker_handle: TrackerHandle,
         cancel_token: CancellationToken,
         watermark_handle: Option<WatermarkHandle>,
+        vertex_type: String,
     ) -> Self {
         let to_vertex_streams = config
             .iter()
@@ -82,6 +87,7 @@ impl JetstreamWriter {
             sem: Arc::new(Semaphore::new(paf_concurrency)),
             watermark_handle,
             paf_concurrency,
+            vertex_type,
         };
 
         // spawn a task for checking whether buffer is_full
@@ -194,14 +200,19 @@ impl JetstreamWriter {
             let mut hash = DefaultHasher::new();
 
             while let Some(message) = messages_stream.next().await {
+                let write_processing_start = Instant::now();
                 // if message needs to be dropped, ack and continue
-                // TODO: add metric for dropped count
                 if message.dropped() {
                     // delete the entry from tracker
                     self.tracker_handle
                         .delete(message.offset)
                         .await
                         .expect("Failed to delete offset from tracker");
+                    pipeline_metrics()
+                        .forwarder
+                        .udf_drop_total
+                        .get_or_create(pipeline_metric_labels(&self.vertex_type))
+                        .inc();
                     continue;
                 }
 
@@ -237,15 +248,16 @@ impl JetstreamWriter {
                         )
                         .await
                     {
+                        let partition_name = stream.name;
+                        Self::send_write_metrics(
+                            partition_name,
+                            &self.vertex_type,
+                            message.clone(),
+                            write_processing_start,
+                        );
                         pafs.push((stream, paf));
                     }
                 }
-
-                pipeline_metrics()
-                    .forwarder
-                    .write_total
-                    .get_or_create(pipeline_isb_metric_labels())
-                    .inc();
 
                 if pafs.is_empty() {
                     continue;
@@ -270,6 +282,34 @@ impl JetstreamWriter {
         Ok(handle)
     }
 
+    fn send_write_metrics(
+        partition_name: &str,
+        vertex_type: &String,
+        message: Message,
+        write_processing_start: Instant,
+    ) {
+        let mut labels = pipeline_metric_labels(vertex_type).clone();
+        labels.push((
+            PIPELINE_PARTITION_NAME_LABEL.to_string(),
+            partition_name.to_string(),
+        ));
+        pipeline_metrics()
+            .forwarder
+            .write_total
+            .get_or_create(&labels)
+            .inc();
+        pipeline_metrics()
+            .forwarder
+            .write_bytes_total
+            .get_or_create(&labels)
+            .inc_by(message.value.len() as u64);
+        pipeline_metrics()
+            .forwarder
+            .write_processing_time
+            .get_or_create(&labels)
+            .observe(write_processing_start.elapsed().as_micros() as f64);
+    }
+
     /// Writes the message to the JetStream ISB and returns a future which can be
     /// awaited to get the PublishAck. It will do infinite retries until the message
     /// gets published successfully. If it returns an error it means it is fatal error
@@ -285,6 +325,7 @@ impl JetstreamWriter {
 
         // message id will be used for deduplication
         let id = message.id.to_string();
+        let msg_bytes = message.value.len();
 
         let payload: BytesMut = message
             .try_into()
@@ -301,7 +342,7 @@ impl JetstreamWriter {
                 Some(true) => {
                     // FIXME: add metrics
                     if log_counter >= 500 {
-                        warn!(stream=?stream, "stream is full (throttled logging)");
+                        warn!(?stream, "stream is full (throttled logging)");
                         log_counter = 0;
                     }
                     log_counter += 1;
@@ -312,6 +353,18 @@ impl JetstreamWriter {
                                 .delete(offset.clone())
                                 .await
                                 .expect("Failed to delete offset from tracker");
+                            // increment drop metric if buffer is full and
+                            // Buffer full strategy is DiscardLatest
+                            pipeline_metrics()
+                                .forwarder
+                                .drop_total
+                                .get_or_create(pipeline_isb_metric_labels())
+                                .inc();
+                            pipeline_metrics()
+                                .forwarder
+                                .drop_bytes_total
+                                .get_or_create(pipeline_isb_metric_labels())
+                                .inc_by(msg_bytes as u64);
                             return None;
                         }
                         BufferFullStrategy::RetryUntilSuccess => {}
@@ -386,8 +439,8 @@ impl JetstreamWriter {
                         if ack.duplicate {
                             warn!(
                                 message_id = ?message.id,
-                                stream = ?stream,
-                                ack = ?ack,
+                                ?stream,
+                                ?ack,
                                 "Duplicate message detected"
                             );
                         }
@@ -504,7 +557,6 @@ impl JetstreamWriter {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
     use std::time::Instant;
 
     use async_nats::jetstream;
@@ -568,6 +620,7 @@ mod tests {
             tracker_handle,
             cln_token.clone(),
             None,
+            "Source".to_string(),
         );
 
         let message = Message {
@@ -583,8 +636,7 @@ mod tests {
                 offset: "offset_0".to_string().into(),
                 index: 0,
             },
-            headers: HashMap::new(),
-            metadata: None,
+            ..Default::default()
         };
 
         let paf = writer
@@ -646,8 +698,7 @@ mod tests {
                 offset: "offset_0".to_string().into(),
                 index: 0,
             },
-            headers: HashMap::new(),
-            metadata: None,
+            ..Default::default()
         };
 
         let writer = JetstreamWriter::new(
@@ -665,6 +716,7 @@ mod tests {
             TrackerHandle::new(None, None),
             cln_token.clone(),
             None,
+            "Source".to_string(),
         );
 
         let result = writer
@@ -729,6 +781,7 @@ mod tests {
             tracker_handle,
             cancel_token.clone(),
             None,
+            "Map".to_string(),
         );
 
         let mut result_receivers = Vec::new();
@@ -746,9 +799,7 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                headers: HashMap::new(),
-                watermark: None,
-                metadata: None,
+                ..Default::default()
             };
             let paf = writer
                 .write(
@@ -776,8 +827,7 @@ mod tests {
                 offset: "offset_11".to_string().into(),
                 index: 11,
             },
-            headers: HashMap::new(),
-            metadata: None,
+            ..Default::default()
         };
         let paf = writer
             .write(
@@ -940,6 +990,7 @@ mod tests {
             tracker_handle,
             cancel_token.clone(),
             None,
+            "Source".to_string(),
         );
 
         let mut js_writer = writer.clone();
@@ -1032,6 +1083,7 @@ mod tests {
             tracker_handle.clone(),
             cln_token.clone(),
             None,
+            "Source".to_string(),
         );
 
         let (messages_tx, messages_rx) = tokio::sync::mpsc::channel(500);
@@ -1051,8 +1103,7 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                headers: HashMap::new(),
-                metadata: None,
+                ..Default::default()
             };
             let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
             tracker_handle.insert(&message, ack_tx).await.unwrap();
@@ -1125,6 +1176,7 @@ mod tests {
             tracker_handle.clone(),
             cancel_token.clone(),
             None,
+            "Source".to_string(),
         );
 
         let (tx, rx) = tokio::sync::mpsc::channel(500);
@@ -1144,8 +1196,7 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                headers: HashMap::new(),
-                metadata: None,
+                ..Default::default()
             };
             let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
             tracker_handle.insert(&message, ack_tx).await.unwrap();
@@ -1174,8 +1225,7 @@ mod tests {
                 offset: "offset_101".to_string().into(),
                 index: 101,
             },
-            headers: HashMap::new(),
-            metadata: None,
+            ..Default::default()
         };
         let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
         tracker_handle.insert(&message, ack_tx).await.unwrap();
@@ -1270,6 +1320,7 @@ mod tests {
             tracker_handle.clone(),
             cln_token.clone(),
             None,
+            "Source".to_string(),
         );
 
         let (messages_tx, messages_rx) = tokio::sync::mpsc::channel(500);
@@ -1288,8 +1339,7 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                headers: HashMap::new(),
-                metadata: None,
+                ..Default::default()
             };
             let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
             tracker_handle.insert(&message, ack_tx).await.unwrap();

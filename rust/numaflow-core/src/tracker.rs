@@ -524,6 +524,7 @@ mod tests {
             },
             headers: HashMap::new(),
             metadata: None,
+            is_late: false,
         };
 
         let callback_info: super::Result<ServingCallbackInfo> = TryFrom::try_from(&message);
@@ -566,6 +567,7 @@ mod tests {
             },
             headers: HashMap::new(),
             metadata: None,
+            is_late: false,
         };
 
         // Insert a new message
@@ -607,6 +609,7 @@ mod tests {
             },
             headers: HashMap::new(),
             metadata: None,
+            is_late: false,
         };
 
         // Insert a new message
@@ -653,6 +656,7 @@ mod tests {
             },
             headers: HashMap::new(),
             metadata: None,
+            is_late: false,
         };
 
         // Insert a new message
@@ -688,6 +692,7 @@ mod tests {
             },
             headers: HashMap::new(),
             metadata: None,
+            is_late: false,
         };
 
         // Insert a new message
@@ -756,6 +761,7 @@ mod tests {
             metadata: Some(Metadata {
                 previous_vertex: "source-vertex".into(),
             }),
+            is_late: false,
         };
 
         // Insert a new message

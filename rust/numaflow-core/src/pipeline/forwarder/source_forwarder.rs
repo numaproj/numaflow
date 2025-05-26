@@ -277,6 +277,7 @@ mod tests {
             tracker_handle.clone(),
             cln_token.clone(),
             None,
+            "Source".to_string(),
         );
 
         // create the forwarder with the source, transformer, and writer

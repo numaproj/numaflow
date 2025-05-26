@@ -194,7 +194,6 @@ mod tests {
     use async_nats::jetstream::{consumer, stream};
     use bytes::BytesMut;
     use chrono::Utc;
-    use std::collections::HashMap;
     use std::sync::Arc;
     use std::time::Duration;
 
@@ -274,8 +273,7 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                headers: HashMap::new(),
-                metadata: None,
+                ..Default::default()
             };
             let message_bytes: BytesMut = message.try_into().unwrap();
             context
@@ -409,8 +407,7 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                headers: HashMap::new(),
-                metadata: None,
+                ..Default::default()
             };
             let message_bytes: BytesMut = message.try_into().unwrap();
             context
@@ -556,8 +553,7 @@ mod tests {
                     offset: format!("wal_offset_{}", i).into(),
                     index: i as i32,
                 },
-                headers: HashMap::new(),
-                metadata: None,
+                ..Default::default()
             };
 
             let wal_message = WalMessage {
@@ -667,8 +663,7 @@ mod tests {
                     offset: format!("isb_offset_{}", i).into(),
                     index: i as i32,
                 },
-                headers: HashMap::new(),
-                metadata: None,
+                ..Default::default()
             };
             let message_bytes: BytesMut = message.try_into().unwrap();
             context
