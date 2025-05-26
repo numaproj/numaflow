@@ -43,12 +43,16 @@ pub struct KafkaSinkMessage {
 }
 
 pub fn new_sink(config: KafkaSinkConfig) -> crate::Result<KafkaSink> {
-    let producer: FutureProducer = ClientConfig::new()
+    let mut client_config = ClientConfig::new();
+    client_config
         .set("bootstrap.servers", config.brokers.join(","))
         .set("message.timeout.ms", "5000")
-        .set("security.protocol", "PLAINTEXT")
         .set("client.id", "numaflow-kafka-sink")
-        .set_log_level(RDKafkaLogLevel::Warning)
+        .set_log_level(RDKafkaLogLevel::Warning);
+
+    crate::update_auth_config(&mut client_config, config.tls, config.auth);
+
+    let producer: FutureProducer = client_config
         .create()
         .map_err(|e| crate::Error::Kafka(format!("Failed to create producer: {}", e)))?;
 
