@@ -19,7 +19,9 @@ limitations under the License.
 package monovertex_e2e
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/suite"
 
@@ -61,6 +63,22 @@ func (s *MonoVertexSuite) TestMonoVertexWithAllContainers() {
 	w.Expect().RedisSinkContains("fallback-sink-key", "1000")
 	w.Expect().RedisSinkContains("fallback-sink-key", "1001")
 
+}
+
+func (s *MonoVertexSuite) TestExponentialBackoffRetryStrategy() {
+	w := s.Given().MonoVertex("@testdata/mono-vertex-exponential-retry-strategy.yaml").When().CreateMonoVertexAndWait()
+	defer w.DeleteMonoVertexAndWait()
+	w.Expect().MonoVertexPodsRunning()
+	// delay between firstLog and secondLog should be at least 1s (interval) and less than 2s
+	// delay between secondLog and thirdLog should be at least 2s (interval * factor) and less than 3s
+	// delay between thirdLog and fourthLog  would be 3s as cap is 3s (minimum of 4s and 3s[cap]) and less than 4s
+	firstLog := fmt.Sprintf("retry_attempt=%d", 1)
+	secondLog := fmt.Sprintf("retry_attempt=%d", 2)
+	thirdLog := fmt.Sprintf("retry_attempt=%d", 3)
+	fourthLog := "Dropping messages"
+	w.Expect().CorrectDelayBetweenMonoVertexLogs(firstLog, secondLog, time.Second, PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(time.Second))
+	w.Expect().CorrectDelayBetweenMonoVertexLogs(secondLog, thirdLog, 2*time.Second, PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(time.Second))
+	w.Expect().CorrectDelayBetweenMonoVertexLogs(thirdLog, fourthLog, 3*time.Second, PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(time.Second))
 }
 
 func TestMonoVertexSuite(t *testing.T) {

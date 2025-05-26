@@ -431,24 +431,6 @@ func (w *When) StreamControllerLogs() *When {
 	return w
 }
 
-func (w *When) GetMonoVertexPodLogs(containerName string, follow bool) string {
-	w.t.Helper()
-	ctx := context.Background()
-	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyComponent, dfv1.ComponentMonoVertex, dfv1.KeyMonoVertexName, w.monoVertex.Name)
-	podList, err := w.kubeClient.CoreV1().Pods(Namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
-	if err != nil {
-		w.t.Fatalf("Error getting vertex pods: %v", err)
-	}
-	podName := podList.Items[0].GetName()
-	w.t.Logf("MonoVertex POD name: %s", podName)
-
-	logs, err := GetPodLogs(ctx, w.kubeClient, Namespace, podName, containerName, follow)
-	if err != nil {
-		return ""
-	}
-	return logs
-}
-
 func (w *When) TerminateAllPodLogs() *When {
 	w.t.Helper()
 	if len(w.streamLogsStopChannels) > 0 {

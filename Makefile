@@ -129,7 +129,6 @@ test-sideinputs-e2e:
 test-monovertex-e2e:
 test-idle-source-e2e:
 test-builtin-source-e2e:
-test-retry-strategy-e2e:
 test-%:
 	$(MAKE) cleanup-e2e
 ifndef SKIP_IMAGE_BUILD

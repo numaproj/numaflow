@@ -11,11 +11,12 @@ spec:
     retryStrategy:
       backoff:
         interval: 1s
-        steps: 2
+        steps: 3
         factor: 2
-        cap: 1s
+        cap: 3s
         jitter: 0
+      onFailure: 'drop'
     udsink:
       container:
         image: quay.io/numaio/numaflow-go/sink-retry-e2e:stable
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always

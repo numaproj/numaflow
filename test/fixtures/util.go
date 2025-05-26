@@ -637,9 +637,45 @@ func PodLogCheckOptionWithContainer(c string) PodLogCheckOption {
 	}
 }
 
+// Helper to extract timestamp from log line
+func extractTimestamp(lines []string, regex string) time.Time {
+	for _, line := range lines {
+		if strings.Contains(line, regex) {
+			parts := strings.SplitN(line, " ", 2)
+			if len(parts) < 2 {
+				continue
+			}
+			t, err := time.Parse(time.RFC3339Nano, parts[0])
+			if err == nil {
+				return t
+			}
+		}
+	}
+	return time.Time{}
+}
+
+// Extract timestamps for regex strings from logs
+// Compare the timestamps to verify the gap between them
+func CheckIfTimestampDifferenceIsCorrect(logs, regexOne, regexTwo string, gap time.Duration) bool {
+
+	lines := strings.Split(logs, "\n")
+	t1 := extractTimestamp(lines, regexOne)
+	t2 := extractTimestamp(lines, regexTwo)
+
+	if t1.IsZero() || t2.IsZero() {
+		return false
+	}
+
+	delta := t2.Sub(t1)
+	if delta < gap || delta > gap+time.Second {
+		return false
+	}
+	return true
+}
+
 // GetPodLogs fetches the logs from the specified pod and container and returns them as a string.
 // If follow is true, it will stream logs until the context is done; otherwise, it fetches current logs.
-func GetPodLogs(ctx context.Context, client kubernetes.Interface, namespace, podName, containerName string, follow bool) (string, error) {
+func GetPodLogs(ctx context.Context, client kubernetes.Interface, namespace, podName string, follow bool, opts ...PodLogCheckOption) (string, error) {
 	var retryBackOff = wait.Backoff{
 		Factor:   1,
 		Jitter:   0,
@@ -647,12 +683,22 @@ func GetPodLogs(ctx context.Context, client kubernetes.Interface, namespace, pod
 		Duration: time.Second * 1,
 	}
 
+	o := defaultPodLogCheckOptions()
+	for _, opt := range opts {
+		if opt != nil {
+			opt(o)
+		}
+	}
+
+	newCtx, cancel := context.WithTimeout(ctx, o.timeout)
+	defer cancel()
+
 	var stream io.ReadCloser
-	err := wait.ExponentialBackoffWithContext(ctx, retryBackOff, func(_ context.Context) (done bool, err error) {
+	err := wait.ExponentialBackoffWithContext(newCtx, retryBackOff, func(_ context.Context) (done bool, err error) {
 		stream, err = client.CoreV1().Pods(namespace).GetLogs(podName, &corev1.PodLogOptions{
 			Follow:    follow,
-			Container: containerName,
-		}).Stream(ctx)
+			Container: o.container,
+		}).Stream(newCtx)
 		if err == nil {
 			return true, nil
 		}
@@ -665,18 +711,26 @@ func GetPodLogs(ctx context.Context, client kubernetes.Interface, namespace, pod
 
 	var buf bytes.Buffer
 	s := bufio.NewScanner(stream)
-	for s.Scan() {
-		buf.Write(s.Bytes())
-		buf.WriteByte('\n')
-		// If not following, break after reading available logs
-		if !follow && buf.Len() > 0 {
-			break
+	for {
+		select {
+		case <-newCtx.Done():
+			return buf.String(), nil
+		default:
+			if !s.Scan() {
+				err := s.Err()
+				if err == context.DeadlineExceeded || (newCtx.Err() != nil && newCtx.Err() == context.DeadlineExceeded) {
+					return buf.String(), nil
+				}
+				return buf.String(), s.Err()
+			}
+			buf.Write(s.Bytes())
+			buf.WriteByte('\n')
+			// For non-follow, break after reading all available logs (EOF)
+			if !follow && s.Err() == io.EOF {
+				return buf.String(), nil
+			}
 		}
 	}
-	if err := s.Err(); err != nil {
-		return buf.String(), err
-	}
-	return buf.String(), nil
 }
 
 func streamPodLogs(ctx context.Context, client kubernetes.Interface, namespace, podName, containerName string, stopCh <-chan struct{}) {

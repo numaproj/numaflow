@@ -19,6 +19,7 @@ package fixtures
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -152,6 +153,33 @@ func (t *Expect) VertexPodLogContains(vertexName, regex string, opts ...PodLogCh
 		t.t.Fatalf("Expected vertex [%q] pod log to contain [%q] but didn't.", vertexName, regex)
 	}
 	t.t.Logf("Expected vertex %q pod contains %q", vertexName, regex)
+	return t
+}
+
+func (t *Expect) CorrectDelayBetweenMonoVertexLogs(regexOne, regexTwo string, gap time.Duration, opts ...PodLogCheckOption) *Expect {
+	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyMonoVertexName, t.monoVertex.Name, dfv1.KeyComponent, dfv1.ComponentMonoVertex)
+	podList, err := t.kubeClient.CoreV1().Pods(Namespace).List(context.Background(), metav1.ListOptions{LabelSelector: labelSelector})
+	if err != nil {
+		t.t.Fatalf("error getting monovertex pods: %v", err)
+	}
+	if len(podList.Items) == 0 {
+		t.t.Fatal("no monovertex pods found")
+	}
+	var logsBuilder strings.Builder
+	for _, pod := range podList.Items {
+		if strings.Contains(pod.Name, "daemon") {
+			continue
+		}
+		logs, err := GetPodLogs(context.Background(), t.kubeClient, Namespace, pod.Name, true, opts...)
+		if err != nil {
+			t.t.Fatalf("error getting logs for pod %s: %v", pod.Name, err)
+		}
+		logsBuilder.WriteString(logs)
+	}
+	yes := CheckIfTimestampDifferenceIsCorrect(logsBuilder.String(), regexOne, regexTwo, gap)
+	if !yes {
+		t.t.Fatalf("timestamp difference between logs is not correct")
+	}
 	return t
 }
 
