@@ -219,7 +219,7 @@ impl Tracker {
             },
         );
 
-        if let Some(watermark_handle) = &self.watermark_handle {
+        if let Some(watermark_handle) = self.watermark_handle.as_mut() {
             watermark_handle.insert_offset(offset, watermark).await;
         }
     }
@@ -293,7 +293,7 @@ impl Tracker {
             .ack_send
             .send(ReadAck::Nak)
             .expect("Failed to send nak");
-        if let Some(watermark_handle) = &self.watermark_handle {
+        if let Some(watermark_handle) = self.watermark_handle.as_mut() {
             watermark_handle.remove_offset(offset).await;
         }
     }
@@ -316,7 +316,7 @@ impl Tracker {
     /// - ack back
     /// - call serving callbacks
     /// - watermark progression
-    async fn completed_successfully(&self, offset: Offset, entry: TrackerEntry) {
+    async fn completed_successfully(&mut self, offset: Offset, entry: TrackerEntry) {
         let TrackerEntry {
             ack_send,
             serving_callback_info: callback_info,
@@ -325,7 +325,7 @@ impl Tracker {
 
         ack_send.send(ReadAck::Ack).expect("Failed to send ack");
 
-        if let Some(watermark_handle) = &self.watermark_handle {
+        if let Some(watermark_handle) = self.watermark_handle.as_mut() {
             watermark_handle.remove_offset(offset).await;
         }
 
@@ -524,6 +524,7 @@ mod tests {
             },
             headers: HashMap::new(),
             metadata: None,
+            is_late: false,
         };
 
         let callback_info: super::Result<ServingCallbackInfo> = TryFrom::try_from(&message);
@@ -566,6 +567,7 @@ mod tests {
             },
             headers: HashMap::new(),
             metadata: None,
+            is_late: false,
         };
 
         // Insert a new message
@@ -607,6 +609,7 @@ mod tests {
             },
             headers: HashMap::new(),
             metadata: None,
+            is_late: false,
         };
 
         // Insert a new message
@@ -653,6 +656,7 @@ mod tests {
             },
             headers: HashMap::new(),
             metadata: None,
+            is_late: false,
         };
 
         // Insert a new message
@@ -688,6 +692,7 @@ mod tests {
             },
             headers: HashMap::new(),
             metadata: None,
+            is_late: false,
         };
 
         // Insert a new message
@@ -756,6 +761,7 @@ mod tests {
             metadata: Some(Metadata {
                 previous_vertex: "source-vertex".into(),
             }),
+            is_late: false,
         };
 
         // Insert a new message

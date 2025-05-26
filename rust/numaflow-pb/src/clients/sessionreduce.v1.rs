@@ -12,7 +12,6 @@ pub struct KeyedWindow {
     #[prost(string, repeated, tag = "4")]
     pub keys: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
-/// *
 /// SessionReduceRequest represents a request element.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SessionReduceRequest {
@@ -98,7 +97,6 @@ pub mod session_reduce_request {
         >,
     }
 }
-/// *
 /// SessionReduceResponse represents a response element.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SessionReduceResponse {
@@ -124,7 +122,6 @@ pub mod session_reduce_response {
         pub tags: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     }
 }
-/// *
 /// ReadyResponse is the health check result.
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct ReadyResponse {

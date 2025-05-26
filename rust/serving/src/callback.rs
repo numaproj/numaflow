@@ -116,7 +116,7 @@ impl CallbackHandler {
                 async || match store.put(&callbacks_key, Bytes::from(value.clone())).await {
                     Ok(resp) => Ok(resp),
                     Err(e) => {
-                        warn!(?e, "Failed to write callback to store, retrying..");
+                        warn!(error = ?e, "Failed to write callback to store, retrying..");
                         Err(Error::Other(format!(
                             "Failed to write callback to store: {}",
                             e
