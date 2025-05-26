@@ -437,15 +437,6 @@ func VertexPodLogNotContains(ctx context.Context, kubeClient kubernetes.Interfac
 	return PodsLogNotContains(ctx, kubeClient, namespace, regex, podList, opts...), nil
 }
 
-func MonoVertexPodLogNotContains(ctx context.Context, kubeClient kubernetes.Interface, namespace, mvName, regex string, opts ...PodLogCheckOption) (bool, error) {
-	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyMonoVertexName, mvName, dfv1.KeyComponent, dfv1.ComponentMonoVertex)
-	podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
-	if err != nil {
-		return false, fmt.Errorf("error getting mono-vertex pods: %w", err)
-	}
-	return PodsLogNotContains(ctx, kubeClient, namespace, regex, podList, opts...), nil
-}
-
 func PodsLogNotContains(ctx context.Context, kubeClient kubernetes.Interface, namespace, regex string, podList *corev1.PodList, opts ...PodLogCheckOption) bool {
 	o := defaultPodLogCheckOptions()
 	for _, opt := range opts {
@@ -656,7 +647,7 @@ func extractTimestamp(lines []string, regex string) time.Time {
 
 // Extract timestamps for regex strings from logs
 // Compare the timestamps to verify the gap between them
-func CheckIfTimestampDifferenceIsCorrect(logs, regexOne, regexTwo string, gap time.Duration) bool {
+func CheckIfGapIsCorrect(logs, regexOne, regexTwo string, gap time.Duration) bool {
 
 	lines := strings.Split(logs, "\n")
 	t1 := extractTimestamp(lines, regexOne)
