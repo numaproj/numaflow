@@ -352,7 +352,7 @@ impl JetStreamDataStore {
                         });
                 }
                 Ok(None) => {
-                    warn!(?id, "No final result key found in KV store, retrying...");
+                    warn!(%id, "No final result key found in KV store, retrying...");
                     tokio::time::sleep(Duration::from_millis(5)).await;
                 }
                 Err(e) => {

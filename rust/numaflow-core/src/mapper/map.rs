@@ -698,8 +698,7 @@ mod tests {
                 offset: "0".to_string().into(),
                 index: 0,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         let (output_tx, mut output_rx) = mpsc::channel(10);
@@ -794,8 +793,7 @@ mod tests {
                     offset: i.to_string().into(),
                     index: i,
                 },
-                headers: Default::default(),
-                metadata: None,
+                ..Default::default()
             };
             input_tx.send(message).await.unwrap();
         }
@@ -890,8 +888,7 @@ mod tests {
                     offset: i.to_string().into(),
                     index: i,
                 },
-                headers: Default::default(),
-                metadata: None,
+                ..Default::default()
             };
             input_tx.send(message).await.unwrap();
             sleep(Duration::from_millis(10)).await;
@@ -985,8 +982,7 @@ mod tests {
                     offset: "0".to_string().into(),
                     index: 0,
                 },
-                headers: Default::default(),
-                metadata: None,
+                ..Default::default()
             },
             Message {
                 typ: Default::default(),
@@ -1001,8 +997,7 @@ mod tests {
                     offset: "1".to_string().into(),
                     index: 1,
                 },
-                headers: Default::default(),
-                metadata: None,
+                ..Default::default()
             },
         ];
 
@@ -1099,8 +1094,7 @@ mod tests {
                     offset: "0".to_string().into(),
                     index: 0,
                 },
-                headers: Default::default(),
-                metadata: None,
+                ..Default::default()
             },
             Message {
                 typ: Default::default(),
@@ -1115,8 +1109,7 @@ mod tests {
                     offset: "1".to_string().into(),
                     index: 1,
                 },
-                headers: Default::default(),
-                metadata: None,
+                ..Default::default()
             },
         ];
 
@@ -1213,8 +1206,7 @@ mod tests {
                 offset: "0".to_string().into(),
                 index: 0,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         let (input_tx, input_rx) = mpsc::channel(10);
@@ -1319,8 +1311,7 @@ mod tests {
                     offset: i.to_string().into(),
                     index: i,
                 },
-                headers: Default::default(),
-                metadata: None,
+                ..Default::default()
             };
             input_tx.send(message).await.unwrap();
             sleep(Duration::from_millis(10)).await;

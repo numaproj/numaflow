@@ -34,6 +34,7 @@ impl From<numaflow_jetstream::Message> for Message {
             metadata: Some(Metadata {
                 previous_vertex: get_vertex_name().to_string(),
             }),
+            is_late: false,
         }
     }
 }

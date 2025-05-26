@@ -91,8 +91,7 @@ impl TryFrom<Bytes> for WalMessage {
                 .expect("event time should be present"),
             watermark: proto_read_message.watermark.map(utc_from_timestamp),
             id: header.id.map(Into::into).unwrap_or_default(),
-            headers: header.headers,
-            metadata: None,
+            ..Default::default()
         };
 
         Ok(WalMessage { message: msg })

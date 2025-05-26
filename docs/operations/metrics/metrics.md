@@ -115,7 +115,7 @@ You can follow the [prometheus operator](https://github.com/prometheus-operator/
 
 You can also set up prometheus operator via [helm](https://bitnami.com/stack/prometheus-operator/helm).
 
-### Configure the below Service/Pod Monitors for scraping your pipeline metrics:
+### Configure the below Service/Pod Monitors for scraping your pipeline/monovertex metrics:
 
 ```yaml
 apiVersion: monitoring.coreos.com/v1
