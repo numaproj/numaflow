@@ -106,6 +106,7 @@ mod tests {
                 },
                 headers,
                 metadata: None,
+                is_late: false,
             });
         }
         let responses = sink.sink(messages).await.expect("Failed to send messages");
