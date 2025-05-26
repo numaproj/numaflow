@@ -18,11 +18,14 @@ pub struct KafkaSinkConfig {
     pub auth: Option<KafkaSaslAuth>,
     /// The TLS configuration for the Kafka consumer.
     pub tls: Option<TlsConfig>,
+    /// Whether to set the partition key for the Kafka sink.
+    pub set_partition_key: bool,
 }
 
 pub struct KafkaSink {
     topic: String,
     producer: FutureProducer,
+    set_partition_key: bool,
 }
 
 pub struct KafkaSinkResponse {
@@ -34,6 +37,7 @@ pub struct KafkaSinkResponse {
 
 pub struct KafkaSinkMessage {
     pub id: String,
+    pub partition_key: Option<String>,
     pub headers: HashMap<String, String>,
     pub payload: Bytes,
 }
@@ -51,6 +55,7 @@ pub fn new_sink(config: KafkaSinkConfig) -> crate::Result<KafkaSink> {
     Ok(KafkaSink {
         producer,
         topic: config.topic,
+        set_partition_key: config.set_partition_key,
     })
 }
 
@@ -65,6 +70,7 @@ impl KafkaSink {
             let fut = async {
                 let KafkaSinkMessage {
                     id,
+                    partition_key,
                     headers: inp_headers,
                     payload,
                 } = msg;
@@ -75,9 +81,14 @@ impl KafkaSink {
                         value: Some(&value),
                     });
                 }
-                let record: FutureRecord<'_, (), _> = FutureRecord::to(&self.topic)
+                let mut record: FutureRecord<'_, String, _> = FutureRecord::to(&self.topic)
                     .headers(headers)
                     .payload(payload.as_ref());
+                if self.set_partition_key {
+                    if let Some(ref partition_key) = partition_key {
+                        record = record.key(partition_key);
+                    }
+                }
                 match self.producer.send(record, Duration::from_secs(1)).await {
                     Ok(_) => KafkaSinkResponse { id, status: Ok(()) },
                     Err(e) => {

@@ -7,10 +7,21 @@ use crate::sink::{ResponseFromSink, ResponseStatusFromSink, Sink};
 impl TryFrom<Message> for KafkaSinkMessage {
     type Error = Error;
 
-    fn try_from(msg: Message) -> Result<Self> {
+    fn try_from(mut msg: Message) -> Result<Self> {
         let id = msg.id.to_string();
+        msg.headers
+            .insert(format!("__key_len"), msg.keys.len().to_string());
+        for (i, key) in msg.keys.iter().enumerate() {
+            msg.headers.insert(format!("__key_{i}"), key.to_string());
+        }
+        let partition_key = if msg.keys.is_empty() {
+            None
+        } else {
+            Some(msg.keys.join(":"))
+        };
         Ok(Self {
             id,
+            partition_key,
             headers: msg.headers,
             payload: msg.value,
         })

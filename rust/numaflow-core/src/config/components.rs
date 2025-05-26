@@ -575,6 +575,7 @@ pub(crate) mod sink {
                 topic: kafka_config.topic,
                 auth,
                 tls,
+                set_partition_key: kafka_config.set_key.unwrap_or(false),
             }))
         }
     }
