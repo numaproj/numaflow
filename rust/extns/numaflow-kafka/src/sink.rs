@@ -8,10 +8,16 @@ use rdkafka::{
 };
 use std::{collections::HashMap, time::Duration};
 
+use crate::{KafkaSaslAuth, TlsConfig};
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct KafkaSinkConfig {
     pub brokers: Vec<String>,
     pub topic: String,
+    /// The authentication mechanism to use for the Kafka consumer.
+    pub auth: Option<KafkaSaslAuth>,
+    /// The TLS configuration for the Kafka consumer.
+    pub tls: Option<TlsConfig>,
 }
 
 pub struct KafkaSink {
