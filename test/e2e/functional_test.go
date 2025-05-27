@@ -325,6 +325,30 @@ func (s *FunctionalSuite) TestFallbackSink() {
 	w.Expect().RedisSinkContains("simple-fallback-output", "fallback-message")
 }
 
+func (s *FunctionalSuite) TestExponentialBackoffRetryStrategyForPipeline() {
+	w := s.Given().Pipeline("@testdata/simple-pipeline-with-retry-strategy.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+
+	// pipelineName := "simple-pipeline-with-retry-strategy"
+	vertexName := "output"
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning().DaemonPodsRunning()
+
+	// delay between firstLog and secondLog should be at least 1s (interval) and less than 2s
+	// delay between secondLog and thirdLog should be at least 2s (interval * factor) and less than 3s
+	// delay between thirdLog and fourthLog  would be 3s as cap is 3s (minimum of 4s and 3s[cap]) and less than 4s
+	firstLog := fmt.Sprintf("retry_attempt=%d", 1)
+	secondLog := fmt.Sprintf("retry_attempt=%d", 2)
+	thirdLog := fmt.Sprintf("retry_attempt=%d", 3)
+	fourthLog := "Dropping messages"
+	w.Expect().CorrectDelayBetweenVertexLogs(vertexName, firstLog, secondLog, time.Second, PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(time.Second))
+	w.Expect().CorrectDelayBetweenVertexLogs(vertexName, secondLog, thirdLog, 2*time.Second, PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(time.Second))
+	w.Expect().CorrectDelayBetweenVertexLogs(vertexName, thirdLog, fourthLog, 3*time.Second, PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(time.Second))
+}
+
 func TestFunctionalSuite(t *testing.T) {
 	suite.Run(t, new(FunctionalSuite))
 }

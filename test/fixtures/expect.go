@@ -156,6 +156,30 @@ func (t *Expect) VertexPodLogContains(vertexName, regex string, opts ...PodLogCh
 	return t
 }
 
+func (t *Expect) CorrectDelayBetweenVertexLogs(vertexName, regexOne, regexTwo string, gap time.Duration, opts ...PodLogCheckOption) *Expect {
+	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, t.pipeline.Name, dfv1.KeyVertexName, vertexName)
+	podList, err := t.kubeClient.CoreV1().Pods(Namespace).List(context.Background(), metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
+	if err != nil {
+		t.t.Fatalf("error getting pods for vertex %s: %v", vertexName, err)
+	}
+	if len(podList.Items) == 0 {
+		t.t.Fatal("no vertex pods found")
+	}
+	var logsBuilder strings.Builder
+	for _, pod := range podList.Items {
+		logs, err := GetPodLogs(context.Background(), t.kubeClient, Namespace, pod.Name, true, opts...)
+		if err != nil {
+			t.t.Fatalf("error getting logs for pod %s: %v", pod.Name, err)
+		}
+		logsBuilder.WriteString(logs)
+	}
+	yes := CheckIfGapIsCorrect(logsBuilder.String(), regexOne, regexTwo, gap)
+	if !yes {
+		t.t.Fatalf("timestamp difference between logs is not correct")
+	}
+	return t
+}
+
 func (t *Expect) CorrectDelayBetweenMonoVertexLogs(regexOne, regexTwo string, gap time.Duration, opts ...PodLogCheckOption) *Expect {
 	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyMonoVertexName, t.monoVertex.Name, dfv1.KeyComponent, dfv1.ComponentMonoVertex)
 	podList, err := t.kubeClient.CoreV1().Pods(Namespace).List(context.Background(), metav1.ListOptions{LabelSelector: labelSelector})
