@@ -22,6 +22,12 @@ pub struct KafkaSinkConfig {
     /// The TLS configuration for the Kafka consumer.
     pub tls: Option<TlsConfig>,
     /// Whether to set the partition key when sending the messages to Kafka.
+    /// Whether to set the partition key when sending messages to Kafka.
+    /// When set to true, messages will be routed to specific partitions based on their partition_key.
+    /// The partition key is constructed using the list of keys associated with a message.
+    /// This ensures that messages with the same keys always go to the same partition,
+    /// which is useful for maintaining message ordering for related messages.
+    /// When set to false, messages will be distributed across partitions randomly.
     pub set_partition_key: bool,
 }
 
@@ -81,6 +87,7 @@ impl KafkaSink {
         &mut self,
         messages: Vec<KafkaSinkMessage>,
     ) -> crate::Result<Vec<KafkaSinkResponse>> {
+        // Create futures for all send operations and concurrently await on them
         let mut send_futures = FuturesUnordered::new();
         let message_count = messages.len();
         for msg in messages {
@@ -101,6 +108,11 @@ impl KafkaSink {
                 let mut record: FutureRecord<'_, String, _> = FutureRecord::to(&self.topic)
                     .headers(headers)
                     .payload(payload.as_ref());
+
+                // The set_partition_key option comes from the user configuration.
+                // The partition key for a message is constructed by message.keys.join(":").
+                // Messages with same partition key will always go to the same partition on Kafka.
+                // If the partition key is not provided, the message will be sent to a random partition.
                 if self.set_partition_key {
                     if let Some(ref partition_key) = partition_key {
                         record = record.key(partition_key);
