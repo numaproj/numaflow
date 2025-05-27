@@ -1,6 +1,6 @@
 //! HTTP source for Numaflow.
 //! There are two endpoints, one for health (`/health`) and another for data (`/data`).
-//! The `/data/` endpoint is a `POST` endpoint that accepts all content-types of data. The
+//! The `/vertices/` endpoint is a `POST` endpoint that accepts all content-types of data. The
 //! headers are propagated as is to the next vertex in the pipeline.
 //! `X-Numaflow-Id` header is added to the message to track the message across the pipeline.
 //! `X-Numaflow-Event-Time` is added to the message to track the event time of the message.
@@ -117,44 +117,44 @@ impl HttpSource {
         info!("HttpSource processor stopped");
         Ok(())
     }
+}
 
-    /// Send a message to the processing channel
-    pub async fn send_message(&self, message: HttpMessage) -> Result<()> {
-        match self.actor_tx.try_send(message) {
-            Ok(_) => Ok(()),
-            Err(e) => match e {
-                mpsc::error::TrySendError::Full(_) => Err(Error::ChannelFull()),
-                mpsc::error::TrySendError::Closed(_) => {
-                    Err(Error::ChannelSend("Channel is closed".to_string()))
-                }
-            },
-        }
+/// Send a message to the processing channel
+pub async fn send_message(tx: mpsc::Sender<HttpMessage>, message: HttpMessage) -> Result<()> {
+    match tx.try_send(message) {
+        Ok(_) => Ok(()),
+        Err(e) => match e {
+            mpsc::error::TrySendError::Full(_) => Err(Error::ChannelFull()),
+            mpsc::error::TrySendError::Closed(_) => {
+                Err(Error::ChannelSend("Channel is closed".to_string()))
+            }
+        },
     }
+}
 
-    /// Create an Axum router with the HTTP source endpoints
-    pub fn create_router(self) -> Router {
-        Router::new()
-            .route("/health", get(health_handler))
-            .route("/data", post(data_handler))
-            .with_state(self)
-    }
+/// Create an Axum router with the HTTP source endpoints
+pub fn create_router(tx: mpsc::Sender<HttpMessage>) -> Router {
+    Router::new()
+        .route("/health", get(health_handler))
+        .route("/vertices", post(data_handler))
+        .with_state(tx)
+}
 
-    /// Start the HTTP server on the specified address
-    pub async fn start_server(self, addr: SocketAddr) -> Result<()> {
-        let router = self.create_router();
+/// Start the HTTP server on the specified address
+pub async fn start_server(tx: mpsc::Sender<HttpMessage>, addr: SocketAddr) -> Result<()> {
+    let router = create_router(tx);
 
-        info!(?addr, "Starting HTTP source server");
+    info!(?addr, "Starting HTTP source server");
 
-        let listener = tokio::net::TcpListener::bind(addr)
-            .await
-            .map_err(|e| Error::Server(format!("Failed to bind to {}: {}", addr, e)))?;
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .map_err(|e| Error::Server(format!("Failed to bind to {}: {}", addr, e)))?;
 
-        axum::serve(listener, router)
-            .await
-            .map_err(|e| Error::Server(format!("Server error: {}", e)))?;
+    axum::serve(listener, router)
+        .await
+        .map_err(|e| Error::Server(format!("Server error: {}", e)))?;
 
-        Ok(())
-    }
+    Ok(())
 }
 
 impl Default for HttpSource {
@@ -170,7 +170,7 @@ async fn health_handler() -> impl IntoResponse {
 
 /// Data ingestion endpoint handler
 async fn data_handler(
-    State(http_source): State<HttpSource>,
+    State(http_source): State<mpsc::Sender<HttpMessage>>,
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
@@ -215,7 +215,7 @@ async fn data_handler(
     };
 
     // Send the message to the processing channel
-    match http_source.send_message(message).await {
+    match send_message(http_source, message).await {
         Ok(()) => {
             trace!(?id, "Successfully queued message");
             (
@@ -264,7 +264,7 @@ mod tests {
     #[tokio::test]
     async fn test_health_endpoint() {
         let http_source = HttpSource::new(HttpSourceBuilder::new().with_buffer_size(500));
-        let app = http_source.create_router();
+        let app = create_router(http_source.actor_tx);
 
         let request = Request::builder()
             .method(Method::GET)
@@ -279,11 +279,11 @@ mod tests {
     #[tokio::test]
     async fn test_data_endpoint() {
         let http_source = HttpSource::new(HttpSourceBuilder::new());
-        let app = http_source.create_router();
+        let app = create_router(http_source.actor_tx);
 
         let request = Request::builder()
             .method(Method::POST)
-            .uri("/data")
+            .uri("/vertices")
             .header("Content-Type", "application/json")
             .body(Body::from(r#"{"test": "data"}"#))
             .unwrap();
@@ -295,12 +295,12 @@ mod tests {
     #[tokio::test]
     async fn test_data_endpoint_with_custom_id() {
         let http_source = HttpSource::new(HttpSourceBuilder::new());
-        let app = http_source.create_router();
+        let app = create_router(http_source.actor_tx);
 
         let custom_id = "custom-test-id";
         let request = Request::builder()
             .method(Method::POST)
-            .uri("/data")
+            .uri("/vertices")
             .header("Content-Type", "text/plain")
             .header("X-Numaflow-Id", custom_id)
             .body(Body::from("test data"))
