@@ -1221,7 +1221,12 @@ async fn expose_pending_metrics_(
                     match fetch_isb_pending(reader).await {
                         Ok(pending) => {
                             if pending != -1 {
-                                info!("Pending messages {:?}", pending);
+                                if last_logged.elapsed().as_secs() >= 60 {
+                                    info!(partition=?reader.name(), "Pending messages {:?}", pending);
+                                    last_logged = std::time::Instant::now();
+                                } else {
+                                    debug!(partition=?reader.name(), "Pending messages {:?}", pending);
+                                }
                                 let mut metric_labels =
                                     pipeline_metric_labels(reader.name()).clone();
                                 metric_labels.push((
@@ -1344,6 +1349,8 @@ async fn expose_pending_metrics(
         ("15m", 900),
     ];
 
+    let mut last_logged = std::time::Instant::now();
+
     loop {
         ticker.tick().await;
         for (name, pending_stats) in pending_map.lock().await.iter() {
@@ -1372,7 +1379,12 @@ async fn expose_pending_metrics(
             }
             // skip for those the pending is not implemented
             if !pending_info.is_empty() {
-                info!("Pending messages {:?}", pending_info);
+                if last_logged.elapsed().as_secs() >= 60 {
+                    info!("Pending messages {:?}", pending_info);
+                    last_logged = std::time::Instant::now();
+                } else {
+                    debug!("Pending messages {:?}", pending_info);
+                }
                 pending_info.clear();
             }
         }
