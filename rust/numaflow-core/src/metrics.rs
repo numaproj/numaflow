@@ -1176,6 +1176,8 @@ async fn expose_pending_metrics_(
     is_mono_vertex: bool,
 ) {
     let mut ticker = time::interval(lag_checking_interval);
+    // print pending messages every one minute
+    let mut last_logged = std::time::Instant::now();
 
     loop {
         ticker.tick().await;
@@ -1184,7 +1186,12 @@ async fn expose_pending_metrics_(
             LagReader::Source(source) => match fetch_source_pending(source).await {
                 Ok(pending) => {
                     if pending != -1 {
-                        info!("Pending messages {:?}", pending);
+                        if last_logged.elapsed().as_secs() >= 60 {
+                            info!("Pending messages {:?}", pending);
+                            last_logged = std::time::Instant::now();
+                        } else {
+                            debug!("Pending messages {:?}", pending);
+                        }
                         if is_mono_vertex {
                             let metric_labels = mvtx_forward_metric_labels().clone();
                             monovertex_metrics()
