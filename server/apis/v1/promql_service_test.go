@@ -403,9 +403,10 @@ func Test_PromQueryBuilder(t *testing.T) {
 					"pipeline":  "test_pipeline",
 					"vertex":    "test_vertex",
 					"period":    "5m",
+					"replica":   "0",
 				},
 			},
-			expectedQuery: `sum(vertex_pending_messages{namespace= "test_namespace", pipeline= "test_pipeline", vertex= "test_vertex", period= "5m"}) by (vertex, period)`,
+			expectedQuery: `sum(vertex_pending_messages{namespace= "test_namespace", pipeline= "test_pipeline", vertex= "test_vertex", period= "5m", replica= "0"}) by (vertex, period)`,
 		},
 		{
 			name: "Missing metric name in service config",
@@ -517,7 +518,7 @@ func Test_QueryPrometheus(t *testing.T) {
 				Api: mockAPI,
 			},
 		}
-		query := `sum(vertex_pending_messages{namespace="default", pipeline="test-pipeline", vertex="test-vertex", period="5m"}) by (vertex, period)`
+		query := `sum(vertex_pending_messages{namespace="default", pipeline="test-pipeline", vertex="test-vertex", period="5m", replica="0"}) by (vertex, period)`
 		startTime := time.Now().Add(-30 * time.Minute)
 		endTime := time.Now()
 
