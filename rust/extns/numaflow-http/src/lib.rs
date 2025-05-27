@@ -19,7 +19,7 @@ use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use tokio::sync::mpsc;
-use tracing::{error, info, warn};
+use tracing::{error, info, trace, warn};
 use uuid::Uuid;
 
 /// HTTP source that manages incoming HTTP requests and forwards them to a processing channel
@@ -33,6 +33,8 @@ pub struct HttpSource {
 pub enum Error {
     #[error("Channel send error: {0}")]
     ChannelSend(String),
+    #[error("Channel Full: 429")]
+    ChannelFull(),
     #[error("Server error: {0}")]
     Server(String),
 }
@@ -55,16 +57,40 @@ struct DataResponse {
     id: String,
 }
 
-/// Health check response
-#[derive(Serialize)]
-struct HealthResponse {
-    status: String,
+/// HTTPSource Builder with custom buffer size
+pub struct HttpSourceBuilder {
+    /// Default buffer size is 2000
+    buffer_size: usize,
+}
+
+impl HttpSourceBuilder {
+    /// Create a new HttpSourceBuilder
+    pub fn new() -> Self {
+        Self { buffer_size: 2000 }
+    }
+
+    /// Set the buffer size for the channel
+    pub fn with_buffer_size(mut self, buffer_size: usize) -> Self {
+        self.buffer_size = buffer_size;
+        self
+    }
+
+    /// Build the HttpSource instance
+    pub fn build(self) -> HttpSource {
+        HttpSource::new(self)
+    }
+}
+
+impl Default for HttpSourceBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl HttpSource {
     /// Create a new HttpSource instance
-    pub fn new() -> Self {
-        let (tx, rx) = mpsc::channel(1000); // Increased buffer size for better throughput
+    pub fn new(http_source_builder: HttpSourceBuilder) -> Self {
+        let (tx, rx) = mpsc::channel(http_source_builder.buffer_size); // Increased buffer size for better throughput
 
         // Spawn a task to read from the channel and process messages
         tokio::spawn(HttpSource::run(rx));
@@ -94,10 +120,15 @@ impl HttpSource {
 
     /// Send a message to the processing channel
     pub async fn send_message(&self, message: HttpMessage) -> Result<()> {
-        self.actor_tx
-            .send(message)
-            .await
-            .map_err(|e| Error::ChannelSend(e.to_string()))
+        match self.actor_tx.try_send(message) {
+            Ok(_) => Ok(()),
+            Err(e) => match e {
+                mpsc::error::TrySendError::Full(_) => Err(Error::ChannelFull()),
+                mpsc::error::TrySendError::Closed(_) => {
+                    Err(Error::ChannelSend("Channel is closed".to_string()))
+                }
+            },
+        }
     }
 
     /// Create an Axum router with the HTTP source endpoints
@@ -128,18 +159,13 @@ impl HttpSource {
 
 impl Default for HttpSource {
     fn default() -> Self {
-        Self::new()
+        Self::new(Default::default())
     }
 }
 
 /// Health check endpoint handler
 async fn health_handler() -> impl IntoResponse {
-    (
-        StatusCode::OK,
-        axum::Json(HealthResponse {
-            status: "healthy".to_string(),
-        }),
-    )
+    StatusCode::OK
 }
 
 /// Data ingestion endpoint handler
@@ -155,7 +181,7 @@ async fn data_handler(
         if let Ok(value_str) = value.to_str() {
             header_map.insert(key.to_string(), value_str.to_string());
         } else {
-            warn!("Skipping header with invalid UTF-8: {:?}", key);
+            warn!(?key, "Skipping header with invalid UTF-8");
         }
     }
 
@@ -178,7 +204,7 @@ async fn data_handler(
         .unwrap_or_else(Utc::now);
 
     // Ensure X-Numaflow-Event-Time is in the headers
-    header_map.insert("X-Numaflow-Event-Time".to_string(), event_time.to_rfc3339());
+    header_map.insert("X-Numaflow-Event-Time".to_string(), event_time.to_rfc2822());
 
     // Create the HTTP message
     let message = HttpMessage {
@@ -191,7 +217,7 @@ async fn data_handler(
     // Send the message to the processing channel
     match http_source.send_message(message).await {
         Ok(()) => {
-            info!("Successfully queued message with ID: {}", id);
+            trace!(?id, "Successfully queued message");
             (
                 StatusCode::OK,
                 axum::Json(DataResponse {
@@ -201,17 +227,30 @@ async fn data_handler(
             )
                 .into_response()
         }
-        Err(e) => {
-            error!("Failed to queue message: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                axum::Json(serde_json::json!({
-                    "error": "Failed to process request",
-                    "details": e.to_string()
-                })),
-            )
-                .into_response()
-        }
+        Err(e) => match e {
+            Error::ChannelFull() => {
+                warn!(?e, "Buffer is full");
+                (
+                    StatusCode::TOO_MANY_REQUESTS,
+                    axum::Json(serde_json::json!({
+                        "error": "Pipeline has stalled, buffer is full",
+                        "details": e.to_string()
+                    })),
+                )
+                    .into_response()
+            }
+            e => {
+                error!(?e, "Failed to queue message");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    axum::Json(serde_json::json!({
+                        "error": "Failed to process request",
+                        "details": e.to_string()
+                    })),
+                )
+                    .into_response()
+            }
+        },
     }
 }
 
@@ -224,7 +263,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_health_endpoint() {
-        let http_source = HttpSource::new();
+        let http_source = HttpSource::new(HttpSourceBuilder::new().with_buffer_size(500));
         let app = http_source.create_router();
 
         let request = Request::builder()
@@ -239,7 +278,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_data_endpoint() {
-        let http_source = HttpSource::new();
+        let http_source = HttpSource::new(HttpSourceBuilder::new());
         let app = http_source.create_router();
 
         let request = Request::builder()
@@ -255,7 +294,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_data_endpoint_with_custom_id() {
-        let http_source = HttpSource::new();
+        let http_source = HttpSource::new(HttpSourceBuilder::new());
         let app = http_source.create_router();
 
         let custom_id = "custom-test-id";
