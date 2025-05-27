@@ -304,6 +304,9 @@ const LineChartComponent = ({
           } else {
             return pod?.name;
           }
+        case "replica":
+          // in case of pending messages, we calculate only for replica 0
+          return "0";
         default:
           return "";
       }

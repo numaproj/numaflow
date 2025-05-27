@@ -152,18 +152,15 @@ data:
     \     display_name: Vertex Pending Messages\n      metric_description: This gauge
     metric keeps track of the total number of messages that are waiting to be processed
     over varying time frames of 1min, 5min, 15min and default period of 2min. \n      required_filters:\n
-    \       - namespace\n        - pipeline\n        - vertex\n      dimensions:\n
-    \       - name: pod\n          # expr: optional expression for prometheus query\n
-    \         # overrides the default expression\n          filters:\n            -
-    name: pod\n              required: false\n            - name: period\n              required:
-    false\n        - name: vertex\n          # expr: optional expression for prometheus
-    query\n          # overrides the default expression\n          filters:\n            -
-    name: period\n              required: false\n\n- name: mono_vertex_gauge\n  objects:
-    \n    - mono-vertex\n  title: MonoVertex Gauge Metrics\n  description: This pattern
-    represents the gauge metrics for a mono-vertex across different dimensions\n  expr:
-    |\n    sum($metric_name{$filters}) by ($dimension, period)\n  params:\n    - name:
-    start_time\n      required: false\n    - name: end_time\n      required: false\n
-    \ metrics:\n    - metric_name: monovtx_pending\n      display_name: MonoVertex
+    \       - namespace\n        - pipeline\n        - vertex\n        - replica\n
+    \     dimensions:\n        - name: vertex\n          # expr: optional expression
+    for prometheus query\n          # overrides the default expression\n          filters:\n
+    \           - name: period\n              required: false\n\n- name: mono_vertex_gauge\n
+    \ objects: \n    - mono-vertex\n  title: MonoVertex Gauge Metrics\n  description:
+    This pattern represents the gauge metrics for a mono-vertex across different dimensions\n
+    \ expr: |\n    sum($metric_name{$filters}) by ($dimension, period)\n  params:\n
+    \   - name: start_time\n      required: false\n    - name: end_time\n      required:
+    false\n  metrics:\n    - metric_name: monovtx_pending\n      display_name: MonoVertex
     Pending Messages\n      metric_description: This gauge metric keeps track of the
     total number of messages that are waiting to be processed over varying time frames
     of 1min, 5min, 15min and default period of 2min. \n      required_filters:\n        -
