@@ -131,19 +131,21 @@ impl HttpSource {
                 HttpSourceMessage::Read { size, response_tx } => {
                     let messages = self.read(size).await;
                     debug!("Reading messages from HttpSource");
-                    let _ = response_tx.send(messages);
+                    response_tx.send(messages).expect("rx should be open");
                 }
                 HttpSourceMessage::Ack {
                     offsets,
                     response_tx,
                 } => {
-                    debug!(count = offsets.len(), "Acking messages from HttpSource");
-                    let _ = response_tx.send(self.ack(offsets).await);
+                    debug!(count = offsets.len(), "Ack'ing messages from HttpSource");
+                    response_tx
+                        .send(self.ack(offsets).await)
+                        .expect("rx should be open");
                 }
                 HttpSourceMessage::Pending(response_tx) => {
                     let pending = self.pending().await;
                     debug!(?pending, "Pending messages from HttpSource");
-                    let _ = response_tx.send(pending);
+                    response_tx.send(pending).expect("rx should be open");
                 }
             }
         }
@@ -211,6 +213,7 @@ pub async fn send_message(tx: mpsc::Sender<HttpMessage>, message: HttpMessage) -
 pub fn create_router(tx: mpsc::Sender<HttpMessage>) -> Router {
     Router::new()
         .route("/health", get(health_handler))
+        // FIXME: should be "/vertices/"+vertexInstance.Vertex.Spec.Name
         .route("/vertices", post(data_handler))
         .with_state(tx)
 }
@@ -257,7 +260,6 @@ async fn data_handler(
     // Generate or extract X-Numaflow-Id
     let id = header_map
         .get("x-numaflow-id")
-        .or_else(|| header_map.get("X-Numaflow-Id"))
         .cloned()
         .unwrap_or_else(|| Uuid::now_v7().to_string());
 
@@ -267,7 +269,6 @@ async fn data_handler(
     // Generate or extract X-Numaflow-Event-Time
     let event_time = header_map
         .get("x-numaflow-event-time")
-        .or_else(|| header_map.get("X-Numaflow-Event-Time"))
         .and_then(|time_str| DateTime::parse_from_rfc3339(time_str).ok())
         .map(|dt| dt.with_timezone(&Utc))
         .unwrap_or_else(Utc::now);
