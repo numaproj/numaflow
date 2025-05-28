@@ -196,7 +196,6 @@ impl AccumulatorWindowManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use std::sync::Arc;
 
     #[test]
@@ -212,10 +211,7 @@ mod tests {
             value: "test_value".as_bytes().to_vec().into(),
             offset: Default::default(),
             event_time: Utc::now(),
-            watermark: None,
-            id: Default::default(),
-            headers: HashMap::new(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Assign windows
@@ -223,7 +219,7 @@ mod tests {
 
         // Verify results - should be assigned to exactly 1 window with Open operation
         assert_eq!(window_msgs.len(), 1);
-        if let UnalignedWindowMessage::Open { message, window } = &window_msgs[0] {
+        if let UnalignedWindowMessage::Open { window, .. } = &window_msgs[0] {
             assert_eq!(window.keys, msg.keys);
         } else {
             panic!("Expected Open message");
@@ -243,10 +239,7 @@ mod tests {
             value: "test_value".as_bytes().to_vec().into(),
             offset: Default::default(),
             event_time: Utc::now(),
-            watermark: None,
-            id: Default::default(),
-            headers: HashMap::new(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Assign windows for the first time
@@ -277,10 +270,7 @@ mod tests {
             value: "test_value".as_bytes().to_vec().into(),
             offset: Default::default(),
             event_time: Utc::now() - chrono::Duration::seconds(2),
-            watermark: None,
-            id: Default::default(),
-            headers: HashMap::new(),
-            metadata: None,
+            ..Default::default()
         };
 
         // Assign windows
@@ -313,10 +303,7 @@ mod tests {
             value: "test_value1".as_bytes().to_vec().into(),
             offset: Default::default(),
             event_time: Utc::now() - chrono::Duration::seconds(30),
-            watermark: None,
-            id: Default::default(),
-            headers: HashMap::new(),
-            metadata: None,
+            ..Default::default()
         };
 
         let msg2 = Message {
@@ -367,10 +354,7 @@ mod tests {
             value: "test_value1".as_bytes().to_vec().into(),
             offset: Default::default(),
             event_time: Utc::now() - chrono::Duration::seconds(30),
-            watermark: None,
-            id: Default::default(),
-            headers: HashMap::new(),
-            metadata: None,
+            ..Default::default()
         };
 
         let msg2 = Message {
@@ -383,7 +367,7 @@ mod tests {
         windower.assign_windows(msg1.clone());
         windower.assign_windows(msg2.clone());
 
-        // Verify oldest window end time is msg1's event time
+        // Verify the oldest window end time is msg1's event time
         let oldest_time = windower.oldest_window_end_time().unwrap();
         assert_eq!(oldest_time, msg1.event_time);
     }

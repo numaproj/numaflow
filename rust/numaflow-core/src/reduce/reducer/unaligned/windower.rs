@@ -1,8 +1,11 @@
 use crate::message::Message;
 use crate::reduce::reducer::unaligned::windower::accumulator::AccumulatorWindowManager;
 use crate::reduce::reducer::unaligned::windower::session::SessionWindowManager;
+use crate::shared::grpc::utc_from_timestamp;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
+use numaflow_pb::clients::accumulator::KeyedWindow;
+use numaflow_pb::clients::sessionreduce;
 use std::sync::Arc;
 
 mod accumulator;
@@ -40,6 +43,66 @@ pub(crate) struct Window {
     pub(crate) id: Bytes,
     /// Keys for the window
     pub(crate) keys: Arc<[String]>,
+}
+
+impl From<sessionreduce::KeyedWindow> for Window {
+    fn from(value: sessionreduce::KeyedWindow) -> Self {
+        Self {
+            start_time: value
+                .start
+                .map(utc_from_timestamp)
+                .expect("start time should be present"),
+            end_time: value
+                .end
+                .map(utc_from_timestamp)
+                .expect("end time should be present"),
+            id: format!(
+                "{}-{}-{}",
+                utc_from_timestamp(value.start.expect("start time should be present"))
+                    .timestamp_millis(),
+                utc_from_timestamp(value.end.expect("end time should be present"))
+                    .timestamp_millis(),
+                value
+                    .keys
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(":"),
+            )
+            .into(),
+            keys: Arc::from(value.keys),
+        }
+    }
+}
+
+impl From<KeyedWindow> for Window {
+    fn from(value: KeyedWindow) -> Self {
+        Self {
+            start_time: value
+                .start
+                .map(utc_from_timestamp)
+                .expect("start time should be present"),
+            end_time: value
+                .end
+                .map(utc_from_timestamp)
+                .expect("end time should be present"),
+            id: format!(
+                "{}-{}-{}",
+                utc_from_timestamp(value.start.expect("start time should be present"))
+                    .timestamp_millis(),
+                utc_from_timestamp(value.end.expect("end time should be present"))
+                    .timestamp_millis(),
+                value
+                    .keys
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(":"),
+            )
+            .into(),
+            keys: Arc::from(value.keys),
+        }
+    }
 }
 
 impl Window {

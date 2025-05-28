@@ -4,19 +4,64 @@ use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::reduce::reducer::unaligned::user_defined::accumulator::UserDefinedAccumulator;
 use crate::reduce::reducer::unaligned::user_defined::session::UserDefinedSessionReduce;
 use crate::reduce::reducer::unaligned::windower::{
-    UnalignedWindowManager, UnalignedWindowMessage, Window, WindowOperation,
+    UnalignedWindowManager, UnalignedWindowMessage, Window,
 };
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use bytes::Bytes;
+use chrono::{DateTime, Utc};
+use numaflow_pb::clients::accumulator::{AccumulatorRequest, AccumulatorResponse};
+use numaflow_pb::clients::sessionreduce::{SessionReduceRequest, SessionReduceResponse};
 use numaflow_pb::objects::wal::GcEvent;
 use prost::Message as ProstMessage;
 use std::collections::HashMap;
+use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
+
+/// Enum to wrap different response types
+enum ReduceResponseWrapper {
+    Accumulator(AccumulatorResponse),
+    Session(SessionReduceResponse),
+}
+
+impl ReduceResponseWrapper {
+    fn window(&self) -> Option<ResponseWindow> {
+        match self {
+            ReduceResponseWrapper::Accumulator(resp) => {
+                resp.window.as_ref().map(|w| ResponseWindow {
+                    keys: w.keys.clone(),
+                    end_time: crate::shared::grpc::utc_from_timestamp(*w.end.as_ref().unwrap()),
+                    is_eof: resp.eof,
+                })
+            }
+            ReduceResponseWrapper::Session(resp) => {
+                resp.keyed_window.as_ref().map(|w| ResponseWindow {
+                    keys: w.keys.clone(),
+                    end_time: crate::shared::grpc::utc_from_timestamp(*w.end.as_ref().unwrap()),
+                    is_eof: resp.eof,
+                })
+            }
+        }
+    }
+
+    fn is_eof(&self) -> bool {
+        match self {
+            ReduceResponseWrapper::Accumulator(resp) => resp.eof,
+            ReduceResponseWrapper::Session(resp) => resp.eof,
+        }
+    }
+}
+
+/// Window information extracted from responses
+struct ResponseWindow {
+    keys: Vec<String>,
+    end_time: DateTime<Utc>,
+    is_eof: bool,
+}
 
 /// Represents an active reduce stream for a window.
 struct ActiveStream {
@@ -43,6 +88,14 @@ struct ReduceTask {
     window: Window,
     /// Window manager for assigning windows to messages and closing windows.
     window_manager: UnalignedWindowManager,
+    /// Maximum batch size for responses before writing
+    batch_size: usize,
+    /// Maximum time to wait before writing a batch
+    batch_timeout: Duration,
+    /// Map to track windows for each key combination
+    /// For session: stores the actual window for that keys
+    /// For accumulator: stores a window with max end time (same start and end time)
+    tracked_windows: HashMap<Vec<String>, Window>,
 }
 
 impl ReduceTask {
@@ -54,6 +107,8 @@ impl ReduceTask {
         error_tx: mpsc::Sender<Error>,
         window: Window,
         window_manager: UnalignedWindowManager,
+        batch_size: usize,
+        batch_timeout: Duration,
     ) -> Self {
         Self {
             client_type: client,
@@ -62,90 +117,288 @@ impl ReduceTask {
             error_tx,
             window,
             window_manager,
+            batch_size,
+            batch_timeout,
+            tracked_windows: HashMap::new(),
         }
+    }
+
+    /// accumulator reduce
+    async fn accumulator_reduce(
+        &mut self,
+        client: UserDefinedAccumulator,
+        mut message_stream: ReceiverStream<UnalignedWindowMessage>,
+        cln_token: CancellationToken,
+    ) -> crate::Result<()> {
+        let (request_tx, request_rx) = mpsc::channel(100);
+        let request_stream = ReceiverStream::new(request_rx);
+
+        let (mut writer_tx, writer_rx) = mpsc::channel(100);
+        let writer_stream = ReceiverStream::new(writer_rx);
+        let mut writer_handle = self
+            .js_writer
+            .clone()
+            .streaming_write(writer_stream, cln_token.clone())
+            .await?;
+
+        // Spawn a task to convert UnalignedWindowMessages to ReduceRequests and send them to req_tx
+        let _request_handle = tokio::spawn(async move {
+            while let Some(window_msg) = message_stream.next().await {
+                let reduce_req: AccumulatorRequest = window_msg.into();
+                if request_tx.send(reduce_req).await.is_err() {
+                    break;
+                }
+            }
+        });
+
+        let mut client_clone = client.clone();
+        let (mut response_stream, handle) = client_clone
+            .reduce_fn(request_stream, cln_token.clone())
+            .await?;
+
+        // we should tokio select on the response stream and the timeout based on the batch timeout
+        // and if the timeout is reached, we should write the GC events and delete the tracked windows
+        // and create a new js streaming writer
+        let mut batch_timer = tokio::time::interval(self.batch_timeout);
+        batch_timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+        loop {
+            tokio::select! {
+                _ = batch_timer.tick() => {
+                    // wait for the writer to finish writing the current batch
+                    if let Err(e) = writer_handle.await {
+                        error!(?e, "Error while writing results to JetStream");
+                        return Err(Error::Reduce(format!("Writer task failed: {}", e)));
+                    }
+
+                    // Create a new channel for the next batch
+                    let (new_writer_tx, new_writer_rx) = mpsc::channel(100);
+                    let writer_stream = ReceiverStream::new(new_writer_rx);
+                    writer_tx = new_writer_tx;
+
+                    // Start a new writer
+                    writer_handle = self
+                        .js_writer
+                        .clone()
+                        .streaming_write(writer_stream, cln_token.clone())
+                        .await?;
+
+                    // Write GC events for tracked windows
+                    self.write_gc_events().await;
+
+                    // Delete tracked windows after writing GC events
+                    self.delete_tracked_windows().await;
+                }
+                response = response_stream.next() => {
+                    let Some(response) = response else {
+                        break;
+                    };
+                    // Process the response
+                    if response.eof {
+                        break;
+                    }
+
+                    let window = response.window.clone().expect("Window not set in response");
+                    let end_time = crate::shared::grpc::utc_from_timestamp(window.end.unwrap());
+
+                    // create with a window with this end time as both start and end and for that key
+                    // and track the max end time
+                    let window = Window {
+                        start_time: end_time,
+                        end_time,
+                        keys: window.keys.into(),
+                        id: format!("{}", end_time.timestamp_millis()).into(),
+                    };
+
+                    writer_tx
+                        .send(response.into())
+                        .await
+                        .expect("Failed to send response to writer");
+                    self.tracked_windows.insert(window.keys.to_vec(), window);
+                }
+            }
+        }
+
+        while let Some(response) = response_stream.next().await {
+            if response.eof {
+                break;
+            }
+        }
+
+        if let Err(e) = handle.await {
+            error!(?e, "Error while doing reduce operation");
+            return Err(Error::Reduce(format!("Reduce task failed: {}", e)));
+        }
+
+        Ok(())
+    }
+
+    /// session reduce
+    async fn session_reduce(
+        &mut self,
+        client: UserDefinedSessionReduce,
+        mut message_stream: ReceiverStream<UnalignedWindowMessage>,
+        cln_token: CancellationToken,
+    ) -> crate::Result<()> {
+        let (request_tx, request_rx) = mpsc::channel(100);
+        let request_stream = ReceiverStream::new(request_rx);
+
+        let (mut writer_tx, writer_rx) = mpsc::channel(100);
+        let writer_stream = ReceiverStream::new(writer_rx);
+        let mut writer_handle = self
+            .js_writer
+            .clone()
+            .streaming_write(writer_stream, cln_token.clone())
+            .await?;
+
+        let _request_handle = tokio::spawn(async move {
+            while let Some(window_msg) = message_stream.next().await {
+                let reduce_req: SessionReduceRequest = window_msg.into();
+                if request_tx.send(reduce_req).await.is_err() {
+                    break;
+                }
+            }
+        });
+
+        let mut client_clone = client.clone();
+        let (mut response_stream, handle) = client_clone
+            .reduce_fn(request_stream, cln_token.clone())
+            .await?;
+
+        // Set up batch timer for periodic flushing
+        let mut batch_timer = tokio::time::interval(self.batch_timeout);
+        batch_timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+        loop {
+            tokio::select! {
+                _ = batch_timer.tick() => {
+                    // Wait for the writer to finish writing the current batch
+                    if let Err(e) = writer_handle.await {
+                        error!(?e, "Error while writing results to JetStream");
+                        return Err(Error::Reduce(format!("Writer task failed: {}", e)));
+                    }
+
+                    // Create a new channel for the next batch
+                    let (new_writer_tx, new_writer_rx) = mpsc::channel(100);
+                    let writer_stream = ReceiverStream::new(new_writer_rx);
+                    writer_tx = new_writer_tx;
+
+                    // Start a new writer
+                    writer_handle = self
+                        .js_writer
+                        .clone()
+                        .streaming_write(writer_stream, cln_token.clone())
+                        .await?;
+
+                    // Write GC events for tracked windows
+                    self.write_gc_events().await;
+
+                    // Delete tracked windows after writing GC events
+                    self.delete_tracked_windows().await;
+                }
+                response = response_stream.next() => {
+                    let Some(response) = response else {
+                        break;
+                    };
+
+                    let window = response.keyed_window.clone().expect("Window not set in response");
+                    let end_time = crate::shared::grpc::utc_from_timestamp(window.end.unwrap());
+                    let start_time = crate::shared::grpc::utc_from_timestamp(window.start.unwrap());
+
+                    // Process the response
+                    if response.eof {
+                        // For session windows, track the actual window with start and end time
+                        let session_window = Window {
+                            start_time,
+                            end_time,
+                            keys: window.keys.into(),
+                            id: format!("{}-{}", start_time.timestamp_millis(), end_time.timestamp_millis()).into(),
+                        };
+
+                        self.tracked_windows.insert(session_window.keys.to_vec(), session_window);
+                        break;
+                    }
+
+                    writer_tx
+                        .send(response.into())
+                        .await
+                        .expect("Failed to send response to writer");
+                }
+            }
+        }
+
+        while let Some(response) = response_stream.next().await {
+            if response.eof {
+                break;
+            }
+        }
+
+        if let Err(e) = handle.await {
+            error!(?e, "Error while doing reduce operation");
+            return Err(Error::Reduce(format!("Reduce task failed: {}", e)));
+        }
+
+        Ok(())
     }
 
     /// starts a task to process the window stream and returns the task handle
     async fn start(
-        self,
+        mut self,
         message_stream: ReceiverStream<UnalignedWindowMessage>,
         cln_token: CancellationToken,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
-            let (result_tx, result_rx) = mpsc::channel(100);
-            let result_stream = ReceiverStream::new(result_rx);
-
             // Call the appropriate reduce_fn based on the client type
-            let client_result = match &self.client_type {
+            match &self.client_type {
                 UnalignedReduceClientType::Accumulator(client) => {
-                    let mut client_clone = client.clone();
-                    client_clone
-                        .reduce_fn(message_stream, result_tx, cln_token.clone())
+                    self.accumulator_reduce(client.clone(), message_stream, cln_token.clone())
                         .await
                 }
                 UnalignedReduceClientType::Session(client) => {
-                    let mut client_clone = client.clone();
-                    client_clone
-                        .reduce_fn(message_stream, result_tx, cln_token.clone())
+                    self.session_reduce(client.clone(), message_stream, cln_token.clone())
                         .await
                 }
-            };
-
-            // Spawn a task to write results to JetStream
-            let writer_handle = match self
-                .js_writer
-                .streaming_write(result_stream, cln_token.clone())
-                .await
-            {
-                Ok(handle) => handle,
-                Err(e) => {
-                    error!(?e, "Failed to start JetStream writer");
-                    return;
-                }
-            };
-
-            if let Err(e) = client_result {
-                // Check if this is a cancellation error
-                if let Error::Cancelled() = &e {
-                    info!("Cancellation detected while doing reduce operation");
-                    return;
-                }
-
-                // For other errors, log and send to error channel to signal the reduce actor to stop
-                // consuming new messages and exit with error.
-                error!(?e, "Error while doing reduce operation");
-                let _ = self.error_tx.send(e).await;
-                return;
             }
+            .expect("Reduce task failed");
+        })
+    }
 
-            // Write GC event to WAL if configured
-            if let Some(gc_wal_tx) = self.gc_wal_tx {
+    // Remove the process_batch method as we're writing continuously
+
+    async fn write_gc_events(&self) {
+        if let Some(gc_wal_tx) = &self.gc_wal_tx {
+            for (keys, window) in &self.tracked_windows {
                 let gc_event = GcEvent {
-                    start_time: None,
-                    end_time: Some(prost_types::Timestamp {
-                        seconds: self.window.end_time.timestamp(),
-                        nanos: self.window.end_time.timestamp_subsec_nanos() as i32,
+                    start_time: Some(prost_types::Timestamp {
+                        seconds: window.start_time.timestamp(),
+                        nanos: window.start_time.timestamp_subsec_nanos() as i32,
                     }),
-                    keys: self.window.keys.to_vec(),
+                    end_time: Some(prost_types::Timestamp {
+                        seconds: window.end_time.timestamp(),
+                        nanos: window.end_time.timestamp_subsec_nanos() as i32,
+                    }),
+                    keys: keys.clone(),
                 };
 
                 let gc_event_bytes = gc_event.encode_to_vec();
-                let _ = gc_wal_tx
+                if let Err(e) = gc_wal_tx
                     .send(SegmentWriteMessage::WriteData {
                         offset: None,
                         data: gc_event_bytes.into(),
                     })
-                    .await;
+                    .await
+                {
+                    error!(?e, ?keys, "Failed to send GC event to WAL");
+                }
             }
+        }
+    }
 
-            // Delete the window from the window manager
-            self.window_manager.delete_closed_window(self.window);
-
-            // Wait for the writer to complete
-            if let Err(e) = writer_handle.await {
-                error!(?e, "JetStream writer task failed");
-            }
-        })
+    /// Delete all tracked windows after writing GC events
+    async fn delete_tracked_windows(&mut self) {
+        for (_keys, window) in self.tracked_windows.drain() {
+            self.window_manager.delete_closed_window(window);
+        }
     }
 }
 
@@ -234,11 +487,15 @@ impl UnalignedReduceActor {
     /// Handle a window message
     async fn handle_window_message(&mut self, msg: UnalignedWindowMessage) -> crate::Result<()> {
         match msg.clone() {
-            UnalignedWindowMessage::Open { .. } => {
-                self.window_open(msg).await?;
+            UnalignedWindowMessage::Open { window, .. } => {
+                self.window_open(window, msg).await?;
             }
-            UnalignedWindowMessage::Close(_) => {}
-            UnalignedWindowMessage::Append { .. } => {}
+            UnalignedWindowMessage::Close(window) => {
+                self.window_close(window.id).await;
+            }
+            UnalignedWindowMessage::Append { window, .. } => {
+                self.window_append(window.id, msg).await?;
+            }
             UnalignedWindowMessage::Merge { .. } => {}
             UnalignedWindowMessage::Expand { .. } => {}
         }
@@ -246,7 +503,11 @@ impl UnalignedReduceActor {
     }
 
     /// Creates a new reduce task for the window and sends the initial Open command
-    async fn window_open(&mut self, msg: UnalignedWindowMessage) -> crate::Result<()> {
+    async fn window_open(
+        &mut self,
+        window: Window,
+        msg: UnalignedWindowMessage,
+    ) -> crate::Result<()> {
         // Create a new channel for this window's messages
         let (message_tx, message_rx) = mpsc::channel(100);
         let message_stream = ReceiverStream::new(message_rx);
@@ -259,6 +520,8 @@ impl UnalignedReduceActor {
             self.error_tx.clone(),
             window.clone(),
             self.window_manager.clone(),
+            500,                    // Default batch size
+            Duration::from_secs(1), // Default batch timeout
         );
 
         // Start the reduce task and store the handle and the sender
@@ -324,15 +587,15 @@ impl UnalignedReduceActor {
     }
 
     /// Handles merging windows (specific to session windows)
-    async fn window_merge(&mut self, msg: UnalignedWindowMessage) -> crate::Result<()> {
+    async fn window_merge(&mut self, _msg: UnalignedWindowMessage) -> crate::Result<()> {
         unimplemented!("Merge operation not implemented for unaligned reduce")
     }
 
     /// Handles expanding windows (specific to session windows)
     async fn window_expand(
         &mut self,
-        window_id: Bytes,
-        msg: UnalignedWindowMessage,
+        _window_id: Bytes,
+        _msg: UnalignedWindowMessage,
     ) -> crate::Result<()> {
         unimplemented!("Expand operation not implemented for unaligned reduce")
     }

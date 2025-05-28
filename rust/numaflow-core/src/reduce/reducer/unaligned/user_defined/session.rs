@@ -1,8 +1,6 @@
 use crate::config::get_vertex_name;
 use crate::message::{IntOffset, Message, MessageID, Offset};
-use crate::reduce::reducer::unaligned::windower::{
-    UnalignedWindowMessage, Window, WindowOperation,
-};
+use crate::reduce::reducer::unaligned::windower::{UnalignedWindowMessage, Window};
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 use numaflow_pb::clients::sessionreduce;
 use numaflow_pb::clients::sessionreduce::session_reduce_client::SessionReduceClient;
@@ -11,7 +9,7 @@ use numaflow_pb::clients::sessionreduce::{
 };
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio_stream::StreamExt;
+use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
@@ -103,16 +101,16 @@ impl From<UnalignedWindowMessage> for SessionReduceRequest {
 }
 
 /// Wrapper for SessionReduceResponse that includes index and vertex name.
-struct UdSessionReducerResponse {
+pub(crate) struct UdSessionReducerResponse {
     pub response: SessionReduceResponse,
     pub index: i32,
     pub vertex_name: &'static str,
 }
 
-impl From<UdSessionReducerResponse> for Message {
-    fn from(wrapper: UdSessionReducerResponse) -> Self {
-        let result = wrapper.response.result.unwrap_or_default();
-        let window = wrapper.response.keyed_window.unwrap_or_default();
+impl From<SessionReduceResponse> for Message {
+    fn from(response: SessionReduceResponse) -> Self {
+        let result = response.result.unwrap_or_default();
+        let window = response.keyed_window.unwrap_or_default();
 
         // Create offset from window start and end time
         let offset_str = format!(
@@ -138,12 +136,13 @@ impl From<UdSessionReducerResponse> for Message {
             // this will be unique for each response which will be used for dedup (index is used because
             // each window can have multiple reduce responses)
             id: MessageID {
-                vertex_name: wrapper.vertex_name.into(),
+                vertex_name: get_vertex_name().to_string().into(),
                 offset: offset_str.into(),
-                index: wrapper.index,
+                index: 0,
             },
             headers: HashMap::new(),
             metadata: None,
+            is_late: false,
         }
     }
 }
@@ -163,90 +162,61 @@ impl UserDefinedSessionReduce {
     /// If the cancellation token is triggered, it will stop processing and return early.
     pub(crate) async fn reduce_fn(
         &mut self,
-        stream: ReceiverStream<UnalignedWindowMessage>,
-        result_tx: tokio::sync::mpsc::Sender<Message>,
+        stream: ReceiverStream<SessionReduceRequest>,
         cln_token: CancellationToken,
-    ) -> crate::error::Result<()> {
-        // Convert UnalignedWindowMessage stream to ReduceRequest stream
-        let (req_tx, req_rx) = tokio::sync::mpsc::channel(100);
+    ) -> crate::Result<(
+        ReceiverStream<SessionReduceResponse>,
+        JoinHandle<crate::Result<()>>,
+    )> {
+        // Create a channel for responses
+        let (result_tx, result_rx) = tokio::sync::mpsc::channel(100);
 
-        // Spawn a task to convert UnalignedWindowMessages to ReduceRequests and send them to req_tx
-        // NOTE: - This is not really required (for client side streaming reduce), we do this because
-        //         `tonic` does not return a stream from the reduce_fn unless there is some output.
-        //       - This implementation works for reduce bidi streaming.
-        let request_handle = tokio::spawn(async move {
-            let mut stream = stream;
-            while let Some(window_msg) = stream.next().await {
-                let reduce_req: SessionReduceRequest = window_msg.into();
-                if req_tx.send(reduce_req).await.is_err() {
-                    break;
+        let mut client = self.client.clone();
+
+        // Start a background task to process responses
+        let handle = tokio::spawn(async move {
+            // Call the gRPC reduce_fn with the stream
+            let mut response_stream = match client.session_reduce_fn(stream).await {
+                Ok(response) => response.into_inner(),
+                Err(e) => {
+                    return Err(crate::Error::Reduce(format!(
+                        "failed to call reduce_fn: {}",
+                        e
+                    )));
+                }
+            };
+
+            loop {
+                tokio::select! {
+                    // Check for cancellation
+                    _ = cln_token.cancelled() => {
+                        info!("Cancellation detected while processing responses, stopping");
+                        return Err(crate::Error::Cancelled());
+                    }
+
+                    // Process next response
+                    response = response_stream.message() => {
+                        let response = match response {
+                            Ok(r) => r,
+                            Err(e) => return Err(crate::Error::Reduce(format!("failed to receive response: {}", e))),
+                        };
+
+                        let Some(response) = response else {
+                            break;
+                        };
+
+                        if result_tx.send(response).await.is_err() {
+                            return Err(crate::Error::Reduce("failed to send response".to_string()));
+                        }
+                    }
                 }
             }
+
+            Ok(())
         });
 
-        // Call the gRPC reduce_fn with the converted stream, but also watch for cancellation
-        let mut response_stream = tokio::select! {
-            // Wait for the gRPC call to complete
-            result = self.client.session_reduce_fn(ReceiverStream::new(req_rx)) => {
-                result
-                    .map_err(|e| crate::Error::Reduce(format!("failed to call reduce_fn: {}", e)))?
-                    .into_inner()
-            }
-
-            // Check for cancellation
-            _ = cln_token.cancelled() => {
-                info!("Cancellation detected while waiting for reduce_fn response");
-                request_handle.abort();
-                return Err(crate::Error::Cancelled());
-            }
-        };
-
-        // Process the response stream
-        let vertex_name = get_vertex_name();
-        let mut index = 0;
-
-        loop {
-            tokio::select! {
-                // Check for cancellation
-                _ = cln_token.cancelled() => {
-                    info!("Cancellation detected while processing responses, stopping");
-                    request_handle.abort();
-                    return Err(crate::Error::Cancelled());
-                }
-
-                // Process next response
-                response = response_stream.message() => {
-                    let response = response.map_err(|e| crate::Error::Reduce(format!("failed to receive response: {}", e)))?;
-                    let Some(response) = response else {
-                        break;
-                    };
-
-                    if response.eof {
-                        break;
-                    }
-
-                    // convert to Message so it can be sent to the ISB write channel
-                    let message: Message = UdSessionReducerResponse {
-                        response,
-                        index,
-                        vertex_name,
-                    }
-                    .into();
-
-                    result_tx
-                        .send(message)
-                        .await
-                        .expect("failed to send response");
-
-                    index += 1;
-                }
-            }
-        }
-
-        // wait for the tokio task to complete
-        request_handle
-            .await
-            .map_err(|e| crate::Error::Reduce(format!("conversion task failed: {}", e)))
+        // Return the receiver stream and handle immediately
+        Ok((ReceiverStream::new(result_rx), handle))
     }
 
     pub(crate) async fn ready(&mut self) -> bool {
