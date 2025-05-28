@@ -250,7 +250,7 @@ mod tests {
 
         // Verify results - should be assigned to exactly 1 window with Append operation
         assert_eq!(window_msgs.len(), 1);
-        if let UnalignedWindowMessage::Append { message, window } = &window_msgs[0] {
+        if let UnalignedWindowMessage::Append { message: _, window } = &window_msgs[0] {
             assert_eq!(window.keys, msg.keys);
         } else {
             panic!("Expected Append message");

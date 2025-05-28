@@ -9,19 +9,19 @@ use chrono::{DateTime, Utc};
 pub(crate) struct SessionWindowManager {}
 
 impl SessionWindowManager {
-    pub(crate) fn new(timeout: Duration) -> Self {
+    pub(crate) fn new(_timeout: Duration) -> Self {
         Self {}
     }
 
-    pub(crate) fn assign_windows(&self, msg: Message) -> Vec<UnalignedWindowMessage> {
+    pub(crate) fn assign_windows(&self, _msg: Message) -> Vec<UnalignedWindowMessage> {
         unimplemented!()
     }
 
-    pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<UnalignedWindowMessage> {
+    pub(crate) fn close_windows(&self, _watermark: DateTime<Utc>) -> Vec<UnalignedWindowMessage> {
         unimplemented!()
     }
 
-    pub(crate) fn delete_closed_window(&self, window: Window) {
+    pub(crate) fn delete_closed_window(&self, _window: Window) {
         unimplemented!()
     }
 

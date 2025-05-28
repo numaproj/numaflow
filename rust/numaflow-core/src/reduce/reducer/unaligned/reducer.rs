@@ -7,6 +7,7 @@ use crate::reduce::reducer::unaligned::windower::{
     UnalignedWindowManager, UnalignedWindowMessage, Window,
 };
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
+use crate::shared::grpc::utc_from_timestamp;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::accumulator::{AccumulatorRequest, AccumulatorResponse};
@@ -88,8 +89,6 @@ struct ReduceTask {
     window: Window,
     /// Window manager for assigning windows to messages and closing windows.
     window_manager: UnalignedWindowManager,
-    /// Maximum batch size for responses before writing
-    batch_size: usize,
     /// Maximum time to wait before writing a batch
     batch_timeout: Duration,
     /// Map to track windows for each key combination
@@ -107,7 +106,6 @@ impl ReduceTask {
         error_tx: mpsc::Sender<Error>,
         window: Window,
         window_manager: UnalignedWindowManager,
-        batch_size: usize,
         batch_timeout: Duration,
     ) -> Self {
         Self {
@@ -117,7 +115,6 @@ impl ReduceTask {
             error_tx,
             window,
             window_manager,
-            batch_size,
             batch_timeout,
             tracked_windows: HashMap::new(),
         }
@@ -199,7 +196,7 @@ impl ReduceTask {
                     }
 
                     let window = response.window.clone().expect("Window not set in response");
-                    let end_time = crate::shared::grpc::utc_from_timestamp(window.end.unwrap());
+                    let end_time = utc_from_timestamp(window.end.expect("Window end time missing"));
 
                     // create with a window with this end time as both start and end and for that key
                     // and track the max end time
@@ -225,10 +222,23 @@ impl ReduceTask {
             }
         }
 
+        // Wait for the client to complete
         if let Err(e) = handle.await {
             error!(?e, "Error while doing reduce operation");
             return Err(Error::Reduce(format!("Reduce task failed: {}", e)));
         }
+
+        // Final cleanup: wait for writer to complete
+        if let Err(e) = writer_handle.await {
+            error!(?e, "Error while writing final results to JetStream");
+            return Err(Error::Reduce(format!("Writer task failed: {}", e)));
+        }
+
+        // Write final GC events
+        self.write_gc_events().await;
+
+        // Delete tracked windows
+        self.delete_tracked_windows().await;
 
         Ok(())
     }
@@ -302,8 +312,8 @@ impl ReduceTask {
                     };
 
                     let window = response.keyed_window.clone().expect("Window not set in response");
-                    let end_time = crate::shared::grpc::utc_from_timestamp(window.end.unwrap());
-                    let start_time = crate::shared::grpc::utc_from_timestamp(window.start.unwrap());
+                    let end_time = utc_from_timestamp(window.end.expect("Window end missing"));
+                    let start_time = utc_from_timestamp(window.start.expect("Window start missing"));
 
                     // Process the response
                     if response.eof {
@@ -333,10 +343,23 @@ impl ReduceTask {
             }
         }
 
+        // Wait for the client to complete
         if let Err(e) = handle.await {
             error!(?e, "Error while doing reduce operation");
             return Err(Error::Reduce(format!("Reduce task failed: {}", e)));
         }
+
+        // Final cleanup: wait for writer to complete
+        if let Err(e) = writer_handle.await {
+            error!(?e, "Error while writing final results to JetStream");
+            return Err(Error::Reduce(format!("Writer task failed: {}", e)));
+        }
+
+        // Write final GC events
+        self.write_gc_events().await;
+
+        // Delete tracked windows
+        self.delete_tracked_windows().await;
 
         Ok(())
     }
@@ -520,7 +543,6 @@ impl UnalignedReduceActor {
             self.error_tx.clone(),
             window.clone(),
             self.window_manager.clone(),
-            500,                    // Default batch size
             Duration::from_secs(1), // Default batch timeout
         );
 
@@ -686,9 +708,6 @@ impl UnalignedReducer {
                     // Check for errors from reduce tasks
                     Some(error) = error_rx.recv() => {
                         self.handle_error(error, &cln_token);
-                        if self.shutting_down_on_err {
-                            break;
-                        }
                     }
 
                     // Process input messages
@@ -697,12 +716,14 @@ impl UnalignedReducer {
                             // End of stream
                             break;
                         };
-                        // Process the message
-                        if let Err(e) = self.process_message(msg, &actor_tx, &cln_token).await {
-                            self.handle_error(e, &cln_token);
-                            if self.shutting_down_on_err {
-                                break;
-                            }
+                        // Convert the message to UnalignedWindowMessage
+                        let window_messages = self.window_manager.assign_windows(msg);
+                        for window_msg in window_messages {
+                            // Send the message to the actor
+                            actor_tx
+                                .send(window_msg)
+                                .await
+                                .expect("failed to send message to actor");
                         }
                     }
                 }
@@ -714,25 +735,6 @@ impl UnalignedReducer {
         });
 
         Ok(handle)
-    }
-
-    /// Process a single message
-    async fn process_message(
-        &mut self,
-        msg: Message,
-        actor_tx: &mpsc::Sender<UnalignedWindowMessage>,
-        cln_token: &CancellationToken,
-    ) -> crate::Result<()> {
-        // Convert the message to UnalignedWindowMessage
-        let window_messages = self.window_manager.assign_windows(msg);
-        for window_msg in window_messages {
-            // Send the message to the actor
-            actor_tx
-                .send(window_msg)
-                .await
-                .map_err(|_| Error::Reduce("Failed to send message to reduce actor".to_string()))?;
-        }
-        Ok(())
     }
 
     /// Set up the GC WAL if configured.

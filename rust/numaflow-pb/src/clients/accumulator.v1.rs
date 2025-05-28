@@ -25,8 +25,6 @@ pub struct AccumulatorRequest {
     pub payload: ::core::option::Option<Payload>,
     #[prost(message, optional, tag = "2")]
     pub operation: ::core::option::Option<accumulator_request::WindowOperation>,
-    #[prost(message, optional, tag = "3")]
-    pub handshake: ::core::option::Option<Handshake>,
 }
 /// Nested message and enum types in `AccumulatorRequest`.
 pub mod accumulator_request {
@@ -104,10 +102,8 @@ pub struct AccumulatorResponse {
     pub window: ::core::option::Option<KeyedWindow>,
     #[prost(string, repeated, tag = "3")]
     pub tags: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-    #[prost(message, optional, tag = "4")]
-    pub handshake: ::core::option::Option<Handshake>,
     /// EOF represents the end of the response for a window.
-    #[prost(bool, tag = "5")]
+    #[prost(bool, tag = "4")]
     pub eof: bool,
 }
 /// ReadyResponse is the health check result.
@@ -115,13 +111,6 @@ pub struct AccumulatorResponse {
 pub struct ReadyResponse {
     #[prost(bool, tag = "1")]
     pub ready: bool,
-}
-/// Handshake message between client and server to indicate the start of transmission.
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct Handshake {
-    /// Required field indicating the start of transmission.
-    #[prost(bool, tag = "1")]
-    pub sot: bool,
 }
 /// Generated client implementations.
 pub mod accumulator_client {

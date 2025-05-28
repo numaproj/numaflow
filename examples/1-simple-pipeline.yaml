@@ -10,19 +10,34 @@ spec:
       # A self data generating source
       source:
         generator:
-          rpu: 5
+          rpu: 100
           duration: 1s
     - name: cat
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
+      partitions: 3
       scale:
-        min: 1
+        min: 2
+        max: 2
       udf:
         container:
-          image: quay.io/numaio/numaflow-go/map-forward-message:stable
+          image: quay.io/numaio/numaflow-go/map-flatmap:stable
+          imagePullPolicy: Never
     - name: out
+#      containerTemplate:
+#        env:
+#          - name: NUMAFLOW_RUNTIME
+#            value: "rust"
       scale:
-        min: 1
+        min: 2
+        max: 2
       sink:
-        log: {}
+        udsink:
+          container:
+            image: quay.io/numaio/numaflow-go/sink-log:stable
+            imagePullPolicy: Never
   edges:
     - from: in
       to: cat

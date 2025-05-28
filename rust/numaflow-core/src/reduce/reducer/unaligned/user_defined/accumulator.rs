@@ -1,8 +1,6 @@
 use crate::config::get_vertex_name;
 use crate::message::{IntOffset, Message, MessageID, Offset};
-use crate::reduce::reducer::unaligned::windower::{
-    UnalignedWindowMessage, Window, WindowOperation,
-};
+use crate::reduce::reducer::unaligned::windower::{UnalignedWindowMessage, Window};
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 use numaflow_pb::clients::accumulator::accumulator_client::AccumulatorClient;
 use numaflow_pb::clients::accumulator::{
@@ -12,7 +10,6 @@ use numaflow_pb::clients::accumulator::{
 use numaflow_pb::clients::accumulator;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
@@ -54,7 +51,6 @@ impl From<UnalignedWindowMessage> for AccumulatorRequest {
                 AccumulatorRequest {
                     payload: Some(message.into()),
                     operation,
-                    handshake: None,
                 }
             }
             UnalignedWindowMessage::Close(window) => {
@@ -66,7 +62,6 @@ impl From<UnalignedWindowMessage> for AccumulatorRequest {
                 AccumulatorRequest {
                     payload: None,
                     operation,
-                    handshake: None,
                 }
             }
             UnalignedWindowMessage::Append { message, window } => {
@@ -78,7 +73,6 @@ impl From<UnalignedWindowMessage> for AccumulatorRequest {
                 AccumulatorRequest {
                     payload: Some(message.into()),
                     operation,
-                    handshake: None,
                 }
             }
             _ => panic!("Unsupported operation for accumulator window"),
