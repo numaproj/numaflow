@@ -10,10 +10,12 @@ tokio = { workspace = true, features = ["sync"] }
 tracing.workspace = true
 thiserror.workspace = true
 bytes.workspace = true
+futures.workspace = true
 uuid = { workspace = true, features = ["v4"], optional = true }
 
 [features]
 kafka-tests = ["uuid"]
+kafka-tests-utils = ["uuid"]
 
 [lints]
 workspace = true

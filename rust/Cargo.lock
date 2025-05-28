@@ -2291,6 +2291,7 @@ name = "numaflow-kafka"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "futures",
  "rdkafka",
  "thiserror 2.0.12",
  "tokio",
