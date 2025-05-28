@@ -449,6 +449,9 @@ pub async fn create_source(
                 watermark_handle,
             ))
         }
+        SourceType::Http(http_source_config) => {
+            unimplemented!("HTTP source is not supported")
+        }
     }
 }
 

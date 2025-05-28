@@ -16,6 +16,7 @@ pub(crate) mod source {
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source, SqsSource};
     use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
     use numaflow_sqs::source::SqsSourceConfig;
+    use serde::{Deserialize, Serialize};
     use tracing::warn;
 
     use crate::Result;
@@ -48,6 +49,7 @@ pub(crate) mod source {
         Jetstream(JetstreamSourceConfig),
         Sqs(SqsSourceConfig),
         Kafka(Box<KafkaSourceConfig>),
+        Http(HttpSourceConfig),
     }
 
     impl From<Box<GeneratorSource>> for SourceType {
@@ -393,6 +395,76 @@ pub(crate) mod source {
                 msg_size_bytes: 8,
                 jitter: Duration::from_secs(0),
             }
+        }
+    }
+
+    // Retrieve value from mounted secret volume
+    // "/var/numaflow/secrets/${secretRef.name}/${secretRef.key}" is expected to be the file path
+    pub(crate) fn get_secret_from_volume(name: &str, key: &str) -> String {
+        let path = format!("/var/numaflow/secrets/{name}/{key}");
+        let val = std::fs::read_to_string(path.clone())
+            .map_err(|e| format!("Reading secret from file {path}: {e:?}"))
+            .expect("Failed to read secret");
+        val.trim().into()
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    struct AuthToken {
+        /// Name of the configmap
+        name: String,
+        /// Key within the configmap
+        key: String,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    struct Auth {
+        token: AuthToken,
+    }
+
+    #[derive(Clone, PartialEq)]
+    pub(crate) struct HttpSourceConfig {
+        batch_size: usize,
+        read_timeout: Duration,
+        addr: &'static str,
+        token: Option<String>,
+    }
+
+    impl Default for HttpSourceConfig {
+        fn default() -> Self {
+            Self {
+                batch_size: 500,
+                read_timeout: Duration::from_secs(1),
+                addr: "0.0.0.0:8080",
+                token: None,
+            }
+        }
+    }
+
+    impl Debug for HttpSourceConfig {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("HttpSourceConfig")
+                .field("batch_size", &self.batch_size)
+                .field("read_timeout", &self.read_timeout)
+                .field("addr", &self.addr)
+                .field("token", &self.token.as_ref().map(|_| "*****"))
+                .finish()
+        }
+    }
+
+    impl TryFrom<Box<numaflow_models::models::HttpSource>> for SourceType {
+        type Error = Error;
+        fn try_from(
+            value: Box<numaflow_models::models::HttpSource>,
+        ) -> std::result::Result<Self, Self::Error> {
+            let mut http_config = HttpSourceConfig::default();
+
+            if let Some(auth) = value.auth {
+                let auth = auth.token.unwrap();
+                let token = get_secret_from_volume(&auth.name, &auth.key);
+                http_config.token = Some(token);
+            }
+
+            Ok(SourceType::Http(http_config))
         }
     }
 
