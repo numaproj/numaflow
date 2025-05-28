@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 tokio.workspace = true
+tokio-stream.workspace = true
 axum.workspace = true
 bytes.workspace = true
 thiserror = "2.0.12"

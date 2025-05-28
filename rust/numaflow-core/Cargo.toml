@@ -32,10 +32,10 @@ serde.workspace = true
 rustls.workspace = true
 tower.workspace = true
 async-nats.workspace = true
+tokio-stream.workspace = true
 tonic = { version = "0.13.0" }
 thiserror = "2.0.3"
 tokio-util = "0.7.11"
-tokio-stream = "0.1.15"
 prost = "0.13.2"
 prost-types = "0.13.1"
 chrono = "0.4.31"

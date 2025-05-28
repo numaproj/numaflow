@@ -5,9 +5,6 @@
 //! `X-Numaflow-Id` header is added to the message to track the message across the pipeline.
 //! `X-Numaflow-Event-Time` is added to the message to track the event time of the message.
 
-use std::collections::HashMap;
-use std::net::SocketAddr;
-
 use axum::{
     Router,
     extract::State,
@@ -18,14 +15,18 @@ use axum::{
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
-use tokio::sync::mpsc;
-use tracing::{error, info, trace, warn};
+use std::collections::HashMap;
+use std::net::SocketAddr;
+use std::time::Duration;
+use tokio::sync::{mpsc, oneshot};
+use tracing::{debug, error, info, trace, warn};
 use uuid::Uuid;
 
 /// HTTP source that manages incoming HTTP requests and forwards them to a processing channel
-#[derive(Clone)]
 pub struct HttpSource {
-    actor_tx: mpsc::Sender<HttpMessage>,
+    server_rx: mpsc::Receiver<HttpMessage>,
+    server_handle: tokio::task::JoinHandle<Result<()>>,
+    timeout: Duration,
 }
 
 /// Error types for the HTTP source
@@ -61,12 +62,18 @@ struct DataResponse {
 pub struct HttpSourceBuilder {
     /// Default buffer size is 2000
     buffer_size: usize,
+    addr: SocketAddr,
+    timeout: Duration,
 }
 
 impl HttpSourceBuilder {
     /// Create a new HttpSourceBuilder
     pub fn new() -> Self {
-        Self { buffer_size: 2000 }
+        Self {
+            buffer_size: 500,
+            addr: "0.0.0.0:8080".parse().expect("Invalid address"),
+            timeout: Duration::from_secs(1),
+        }
     }
 
     /// Set the buffer size for the channel
@@ -75,9 +82,23 @@ impl HttpSourceBuilder {
         self
     }
 
+    /// Set the buffer size for the channel
+    pub fn with_addr(mut self, addr: SocketAddr) -> Self {
+        self.addr = addr;
+        self
+    }
+
     /// Build the HttpSource instance
     pub fn build(self) -> HttpSource {
-        HttpSource::new(self)
+        let (tx, rx) = mpsc::channel(self.buffer_size); // Increased buffer size for better throughput
+
+        let server_handle = tokio::spawn(start_server(tx, self.addr));
+
+        HttpSource {
+            server_rx: rx,
+            timeout: self.timeout,
+            server_handle,
+        }
     }
 }
 
@@ -87,34 +108,88 @@ impl Default for HttpSourceBuilder {
     }
 }
 
+#[derive(Debug)]
+pub enum HttpSourceMessage {
+    Read {
+        size: usize,
+        response_tx: oneshot::Sender<Result<Vec<HttpMessage>>>,
+    },
+    Ack {
+        offsets: Vec<String>,
+        response_tx: oneshot::Sender<Result<()>>,
+    },
+    Pending(oneshot::Sender<Option<usize>>),
+}
+
 impl HttpSource {
-    /// Create a new HttpSource instance
-    pub fn new(http_source_builder: HttpSourceBuilder) -> Self {
-        let (tx, rx) = mpsc::channel(http_source_builder.buffer_size); // Increased buffer size for better throughput
-
-        // Spawn a task to read from the channel and process messages
-        tokio::spawn(HttpSource::run(rx));
-
-        Self { actor_tx: tx }
-    }
-
     /// Background task that processes messages from the channel
-    async fn run(mut rx: mpsc::Receiver<HttpMessage>) -> Result<()> {
+    async fn run(mut self, mut actor_rx: mpsc::Receiver<HttpSourceMessage>) -> Result<()> {
         info!("HttpSource processor started");
 
-        while let Some(msg) = rx.recv().await {
-            // Process the message - for now just log it
-            // In a real implementation, this would forward to the next vertex
-            info!(
-                id = %msg.id,
-                event_time = %msg.event_time,
-                body_size = msg.body.len(),
-                headers_count = msg.headers.len(),
-                "Processed HTTP message"
-            );
+        while let Some(msg) = actor_rx.recv().await {
+            match msg {
+                HttpSourceMessage::Read { size, response_tx } => {
+                    let messages = self.read(size).await;
+                    debug!("Reading messages from HttpSource");
+                    let _ = response_tx.send(messages);
+                }
+                HttpSourceMessage::Ack {
+                    offsets,
+                    response_tx,
+                } => {
+                    debug!(count = offsets.len(), "Acking messages from HttpSource");
+                    let _ = response_tx.send(self.ack(offsets).await);
+                }
+                HttpSourceMessage::Pending(response_tx) => {
+                    let pending = self.pending().await;
+                    debug!(?pending, "Pending messages from HttpSource");
+                    let _ = response_tx.send(pending);
+                }
+            }
         }
 
         info!("HttpSource processor stopped");
+        Ok(())
+    }
+
+    async fn pending(&self) -> Option<usize> {
+        Some(self.server_rx.len())
+    }
+
+    async fn read(&mut self, count: usize) -> Result<Vec<HttpMessage>> {
+        // return all the messages in self.server_rx as long as timeout is not reached and not
+        // exceeding the count.
+
+        let mut messages = vec![];
+
+        let timeout = tokio::time::timeout(self.timeout, std::future::pending::<()>());
+        tokio::pin!(timeout);
+
+        loop {
+            tokio::select! {
+                biased;
+
+                _ =  &mut timeout => {
+                    return Ok(messages);
+                }
+
+                message = self.server_rx.recv() => {
+                    // stream ended
+                    let Some(message) = message else {
+                        return Ok(messages);
+                    };
+                    messages.push(message);
+                }
+            }
+
+            if messages.len() >= count {
+                return Ok(messages);
+            }
+        }
+    }
+
+    /// http source cannot implement ack, we have already returned 202 or 429 accordingly
+    async fn ack(&self, _offsets: Vec<String>) -> Result<()> {
         Ok(())
     }
 }
@@ -155,12 +230,6 @@ pub async fn start_server(tx: mpsc::Sender<HttpMessage>, addr: SocketAddr) -> Re
         .map_err(|e| Error::Server(format!("Server error: {}", e)))?;
 
     Ok(())
-}
-
-impl Default for HttpSource {
-    fn default() -> Self {
-        Self::new(Default::default())
-    }
 }
 
 /// Health check endpoint handler
@@ -263,8 +332,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_health_endpoint() {
-        let http_source = HttpSource::new(HttpSourceBuilder::new().with_buffer_size(500));
-        let app = create_router(http_source.actor_tx);
+        let (tx, _rx) = mpsc::channel(500);
+
+        let app = create_router(tx);
 
         let request = Request::builder()
             .method(Method::GET)
@@ -278,8 +348,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_data_endpoint() {
-        let http_source = HttpSource::new(HttpSourceBuilder::new());
-        let app = create_router(http_source.actor_tx);
+        let (tx, rx) = mpsc::channel(10);
+
+        let app = create_router(tx);
 
         let request = Request::builder()
             .method(Method::POST)
@@ -290,12 +361,15 @@ mod tests {
 
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+
+        assert_eq!(rx.len(), 1);
     }
 
     #[tokio::test]
     async fn test_data_endpoint_with_custom_id() {
-        let http_source = HttpSource::new(HttpSourceBuilder::new());
-        let app = create_router(http_source.actor_tx);
+        let (tx, rx) = mpsc::channel(10);
+
+        let app = create_router(tx);
 
         let custom_id = "custom-test-id";
         let request = Request::builder()
@@ -308,5 +382,7 @@ mod tests {
 
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+
+        assert_eq!(rx.len(), 1);
     }
 }
