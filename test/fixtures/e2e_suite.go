@@ -205,6 +205,10 @@ func (s *E2ESuite) Given() *Given {
 	}
 }
 
+func (s *E2ESuite) GetKubernetesClient() kubernetes.Interface {
+	return s.kubeClient
+}
+
 func getISBSvcSpec() string {
 	x := strings.ToUpper(os.Getenv("ISBSVC"))
 	if x == "REDIS" {

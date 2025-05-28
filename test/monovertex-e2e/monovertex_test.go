@@ -19,6 +19,7 @@ limitations under the License.
 package monovertex_e2e
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -69,6 +70,7 @@ func (s *MonoVertexSuite) TestExponentialBackoffRetryStrategy() {
 	w := s.Given().MonoVertex("@testdata/mono-vertex-exponential-retry-strategy.yaml").When().CreateMonoVertexAndWait()
 	defer w.DeleteMonoVertexAndWait()
 	w.Expect().MonoVertexPodsRunning()
+	monoVertexName := "retry-backoff-mvtx"
 	// delay between firstLog and secondLog should be at least 1s (interval) and less than 2s
 	// delay between secondLog and thirdLog should be at least 2s (interval * factor) and less than 3s
 	// delay between thirdLog and fourthLog  would be 3s as cap is 3s (minimum of 4s and 3s[cap]) and less than 4s
@@ -76,9 +78,34 @@ func (s *MonoVertexSuite) TestExponentialBackoffRetryStrategy() {
 	secondLog := fmt.Sprintf("retry_attempt=%d", 2)
 	thirdLog := fmt.Sprintf("retry_attempt=%d", 3)
 	fourthLog := "Dropping messages"
-	w.Expect().CorrectDelayBetweenMonoVertexLogs(firstLog, secondLog, time.Second, PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(time.Second))
-	w.Expect().CorrectDelayBetweenMonoVertexLogs(secondLog, thirdLog, 2*time.Second, PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(time.Second))
-	w.Expect().CorrectDelayBetweenMonoVertexLogs(thirdLog, fourthLog, 3*time.Second, PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(time.Second))
+	ts1, found, err := MonoVertexPodLogContains(context.Background(), s.E2ESuite.GetKubernetesClient(), Namespace, monoVertexName, firstLog, PodLogCheckOptionWithTimestamps(true))
+	if !found || err != nil {
+		s.T().Fatalf("expected log '%s' not found or error occurred: %v", firstLog, err)
+	}
+	ts2, found, err := MonoVertexPodLogContains(context.Background(), s.E2ESuite.GetKubernetesClient(), Namespace, monoVertexName, secondLog, PodLogCheckOptionWithTimestamps(true))
+	if !found || err != nil {
+		s.T().Fatalf("expected log '%s' not found or error occurred: %v", secondLog, err)
+	}
+	ts3, found, err := MonoVertexPodLogContains(context.Background(), s.E2ESuite.GetKubernetesClient(), Namespace, monoVertexName, thirdLog, PodLogCheckOptionWithTimestamps(true))
+	if !found || err != nil {
+		s.T().Fatalf("expected log '%s' not found or error occurred: %v", thirdLog, err)
+	}
+	ts4, found, err := MonoVertexPodLogContains(context.Background(), s.E2ESuite.GetKubernetesClient(), Namespace, monoVertexName, fourthLog, PodLogCheckOptionWithTimestamps(true))
+	if !found || err != nil {
+		s.T().Fatalf("expected log '%s' not found or error occurred: %v", fourthLog, err)
+	}
+	delta := ts2.Sub(ts1)
+	if delta < time.Second || delta > 2*time.Second {
+		s.T().Fatalf("expected delta for first retry attempt to be at least 1 second")
+	}
+	delta = ts3.Sub(ts2)
+	if delta < 2*time.Second || delta > 3*time.Second {
+		s.T().Fatalf("expected delta for second retry attempt to be at least 2 seconds")
+	}
+	delta = ts4.Sub(ts3)
+	if delta < 3*time.Second || delta > 4*time.Second {
+		s.T().Fatalf("expected delta for third retry attempt to be at least 3 seconds")
+	}
 }
 
 func TestMonoVertexSuite(t *testing.T) {
