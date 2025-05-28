@@ -327,7 +327,11 @@ async fn data_handler(
 mod tests {
     use super::*;
     use axum::body::Body;
-    use axum::http::{Method, Request};
+    use hyper::{Method, Request, StatusCode};
+    use hyper_util::client::legacy::Client;
+    use std::net::TcpListener;
+    use std::time::Duration;
+    use tokio::sync::{mpsc, oneshot};
     use tower::ServiceExt;
 
     #[tokio::test]
@@ -384,5 +388,141 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         assert_eq!(rx.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_http_source_read_with_real_server() {
+        // Bind to a random available port
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        drop(listener); // Release the listener so HttpSource can bind to it
+
+        // Create HttpSource with the address
+        let http_source = HttpSourceBuilder::new()
+            .with_addr(addr)
+            .with_buffer_size(100)
+            .build();
+
+        // Create actor channel for communicating with HttpSource
+        let (actor_tx, actor_rx) = mpsc::channel::<HttpSourceMessage>(10);
+
+        // Spawn the HttpSource actor
+        let source_handle = tokio::spawn(async move { http_source.run(actor_rx).await });
+
+        // Wait a bit for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Create HTTP client
+        let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
+
+        // Send multiple HTTP requests to the server
+        let test_data = vec![
+            (r#"{"message": "test1"}"#, "application/json"),
+            (r#"{"message": "test2"}"#, "application/json"),
+            ("plain text data", "text/plain"),
+        ];
+
+        for (body_data, content_type) in &test_data {
+            let request = Request::builder()
+                .method(Method::POST)
+                .uri(format!("http://{}/vertices", addr))
+                .header("Content-Type", *content_type)
+                .header("X-Numaflow-Id", format!("test-id-{}", uuid::Uuid::now_v7()))
+                .body((*body_data).to_string())
+                .unwrap();
+
+            let response = client.request(request).await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+        }
+
+        // Use the actor to read messages from HttpSource
+        let (read_tx, read_rx) = oneshot::channel();
+        actor_tx
+            .send(HttpSourceMessage::Read {
+                size: 3, // Request up to 3 messages (else it will wait for timeout)
+                response_tx: read_tx,
+            })
+            .await
+            .unwrap();
+
+        // Wait for the read response
+        let messages = read_rx.await.unwrap().unwrap();
+
+        // Verify we got the expected number of messages
+        assert_eq!(messages.len(), 3);
+
+        // Verify message contents
+        for message in messages.iter() {
+            assert!(!message.id.is_empty());
+            assert!(message.headers.contains_key("X-Numaflow-Id"));
+            assert!(message.headers.contains_key("X-Numaflow-Event-Time"));
+            assert!(message.headers.contains_key("content-type"));
+
+            // Check that the body matches what we sent
+            let body_str = String::from_utf8(message.body.to_vec()).unwrap();
+            assert!(test_data.iter().any(|(data, _)| *data == body_str));
+        }
+
+        // Test pending count
+        let (pending_tx, pending_rx) = oneshot::channel();
+        actor_tx
+            .send(HttpSourceMessage::Pending(pending_tx))
+            .await
+            .unwrap();
+
+        let pending_count = pending_rx.await.unwrap();
+        assert_eq!(pending_count, Some(0)); // Should be 0 since we read all messages
+
+        // Test ack (should always succeed for HTTP source)
+        let offsets: Vec<String> = messages.iter().map(|m| m.id.clone()).collect();
+        let (ack_tx, ack_rx) = oneshot::channel();
+        actor_tx
+            .send(HttpSourceMessage::Ack {
+                offsets,
+                response_tx: ack_tx,
+            })
+            .await
+            .unwrap();
+
+        let ack_result = ack_rx.await.unwrap();
+        assert!(ack_result.is_ok());
+
+        // Clean up
+        drop(actor_tx);
+        let _ = source_handle.await;
+    }
+
+    #[tokio::test]
+    async fn test_http_source_timeout_behavior() {
+        // Test that read method respects timeout when no messages are available
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        drop(listener);
+
+        let http_source = HttpSourceBuilder::new()
+            .with_addr(addr)
+            .with_buffer_size(100)
+            .build();
+
+        let (actor_tx, actor_rx) = mpsc::channel::<HttpSourceMessage>(10);
+
+        let source_handle = tokio::spawn(async move { http_source.run(actor_rx).await });
+
+        // Try to read messages when none are available - should timeout and return empty vec
+        let (read_tx, read_rx) = oneshot::channel();
+        actor_tx
+            .send(HttpSourceMessage::Read {
+                size: 5,
+                response_tx: read_tx,
+            })
+            .await
+            .unwrap();
+
+        let messages = read_rx.await.unwrap().unwrap();
+        assert_eq!(messages.len(), 0); // Should be empty due to timeout
+
+        // Clean up
+        drop(actor_tx);
+        let _ = source_handle.await;
     }
 }
