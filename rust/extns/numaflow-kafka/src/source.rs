@@ -27,6 +27,9 @@ pub struct KafkaSourceConfig {
     pub auth: Option<KafkaSaslAuth>,
     /// The TLS configuration for the Kafka consumer.
     pub tls: Option<TlsConfig>,
+    /// Any supported kafka client configuration options from
+    /// https://docs.confluent.io/platform/current/clients/librdkafka/html/md_CONFIGURATION.html
+    pub kafka_raw_config: Option<HashMap<String, String>>,
 }
 
 /// Message represents a message received from Kafka which can be converted to Numaflow Message.
@@ -111,12 +114,26 @@ impl KafkaActor {
         let mut client_config = ClientConfig::new();
         // https://docs.confluent.io/platform/current/clients/librdkafka/html/md_CONFIGURATION.html
         client_config
-            .set("group.id", &config.consumer_group)
-            .set("bootstrap.servers", config.brokers.join(","))
             .set("enable.partition.eof", "false")
             .set("session.timeout.ms", "6000")
+            .set("auto.offset.reset", "earliest");
+        if let Some(kafka_raw_config) = config.kafka_raw_config {
+            info!(
+                "Applying user-specified kafka config: {}",
+                kafka_raw_config
+                    .iter()
+                    .map(|(k, v)| format!("{k}={v}"))
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            );
+            for (key, value) in kafka_raw_config {
+                client_config.set(key, value);
+            }
+        }
+        client_config
+            .set("group.id", &config.consumer_group)
+            .set("bootstrap.servers", config.brokers.join(","))
             .set("enable.auto.commit", "false")
-            .set("auto.offset.reset", "earliest") // TODO: Make this configurable
             .set_log_level(RDKafkaLogLevel::Warning);
 
         crate::update_auth_config(&mut client_config, config.tls, config.auth);
@@ -586,6 +603,7 @@ mod tests {
             consumer_group: "test_consumer_group".to_string(),
             auth: None,
             tls: None,
+            kafka_raw_config: None,
         };
 
         let read_timeout = Duration::from_secs(5);
@@ -792,6 +810,7 @@ mod tests {
             consumer_group: "test_consumer_group_headers".to_string(),
             auth: None,
             tls: None,
+            kafka_raw_config: None,
         };
 
         let source = KafkaSource::connect(config, 1, Duration::from_secs(5))

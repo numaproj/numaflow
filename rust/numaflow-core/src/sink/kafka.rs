@@ -85,6 +85,7 @@ mod tests {
             auth: None,
             tls: None,
             set_partition_key: false,
+            kafka_raw_config: None,
         };
         let mut sink = new_sink(config).expect("Failed to create KafkaSink");
         let mut messages = Vec::new();

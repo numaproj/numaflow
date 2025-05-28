@@ -8,6 +8,7 @@ use rdkafka::{
     message::{Header, OwnedHeaders},
     producer::{FutureProducer, FutureRecord},
 };
+use tracing::info;
 
 use crate::{KafkaSaslAuth, TlsConfig};
 
@@ -29,6 +30,9 @@ pub struct KafkaSinkConfig {
     /// which is useful for maintaining message ordering for related messages.
     /// When set to false, messages will be distributed across partitions randomly.
     pub set_partition_key: bool,
+    /// Any supported kafka client configuration options from
+    /// https://docs.confluent.io/platform/current/clients/librdkafka/html/md_CONFIGURATION.html
+    pub kafka_raw_config: Option<HashMap<String, String>>,
 }
 
 /// The Kafka sink client.
@@ -63,9 +67,23 @@ pub struct KafkaSinkMessage {
 pub fn new_sink(config: KafkaSinkConfig) -> crate::Result<KafkaSink> {
     let mut client_config = ClientConfig::new();
     client_config
-        .set("bootstrap.servers", config.brokers.join(","))
         .set("message.timeout.ms", "5000")
-        .set("client.id", "numaflow-kafka-sink")
+        .set("client.id", "numaflow-kafka-sink");
+    if let Some(kafka_raw_config) = config.kafka_raw_config {
+        info!(
+            "Applying user-specified kafka config: {}",
+            kafka_raw_config
+                .iter()
+                .map(|(k, v)| format!("{k}={v}"))
+                .collect::<Vec<String>>()
+                .join(", ")
+        );
+        for (key, value) in kafka_raw_config {
+            client_config.set(key, value);
+        }
+    }
+    client_config
+        .set("bootstrap.servers", config.brokers.join(","))
         .set_log_level(RDKafkaLogLevel::Warning);
 
     crate::update_auth_config(&mut client_config, config.tls, config.auth);
@@ -233,6 +251,7 @@ mod tests {
             auth: None,
             tls: None,
             set_partition_key: true,
+            kafka_raw_config: None,
         };
         let mut sink = new_sink(config).expect("Failed to create KafkaSink");
         let mut headers = HashMap::new();
@@ -269,6 +288,7 @@ mod tests {
             auth: None,
             tls: None,
             set_partition_key: false,
+            kafka_raw_config: None,
         };
         let mut sink = new_sink(config).expect("Failed to create KafkaSink");
         let mut messages = Vec::new();

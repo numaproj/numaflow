@@ -8,6 +8,7 @@ pub(crate) mod source {
     const DEFAULT_SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
     const DEFAULT_SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
 
+    use std::collections::HashMap;
     use std::{fmt::Debug, time::Duration};
 
     use bytes::Bytes;
@@ -330,6 +331,20 @@ pub(crate) mod source {
                 consumer_group: value.consumer_group.unwrap_or_default(),
                 auth,
                 tls,
+                kafka_raw_config: value.config.map(|config| {
+                    // config is multiline string with key: value pairs.
+                    // Eg:
+                    //  max.poll.interval.ms: 100
+                    //  socket.timeout.ms: 10000
+                    //  queue.buffering.max.ms: 10000
+                    config
+                        .trim()
+                        .split('\n')
+                        .map(|s| s.split(':').collect::<Vec<&str>>())
+                        .filter(|parts| parts.len() == 2)
+                        .map(|parts| (parts[0].trim().to_string(), parts[1].trim().to_string()))
+                        .collect::<HashMap<String, String>>()
+                }),
             };
             Ok(SourceType::Kafka(kafka_config))
         }
@@ -427,6 +442,7 @@ pub(crate) mod sink {
     const DEFAULT_SINK_RETRY_FACTOR: f64 = 1.0;
     const DEFAULT_SINK_RETRY_JITTER: f64 = 0.0;
 
+    use std::collections::HashMap;
     use std::fmt::Display;
 
     use numaflow_kafka::sink::KafkaSinkConfig;
@@ -576,6 +592,20 @@ pub(crate) mod sink {
                 auth,
                 tls,
                 set_partition_key: kafka_config.set_key.unwrap_or(false),
+                kafka_raw_config: kafka_config.config.map(|config| {
+                    // config is multiline string with key: value pairs.
+                    // Eg:
+                    //  max.poll.interval.ms: 100
+                    //  socket.timeout.ms: 10000
+                    //  queue.buffering.max.ms: 10000
+                    config
+                        .trim()
+                        .split('\n')
+                        .map(|s| s.split(':').collect::<Vec<&str>>())
+                        .filter(|parts| parts.len() == 2)
+                        .map(|parts| (parts[0].trim().to_string(), parts[1].trim().to_string()))
+                        .collect::<HashMap<String, String>>()
+                }),
             }))
         }
     }
