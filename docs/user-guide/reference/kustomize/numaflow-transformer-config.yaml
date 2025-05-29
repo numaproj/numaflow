@@ -177,7 +177,7 @@ nameReference:
         kind: Pipeline
       - path: spec/vertices/source/udsource/container/env/valueFrom/secretKeyRef/name
         kind: Pipeline
-      - path: spec/vertices/source/udousrce/container/envFrom/secretRef/name
+      - path: spec/vertices/source/udsource/container/envFrom/secretRef/name
         kind: Pipeline
       - path: spec/sideInputs/container/env/valueFrom/secretKeyRef/name
         kind: Pipeline
@@ -239,7 +239,7 @@ nameReference:
         kind: MonoVertex
       - path: spec/source/udsource/container/env/valueFrom/secretKeyRef/name
         kind: MonoVertex
-      - path: spec/source/udousrce/container/envFrom/secretRef/name
+      - path: spec/source/udsource/container/envFrom/secretRef/name
         kind: MonoVertex
       - path: spec/sink/udsink/container/env/valueFrom/secretKeyRef/name
         kind: MonoVertex
