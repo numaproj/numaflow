@@ -5,14 +5,14 @@ metadata:
 spec:
   vertices:
     - name: input
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       source:
         generator:
           rpu: 1
           duration: 1s
-    - name: p1
-      udf:
-        builtin:
-          name: cat
     - name: output
       containerTemplate:
         env:
@@ -33,6 +33,4 @@ spec:
             imagePullPolicy: Always
   edges:
     - from: input
-      to: p1
-    - from: p1
       to: output
