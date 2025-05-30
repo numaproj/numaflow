@@ -10,7 +10,9 @@ pub(crate) mod source {
 
     use std::{fmt::Debug, time::Duration};
 
+    use super::parse_kafka_auth_config;
     use crate::Result;
+    use crate::config::get_vertex_name;
     use crate::error::Error;
     use bytes::Bytes;
     use numaflow_jetstream::{JetstreamSourceConfig, NatsAuth, TlsClientAuthCerts, TlsConfig};
@@ -20,8 +22,6 @@ pub(crate) mod source {
     use numaflow_sqs::source::SqsSourceConfig;
     use serde::{Deserialize, Serialize};
     use tracing::warn;
-
-    use super::parse_kafka_auth_config;
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct SourceConfig {
@@ -368,6 +368,10 @@ pub(crate) mod source {
                 return kafka.try_into();
             }
 
+            if let Some(http) = source.http.take() {
+                return http.try_into();
+            }
+
             Err(Error::Config(format!("Invalid source type: {source:?}")))
         }
     }
@@ -425,15 +429,15 @@ pub(crate) mod source {
         fn try_from(
             value: Box<numaflow_models::models::HttpSource>,
         ) -> std::result::Result<Self, Self::Error> {
-            let mut http_config = numaflow_http::HttpSourceConfig::default();
+            let mut http_config = numaflow_http::HttpSourceConfigBuilder::new(get_vertex_name());
 
             if let Some(auth) = value.auth {
                 let auth = auth.token.unwrap();
                 let token = get_secret_from_volume(&auth.name, &auth.key);
-                http_config.token = Some(token);
+                http_config = http_config.token(token);
             }
 
-            Ok(SourceType::Http(http_config))
+            Ok(SourceType::Http(http_config.build()))
         }
     }
 

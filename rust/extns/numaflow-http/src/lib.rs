@@ -64,6 +64,7 @@ struct DataResponse {
 /// HTTPSource Builder with custom buffer size
 #[derive(Clone, PartialEq)]
 pub struct HttpSourceConfig {
+    pub vertex_name: &'static str,
     /// Default buffer size is 2000
     pub buffer_size: usize,
     pub addr: SocketAddr,
@@ -85,6 +86,7 @@ impl Debug for HttpSourceConfig {
 impl Default for HttpSourceConfig {
     fn default() -> Self {
         Self {
+            vertex_name: "in",
             buffer_size: 500,
             addr: "0.0.0.0:8080".parse().expect("Invalid address"),
             timeout: Duration::from_secs(1),
@@ -94,21 +96,17 @@ impl Default for HttpSourceConfig {
 }
 
 pub struct HttpSourceConfigBuilder {
+    vertex_name: &'static str,
     buffer_size: Option<usize>,
     addr: Option<SocketAddr>,
     timeout: Option<Duration>,
     token: Option<String>,
 }
 
-impl Default for HttpSourceConfigBuilder {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl HttpSourceConfigBuilder {
-    pub fn new() -> Self {
+    pub fn new(vertex_name: &'static str) -> Self {
         Self {
+            vertex_name,
             buffer_size: None,
             addr: None,
             timeout: None,
@@ -138,6 +136,7 @@ impl HttpSourceConfigBuilder {
 
     pub fn build(self) -> HttpSourceConfig {
         HttpSourceConfig {
+            vertex_name: self.vertex_name,
             buffer_size: self.buffer_size.unwrap_or(500),
             addr: self
                 .addr
@@ -165,7 +164,11 @@ impl HttpSourceActor {
     async fn new(http_source_config: HttpSourceConfig) -> Self {
         let (tx, rx) = mpsc::channel(http_source_config.buffer_size); // Increased buffer size for better throughput
 
-        let server_handle = tokio::spawn(start_server(tx, http_source_config.addr));
+        let server_handle = tokio::spawn(start_server(
+            http_source_config.vertex_name,
+            tx,
+            http_source_config.addr,
+        ));
 
         Self {
             server_rx: rx,
@@ -319,17 +322,23 @@ pub async fn send_message(tx: mpsc::Sender<HttpMessage>, message: HttpMessage) -
 }
 
 /// Create an Axum router with the HTTP source endpoints
-pub fn create_router(tx: mpsc::Sender<HttpMessage>) -> Router {
+pub fn create_router(vertex_name: &'static str, tx: mpsc::Sender<HttpMessage>) -> Router {
     Router::new()
         .route("/health", get(health_handler))
-        // FIXME: should be "/vertices/"+vertexInstance.Vertex.Spec.Name
-        .route("/vertices", post(data_handler))
+        .route(
+            format!("/vertices/{}", vertex_name).as_str(),
+            post(data_handler),
+        )
         .with_state(tx)
 }
 
 /// Start the HTTP server on the specified address
-pub async fn start_server(tx: mpsc::Sender<HttpMessage>, addr: SocketAddr) -> Result<()> {
-    let router = create_router(tx);
+pub async fn start_server(
+    vertex_name: &'static str,
+    tx: mpsc::Sender<HttpMessage>,
+    addr: SocketAddr,
+) -> Result<()> {
+    let router = create_router(vertex_name, tx);
 
     info!(?addr, "Starting HTTP source server");
 
@@ -448,7 +457,7 @@ mod tests {
     async fn test_health_endpoint() {
         let (tx, _rx) = mpsc::channel(500);
 
-        let app = create_router(tx);
+        let app = create_router("test", tx);
 
         let request = Request::builder()
             .method(Method::GET)
@@ -464,11 +473,11 @@ mod tests {
     async fn test_data_endpoint() {
         let (tx, rx) = mpsc::channel(10);
 
-        let app = create_router(tx);
+        let app = create_router("test", tx);
 
         let request = Request::builder()
             .method(Method::POST)
-            .uri("/vertices")
+            .uri("/vertices/test")
             .header("Content-Type", "application/json")
             .body(Body::from(r#"{"test": "data"}"#))
             .unwrap();
@@ -483,12 +492,12 @@ mod tests {
     async fn test_data_endpoint_with_custom_id() {
         let (tx, rx) = mpsc::channel(10);
 
-        let app = create_router(tx);
+        let app = create_router("test", tx);
 
         let custom_id = "custom-test-id";
         let request = Request::builder()
             .method(Method::POST)
-            .uri("/vertices")
+            .uri("/vertices/test")
             .header("Content-Type", "text/plain")
             .header("X-Numaflow-Id", custom_id)
             .body(Body::from("test data"))
@@ -508,7 +517,7 @@ mod tests {
         drop(listener); // Release the listener so HttpSource can bind to it
 
         // Create HttpSource with the address
-        let http_source_config = HttpSourceConfigBuilder::new().addr(addr).build();
+        let http_source_config = HttpSourceConfigBuilder::new("test").addr(addr).build();
 
         let http_source = HttpSourceActor::new(http_source_config).await;
 
@@ -534,7 +543,7 @@ mod tests {
         for (body_data, content_type) in &test_data {
             let request = Request::builder()
                 .method(Method::POST)
-                .uri(format!("http://{}/vertices", addr))
+                .uri(format!("http://{}/vertices/test", addr))
                 .header("Content-Type", *content_type)
                 .header("X-Numaflow-Id", format!("test-id-{}", uuid::Uuid::now_v7()))
                 .body((*body_data).to_string())
@@ -608,7 +617,7 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         drop(listener);
 
-        let http_source_config = HttpSourceConfigBuilder::new().addr(addr).build();
+        let http_source_config = HttpSourceConfigBuilder::new("test").addr(addr).build();
 
         let http_source = HttpSourceActor::new(http_source_config).await;
 
