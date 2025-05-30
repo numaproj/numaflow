@@ -2956,25 +2956,31 @@
 <td><code>forwarder_udf_processing_time</code></td>
 <td>Histogram</td>
 <td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code></td>
-<td>Provides a histogram distribution of the processing times of User-defined Functions. (UDF's)</td>
+<td>Provides a histogram distribution of the processing times of User-defined Functions (UDFs) in a map vertex</td>
 </tr>
 <tr>
 <td><code>forwarder_forward_chunk_processing_time</code></td>
 <td>Histogram</td>
 <td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>vertex_type=&lt;vertex-type&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code></td>
-<td>Provides a histogram distribution of the processing times of the forwarder function as a whole</td>
+<td>Provides a histogram distribution of the processing times of the forwarder function as a whole in a map vertex</td>
+</tr>
+<tr>
+<td><code>reduce_data_forward_forward_time</code></td>
+<td>Histogram</td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code></td>
+<td>Provides a histogram distribution of the forwarding times of the data from an ISB to a PBQ</td>
+</tr>
+<tr>
+<td><code>reduce_pbq_write_time</code></td>
+<td>Histogram</td>
+<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code></td>
+<td>Provides a histogram distribution of the processing times of write operations to a PBQ</td>
 </tr>
 <tr>
 <td><code>reduce_pnf_process_time</code></td>
 <td>Histogram</td>
 <td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code></td>
 <td>Provides a histogram distribution of the processing times of the reducer</td>
-</tr>
-<tr>
-<td><code>reduce_pnf_forward_time</code></td>
-<td>Histogram</td>
-<td><code>pipeline=&lt;pipeline-name&gt;</code> <br> <code>vertex=&lt;vertex-name&gt;</code> <br> <code>replica=&lt;replica-index&gt;</code></td>
-<td>Provides a histogram distribution of the forwarding times of the reducer</td>
 </tr>
 <tr>
 <td><code>vertex_pending_messages</code></td>
