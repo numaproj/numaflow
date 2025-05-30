@@ -2734,7 +2734,7 @@ unexpected issues efficiently.</p>
 <li><code>as_fallback</code> for <a href="https://github.com/numaproj/numaflow-python/blob/main/pynumaflow/sinker/_dtypes.py">Python</a></li>
 </ul>
 <h3 id="retry-strategy-configuration">Retry Strategy Configuration<a class="headerlink" href="#retry-strategy-configuration" title="Permanent link">&para;</a></h3>
-<p>The <code>retryStrategy</code> section allows you to define custom retry behavior for sink operations. If no custom fields are defined, the <strong>default</strong> values are applied.</p>
+<p>The <code>retryStrategy</code> section allows you to define custom retry behavior for sink operations. If no custom fields are defined, the Default values are applied.</p>
 <h4 id="example-configuration">Example Configuration<a class="headerlink" href="#example-configuration" title="Permanent link">&para;</a></h4>
 <div class="highlight"><pre><span></span><code><span class="nt">sink</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">retryStrategy</span><span class="p">:</span>
@@ -2753,58 +2753,50 @@ unexpected issues efficiently.</p>
 <ul>
 <li>
 <p><strong><code>interval</code></strong>: The time interval to wait before retry attempts.</p>
-</li>
-<li>
-<p><strong>Type</strong>: String with a timestamp suffix.</p>
-</li>
-<li>
-<p><strong>Default</strong>: <code>1ms</code>.</p>
+<ul>
+<li>Type: String with a timestamp suffix.</li>
+<li>Default: <code>1ms</code>.</li>
+</ul>
 </li>
 <li>
 <p><strong><code>steps</code></strong>: The maximum number of retry attempts, including the initial attempt.</p>
-</li>
-<li>
-<p><strong>Type</strong>: Unsigned integer, must be greater than 0.</p>
-</li>
-<li>
-<p><strong>Default</strong>: Infinite.</p>
+<ul>
+<li>Type: Unsigned integer, must be greater than 0.</li>
+<li>Default: Infinite.</li>
+</ul>
 </li>
 <li>
 <p><strong><code>factor</code></strong>: A multiplier applied to the interval after each retry attempt.</p>
-</li>
-<li>
-<p><strong>Type</strong>: Float, must be greater than or equal to 1.</p>
-</li>
-<li>
-<p><strong>Default</strong>: <code>1.0</code>.</p>
+<ul>
+<li>Type: Float, must be greater than or equal to 1.</li>
+<li>Default: <code>1.0</code>.</li>
+</ul>
 </li>
 <li>
 <p><strong><code>cap</code></strong>: The maximum value for the interval, limiting exponential backoff growth.</p>
-</li>
-<li>
-<p><strong>Type</strong>: String with a timestamp suffix.</p>
-</li>
-<li>
-<p><strong>Default</strong>: <code>indefinite</code> (no upper limit).</p>
+<ul>
+<li>Type: String with a timestamp suffix.</li>
+<li>Default: <code>indefinite</code> (no upper limit).</li>
+</ul>
 </li>
 <li>
 <p><strong><code>jitter</code></strong>: Adds randomness to the interval to avoid retry collisions.</p>
+<ul>
+<li>Type: Float, must be greater than or equal to 0 and less than 1.</li>
+<li>Default: <code>0</code>.</li>
+</ul>
 </li>
-<li><strong>Type</strong>: Float, must be greater than or equal to 0 and less than 1.</li>
-<li><strong>Default</strong>: <code>0</code>.</li>
 </ul>
 <h4 id="onfailure-actions">OnFailure Actions<a class="headerlink" href="#onfailure-actions" title="Permanent link">&para;</a></h4>
 <p>The <code>onFailure</code> field specifies the action to take when retries are exhausted. Available options are:</p>
 <ul>
 <li><strong><code>retry</code></strong>: Restart the retry logic.</li>
 <li><strong><code>fallback</code></strong>: Route the remaining messages to a <a href="https://numaflow.numaproj.io/user-guide/sinks/fallback/">fallback sink</a>.</li>
-<li>
-<p><strong><code>drop</code></strong>: Discard any unprocessed messages.</p>
-</li>
-<li>
-<p><strong>Default</strong>: <code>retry</code>.</p>
-</li>
+<li><strong><code>drop</code></strong>: Discard any unprocessed messages.</li>
 </ul>
+<blockquote>
+<p>Default: <code>retry</code></p>
+</blockquote>
 <h3 id="sink-example-with-retry-strategy">Sink Example with Retry Strategy<a class="headerlink" href="#sink-example-with-retry-strategy" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><span class="nt">sink</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">retryStrategy</span><span class="p">:</span>
