@@ -48,7 +48,7 @@ pub(crate) mod source {
         Pulsar(PulsarSourceConfig),
         Jetstream(JetstreamSourceConfig),
         Sqs(SqsSourceConfig),
-        Kafka(KafkaSourceConfig),
+        Kafka(Box<KafkaSourceConfig>),
     }
 
     impl From<Box<GeneratorSource>> for SourceType {
@@ -346,7 +346,7 @@ pub(crate) mod source {
                         .collect::<HashMap<String, String>>()
                 }),
             };
-            Ok(SourceType::Kafka(kafka_config))
+            Ok(SourceType::Kafka(Box::new(kafka_config)))
         }
     }
 
@@ -467,7 +467,7 @@ pub(crate) mod sink {
         Serve,
         UserDefined(UserDefinedConfig),
         Sqs(SqsSinkConfig),
-        Kafka(KafkaSinkConfig),
+        Kafka(Box<KafkaSinkConfig>),
     }
 
     impl SinkType {
@@ -586,7 +586,7 @@ pub(crate) mod sink {
             let (auth, tls) =
                 parse_kafka_auth_config(kafka_config.sasl.clone(), kafka_config.tls.clone())?;
 
-            Ok(SinkType::Kafka(KafkaSinkConfig {
+            Ok(SinkType::Kafka(Box::new(KafkaSinkConfig {
                 brokers,
                 topic: kafka_config.topic,
                 auth,
@@ -606,7 +606,7 @@ pub(crate) mod sink {
                         .map(|parts| (parts[0].trim().to_string(), parts[1].trim().to_string()))
                         .collect::<HashMap<String, String>>()
                 }),
-            }))
+            })))
         }
     }
 

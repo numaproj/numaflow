@@ -1,0 +1,24 @@
+[package]
+name = "numaflow-http"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio.workspace = true
+tokio-stream.workspace = true
+axum.workspace = true
+bytes.workspace = true
+thiserror = "2.0.12"
+serde.workspace = true
+tracing.workspace = true
+uuid = { workspace = true, features = ["v7"] }
+chrono = { version = "0.4", features = ["serde"] }
+serde_json = "1.0"
+
+[dev-dependencies]
+hyper = { version = "1.6.0", features = ["client", "http1"] }
+hyper-util = { version = "0.1.13", features = ["client", "client-legacy", "http1"] }
+tower.workspace = true
+
+[lints]
+workspace = true
