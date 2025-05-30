@@ -642,4 +642,81 @@ mod tests {
         drop(actor_tx);
         let _ = source_handle.await;
     }
+
+    #[tokio::test]
+    async fn test_http_source_handle() {
+        // Bind to a random available port
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        drop(listener); // Release the listener so HttpSource can bind to it
+
+        // Create HttpSource config
+        let http_source_config = HttpSourceConfigBuilder::new("test")
+            .addr(addr)
+            .buffer_size(10)
+            .timeout(Duration::from_millis(100))
+            .build();
+
+        // Create HttpSourceHandle
+        let handle = HttpSourceHandle::new(http_source_config.clone()).await;
+
+        // Wait a bit for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Create HTTP client and send requests
+        let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
+
+        // Send test requests
+        for i in 0..5 {
+            let request = Request::builder()
+                .method(Method::POST)
+                .uri(format!("http://{}/vertices/test", addr))
+                .header("Content-Type", "application/json")
+                .header("X-Numaflow-Id", format!("test-id-{}", i))
+                .body(format!(r#"{{"message": "test{}"}}"#, i))
+                .unwrap();
+
+            let response = client.request(request).await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+        }
+
+        // Test pending count
+        let pending = handle.pending().await;
+        assert_eq!(pending, Some(5), "Should have 5 pending messages");
+
+        // Test read method
+        let messages = handle.read(3).await.unwrap();
+        assert_eq!(messages.len(), 3, "Should read 3 messages");
+
+        // Verify message contents
+        for (i, message) in messages.iter().enumerate() {
+            assert!(message.headers.contains_key("X-Numaflow-Id"));
+            assert!(message.headers.contains_key("X-Numaflow-Event-Time"));
+            assert!(message.headers.contains_key("content-type"));
+
+            let body_str = String::from_utf8(message.body.to_vec()).unwrap();
+            assert!(body_str.contains(&format!("test{}", i)));
+        }
+
+        // Test pending count after reading
+        let pending = handle.pending().await;
+        assert_eq!(
+            pending,
+            Some(2),
+            "Should have 2 pending messages after reading 3"
+        );
+
+        // Test ack method (should always succeed for HTTP source)
+        let offsets: Vec<String> = messages.iter().map(|m| m.id.clone()).collect();
+        let ack_result = handle.ack(offsets).await;
+        assert!(ack_result.is_ok(), "Ack should succeed");
+
+        // Read remaining messages
+        let messages = handle.read(5).await.unwrap();
+        assert_eq!(messages.len(), 2, "Should read remaining 2 messages");
+
+        // Verify no more pending messages
+        let pending = handle.pending().await;
+        assert_eq!(pending, Some(0), "Should have 0 pending messages");
+    }
 }
