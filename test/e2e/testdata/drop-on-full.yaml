@@ -15,10 +15,6 @@ spec:
       source:
         http: {}
     - name: sink
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       partitions: 2
       sink:
         log: {}
