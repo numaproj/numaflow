@@ -13,7 +13,6 @@ pub(crate) mod source {
     use crate::Result;
     use crate::error::Error;
     use bytes::Bytes;
-    use numaflow_http::HttpSourceConfig;
     use numaflow_jetstream::{JetstreamSourceConfig, NatsAuth, TlsClientAuthCerts, TlsConfig};
     use numaflow_kafka::source::KafkaSourceConfig;
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source, SqsSource};
@@ -49,7 +48,7 @@ pub(crate) mod source {
         Jetstream(JetstreamSourceConfig),
         Sqs(SqsSourceConfig),
         Kafka(Box<KafkaSourceConfig>),
-        Http(HttpSourceConfig),
+        Http(numaflow_http::HttpSourceConfig),
     }
 
     impl From<Box<GeneratorSource>> for SourceType {
@@ -426,7 +425,7 @@ pub(crate) mod source {
         fn try_from(
             value: Box<numaflow_models::models::HttpSource>,
         ) -> std::result::Result<Self, Self::Error> {
-            let mut http_config = HttpSourceConfig::default();
+            let mut http_config = numaflow_http::HttpSourceConfig::default();
 
             if let Some(auth) = value.auth {
                 let auth = auth.token.unwrap();

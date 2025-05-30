@@ -20,6 +20,7 @@ use crate::sink::serve::ServingStore;
 use crate::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
 use crate::source::Source;
 use crate::source::generator::new_generator;
+use crate::source::http::CoreHttpSource;
 use crate::source::jetstream::new_jetstream_source;
 use crate::source::kafka::new_kafka_source;
 use crate::source::pulsar::new_pulsar_source;
@@ -31,7 +32,6 @@ use crate::watermark::isb::ISBWatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
 use crate::{config, error, metrics, source};
 use async_nats::jetstream::Context;
-use numaflow_http::HttpSourceHandle;
 use numaflow_pb::clients::map::map_client::MapClient;
 use numaflow_pb::clients::reduce::reduce_client::ReduceClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
@@ -451,10 +451,11 @@ pub async fn create_source(
             ))
         }
         SourceType::Http(http_source_config) => {
-            let http_source = HttpSourceHandle::new(http_source_config.clone()).await;
+            let http_source =
+                numaflow_http::HttpSourceHandle::new(http_source_config.clone()).await;
             Ok(Source::new(
                 batch_size,
-                source::SourceType::Http(http_source),
+                source::SourceType::Http(CoreHttpSource::new(batch_size, http_source)),
                 tracker_handle,
                 source_config.read_ahead,
                 transformer,

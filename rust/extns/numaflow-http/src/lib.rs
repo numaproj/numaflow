@@ -26,7 +26,7 @@ use uuid::Uuid;
 /// HTTP source that manages incoming HTTP requests and forwards them to a processing channel
 struct HttpSourceActor {
     server_rx: mpsc::Receiver<HttpMessage>,
-    server_handle: tokio::task::JoinHandle<Result<()>>,
+    _server_handle: tokio::task::JoinHandle<Result<()>>,
     timeout: Duration,
 }
 
@@ -170,7 +170,7 @@ impl HttpSourceActor {
         Self {
             server_rx: rx,
             timeout: http_source_config.timeout,
-            server_handle,
+            _server_handle: server_handle,
         }
     }
 

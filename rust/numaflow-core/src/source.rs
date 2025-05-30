@@ -12,13 +12,13 @@ use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
     pipeline_isb_metric_labels, pipeline_metric_labels, pipeline_metrics,
 };
+use crate::source::http::CoreHttpSource;
 use crate::tracker::TrackerHandle;
 use crate::{
     message::{Message, Offset},
     reader::LagReader,
 };
 use chrono::Utc;
-use numaflow_http::HttpSourceHandle;
 use numaflow_jetstream::JetstreamSource;
 use numaflow_kafka::source::KafkaSource;
 use numaflow_pb::clients::source::source_client::SourceClient;
@@ -55,7 +55,7 @@ pub(crate) mod jetstream;
 
 pub(crate) mod sqs;
 
-mod http;
+pub(crate) mod http;
 pub(crate) mod kafka;
 
 use crate::transformer::Transformer;
@@ -96,7 +96,7 @@ pub(crate) enum SourceType {
     Sqs(SqsSource),
     Jetstream(JetstreamSource),
     Kafka(KafkaSource),
-    Http(HttpSourceHandle),
+    Http(CoreHttpSource),
 }
 
 enum ActorMessage {
