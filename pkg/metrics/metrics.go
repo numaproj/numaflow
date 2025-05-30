@@ -283,7 +283,7 @@ var (
 		Buckets:   prometheus.ExponentialBucketsRange(1, 5000, 5),
 	}, []string{LabelPipeline, LabelVertex, LabelVertexReplicaIndex})
 
-	// ReduceProcessTime reduce ForwardTask processing latency
+	// ReduceProcessTime indicates the time it took to apply reduce UDF to a window
 	ReduceProcessTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Subsystem: "reduce_pnf",
 		Name:      "process_time",
@@ -291,20 +291,13 @@ var (
 		Buckets:   prometheus.ExponentialBucketsRange(1, 1200000, 5),
 	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex})
 
-	// ReduceForwardTime is used to indicate the time it took to forward the writeMessages
+	// ReduceForwardTime indicates the time it took to forward the readMessages from ISB to PBQ
 	ReduceForwardTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Subsystem: "reduce_pnf",
+		Subsystem: "reduce_data_forward",
 		Name:      "forward_time",
 		Help:      "Reduce forward time (1 to 100000 microseconds)",
 		Buckets:   prometheus.ExponentialBucketsRange(1, 100000, 5),
 	}, []string{LabelPipeline, LabelVertex, LabelVertexReplicaIndex})
-
-	// ReducePartitionsInFlight is used to indicate the partitions in flight
-	ReducePartitionsInFlight = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Subsystem: "reduce_pnf",
-		Name:      "partitions_inflight",
-		Help:      "Total number of partitions in flight",
-	}, []string{LabelVertex, LabelPipeline, LabelVertexReplicaIndex})
 
 	// ActiveWindowsCount is used to indicate the number of active windows
 	ActiveWindowsCount = promauto.NewGaugeVec(prometheus.GaugeOpts{
