@@ -18,6 +18,7 @@ use crate::{
     reader::LagReader,
 };
 use chrono::Utc;
+use numaflow_http::HttpSourceHandle;
 use numaflow_jetstream::JetstreamSource;
 use numaflow_kafka::source::KafkaSource;
 use numaflow_pb::clients::source::source_client::SourceClient;
@@ -54,6 +55,7 @@ pub(crate) mod jetstream;
 
 pub(crate) mod sqs;
 
+mod http;
 pub(crate) mod kafka;
 
 use crate::transformer::Transformer;
@@ -94,6 +96,7 @@ pub(crate) enum SourceType {
     Sqs(SqsSource),
     Jetstream(JetstreamSource),
     Kafka(KafkaSource),
+    Http(HttpSourceHandle),
 }
 
 enum ActorMessage {
@@ -251,6 +254,17 @@ impl Source {
             SourceType::Kafka(kafka) => {
                 tokio::spawn(async move {
                     let actor = SourceActor::new(receiver, kafka.clone(), kafka.clone(), kafka);
+                    actor.run().await;
+                });
+            }
+            SourceType::Http(http_source) => {
+                tokio::spawn(async move {
+                    let actor = SourceActor::new(
+                        receiver,
+                        http_source.clone(),
+                        http_source.clone(),
+                        http_source,
+                    );
                     actor.run().await;
                 });
             }

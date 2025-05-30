@@ -10,7 +10,10 @@ pub(crate) mod source {
 
     use std::{fmt::Debug, time::Duration};
 
+    use crate::Result;
+    use crate::error::Error;
     use bytes::Bytes;
+    use numaflow_http::HttpSourceConfig;
     use numaflow_jetstream::{JetstreamSourceConfig, NatsAuth, TlsClientAuthCerts, TlsConfig};
     use numaflow_kafka::source::KafkaSourceConfig;
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source, SqsSource};
@@ -18,9 +21,6 @@ pub(crate) mod source {
     use numaflow_sqs::source::SqsSourceConfig;
     use serde::{Deserialize, Serialize};
     use tracing::warn;
-
-    use crate::Result;
-    use crate::error::Error;
 
     use super::parse_kafka_auth_config;
 
@@ -419,36 +419,6 @@ pub(crate) mod source {
     #[derive(Serialize, Deserialize, Debug, Clone)]
     struct Auth {
         token: AuthToken,
-    }
-
-    #[derive(Clone, PartialEq)]
-    pub(crate) struct HttpSourceConfig {
-        batch_size: usize,
-        read_timeout: Duration,
-        addr: &'static str,
-        token: Option<String>,
-    }
-
-    impl Default for HttpSourceConfig {
-        fn default() -> Self {
-            Self {
-                batch_size: 500,
-                read_timeout: Duration::from_secs(1),
-                addr: "0.0.0.0:8080",
-                token: None,
-            }
-        }
-    }
-
-    impl Debug for HttpSourceConfig {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.debug_struct("HttpSourceConfig")
-                .field("batch_size", &self.batch_size)
-                .field("read_timeout", &self.read_timeout)
-                .field("addr", &self.addr)
-                .field("token", &self.token.as_ref().map(|_| "*****"))
-                .finish()
-        }
     }
 
     impl TryFrom<Box<numaflow_models::models::HttpSource>> for SourceType {
