@@ -1799,10 +1799,12 @@ mod jetstream_tests {
 
 #[cfg(test)]
 mod kafka_tests {
+    use super::sink::SinkType;
     use super::source::SourceType;
     use k8s_openapi::api::core::v1::SecretKeySelector;
     use numaflow_models::models::gssapi::AuthType;
     use numaflow_models::models::{Gssapi, KafkaSource, Sasl, SaslPlain, SasloAuth, Tls};
+    use std::collections::HashMap;
     use std::fs;
     use std::path::Path;
 
@@ -1819,6 +1821,67 @@ mod kafka_tests {
         if Path::new(&path).exists() {
             fs::remove_dir_all(&path).unwrap();
         }
+    }
+
+    #[test]
+    fn test_try_from_kafka_source_with_kafka_raw_config() {
+        let kafka_user_config: &str = r#"
+            max.poll.interval.ms: 100
+            socket.timeout.ms: 10000
+            queue.buffering.max.ms: 10000
+            "#;
+
+        let kafka_source = KafkaSource {
+            brokers: Some(vec!["localhost:9092".to_string()]),
+            topic: "test-topic".to_string(),
+            consumer_group: Some("test-group".to_string()),
+            sasl: None,
+            tls: None,
+            config: Some(kafka_user_config.to_string()),
+            kafka_version: None,
+        };
+
+        let source_type = SourceType::try_from(Box::new(kafka_source)).unwrap();
+        let SourceType::Kafka(config) = source_type else {
+            panic!("Expected SourceType::Kafka");
+        };
+
+        let expected_config = HashMap::from([
+            ("max.poll.interval.ms".to_string(), "100".to_string()),
+            ("socket.timeout.ms".to_string(), "10000".to_string()),
+            ("queue.buffering.max.ms".to_string(), "10000".to_string()),
+        ]);
+        assert_eq!(config.kafka_raw_config, Some(expected_config));
+    }
+
+    #[test]
+    fn test_try_from_kafka_sink_with_kafka_raw_config() {
+        let kafka_user_config: &str = r#"
+            max.poll.interval.ms: 100
+            socket.timeout.ms: 10000
+            queue.buffering.max.ms: 10000
+            "#;
+
+        let kafka_sink = numaflow_models::models::KafkaSink {
+            brokers: Some(vec!["localhost:9092".to_string()]),
+            topic: "test-topic".to_string(),
+            config: Some(kafka_user_config.to_string()),
+            sasl: None,
+            set_key: Some(true),
+            tls: None,
+        };
+
+        let sink_type = SinkType::try_from(Box::new(kafka_sink)).unwrap();
+        let SinkType::Kafka(config) = sink_type else {
+            panic!("Expected SinkType::Kafka");
+        };
+
+        let expected_config = HashMap::from([
+            ("max.poll.interval.ms".to_string(), "100".to_string()),
+            ("socket.timeout.ms".to_string(), "10000".to_string()),
+            ("queue.buffering.max.ms".to_string(), "10000".to_string()),
+        ]);
+        assert_eq!(config.kafka_raw_config, expected_config);
     }
 
     #[test]
