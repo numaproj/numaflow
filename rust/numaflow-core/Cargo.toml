@@ -20,6 +20,7 @@ numaflow-pulsar.workspace = true
 numaflow-monitor.workspace = true
 numaflow-jetstream.workspace = true
 numaflow-kafka.workspace = true
+numaflow-http.workspace = true
 numaflow-sqs.workspace = true
 numaflow-models.workspace = true
 numaflow-pb.workspace = true
@@ -59,6 +60,7 @@ numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "c6aa3a8
 pulsar = { version = "6.3.0", default-features = false, features = [
     "tokio-rustls-runtime",
 ] }
+hyper = "1.6.0"
 http = "1.2.0"
 aws-sdk-sqs = "1.65.0"
 aws-smithy-mocks-experimental = "0.2.3"

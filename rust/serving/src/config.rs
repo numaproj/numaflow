@@ -123,25 +123,11 @@ impl Default for Settings {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct AuthToken {
-    /// Name of the configmap
-    name: String,
-    /// Key within the configmap
-    key: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct Auth {
-    token: AuthToken,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Serving {
     #[serde(rename = "msgIDHeaderKey")]
     pub msg_id_header_key: Option<String>,
     #[serde(rename = "store")]
     pub callback_storage: CallbackStorageConfig,
-    auth: Option<Auth>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
