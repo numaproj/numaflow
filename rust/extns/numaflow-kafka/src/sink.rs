@@ -252,7 +252,9 @@ mod tests {
             auth: None,
             tls: None,
             set_partition_key: true,
-            kafka_raw_config: HashMap::new(),
+            kafka_raw_config: HashMap::from([
+                ("connections.max.idle.ms".to_string(), "540000".to_string()), // 9 minutes, default value
+            ]),
         };
         let mut sink = new_sink(config).expect("Failed to create KafkaSink");
         let mut headers = HashMap::new();

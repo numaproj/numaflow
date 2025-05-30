@@ -603,7 +603,9 @@ mod tests {
             consumer_group: "test_consumer_group".to_string(),
             auth: None,
             tls: None,
-            kafka_raw_config: None,
+            kafka_raw_config: Some(HashMap::from([
+                ("connections.max.idle.ms".to_string(), "540000".to_string()), // 9 minutes, default value
+            ])),
         };
 
         let read_timeout = Duration::from_secs(5);
