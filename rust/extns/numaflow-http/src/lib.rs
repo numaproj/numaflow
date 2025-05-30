@@ -16,6 +16,7 @@ use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
@@ -23,9 +24,9 @@ use tracing::{debug, error, info, trace, warn};
 use uuid::Uuid;
 
 /// HTTP source that manages incoming HTTP requests and forwards them to a processing channel
-pub struct HttpSource {
+struct HttpSourceActor {
     server_rx: mpsc::Receiver<HttpMessage>,
-    server_handle: tokio::task::JoinHandle<Result<()>>,
+    _server_handle: tokio::task::JoinHandle<Result<()>>,
     timeout: Duration,
 }
 
@@ -34,6 +35,8 @@ pub struct HttpSource {
 pub enum Error {
     #[error("Channel send error: {0}")]
     ChannelSend(String),
+    #[error("Channel recv error: {0}")]
+    ChannelRecv(String),
     #[error("Channel Full: 429")]
     ChannelFull(),
     #[error("Server error: {0}")]
@@ -43,7 +46,7 @@ pub enum Error {
 type Result<T> = std::result::Result<T, Error>;
 
 /// HTTP message containing the request body and headers
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct HttpMessage {
     pub body: Bytes,
     pub headers: HashMap<String, String>,
@@ -59,57 +62,93 @@ struct DataResponse {
 }
 
 /// HTTPSource Builder with custom buffer size
-pub struct HttpSourceBuilder {
+#[derive(Clone, PartialEq)]
+pub struct HttpSourceConfig {
+    pub vertex_name: &'static str,
     /// Default buffer size is 2000
-    buffer_size: usize,
-    addr: SocketAddr,
-    timeout: Duration,
+    pub buffer_size: usize,
+    pub addr: SocketAddr,
+    pub timeout: Duration,
+    pub token: Option<String>,
 }
 
-impl HttpSourceBuilder {
-    /// Create a new HttpSourceBuilder
-    pub fn new() -> Self {
+impl Debug for HttpSourceConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HttpSourceConfig")
+            .field("batch_size", &self.buffer_size)
+            .field("read_timeout", &self.timeout)
+            .field("addr", &self.addr)
+            .field("token", &self.token.as_ref().map(|_| "*****"))
+            .finish()
+    }
+}
+
+impl Default for HttpSourceConfig {
+    fn default() -> Self {
         Self {
+            vertex_name: "in",
             buffer_size: 500,
             addr: "0.0.0.0:8080".parse().expect("Invalid address"),
             timeout: Duration::from_secs(1),
-        }
-    }
-
-    /// Set the buffer size for the channel
-    pub fn with_buffer_size(mut self, buffer_size: usize) -> Self {
-        self.buffer_size = buffer_size;
-        self
-    }
-
-    /// Set the buffer size for the channel
-    pub fn with_addr(mut self, addr: SocketAddr) -> Self {
-        self.addr = addr;
-        self
-    }
-
-    /// Build the HttpSource instance
-    pub fn build(self) -> HttpSource {
-        let (tx, rx) = mpsc::channel(self.buffer_size); // Increased buffer size for better throughput
-
-        let server_handle = tokio::spawn(start_server(tx, self.addr));
-
-        HttpSource {
-            server_rx: rx,
-            timeout: self.timeout,
-            server_handle,
+            token: None,
         }
     }
 }
 
-impl Default for HttpSourceBuilder {
-    fn default() -> Self {
-        Self::new()
+pub struct HttpSourceConfigBuilder {
+    vertex_name: &'static str,
+    buffer_size: Option<usize>,
+    addr: Option<SocketAddr>,
+    timeout: Option<Duration>,
+    token: Option<String>,
+}
+
+impl HttpSourceConfigBuilder {
+    pub fn new(vertex_name: &'static str) -> Self {
+        Self {
+            vertex_name,
+            buffer_size: None,
+            addr: None,
+            timeout: None,
+            token: None,
+        }
+    }
+
+    pub fn buffer_size(mut self, buffer_size: usize) -> Self {
+        self.buffer_size = Some(buffer_size);
+        self
+    }
+
+    pub fn addr(mut self, addr: SocketAddr) -> Self {
+        self.addr = Some(addr);
+        self
+    }
+
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
+    pub fn token(mut self, token: String) -> Self {
+        self.token = Some(token);
+        self
+    }
+
+    pub fn build(self) -> HttpSourceConfig {
+        HttpSourceConfig {
+            vertex_name: self.vertex_name,
+            buffer_size: self.buffer_size.unwrap_or(500),
+            addr: self
+                .addr
+                .unwrap_or_else(|| "0.0.0.0:8080".parse().expect("Invalid address")),
+            timeout: self.timeout.unwrap_or(Duration::from_secs(1)),
+            token: self.token,
+        }
     }
 }
 
 #[derive(Debug)]
-pub enum HttpSourceMessage {
+pub enum HttpActorMessage {
     Read {
         size: usize,
         response_tx: oneshot::Sender<Result<Vec<HttpMessage>>>,
@@ -121,19 +160,35 @@ pub enum HttpSourceMessage {
     Pending(oneshot::Sender<Option<usize>>),
 }
 
-impl HttpSource {
+impl HttpSourceActor {
+    async fn new(http_source_config: HttpSourceConfig) -> Self {
+        let (tx, rx) = mpsc::channel(http_source_config.buffer_size); // Increased buffer size for better throughput
+
+        let server_handle = tokio::spawn(start_server(
+            http_source_config.vertex_name,
+            tx,
+            http_source_config.addr,
+        ));
+
+        Self {
+            server_rx: rx,
+            timeout: http_source_config.timeout,
+            _server_handle: server_handle,
+        }
+    }
+
     /// Background task that processes messages from the channel
-    async fn run(mut self, mut actor_rx: mpsc::Receiver<HttpSourceMessage>) -> Result<()> {
+    async fn run(mut self, mut actor_rx: mpsc::Receiver<HttpActorMessage>) -> Result<()> {
         info!("HttpSource processor started");
 
         while let Some(msg) = actor_rx.recv().await {
             match msg {
-                HttpSourceMessage::Read { size, response_tx } => {
+                HttpActorMessage::Read { size, response_tx } => {
                     let messages = self.read(size).await;
                     debug!("Reading messages from HttpSource");
                     response_tx.send(messages).expect("rx should be open");
                 }
-                HttpSourceMessage::Ack {
+                HttpActorMessage::Ack {
                     offsets,
                     response_tx,
                 } => {
@@ -142,7 +197,7 @@ impl HttpSource {
                         .send(self.ack(offsets).await)
                         .expect("rx should be open");
                 }
-                HttpSourceMessage::Pending(response_tx) => {
+                HttpActorMessage::Pending(response_tx) => {
                     let pending = self.pending().await;
                     debug!(?pending, "Pending messages from HttpSource");
                     response_tx.send(pending).expect("rx should be open");
@@ -196,6 +251,63 @@ impl HttpSource {
     }
 }
 
+/// Handle to interact with the HttpSource actor
+#[derive(Clone)]
+pub struct HttpSourceHandle {
+    actor_tx: mpsc::Sender<HttpActorMessage>,
+}
+
+impl HttpSourceHandle {
+    /// Create a new HttpSourceHandle
+    pub async fn new(http_source_config: HttpSourceConfig) -> Self {
+        let (actor_tx, actor_rx) =
+            mpsc::channel::<HttpActorMessage>(http_source_config.buffer_size);
+
+        let http_source = HttpSourceActor::new(http_source_config).await;
+
+        // the tokio task will stop when tx is dropped
+        tokio::spawn(async move { http_source.run(actor_rx).await });
+
+        Self { actor_tx }
+    }
+
+    /// Read messages from the HttpSource.
+    pub async fn read(&self, size: usize) -> Result<Vec<HttpMessage>> {
+        let (tx, rx) = oneshot::channel();
+        self.actor_tx
+            .send(HttpActorMessage::Read {
+                size,
+                response_tx: tx,
+            })
+            .await
+            .expect("actor should be running");
+        rx.await.map_err(|e| Error::ChannelRecv(e.to_string()))?
+    }
+
+    /// Ack messages to the HttpSource.
+    pub async fn ack(&self, offsets: Vec<String>) -> Result<()> {
+        let (tx, rx) = oneshot::channel();
+        self.actor_tx
+            .send(HttpActorMessage::Ack {
+                offsets,
+                response_tx: tx,
+            })
+            .await
+            .expect("actor should be running");
+        rx.await.map_err(|e| Error::ChannelRecv(e.to_string()))?
+    }
+
+    /// Get the number of pending messages from the HttpSource.
+    pub async fn pending(&self) -> Option<usize> {
+        let (tx, rx) = oneshot::channel();
+        self.actor_tx
+            .send(HttpActorMessage::Pending(tx))
+            .await
+            .expect("actor should be running");
+        rx.await.ok().flatten()
+    }
+}
+
 /// Send a message to the processing channel
 pub async fn send_message(tx: mpsc::Sender<HttpMessage>, message: HttpMessage) -> Result<()> {
     match tx.try_send(message) {
@@ -210,17 +322,23 @@ pub async fn send_message(tx: mpsc::Sender<HttpMessage>, message: HttpMessage) -
 }
 
 /// Create an Axum router with the HTTP source endpoints
-pub fn create_router(tx: mpsc::Sender<HttpMessage>) -> Router {
+pub fn create_router(vertex_name: &'static str, tx: mpsc::Sender<HttpMessage>) -> Router {
     Router::new()
         .route("/health", get(health_handler))
-        // FIXME: should be "/vertices/"+vertexInstance.Vertex.Spec.Name
-        .route("/vertices", post(data_handler))
+        .route(
+            format!("/vertices/{}", vertex_name).as_str(),
+            post(data_handler),
+        )
         .with_state(tx)
 }
 
 /// Start the HTTP server on the specified address
-pub async fn start_server(tx: mpsc::Sender<HttpMessage>, addr: SocketAddr) -> Result<()> {
-    let router = create_router(tx);
+pub async fn start_server(
+    vertex_name: &'static str,
+    tx: mpsc::Sender<HttpMessage>,
+    addr: SocketAddr,
+) -> Result<()> {
+    let router = create_router(vertex_name, tx);
 
     info!(?addr, "Starting HTTP source server");
 
@@ -339,7 +457,7 @@ mod tests {
     async fn test_health_endpoint() {
         let (tx, _rx) = mpsc::channel(500);
 
-        let app = create_router(tx);
+        let app = create_router("test", tx);
 
         let request = Request::builder()
             .method(Method::GET)
@@ -355,11 +473,11 @@ mod tests {
     async fn test_data_endpoint() {
         let (tx, rx) = mpsc::channel(10);
 
-        let app = create_router(tx);
+        let app = create_router("test", tx);
 
         let request = Request::builder()
             .method(Method::POST)
-            .uri("/vertices")
+            .uri("/vertices/test")
             .header("Content-Type", "application/json")
             .body(Body::from(r#"{"test": "data"}"#))
             .unwrap();
@@ -374,12 +492,12 @@ mod tests {
     async fn test_data_endpoint_with_custom_id() {
         let (tx, rx) = mpsc::channel(10);
 
-        let app = create_router(tx);
+        let app = create_router("test", tx);
 
         let custom_id = "custom-test-id";
         let request = Request::builder()
             .method(Method::POST)
-            .uri("/vertices")
+            .uri("/vertices/test")
             .header("Content-Type", "text/plain")
             .header("X-Numaflow-Id", custom_id)
             .body(Body::from("test data"))
@@ -399,13 +517,12 @@ mod tests {
         drop(listener); // Release the listener so HttpSource can bind to it
 
         // Create HttpSource with the address
-        let http_source = HttpSourceBuilder::new()
-            .with_addr(addr)
-            .with_buffer_size(100)
-            .build();
+        let http_source_config = HttpSourceConfigBuilder::new("test").addr(addr).build();
+
+        let http_source = HttpSourceActor::new(http_source_config).await;
 
         // Create actor channel for communicating with HttpSource
-        let (actor_tx, actor_rx) = mpsc::channel::<HttpSourceMessage>(10);
+        let (actor_tx, actor_rx) = mpsc::channel::<HttpActorMessage>(10);
 
         // Spawn the HttpSource actor
         let source_handle = tokio::spawn(async move { http_source.run(actor_rx).await });
@@ -426,7 +543,7 @@ mod tests {
         for (body_data, content_type) in &test_data {
             let request = Request::builder()
                 .method(Method::POST)
-                .uri(format!("http://{}/vertices", addr))
+                .uri(format!("http://{}/vertices/test", addr))
                 .header("Content-Type", *content_type)
                 .header("X-Numaflow-Id", format!("test-id-{}", uuid::Uuid::now_v7()))
                 .body((*body_data).to_string())
@@ -439,7 +556,7 @@ mod tests {
         // Use the actor to read messages from HttpSource
         let (read_tx, read_rx) = oneshot::channel();
         actor_tx
-            .send(HttpSourceMessage::Read {
+            .send(HttpActorMessage::Read {
                 size: 3, // Request up to 3 messages (else it will wait for timeout)
                 response_tx: read_tx,
             })
@@ -467,7 +584,7 @@ mod tests {
         // Test pending count
         let (pending_tx, pending_rx) = oneshot::channel();
         actor_tx
-            .send(HttpSourceMessage::Pending(pending_tx))
+            .send(HttpActorMessage::Pending(pending_tx))
             .await
             .unwrap();
 
@@ -478,7 +595,7 @@ mod tests {
         let offsets: Vec<String> = messages.iter().map(|m| m.id.clone()).collect();
         let (ack_tx, ack_rx) = oneshot::channel();
         actor_tx
-            .send(HttpSourceMessage::Ack {
+            .send(HttpActorMessage::Ack {
                 offsets,
                 response_tx: ack_tx,
             })
@@ -500,19 +617,18 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         drop(listener);
 
-        let http_source = HttpSourceBuilder::new()
-            .with_addr(addr)
-            .with_buffer_size(100)
-            .build();
+        let http_source_config = HttpSourceConfigBuilder::new("test").addr(addr).build();
 
-        let (actor_tx, actor_rx) = mpsc::channel::<HttpSourceMessage>(10);
+        let http_source = HttpSourceActor::new(http_source_config).await;
+
+        let (actor_tx, actor_rx) = mpsc::channel::<HttpActorMessage>(10);
 
         let source_handle = tokio::spawn(async move { http_source.run(actor_rx).await });
 
         // Try to read messages when none are available - should timeout and return empty vec
         let (read_tx, read_rx) = oneshot::channel();
         actor_tx
-            .send(HttpSourceMessage::Read {
+            .send(HttpActorMessage::Read {
                 size: 5,
                 response_tx: read_tx,
             })
@@ -525,5 +641,82 @@ mod tests {
         // Clean up
         drop(actor_tx);
         let _ = source_handle.await;
+    }
+
+    #[tokio::test]
+    async fn test_http_source_handle() {
+        // Bind to a random available port
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        drop(listener); // Release the listener so HttpSource can bind to it
+
+        // Create HttpSource config
+        let http_source_config = HttpSourceConfigBuilder::new("test")
+            .addr(addr)
+            .buffer_size(10)
+            .timeout(Duration::from_millis(100))
+            .build();
+
+        // Create HttpSourceHandle
+        let handle = HttpSourceHandle::new(http_source_config.clone()).await;
+
+        // Wait a bit for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Create HTTP client and send requests
+        let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
+
+        // Send test requests
+        for i in 0..5 {
+            let request = Request::builder()
+                .method(Method::POST)
+                .uri(format!("http://{}/vertices/test", addr))
+                .header("Content-Type", "application/json")
+                .header("X-Numaflow-Id", format!("test-id-{}", i))
+                .body(format!(r#"{{"message": "test{}"}}"#, i))
+                .unwrap();
+
+            let response = client.request(request).await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+        }
+
+        // Test pending count
+        let pending = handle.pending().await;
+        assert_eq!(pending, Some(5), "Should have 5 pending messages");
+
+        // Test read method
+        let messages = handle.read(3).await.unwrap();
+        assert_eq!(messages.len(), 3, "Should read 3 messages");
+
+        // Verify message contents
+        for (i, message) in messages.iter().enumerate() {
+            assert!(message.headers.contains_key("X-Numaflow-Id"));
+            assert!(message.headers.contains_key("X-Numaflow-Event-Time"));
+            assert!(message.headers.contains_key("content-type"));
+
+            let body_str = String::from_utf8(message.body.to_vec()).unwrap();
+            assert!(body_str.contains(&format!("test{}", i)));
+        }
+
+        // Test pending count after reading
+        let pending = handle.pending().await;
+        assert_eq!(
+            pending,
+            Some(2),
+            "Should have 2 pending messages after reading 3"
+        );
+
+        // Test ack method (should always succeed for HTTP source)
+        let offsets: Vec<String> = messages.iter().map(|m| m.id.clone()).collect();
+        let ack_result = handle.ack(offsets).await;
+        assert!(ack_result.is_ok(), "Ack should succeed");
+
+        // Read remaining messages
+        let messages = handle.read(5).await.unwrap();
+        assert_eq!(messages.len(), 2, "Should read remaining 2 messages");
+
+        // Verify no more pending messages
+        let pending = handle.pending().await;
+        assert_eq!(pending, Some(0), "Should have 0 pending messages");
     }
 }

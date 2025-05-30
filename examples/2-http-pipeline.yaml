@@ -18,10 +18,14 @@ spec:
     #             name: my-secret
     #             key: my-key
     - name: cat
+      scale:
+        min: 1
       udf:
         builtin:
           name: cat # A built-in UDF which simply cats the message
     - name: out
+      scale:
+        min: 1
       sink:
         # A simple log printing sink
         log: {}
