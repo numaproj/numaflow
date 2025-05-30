@@ -592,20 +592,20 @@ pub(crate) mod sink {
                 auth,
                 tls,
                 set_partition_key: kafka_config.set_key.unwrap_or(false),
-                kafka_raw_config: kafka_config.config.map(|config| {
-                    // config is multiline string with key: value pairs.
-                    // Eg:
-                    //  max.poll.interval.ms: 100
-                    //  socket.timeout.ms: 10000
-                    //  queue.buffering.max.ms: 10000
-                    config
-                        .trim()
-                        .split('\n')
-                        .map(|s| s.split(':').collect::<Vec<&str>>())
-                        .filter(|parts| parts.len() == 2)
-                        .map(|parts| (parts[0].trim().to_string(), parts[1].trim().to_string()))
-                        .collect::<HashMap<String, String>>()
-                }),
+                // config is multiline string with key: value pairs.
+                // Eg:
+                //  max.poll.interval.ms: 100
+                //  socket.timeout.ms: 10000
+                //  queue.buffering.max.ms: 10000
+                kafka_raw_config: kafka_config
+                    .config
+                    .unwrap_or_default()
+                    .trim()
+                    .split('\n')
+                    .map(|s| s.split(':').collect::<Vec<&str>>())
+                    .filter(|parts| parts.len() == 2)
+                    .map(|parts| (parts[0].trim().to_string(), parts[1].trim().to_string()))
+                    .collect::<HashMap<String, String>>(),
             })))
         }
     }

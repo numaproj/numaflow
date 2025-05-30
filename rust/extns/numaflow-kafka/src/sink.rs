@@ -32,7 +32,7 @@ pub struct KafkaSinkConfig {
     pub set_partition_key: bool,
     /// Any supported kafka client configuration options from
     /// https://docs.confluent.io/platform/current/clients/librdkafka/html/md_CONFIGURATION.html
-    pub kafka_raw_config: Option<HashMap<String, String>>,
+    pub kafka_raw_config: HashMap<String, String>,
 }
 
 /// The Kafka sink client.
@@ -69,16 +69,17 @@ pub fn new_sink(config: KafkaSinkConfig) -> crate::Result<KafkaSink> {
     client_config
         .set("message.timeout.ms", "5000")
         .set("client.id", "numaflow-kafka-sink");
-    if let Some(kafka_raw_config) = config.kafka_raw_config {
+    if !config.kafka_raw_config.is_empty() {
         info!(
             "Applying user-specified kafka config: {}",
-            kafka_raw_config
+            config
+                .kafka_raw_config
                 .iter()
                 .map(|(k, v)| format!("{k}={v}"))
                 .collect::<Vec<String>>()
                 .join(", ")
         );
-        for (key, value) in kafka_raw_config {
+        for (key, value) in config.kafka_raw_config {
             client_config.set(key, value);
         }
     }
@@ -251,7 +252,7 @@ mod tests {
             auth: None,
             tls: None,
             set_partition_key: true,
-            kafka_raw_config: None,
+            kafka_raw_config: HashMap::new(),
         };
         let mut sink = new_sink(config).expect("Failed to create KafkaSink");
         let mut headers = HashMap::new();
@@ -288,7 +289,7 @@ mod tests {
             auth: None,
             tls: None,
             set_partition_key: false,
-            kafka_raw_config: None,
+            kafka_raw_config: HashMap::new(),
         };
         let mut sink = new_sink(config).expect("Failed to create KafkaSink");
         let mut messages = Vec::new();
