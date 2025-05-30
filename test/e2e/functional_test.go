@@ -325,6 +325,27 @@ func (s *FunctionalSuite) TestFallbackSink() {
 	w.Expect().RedisSinkContains("simple-fallback-output", "fallback-message")
 }
 
+func (s *FunctionalSuite) TestExponentialBackoffRetryStrategyForPipeline() {
+	w := s.Given().Pipeline("@testdata/simple-pipeline-with-retry-strategy.yaml").
+		When().
+		CreatePipelineAndWait()
+	defer w.DeletePipelineAndWait()
+
+	vertexName := "output"
+
+	// wait for all the pods to come up
+	w.Expect().VertexPodsRunning().DaemonPodsRunning()
+
+	firstRetryLog := fmt.Sprintf("retry_attempt=%d", 1)
+	secondRetryLog := fmt.Sprintf("retry_attempt=%d", 2)
+	thirdRetryLog := fmt.Sprintf("retry_attempt=%d", 3)
+	dropLog := "Dropping messages"
+	w.Expect().VertexPodLogContains(vertexName, firstRetryLog, PodLogCheckOptionWithContainer("numa"))
+	w.Expect().VertexPodLogContains(vertexName, secondRetryLog, PodLogCheckOptionWithContainer("numa"))
+	w.Expect().VertexPodLogContains(vertexName, dropLog, PodLogCheckOptionWithContainer("numa"))
+	w.Expect().VertexPodLogNotContains(vertexName, thirdRetryLog, PodLogCheckOptionWithContainer("numa"))
+}
+
 func TestFunctionalSuite(t *testing.T) {
 	suite.Run(t, new(FunctionalSuite))
 }
