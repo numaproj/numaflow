@@ -1031,37 +1031,38 @@ pub(crate) mod reduce {
     const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
     const DEFAULT_REDUCER_SOCKET: &str = "/var/run/numaflow/reduce.sock";
     const DEFAULT_REDUCER_SERVER_INFO_FILE: &str = "/var/run/numaflow/reducer-server-info";
+    const DEFAULT_ACCUMULATOR_REDUCER_SOCKET: &str = "/var/run/numaflow/accumulator.sock";
+    const DEFAULT_ACCUMULATOR_REDUCER_SERVER_INFO_FILE: &str =
+        "/var/run/numaflow/accumulator-server-info";
+    const DEFAULT_SESSION_REDUCER_SOCKET: &str = "/var/run/numaflow/sessionreduce.sock";
+    const DEFAULT_SESSION_REDUCER_SERVER_INFO_FILE: &str =
+        "/var/run/numaflow/sessionreducer-server-info";
 
     use std::time::Duration;
 
     use numaflow_models::models::{
-        AccumulatorWindow, FixedWindow, GroupBy, PbqStorage, SessionWindow, SlidingWindow, Udf,
+        AccumulatorWindow, FixedWindow, GroupBy, PbqStorage, SessionWindow, SlidingWindow,
     };
 
     use crate::Result;
     use crate::error::Error;
 
     #[derive(Debug, Clone, PartialEq)]
-    pub(crate) struct ReducerConfig {
-        pub(crate) reducer_type: ReducerType,
-        pub(crate) window_config: WindowConfig,
+    pub(crate) enum ReducerConfig {
+        Aligned(AlignedReducerConfig),
+        Unaligned(UnalignedReducerConfig),
     }
 
     #[derive(Debug, Clone, PartialEq)]
-    pub(crate) enum ReducerType {
-        UserDefined(UserDefinedConfig),
+    pub(crate) struct AlignedReducerConfig {
+        pub(crate) user_defined_config: UserDefinedConfig,
+        pub(crate) window_config: AlignedWindowConfig,
     }
 
-    impl TryFrom<(&Box<Udf>, &Box<GroupBy>)> for ReducerType {
-        type Error = Error;
-        fn try_from(value: (&Box<Udf>, &Box<GroupBy>)) -> Result<Self> {
-            let (udf, _group_by) = value;
-            if udf.container.is_some() {
-                Ok(ReducerType::UserDefined(UserDefinedConfig::default()))
-            } else {
-                Err(Error::Config("Invalid UDF for reducer".to_string()))
-            }
-        }
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) struct UnalignedReducerConfig {
+        pub(crate) user_defined_config: UserDefinedConfig,
+        pub(crate) window_config: UnalignedWindowConfig,
     }
 
     #[derive(Debug, Clone, PartialEq)]
@@ -1081,19 +1082,48 @@ pub(crate) mod reduce {
         }
     }
 
+    impl UserDefinedConfig {
+        pub(crate) fn session_config() -> Self {
+            Self {
+                grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                socket_path: DEFAULT_SESSION_REDUCER_SOCKET,
+                server_info_path: DEFAULT_SESSION_REDUCER_SERVER_INFO_FILE,
+            }
+        }
+
+        pub(crate) fn accumulator_config() -> Self {
+            Self {
+                grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                socket_path: DEFAULT_ACCUMULATOR_REDUCER_SOCKET,
+                server_info_path: DEFAULT_ACCUMULATOR_REDUCER_SERVER_INFO_FILE,
+            }
+        }
+    }
+
     #[derive(Debug, Clone, PartialEq)]
-    pub(crate) struct WindowConfig {
-        pub(crate) window_type: WindowType,
+    pub(crate) struct AlignedWindowConfig {
+        pub(crate) window_type: AlignedWindowType,
         pub(crate) allowed_lateness: Duration,
         pub(crate) is_keyed: bool,
     }
 
     #[derive(Debug, Clone, PartialEq)]
-    pub(crate) enum WindowType {
+    pub(crate) struct UnalignedWindowConfig {
+        pub(crate) window_type: UnalignedWindowType,
+        pub(crate) allowed_lateness: Duration,
+        pub(crate) is_keyed: bool,
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) enum UnalignedWindowType {
+        Accumulator(AccumulatorWindowConfig),
+        Session(SessionWindowConfig),
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) enum AlignedWindowType {
         Fixed(FixedWindowConfig),
         Sliding(SlidingWindowConfig),
-        Session(SessionWindowConfig),
-        Accumulator(AccumulatorWindowConfig),
     }
 
     #[derive(Debug, Clone, PartialEq)]
@@ -1150,33 +1180,60 @@ pub(crate) mod reduce {
         }
     }
 
-    impl TryFrom<&Box<GroupBy>> for WindowConfig {
+    impl TryFrom<&Box<GroupBy>> for ReducerConfig {
         type Error = Error;
         fn try_from(group_by: &Box<GroupBy>) -> Result<Self> {
             let window = group_by.window.as_ref();
+            let allowed_lateness = group_by
+                .allowed_lateness
+                .map_or(Duration::from_secs(0), Duration::from);
+            let is_keyed = group_by.keyed.unwrap_or(false);
 
-            let window_type = if let Some(fixed) = &window.fixed {
-                WindowType::Fixed(fixed.clone().into())
+            if let Some(fixed) = &window.fixed {
+                let window_config = AlignedWindowConfig {
+                    window_type: AlignedWindowType::Fixed(fixed.clone().into()),
+                    allowed_lateness,
+                    is_keyed,
+                };
+                Ok(ReducerConfig::Aligned(AlignedReducerConfig {
+                    user_defined_config: UserDefinedConfig::default(),
+                    window_config,
+                }))
             } else if let Some(sliding) = &window.sliding {
-                WindowType::Sliding(sliding.clone().into())
+                let window_config = AlignedWindowConfig {
+                    window_type: AlignedWindowType::Sliding(sliding.clone().into()),
+                    allowed_lateness,
+                    is_keyed,
+                };
+                Ok(ReducerConfig::Aligned(AlignedReducerConfig {
+                    user_defined_config: UserDefinedConfig::default(),
+                    window_config,
+                }))
             } else if let Some(session) = &window.session {
-                WindowType::Session(session.clone().into())
+                let window_config = UnalignedWindowConfig {
+                    window_type: UnalignedWindowType::Session(session.clone().into()),
+                    allowed_lateness,
+                    is_keyed,
+                };
+                Ok(ReducerConfig::Unaligned(UnalignedReducerConfig {
+                    user_defined_config: UserDefinedConfig::session_config(),
+                    window_config,
+                }))
             } else if let Some(accumulator) = &window.accumulator {
-                WindowType::Accumulator(accumulator.clone().into())
+                let window_config = UnalignedWindowConfig {
+                    window_type: UnalignedWindowType::Accumulator(accumulator.clone().into()),
+                    allowed_lateness,
+                    is_keyed,
+                };
+                Ok(ReducerConfig::Unaligned(UnalignedReducerConfig {
+                    user_defined_config: UserDefinedConfig::accumulator_config(),
+                    window_config,
+                }))
             } else {
-                return Err(Error::Config("No window type specified".to_string()));
-            };
-
-            Ok(WindowConfig {
-                window_type,
-                allowed_lateness: group_by
-                    .allowed_lateness
-                    .map_or(Duration::from_secs(0), Duration::from),
-                is_keyed: group_by.keyed.unwrap_or(false),
-            })
+                Err(Error::Config("No window type specified".to_string()))
+            }
         }
     }
-
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct StorageConfig {
         pub(crate) path: std::path::PathBuf,
@@ -2329,11 +2386,10 @@ mod reducer_tests {
     use std::time::Duration;
 
     use numaflow_models::models::{
-        AccumulatorWindow, Container, FixedWindow, GroupBy, SessionWindow, SlidingWindow, Udf,
-        Window,
+        AccumulatorWindow, FixedWindow, GroupBy, SessionWindow, SlidingWindow, Window,
     };
 
-    use super::reduce::{ReducerType, UserDefinedConfig, WindowConfig, WindowType};
+    use super::reduce::{AlignedWindowType, ReducerConfig, UnalignedWindowType, UserDefinedConfig};
 
     #[test]
     fn test_default_user_defined_config() {
@@ -2344,52 +2400,6 @@ mod reducer_tests {
             default_config.server_info_path,
             "/var/run/numaflow/reducer-server-info"
         );
-    }
-
-    #[test]
-    fn test_reducer_type_from_udf_and_group_by() {
-        let udf = Box::new(Udf {
-            builtin: None,
-            container: Some(Box::new(Container {
-                args: None,
-                command: None,
-                env: None,
-                env_from: None,
-                image: Some("reducer-image".to_string()),
-                image_pull_policy: None,
-                liveness_probe: None,
-                ports: None,
-                readiness_probe: None,
-                resources: None,
-                security_context: None,
-                volume_mounts: None,
-            })),
-            group_by: None,
-        });
-
-        let window = Window {
-            fixed: Some(Box::new(FixedWindow {
-                length: Some(kube::core::Duration::from(Duration::from_secs(60))),
-                streaming: None,
-            })),
-            sliding: None,
-            session: None,
-            accumulator: None,
-        };
-
-        let group_by = Box::new(GroupBy {
-            allowed_lateness: Some(kube::core::Duration::from(Duration::from_secs(10))),
-            keyed: Some(true),
-            storage: None,
-            window: Box::new(window),
-        });
-
-        let reducer_type = ReducerType::try_from((&udf, &group_by)).unwrap();
-        match reducer_type {
-            ReducerType::UserDefined(config) => {
-                assert_eq!(config, UserDefinedConfig::default());
-            }
-        }
     }
 
     #[test]
@@ -2411,15 +2421,23 @@ mod reducer_tests {
             window: Box::new(window),
         });
 
-        let window_config = WindowConfig::try_from(&group_by).unwrap();
-        assert_eq!(window_config.allowed_lateness, Duration::from_secs(10));
-        assert!(window_config.is_keyed);
+        let reducer_config = ReducerConfig::try_from(&group_by).unwrap();
+        match reducer_config {
+            ReducerConfig::Aligned(aligned_config) => {
+                assert_eq!(
+                    aligned_config.window_config.allowed_lateness,
+                    Duration::from_secs(10)
+                );
+                assert!(aligned_config.window_config.is_keyed);
 
-        match window_config.window_type {
-            WindowType::Fixed(config) => {
-                assert_eq!(config.length, Duration::from_secs(60));
+                match aligned_config.window_config.window_type {
+                    AlignedWindowType::Fixed(config) => {
+                        assert_eq!(config.length, Duration::from_secs(60));
+                    }
+                    _ => panic!("Expected fixed window type"),
+                }
             }
-            _ => panic!("Expected fixed window type"),
+            _ => panic!("Expected aligned reducer config"),
         }
     }
 
@@ -2443,16 +2461,24 @@ mod reducer_tests {
             window: Box::new(window),
         });
 
-        let window_config = WindowConfig::try_from(&group_by).unwrap();
-        assert_eq!(window_config.allowed_lateness, Duration::from_secs(0));
-        assert!(!window_config.is_keyed);
+        let reducer_config = ReducerConfig::try_from(&group_by).unwrap();
+        match reducer_config {
+            ReducerConfig::Aligned(aligned_config) => {
+                assert_eq!(
+                    aligned_config.window_config.allowed_lateness,
+                    Duration::from_secs(0)
+                );
+                assert!(!aligned_config.window_config.is_keyed);
 
-        match window_config.window_type {
-            WindowType::Sliding(config) => {
-                assert_eq!(config.length, Duration::from_secs(60));
-                assert_eq!(config.slide, Duration::from_secs(30));
+                match aligned_config.window_config.window_type {
+                    AlignedWindowType::Sliding(config) => {
+                        assert_eq!(config.length, Duration::from_secs(60));
+                        assert_eq!(config.slide, Duration::from_secs(30));
+                    }
+                    _ => panic!("Expected sliding window type"),
+                }
             }
-            _ => panic!("Expected sliding window type"),
+            _ => panic!("Expected aligned reducer config"),
         }
     }
 
@@ -2474,15 +2500,23 @@ mod reducer_tests {
             window: Box::new(window),
         });
 
-        let window_config = WindowConfig::try_from(&group_by).unwrap();
-        assert_eq!(window_config.allowed_lateness, Duration::from_secs(0));
-        assert!(window_config.is_keyed);
+        let reducer_config = ReducerConfig::try_from(&group_by).unwrap();
+        match reducer_config {
+            ReducerConfig::Unaligned(unaligned_config) => {
+                assert_eq!(
+                    unaligned_config.window_config.allowed_lateness,
+                    Duration::from_secs(0)
+                );
+                assert!(unaligned_config.window_config.is_keyed);
 
-        match window_config.window_type {
-            WindowType::Session(config) => {
-                assert_eq!(config.timeout, Duration::from_secs(300));
+                match unaligned_config.window_config.window_type {
+                    UnalignedWindowType::Session(config) => {
+                        assert_eq!(config.timeout, Duration::from_secs(300));
+                    }
+                    _ => panic!("Expected session window type"),
+                }
             }
-            _ => panic!("Expected session window type"),
+            _ => panic!("Expected unaligned reducer config"),
         }
     }
 
@@ -2504,15 +2538,23 @@ mod reducer_tests {
             window: Box::new(window),
         });
 
-        let window_config = WindowConfig::try_from(&group_by).unwrap();
-        assert_eq!(window_config.allowed_lateness, Duration::from_secs(0));
-        assert!(window_config.is_keyed);
+        let reducer_config = ReducerConfig::try_from(&group_by).unwrap();
+        match reducer_config {
+            ReducerConfig::Unaligned(unaligned_config) => {
+                assert_eq!(
+                    unaligned_config.window_config.allowed_lateness,
+                    Duration::from_secs(0)
+                );
+                assert!(unaligned_config.window_config.is_keyed);
 
-        match window_config.window_type {
-            WindowType::Accumulator(config) => {
-                assert_eq!(config.timeout, Duration::from_secs(600));
+                match unaligned_config.window_config.window_type {
+                    UnalignedWindowType::Accumulator(config) => {
+                        assert_eq!(config.timeout, Duration::from_secs(600));
+                    }
+                    _ => panic!("Expected accumulator window type"),
+                }
             }
-            _ => panic!("Expected accumulator window type"),
+            _ => panic!("Expected unaligned reducer config"),
         }
     }
 
@@ -2532,7 +2574,7 @@ mod reducer_tests {
             window: Box::new(window),
         });
 
-        let result = WindowConfig::try_from(&group_by);
+        let result = ReducerConfig::try_from(&group_by);
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().to_string(),

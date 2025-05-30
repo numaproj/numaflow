@@ -153,6 +153,8 @@ impl UserDefinedAccumulator {
                 }
             };
 
+            info!("Waiting for responses from accumulator reduce function");
+
             loop {
                 tokio::select! {
                     // Check for cancellation
@@ -163,6 +165,7 @@ impl UserDefinedAccumulator {
 
                     // Process next response
                     response = response_stream.message() => {
+                        info!("Received response from accumulator reduce function {:?}", response);
                         let response = match response {
                             Ok(r) => r,
                             Err(e) => return Err(crate::Error::Reduce(format!("failed to receive response: {}", e))),

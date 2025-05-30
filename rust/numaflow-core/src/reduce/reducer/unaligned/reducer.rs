@@ -1,6 +1,7 @@
 use crate::error::Error;
 use crate::message::Message;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
+use crate::reduce::reducer::unaligned::user_defined::UserDefinedUnalignedReduce;
 use crate::reduce::reducer::unaligned::user_defined::accumulator::UserDefinedAccumulator;
 use crate::reduce::reducer::unaligned::user_defined::session::UserDefinedSessionReduce;
 use crate::reduce::reducer::unaligned::windower::{
@@ -78,7 +79,7 @@ struct ActiveStream {
 /// Also writes the GC events to the WAL if configured.
 struct ReduceTask {
     /// Client for user-defined reduce operations.
-    client_type: UnalignedReduceClientType,
+    client_type: UserDefinedUnalignedReduce,
     /// JetStream writer for writing results of reduce operation.
     js_writer: JetstreamWriter,
     /// Sender for GC WAL messages. It is optional since users can specify not to use WAL.
@@ -100,7 +101,7 @@ struct ReduceTask {
 impl ReduceTask {
     /// Creates a new ReduceTask with the given configuration for Accumulator
     fn new(
-        client: UnalignedReduceClientType,
+        client: UserDefinedUnalignedReduce,
         js_writer: JetstreamWriter,
         gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
         error_tx: mpsc::Sender<Error>,
@@ -127,10 +128,10 @@ impl ReduceTask {
         mut message_stream: ReceiverStream<UnalignedWindowMessage>,
         cln_token: CancellationToken,
     ) -> crate::Result<()> {
-        let (request_tx, request_rx) = mpsc::channel(100);
+        let (request_tx, request_rx) = mpsc::channel(500);
         let request_stream = ReceiverStream::new(request_rx);
 
-        let (mut writer_tx, writer_rx) = mpsc::channel(100);
+        let (mut writer_tx, writer_rx) = mpsc::channel(500);
         let writer_stream = ReceiverStream::new(writer_rx);
         let mut writer_handle = self
             .js_writer
@@ -142,6 +143,7 @@ impl ReduceTask {
         let _request_handle = tokio::spawn(async move {
             while let Some(window_msg) = message_stream.next().await {
                 let reduce_req: AccumulatorRequest = window_msg.into();
+                info!("Sending request to reduce function {:?}", reduce_req);
                 if request_tx.send(reduce_req).await.is_err() {
                     break;
                 }
@@ -162,6 +164,9 @@ impl ReduceTask {
         loop {
             tokio::select! {
                 _ = batch_timer.tick() => {
+                    info!("Batch timeout reached, writing GC events and deleting tracked windows");
+
+                    drop(writer_tx);
                     // wait for the writer to finish writing the current batch
                     if let Err(e) = writer_handle.await {
                         error!(?e, "Error while writing results to JetStream");
@@ -187,9 +192,12 @@ impl ReduceTask {
                     self.delete_tracked_windows().await;
                 }
                 response = response_stream.next() => {
+                    info!("Received response from reduce function {:?}", response);
+
                     let Some(response) = response else {
                         break;
                     };
+
                     // Process the response
                     if response.eof {
                         break;
@@ -213,12 +221,6 @@ impl ReduceTask {
                         .expect("Failed to send response to writer");
                     self.tracked_windows.insert(window.keys.to_vec(), window);
                 }
-            }
-        }
-
-        while let Some(response) = response_stream.next().await {
-            if response.eof {
-                break;
             }
         }
 
@@ -373,11 +375,11 @@ impl ReduceTask {
         tokio::spawn(async move {
             // Call the appropriate reduce_fn based on the client type
             match &self.client_type {
-                UnalignedReduceClientType::Accumulator(client) => {
+                UserDefinedUnalignedReduce::Accumulator(client) => {
                     self.accumulator_reduce(client.clone(), message_stream, cln_token.clone())
                         .await
                 }
-                UnalignedReduceClientType::Session(client) => {
+                UserDefinedUnalignedReduce::Session(client) => {
                     self.session_reduce(client.clone(), message_stream, cln_token.clone())
                         .await
                 }
@@ -420,7 +422,7 @@ impl ReduceTask {
     /// Delete all tracked windows after writing GC events
     async fn delete_tracked_windows(&mut self) {
         for (_keys, window) in self.tracked_windows.drain() {
-            self.window_manager.delete_closed_window(window);
+            self.window_manager.delete_window(window);
         }
     }
 }
@@ -432,7 +434,7 @@ struct UnalignedReduceActor {
     /// tx in [ActiveStream].
     receiver: mpsc::Receiver<UnalignedWindowMessage>,
     /// Client for user-defined reduce operations.
-    client_type: UnalignedReduceClientType,
+    client_type: UserDefinedUnalignedReduce,
     /// Map of [ActiveStream]s keyed by window ID.
     active_streams: HashMap<Bytes, ActiveStream>,
     /// JetStream writer for writing results of reduce operation.
@@ -445,13 +447,6 @@ struct UnalignedReduceActor {
     window_manager: UnalignedWindowManager,
     /// Cancellation token to signal tasks to stop
     cln_token: CancellationToken,
-}
-
-/// Enum to hold the different types of unaligned reduce clients
-#[derive(Clone)]
-enum UnalignedReduceClientType {
-    Accumulator(UserDefinedAccumulator),
-    Session(UserDefinedSessionReduce),
 }
 
 impl UnalignedReduceActor {
@@ -477,7 +472,7 @@ impl UnalignedReduceActor {
     }
 
     pub(crate) async fn new(
-        client_type: UnalignedReduceClientType,
+        client_type: UserDefinedUnalignedReduce,
         receiver: mpsc::Receiver<UnalignedWindowMessage>,
         js_writer: JetstreamWriter,
         error_tx: mpsc::Sender<Error>,
@@ -626,7 +621,7 @@ impl UnalignedReduceActor {
 /// Processes messages and forwards results to the next stage.
 pub(crate) struct UnalignedReducer {
     /// Client type for user-defined reduce operations
-    client_type: UnalignedReduceClientType,
+    client: UserDefinedUnalignedReduce,
     /// Window manager for assigning windows to messages and closing windows.
     window_manager: UnalignedWindowManager,
     /// Writer for writing results to JetStream
@@ -640,30 +635,14 @@ pub(crate) struct UnalignedReducer {
 }
 
 impl UnalignedReducer {
-    pub(crate) async fn new_accumulator(
-        client: UserDefinedAccumulator,
+    pub(crate) async fn new(
+        client: UserDefinedUnalignedReduce,
         window_manager: UnalignedWindowManager,
         js_writer: JetstreamWriter,
         gc_wal: Option<AppendOnlyWal>,
     ) -> Self {
         Self {
-            client_type: UnalignedReduceClientType::Accumulator(client),
-            window_manager,
-            js_writer,
-            final_result: Ok(()),
-            shutting_down_on_err: false,
-            gc_wal,
-        }
-    }
-
-    pub(crate) async fn new_session(
-        client: UserDefinedSessionReduce,
-        window_manager: UnalignedWindowManager,
-        js_writer: JetstreamWriter,
-        gc_wal: Option<AppendOnlyWal>,
-    ) -> Self {
-        Self {
-            client_type: UnalignedReduceClientType::Session(client),
+            client,
             window_manager,
             js_writer,
             final_result: Ok(()),
@@ -685,7 +664,7 @@ impl UnalignedReducer {
         // Create the actor channel and start the actor
         let (actor_tx, actor_rx) = mpsc::channel(100);
         let actor = UnalignedReduceActor::new(
-            self.client_type.clone(),
+            self.client.clone(),
             actor_rx,
             self.js_writer.clone(),
             error_tx.clone(),

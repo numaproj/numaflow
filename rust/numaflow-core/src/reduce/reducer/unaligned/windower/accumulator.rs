@@ -161,8 +161,8 @@ impl AccumulatorWindowManager {
         result
     }
 
-    /// Deletes event times before the given window's end time
-    pub(crate) fn delete_closed_window(&self, window: Window) {
+    /// Deletes event times before the given window's end time for the given keyed window
+    pub(crate) fn delete_window(&self, window: Window) {
         let combined_key = Self::combine_keys(&window.keys);
 
         let active_windows = self.active_windows.read().expect("Poisoned lock");
@@ -325,7 +325,7 @@ mod tests {
         };
 
         // Delete timestamps before msg2's event time
-        windower.delete_closed_window(Window {
+        windower.delete_window(Window {
             end_time: msg2.event_time,
             ..window
         });

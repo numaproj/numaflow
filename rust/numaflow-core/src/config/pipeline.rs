@@ -17,9 +17,7 @@ use crate::Result;
 use crate::config::ENV_NUMAFLOW_SERVING_CALLBACK_STORE;
 use crate::config::ENV_NUMAFLOW_SERVING_SOURCE_SETTINGS;
 use crate::config::components::metrics::MetricsConfig;
-use crate::config::components::reduce::{
-    ReducerConfig, ReducerType, StorageConfig, UserDefinedConfig,
-};
+use crate::config::components::reduce::{ReducerConfig, StorageConfig};
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::sink::SinkType;
 use crate::config::components::source::SourceConfig;
@@ -407,11 +405,6 @@ impl PipelineConfig {
         } else if let Some(udf) = vertex_obj.spec.udf {
             if let Some(group_by) = &udf.group_by {
                 // This is a reduce vertex
-                let reducer_config = ReducerConfig {
-                    reducer_type: ReducerType::UserDefined(UserDefinedConfig::default()),
-                    window_config: group_by.try_into()?,
-                };
-
                 let storage_config = group_by.storage.as_ref().and_then(|storage| {
                     if storage.no_store.is_some() {
                         None
@@ -421,7 +414,7 @@ impl PipelineConfig {
                 });
 
                 VertexType::Reduce(ReduceVtxConfig {
-                    reducer_config,
+                    reducer_config: group_by.try_into()?,
                     wal_storage_config: storage_config,
                 })
             } else {

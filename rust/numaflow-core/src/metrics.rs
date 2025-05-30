@@ -28,6 +28,8 @@ use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica};
 use crate::mapper::map::MapHandle;
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
 use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
+use crate::reduce::reducer::unaligned::user_defined::UserDefinedUnalignedReduce;
+use crate::reduce::reducer::user_defined::UserDefinedReduce;
 use crate::sink::SinkWriter;
 use crate::source::Source;
 
@@ -144,7 +146,7 @@ pub(crate) enum PipelineComponents {
     Source(Source),
     Sink(SinkWriter),
     Map(MapHandle),
-    Reduce(UserDefinedAlignedReduce),
+    Reduce(UserDefinedReduce),
 }
 
 /// The global register of all metrics.
@@ -979,12 +981,28 @@ async fn sidecar_livez(State(state): State<ComponentHealthChecks>) -> impl IntoR
                     return StatusCode::INTERNAL_SERVER_ERROR;
                 }
             }
-            PipelineComponents::Reduce(mut reducer) => {
-                if !reducer.ready().await {
-                    error!("Pipeline reduce component is not ready");
-                    return StatusCode::INTERNAL_SERVER_ERROR;
+            PipelineComponents::Reduce(mut reducer) => match reducer {
+                UserDefinedReduce::Aligned(mut reducer) => {
+                    if !reducer.ready().await {
+                        error!("Pipeline aligned reduce is not ready");
+                        return StatusCode::INTERNAL_SERVER_ERROR;
+                    }
                 }
-            }
+                UserDefinedReduce::Unaligned(mut reducer) => match reducer {
+                    UserDefinedUnalignedReduce::Accumulator(mut reducer) => {
+                        if !reducer.ready().await {
+                            error!("Pipeline accumulator reduce component is not ready");
+                            return StatusCode::INTERNAL_SERVER_ERROR;
+                        }
+                    }
+                    UserDefinedUnalignedReduce::Session(mut reducer) => {
+                        if !reducer.ready().await {
+                            error!("Pipeline session reduce component is not ready");
+                            return StatusCode::INTERNAL_SERVER_ERROR;
+                        }
+                    }
+                },
+            },
         },
     }
     StatusCode::NO_CONTENT

@@ -8,8 +8,8 @@ use numaflow_pb::clients::accumulator::KeyedWindow;
 use numaflow_pb::clients::sessionreduce;
 use std::sync::Arc;
 
-mod accumulator;
-mod session;
+pub(crate) mod accumulator;
+pub(crate) mod session;
 
 const SHARED_PNF_SLOT: &str = "GLOBAL_SLOT";
 
@@ -183,9 +183,9 @@ impl UnalignedWindowManager {
         }
     }
 
-    pub(crate) fn delete_closed_window(&self, window: Window) {
+    pub(crate) fn delete_window(&self, window: Window) {
         match self {
-            UnalignedWindowManager::Accumulator(manager) => manager.delete_closed_window(window),
+            UnalignedWindowManager::Accumulator(manager) => manager.delete_window(window),
             UnalignedWindowManager::Session(manager) => manager.delete_closed_window(window),
         }
     }

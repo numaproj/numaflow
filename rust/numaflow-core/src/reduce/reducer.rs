@@ -59,3 +59,17 @@ pub(crate) mod unaligned;
 
 /// User-defined Reduce for Aligned and Unaligned Windows.
 pub(crate) mod user_defined;
+
+#[derive(Debug, Clone)]
+pub(crate) enum WindowManager {
+    /// Aligned window manager.
+    Aligned(aligned::windower::AlignedWindowManager),
+    /// Unaligned window manager.
+    Unaligned(unaligned::windower::UnalignedWindowManager),
+}
+
+/// Reducer for Aligned and Unaligned Windows.
+pub(crate) enum Reducer {
+    Aligned(aligned::reducer::AlignedReducer),
+    Unaligned(unaligned::reducer::UnalignedReducer),
+}
