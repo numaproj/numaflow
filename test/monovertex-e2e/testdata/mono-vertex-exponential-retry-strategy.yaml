@@ -11,7 +11,7 @@ spec:
     retryStrategy:
       backoff:
         interval: 1s
-        steps: 3
+        steps: 2
         factor: 2
         cap: 3s
         jitter: 0

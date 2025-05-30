@@ -144,7 +144,7 @@ func (t *Expect) VertexSizeScaledTo(v string, size int) *Expect {
 func (t *Expect) VertexPodLogContains(vertexName, regex string, opts ...PodLogCheckOption) *Expect {
 	t.t.Helper()
 	ctx := context.Background()
-	_, contains, err := VertexPodLogContains(ctx, t.kubeClient, Namespace, t.pipeline.Name, vertexName, regex, opts...)
+	contains, err := VertexPodLogContains(ctx, t.kubeClient, Namespace, t.pipeline.Name, vertexName, regex, opts...)
 	if err != nil {
 		t.t.Fatalf("Failed to check vertex %q pod logs: %v", vertexName, err)
 	}
@@ -158,7 +158,7 @@ func (t *Expect) VertexPodLogContains(vertexName, regex string, opts ...PodLogCh
 func (t *Expect) MonoVertexPodLogContains(regex string, opts ...PodLogCheckOption) *Expect {
 	t.t.Helper()
 	ctx := context.Background()
-	_, contains, err := MonoVertexPodLogContains(ctx, t.kubeClient, Namespace, t.monoVertex.Name, regex, opts...)
+	contains, err := MonoVertexPodLogContains(ctx, t.kubeClient, Namespace, t.monoVertex.Name, regex, opts...)
 	if err != nil {
 		t.t.Fatalf("Failed to check mono vertex %q pod logs: %v", t.monoVertex.Name, err)
 	}
@@ -166,6 +166,20 @@ func (t *Expect) MonoVertexPodLogContains(regex string, opts ...PodLogCheckOptio
 		t.t.Fatalf("Expected mono vertex [%q] pod log to contain [%q] but didn't.", t.monoVertex.Name, regex)
 	}
 	t.t.Logf("Expected mono vertex %q pod contains %q", t.monoVertex.Name, regex)
+	return t
+}
+
+func (t *Expect) MonoVertexPodLogNotContains(regex string, opts ...PodLogCheckOption) *Expect {
+	t.t.Helper()
+	ctx := context.Background()
+	yes, err := MonoVertexPodLogNotContains(ctx, t.kubeClient, Namespace, t.monoVertex.Name, regex, opts...)
+	if err != nil {
+		t.t.Fatalf("Failed to check mono-vertex pod logs: %v", err)
+	}
+	if !yes {
+		t.t.Fatalf("Not expected mono-vertex pod log contains %q", regex)
+	}
+	t.t.Logf("Expected mono vertex %q pod to not contain %q", t.monoVertex.Name, regex)
 	return t
 }
 

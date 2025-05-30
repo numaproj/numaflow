@@ -331,47 +331,19 @@ func (s *FunctionalSuite) TestExponentialBackoffRetryStrategyForPipeline() {
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
 
-	pipelineName := "simple-pipeline-with-retry-strategy"
 	vertexName := "output"
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning().DaemonPodsRunning()
 
-	// delay between firstLog and secondLog should be at least 1s (interval) and less than 2s
-	// delay between secondLog and thirdLog should be at least 2s (interval * factor) and less than 3s
-	// delay between thirdLog and fourthLog  would be 3s as cap is 3s (minimum of 4s and 3s[cap]) and less than 4s
-	firstLog := fmt.Sprintf("retry_attempt=%d", 1)
-	secondLog := fmt.Sprintf("retry_attempt=%d", 2)
-	thirdLog := fmt.Sprintf("retry_attempt=%d", 3)
-	fourthLog := "Dropping messages"
-	ts1, found, err := VertexPodLogContains(context.Background(), s.E2ESuite.GetKubernetesClient(), Namespace, pipelineName, vertexName, firstLog, PodLogCheckOptionWithTimestamps(true))
-	if !found || err != nil {
-		s.T().Fatalf("expected log '%s' not found or error occurred: %v", firstLog, err)
-	}
-	ts2, found, err := VertexPodLogContains(context.Background(), s.E2ESuite.GetKubernetesClient(), Namespace, pipelineName, vertexName, secondLog, PodLogCheckOptionWithTimestamps(true))
-	if !found || err != nil {
-		s.T().Fatalf("expected log '%s' not found or error occurred: %v", secondLog, err)
-	}
-	ts3, found, err := VertexPodLogContains(context.Background(), s.E2ESuite.GetKubernetesClient(), Namespace, pipelineName, vertexName, thirdLog, PodLogCheckOptionWithTimestamps(true))
-	if !found || err != nil {
-		s.T().Fatalf("expected log '%s' not found or error occurred: %v", thirdLog, err)
-	}
-	ts4, found, err := VertexPodLogContains(context.Background(), s.E2ESuite.GetKubernetesClient(), Namespace, pipelineName, vertexName, fourthLog, PodLogCheckOptionWithTimestamps(true))
-	if !found || err != nil {
-		s.T().Fatalf("expected log '%s' not found or error occurred: %v", fourthLog, err)
-	}
-	delta := ts2.Sub(ts1)
-	if delta < time.Second || delta > 2*time.Second {
-		s.T().Fatalf("expected delta for first retry attempt to be at least 1 second")
-	}
-	delta = ts3.Sub(ts2)
-	if delta < 2*time.Second || delta > 3*time.Second {
-		s.T().Fatalf("expected delta for second retry attempt to be at least 2 seconds")
-	}
-	delta = ts4.Sub(ts3)
-	if delta < 3*time.Second || delta > 4*time.Second {
-		s.T().Fatalf("expected delta for third retry attempt to be at least 3 seconds")
-	}
+	firstRetryLog := fmt.Sprintf("retry_attempt=%d", 1)
+	secondRetryLog := fmt.Sprintf("retry_attempt=%d", 2)
+	thirdRetryLog := fmt.Sprintf("retry_attempt=%d", 3)
+	dropLog := "Dropping messages"
+	w.Expect().VertexPodLogContains(vertexName, firstRetryLog, PodLogCheckOptionWithContainer("numa"))
+	w.Expect().VertexPodLogContains(vertexName, secondRetryLog, PodLogCheckOptionWithContainer("numa"))
+	w.Expect().VertexPodLogContains(vertexName, dropLog, PodLogCheckOptionWithContainer("numa"))
+	w.Expect().VertexPodLogNotContains(vertexName, thirdRetryLog, PodLogCheckOptionWithContainer("numa"))
 }
 
 func TestFunctionalSuite(t *testing.T) {

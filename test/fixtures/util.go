@@ -60,11 +60,6 @@ var CheckVertexScaled = func(t *testing.T, output string, err error) {
 	assert.NoError(t, err)
 }
 
-type logStruct struct {
-	timestamp time.Time
-	found     bool
-}
-
 func Exec(name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
 	cmd.Env = os.Environ()
@@ -452,7 +447,7 @@ func PodsLogNotContains(ctx context.Context, kubeClient kubernetes.Interface, na
 	cctx, cancel := context.WithTimeout(ctx, o.timeout)
 	defer cancel()
 	errChan := make(chan error)
-	resultChan := make(chan logStruct)
+	resultChan := make(chan bool)
 	for _, p := range podList.Items {
 		go func(podName string) {
 			fmt.Printf("Watching POD: %s\n", podName)
@@ -467,7 +462,7 @@ func PodsLogNotContains(ctx context.Context, kubeClient kubernetes.Interface, na
 		case <-cctx.Done():
 			return true // Consider timeout as not containing
 		case result := <-resultChan:
-			if result.found {
+			if result {
 				return false
 			}
 		case err := <-errChan:
@@ -476,27 +471,34 @@ func PodsLogNotContains(ctx context.Context, kubeClient kubernetes.Interface, na
 	}
 }
 
-func VertexPodLogContains(ctx context.Context, kubeClient kubernetes.Interface, namespace, pipelineName, vertexName, regex string, opts ...PodLogCheckOption) (time.Time, bool, error) {
+func VertexPodLogContains(ctx context.Context, kubeClient kubernetes.Interface, namespace, pipelineName, vertexName, regex string, opts ...PodLogCheckOption) (bool, error) {
 	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyPipelineName, pipelineName, dfv1.KeyVertexName, vertexName)
 	podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"})
 	if err != nil {
-		return time.Time{}, false, fmt.Errorf("error getting vertex pods: %w", err)
+		return false, fmt.Errorf("error getting vertex pods: %w", err)
 	}
-	ts, ok := PodsLogContains(ctx, kubeClient, namespace, regex, podList, opts...)
-	return ts, ok, nil
+	return PodsLogContains(ctx, kubeClient, namespace, regex, podList, opts...), nil
 }
 
-func MonoVertexPodLogContains(ctx context.Context, kubeClient kubernetes.Interface, namespace, mvName, regex string, opts ...PodLogCheckOption) (time.Time, bool, error) {
+func MonoVertexPodLogContains(ctx context.Context, kubeClient kubernetes.Interface, namespace, mvName, regex string, opts ...PodLogCheckOption) (bool, error) {
 	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyMonoVertexName, mvName, dfv1.KeyComponent, dfv1.ComponentMonoVertex)
 	podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
 	if err != nil {
-		return time.Time{}, false, fmt.Errorf("error getting monovertex pods: %w", err)
+		return false, fmt.Errorf("error getting monovertex pods: %w", err)
 	}
 	if len(podList.Items) == 0 {
-		return time.Time{}, false, fmt.Errorf("no monovertex pods found")
+		return false, fmt.Errorf("no monovertex pods found")
 	}
-	ts, ok := PodsLogContains(ctx, kubeClient, namespace, regex, podList, opts...)
-	return ts, ok, nil
+	return PodsLogContains(ctx, kubeClient, namespace, regex, podList, opts...), nil
+}
+
+func MonoVertexPodLogNotContains(ctx context.Context, kubeClient kubernetes.Interface, namespace, mvName, regex string, opts ...PodLogCheckOption) (bool, error) {
+	labelSelector := fmt.Sprintf("%s=%s,%s=%s", dfv1.KeyMonoVertexName, mvName, dfv1.KeyComponent, dfv1.ComponentMonoVertex)
+	podList, err := kubeClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelector})
+	if err != nil {
+		return false, fmt.Errorf("error getting mono-vertex pods: %w", err)
+	}
+	return PodsLogNotContains(ctx, kubeClient, namespace, regex, podList, opts...), nil
 }
 
 func DaemonPodLogContains(ctx context.Context, kubeClient kubernetes.Interface, namespace, pipelineName, regex string, opts ...PodLogCheckOption) (bool, error) {
@@ -505,11 +507,10 @@ func DaemonPodLogContains(ctx context.Context, kubeClient kubernetes.Interface, 
 	if err != nil {
 		return false, fmt.Errorf("error getting daemon pods of pipeline %q: %w", pipelineName, err)
 	}
-	_, ok := PodsLogContains(ctx, kubeClient, namespace, regex, podList, opts...)
-	return ok, nil
+	return PodsLogContains(ctx, kubeClient, namespace, regex, podList, opts...), nil
 }
 
-func PodsLogContains(ctx context.Context, kubeClient kubernetes.Interface, namespace, regex string, podList *corev1.PodList, opts ...PodLogCheckOption) (time.Time, bool) {
+func PodsLogContains(ctx context.Context, kubeClient kubernetes.Interface, namespace, regex string, podList *corev1.PodList, opts ...PodLogCheckOption) bool {
 	o := defaultPodLogCheckOptions()
 	for _, opt := range opts {
 		if opt != nil {
@@ -519,7 +520,7 @@ func PodsLogContains(ctx context.Context, kubeClient kubernetes.Interface, names
 	cctx, cancel := context.WithTimeout(ctx, o.timeout)
 	defer cancel()
 	errChan := make(chan error)
-	resultChan := make(chan logStruct)
+	resultChan := make(chan bool)
 	for _, p := range podList.Items {
 		go func(podName string) {
 			fmt.Printf("Watching POD: %s\n", podName)
@@ -534,18 +535,15 @@ func PodsLogContains(ctx context.Context, kubeClient kubernetes.Interface, names
 	for {
 		select {
 		case <-cctx.Done():
-			return time.Time{}, false // Consider timeout as false
+			return false // Consider timeout as false
 		case result := <-resultChan:
-			if o.timestamps {
-				return result.timestamp, result.found
-			}
-			if result.found {
+			if result {
 				if o.count < 0 {
-					return time.Time{}, true
+					return true
 				} else {
 					matchTimes++
 					if matchTimes >= o.count {
-						return time.Time{}, true
+						return true
 					}
 				}
 			}
@@ -555,7 +553,7 @@ func PodsLogContains(ctx context.Context, kubeClient kubernetes.Interface, names
 	}
 }
 
-func podLogContains(ctx context.Context, client kubernetes.Interface, namespace, podName, containerName, regex string, result chan logStruct) error {
+func podLogContains(ctx context.Context, client kubernetes.Interface, namespace, podName, containerName, regex string, result chan bool) error {
 	var stream io.ReadCloser
 	var err error
 	// Streaming logs from file could be rotated by container log manager and as consequence, we receive EOF and need to re-initialize the stream.
@@ -597,28 +595,25 @@ func podLogContains(ctx context.Context, client kubernetes.Interface, namespace,
 			if !s.Scan() {
 				return s.Err()
 			}
-			line := s.Text()
-			if exp.MatchString(line) {
-				timestamp := extractTimestamp([]string{line}, regex)
-				result <- logStruct{timestamp: timestamp, found: true}
+			data := s.Bytes()
+			if exp.Match(data) {
+				result <- true
 			}
 		}
 	}
 }
 
 type podLogCheckOptions struct {
-	container  string
-	timeout    time.Duration
-	count      int
-	timestamps bool
+	container string
+	timeout   time.Duration
+	count     int
 }
 
 func defaultPodLogCheckOptions() *podLogCheckOptions {
 	return &podLogCheckOptions{
-		container:  "",
-		timeout:    defaultTimeout,
-		count:      -1,
-		timestamps: false,
+		container: "",
+		timeout:   defaultTimeout,
+		count:     -1,
 	}
 }
 
@@ -640,29 +635,6 @@ func PodLogCheckOptionWithContainer(c string) PodLogCheckOption {
 	return func(o *podLogCheckOptions) {
 		o.container = c
 	}
-}
-
-func PodLogCheckOptionWithTimestamps(c bool) PodLogCheckOption {
-	return func(o *podLogCheckOptions) {
-		o.timestamps = c
-	}
-}
-
-// Helper to extract timestamp from log line
-func extractTimestamp(lines []string, regex string) time.Time {
-	for _, line := range lines {
-		if strings.Contains(line, regex) {
-			parts := strings.SplitN(line, " ", 2)
-			if len(parts) < 2 {
-				continue
-			}
-			t, err := time.Parse(time.RFC3339Nano, parts[0])
-			if err == nil {
-				return t
-			}
-		}
-	}
-	return time.Time{}
 }
 
 func streamPodLogs(ctx context.Context, client kubernetes.Interface, namespace, podName, containerName string, stopCh <-chan struct{}) {
