@@ -60,6 +60,7 @@ numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "c6aa3a8
 pulsar = { version = "6.3.0", default-features = false, features = [
     "tokio-rustls-runtime",
 ] }
+hyper = "1.6.0"
 http = "1.2.0"
 aws-sdk-sqs = "1.65.0"
 aws-smithy-mocks-experimental = "0.2.3"
