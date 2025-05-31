@@ -5,10 +5,14 @@
 //! `X-Numaflow-Id` header is added to the message to track the message across the pipeline.
 //! `X-Numaflow-Event-Time` is added to the message to track the event time of the message.
 
+use axum::body::Body;
+use axum::http::Request;
+use axum::middleware::Next;
 use axum::{
     Router,
     extract::State,
     http::{HeaderMap, StatusCode},
+    middleware,
     response::IntoResponse,
     routing::{get, post},
 };
@@ -69,7 +73,7 @@ pub struct HttpSourceConfig {
     pub buffer_size: usize,
     pub addr: SocketAddr,
     pub timeout: Duration,
-    pub token: Option<String>,
+    pub token: Option<&'static str>,
 }
 
 impl Debug for HttpSourceConfig {
@@ -100,7 +104,7 @@ pub struct HttpSourceConfigBuilder {
     buffer_size: Option<usize>,
     addr: Option<SocketAddr>,
     timeout: Option<Duration>,
-    token: Option<String>,
+    token: Option<&'static str>,
 }
 
 impl HttpSourceConfigBuilder {
@@ -129,7 +133,7 @@ impl HttpSourceConfigBuilder {
         self
     }
 
-    pub fn token(mut self, token: String) -> Self {
+    pub fn token(mut self, token: &'static str) -> Self {
         self.token = Some(token);
         self
     }
@@ -168,6 +172,7 @@ impl HttpSourceActor {
             http_source_config.vertex_name,
             tx,
             http_source_config.addr,
+            http_source_config.token,
         ));
 
         Self {
@@ -321,15 +326,46 @@ pub async fn send_message(tx: mpsc::Sender<HttpMessage>, message: HttpMessage) -
     }
 }
 
+#[derive(Clone)]
+struct HttpState {
+    tx: mpsc::Sender<HttpMessage>,
+}
+
 /// Create an Axum router with the HTTP source endpoints
-pub fn create_router(vertex_name: &'static str, tx: mpsc::Sender<HttpMessage>) -> Router {
+pub fn create_router(
+    vertex_name: &'static str,
+    token: Option<&'static str>,
+    tx: mpsc::Sender<HttpMessage>,
+) -> Router {
     Router::new()
         .route("/health", get(health_handler))
         .route(
             format!("/vertices/{}", vertex_name).as_str(),
             post(data_handler),
         )
-        .with_state(tx)
+        .route_layer(middleware::from_fn(
+            move |request: Request<Body>, next: Next| async move {
+                // if no token is provided, skip the auth check
+                let Some(token) = token else {
+                    return next.run(request).await;
+                };
+
+                match request.headers().get("Authorization") {
+                    Some(t) => {
+                        let t = t.to_str().expect("token should be a string");
+                        if token == format!("Bearer {}", t) {
+                            return next.run(request).await;
+                        }
+                    }
+                    None => {
+                        return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
+                    }
+                }
+
+                (StatusCode::UNAUTHORIZED, "Unauthorized").into_response()
+            },
+        ))
+        .with_state(HttpState { tx })
 }
 
 /// Start the HTTP server on the specified address
@@ -337,8 +373,9 @@ pub async fn start_server(
     vertex_name: &'static str,
     tx: mpsc::Sender<HttpMessage>,
     addr: SocketAddr,
+    token: Option<&'static str>,
 ) -> Result<()> {
-    let router = create_router(vertex_name, tx);
+    let router = create_router(vertex_name, token, tx);
 
     info!(?addr, "Starting HTTP source server");
 
@@ -360,7 +397,7 @@ async fn health_handler() -> impl IntoResponse {
 
 /// Data ingestion endpoint handler
 async fn data_handler(
-    State(http_source): State<mpsc::Sender<HttpMessage>>,
+    State(http_source): State<HttpState>,
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
@@ -403,7 +440,7 @@ async fn data_handler(
     };
 
     // Send the message to the processing channel
-    match send_message(http_source, message).await {
+    match send_message(http_source.tx, message).await {
         Ok(()) => {
             trace!(?id, "Successfully queued message");
             (
@@ -457,7 +494,7 @@ mod tests {
     async fn test_health_endpoint() {
         let (tx, _rx) = mpsc::channel(500);
 
-        let app = create_router("test", tx);
+        let app = create_router("test", None, tx);
 
         let request = Request::builder()
             .method(Method::GET)
@@ -473,7 +510,7 @@ mod tests {
     async fn test_data_endpoint() {
         let (tx, rx) = mpsc::channel(10);
 
-        let app = create_router("test", tx);
+        let app = create_router("test", None, tx);
 
         let request = Request::builder()
             .method(Method::POST)
@@ -492,7 +529,7 @@ mod tests {
     async fn test_data_endpoint_with_custom_id() {
         let (tx, rx) = mpsc::channel(10);
 
-        let app = create_router("test", tx);
+        let app = create_router("test", None, tx);
 
         let custom_id = "custom-test-id";
         let request = Request::builder()
