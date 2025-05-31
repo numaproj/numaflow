@@ -59,13 +59,8 @@ data:
                   - namespace
                   - pipeline
                   - vertex
+                  - replica
                 dimensions:
-                  - name: pod
-                    filters:
-                      - name: pod
-                        required: false
-                      - name: period
-                        required: false
                   - name: vertex
                     filters:
                       - name: period
