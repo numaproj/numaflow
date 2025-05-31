@@ -434,7 +434,7 @@ pub(crate) mod source {
             if let Some(auth) = value.auth {
                 let auth = auth.token.unwrap();
                 let token = get_secret_from_volume(&auth.name, &auth.key);
-                http_config = http_config.token(token);
+                http_config = http_config.token(Box::leak(token.into_boxed_str()));
             }
 
             Ok(SourceType::Http(http_config.build()))
