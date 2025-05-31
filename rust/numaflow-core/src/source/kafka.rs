@@ -172,7 +172,7 @@ mod tests {
             consumer_group: "test_consumer_group".to_string(),
             auth: None,
             tls: None,
-            kafka_raw_config: None,
+            kafka_raw_config: HashMap::new(),
         };
 
         let read_timeout = Duration::from_secs(5);

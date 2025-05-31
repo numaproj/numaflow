@@ -29,7 +29,7 @@ pub struct KafkaSourceConfig {
     pub tls: Option<TlsConfig>,
     /// Any supported kafka client configuration options from
     /// https://docs.confluent.io/platform/current/clients/librdkafka/html/md_CONFIGURATION.html
-    pub kafka_raw_config: Option<HashMap<String, String>>,
+    pub kafka_raw_config: HashMap<String, String>,
 }
 
 /// Message represents a message received from Kafka which can be converted to Numaflow Message.
@@ -117,16 +117,17 @@ impl KafkaActor {
             .set("enable.partition.eof", "false")
             .set("session.timeout.ms", "6000")
             .set("auto.offset.reset", "earliest");
-        if let Some(kafka_raw_config) = config.kafka_raw_config {
+        if !config.kafka_raw_config.is_empty() {
             info!(
                 "Applying user-specified kafka config: {}",
-                kafka_raw_config
+                config
+                    .kafka_raw_config
                     .iter()
                     .map(|(k, v)| format!("{k}={v}"))
                     .collect::<Vec<String>>()
                     .join(", ")
             );
-            for (key, value) in kafka_raw_config {
+            for (key, value) in config.kafka_raw_config {
                 client_config.set(key, value);
             }
         }
@@ -603,9 +604,9 @@ mod tests {
             consumer_group: "test_consumer_group".to_string(),
             auth: None,
             tls: None,
-            kafka_raw_config: Some(HashMap::from([
+            kafka_raw_config: HashMap::from([
                 ("connections.max.idle.ms".to_string(), "540000".to_string()), // 9 minutes, default value
-            ])),
+            ]),
         };
 
         let read_timeout = Duration::from_secs(5);
@@ -812,7 +813,7 @@ mod tests {
             consumer_group: "test_consumer_group_headers".to_string(),
             auth: None,
             tls: None,
-            kafka_raw_config: None,
+            kafka_raw_config: HashMap::new(),
         };
 
         let source = KafkaSource::connect(config, 1, Duration::from_secs(5))
