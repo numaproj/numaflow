@@ -186,7 +186,7 @@ impl UnalignedWindowManager {
     pub(crate) fn delete_window(&self, window: Window) {
         match self {
             UnalignedWindowManager::Accumulator(manager) => manager.delete_window(window),
-            UnalignedWindowManager::Session(manager) => manager.delete_closed_window(window),
+            UnalignedWindowManager::Session(manager) => manager.delete_window(window),
         }
     }
 
