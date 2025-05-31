@@ -16,12 +16,15 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
+use axum_server::tls_rustls::RustlsConfig;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
+use rcgen::{Certificate, CertifiedKey, generate_simple_self_signed};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::net::SocketAddr;
+
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, info, trace, warn};
@@ -69,7 +72,7 @@ struct DataResponse {
 #[derive(Clone, PartialEq)]
 pub struct HttpSourceConfig {
     pub vertex_name: &'static str,
-    /// Default buffer size is 2000
+    /// Default buffer size is 500
     pub buffer_size: usize,
     pub addr: SocketAddr,
     pub timeout: Duration,
@@ -368,7 +371,15 @@ pub fn create_router(
         .with_state(HttpState { tx })
 }
 
-/// Start the HTTP server on the specified address
+/// Generate self-signed TLS certificate
+fn generate_certs() -> Result<(Certificate, rcgen::KeyPair)> {
+    let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
+        .map_err(|e| Error::Server(format!("Generating self-signed certificate: {}", e)))?;
+
+    Ok((cert, key_pair))
+}
+
+/// Start the HTTPS server on the specified address
 pub async fn start_server(
     vertex_name: &'static str,
     tx: mpsc::Sender<HttpMessage>,
@@ -377,15 +388,19 @@ pub async fn start_server(
 ) -> Result<()> {
     let router = create_router(vertex_name, token, tx);
 
-    info!(?addr, "Starting HTTP source server");
+    info!(?addr, "Starting HTTPS source server");
 
-    let listener = tokio::net::TcpListener::bind(addr)
-        .await
-        .map_err(|e| Error::Server(format!("Failed to bind to {}: {}", addr, e)))?;
+    // Generate a self-signed certificate
+    let (cert, key_pair) = generate_certs()?;
 
-    axum::serve(listener, router)
+    let tls_config = RustlsConfig::from_pem(cert.pem().into(), key_pair.serialize_pem().into())
         .await
-        .map_err(|e| Error::Server(format!("Server error: {}", e)))?;
+        .map_err(|e| Error::Server(format!("Creating TLS config from PEM: {}", e)))?;
+
+    axum_server::bind_rustls(addr, tls_config)
+        .serve(router.into_make_service())
+        .await
+        .map_err(|e| Error::Server(format!("HTTPS server error: {}", e)))?;
 
     Ok(())
 }
@@ -485,10 +500,66 @@ mod tests {
     use axum::body::Body;
     use hyper::{Method, Request, StatusCode};
     use hyper_util::client::legacy::Client;
+    use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+    use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+    use rustls::{DigitallySignedStruct, SignatureScheme};
     use std::net::TcpListener;
     use std::time::Duration;
     use tokio::sync::{mpsc, oneshot};
     use tower::ServiceExt;
+
+    // Custom certificate verifier that accepts any certificate (for testing)
+    #[derive(Debug)]
+    struct AcceptAnyCertVerifier;
+
+    impl ServerCertVerifier for AcceptAnyCertVerifier {
+        fn verify_server_cert(
+            &self,
+            _end_entity: &CertificateDer<'_>,
+            _intermediates: &[CertificateDer<'_>],
+            _server_name: &ServerName<'_>,
+            _ocsp_response: &[u8],
+            _now: UnixTime,
+        ) -> std::result::Result<ServerCertVerified, rustls::Error> {
+            Ok(ServerCertVerified::assertion())
+        }
+
+        fn verify_tls12_signature(
+            &self,
+            _message: &[u8],
+            _cert: &CertificateDer<'_>,
+            _dss: &DigitallySignedStruct,
+        ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
+            Ok(HandshakeSignatureValid::assertion())
+        }
+
+        fn verify_tls13_signature(
+            &self,
+            _message: &[u8],
+            _cert: &CertificateDer<'_>,
+            _dss: &DigitallySignedStruct,
+        ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
+            Ok(HandshakeSignatureValid::assertion())
+        }
+
+        fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+            vec![
+                SignatureScheme::RSA_PKCS1_SHA1,
+                SignatureScheme::ECDSA_SHA1_Legacy,
+                SignatureScheme::RSA_PKCS1_SHA256,
+                SignatureScheme::ECDSA_NISTP256_SHA256,
+                SignatureScheme::RSA_PKCS1_SHA384,
+                SignatureScheme::ECDSA_NISTP384_SHA384,
+                SignatureScheme::RSA_PKCS1_SHA512,
+                SignatureScheme::ECDSA_NISTP521_SHA512,
+                SignatureScheme::RSA_PSS_SHA256,
+                SignatureScheme::RSA_PSS_SHA384,
+                SignatureScheme::RSA_PSS_SHA512,
+                SignatureScheme::ED25519,
+                SignatureScheme::ED448,
+            ]
+        }
+    }
 
     #[tokio::test]
     async fn test_health_endpoint() {
@@ -545,9 +616,11 @@ mod tests {
 
         assert_eq!(rx.len(), 1);
     }
-
     #[tokio::test]
     async fn test_http_source_read_with_real_server() {
+        // Setup the CryptoProvider for rustls
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
         // Bind to a random available port
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
@@ -567,10 +640,20 @@ mod tests {
         // Wait a bit for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        // Create HTTP client
-        let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
+        // Configure TLS client to accept any certificate (for testing with self-signed certs)
+        let tls_config = rustls::ClientConfig::builder()
+            .dangerous()
+            .with_custom_certificate_verifier(std::sync::Arc::new(AcceptAnyCertVerifier))
+            .with_no_client_auth();
 
-        // Send multiple HTTP requests to the server
+        let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
+            .with_tls_config(tls_config)
+            .https_or_http()
+            .enable_http1()
+            .build();
+        let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build(https_connector);
+
+        // Send multiple HTTPS requests to the server
         let test_data = vec![
             (r#"{"message": "test1"}"#, "application/json"),
             (r#"{"message": "test2"}"#, "application/json"),
@@ -580,7 +663,7 @@ mod tests {
         for (body_data, content_type) in &test_data {
             let request = Request::builder()
                 .method(Method::POST)
-                .uri(format!("http://{}/vertices/test", addr))
+                .uri(format!("https://{}/vertices/test", addr))
                 .header("Content-Type", *content_type)
                 .header("X-Numaflow-Id", format!("test-id-{}", uuid::Uuid::now_v7()))
                 .body((*body_data).to_string())
@@ -594,7 +677,7 @@ mod tests {
         let (read_tx, read_rx) = oneshot::channel();
         actor_tx
             .send(HttpActorMessage::Read {
-                size: 3, // Request up to 3 messages (else it will wait for timeout)
+                size: test_data.len(),
                 response_tx: read_tx,
             })
             .await
@@ -604,7 +687,7 @@ mod tests {
         let messages = read_rx.await.unwrap().unwrap();
 
         // Verify we got the expected number of messages
-        assert_eq!(messages.len(), 3);
+        assert_eq!(messages.len(), test_data.len());
 
         // Verify message contents
         for message in messages.iter() {
@@ -682,6 +765,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_http_source_handle() {
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
         // Bind to a random available port
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
@@ -700,14 +785,24 @@ mod tests {
         // Wait a bit for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        // Create HTTP client and send requests
-        let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
+        // Configure TLS client to accept any certificate (for testing with self-signed certs)
+        let tls_config = rustls::ClientConfig::builder()
+            .dangerous()
+            .with_custom_certificate_verifier(std::sync::Arc::new(AcceptAnyCertVerifier))
+            .with_no_client_auth();
+
+        let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
+            .with_tls_config(tls_config)
+            .https_or_http()
+            .enable_http1()
+            .build();
+        let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build(https_connector);
 
         // Send test requests
         for i in 0..5 {
             let request = Request::builder()
                 .method(Method::POST)
-                .uri(format!("http://{}/vertices/test", addr))
+                .uri(format!("https://{}/vertices/test", addr))
                 .header("Content-Type", "application/json")
                 .header("X-Numaflow-Id", format!("test-id-{}", i))
                 .body(format!(r#"{{"message": "test{}"}}"#, i))
