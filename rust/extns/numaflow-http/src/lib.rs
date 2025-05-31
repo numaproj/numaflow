@@ -95,7 +95,7 @@ impl Default for HttpSourceConfig {
         Self {
             vertex_name: "in",
             buffer_size: 500,
-            addr: "0.0.0.0:8080".parse().expect("Invalid address"),
+            addr: "0.0.0.0:8443".parse().expect("Invalid address"),
             timeout: Duration::from_secs(1),
             token: None,
         }
