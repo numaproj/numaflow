@@ -1,0 +1,22 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: retry-backoff-mvtx
+spec:
+  source:
+    generator:
+      rpu: 1
+      duration: "1s"
+  sink:
+    retryStrategy:
+      backoff:
+        interval: 1s
+        steps: 2
+        factor: 2
+        cap: 3s
+        jitter: 0
+      onFailure: 'drop'
+    udsink:
+      container:
+        image: quay.io/numaio/numaflow-go/sink-retry-e2e:stable
+        imagePullPolicy: Always

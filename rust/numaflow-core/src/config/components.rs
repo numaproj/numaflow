@@ -11,18 +11,18 @@ pub(crate) mod source {
     use std::collections::HashMap;
     use std::{fmt::Debug, time::Duration};
 
+    use super::parse_kafka_auth_config;
+    use crate::Result;
+    use crate::config::get_vertex_name;
+    use crate::error::Error;
     use bytes::Bytes;
     use numaflow_jetstream::{JetstreamSourceConfig, NatsAuth, TlsClientAuthCerts, TlsConfig};
     use numaflow_kafka::source::KafkaSourceConfig;
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source, SqsSource};
     use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
     use numaflow_sqs::source::SqsSourceConfig;
+    use serde::{Deserialize, Serialize};
     use tracing::warn;
-
-    use crate::Result;
-    use crate::error::Error;
-
-    use super::parse_kafka_auth_config;
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct SourceConfig {
@@ -49,6 +49,7 @@ pub(crate) mod source {
         Jetstream(JetstreamSourceConfig),
         Sqs(SqsSourceConfig),
         Kafka(Box<KafkaSourceConfig>),
+        Http(numaflow_http::HttpSourceConfig),
     }
 
     impl From<Box<GeneratorSource>> for SourceType {
@@ -382,6 +383,10 @@ pub(crate) mod source {
                 return kafka.try_into();
             }
 
+            if let Some(http) = source.http.take() {
+                return http.try_into();
+            }
+
             Err(Error::Config(format!("Invalid source type: {source:?}")))
         }
     }
@@ -408,6 +413,46 @@ pub(crate) mod source {
                 msg_size_bytes: 8,
                 jitter: Duration::from_secs(0),
             }
+        }
+    }
+
+    // Retrieve value from mounted secret volume
+    // "/var/numaflow/secrets/${secretRef.name}/${secretRef.key}" is expected to be the file path
+    pub(crate) fn get_secret_from_volume(name: &str, key: &str) -> String {
+        let path = format!("/var/numaflow/secrets/{name}/{key}");
+        let val = std::fs::read_to_string(path.clone())
+            .map_err(|e| format!("Reading secret from file {path}: {e:?}"))
+            .expect("Failed to read secret");
+        val.trim().into()
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    struct AuthToken {
+        /// Name of the configmap
+        name: String,
+        /// Key within the configmap
+        key: String,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    struct Auth {
+        token: AuthToken,
+    }
+
+    impl TryFrom<Box<numaflow_models::models::HttpSource>> for SourceType {
+        type Error = Error;
+        fn try_from(
+            value: Box<numaflow_models::models::HttpSource>,
+        ) -> std::result::Result<Self, Self::Error> {
+            let mut http_config = numaflow_http::HttpSourceConfigBuilder::new(get_vertex_name());
+
+            if let Some(auth) = value.auth {
+                let auth = auth.token.unwrap();
+                let token = get_secret_from_volume(&auth.name, &auth.key);
+                http_config = http_config.token(token);
+            }
+
+            Ok(SourceType::Http(http_config.build()))
         }
     }
 
