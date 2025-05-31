@@ -227,6 +227,7 @@ func (s *FunctionalSuite) TestDropOnFull() {
 	}
 }
 
+// rust-done
 func (s *FunctionalSuite) TestWatermarkEnabled() {
 
 	// the watermark feature is not supported with redis ISBSVC
@@ -308,23 +309,25 @@ func isWatermarkProgressing(ctx context.Context, client daemonclient.DaemonClien
 	return true, nil
 }
 
+// rust-done
 func (s *FunctionalSuite) TestFallbackSink() {
 
 	w := s.Given().Pipeline("@testdata/simple-fallback.yaml").
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
-	pipelineName := "simple-fallback"
+	// pipelineName := "simple-fallback"
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
 	// send a message to the pipeline
-	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("fallback-message")))
+	// w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("fallback-message")))
 
 	w.Expect().RedisSinkContains("simple-fallback-output", "fallback-message")
 }
 
+// rust-done
 func (s *FunctionalSuite) TestExponentialBackoffRetryStrategyForPipeline() {
 	w := s.Given().Pipeline("@testdata/simple-pipeline-with-retry-strategy.yaml").
 		When().
