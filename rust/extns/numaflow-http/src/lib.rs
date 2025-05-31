@@ -353,7 +353,7 @@ pub fn create_router(
                 match request.headers().get("Authorization") {
                     Some(t) => {
                         let t = t.to_str().expect("token should be a string");
-                        if token == format!("Bearer {}", t) {
+                        if t == format!("Bearer {}", token) {
                             return next.run(request).await;
                         }
                     }
@@ -755,5 +755,50 @@ mod tests {
         // Verify no more pending messages
         let pending = handle.pending().await;
         assert_eq!(pending, Some(0), "Should have 0 pending messages");
+    }
+
+    #[tokio::test]
+    async fn test_auth_token_validation() {
+        // Create a channel for the HTTP source
+        let (tx, _rx) = mpsc::channel(10);
+
+        // Set up router with auth token
+        let test_token = "test-token";
+        let app = create_router("test", Some(test_token), tx);
+
+        // Test request with correct token
+        let request = Request::builder()
+            .method(Method::POST)
+            .uri("/vertices/test")
+            .header("Content-Type", "application/json")
+            .header("Authorization", format!("Bearer {}", test_token))
+            .body(Body::from(r#"{"test": "data"}"#))
+            .unwrap();
+
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Test request with incorrect token
+        let request = Request::builder()
+            .method(Method::POST)
+            .uri("/vertices/test")
+            .header("Content-Type", "application/json")
+            .header("Authorization", "Bearer wrong-token")
+            .body(Body::from(r#"{"test": "data"}"#))
+            .unwrap();
+
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        // Test request with missing token
+        let request = Request::builder()
+            .method(Method::POST)
+            .uri("/vertices/test")
+            .header("Content-Type", "application/json")
+            .body(Body::from(r#"{"test": "data"}"#))
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 }
