@@ -5,27 +5,35 @@
 //! `X-Numaflow-Id` header is added to the message to track the message across the pipeline.
 //! `X-Numaflow-Event-Time` is added to the message to track the event time of the message.
 
+use axum::body::Body;
+use axum::http::Request;
+use axum::middleware::Next;
 use axum::{
     Router,
     extract::State,
     http::{HeaderMap, StatusCode},
+    middleware,
     response::IntoResponse,
     routing::{get, post},
 };
+use axum_server::tls_rustls::RustlsConfig;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
+use rcgen::{Certificate, CertifiedKey, generate_simple_self_signed};
 use serde::Serialize;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::net::SocketAddr;
+
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, error, info, trace, warn};
 use uuid::Uuid;
 
 /// HTTP source that manages incoming HTTP requests and forwards them to a processing channel
-pub struct HttpSource {
+struct HttpSourceActor {
     server_rx: mpsc::Receiver<HttpMessage>,
-    server_handle: tokio::task::JoinHandle<Result<()>>,
+    _server_handle: tokio::task::JoinHandle<Result<()>>,
     timeout: Duration,
 }
 
@@ -34,6 +42,8 @@ pub struct HttpSource {
 pub enum Error {
     #[error("Channel send error: {0}")]
     ChannelSend(String),
+    #[error("Channel recv error: {0}")]
+    ChannelRecv(String),
     #[error("Channel Full: 429")]
     ChannelFull(),
     #[error("Server error: {0}")]
@@ -43,7 +53,7 @@ pub enum Error {
 type Result<T> = std::result::Result<T, Error>;
 
 /// HTTP message containing the request body and headers
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct HttpMessage {
     pub body: Bytes,
     pub headers: HashMap<String, String>,
@@ -59,57 +69,93 @@ struct DataResponse {
 }
 
 /// HTTPSource Builder with custom buffer size
-pub struct HttpSourceBuilder {
-    /// Default buffer size is 2000
-    buffer_size: usize,
-    addr: SocketAddr,
-    timeout: Duration,
+#[derive(Clone, PartialEq)]
+pub struct HttpSourceConfig {
+    pub vertex_name: &'static str,
+    /// Default buffer size is 500
+    pub buffer_size: usize,
+    pub addr: SocketAddr,
+    pub timeout: Duration,
+    pub token: Option<&'static str>,
 }
 
-impl HttpSourceBuilder {
-    /// Create a new HttpSourceBuilder
-    pub fn new() -> Self {
-        Self {
-            buffer_size: 500,
-            addr: "0.0.0.0:8080".parse().expect("Invalid address"),
-            timeout: Duration::from_secs(1),
-        }
-    }
-
-    /// Set the buffer size for the channel
-    pub fn with_buffer_size(mut self, buffer_size: usize) -> Self {
-        self.buffer_size = buffer_size;
-        self
-    }
-
-    /// Set the buffer size for the channel
-    pub fn with_addr(mut self, addr: SocketAddr) -> Self {
-        self.addr = addr;
-        self
-    }
-
-    /// Build the HttpSource instance
-    pub fn build(self) -> HttpSource {
-        let (tx, rx) = mpsc::channel(self.buffer_size); // Increased buffer size for better throughput
-
-        let server_handle = tokio::spawn(start_server(tx, self.addr));
-
-        HttpSource {
-            server_rx: rx,
-            timeout: self.timeout,
-            server_handle,
-        }
+impl Debug for HttpSourceConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HttpSourceConfig")
+            .field("batch_size", &self.buffer_size)
+            .field("read_timeout", &self.timeout)
+            .field("addr", &self.addr)
+            .field("token", &self.token.as_ref().map(|_| "*****"))
+            .finish()
     }
 }
 
-impl Default for HttpSourceBuilder {
+impl Default for HttpSourceConfig {
     fn default() -> Self {
-        Self::new()
+        Self {
+            vertex_name: "in",
+            buffer_size: 500,
+            addr: "0.0.0.0:8443".parse().expect("Invalid address"),
+            timeout: Duration::from_secs(1),
+            token: None,
+        }
+    }
+}
+
+pub struct HttpSourceConfigBuilder {
+    vertex_name: &'static str,
+    buffer_size: Option<usize>,
+    addr: Option<SocketAddr>,
+    timeout: Option<Duration>,
+    token: Option<&'static str>,
+}
+
+impl HttpSourceConfigBuilder {
+    pub fn new(vertex_name: &'static str) -> Self {
+        Self {
+            vertex_name,
+            buffer_size: None,
+            addr: None,
+            timeout: None,
+            token: None,
+        }
+    }
+
+    pub fn buffer_size(mut self, buffer_size: usize) -> Self {
+        self.buffer_size = Some(buffer_size);
+        self
+    }
+
+    pub fn addr(mut self, addr: SocketAddr) -> Self {
+        self.addr = Some(addr);
+        self
+    }
+
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
+    pub fn token(mut self, token: &'static str) -> Self {
+        self.token = Some(token);
+        self
+    }
+
+    pub fn build(self) -> HttpSourceConfig {
+        HttpSourceConfig {
+            vertex_name: self.vertex_name,
+            buffer_size: self.buffer_size.unwrap_or(500),
+            addr: self
+                .addr
+                .unwrap_or_else(|| "0.0.0.0:8080".parse().expect("Invalid address")),
+            timeout: self.timeout.unwrap_or(Duration::from_secs(1)),
+            token: self.token,
+        }
     }
 }
 
 #[derive(Debug)]
-pub enum HttpSourceMessage {
+pub enum HttpActorMessage {
     Read {
         size: usize,
         response_tx: oneshot::Sender<Result<Vec<HttpMessage>>>,
@@ -121,19 +167,36 @@ pub enum HttpSourceMessage {
     Pending(oneshot::Sender<Option<usize>>),
 }
 
-impl HttpSource {
+impl HttpSourceActor {
+    async fn new(http_source_config: HttpSourceConfig) -> Self {
+        let (tx, rx) = mpsc::channel(http_source_config.buffer_size); // Increased buffer size for better throughput
+
+        let server_handle = tokio::spawn(start_server(
+            http_source_config.vertex_name,
+            tx,
+            http_source_config.addr,
+            http_source_config.token,
+        ));
+
+        Self {
+            server_rx: rx,
+            timeout: http_source_config.timeout,
+            _server_handle: server_handle,
+        }
+    }
+
     /// Background task that processes messages from the channel
-    async fn run(mut self, mut actor_rx: mpsc::Receiver<HttpSourceMessage>) -> Result<()> {
+    async fn run(mut self, mut actor_rx: mpsc::Receiver<HttpActorMessage>) -> Result<()> {
         info!("HttpSource processor started");
 
         while let Some(msg) = actor_rx.recv().await {
             match msg {
-                HttpSourceMessage::Read { size, response_tx } => {
+                HttpActorMessage::Read { size, response_tx } => {
                     let messages = self.read(size).await;
                     debug!("Reading messages from HttpSource");
                     response_tx.send(messages).expect("rx should be open");
                 }
-                HttpSourceMessage::Ack {
+                HttpActorMessage::Ack {
                     offsets,
                     response_tx,
                 } => {
@@ -142,7 +205,7 @@ impl HttpSource {
                         .send(self.ack(offsets).await)
                         .expect("rx should be open");
                 }
-                HttpSourceMessage::Pending(response_tx) => {
+                HttpActorMessage::Pending(response_tx) => {
                     let pending = self.pending().await;
                     debug!(?pending, "Pending messages from HttpSource");
                     response_tx.send(pending).expect("rx should be open");
@@ -196,6 +259,63 @@ impl HttpSource {
     }
 }
 
+/// Handle to interact with the HttpSource actor
+#[derive(Clone)]
+pub struct HttpSourceHandle {
+    actor_tx: mpsc::Sender<HttpActorMessage>,
+}
+
+impl HttpSourceHandle {
+    /// Create a new HttpSourceHandle
+    pub async fn new(http_source_config: HttpSourceConfig) -> Self {
+        let (actor_tx, actor_rx) =
+            mpsc::channel::<HttpActorMessage>(http_source_config.buffer_size);
+
+        let http_source = HttpSourceActor::new(http_source_config).await;
+
+        // the tokio task will stop when tx is dropped
+        tokio::spawn(async move { http_source.run(actor_rx).await });
+
+        Self { actor_tx }
+    }
+
+    /// Read messages from the HttpSource.
+    pub async fn read(&self, size: usize) -> Result<Vec<HttpMessage>> {
+        let (tx, rx) = oneshot::channel();
+        self.actor_tx
+            .send(HttpActorMessage::Read {
+                size,
+                response_tx: tx,
+            })
+            .await
+            .expect("actor should be running");
+        rx.await.map_err(|e| Error::ChannelRecv(e.to_string()))?
+    }
+
+    /// Ack messages to the HttpSource.
+    pub async fn ack(&self, offsets: Vec<String>) -> Result<()> {
+        let (tx, rx) = oneshot::channel();
+        self.actor_tx
+            .send(HttpActorMessage::Ack {
+                offsets,
+                response_tx: tx,
+            })
+            .await
+            .expect("actor should be running");
+        rx.await.map_err(|e| Error::ChannelRecv(e.to_string()))?
+    }
+
+    /// Get the number of pending messages from the HttpSource.
+    pub async fn pending(&self) -> Option<usize> {
+        let (tx, rx) = oneshot::channel();
+        self.actor_tx
+            .send(HttpActorMessage::Pending(tx))
+            .await
+            .expect("actor should be running");
+        rx.await.ok().flatten()
+    }
+}
+
 /// Send a message to the processing channel
 pub async fn send_message(tx: mpsc::Sender<HttpMessage>, message: HttpMessage) -> Result<()> {
     match tx.try_send(message) {
@@ -209,28 +329,78 @@ pub async fn send_message(tx: mpsc::Sender<HttpMessage>, message: HttpMessage) -
     }
 }
 
-/// Create an Axum router with the HTTP source endpoints
-pub fn create_router(tx: mpsc::Sender<HttpMessage>) -> Router {
-    Router::new()
-        .route("/health", get(health_handler))
-        // FIXME: should be "/vertices/"+vertexInstance.Vertex.Spec.Name
-        .route("/vertices", post(data_handler))
-        .with_state(tx)
+#[derive(Clone)]
+struct HttpState {
+    tx: mpsc::Sender<HttpMessage>,
 }
 
-/// Start the HTTP server on the specified address
-pub async fn start_server(tx: mpsc::Sender<HttpMessage>, addr: SocketAddr) -> Result<()> {
-    let router = create_router(tx);
+/// Create an Axum router with the HTTP source endpoints
+pub fn create_router(
+    vertex_name: &'static str,
+    token: Option<&'static str>,
+    tx: mpsc::Sender<HttpMessage>,
+) -> Router {
+    Router::new()
+        .route("/health", get(health_handler))
+        .route(
+            format!("/vertices/{}", vertex_name).as_str(),
+            post(data_handler),
+        )
+        .route_layer(middleware::from_fn(
+            move |request: Request<Body>, next: Next| async move {
+                // if no token is provided, skip the auth check
+                let Some(token) = token else {
+                    return next.run(request).await;
+                };
 
-    info!(?addr, "Starting HTTP source server");
+                match request.headers().get("Authorization") {
+                    Some(t) => {
+                        let t = t.to_str().expect("token should be a string");
+                        if t == format!("Bearer {}", token) {
+                            return next.run(request).await;
+                        }
+                    }
+                    None => {
+                        return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
+                    }
+                }
 
-    let listener = tokio::net::TcpListener::bind(addr)
+                (StatusCode::UNAUTHORIZED, "Unauthorized").into_response()
+            },
+        ))
+        .with_state(HttpState { tx })
+}
+
+/// Generate self-signed TLS certificate
+fn generate_certs() -> Result<(Certificate, rcgen::KeyPair)> {
+    let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
+        .map_err(|e| Error::Server(format!("Generating self-signed certificate: {}", e)))?;
+
+    Ok((cert, key_pair))
+}
+
+/// Start the HTTPS server on the specified address
+pub async fn start_server(
+    vertex_name: &'static str,
+    tx: mpsc::Sender<HttpMessage>,
+    addr: SocketAddr,
+    token: Option<&'static str>,
+) -> Result<()> {
+    let router = create_router(vertex_name, token, tx);
+
+    info!(?addr, "Starting HTTPS source server");
+
+    // Generate a self-signed certificate
+    let (cert, key_pair) = generate_certs()?;
+
+    let tls_config = RustlsConfig::from_pem(cert.pem().into(), key_pair.serialize_pem().into())
         .await
-        .map_err(|e| Error::Server(format!("Failed to bind to {}: {}", addr, e)))?;
+        .map_err(|e| Error::Server(format!("Creating TLS config from PEM: {}", e)))?;
 
-    axum::serve(listener, router)
+    axum_server::bind_rustls(addr, tls_config)
+        .serve(router.into_make_service())
         .await
-        .map_err(|e| Error::Server(format!("Server error: {}", e)))?;
+        .map_err(|e| Error::Server(format!("HTTPS server error: {}", e)))?;
 
     Ok(())
 }
@@ -242,7 +412,7 @@ async fn health_handler() -> impl IntoResponse {
 
 /// Data ingestion endpoint handler
 async fn data_handler(
-    State(http_source): State<mpsc::Sender<HttpMessage>>,
+    State(http_source): State<HttpState>,
     headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
@@ -285,7 +455,7 @@ async fn data_handler(
     };
 
     // Send the message to the processing channel
-    match send_message(http_source, message).await {
+    match send_message(http_source.tx, message).await {
         Ok(()) => {
             trace!(?id, "Successfully queued message");
             (
@@ -330,16 +500,72 @@ mod tests {
     use axum::body::Body;
     use hyper::{Method, Request, StatusCode};
     use hyper_util::client::legacy::Client;
+    use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+    use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+    use rustls::{DigitallySignedStruct, SignatureScheme};
     use std::net::TcpListener;
     use std::time::Duration;
     use tokio::sync::{mpsc, oneshot};
     use tower::ServiceExt;
 
+    // Custom certificate verifier that accepts any certificate (for testing)
+    #[derive(Debug)]
+    struct AcceptAnyCertVerifier;
+
+    impl ServerCertVerifier for AcceptAnyCertVerifier {
+        fn verify_server_cert(
+            &self,
+            _end_entity: &CertificateDer<'_>,
+            _intermediates: &[CertificateDer<'_>],
+            _server_name: &ServerName<'_>,
+            _ocsp_response: &[u8],
+            _now: UnixTime,
+        ) -> std::result::Result<ServerCertVerified, rustls::Error> {
+            Ok(ServerCertVerified::assertion())
+        }
+
+        fn verify_tls12_signature(
+            &self,
+            _message: &[u8],
+            _cert: &CertificateDer<'_>,
+            _dss: &DigitallySignedStruct,
+        ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
+            Ok(HandshakeSignatureValid::assertion())
+        }
+
+        fn verify_tls13_signature(
+            &self,
+            _message: &[u8],
+            _cert: &CertificateDer<'_>,
+            _dss: &DigitallySignedStruct,
+        ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
+            Ok(HandshakeSignatureValid::assertion())
+        }
+
+        fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+            vec![
+                SignatureScheme::RSA_PKCS1_SHA1,
+                SignatureScheme::ECDSA_SHA1_Legacy,
+                SignatureScheme::RSA_PKCS1_SHA256,
+                SignatureScheme::ECDSA_NISTP256_SHA256,
+                SignatureScheme::RSA_PKCS1_SHA384,
+                SignatureScheme::ECDSA_NISTP384_SHA384,
+                SignatureScheme::RSA_PKCS1_SHA512,
+                SignatureScheme::ECDSA_NISTP521_SHA512,
+                SignatureScheme::RSA_PSS_SHA256,
+                SignatureScheme::RSA_PSS_SHA384,
+                SignatureScheme::RSA_PSS_SHA512,
+                SignatureScheme::ED25519,
+                SignatureScheme::ED448,
+            ]
+        }
+    }
+
     #[tokio::test]
     async fn test_health_endpoint() {
         let (tx, _rx) = mpsc::channel(500);
 
-        let app = create_router(tx);
+        let app = create_router("test", None, tx);
 
         let request = Request::builder()
             .method(Method::GET)
@@ -355,11 +581,11 @@ mod tests {
     async fn test_data_endpoint() {
         let (tx, rx) = mpsc::channel(10);
 
-        let app = create_router(tx);
+        let app = create_router("test", None, tx);
 
         let request = Request::builder()
             .method(Method::POST)
-            .uri("/vertices")
+            .uri("/vertices/test")
             .header("Content-Type", "application/json")
             .body(Body::from(r#"{"test": "data"}"#))
             .unwrap();
@@ -374,12 +600,12 @@ mod tests {
     async fn test_data_endpoint_with_custom_id() {
         let (tx, rx) = mpsc::channel(10);
 
-        let app = create_router(tx);
+        let app = create_router("test", None, tx);
 
         let custom_id = "custom-test-id";
         let request = Request::builder()
             .method(Method::POST)
-            .uri("/vertices")
+            .uri("/vertices/test")
             .header("Content-Type", "text/plain")
             .header("X-Numaflow-Id", custom_id)
             .body(Body::from("test data"))
@@ -390,22 +616,23 @@ mod tests {
 
         assert_eq!(rx.len(), 1);
     }
-
     #[tokio::test]
     async fn test_http_source_read_with_real_server() {
+        // Setup the CryptoProvider for rustls
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
         // Bind to a random available port
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
         drop(listener); // Release the listener so HttpSource can bind to it
 
         // Create HttpSource with the address
-        let http_source = HttpSourceBuilder::new()
-            .with_addr(addr)
-            .with_buffer_size(100)
-            .build();
+        let http_source_config = HttpSourceConfigBuilder::new("test").addr(addr).build();
+
+        let http_source = HttpSourceActor::new(http_source_config).await;
 
         // Create actor channel for communicating with HttpSource
-        let (actor_tx, actor_rx) = mpsc::channel::<HttpSourceMessage>(10);
+        let (actor_tx, actor_rx) = mpsc::channel::<HttpActorMessage>(10);
 
         // Spawn the HttpSource actor
         let source_handle = tokio::spawn(async move { http_source.run(actor_rx).await });
@@ -413,10 +640,20 @@ mod tests {
         // Wait a bit for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        // Create HTTP client
-        let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
+        // Configure TLS client to accept any certificate (for testing with self-signed certs)
+        let tls_config = rustls::ClientConfig::builder()
+            .dangerous()
+            .with_custom_certificate_verifier(std::sync::Arc::new(AcceptAnyCertVerifier))
+            .with_no_client_auth();
 
-        // Send multiple HTTP requests to the server
+        let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
+            .with_tls_config(tls_config)
+            .https_or_http()
+            .enable_http1()
+            .build();
+        let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build(https_connector);
+
+        // Send multiple HTTPS requests to the server
         let test_data = vec![
             (r#"{"message": "test1"}"#, "application/json"),
             (r#"{"message": "test2"}"#, "application/json"),
@@ -426,7 +663,7 @@ mod tests {
         for (body_data, content_type) in &test_data {
             let request = Request::builder()
                 .method(Method::POST)
-                .uri(format!("http://{}/vertices", addr))
+                .uri(format!("https://{}/vertices/test", addr))
                 .header("Content-Type", *content_type)
                 .header("X-Numaflow-Id", format!("test-id-{}", uuid::Uuid::now_v7()))
                 .body((*body_data).to_string())
@@ -439,8 +676,8 @@ mod tests {
         // Use the actor to read messages from HttpSource
         let (read_tx, read_rx) = oneshot::channel();
         actor_tx
-            .send(HttpSourceMessage::Read {
-                size: 3, // Request up to 3 messages (else it will wait for timeout)
+            .send(HttpActorMessage::Read {
+                size: test_data.len(),
                 response_tx: read_tx,
             })
             .await
@@ -450,7 +687,7 @@ mod tests {
         let messages = read_rx.await.unwrap().unwrap();
 
         // Verify we got the expected number of messages
-        assert_eq!(messages.len(), 3);
+        assert_eq!(messages.len(), test_data.len());
 
         // Verify message contents
         for message in messages.iter() {
@@ -467,7 +704,7 @@ mod tests {
         // Test pending count
         let (pending_tx, pending_rx) = oneshot::channel();
         actor_tx
-            .send(HttpSourceMessage::Pending(pending_tx))
+            .send(HttpActorMessage::Pending(pending_tx))
             .await
             .unwrap();
 
@@ -478,7 +715,7 @@ mod tests {
         let offsets: Vec<String> = messages.iter().map(|m| m.id.clone()).collect();
         let (ack_tx, ack_rx) = oneshot::channel();
         actor_tx
-            .send(HttpSourceMessage::Ack {
+            .send(HttpActorMessage::Ack {
                 offsets,
                 response_tx: ack_tx,
             })
@@ -500,19 +737,18 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         drop(listener);
 
-        let http_source = HttpSourceBuilder::new()
-            .with_addr(addr)
-            .with_buffer_size(100)
-            .build();
+        let http_source_config = HttpSourceConfigBuilder::new("test").addr(addr).build();
 
-        let (actor_tx, actor_rx) = mpsc::channel::<HttpSourceMessage>(10);
+        let http_source = HttpSourceActor::new(http_source_config).await;
+
+        let (actor_tx, actor_rx) = mpsc::channel::<HttpActorMessage>(10);
 
         let source_handle = tokio::spawn(async move { http_source.run(actor_rx).await });
 
         // Try to read messages when none are available - should timeout and return empty vec
         let (read_tx, read_rx) = oneshot::channel();
         actor_tx
-            .send(HttpSourceMessage::Read {
+            .send(HttpActorMessage::Read {
                 size: 5,
                 response_tx: read_tx,
             })
@@ -525,5 +761,139 @@ mod tests {
         // Clean up
         drop(actor_tx);
         let _ = source_handle.await;
+    }
+
+    #[tokio::test]
+    async fn test_http_source_handle() {
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
+        // Bind to a random available port
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        drop(listener); // Release the listener so HttpSource can bind to it
+
+        // Create HttpSource config
+        let http_source_config = HttpSourceConfigBuilder::new("test")
+            .addr(addr)
+            .buffer_size(10)
+            .timeout(Duration::from_millis(100))
+            .build();
+
+        // Create HttpSourceHandle
+        let handle = HttpSourceHandle::new(http_source_config.clone()).await;
+
+        // Wait a bit for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Configure TLS client to accept any certificate (for testing with self-signed certs)
+        let tls_config = rustls::ClientConfig::builder()
+            .dangerous()
+            .with_custom_certificate_verifier(std::sync::Arc::new(AcceptAnyCertVerifier))
+            .with_no_client_auth();
+
+        let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
+            .with_tls_config(tls_config)
+            .https_or_http()
+            .enable_http1()
+            .build();
+        let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build(https_connector);
+
+        // Send test requests
+        for i in 0..5 {
+            let request = Request::builder()
+                .method(Method::POST)
+                .uri(format!("https://{}/vertices/test", addr))
+                .header("Content-Type", "application/json")
+                .header("X-Numaflow-Id", format!("test-id-{}", i))
+                .body(format!(r#"{{"message": "test{}"}}"#, i))
+                .unwrap();
+
+            let response = client.request(request).await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+        }
+
+        // Test pending count
+        let pending = handle.pending().await;
+        assert_eq!(pending, Some(5), "Should have 5 pending messages");
+
+        // Test read method
+        let messages = handle.read(3).await.unwrap();
+        assert_eq!(messages.len(), 3, "Should read 3 messages");
+
+        // Verify message contents
+        for (i, message) in messages.iter().enumerate() {
+            assert!(message.headers.contains_key("X-Numaflow-Id"));
+            assert!(message.headers.contains_key("X-Numaflow-Event-Time"));
+            assert!(message.headers.contains_key("content-type"));
+
+            let body_str = String::from_utf8(message.body.to_vec()).unwrap();
+            assert!(body_str.contains(&format!("test{}", i)));
+        }
+
+        // Test pending count after reading
+        let pending = handle.pending().await;
+        assert_eq!(
+            pending,
+            Some(2),
+            "Should have 2 pending messages after reading 3"
+        );
+
+        // Test ack method (should always succeed for HTTP source)
+        let offsets: Vec<String> = messages.iter().map(|m| m.id.clone()).collect();
+        let ack_result = handle.ack(offsets).await;
+        assert!(ack_result.is_ok(), "Ack should succeed");
+
+        // Read remaining messages
+        let messages = handle.read(5).await.unwrap();
+        assert_eq!(messages.len(), 2, "Should read remaining 2 messages");
+
+        // Verify no more pending messages
+        let pending = handle.pending().await;
+        assert_eq!(pending, Some(0), "Should have 0 pending messages");
+    }
+
+    #[tokio::test]
+    async fn test_auth_token_validation() {
+        // Create a channel for the HTTP source
+        let (tx, _rx) = mpsc::channel(10);
+
+        // Set up router with auth token
+        let test_token = "test-token";
+        let app = create_router("test", Some(test_token), tx);
+
+        // Test request with correct token
+        let request = Request::builder()
+            .method(Method::POST)
+            .uri("/vertices/test")
+            .header("Content-Type", "application/json")
+            .header("Authorization", format!("Bearer {}", test_token))
+            .body(Body::from(r#"{"test": "data"}"#))
+            .unwrap();
+
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Test request with incorrect token
+        let request = Request::builder()
+            .method(Method::POST)
+            .uri("/vertices/test")
+            .header("Content-Type", "application/json")
+            .header("Authorization", "Bearer wrong-token")
+            .body(Body::from(r#"{"test": "data"}"#))
+            .unwrap();
+
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        // Test request with missing token
+        let request = Request::builder()
+            .method(Method::POST)
+            .uri("/vertices/test")
+            .header("Content-Type", "application/json")
+            .body(Body::from(r#"{"test": "data"}"#))
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 }

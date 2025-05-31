@@ -202,6 +202,7 @@ pub(crate) enum ReadAck {
 pub(crate) struct MessageID {
     pub(crate) vertex_name: Bytes,
     pub(crate) offset: Bytes,
+    /// Index is used to identify the index of the message in case of flatmap.
     pub(crate) index: i32,
 }
 
