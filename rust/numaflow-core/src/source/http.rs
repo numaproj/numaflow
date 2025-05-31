@@ -95,8 +95,8 @@ mod tests {
     use hyper_util::client::legacy::Client;
     use hyper_util::rt::TokioExecutor;
     use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
-    use rustls::{DigitallySignedStruct, SignatureScheme};
     use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+    use rustls::{DigitallySignedStruct, SignatureScheme};
     use std::net::TcpListener;
     use std::time::Duration;
     use tokio::time::sleep;
