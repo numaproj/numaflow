@@ -24,7 +24,8 @@ use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, Offset};
 use crate::metrics::{
-    pipeline_drop_metric_labels, pipeline_isb_metric_labels, pipeline_metric_labels, pipeline_metrics, PIPELINE_PARTITION_NAME_LABEL
+    PIPELINE_PARTITION_NAME_LABEL, pipeline_drop_metric_labels, pipeline_isb_metric_labels,
+    pipeline_metric_labels, pipeline_metrics,
 };
 use crate::shared::forward;
 use crate::tracker::TrackerHandle;

@@ -179,6 +179,7 @@ func (s *FunctionalSuite) TestUDFFiltering() {
 	w.Expect().RedisSinkNotContains("udf-filtering-out", expect2)
 }
 
+// rust-done
 func (s *FunctionalSuite) TestDropOnFull() {
 
 	// the drop on full feature is not supported with redis ISBSVC
