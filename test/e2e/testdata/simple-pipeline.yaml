@@ -5,15 +5,28 @@ metadata:
 spec:
   vertices:
     - name: input
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       source:
         generator:
           rpu: 5
           duration: 1s
     - name: p1
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       udf:
-        builtin:
-          name: cat
+        container:
+          image: quay.io/numaio/numaflow-go/map-cat:stable 
+          imagePullPolicy: Always
     - name: output
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       sink:
         log: {}
   edges:

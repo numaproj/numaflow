@@ -29,7 +29,7 @@ spec:
           onFailure: 'drop'
         udsink:
           container:
-            image: quay.io/numaio/numaflow-go/sink-retry-e2e:stable
+            image: quay.io/numaio/numaflow-go/sink-failure:stable
             imagePullPolicy: Always
   edges:
     - from: input

@@ -1,5 +1,3 @@
-//go:build test
-
 /*
 Copyright 2022 The Numaproj Authors.
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,6 +35,7 @@ type FunctionalSuite struct {
 	E2ESuite
 }
 
+// rust-done
 func (s *FunctionalSuite) TestCreateSimplePipeline() {
 	w := s.Given().Pipeline("@testdata/simple-pipeline.yaml").
 		When().
@@ -46,11 +45,11 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 
 	w.Expect().
 		VertexPodsRunning().DaemonPodsRunning().
-		VertexPodLogContains("input", LogSourceVertexStarted).
-		VertexPodLogContains("p1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("output", SinkVertexStarted).
+		VertexPodLogContains("input", LogSourceVertexStartedRustRuntime).
+		VertexPodLogContains("p1", LogMapVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("output", LogSinkVertexStartedRustRuntime).
 		DaemonPodLogContains(pipelineName, LogDaemonStarted).
-		VertexPodLogContains("output", `"Data":.*,"Createdts":.*`)
+		VertexPodLogContains("output", `"value":.*EventTime - \d+`)
 
 	defer w.VertexPodPortForward("input", 8001, dfv1.VertexMetricsPort).
 		VertexPodPortForward("p1", 8002, dfv1.VertexMetricsPort).
@@ -148,6 +147,7 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 	timer.Stop()
 }
 
+// rust-done
 func (s *FunctionalSuite) TestUDFFiltering() {
 	w := s.Given().Pipeline("@testdata/udf-filtering.yaml").
 		When().
@@ -316,13 +316,13 @@ func (s *FunctionalSuite) TestFallbackSink() {
 		When().
 		CreatePipelineAndWait()
 	defer w.DeletePipelineAndWait()
-	// pipelineName := "simple-fallback"
+	pipelineName := "simple-fallback"
 
 	// wait for all the pods to come up
 	w.Expect().VertexPodsRunning()
 
 	// send a message to the pipeline
-	// w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("fallback-message")))
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("fallback-message")))
 
 	w.Expect().RedisSinkContains("simple-fallback-output", "fallback-message")
 }

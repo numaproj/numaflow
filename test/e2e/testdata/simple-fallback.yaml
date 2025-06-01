@@ -10,10 +10,7 @@ spec:
           - name: NUMAFLOW_RUNTIME
             value: "rust"
       source:
-        generator: 
-          rpu: 1
-          duration: 1s
-          valueBlob: "fallback-message"
+        http: {}
     - name: udf
       containerTemplate:
         env:
