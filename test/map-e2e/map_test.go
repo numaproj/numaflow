@@ -1,3 +1,5 @@
+//go:build test
+
 /*
 Copyright 2022 The Numaproj Authors.
 
@@ -28,6 +30,7 @@ type MapSuite struct {
 	E2ESuite
 }
 
+// rust-done
 func (s *MapSuite) TestBatchMapUDFunctionAndSink() {
 	w := s.Given().Pipeline("@testdata/flatmap-batch.yaml").
 		When().
@@ -57,6 +60,7 @@ func (s *MapSuite) TestBatchMapUDFunctionAndSink() {
 		VertexPodLogContains("java-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3))
 }
 
+// rust-done
 func (s *MapSuite) TestUDFunctionAndSink() {
 	w := s.Given().Pipeline("@testdata/flatmap.yaml").
 		When().
@@ -83,6 +87,7 @@ func (s *MapSuite) TestUDFunctionAndSink() {
 		VertexPodLogContains("python-udsink", "hello", PodLogCheckOptionWithContainer("udsink"), PodLogCheckOptionWithCount(3))
 }
 
+// rust-done
 func (s *MapSuite) TestMapStreamUDFunctionAndSink() {
 	w := s.Given().Pipeline("@testdata/flatmap-stream.yaml").
 		When().
