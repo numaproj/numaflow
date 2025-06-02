@@ -42,6 +42,7 @@ type TransformerSuite struct {
 	E2ESuite
 }
 
+// rust-done
 func (s *TransformerSuite) TestSourceFiltering() {
 	w := s.Given().Pipeline("@testdata/source-filtering.yaml").
 		When().
@@ -71,6 +72,7 @@ func (s *TransformerSuite) TestSourceFiltering() {
 	w.Expect().RedisSinkNotContains("source-filtering-out", expect2)
 }
 
+// rust-done
 func (s *TransformerSuite) TestTimeExtractionFilter() {
 	w := s.Given().Pipeline("@testdata/time-extraction-filter.yaml").
 		When().
@@ -83,13 +85,14 @@ func (s *TransformerSuite) TestTimeExtractionFilter() {
 
 	testMsgOne := `{"id": 80, "msg": "hello", "time": "2021-01-18T21:54:42.123Z", "desc": "A good ID."}`
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgOne)))
-	w.Expect().VertexPodLogContains("out", fmt.Sprintf("EventTime -  %d", time.Date(2021, 1, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli()), PodLogCheckOptionWithCount(1), PodLogCheckOptionWithContainer("numa"))
+	w.Expect().VertexPodLogContains("out", fmt.Sprintf("EventTime - %d", time.Date(2021, 1, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli()), PodLogCheckOptionWithCount(1), PodLogCheckOptionWithContainer("numa"))
 
 	testMsgTwo := `{"id": 101, "msg": "test", "time": "2021-01-18T21:54:42.123Z", "desc": "A bad ID."}`
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgTwo)))
 	w.Expect().RedisSinkNotContains("time-extraction-filter-out", testMsgTwo)
 }
 
+// rust-done
 func (s *TransformerSuite) TestBuiltinEventTimeExtractor() {
 	// this test is skipped for redis as watermark is not supported with this ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
@@ -167,6 +170,7 @@ wmLoop:
 	done <- struct{}{}
 }
 
+// rust-done
 func (s *TransformerSuite) TestSourceTransformer() {
 	// the transformer feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
@@ -223,12 +227,12 @@ func (s *TransformerSuite) testSourceTransformer(lang string) {
 	janFirst2022 := time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC)
 	janFirst2023 := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 
-	w.Expect().VertexPodLogContains("sink-within-2022", fmt.Sprintf("EventTime -  %d", janFirst2022.UnixMilli()), PodLogCheckOptionWithCount(1)).
-		VertexPodLogContains("sink-after-2022", fmt.Sprintf("EventTime -  %d", janFirst2023.UnixMilli()), PodLogCheckOptionWithCount(2)).
-		VertexPodLogContains("sink-all", fmt.Sprintf("EventTime -  %d", janFirst2022.UnixMilli()), PodLogCheckOptionWithCount(1)).
-		VertexPodLogContains("sink-all", fmt.Sprintf("EventTime -  %d", janFirst2023.UnixMilli()), PodLogCheckOptionWithCount(2)).
-		VertexPodLogNotContains("sink-within-2022", fmt.Sprintf("EventTime -  %d", janFirst2023.UnixMilli()), PodLogCheckOptionWithTimeout(1*time.Second)).
-		VertexPodLogNotContains("sink-after-2022", fmt.Sprintf("EventTime -  %d", janFirst2022.UnixMilli()), PodLogCheckOptionWithTimeout(1*time.Second)).
+	w.Expect().VertexPodLogContains("sink-within-2022", fmt.Sprintf("EventTime - %d", janFirst2022.UnixMilli()), PodLogCheckOptionWithCount(1)).
+		VertexPodLogContains("sink-after-2022", fmt.Sprintf("EventTime - %d", janFirst2023.UnixMilli()), PodLogCheckOptionWithCount(2)).
+		VertexPodLogContains("sink-all", fmt.Sprintf("EventTime - %d", janFirst2022.UnixMilli()), PodLogCheckOptionWithCount(1)).
+		VertexPodLogContains("sink-all", fmt.Sprintf("EventTime - %d", janFirst2023.UnixMilli()), PodLogCheckOptionWithCount(2)).
+		VertexPodLogNotContains("sink-within-2022", fmt.Sprintf("EventTime - %d", janFirst2023.UnixMilli()), PodLogCheckOptionWithTimeout(1*time.Second)).
+		VertexPodLogNotContains("sink-after-2022", fmt.Sprintf("EventTime - %d", janFirst2022.UnixMilli()), PodLogCheckOptionWithTimeout(1*time.Second)).
 		VertexPodLogNotContains("sink-all", "Before2022", PodLogCheckOptionWithTimeout(1*time.Second)).
 		VertexPodLogNotContains("sink-within-2022", "Before2022", PodLogCheckOptionWithTimeout(1*time.Second)).
 		VertexPodLogNotContains("sink-after-2022", "Before2022", PodLogCheckOptionWithTimeout(1*time.Second))
