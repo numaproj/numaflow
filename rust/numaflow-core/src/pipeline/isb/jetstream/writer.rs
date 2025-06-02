@@ -284,7 +284,7 @@ impl JetstreamWriter {
 
     fn send_write_metrics(
         partition_name: &str,
-        vertex_type: &String,
+        vertex_type: &str,
         message: Message,
         write_processing_start: Instant,
     ) {

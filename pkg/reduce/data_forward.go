@@ -284,11 +284,22 @@ func (df *DataForward) replayForAlignedWindows(ctx context.Context, discoveredWA
 // and writes the windowRequests to pbq
 func (df *DataForward) forwardAChunk(ctx context.Context) {
 	// Initialize metric labels
-	metricLabelsWithPartition := map[string]string{metrics.LabelVertex: df.vertexName, metrics.LabelPipeline: df.pipelineName, metrics.LabelVertexType: string(dfv1.VertexTypeReduceUDF), metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)), metrics.LabelPartitionName: df.fromBufferPartition.GetName()}
+	metricLabels := map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+	}
+	metricLabelsWithPartition := map[string]string{
+		metrics.LabelVertex:             df.vertexName,
+		metrics.LabelPipeline:           df.pipelineName,
+		metrics.LabelVertexType:         string(dfv1.VertexTypeReduceUDF),
+		metrics.LabelVertexReplicaIndex: strconv.Itoa(int(df.vertexReplica)),
+		metrics.LabelPartitionName:      df.fromBufferPartition.GetName(),
+	}
 
+	start := time.Now()
+	readStart := time.Now()
 	readMessages, err := df.fromBufferPartition.Read(ctx, df.opts.readBatchSize)
-	totalBytes := 0
-	dataBytes := 0
 	if err != nil {
 		df.log.Errorw("Failed to read from isb", zap.Error(err))
 		metrics.ReadMessagesError.With(metricLabelsWithPartition).Inc()
@@ -359,6 +370,8 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		df.currentWatermark = time.Time(processorWM)
 	}
 
+	totalBytes := 0
+	dataBytes := 0
 	for _, m := range readMessages {
 		if !df.keyed {
 			m.Keys = []string{dfv1.DefaultKeyForNonKeyedData}
@@ -371,12 +384,14 @@ func (df *DataForward) forwardAChunk(ctx context.Context) {
 		}
 	}
 
+	metrics.ReadProcessingTime.With(metricLabelsWithPartition).Observe(float64(time.Since(readStart).Microseconds()))
 	metrics.ReadBytesCount.With(metricLabelsWithPartition).Add(float64(totalBytes))
-
 	metrics.ReadDataBytesCount.With(metricLabelsWithPartition).Add(float64(dataBytes))
 
 	// readMessages has to be written to PBQ, acked, etc.
 	df.process(ctx, readMessages)
+
+	metrics.ReduceForwardTime.With(metricLabels).Observe(float64(time.Since(start).Microseconds()))
 }
 
 // associatePBQAndPnF associates a PBQ with the partition if a PBQ exists, else creates a new one and then associates
@@ -460,6 +475,7 @@ func (df *DataForward) process(ctx context.Context, messages []*isb.ReadMessage)
 		df.log.Errorw("Failed to write messages", zap.Int("totalMessages", len(messages)), zap.Int("writtenMessage", len(successfullyWrittenMessages)))
 	}
 
+	ackStart := time.Now()
 	// ack the control messages
 	if len(ctrlMessages) != 0 {
 		df.ackMessages(ctx, ctrlMessages)
@@ -479,6 +495,7 @@ func (df *DataForward) process(ctx context.Context, messages []*isb.ReadMessage)
 
 	// ack successful messages
 	df.ackMessages(ctx, successfullyWrittenMessages)
+	metrics.AckProcessingTime.With(metricLabelsWithPartition).Observe(float64(time.Since(ackStart).Microseconds()))
 
 	// close any windows that need to be closed.
 	// since the watermark will be same for all the messages in the batch

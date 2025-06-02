@@ -1194,6 +1194,8 @@ async fn expose_pending_metrics_(
     is_mono_vertex: bool,
 ) {
     let mut ticker = time::interval(lag_checking_interval);
+    // print pending messages every one minute
+    let mut last_logged = std::time::Instant::now();
 
     loop {
         ticker.tick().await;
@@ -1202,7 +1204,12 @@ async fn expose_pending_metrics_(
             LagReader::Source(source) => match fetch_source_pending(source).await {
                 Ok(pending) => {
                     if pending != -1 {
-                        info!("Pending messages {:?}", pending);
+                        if last_logged.elapsed().as_secs() >= 60 {
+                            info!("Pending messages {:?}", pending);
+                            last_logged = std::time::Instant::now();
+                        } else {
+                            debug!("Pending messages {:?}", pending);
+                        }
                         if is_mono_vertex {
                             let metric_labels = mvtx_forward_metric_labels().clone();
                             monovertex_metrics()
@@ -1232,7 +1239,12 @@ async fn expose_pending_metrics_(
                     match fetch_isb_pending(reader).await {
                         Ok(pending) => {
                             if pending != -1 {
-                                info!("Pending messages {:?}", pending);
+                                if last_logged.elapsed().as_secs() >= 60 {
+                                    info!(partition=?reader.name(), "Pending messages {:?}", pending);
+                                    last_logged = std::time::Instant::now();
+                                } else {
+                                    debug!(partition=?reader.name(), "Pending messages {:?}", pending);
+                                }
                                 let mut metric_labels =
                                     pipeline_metric_labels(reader.name()).clone();
                                 metric_labels.push((
@@ -1355,6 +1367,8 @@ async fn expose_pending_metrics(
         ("15m", 900),
     ];
 
+    let mut last_logged = std::time::Instant::now();
+
     loop {
         ticker.tick().await;
         for (name, pending_stats) in pending_map.lock().await.iter() {
@@ -1383,7 +1397,12 @@ async fn expose_pending_metrics(
             }
             // skip for those the pending is not implemented
             if !pending_info.is_empty() {
-                info!("Pending messages {:?}", pending_info);
+                if last_logged.elapsed().as_secs() >= 60 {
+                    info!("Pending messages {:?}", pending_info);
+                    last_logged = std::time::Instant::now();
+                } else {
+                    debug!("Pending messages {:?}", pending_info);
+                }
                 pending_info.clear();
             }
         }

@@ -12,6 +12,7 @@ use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
     pipeline_isb_metric_labels, pipeline_metric_labels, pipeline_metrics,
 };
+use crate::source::http::CoreHttpSource;
 use crate::tracker::TrackerHandle;
 use crate::{
     message::{Message, Offset},
@@ -19,7 +20,7 @@ use crate::{
 };
 use chrono::Utc;
 use numaflow_jetstream::JetstreamSource;
-use numaflow_kafka::KafkaSource;
+use numaflow_kafka::source::KafkaSource;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pulsar::source::PulsarSource;
 use numaflow_sqs::source::SqsSource;
@@ -54,6 +55,7 @@ pub(crate) mod jetstream;
 
 pub(crate) mod sqs;
 
+pub(crate) mod http;
 pub(crate) mod kafka;
 
 use crate::transformer::Transformer;
@@ -94,6 +96,7 @@ pub(crate) enum SourceType {
     Sqs(SqsSource),
     Jetstream(JetstreamSource),
     Kafka(KafkaSource),
+    Http(CoreHttpSource),
 }
 
 enum ActorMessage {
@@ -251,6 +254,17 @@ impl Source {
             SourceType::Kafka(kafka) => {
                 tokio::spawn(async move {
                     let actor = SourceActor::new(receiver, kafka.clone(), kafka.clone(), kafka);
+                    actor.run().await;
+                });
+            }
+            SourceType::Http(http_source) => {
+                tokio::spawn(async move {
+                    let actor = SourceActor::new(
+                        receiver,
+                        http_source.clone(),
+                        http_source.clone(),
+                        http_source,
+                    );
                     actor.run().await;
                 });
             }
