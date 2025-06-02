@@ -152,7 +152,6 @@ pub(crate) enum UnalignedWindowMessage {
     },
     // Merging windows
     Merge {
-        message: Message,
         windows: Vec<Window>,
     },
     // Expanding a window

@@ -421,6 +421,7 @@ impl ProcessorManager {
     }
 
     /// creates a watcher for the given bucket, will retry infinitely until it succeeds
+    // FIXME: create_watcher is not cancel safe
     async fn create_watcher(bucket: async_nats::jetstream::kv::Store) -> Watch {
         const RECONNECT_INTERVAL: u64 = 1000;
         // infinite retry

@@ -6,6 +6,8 @@ use crate::message::Message;
 use crate::reduce::reducer::unaligned::windower::{UnalignedWindowMessage, Window};
 use chrono::{DateTime, Utc};
 
+type WindowStore = Arc<RwLock<HashMap<String, BTreeMap<DateTime<Utc>, Window>>>>;
+
 /// SessionWindowManager manages session windows.
 #[derive(Debug, Clone)]
 pub(crate) struct SessionWindowManager {
@@ -13,7 +15,7 @@ pub(crate) struct SessionWindowManager {
     timeout: Duration,
     /// All windows (both active and closed) mapped by combined key (joined keys)
     /// Windows are sorted by end time within each key
-    all_windows: Arc<RwLock<HashMap<String, BTreeMap<DateTime<Utc>, Window>>>>,
+    all_windows: WindowStore,
 }
 
 impl SessionWindowManager {
@@ -32,226 +34,189 @@ impl SessionWindowManager {
     /// Assigns windows to a message based on session window logic
     pub(crate) fn assign_windows(&self, msg: Message) -> Vec<UnalignedWindowMessage> {
         let combined_key = Self::combine_keys(&msg.keys);
-        let mut result = Vec::new();
-
-        // Check if we already have windows for this key
         let mut all_windows = self.all_windows.write().expect("Poisoned lock");
 
-        // Create a new window for this message
         let new_window = Window::new(
             msg.event_time,
             msg.event_time + chrono::Duration::from_std(self.timeout).unwrap(),
             Arc::clone(&msg.keys),
         );
 
-        // Get or create the window map for this key
         let window_map = all_windows.entry(combined_key).or_default();
 
-        // Check if this window can be merged with any existing window
-        if let Some((_, window_to_merge)) = Self::find_window_to_merge(window_map, &new_window) {
-            let old_window = window_to_merge.clone();
+        match Self::find_window_to_merge(window_map, &new_window) {
+            Some(existing_window) => {
+                let needs_expansion = new_window.start_time < existing_window.start_time
+                    || new_window.end_time > existing_window.end_time;
 
-            // Check if we need to expand the window
-            if new_window.start_time < window_to_merge.start_time
-                || new_window.end_time > window_to_merge.end_time
-            {
-                // Remove the old window from the map
-                window_map.remove(&old_window.end_time);
+                if needs_expansion {
+                    let old_window = existing_window.clone();
+                    window_map.remove(&old_window.end_time);
 
-                // Create an expanded window
-                let mut expanded_window = old_window.clone();
-                if new_window.start_time < expanded_window.start_time {
-                    expanded_window.start_time = new_window.start_time;
+                    let expanded_window = Window::new(
+                        new_window.start_time.min(old_window.start_time),
+                        new_window.end_time.max(old_window.end_time),
+                        Arc::clone(&msg.keys),
+                    );
+
+                    window_map.insert(expanded_window.end_time, expanded_window.clone());
+
+                    vec![UnalignedWindowMessage::Expand {
+                        message: msg,
+                        windows: vec![old_window, expanded_window],
+                    }]
+                } else {
+                    vec![UnalignedWindowMessage::Append {
+                        message: msg,
+                        window: existing_window.clone(),
+                    }]
                 }
-                if new_window.end_time > expanded_window.end_time {
-                    expanded_window.end_time = new_window.end_time;
-                }
-
-                // Insert the expanded window
-                window_map.insert(expanded_window.end_time, expanded_window.clone());
-
-                // Create expand operation
-                result.push(UnalignedWindowMessage::Expand {
-                    message: msg,
-                    windows: vec![old_window, expanded_window],
-                });
-            } else {
-                // No need to expand, just append
-                result.push(UnalignedWindowMessage::Append {
-                    message: msg,
-                    window: window_to_merge.clone(),
-                });
             }
-        } else {
-            // No exiting window to expand, create a new one
-            window_map.insert(new_window.end_time, new_window.clone());
-            result.push(UnalignedWindowMessage::Open {
-                message: msg,
-                window: new_window,
-            });
+            None => {
+                window_map.insert(new_window.end_time, new_window.clone());
+                vec![UnalignedWindowMessage::Open {
+                    message: msg,
+                    window: new_window,
+                }]
+            }
         }
-
-        result
     }
 
     /// Find a window that can be merged with the given window
     fn find_window_to_merge<'a>(
         window_map: &'a BTreeMap<DateTime<Utc>, Window>,
         window: &Window,
-    ) -> Option<(&'a DateTime<Utc>, &'a Window)> {
-        for (end_time, existing_window) in window_map.iter() {
-            // Windows can be merged if:
-            // 1. New window starts before existing window ends
-            // 2. Existing window starts before new window ends
-            if window.start_time <= existing_window.end_time
+    ) -> Option<&'a Window> {
+        window_map.values().find(|existing_window| {
+            // Windows overlap if they intersect
+            window.start_time <= existing_window.end_time
                 && existing_window.start_time <= window.end_time
-            {
-                return Some((end_time, existing_window));
-            }
-        }
-        None
+        })
     }
 
     /// Closes windows that have been inactive for longer than the timeout
     pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<UnalignedWindowMessage> {
-        let mut result = Vec::new();
-
-        // Find windows to close
         let mut all_windows = self.all_windows.write().expect("Poisoned lock");
-        let mut closed_windows_by_key: HashMap<String, Vec<Window>> = HashMap::new();
 
-        // First pass: identify windows to close and group them by key
+        // Extract and remove expired windows
+        let closed_windows_by_key = Self::extract_expired_windows(&mut all_windows, watermark);
+
+        // Process each key's closed windows
+        closed_windows_by_key
+            .into_iter()
+            .flat_map(|(key, windows)| {
+                Self::process_closed_windows(&mut all_windows, &key, windows)
+            })
+            .collect()
+    }
+
+    /// Extract expired windows from the window map
+    fn extract_expired_windows(
+        all_windows: &mut HashMap<String, BTreeMap<DateTime<Utc>, Window>>,
+        watermark: DateTime<Utc>,
+    ) -> HashMap<String, Vec<Window>> {
+        let mut closed_windows_by_key = HashMap::new();
+
         for (key, window_map) in all_windows.iter_mut() {
-            let mut windows_to_remove = Vec::new();
+            let expired_windows: Vec<_> = window_map
+                .iter()
+                .filter(|(end_time, _)| **end_time <= watermark)
+                .map(|(end_time, window)| (*end_time, window.clone()))
+                .collect();
 
-            for (end_time, window) in window_map.iter() {
-                // If window end time is before or equal to watermark, close it
-                if *end_time <= watermark {
-                    windows_to_remove.push(*end_time);
-                    closed_windows_by_key
-                        .entry(key.clone())
-                        .or_default()
-                        .push(window.clone());
+            if !expired_windows.is_empty() {
+                for (end_time, _) in &expired_windows {
+                    window_map.remove(end_time);
                 }
-            }
 
-            // Remove closed windows from the map
-            for end_time in windows_to_remove {
-                window_map.remove(&end_time);
+                closed_windows_by_key.insert(
+                    key.clone(),
+                    expired_windows
+                        .into_iter()
+                        .map(|(_, window)| window)
+                        .collect(),
+                );
             }
         }
 
         // Remove empty keys
         all_windows.retain(|_, window_map| !window_map.is_empty());
+        closed_windows_by_key
+    }
 
-        // Second pass: process closed windows for merging
-        for (key, closed_windows) in closed_windows_by_key {
-            // Find groups of windows that can be merged
-            let merged_groups = self.windows_that_can_be_merged(&closed_windows);
+    /// Process closed windows for a specific key
+    fn process_closed_windows(
+        all_windows: &mut HashMap<String, BTreeMap<DateTime<Utc>, Window>>,
+        key: &str,
+        closed_windows: Vec<Window>,
+    ) -> Vec<UnalignedWindowMessage> {
+        Self::windows_that_can_be_merged(&closed_windows)
+            .into_iter()
+            .filter_map(|group| Self::process_window_group(all_windows, key, group))
+            .collect()
+    }
 
-            for group in merged_groups {
-                if group.len() > 1 {
-                    // Create a merge operation for windows that can be merged
-                    result.push(UnalignedWindowMessage::Merge {
-                        message: Message::default(), // No message for close operations
-                        windows: group.clone(),
-                    });
-
-                    // Merge the windows into a single window
-                    let mut merged_window = group[0].clone();
-                    for window in &group[1..] {
-                        if window.start_time < merged_window.start_time {
-                            merged_window.start_time = window.start_time;
-                        }
-                        if window.end_time > merged_window.end_time {
-                            merged_window.end_time = window.end_time;
-                        }
-                    }
-
-                    // Check if the merged window can be merged with any remaining active window
-                    let window_map = all_windows.get_mut(&key);
-                    if let Some(window_map) = window_map {
-                        if let Some((_, active_window)) =
-                            Self::find_window_to_merge(window_map, &merged_window)
-                        {
-                            let old_window = active_window.clone();
-
-                            // Remove the old window
-                            window_map.remove(&old_window.end_time);
-
-                            // Create a new merged window
-                            let mut new_merged_window = old_window.clone();
-                            if merged_window.start_time < new_merged_window.start_time {
-                                new_merged_window.start_time = merged_window.start_time;
-                            }
-                            if merged_window.end_time > new_merged_window.end_time {
-                                new_merged_window.end_time = merged_window.end_time;
-                            }
-
-                            // Insert the new merged window
-                            window_map
-                                .insert(new_merged_window.end_time, new_merged_window.clone());
-
-                            // Create a merge operation
-                            result.push(UnalignedWindowMessage::Merge {
-                                message: Message::default(),
-                                windows: vec![merged_window, old_window, new_merged_window],
-                            });
-
-                            continue;
-                        }
-                    }
-
-                    // If we can't merge with an active window, close the merged window
-                    result.push(UnalignedWindowMessage::Close(merged_window));
-                } else if !group.is_empty() {
-                    // For single windows, check if they can be merged with remaining active windows
-                    let window = &group[0];
-                    let window_map = all_windows.get_mut(&key);
-
-                    if let Some(window_map) = window_map {
-                        if let Some((_, active_window)) =
-                            Self::find_window_to_merge(window_map, window)
-                        {
-                            let old_window = active_window.clone();
-
-                            // Remove the old window
-                            window_map.remove(&old_window.end_time);
-
-                            // Create a new merged window
-                            let mut new_merged_window = old_window.clone();
-                            if window.start_time < new_merged_window.start_time {
-                                new_merged_window.start_time = window.start_time;
-                            }
-                            if window.end_time > new_merged_window.end_time {
-                                new_merged_window.end_time = window.end_time;
-                            }
-
-                            // Insert the new merged window
-                            window_map
-                                .insert(new_merged_window.end_time, new_merged_window.clone());
-
-                            // Create a merge operation
-                            result.push(UnalignedWindowMessage::Merge {
-                                message: Message::default(),
-                                windows: vec![window.clone(), old_window, new_merged_window],
-                            });
-
-                            continue;
-                        }
-                    }
-
-                    // If we can't merge with an active window, close the window
-                    result.push(UnalignedWindowMessage::Close(window.clone()));
-                }
-            }
+    /// Process a group of windows that can be merged
+    fn process_window_group(
+        all_windows: &mut HashMap<String, BTreeMap<DateTime<Utc>, Window>>,
+        key: &str,
+        group: Vec<Window>,
+    ) -> Option<UnalignedWindowMessage> {
+        if group.is_empty() {
+            return None;
         }
 
-        result
+        let window_to_close = Self::merge_windows(&group);
+
+        // Try to merge with active windows
+        match Self::try_merge_with_active(all_windows, key, &window_to_close) {
+            Some((old_active, new_merged)) => Some(UnalignedWindowMessage::Merge {
+                windows: vec![window_to_close, old_active, new_merged],
+            }),
+            None => Some(UnalignedWindowMessage::Close(window_to_close)),
+        }
+    }
+
+    /// Try to merge a window with active windows
+    fn try_merge_with_active(
+        all_windows: &mut HashMap<String, BTreeMap<DateTime<Utc>, Window>>,
+        key: &str,
+        window: &Window,
+    ) -> Option<(Window, Window)> {
+        let window_map = all_windows.get_mut(key)?;
+        let active_window = Self::find_window_to_merge(window_map, window)?.clone();
+
+        window_map.remove(&active_window.end_time);
+
+        let new_merged = Window::new(
+            window.start_time.min(active_window.start_time),
+            window.end_time.max(active_window.end_time),
+            Arc::clone(&window.keys),
+        );
+
+        window_map.insert(new_merged.end_time, new_merged.clone());
+        Some((active_window, new_merged))
+    }
+
+    /// Merge multiple windows into a single window
+    fn merge_windows(windows: &[Window]) -> Window {
+        let first = &windows[0];
+
+        let (start_time, end_time) = windows.iter().fold(
+            (first.start_time, first.end_time),
+            |(min_start, max_end), window| {
+                (
+                    min_start.min(window.start_time),
+                    max_end.max(window.end_time),
+                )
+            },
+        );
+
+        Window::new(start_time, end_time, Arc::clone(&first.keys))
     }
 
     /// Groups windows that can be merged together
-    fn windows_that_can_be_merged(&self, windows: &[Window]) -> Vec<Vec<Window>> {
+    fn windows_that_can_be_merged(windows: &[Window]) -> Vec<Vec<Window>> {
         if windows.is_empty() {
             return Vec::new();
         }
@@ -494,7 +459,7 @@ mod tests {
         );
 
         // Test merging
-        let merged_groups = windower.windows_that_can_be_merged(&[
+        let merged_groups = SessionWindowManager::windows_that_can_be_merged(&[
             window1.clone(),
             window2.clone(),
             window3.clone(),

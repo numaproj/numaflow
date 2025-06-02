@@ -74,14 +74,14 @@ impl From<UnalignedWindowMessage> for SessionReduceRequest {
                     operation,
                 }
             }
-            UnalignedWindowMessage::Merge { message, windows } => {
+            UnalignedWindowMessage::Merge { windows } => {
                 let operation = Some(session_reduce_request::WindowOperation {
                     event: session_reduce_request::window_operation::Event::Merge as i32,
                     keyed_windows: windows.into_iter().map(Into::into).collect(),
                 });
 
                 SessionReduceRequest {
-                    payload: Some(message.into()),
+                    payload: None,
                     operation,
                 }
             }
