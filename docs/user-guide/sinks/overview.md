@@ -26,4 +26,4 @@ analysis on the data.
 
 There is an explicit DLQ support for sinks using a concept called [fallback sink](fallback.md). For the rest of vertices,
 if you need DLQ, please use [conditional-forwarding](../reference/conditional-forwarding.md).
-Sink cannot not do conditional-forwarding since it is a terminal state and hence we have explicit fallback option. 
+Sink cannot do conditional-forwarding since it is a terminal state and hence we have explicit fallback option. 

@@ -1,0 +1,38 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: simple-pipeline-with-retry-strategy
+spec:
+  vertices:
+    - name: input
+      source:
+        generator:
+          rpu: 1
+          duration: 1s
+    - name: p1
+      udf:
+        builtin:
+          name: cat
+    - name: output
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
+      sink:
+        retryStrategy:
+          backoff:
+            interval: 1s
+            steps: 2
+            factor: 2
+            cap: 3s
+            jitter: 0
+          onFailure: 'drop'
+        udsink:
+          container:
+            image: quay.io/numaio/numaflow-go/sink-retry-e2e:stable
+            imagePullPolicy: Always
+  edges:
+    - from: input
+      to: p1
+    - from: p1
+      to: output

@@ -20,6 +20,7 @@ use crate::sink::serve::ServingStore;
 use crate::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
 use crate::source::Source;
 use crate::source::generator::new_generator;
+use crate::source::http::CoreHttpSource;
 use crate::source::jetstream::new_jetstream_source;
 use crate::source::kafka::new_kafka_source;
 use crate::source::pulsar::new_pulsar_source;
@@ -110,6 +111,7 @@ pub(crate) async fn create_sink_writer(
             )
         }
         SinkType::Kafka(sink_config) => {
+            let sink_config = *sink_config.clone();
             let kafka_sink = numaflow_kafka::sink::new_sink(sink_config)?;
             SinkWriterBuilder::new(
                 batch_size,
@@ -172,6 +174,7 @@ pub(crate) async fn create_sink_writer(
                     .await?)
             }
             SinkType::Kafka(sink_config) => {
+                let sink_config = *sink_config.clone();
                 let kafka_sink = numaflow_kafka::sink::new_sink(sink_config)?;
                 Ok(sink_writer_builder
                     .fb_sink_client(SinkClientType::Kafka(kafka_sink))
@@ -436,10 +439,23 @@ pub async fn create_source(
             ))
         }
         SourceType::Kafka(kafka_config) => {
-            let kafka = new_kafka_source(kafka_config.clone(), batch_size, read_timeout).await?;
+            let config = *kafka_config.clone();
+            let kafka = new_kafka_source(config, batch_size, read_timeout).await?;
             Ok(Source::new(
                 batch_size,
                 source::SourceType::Kafka(kafka),
+                tracker_handle,
+                source_config.read_ahead,
+                transformer,
+                watermark_handle,
+            ))
+        }
+        SourceType::Http(http_source_config) => {
+            let http_source =
+                numaflow_http::HttpSourceHandle::new(http_source_config.clone()).await;
+            Ok(Source::new(
+                batch_size,
+                source::SourceType::Http(CoreHttpSource::new(batch_size, http_source)),
                 tracker_handle,
                 source_config.read_ahead,
                 transformer,
