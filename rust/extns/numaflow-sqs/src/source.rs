@@ -11,7 +11,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use aws_sdk_sqs::Client;
-use aws_sdk_sqs::types::{MessageSystemAttributeName, QueueAttributeName};
+use aws_sdk_sqs::types::{DeleteMessageBatchRequestEntry, MessageSystemAttributeName, QueueAttributeName};
 use bytes::Bytes;
 use chrono::{DateTime, TimeZone, Utc};
 use tokio::sync::{mpsc, oneshot};
@@ -274,6 +274,7 @@ impl SqsActor {
 
     /// delete message from SQS, serves as Numaflow source ack.
     async fn delete_messages(&mut self, offsets: Vec<Bytes>) -> Result<()> {
+        let mut batch_builder = self.client.delete_message_batch().queue_url(&self.queue_url);
         for offset in offsets {
             let offset = match std::str::from_utf8(&offset) {
                 Ok(offset) => offset,
@@ -284,21 +285,18 @@ impl SqsActor {
                     )));
                 }
             };
-            if let Err(err) = self
-                .client
-                .delete_message()
-                .queue_url(self.queue_url.clone())
-                .receipt_handle(offset)
-                .send()
-                .await
-            {
-                tracing::error!(
-                    ?err,
-                    queue_url = ?self.queue_url,
-                    "Error while deleting message from SQS"
-                );
-                return Err(SqsSourceError::from(Error::Sqs(err.into())));
-            }
+            batch_builder = batch_builder.entries(DeleteMessageBatchRequestEntry::builder().receipt_handle(offset).build().map_err(
+                |err| Error::Sqs(err.into()),
+            )?);
+        }
+
+        if let Err(e) =  batch_builder.send().await {
+            tracing::error!(
+                ?e,
+                queue_url = self.queue_url,
+                "Failed to delete messages from SQS"
+            );
+            return Err(SqsSourceError::from(Error::Sqs(e.into())));
         }
         Ok(())
     }
