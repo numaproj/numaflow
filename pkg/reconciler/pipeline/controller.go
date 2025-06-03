@@ -684,6 +684,7 @@ func buildVertices(pl *dfv1.Pipeline) map[string]dfv1.Vertex {
 			Lifecycle: dfv1.VertexLifecycle{
 				DesiredPhase: dfv1.VertexPhase(pl.GetDesiredPhase()),
 			},
+			InterStepBuffer: pl.Spec.InterStepBuffer,
 		}
 		hash := sharedutil.MustHash(spec.DeepCopyWithoutReplicasAndLifecycle())
 		obj := dfv1.Vertex{
