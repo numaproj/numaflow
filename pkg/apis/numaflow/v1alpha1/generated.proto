@@ -310,6 +310,15 @@ message CombinedEdge {
   optional VertexLimits toVertexLimits = 7;
 }
 
+// Compression is the compression settings for the messages in the InterStepBuffer
+message Compression {
+  // Type is the type of compression to be used
+  // +kubebuilder:validation:Enum:None;GZIP
+  // +kubebuilder:default:=None
+  // +optional
+  optional string type = 1;
+}
+
 // Container is used to define the container properties for user-defined functions, sinks, etc.
 message Container {
   // +optional
@@ -702,6 +711,13 @@ message IdleSource {
 
   // IncrementBy is the duration to be added to the current watermark to progress the watermark when source is idling.
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration incrementBy = 3;
+}
+
+// InterStepBuffer configuration specifically for the pipeline.
+message InterStepBuffer {
+  // Compression is the compression settings for the InterStepBufferService
+  // +optional
+  optional Compression compression = 2;
 }
 
 // +genclient
@@ -1259,6 +1275,7 @@ message PipelineList {
 }
 
 message PipelineSpec {
+  // InterStepBufferServiceName is the name of the InterStepBufferService to be used by the pipeline
   // +optional
   optional string interStepBufferServiceName = 1;
 
@@ -1291,6 +1308,10 @@ message PipelineSpec {
   // SideInputs defines the Side Inputs of a pipeline.
   // +optional
   repeated SideInput sideInputs = 8;
+
+  // InterStepBuffer configuration specific to this pipeline.
+  // +optional
+  optional InterStepBuffer interStepBuffer = 9;
 }
 
 message PipelineStatus {
@@ -2033,6 +2054,10 @@ message VertexSpec {
   // +kubebuilder:default={"desiredPhase": Running}
   // +optional
   optional VertexLifecycle lifecycle = 8;
+
+  // InterStepBuffer configuration specific to this pipeline.
+  // +optional
+  optional InterStepBuffer interStepBuffer = 9;
 }
 
 message VertexStatus {
