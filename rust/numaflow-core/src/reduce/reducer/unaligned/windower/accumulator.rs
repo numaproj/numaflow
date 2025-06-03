@@ -5,7 +5,9 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 
 use crate::message::Message;
-use crate::reduce::reducer::unaligned::windower::{UnalignedWindowMessage, Window};
+use crate::reduce::reducer::unaligned::windower::{
+    SHARED_PNF_SLOT, UnalignedWindowMessage, UnalignedWindowOperation, Window,
+};
 
 /// Represents the state of an accumulator window, tracking message timestamps
 #[derive(Debug, Clone)]
@@ -45,8 +47,8 @@ impl WindowState {
     fn delete_timestamps_before(&self, end_time: DateTime<Utc>) {
         let mut timestamps = self.message_timestamps.write().expect("Poisoned lock");
 
-        // Remove all timestamps before or equal to end_time
-        timestamps.retain(|ts| *ts > end_time);
+        // Remove all timestamps before end_time (keep timestamps >= end_time)
+        timestamps.retain(|ts| *ts >= end_time);
 
         let mut last_seen = self.last_seen_event_time.write().expect("Poisoned lock");
         // Update last seen event time if needed
@@ -101,9 +103,12 @@ impl AccumulatorWindowManager {
             // Window exists, append message
             window_state.append_timestamp(msg.event_time);
 
-            result.push(UnalignedWindowMessage::Append {
-                message: msg.clone(),
-                window: window_state.window.clone(),
+            result.push(UnalignedWindowMessage {
+                operation: UnalignedWindowOperation::Append {
+                    message: msg.clone(),
+                    window: window_state.window.clone(),
+                },
+                pnf_slot: SHARED_PNF_SLOT.to_string().into(),
             });
         } else {
             // Create a new window for this key
@@ -118,9 +123,12 @@ impl AccumulatorWindowManager {
 
             active_windows.insert(combined_key, window_state);
 
-            result.push(UnalignedWindowMessage::Open {
-                message: msg.clone(),
-                window,
+            result.push(UnalignedWindowMessage {
+                operation: UnalignedWindowOperation::Open {
+                    message: msg.clone(),
+                    window,
+                },
+                pnf_slot: SHARED_PNF_SLOT.to_string().into(),
             });
         }
 
@@ -143,7 +151,12 @@ impl AccumulatorWindowManager {
 
             // If the last event time plus timeout is before current time, close the window
             if current_time > last_seen + chrono::Duration::from_std(self.timeout).unwrap() {
-                result.push(UnalignedWindowMessage::Close(window_state.window.clone()));
+                result.push(UnalignedWindowMessage {
+                    operation: UnalignedWindowOperation::Close {
+                        window: window_state.window.clone(),
+                    },
+                    pnf_slot: SHARED_PNF_SLOT.to_string().into(),
+                });
                 keys_to_delete.push(key.clone());
             }
         }
@@ -219,7 +232,11 @@ mod tests {
 
         // Verify results - should be assigned to exactly 1 window with Open operation
         assert_eq!(window_msgs.len(), 1);
-        if let UnalignedWindowMessage::Open { window, .. } = &window_msgs[0] {
+        if let UnalignedWindowMessage {
+            operation: UnalignedWindowOperation::Open { window, .. },
+            ..
+        } = &window_msgs[0]
+        {
             assert_eq!(window.keys, msg.keys);
         } else {
             panic!("Expected Open message");
@@ -250,7 +267,11 @@ mod tests {
 
         // Verify results - should be assigned to exactly 1 window with Append operation
         assert_eq!(window_msgs.len(), 1);
-        if let UnalignedWindowMessage::Append { message: _, window } = &window_msgs[0] {
+        if let UnalignedWindowMessage {
+            operation: UnalignedWindowOperation::Append { window, .. },
+            ..
+        } = &window_msgs[0]
+        {
             assert_eq!(window.keys, msg.keys);
         } else {
             panic!("Expected Append message");
@@ -280,7 +301,11 @@ mod tests {
         let closed = windower.close_windows(Utc::now());
 
         // Should close 1 window
-        if let UnalignedWindowMessage::Close(window) = &closed[0] {
+        if let UnalignedWindowMessage {
+            operation: UnalignedWindowOperation::Close { window },
+            ..
+        } = &closed[0]
+        {
             assert_eq!(window.keys, msg.keys);
         } else {
             panic!("Expected Close message");

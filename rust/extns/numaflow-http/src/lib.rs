@@ -147,7 +147,7 @@ impl HttpSourceConfigBuilder {
             buffer_size: self.buffer_size.unwrap_or(500),
             addr: self
                 .addr
-                .unwrap_or_else(|| "0.0.0.0:8080".parse().expect("Invalid address")),
+                .unwrap_or_else(|| "0.0.0.0:8443".parse().expect("Invalid address")),
             timeout: self.timeout.unwrap_or(Duration::from_secs(1)),
             token: self.token,
         }

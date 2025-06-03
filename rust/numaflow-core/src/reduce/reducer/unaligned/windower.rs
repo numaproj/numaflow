@@ -6,6 +6,7 @@ use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::accumulator::KeyedWindow;
 use numaflow_pb::clients::sessionreduce;
+use std::fmt::Display;
 use std::sync::Arc;
 
 pub(crate) mod accumulator;
@@ -43,6 +44,18 @@ pub(crate) struct Window {
     pub(crate) id: Bytes,
     /// Keys for the window
     pub(crate) keys: Arc<[String]>,
+}
+
+impl Display for Window {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Window {{ start: {}, end: {}, keys: {:?} }}",
+            self.start_time.timestamp_millis(),
+            self.end_time.timestamp_millis(),
+            self.keys
+        )
+    }
 }
 
 impl From<sessionreduce::KeyedWindow> for Window {
@@ -128,23 +141,26 @@ impl Window {
             keys,
         }
     }
+}
 
-    pub(crate) fn pnf_slot() -> Bytes {
-        // all the windows share the same slot
-        SHARED_PNF_SLOT.to_string().into()
-    }
+#[derive(Debug, Clone)]
+pub(crate) struct UnalignedWindowMessage {
+    pub(crate) operation: UnalignedWindowOperation,
+    pub(crate) pnf_slot: Bytes,
 }
 
 /// Unaligned Window Message.
 #[derive(Debug, Clone)]
-pub(crate) enum UnalignedWindowMessage {
+pub(crate) enum UnalignedWindowOperation {
     // Opening a new window
     Open {
         message: Message,
         window: Window,
     },
     // Closing a window
-    Close(Window),
+    Close {
+        window: Window,
+    },
     // Appending to an existing window
     Append {
         message: Message,

@@ -1,6 +1,6 @@
 use crate::config::get_vertex_name;
 use crate::message::{IntOffset, Message, MessageID, Offset};
-use crate::reduce::reducer::unaligned::windower::{UnalignedWindowMessage, Window};
+use crate::reduce::reducer::unaligned::windower::{UnalignedWindowMessage, UnalignedWindowOperation, Window};
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 use numaflow_pb::clients::accumulator::accumulator_client::AccumulatorClient;
 use numaflow_pb::clients::accumulator::{
@@ -41,8 +41,11 @@ impl From<Window> for accumulator::KeyedWindow {
 
 impl From<UnalignedWindowMessage> for AccumulatorRequest {
     fn from(value: UnalignedWindowMessage) -> Self {
-        match value {
-            UnalignedWindowMessage::Open { message, window } => {
+        match value.operation {
+            UnalignedWindowOperation::Open {
+                message,
+                window,
+            } => {
                 let operation = Some(accumulator_request::WindowOperation {
                     event: accumulator_request::window_operation::Event::Open as i32,
                     keyed_window: Some(window.into()),
@@ -53,7 +56,9 @@ impl From<UnalignedWindowMessage> for AccumulatorRequest {
                     operation,
                 }
             }
-            UnalignedWindowMessage::Close(window) => {
+            UnalignedWindowOperation::Close {
+                window,
+            } => {
                 let operation = Some(accumulator_request::WindowOperation {
                     event: accumulator_request::window_operation::Event::Close as i32,
                     keyed_window: Some(window.into()),
@@ -64,7 +69,10 @@ impl From<UnalignedWindowMessage> for AccumulatorRequest {
                     operation,
                 }
             }
-            UnalignedWindowMessage::Append { message, window } => {
+            UnalignedWindowOperation::Append {
+                message,
+                window,
+            } => {
                 let operation = Some(accumulator_request::WindowOperation {
                     event: accumulator_request::window_operation::Event::Append as i32,
                     keyed_window: Some(window.into()),

@@ -27,7 +27,6 @@ use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica};
 use crate::mapper::map::MapHandle;
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
-use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
 use crate::reduce::reducer::unaligned::user_defined::UserDefinedUnalignedReduce;
 use crate::reduce::reducer::user_defined::UserDefinedReduce;
 use crate::sink::SinkWriter;
@@ -981,14 +980,14 @@ async fn sidecar_livez(State(state): State<ComponentHealthChecks>) -> impl IntoR
                     return StatusCode::INTERNAL_SERVER_ERROR;
                 }
             }
-            PipelineComponents::Reduce(mut reducer) => match reducer {
+            PipelineComponents::Reduce(reducer) => match reducer {
                 UserDefinedReduce::Aligned(mut reducer) => {
                     if !reducer.ready().await {
                         error!("Pipeline aligned reduce is not ready");
                         return StatusCode::INTERNAL_SERVER_ERROR;
                     }
                 }
-                UserDefinedReduce::Unaligned(mut reducer) => match reducer {
+                UserDefinedReduce::Unaligned(reducer) => match reducer {
                     UserDefinedUnalignedReduce::Accumulator(mut reducer) => {
                         if !reducer.ready().await {
                             error!("Pipeline accumulator reduce component is not ready");

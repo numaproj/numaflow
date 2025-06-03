@@ -3,8 +3,11 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use crate::message::Message;
-use crate::reduce::reducer::unaligned::windower::{UnalignedWindowMessage, Window};
+use crate::reduce::reducer::unaligned::windower::{
+    SHARED_PNF_SLOT, UnalignedWindowMessage, UnalignedWindowOperation, Window,
+};
 use chrono::{DateTime, Utc};
+use tracing::info;
 
 type WindowStore = Arc<RwLock<HashMap<String, BTreeMap<DateTime<Utc>, Window>>>>;
 
@@ -61,22 +64,38 @@ impl SessionWindowManager {
 
                     window_map.insert(expanded_window.end_time, expanded_window.clone());
 
-                    vec![UnalignedWindowMessage::Expand {
-                        message: msg,
-                        windows: vec![old_window, expanded_window],
+                    info!(
+                        "Expanding window: {:?} -> {:?}",
+                        old_window, expanded_window
+                    );
+
+                    vec![UnalignedWindowMessage {
+                        operation: UnalignedWindowOperation::Expand {
+                            message: msg,
+                            windows: vec![old_window, expanded_window],
+                        },
+                        pnf_slot: SHARED_PNF_SLOT.to_string().into(),
                     }]
                 } else {
-                    vec![UnalignedWindowMessage::Append {
-                        message: msg,
-                        window: existing_window.clone(),
+                    info!("Appending to existing window: {:?}", existing_window);
+                    vec![UnalignedWindowMessage {
+                        operation: UnalignedWindowOperation::Append {
+                            message: msg,
+                            window: existing_window.clone(),
+                        },
+                        pnf_slot: SHARED_PNF_SLOT.to_string().into(),
                     }]
                 }
             }
             None => {
+                info!("Creating new window: {:?}", new_window);
                 window_map.insert(new_window.end_time, new_window.clone());
-                vec![UnalignedWindowMessage::Open {
-                    message: msg,
-                    window: new_window,
+                vec![UnalignedWindowMessage {
+                    operation: UnalignedWindowOperation::Open {
+                        message: msg,
+                        window: new_window,
+                    },
+                    pnf_slot: SHARED_PNF_SLOT.to_string().into(),
                 }]
             }
         }
@@ -105,7 +124,9 @@ impl SessionWindowManager {
         closed_windows_by_key
             .into_iter()
             .flat_map(|(key, windows)| {
-                Self::process_closed_windows(&mut all_windows, &key, windows)
+                let windows = Self::process_closed_windows(&mut all_windows, &key, windows);
+                info!("Closing windows for key {}: {:?}", key, windows);
+                windows
             })
             .collect()
     }
@@ -170,10 +191,18 @@ impl SessionWindowManager {
 
         // Try to merge with active windows
         match Self::try_merge_with_active(all_windows, key, &window_to_close) {
-            Some((old_active, new_merged)) => Some(UnalignedWindowMessage::Merge {
-                windows: vec![window_to_close, old_active, new_merged],
+            Some((old_active, new_merged)) => Some(UnalignedWindowMessage {
+                operation: UnalignedWindowOperation::Merge {
+                    windows: vec![window_to_close, old_active, new_merged],
+                },
+                pnf_slot: SHARED_PNF_SLOT.to_string().into(),
             }),
-            None => Some(UnalignedWindowMessage::Close(window_to_close)),
+            None => Some(UnalignedWindowMessage {
+                operation: UnalignedWindowOperation::Close {
+                    window: window_to_close,
+                },
+                pnf_slot: SHARED_PNF_SLOT.to_string().into(),
+            }),
         }
     }
 
@@ -309,7 +338,11 @@ mod tests {
 
         // Verify results - should be assigned to exactly 1 window with Open operation
         assert_eq!(window_msgs.len(), 1);
-        if let UnalignedWindowMessage::Open { window, .. } = &window_msgs[0] {
+        if let UnalignedWindowMessage {
+            operation: UnalignedWindowOperation::Open { window, .. },
+            ..
+        } = &window_msgs[0]
+        {
             assert_eq!(window.keys, msg.keys);
         } else {
             panic!("Expected Open message");
@@ -353,7 +386,11 @@ mod tests {
         // Verify results - should be assigned to exactly 1 window with Expand operation (not Append)
         // because the new window extends the existing window
         assert_eq!(window_msgs.len(), 1);
-        if let UnalignedWindowMessage::Expand { windows, .. } = &window_msgs[0] {
+        if let UnalignedWindowMessage {
+            operation: UnalignedWindowOperation::Expand { windows, .. },
+            ..
+        } = &window_msgs[0]
+        {
             assert_eq!(windows.len(), 2); // old window and new expanded window
         } else {
             panic!("Expected Expand message, got {:?}", window_msgs[0]);
@@ -396,7 +433,11 @@ mod tests {
 
         // Since [now+10, now+70] extends beyond [now, now+60], this should be an Expand operation
         assert_eq!(window_msgs.len(), 1);
-        if let UnalignedWindowMessage::Expand { windows, .. } = &window_msgs[0] {
+        if let UnalignedWindowMessage {
+            operation: UnalignedWindowOperation::Expand { windows, .. },
+            ..
+        } = &window_msgs[0]
+        {
             assert_eq!(windows.len(), 2); // old window and new expanded window
         } else {
             panic!("Expected Expand message, got {:?}", window_msgs[0]);
@@ -428,7 +469,11 @@ mod tests {
 
         // Should close 1 window
         assert_eq!(closed.len(), 1);
-        if let UnalignedWindowMessage::Close(window) = &closed[0] {
+        if let UnalignedWindowMessage {
+            operation: UnalignedWindowOperation::Close { window },
+            ..
+        } = &closed[0]
+        {
             assert_eq!(window.keys, msg.keys);
         } else {
             panic!("Expected Close message");
@@ -438,7 +483,6 @@ mod tests {
     #[test]
     fn test_windows_that_can_be_merged() {
         // Create session windower with 60s timeout
-        let windower = SessionWindowManager::new(Duration::from_secs(60));
         let now = Utc::now();
 
         // Create overlapping windows

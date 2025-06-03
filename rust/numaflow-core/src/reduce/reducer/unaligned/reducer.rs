@@ -36,14 +36,14 @@ impl ReduceResponseWrapper {
             ReduceResponseWrapper::Accumulator(resp) => {
                 resp.window.as_ref().map(|w| ResponseWindow {
                     keys: w.keys.clone(),
-                    end_time: crate::shared::grpc::utc_from_timestamp(*w.end.as_ref().unwrap()),
+                    end_time: utc_from_timestamp(*w.end.as_ref().unwrap()),
                     is_eof: resp.eof,
                 })
             }
             ReduceResponseWrapper::Session(resp) => {
                 resp.keyed_window.as_ref().map(|w| ResponseWindow {
                     keys: w.keys.clone(),
-                    end_time: crate::shared::grpc::utc_from_timestamp(*w.end.as_ref().unwrap()),
+                    end_time: utc_from_timestamp(*w.end.as_ref().unwrap()),
                     is_eof: resp.eof,
                 })
             }
@@ -86,8 +86,6 @@ struct ReduceTask {
     gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
     /// Sender for error messages.
     error_tx: mpsc::Sender<Error>,
-    /// Window being processed by this task.
-    window: Window,
     /// Window manager for assigning windows to messages and closing windows.
     window_manager: UnalignedWindowManager,
     /// Maximum time to wait before writing a batch
@@ -105,7 +103,6 @@ impl ReduceTask {
         js_writer: JetstreamWriter,
         gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
         error_tx: mpsc::Sender<Error>,
-        window: Window,
         window_manager: UnalignedWindowManager,
         batch_timeout: Duration,
     ) -> Self {
@@ -114,7 +111,6 @@ impl ReduceTask {
             js_writer,
             gc_wal_tx,
             error_tx,
-            window,
             window_manager,
             batch_timeout,
             tracked_windows: HashMap::new(),
@@ -284,6 +280,9 @@ impl ReduceTask {
         loop {
             tokio::select! {
                 _ = batch_timer.tick() => {
+
+                    drop(writer_tx);
+
                     // Wait for the writer to finish writing the current batch
                     if let Err(e) = writer_handle.await {
                         error!(?e, "Error while writing results to JetStream");
@@ -328,7 +327,7 @@ impl ReduceTask {
                         };
 
                         self.tracked_windows.insert(session_window.keys.to_vec(), session_window);
-                        break;
+                        continue;
                     }
 
                     writer_tx
@@ -336,12 +335,6 @@ impl ReduceTask {
                         .await
                         .expect("Failed to send response to writer");
                 }
-            }
-        }
-
-        while let Some(response) = response_stream.next().await {
-            if response.eof {
-                break;
             }
         }
 
@@ -504,28 +497,25 @@ impl UnalignedReduceActor {
 
     /// Handle a window message
     async fn handle_window_message(&mut self, msg: UnalignedWindowMessage) -> crate::Result<()> {
-        match msg.clone() {
-            UnalignedWindowMessage::Open { window, .. } => {
-                self.window_open(window, msg).await?;
-            }
-            UnalignedWindowMessage::Close(window) => {
-                self.window_close(window.id).await;
-            }
-            UnalignedWindowMessage::Append { window, .. } => {
-                self.window_append(window.id, msg).await?;
-            }
-            UnalignedWindowMessage::Merge { .. } => {}
-            UnalignedWindowMessage::Expand { .. } => {}
+        // Check if pnf_slot already exists (active stream creation based on slot presence)
+        if let Some(active_stream) = self.active_streams.get(&msg.pnf_slot) {
+            // Slot exists, send message to existing channel (append operation)
+            active_stream
+                .message_tx
+                .send(msg)
+                .await
+                .map_err(|_| Error::Reduce("Failed to send message to reduce task".to_string()))?;
+        } else {
+            // Slot not present, create new active stream (window open operation)
+            self.create_active_stream(msg).await?;
         }
         Ok(())
     }
 
-    /// Creates a new reduce task for the window and sends the initial Open command
-    async fn window_open(
-        &mut self,
-        window: Window,
-        msg: UnalignedWindowMessage,
-    ) -> crate::Result<()> {
+    /// Creates a new active stream for the pnf_slot and sends the message
+    async fn create_active_stream(&mut self, msg: UnalignedWindowMessage) -> crate::Result<()> {
+        let pnf_slot = msg.pnf_slot.clone();
+
         // Create a new channel for this window's messages
         let (message_tx, message_rx) = mpsc::channel(100);
         let message_stream = ReceiverStream::new(message_rx);
@@ -536,7 +526,6 @@ impl UnalignedReduceActor {
             self.js_writer.clone(),
             self.gc_wal_tx.clone(),
             self.error_tx.clone(),
-            window.clone(),
             self.window_manager.clone(),
             Duration::from_secs(1), // Default batch timeout
         );
@@ -547,74 +536,20 @@ impl UnalignedReduceActor {
             .await;
 
         self.active_streams.insert(
-            window.id.clone(),
+            pnf_slot,
             ActiveStream {
                 message_tx: message_tx.clone(),
                 task_handle,
             },
         );
 
-        // Send the open command with the first message
+        // Send the message to the newly created stream
         message_tx
             .send(msg)
             .await
-            .map_err(|_| Error::Reduce("Failed to send open message to reduce task".to_string()))?;
+            .map_err(|_| Error::Reduce("Failed to send message to new reduce task".to_string()))?;
 
         Ok(())
-    }
-
-    /// Sends the message to the reduce task for the window
-    async fn window_append(
-        &mut self,
-        window_id: Bytes,
-        msg: UnalignedWindowMessage,
-    ) -> crate::Result<()> {
-        let Some(active_stream) = self.active_streams.get(&window_id) else {
-            error!(
-                ?window_id,
-                "No active stream found for window during append"
-            );
-            return Ok(());
-        };
-
-        // Get the existing stream or create a new one if not found
-        // Send the append message
-        active_stream.message_tx.send(msg).await.map_err(|_| {
-            Error::Reduce("Failed to send append message to reduce task".to_string())
-        })?;
-
-        Ok(())
-    }
-
-    /// Closes the reduce task for the window
-    async fn window_close(&mut self, window_id: Bytes) {
-        // Get the existing stream or log error if not found
-        let Some(active_stream) = self.active_streams.remove(&window_id) else {
-            error!(?window_id, "No active stream found for window during close");
-            return;
-        };
-
-        // Drop the sender to signal completion
-        drop(active_stream.message_tx);
-
-        // Wait for the task to complete
-        if let Err(e) = active_stream.task_handle.await {
-            error!(?window_id, err = ?e, "Reduce task for window failed");
-        }
-    }
-
-    /// Handles merging windows (specific to session windows)
-    async fn window_merge(&mut self, _msg: UnalignedWindowMessage) -> crate::Result<()> {
-        unimplemented!("Merge operation not implemented for unaligned reduce")
-    }
-
-    /// Handles expanding windows (specific to session windows)
-    async fn window_expand(
-        &mut self,
-        _window_id: Bytes,
-        _msg: UnalignedWindowMessage,
-    ) -> crate::Result<()> {
-        unimplemented!("Expand operation not implemented for unaligned reduce")
     }
 }
 
@@ -695,6 +630,18 @@ impl UnalignedReducer {
                             // End of stream
                             break;
                         };
+
+                        // check if any windows can be closed
+                        if let Some(watermark) = msg.watermark {
+                            let close_window_messages = self.window_manager.close_windows(watermark);
+                            for window_msg in close_window_messages {
+                                actor_tx
+                                    .send(window_msg)
+                                    .await
+                                    .expect("failed to send message to actor");
+                            }
+                        }
+
                         // Convert the message to UnalignedWindowMessage
                         let window_messages = self.window_manager.assign_windows(msg);
                         for window_msg in window_messages {
