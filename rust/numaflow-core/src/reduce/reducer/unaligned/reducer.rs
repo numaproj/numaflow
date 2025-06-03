@@ -9,7 +9,7 @@ use crate::reduce::reducer::unaligned::windower::{
 };
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use crate::shared::grpc::utc_from_timestamp;
-use bytes::Bytes;
+
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::accumulator::{AccumulatorRequest, AccumulatorResponse};
 use numaflow_pb::clients::sessionreduce::{SessionReduceRequest, SessionReduceResponse};
@@ -427,7 +427,7 @@ struct UnalignedReduceActor {
     /// Client for user-defined reduce operations.
     client_type: UserDefinedUnalignedReduce,
     /// Map of [ActiveStream]s keyed by window ID.
-    active_streams: HashMap<Bytes, ActiveStream>,
+    active_streams: HashMap<&'static str, ActiveStream>,
     /// JetStream writer for writing results of reduce operation.
     js_writer: JetstreamWriter,
     /// Sender for error messages.
@@ -512,7 +512,7 @@ impl UnalignedReduceActor {
 
     /// Creates a new active stream for the pnf_slot and sends the message
     async fn create_active_stream(&mut self, msg: UnalignedWindowMessage) -> crate::Result<()> {
-        let pnf_slot = msg.pnf_slot.clone();
+        let pnf_slot = msg.pnf_slot;
 
         // Create a new channel for this window's messages
         let (message_tx, message_rx) = mpsc::channel(100);

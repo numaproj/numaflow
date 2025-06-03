@@ -160,7 +160,7 @@ impl Window {
 #[derive(Debug, Clone)]
 pub(crate) struct UnalignedWindowMessage {
     pub(crate) operation: UnalignedWindowOperation,
-    pub(crate) pnf_slot: Bytes,
+    pub(crate) pnf_slot: &'static str,
 }
 
 /// Unaligned Window Message.

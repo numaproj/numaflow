@@ -67,7 +67,7 @@ impl SessionWindowManager {
                             message: msg,
                             windows: vec![existing_window, expanded_window],
                         },
-                        pnf_slot: SHARED_PNF_SLOT.to_string().into(),
+                        pnf_slot: SHARED_PNF_SLOT,
                     }]
                 } else {
                     vec![UnalignedWindowMessage {
@@ -75,7 +75,7 @@ impl SessionWindowManager {
                             message: msg,
                             window: existing_window,
                         },
-                        pnf_slot: SHARED_PNF_SLOT.to_string().into(),
+                        pnf_slot: SHARED_PNF_SLOT,
                     }]
                 }
             }
@@ -86,7 +86,7 @@ impl SessionWindowManager {
                         message: msg,
                         window: new_window,
                     },
-                    pnf_slot: SHARED_PNF_SLOT.to_string().into(),
+                    pnf_slot: SHARED_PNF_SLOT,
                 }]
             }
         }
@@ -178,13 +178,13 @@ impl SessionWindowManager {
                 operation: UnalignedWindowOperation::Merge {
                     windows: vec![window_to_close, old_active, new_merged],
                 },
-                pnf_slot: SHARED_PNF_SLOT.to_string().into(),
+                pnf_slot: SHARED_PNF_SLOT,
             }),
             None => Some(UnalignedWindowMessage {
                 operation: UnalignedWindowOperation::Close {
                     window: window_to_close,
                 },
-                pnf_slot: SHARED_PNF_SLOT.to_string().into(),
+                pnf_slot: SHARED_PNF_SLOT,
             }),
         }
     }

@@ -108,7 +108,7 @@ impl AccumulatorWindowManager {
                     message: msg.clone(),
                     window: window_state.window.clone(),
                 },
-                pnf_slot: SHARED_PNF_SLOT.to_string().into(),
+                pnf_slot: SHARED_PNF_SLOT,
             });
         } else {
             // Create a new window for this key
@@ -128,7 +128,7 @@ impl AccumulatorWindowManager {
                     message: msg.clone(),
                     window,
                 },
-                pnf_slot: SHARED_PNF_SLOT.to_string().into(),
+                pnf_slot: SHARED_PNF_SLOT,
             });
         }
 
@@ -155,7 +155,7 @@ impl AccumulatorWindowManager {
                     operation: UnalignedWindowOperation::Close {
                         window: window_state.window.clone(),
                     },
-                    pnf_slot: SHARED_PNF_SLOT.to_string().into(),
+                    pnf_slot: SHARED_PNF_SLOT,
                 });
                 keys_to_delete.push(key.clone());
             }
