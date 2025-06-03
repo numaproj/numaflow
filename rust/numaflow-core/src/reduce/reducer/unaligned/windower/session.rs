@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
@@ -7,9 +7,8 @@ use crate::reduce::reducer::unaligned::windower::{
     SHARED_PNF_SLOT, UnalignedWindowMessage, UnalignedWindowOperation, Window,
 };
 use chrono::{DateTime, Utc};
-use tracing::info;
 
-type WindowStore = Arc<RwLock<HashMap<String, BTreeMap<DateTime<Utc>, Window>>>>;
+type WindowStore = Arc<RwLock<HashMap<String, BTreeSet<Window>>>>;
 
 /// SessionWindowManager manages session windows.
 #[derive(Debug, Clone)]
@@ -17,7 +16,7 @@ pub(crate) struct SessionWindowManager {
     /// Timeout duration after which inactive windows are closed
     timeout: Duration,
     /// All windows (both active and closed) mapped by combined key (joined keys)
-    /// Windows are sorted by end time within each key
+    /// Windows are sorted by end time within each key using Window's Ord implementation
     all_windows: WindowStore,
 }
 
@@ -45,51 +44,43 @@ impl SessionWindowManager {
             Arc::clone(&msg.keys),
         );
 
-        let window_map = all_windows.entry(combined_key).or_default();
+        let window_set = all_windows.entry(combined_key).or_default();
 
-        match Self::find_window_to_merge(window_map, &new_window) {
+        match Self::find_window_to_merge(window_set, &new_window) {
             Some(existing_window) => {
                 let needs_expansion = new_window.start_time < existing_window.start_time
                     || new_window.end_time > existing_window.end_time;
 
                 if needs_expansion {
-                    let old_window = existing_window.clone();
-                    window_map.remove(&old_window.end_time);
+                    window_set.remove(&existing_window);
 
                     let expanded_window = Window::new(
-                        new_window.start_time.min(old_window.start_time),
-                        new_window.end_time.max(old_window.end_time),
+                        new_window.start_time.min(existing_window.start_time),
+                        new_window.end_time.max(existing_window.end_time),
                         Arc::clone(&msg.keys),
                     );
 
-                    window_map.insert(expanded_window.end_time, expanded_window.clone());
-
-                    info!(
-                        "Expanding window: {:?} -> {:?}",
-                        old_window, expanded_window
-                    );
+                    window_set.insert(expanded_window.clone());
 
                     vec![UnalignedWindowMessage {
                         operation: UnalignedWindowOperation::Expand {
                             message: msg,
-                            windows: vec![old_window, expanded_window],
+                            windows: vec![existing_window, expanded_window],
                         },
                         pnf_slot: SHARED_PNF_SLOT.to_string().into(),
                     }]
                 } else {
-                    info!("Appending to existing window: {:?}", existing_window);
                     vec![UnalignedWindowMessage {
                         operation: UnalignedWindowOperation::Append {
                             message: msg,
-                            window: existing_window.clone(),
+                            window: existing_window,
                         },
                         pnf_slot: SHARED_PNF_SLOT.to_string().into(),
                     }]
                 }
             }
             None => {
-                info!("Creating new window: {:?}", new_window);
-                window_map.insert(new_window.end_time, new_window.clone());
+                window_set.insert(new_window.clone());
                 vec![UnalignedWindowMessage {
                     operation: UnalignedWindowOperation::Open {
                         message: msg,
@@ -102,15 +93,15 @@ impl SessionWindowManager {
     }
 
     /// Find a window that can be merged with the given window
-    fn find_window_to_merge<'a>(
-        window_map: &'a BTreeMap<DateTime<Utc>, Window>,
+    fn find_window_to_merge(
+        window_set: &BTreeSet<Window>,
         window: &Window,
-    ) -> Option<&'a Window> {
-        window_map.values().find(|existing_window| {
+    ) -> Option<Window> {
+        window_set.iter().find(|existing_window| {
             // Windows overlap if they intersect
             window.start_time <= existing_window.end_time
                 && existing_window.start_time <= window.end_time
-        })
+        }).cloned()
     }
 
     /// Closes windows that have been inactive for longer than the timeout
@@ -124,50 +115,42 @@ impl SessionWindowManager {
         closed_windows_by_key
             .into_iter()
             .flat_map(|(key, windows)| {
-                let windows = Self::process_closed_windows(&mut all_windows, &key, windows);
-                info!("Closing windows for key {}: {:?}", key, windows);
-                windows
+                Self::process_closed_windows(&mut all_windows, &key, windows)
             })
             .collect()
     }
 
-    /// Extract expired windows from the window map
+    /// Extract expired windows from the window set
     fn extract_expired_windows(
-        all_windows: &mut HashMap<String, BTreeMap<DateTime<Utc>, Window>>,
+        all_windows: &mut HashMap<String, BTreeSet<Window>>,
         watermark: DateTime<Utc>,
     ) -> HashMap<String, Vec<Window>> {
         let mut closed_windows_by_key = HashMap::new();
 
-        for (key, window_map) in all_windows.iter_mut() {
-            let expired_windows: Vec<_> = window_map
+        for (key, window_set) in all_windows.iter_mut() {
+            let expired_windows: Vec<_> = window_set
                 .iter()
-                .filter(|(end_time, _)| **end_time <= watermark)
-                .map(|(end_time, window)| (*end_time, window.clone()))
+                .filter(|window| window.end_time <= watermark)
+                .cloned()
                 .collect();
 
             if !expired_windows.is_empty() {
-                for (end_time, _) in &expired_windows {
-                    window_map.remove(end_time);
+                for window in &expired_windows {
+                    window_set.remove(window);
                 }
 
-                closed_windows_by_key.insert(
-                    key.clone(),
-                    expired_windows
-                        .into_iter()
-                        .map(|(_, window)| window)
-                        .collect(),
-                );
+                closed_windows_by_key.insert(key.clone(), expired_windows);
             }
         }
 
         // Remove empty keys
-        all_windows.retain(|_, window_map| !window_map.is_empty());
+        all_windows.retain(|_, window_set| !window_set.is_empty());
         closed_windows_by_key
     }
 
     /// Process closed windows for a specific key
     fn process_closed_windows(
-        all_windows: &mut HashMap<String, BTreeMap<DateTime<Utc>, Window>>,
+        all_windows: &mut HashMap<String, BTreeSet<Window>>,
         key: &str,
         closed_windows: Vec<Window>,
     ) -> Vec<UnalignedWindowMessage> {
@@ -179,7 +162,7 @@ impl SessionWindowManager {
 
     /// Process a group of windows that can be merged
     fn process_window_group(
-        all_windows: &mut HashMap<String, BTreeMap<DateTime<Utc>, Window>>,
+        all_windows: &mut HashMap<String, BTreeSet<Window>>,
         key: &str,
         group: Vec<Window>,
     ) -> Option<UnalignedWindowMessage> {
@@ -208,14 +191,14 @@ impl SessionWindowManager {
 
     /// Try to merge a window with active windows
     fn try_merge_with_active(
-        all_windows: &mut HashMap<String, BTreeMap<DateTime<Utc>, Window>>,
+        all_windows: &mut HashMap<String, BTreeSet<Window>>,
         key: &str,
         window: &Window,
     ) -> Option<(Window, Window)> {
-        let window_map = all_windows.get_mut(key)?;
-        let active_window = Self::find_window_to_merge(window_map, window)?.clone();
+        let window_set = all_windows.get_mut(key)?;
+        let active_window = Self::find_window_to_merge(window_set, window)?;
 
-        window_map.remove(&active_window.end_time);
+        window_set.remove(&active_window);
 
         let new_merged = Window::new(
             window.start_time.min(active_window.start_time),
@@ -223,7 +206,7 @@ impl SessionWindowManager {
             Arc::clone(&window.keys),
         );
 
-        window_map.insert(new_merged.end_time, new_merged.clone());
+        window_set.insert(new_merged.clone());
         Some((active_window, new_merged))
     }
 
@@ -285,11 +268,11 @@ impl SessionWindowManager {
         let mut all_windows = self.all_windows.write().expect("Poisoned lock");
         let combined_key = Self::combine_keys(&window.keys);
 
-        if let Some(window_map) = all_windows.get_mut(&combined_key) {
-            window_map.remove(&window.end_time);
+        if let Some(window_set) = all_windows.get_mut(&combined_key) {
+            window_set.remove(&window);
 
             // Remove the key if no windows left
-            if window_map.is_empty() {
+            if window_set.is_empty() {
                 all_windows.remove(&combined_key);
             }
         }
@@ -300,10 +283,10 @@ impl SessionWindowManager {
         let all_windows = self.all_windows.read().expect("Poisoned lock");
         let mut min_end_time = None;
 
-        for window_map in all_windows.values() {
-            if let Some((end_time, _)) = window_map.iter().next() {
-                if min_end_time.is_none() || *end_time < min_end_time.unwrap() {
-                    min_end_time = Some(*end_time);
+        for window_set in all_windows.values() {
+            if let Some(window) = window_set.iter().next() {
+                if min_end_time.is_none() || window.end_time < min_end_time.unwrap() {
+                    min_end_time = Some(window.end_time);
                 }
             }
         }

@@ -1,6 +1,8 @@
 use crate::config::get_vertex_name;
 use crate::message::{IntOffset, Message, MessageID, Offset};
-use crate::reduce::reducer::unaligned::windower::{UnalignedWindowMessage, UnalignedWindowOperation, Window};
+use crate::reduce::reducer::unaligned::windower::{
+    UnalignedWindowMessage, UnalignedWindowOperation, Window,
+};
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 use numaflow_pb::clients::sessionreduce;
 use numaflow_pb::clients::sessionreduce::session_reduce_client::SessionReduceClient;
@@ -41,10 +43,7 @@ impl From<Window> for sessionreduce::KeyedWindow {
 impl From<UnalignedWindowMessage> for SessionReduceRequest {
     fn from(value: UnalignedWindowMessage) -> Self {
         match value.operation {
-            UnalignedWindowOperation::Open {
-                message,
-                window,
-            } => {
+            UnalignedWindowOperation::Open { message, window } => {
                 let operation = Some(session_reduce_request::WindowOperation {
                     event: session_reduce_request::window_operation::Event::Open as i32,
                     keyed_windows: vec![window.into()],
@@ -55,9 +54,7 @@ impl From<UnalignedWindowMessage> for SessionReduceRequest {
                     operation,
                 }
             }
-            UnalignedWindowOperation::Close {
-                window,
-            } => {
+            UnalignedWindowOperation::Close { window } => {
                 let operation = Some(session_reduce_request::WindowOperation {
                     event: session_reduce_request::window_operation::Event::Close as i32,
                     keyed_windows: vec![window.into()],
@@ -68,10 +65,7 @@ impl From<UnalignedWindowMessage> for SessionReduceRequest {
                     operation,
                 }
             }
-            UnalignedWindowOperation::Append {
-                message,
-                window,
-            } => {
+            UnalignedWindowOperation::Append { message, window } => {
                 let operation = Some(session_reduce_request::WindowOperation {
                     event: session_reduce_request::window_operation::Event::Append as i32,
                     keyed_windows: vec![window.into()],
@@ -82,9 +76,7 @@ impl From<UnalignedWindowMessage> for SessionReduceRequest {
                     operation,
                 }
             }
-            UnalignedWindowOperation::Merge {
-                windows,
-            } => {
+            UnalignedWindowOperation::Merge { windows } => {
                 let operation = Some(session_reduce_request::WindowOperation {
                     event: session_reduce_request::window_operation::Event::Merge as i32,
                     keyed_windows: windows.into_iter().map(Into::into).collect(),
@@ -95,10 +87,7 @@ impl From<UnalignedWindowMessage> for SessionReduceRequest {
                     operation,
                 }
             }
-            UnalignedWindowOperation::Expand {
-                message,
-                windows,
-            } => {
+            UnalignedWindowOperation::Expand { message, windows } => {
                 let operation = Some(session_reduce_request::WindowOperation {
                     event: session_reduce_request::window_operation::Event::Expand as i32,
                     keyed_windows: windows.into_iter().map(Into::into).collect(),
@@ -239,3 +228,5 @@ impl UserDefinedSessionReduce {
         }
     }
 }
+
+// TODO: add tests

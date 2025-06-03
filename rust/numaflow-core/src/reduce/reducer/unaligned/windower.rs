@@ -6,6 +6,7 @@ use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::accumulator::KeyedWindow;
 use numaflow_pb::clients::sessionreduce;
+use std::cmp::Ordering;
 use std::fmt::Display;
 use std::sync::Arc;
 
@@ -44,6 +45,19 @@ pub(crate) struct Window {
     pub(crate) id: Bytes,
     /// Keys for the window
     pub(crate) keys: Arc<[String]>,
+}
+
+impl Ord for Window {
+    fn cmp(&self, other: &Self) -> Ordering {
+        // Compare based on end time
+        self.end_time.cmp(&other.end_time)
+    }
+}
+
+impl PartialOrd for Window {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl Display for Window {

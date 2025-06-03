@@ -139,7 +139,6 @@ impl ReduceTask {
         let _request_handle = tokio::spawn(async move {
             while let Some(window_msg) = message_stream.next().await {
                 let reduce_req: AccumulatorRequest = window_msg.into();
-                info!("Sending request to reduce function {:?}", reduce_req);
                 if request_tx.send(reduce_req).await.is_err() {
                     break;
                 }
@@ -160,7 +159,6 @@ impl ReduceTask {
         loop {
             tokio::select! {
                 _ = batch_timer.tick() => {
-                    info!("Batch timeout reached, writing GC events and deleting tracked windows");
 
                     drop(writer_tx);
                     // wait for the writer to finish writing the current batch

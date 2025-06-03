@@ -1,6 +1,8 @@
 use crate::config::get_vertex_name;
 use crate::message::{IntOffset, Message, MessageID, Offset};
-use crate::reduce::reducer::unaligned::windower::{UnalignedWindowMessage, UnalignedWindowOperation, Window};
+use crate::reduce::reducer::unaligned::windower::{
+    UnalignedWindowMessage, UnalignedWindowOperation, Window,
+};
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 use numaflow_pb::clients::accumulator::accumulator_client::AccumulatorClient;
 use numaflow_pb::clients::accumulator::{
@@ -42,10 +44,7 @@ impl From<Window> for accumulator::KeyedWindow {
 impl From<UnalignedWindowMessage> for AccumulatorRequest {
     fn from(value: UnalignedWindowMessage) -> Self {
         match value.operation {
-            UnalignedWindowOperation::Open {
-                message,
-                window,
-            } => {
+            UnalignedWindowOperation::Open { message, window } => {
                 let operation = Some(accumulator_request::WindowOperation {
                     event: accumulator_request::window_operation::Event::Open as i32,
                     keyed_window: Some(window.into()),
@@ -56,9 +55,7 @@ impl From<UnalignedWindowMessage> for AccumulatorRequest {
                     operation,
                 }
             }
-            UnalignedWindowOperation::Close {
-                window,
-            } => {
+            UnalignedWindowOperation::Close { window } => {
                 let operation = Some(accumulator_request::WindowOperation {
                     event: accumulator_request::window_operation::Event::Close as i32,
                     keyed_window: Some(window.into()),
@@ -69,10 +66,7 @@ impl From<UnalignedWindowMessage> for AccumulatorRequest {
                     operation,
                 }
             }
-            UnalignedWindowOperation::Append {
-                message,
-                window,
-            } => {
+            UnalignedWindowOperation::Append { message, window } => {
                 let operation = Some(accumulator_request::WindowOperation {
                     event: accumulator_request::window_operation::Event::Append as i32,
                     keyed_window: Some(window.into()),
@@ -107,7 +101,10 @@ impl From<AccumulatorResponse> for Message {
             tags: (!tags.is_empty()).then(|| Arc::from(tags)),
             value: result.value.into(),
             offset: Offset::Int(IntOffset::new(0, 0)),
-            event_time: utc_from_timestamp(window.end.unwrap()),
+            event_time: result
+                .event_time
+                .map(utc_from_timestamp)
+                .expect("event time should be present"),
             watermark: window
                 .end
                 .map(|ts| utc_from_timestamp(ts) - chrono::Duration::milliseconds(1)),
@@ -145,7 +142,7 @@ impl UserDefinedAccumulator {
         tokio::task::JoinHandle<crate::error::Result<()>>,
     )> {
         // Create a channel for responses
-        let (result_tx, result_rx) = tokio::sync::mpsc::channel(100);
+        let (result_tx, result_rx) = tokio::sync::mpsc::channel(500);
         let mut client = self.client.clone();
 
         // Start a background task to process responses
@@ -162,7 +159,6 @@ impl UserDefinedAccumulator {
             };
 
             info!("Waiting for responses from accumulator reduce function");
-
             loop {
                 tokio::select! {
                     // Check for cancellation
@@ -204,3 +200,5 @@ impl UserDefinedAccumulator {
         }
     }
 }
+
+// TODO: Add tests
