@@ -8,11 +8,9 @@ use crate::reduce::reducer::unaligned::windower::{
     UnalignedWindowManager, UnalignedWindowMessage, Window,
 };
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
-use crate::shared::grpc::utc_from_timestamp;
 
-use chrono::{DateTime, Utc};
-use numaflow_pb::clients::accumulator::{AccumulatorRequest, AccumulatorResponse};
-use numaflow_pb::clients::sessionreduce::{SessionReduceRequest, SessionReduceResponse};
+use numaflow_pb::clients::accumulator::AccumulatorRequest;
+use numaflow_pb::clients::sessionreduce::SessionReduceRequest;
 use numaflow_pb::objects::wal::GcEvent;
 use prost::Message as ProstMessage;
 use std::collections::HashMap;
@@ -30,7 +28,7 @@ struct ActiveStream {
     /// task for that pnf slot.
     message_tx: mpsc::Sender<UnalignedWindowMessage>,
     /// Handle to the task processing the pnf slot.
-    task_handle: JoinHandle<()>,
+    task_handle: JoinHandle<crate::Result<()>>,
 }
 
 /// Represents a reduce task for a pnf slot. It is responsible for calling the user-defined reduce
@@ -166,16 +164,6 @@ impl ReduceTask {
             }
         }
 
-        if let Err(e) = handle.await.expect("Reduce task failed") {
-            if let Error::Cancelled() = &e {
-                info!("Accumulator task cancelled");
-                return Ok(());
-            }
-
-            error!(?e, "Error while doing reduce operation");
-            return Err(e);
-        }
-
         drop(writer_tx);
         // Final cleanup: wait for writer to complete
         if let Err(e) = writer_handle.await {
@@ -189,7 +177,17 @@ impl ReduceTask {
         // Delete tracked windows
         self.delete_tracked_windows().await;
 
-        Ok(())
+        match handle.await.expect("Reduce task failed") {
+            Err(Error::Cancelled()) => {
+                info!("Accumulator task cancelled");
+                Ok(())
+            }
+            Err(e) => {
+                error!(?e, "Error while doing reduce operation");
+                Err(e)
+            }
+            Ok(_) => Ok(()),
+        }
     }
 
     /// session reduce
@@ -275,16 +273,6 @@ impl ReduceTask {
             }
         }
 
-        if let Err(e) = handle.await.expect("Reduce task failed") {
-            if let Error::Cancelled() = &e {
-                info!("Session reduce task cancelled");
-                return Ok(());
-            }
-
-            error!(?e, "Error while doing reduce operation");
-            return Err(e);
-        }
-
         drop(writer_tx);
         // Final cleanup: wait for writer to complete
         if let Err(e) = writer_handle.await {
@@ -298,7 +286,17 @@ impl ReduceTask {
         // Delete tracked windows
         self.delete_tracked_windows().await;
 
-        Ok(())
+        match handle.await.expect("Reduce task failed") {
+            Err(Error::Cancelled()) => {
+                info!("Session reduce task cancelled");
+                Ok(())
+            }
+            Err(e) => {
+                error!(?e, "Error while doing reduce operation");
+                Err(e)
+            }
+            Ok(_) => Ok(()),
+        }
     }
 
     /// starts a task to process the window stream and returns the task handle
@@ -306,10 +304,10 @@ impl ReduceTask {
         mut self,
         message_stream: ReceiverStream<UnalignedWindowMessage>,
         cln_token: CancellationToken,
-    ) -> JoinHandle<()> {
+    ) -> JoinHandle<crate::Result<()>> {
         tokio::spawn(async move {
             // Call the appropriate reduce_fn based on the client type
-            match &self.client_type {
+            let result = match &self.client_type {
                 UserDefinedUnalignedReduce::Accumulator(client) => {
                     self.accumulator_reduce(client.clone(), message_stream, cln_token.clone())
                         .await
@@ -318,8 +316,12 @@ impl ReduceTask {
                     self.session_reduce(client.clone(), message_stream, cln_token.clone())
                         .await
                 }
+            };
+
+            if let Err(e) = result {
+                self.error_tx.send(e).await.expect("Failed to send error");
             }
-            .expect("Reduce task failed");
+            Ok(())
         })
     }
 
@@ -385,7 +387,7 @@ impl UnalignedReduceActor {
 
         for (window_id, active_stream) in active_streams {
             // Wait for the task to complete
-            if let Err(e) = active_stream.task_handle.await {
+            if let Err(e) = active_stream.task_handle.await.expect("task failed") {
                 error!(?window_id, err = ?e, "Reduce task for window failed during shutdown");
             }
             info!(?window_id, "Reduce task for window completed");
@@ -430,11 +432,10 @@ impl UnalignedReduceActor {
         // Check if pnf_slot already exists (active stream creation based on slot presence)
         if let Some(active_stream) = self.active_streams.get(&msg.pnf_slot) {
             // Slot exists, send message to existing channel (append operation)
-            active_stream
-                .message_tx
-                .send(msg)
-                .await
-                .map_err(|_| Error::Reduce("Failed to send message to reduce task".to_string()))?;
+            let _ =
+                active_stream.message_tx.send(msg).await.inspect_err(|e| {
+                    error!(?e, "Failed to send message reduce task, task aborted")
+                });
         } else {
             // Slot not present, create new active stream (window open operation)
             self.create_active_stream(msg).await?;
@@ -584,9 +585,19 @@ impl UnalignedReducer {
                     }
                 }
             }
-            // Wait for the actor to finish
-            actor_handle.await.expect("failed");
-            // Return the final result
+
+            // Drop the sender to signal the actor to stop
+            info!(
+                "Unaligned Reduce component is shutting down, waiting for active reduce tasks to complete"
+            );
+            drop(actor_tx);
+
+            // Wait for the actor to complete
+            if let Err(e) = actor_handle.await {
+                error!("Error waiting for actor to complete: {:?}", e);
+            }
+
+            info!(status=?self.final_result, "UnalignedReduce component successfully completed");
             self.final_result
         });
 

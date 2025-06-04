@@ -182,7 +182,7 @@ impl UserDefinedSessionReduce {
                 Ok(response) => response.into_inner(),
                 Err(e) => {
                     return Err(crate::Error::Reduce(format!(
-                        "failed to call reduce_fn: {}",
+                        "failed to call session reduce_fn: {}",
                         e
                     )));
                 }

@@ -446,7 +446,9 @@ impl AlignedReducer {
             }
 
             // Drop the sender to signal the actor to stop
-            info!("Reduce component is shutting down, waiting for active reduce tasks to complete");
+            info!(
+                "Aligned Reduce component is shutting down, waiting for active reduce tasks to complete"
+            );
             drop(actor_tx);
 
             // Wait for the actor to complete
@@ -462,7 +464,7 @@ impl AlignedReducer {
                 }
             }
 
-            info!(status=?self.final_result, "Reduce component successfully completed");
+            info!(status=?self.final_result, "Aligned Reduce component successfully completed");
             self.final_result
         });
 
