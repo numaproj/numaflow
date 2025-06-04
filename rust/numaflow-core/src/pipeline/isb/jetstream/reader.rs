@@ -306,10 +306,10 @@ impl JetStreamReader {
         Ok((ReceiverStream::new(messages_rx), handle))
     }
 
-    // Intended to be run as background task which waits for the ack and continuously sends wip acks
-    // until the final ack/nak is received. We will continuously retry if there is an error in acknowledging
-    // the message as work-in-progress. If the sender end of the ack_rx channel was dropped before
-    // sending a final Ack or Nak (due to some unhandled/unknown failure), we will send a Nak to Jetstream.
+    /// A background task which waits for the `Ack`, meanwhile it continuously sends `WIP` acks
+    /// until the final ack/nak is received. This will continuously retry if there is an error in acknowledging.
+    /// If the sender's end of the ack_rx channel was dropped before
+    /// sending the final `Ack` or `Nak` (due to some unhandled/unknown failure), we will send `Nak` to Jetstream.
     async fn wait_for_ack(
         labels: Vec<(String, String)>,
         offset: Offset,
