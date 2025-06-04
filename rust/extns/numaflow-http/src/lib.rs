@@ -457,7 +457,11 @@ async fn data_handler(
         if let Ok(value_str) = value.to_str() {
             header_map.insert(key.to_string(), value_str.to_string());
         } else {
-            warn!(?key, "Skipping header with invalid ASCII characters");
+            warn!(
+                header_name=?key,
+                header_value=?value,
+                "Skipping header with invalid ASCII characters"
+            );
         }
     }
 
@@ -526,14 +530,14 @@ fn parse_message_id_from_header(
 }
 
 fn parse_event_time_from_header(
-    eventtime_header_value: &HeaderValue,
+    event_time_header_value: &HeaderValue,
 ) -> std::result::Result<DateTime<Utc>, (StatusCode, axum::Json<serde_json::Value>)> {
-    let epoch_millis_str = eventtime_header_value
+    let epoch_millis_str = event_time_header_value
         .to_str()
         .inspect_err(|e| {
             error!(
                 ?e,
-                ?eventtime_header_value,
+                ?event_time_header_value,
                 "Converting value of header 'x-numaflow-event-time' to string"
             )
         })
