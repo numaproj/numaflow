@@ -771,6 +771,7 @@ mod tests {
             },
             watermark_config: None,
             callback_config: None,
+            isb_config: None,
         };
 
         let cancellation_token = CancellationToken::new();
@@ -929,6 +930,7 @@ mod tests {
             },
             watermark_config: None,
             callback_config: None,
+            isb_config: None,
         };
 
         let cancellation_token = CancellationToken::new();
@@ -1167,6 +1169,7 @@ mod tests {
             },
             watermark_config: None,
             callback_config: None,
+            isb_config: None,
         };
 
         let cancellation_token = CancellationToken::new();

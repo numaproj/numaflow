@@ -598,24 +598,25 @@ impl PipelineConfig {
             });
         }
 
-        let isb_config = if let Some(isb_spec) = vertex_obj.spec.inter_step_buffer.as_ref() {
-            Some(isb_config::ISBConfig {
-                compression: isb_config::Compression {
-                    compress_type: match isb_spec.compression.as_ref() {
-                        None => isb_config::CompressionType::None,
-                        Some(t) => match &t.r#type {
+        let isb_config =
+            vertex_obj
+                .spec
+                .inter_step_buffer
+                .as_ref()
+                .map(|isb_spec| isb_config::ISBConfig {
+                    compression: isb_config::Compression {
+                        compress_type: match isb_spec.compression.as_ref() {
                             None => isb_config::CompressionType::None,
-                            Some(t) => match t.as_str() {
-                                "gzip" => isb_config::CompressionType::Gzip,
-                                _ => isb_config::CompressionType::None,
+                            Some(t) => match &t.r#type {
+                                None => isb_config::CompressionType::None,
+                                Some(t) => match t.as_str() {
+                                    "gzip" => isb_config::CompressionType::Gzip,
+                                    _ => isb_config::CompressionType::None,
+                                },
                             },
                         },
                     },
-                },
-            })
-        } else {
-            None
-        };
+                });
 
         Ok(PipelineConfig {
             batch_size: batch_size as usize,
