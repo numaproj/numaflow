@@ -277,14 +277,12 @@ impl SqsActor {
 
     /// delete message from SQS, serves as Numaflow source ack.
     async fn delete_messages(&mut self, offsets: Vec<Bytes>) -> Result<()> {
-        let n = offsets.len();
-        info!("Deleting messages from SQS: {:?}", n);
         let mut batch_builder = self
             .client
             .delete_message_batch()
             .queue_url(&self.queue_url);
         for (id, offset) in offsets.iter().enumerate() {
-            let offset = match std::str::from_utf8(&offset) {
+            let offset = match std::str::from_utf8(offset) {
                 Ok(offset) => offset,
                 Err(err) => {
                     tracing::error!(?err, "failed to parse offset");
@@ -313,7 +311,6 @@ impl SqsActor {
             );
             return Err(SqsSourceError::from(Error::Sqs(e.into())));
         }
-        info!("Successfully deleted messages from SQS: {:?}", n);
         Ok(())
     }
 
