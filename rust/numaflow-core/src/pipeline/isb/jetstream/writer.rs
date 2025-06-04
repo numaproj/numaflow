@@ -21,7 +21,9 @@ use tracing::{debug, error, warn};
 use crate::Result;
 use crate::config::pipeline::ToVertexConfig;
 use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
+use crate::config::pipeline::isb_config::ISBConfig;
 use crate::error::Error;
+
 use crate::message::{IntOffset, Message, Offset};
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, pipeline_isb_metric_labels, pipeline_metric_labels,
@@ -30,6 +32,19 @@ use crate::metrics::{
 use crate::shared::forward;
 use crate::tracker::TrackerHandle;
 use crate::watermark::WatermarkHandle;
+
+/// Configuration for creating a JetstreamWriter
+#[derive(Clone)]
+pub(crate) struct ISBWriterConfig {
+    pub config: Vec<ToVertexConfig>,
+    pub js_ctx: Context,
+    pub paf_concurrency: usize,
+    pub tracker_handle: TrackerHandle,
+    pub cancel_token: CancellationToken,
+    pub watermark_handle: Option<WatermarkHandle>,
+    pub vertex_type: String,
+    pub isb_config: Option<ISBConfig>,
+}
 
 const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
 const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
@@ -60,16 +75,8 @@ pub(crate) struct JetstreamWriter {
 impl JetstreamWriter {
     /// Creates a JetStream Writer and a background task to make sure the Write futures (PAFs) are
     /// successful. Batch Size determines the maximum pending futures.
-    pub(crate) fn new(
-        config: Vec<ToVertexConfig>,
-        js_ctx: Context,
-        paf_concurrency: usize,
-        tracker_handle: TrackerHandle,
-        cancel_token: CancellationToken,
-        watermark_handle: Option<WatermarkHandle>,
-        vertex_type: String,
-    ) -> Self {
-        let to_vertex_streams = config
+    pub(crate) fn new(writer_config: ISBWriterConfig) -> Self {
+        let to_vertex_streams = writer_config.config
             .iter()
             .flat_map(|c| c.writer_config.streams.clone())
             .collect::<Vec<Stream>>();
@@ -80,21 +87,21 @@ impl JetstreamWriter {
             .collect::<HashMap<_, _>>();
 
         let this = Self {
-            config: Arc::new(config),
-            js_ctx,
+            config: Arc::new(writer_config.config),
+            js_ctx: writer_config.js_ctx,
             is_full,
-            tracker_handle,
-            sem: Arc::new(Semaphore::new(paf_concurrency)),
-            watermark_handle,
-            paf_concurrency,
-            vertex_type,
+            tracker_handle: writer_config.tracker_handle,
+            sem: Arc::new(Semaphore::new(writer_config.paf_concurrency)),
+            watermark_handle: writer_config.watermark_handle,
+            paf_concurrency: writer_config.paf_concurrency,
+            vertex_type: writer_config.vertex_type,
         };
 
         // spawn a task for checking whether buffer is_full
         tokio::task::spawn({
             let mut this = this.clone();
             async move {
-                this.check_stream_status(cancel_token).await;
+                this.check_stream_status(writer_config.cancel_token).await;
             }
         });
 
@@ -605,8 +612,8 @@ mod tests {
             .await
             .unwrap();
 
-        let writer = JetstreamWriter::new(
-            vec![ToVertexConfig {
+        let writer = JetstreamWriter::new(ISBWriterConfig {
+            config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
@@ -615,13 +622,14 @@ mod tests {
                 },
                 conditions: None,
             }],
-            context.clone(),
-            100,
+            js_ctx: context.clone(),
+            paf_concurrency: 100,
             tracker_handle,
-            cln_token.clone(),
-            None,
-            "Source".to_string(),
-        );
+            cancel_token: cln_token.clone(),
+            watermark_handle: None,
+            vertex_type: "Source".to_string(),
+            isb_config: None,
+        });
 
         let message = Message {
             typ: Default::default(),
@@ -701,8 +709,8 @@ mod tests {
             ..Default::default()
         };
 
-        let writer = JetstreamWriter::new(
-            vec![ToVertexConfig {
+        let writer = JetstreamWriter::new(ISBWriterConfig {
+            config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
@@ -711,13 +719,14 @@ mod tests {
                 },
                 conditions: None,
             }],
-            context.clone(),
-            100,
-            TrackerHandle::new(None, None),
-            cln_token.clone(),
-            None,
-            "Source".to_string(),
-        );
+            js_ctx: context.clone(),
+            paf_concurrency: 100,
+            tracker_handle: TrackerHandle::new(None, None),
+            cancel_token: cln_token.clone(),
+            watermark_handle: None,
+            vertex_type: "Source".to_string(),
+            isb_config: None,
+        });
 
         let result = writer
             .blocking_write(stream.clone(), message, cln_token.clone())
@@ -766,8 +775,8 @@ mod tests {
 
         let cancel_token = CancellationToken::new();
 
-        let writer = JetstreamWriter::new(
-            vec![ToVertexConfig {
+        let writer = JetstreamWriter::new(ISBWriterConfig {
+            config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
@@ -776,13 +785,14 @@ mod tests {
                 },
                 conditions: None,
             }],
-            context.clone(),
-            100,
+            js_ctx: context.clone(),
+            paf_concurrency: 100,
             tracker_handle,
-            cancel_token.clone(),
-            None,
-            "Map".to_string(),
-        );
+            cancel_token: cancel_token.clone(),
+            watermark_handle: None,
+            vertex_type: "Map".to_string(),
+            isb_config: None,
+        });
 
         let mut result_receivers = Vec::new();
         // Publish 10 messages successfully
@@ -974,8 +984,8 @@ mod tests {
             .unwrap();
 
         let cancel_token = CancellationToken::new();
-        let writer = JetstreamWriter::new(
-            vec![ToVertexConfig {
+        let writer = JetstreamWriter::new(ISBWriterConfig {
+            config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
@@ -985,13 +995,14 @@ mod tests {
                 },
                 conditions: None,
             }],
-            context.clone(),
-            100,
+            js_ctx: context.clone(),
+            paf_concurrency: 100,
             tracker_handle,
-            cancel_token.clone(),
-            None,
-            "Source".to_string(),
-        );
+            cancel_token: cancel_token.clone(),
+            watermark_handle: None,
+            vertex_type: "Source".to_string(),
+            isb_config: None,
+        });
 
         let mut js_writer = writer.clone();
         // Simulate the stream status check
@@ -1067,8 +1078,8 @@ mod tests {
             .await
             .unwrap();
 
-        let writer = JetstreamWriter::new(
-            vec![ToVertexConfig {
+        let writer = JetstreamWriter::new(ISBWriterConfig {
+            config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
@@ -1078,13 +1089,14 @@ mod tests {
                 },
                 conditions: None,
             }],
-            context.clone(),
-            100,
-            tracker_handle.clone(),
-            cln_token.clone(),
-            None,
-            "Source".to_string(),
-        );
+            js_ctx: context.clone(),
+            paf_concurrency: 100,
+            tracker_handle: tracker_handle.clone(),
+            cancel_token: cln_token.clone(),
+            watermark_handle: None,
+            vertex_type: "Source".to_string(),
+            isb_config: None,
+        });
 
         let (messages_tx, messages_rx) = tokio::sync::mpsc::channel(500);
         let mut ack_rxs = vec![];
@@ -1161,8 +1173,8 @@ mod tests {
             .unwrap();
 
         let cancel_token = CancellationToken::new();
-        let writer = JetstreamWriter::new(
-            vec![ToVertexConfig {
+        let writer = JetstreamWriter::new(ISBWriterConfig {
+            config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
@@ -1171,13 +1183,14 @@ mod tests {
                 },
                 conditions: None,
             }],
-            context.clone(),
-            100,
-            tracker_handle.clone(),
-            cancel_token.clone(),
-            None,
-            "Source".to_string(),
-        );
+            js_ctx: context.clone(),
+            paf_concurrency: 100,
+            tracker_handle: tracker_handle.clone(),
+            cancel_token: cancel_token.clone(),
+            watermark_handle: None,
+            vertex_type: "Source".to_string(),
+            isb_config: None,
+        });
 
         let (tx, rx) = tokio::sync::mpsc::channel(500);
         let mut ack_rxs = vec![];
@@ -1276,8 +1289,8 @@ mod tests {
         let (_, consumers2) = create_streams_and_consumers(&context, &vertex2_streams).await;
         let (_, consumers3) = create_streams_and_consumers(&context, &vertex3_streams).await;
 
-        let writer = JetstreamWriter::new(
-            vec![
+        let writer = JetstreamWriter::new(ISBWriterConfig {
+            config: vec![
                 ToVertexConfig {
                     name: "vertex1",
                     partitions: 2,
@@ -1315,13 +1328,14 @@ mod tests {
                     }))),
                 },
             ],
-            context.clone(),
-            100,
-            tracker_handle.clone(),
-            cln_token.clone(),
-            None,
-            "Source".to_string(),
-        );
+            js_ctx: context.clone(),
+            paf_concurrency: 100,
+            tracker_handle: tracker_handle.clone(),
+            cancel_token: cln_token.clone(),
+            watermark_handle: None,
+            vertex_type: "Source".to_string(),
+            isb_config: None,
+        });
 
         let (messages_tx, messages_rx) = tokio::sync::mpsc::channel(500);
         let mut ack_rxs = vec![];
