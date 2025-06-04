@@ -85,7 +85,7 @@ pub(crate) mod isb_config {
         pub(crate) compress_type: CompressionType,
     }
 
-    #[derive(Debug, Clone, PartialEq)]
+    #[derive(Debug, Copy, Clone, PartialEq)]
     pub(crate) enum CompressionType {
         None,
         Gzip,
