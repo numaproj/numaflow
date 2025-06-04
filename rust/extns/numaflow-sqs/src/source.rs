@@ -10,15 +10,17 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Duration;
 
+use crate::Error::ActorTaskTerminated;
+use crate::{Error, SqsConfig, SqsSourceError};
 use aws_sdk_sqs::Client;
-use aws_sdk_sqs::types::{DeleteMessageBatchRequestEntry, MessageSystemAttributeName, QueueAttributeName};
+use aws_sdk_sqs::types::{
+    DeleteMessageBatchRequestEntry, MessageSystemAttributeName, QueueAttributeName,
+};
 use bytes::Bytes;
 use chrono::{DateTime, TimeZone, Utc};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
-
-use crate::Error::ActorTaskTerminated;
-use crate::{Error, SqsConfig, SqsSourceError};
+use tracing::{error, info};
 
 pub const SQS_DEFAULT_REGION: &str = "us-west-2";
 
@@ -274,7 +276,12 @@ impl SqsActor {
 
     /// delete message from SQS, serves as Numaflow source ack.
     async fn delete_messages(&mut self, offsets: Vec<Bytes>) -> Result<()> {
-        let mut batch_builder = self.client.delete_message_batch().queue_url(&self.queue_url);
+        let n = offsets.len();
+        info!("Deleting messages from SQS: {:?}", n);
+        let mut batch_builder = self
+            .client
+            .delete_message_batch()
+            .queue_url(&self.queue_url);
         for offset in offsets {
             let offset = match std::str::from_utf8(&offset) {
                 Ok(offset) => offset,
@@ -285,19 +292,27 @@ impl SqsActor {
                     )));
                 }
             };
-            batch_builder = batch_builder.entries(DeleteMessageBatchRequestEntry::builder().receipt_handle(offset).build().map_err(
-                |err| Error::Sqs(err.into()),
-            )?);
+            batch_builder = batch_builder.entries(
+                DeleteMessageBatchRequestEntry::builder()
+                    .receipt_handle(offset)
+                    .id(offset)
+                    .build()
+                    .map_err(|err| {
+                        error!(?err, "Failed to build DeleteMessageBatchRequestEntry",);
+                        Error::Sqs(err.into())
+                    })?,
+            );
         }
 
-        if let Err(e) =  batch_builder.send().await {
-            tracing::error!(
+        if let Err(e) = batch_builder.send().await {
+            error!(
                 ?e,
                 queue_url = self.queue_url,
                 "Failed to delete messages from SQS"
             );
             return Err(SqsSourceError::from(Error::Sqs(e.into())));
         }
+        info!("Successfully deleted messages from SQS: {:?}", n);
         Ok(())
     }
 
