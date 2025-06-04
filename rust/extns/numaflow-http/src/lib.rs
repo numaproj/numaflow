@@ -541,12 +541,12 @@ fn parse_event_time_from_header(
             (
                 StatusCode::BAD_REQUEST,
                 axum::Json(serde_json::json!({
-                    "error": "Event time specified in header 'x-numaflow-event-time' is not a ASCII string",
+                    "error": "Event time specified in header 'x-numaflow-event-time' is not an ASCII string",
                 })),
             )
     })?;
     let epoch_millis = epoch_millis_str.parse::<i64>().inspect_err(|e| {
-        error!(?e, "Event time specified in header 'x-numaflow-event-time' is not a valid integer");
+        error!(?e, epoch_millis_str, "Event time specified in header 'x-numaflow-event-time' is not a valid integer or within signed 64-bit integer range");
     }).map_err(|_| {
         (
             StatusCode::BAD_REQUEST,
@@ -987,5 +987,16 @@ mod tests {
 
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[test]
+    fn test_parse_message_id_with_invalid_event_time() {
+        let eventtime_header_value = HeaderValue::from_static("abcd");
+        let result = parse_event_time_from_header(&eventtime_header_value).unwrap_err();
+        assert_eq!(result.0, StatusCode::BAD_REQUEST);
+
+        let eventtime_header_value = HeaderValue::from_str(&i64::MIN.to_string()).unwrap();
+        let result = parse_event_time_from_header(&eventtime_header_value).unwrap_err();
+        assert_eq!(result.0, StatusCode::BAD_REQUEST);
     }
 }
