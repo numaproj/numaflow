@@ -6,7 +6,7 @@
 //! `X-Numaflow-Event-Time` is added to the message to track the event time of the message.
 
 use axum::body::Body;
-use axum::http::Request;
+use axum::http::{HeaderValue, Request};
 use axum::middleware::Next;
 use axum::{
     Router,
@@ -413,38 +413,57 @@ async fn health_handler() -> impl IntoResponse {
 /// Data ingestion endpoint handler
 async fn data_handler(
     State(http_source): State<HttpState>,
-    headers: HeaderMap,
+    mut headers: HeaderMap,
     body: Bytes,
 ) -> impl IntoResponse {
+    // Generate or extract X-Numaflow-Id
+    let id = match headers.get("x-numaflow-id") {
+        Some(val) => match parse_message_id_from_header(val) {
+            Ok(id) => id,
+            Err(e) => return e.into_response(),
+        },
+        None => Uuid::now_v7().to_string(),
+    };
+
+    // Generate or extract X-Numaflow-Event-Time
+    let event_time = headers.get("x-numaflow-event-time");
+    let event_time = match event_time {
+        Some(etime) => match parse_event_time_from_header(etime) {
+            Ok(time) => time,
+            Err(resp) => return resp.into_response(),
+        },
+        None => Utc::now(),
+    };
+
+    // Remove all entries of "x-numaflow-event-time" header
+    // https://github.com/numaproj/numaflow/blob/2cab60c2a1ddde0f0272b6570144071a49c4e94b/pkg/sources/http/http.go#L146
+    if let axum::http::header::Entry::Occupied(hm) = headers.entry("x-numaflow-event-time") {
+        hm.remove_entry_mult();
+    }
+
+    // Do not forward authorization header
+    if let axum::http::header::Entry::Occupied(hm) =
+        headers.entry(axum::http::header::AUTHORIZATION)
+    {
+        hm.remove_entry_mult();
+    }
+
     // Convert headers to HashMap and ensure required headers are present
     let mut header_map = HashMap::new();
+    // Ensure X-Numaflow-Id is in the headers
+    header_map.insert("X-Numaflow-Id".to_string(), id.clone());
 
     for (key, value) in headers.iter() {
         if let Ok(value_str) = value.to_str() {
             header_map.insert(key.to_string(), value_str.to_string());
         } else {
-            warn!(?key, "Skipping header with invalid UTF-8");
+            warn!(
+                header_name=?key,
+                header_value=?value,
+                "Skipping header with invalid ASCII characters"
+            );
         }
     }
-
-    // Generate or extract X-Numaflow-Id
-    let id = header_map
-        .get("x-numaflow-id")
-        .cloned()
-        .unwrap_or_else(|| Uuid::now_v7().to_string());
-
-    // Ensure X-Numaflow-Id is in the headers
-    header_map.insert("X-Numaflow-Id".to_string(), id.clone());
-
-    // Generate or extract X-Numaflow-Event-Time
-    let event_time = header_map
-        .get("x-numaflow-event-time")
-        .and_then(|time_str| DateTime::parse_from_rfc3339(time_str).ok())
-        .map(|dt| dt.with_timezone(&Utc))
-        .unwrap_or_else(Utc::now);
-
-    // Ensure X-Numaflow-Event-Time is in the headers
-    header_map.insert("X-Numaflow-Event-Time".to_string(), event_time.to_rfc2822());
 
     // Create the HTTP message
     let message = HttpMessage {
@@ -492,6 +511,69 @@ async fn data_handler(
             }
         },
     }
+}
+
+fn parse_message_id_from_header(
+    id_header_value: &HeaderValue,
+) -> std::result::Result<String, (StatusCode, axum::Json<serde_json::Value>)> {
+    let id = id_header_value.to_str().inspect_err(|e| {
+        error!(?e, "The value of 'x-numaflow-id' header sent by the user contains non-printable ASCII characters");
+    }).map_err(|_|{
+        (
+            StatusCode::BAD_REQUEST,
+            axum::Json(serde_json::json!({
+                "error": "Value of 'x-numaflow-id' header contains non-printable ASCII characters",
+            })),
+        )
+    })?;
+    Ok(id.to_string())
+}
+
+fn parse_event_time_from_header(
+    event_time_header_value: &HeaderValue,
+) -> std::result::Result<DateTime<Utc>, (StatusCode, axum::Json<serde_json::Value>)> {
+    let epoch_millis_str = event_time_header_value
+        .to_str()
+        .inspect_err(|e| {
+            error!(
+                ?e,
+                ?event_time_header_value,
+                "Converting value of header 'x-numaflow-event-time' to string"
+            )
+        })
+        .map_err(|_|  {
+            (
+                StatusCode::BAD_REQUEST,
+                axum::Json(serde_json::json!({
+                    "error": "Event time specified in header 'x-numaflow-event-time' is not an ASCII string",
+                })),
+            )
+    })?;
+    let epoch_millis = epoch_millis_str.parse::<i64>().inspect_err(|e| {
+        error!(?e, epoch_millis_str, "Event time specified in header 'x-numaflow-event-time' is not a valid integer or within signed 64-bit integer range");
+    }).map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            axum::Json(serde_json::json!({
+                "error": "Event time specified in header 'x-numaflow-event-time' is not a valid integer",
+                "details": format!("Specified value is {}", epoch_millis_str)
+            })),
+        )
+    })?;
+
+    let event_time = DateTime::from_timestamp_millis(epoch_millis).ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            axum::Json(serde_json::json!({
+                "error": "Event time specified in header 'x-numaflow-event-time' is out of range",
+                "details": format!("Specified value is {}", epoch_millis_str)
+            })),
+        )
+    }).inspect_err(|_| {
+        error!("Event time specified in header 'x-numaflow-event-time' is out of range for Epoch milliseconds");
+    })?;
+
+    Ok(event_time)
 }
 
 #[cfg(test)]
@@ -689,12 +771,22 @@ mod tests {
         // Verify we got the expected number of messages
         assert_eq!(messages.len(), test_data.len());
 
+        let current_time = Utc::now();
+
         // Verify message contents
         for message in messages.iter() {
             assert!(!message.id.is_empty());
             assert!(message.headers.contains_key("X-Numaflow-Id"));
-            assert!(message.headers.contains_key("X-Numaflow-Event-Time"));
             assert!(message.headers.contains_key("content-type"));
+
+            // Ensure current time is set when x-numaflow-event-time header is not specified
+            assert!(
+                current_time
+                    .signed_duration_since(message.event_time)
+                    .num_seconds()
+                    .abs()
+                    < 1
+            );
 
             // Check that the body matches what we sent
             let body_str = String::from_utf8(message.body.to_vec()).unwrap();
@@ -805,6 +897,7 @@ mod tests {
                 .uri(format!("https://{}/vertices/test", addr))
                 .header("Content-Type", "application/json")
                 .header("X-Numaflow-Id", format!("test-id-{}", i))
+                .header("x-numaflow-event-time", 1431628200000i64.to_string())
                 .body(format!(r#"{{"message": "test{}"}}"#, i))
                 .unwrap();
 
@@ -820,11 +913,14 @@ mod tests {
         let messages = handle.read(3).await.unwrap();
         assert_eq!(messages.len(), 3, "Should read 3 messages");
 
+        let expected_event_time = DateTime::from_timestamp_millis(1431628200000).unwrap(); // May 15, 2015
+
         // Verify message contents
         for (i, message) in messages.iter().enumerate() {
             assert!(message.headers.contains_key("X-Numaflow-Id"));
-            assert!(message.headers.contains_key("X-Numaflow-Event-Time"));
             assert!(message.headers.contains_key("content-type"));
+
+            assert_eq!(message.event_time, expected_event_time);
 
             let body_str = String::from_utf8(message.body.to_vec()).unwrap();
             assert!(body_str.contains(&format!("test{}", i)));
@@ -895,5 +991,27 @@ mod tests {
 
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[test]
+    fn test_parse_message_id_with_invalid_header() {
+        let eventtime_header_value = HeaderValue::from_str("héllo").unwrap(); // 'é' is not ASCII
+        let result = parse_message_id_from_header(&eventtime_header_value).unwrap_err();
+        assert_eq!(result.0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_parse_header_with_invalid_event_time() {
+        let eventtime_header_value = HeaderValue::from_static("abcd");
+        let result = parse_event_time_from_header(&eventtime_header_value).unwrap_err();
+        assert_eq!(result.0, StatusCode::BAD_REQUEST);
+
+        let eventtime_header_value = HeaderValue::from_str("héllo").unwrap(); // 'é' is not ASCII
+        let result = parse_event_time_from_header(&eventtime_header_value).unwrap_err();
+        assert_eq!(result.0, StatusCode::BAD_REQUEST);
+
+        let eventtime_header_value = HeaderValue::from_str(&i64::MIN.to_string()).unwrap();
+        let result = parse_event_time_from_header(&eventtime_header_value).unwrap_err();
+        assert_eq!(result.0, StatusCode::BAD_REQUEST);
     }
 }
