@@ -560,10 +560,9 @@ impl PipelineMetrics {
                     Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                         Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
                     }),
-                e2e_time:
-                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10))
-                    }),
+                e2e_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                    Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10))
+                }),
             },
             source_forwarder: SourceForwarderMetrics {
                 transformer_read_total: Family::<Vec<(String, String)>, Counter>::default(),

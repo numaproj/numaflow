@@ -208,7 +208,7 @@ impl JetStreamReader {
                                     continue;
                                 }
                             };
-                            let message_processing_start = Instant::now(); 
+                            let message_processing_start = Instant::now();
 
                             let js_message = JSWrappedMessage {
                                 partition_idx: self.stream.partition,

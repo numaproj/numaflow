@@ -9,7 +9,8 @@ use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
 use crate::message::ReadAck;
 use crate::metrics::{
-    PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels, pipeline_metric_labels, pipeline_metrics,
+    PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
+    pipeline_metric_labels, pipeline_metrics,
 };
 use crate::tracker::TrackerHandle;
 use crate::{
@@ -539,9 +540,16 @@ impl Source {
                 .read_time
                 .get_or_create(mvtx_labels)
                 .observe(read_start_time.elapsed().as_micros() as f64);
-            monovertex_metrics().read_batch_size.get_or_create(mvtx_labels).set(n as i64);
+            monovertex_metrics()
+                .read_batch_size
+                .get_or_create(mvtx_labels)
+                .set(n as i64);
         } else {
-            pipeline_metrics().forwarder.read_batch_size.get_or_create(pipeline_labels).set(n as i64);
+            pipeline_metrics()
+                .forwarder
+                .read_batch_size
+                .get_or_create(pipeline_labels)
+                .set(n as i64);
             pipeline_metrics()
                 .forwarder
                 .read_total
@@ -570,13 +578,8 @@ impl Source {
         }
     }
 
-    fn send_ack_metrics(
-        e2e_start_time: Instant, 
-        n: usize, 
-        start: Instant
-    ) {
+    fn send_ack_metrics(e2e_start_time: Instant, n: usize, start: Instant) {
         if is_mono_vertex() {
-
             let mvtx_labels = mvtx_forward_metric_labels();
             monovertex_metrics()
                 .ack_time

@@ -24,7 +24,8 @@ use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, Offset};
 use crate::metrics::{
-    pipeline_drop_metric_labels, pipeline_isb_metric_labels, pipeline_metric_labels, pipeline_metrics, PIPELINE_PARTITION_NAME_LABEL
+    PIPELINE_PARTITION_NAME_LABEL, pipeline_drop_metric_labels, pipeline_isb_metric_labels,
+    pipeline_metric_labels, pipeline_metrics,
 };
 use crate::shared::forward;
 use crate::tracker::TrackerHandle;
@@ -424,9 +425,14 @@ impl JetstreamWriter {
             for (stream, write_processing_start, paf) in pafs {
                 let ack = match paf.await {
                     Ok(ack) => {
-                        Self::send_write_metrics(stream.name, &this.vertex_type, message.clone(), write_processing_start);
+                        Self::send_write_metrics(
+                            stream.name,
+                            &this.vertex_type,
+                            message.clone(),
+                            write_processing_start,
+                        );
                         Ok(ack)
-                    },
+                    }
                     Err(e) => {
                         error!(
                             ?e, stream = ?stream,
