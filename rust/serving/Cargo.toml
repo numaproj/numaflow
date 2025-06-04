@@ -22,6 +22,7 @@ bytes.workspace = true
 rustls.workspace = true
 tower.workspace = true
 serde.workspace = true
+rcgen.workspace = true
 axum-macros = "0.5.0"
 hyper-util = { version = "0.1.6", features = ["client-legacy"] }
 serde_json = "1.0.120"
@@ -30,7 +31,6 @@ uuid = { workspace = true, features = ["std", "v7"] }
 trait-variant = "0.1.2"
 chrono = { version = "0.4", features = ["serde"] }
 base64 = "0.22.1"
-rcgen = "0.13.1"
 parking_lot = "0.12.3"
 prometheus-client = "0.23.1"
 thiserror = "2.0.12"

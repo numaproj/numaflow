@@ -8,20 +8,21 @@ pub(crate) mod source {
     const DEFAULT_SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
     const DEFAULT_SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
 
+    use std::collections::HashMap;
     use std::{fmt::Debug, time::Duration};
 
+    use super::parse_kafka_auth_config;
+    use crate::Result;
+    use crate::config::get_vertex_name;
+    use crate::error::Error;
     use bytes::Bytes;
     use numaflow_jetstream::{JetstreamSourceConfig, NatsAuth, TlsClientAuthCerts, TlsConfig};
     use numaflow_kafka::source::KafkaSourceConfig;
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source, SqsSource};
     use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
     use numaflow_sqs::source::SqsSourceConfig;
+    use serde::{Deserialize, Serialize};
     use tracing::warn;
-
-    use crate::Result;
-    use crate::error::Error;
-
-    use super::parse_kafka_auth_config;
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct SourceConfig {
@@ -48,6 +49,7 @@ pub(crate) mod source {
         Jetstream(JetstreamSourceConfig),
         Sqs(SqsSourceConfig),
         Kafka(Box<KafkaSourceConfig>),
+        Http(numaflow_http::HttpSourceConfig),
     }
 
     impl From<Box<GeneratorSource>> for SourceType {
@@ -330,6 +332,20 @@ pub(crate) mod source {
                 consumer_group: value.consumer_group.unwrap_or_default(),
                 auth,
                 tls,
+                // config is multiline string with key: value pairs.
+                // Eg:
+                //  max.poll.interval.ms: 100
+                //  socket.timeout.ms: 10000
+                //  queue.buffering.max.ms: 10000
+                kafka_raw_config: value
+                    .config
+                    .unwrap_or_default()
+                    .trim()
+                    .split('\n')
+                    .map(|s| s.split(':').collect::<Vec<&str>>())
+                    .filter(|parts| parts.len() == 2)
+                    .map(|parts| (parts[0].trim().to_string(), parts[1].trim().to_string()))
+                    .collect::<HashMap<String, String>>(),
             };
             Ok(SourceType::Kafka(Box::new(kafka_config)))
         }
@@ -367,6 +383,10 @@ pub(crate) mod source {
                 return kafka.try_into();
             }
 
+            if let Some(http) = source.http.take() {
+                return http.try_into();
+            }
+
             Err(Error::Config(format!("Invalid source type: {source:?}")))
         }
     }
@@ -393,6 +413,46 @@ pub(crate) mod source {
                 msg_size_bytes: 8,
                 jitter: Duration::from_secs(0),
             }
+        }
+    }
+
+    // Retrieve value from mounted secret volume
+    // "/var/numaflow/secrets/${secretRef.name}/${secretRef.key}" is expected to be the file path
+    pub(crate) fn get_secret_from_volume(name: &str, key: &str) -> String {
+        let path = format!("/var/numaflow/secrets/{name}/{key}");
+        let val = std::fs::read_to_string(path.clone())
+            .map_err(|e| format!("Reading secret from file {path}: {e:?}"))
+            .expect("Failed to read secret");
+        val.trim().into()
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    struct AuthToken {
+        /// Name of the configmap
+        name: String,
+        /// Key within the configmap
+        key: String,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    struct Auth {
+        token: AuthToken,
+    }
+
+    impl TryFrom<Box<numaflow_models::models::HttpSource>> for SourceType {
+        type Error = Error;
+        fn try_from(
+            value: Box<numaflow_models::models::HttpSource>,
+        ) -> std::result::Result<Self, Self::Error> {
+            let mut http_config = numaflow_http::HttpSourceConfigBuilder::new(get_vertex_name());
+
+            if let Some(auth) = value.auth {
+                let auth = auth.token.unwrap();
+                let token = get_secret_from_volume(&auth.name, &auth.key);
+                http_config = http_config.token(Box::leak(token.into_boxed_str()));
+            }
+
+            Ok(SourceType::Http(http_config.build()))
         }
     }
 
@@ -427,6 +487,7 @@ pub(crate) mod sink {
     const DEFAULT_SINK_RETRY_FACTOR: f64 = 1.0;
     const DEFAULT_SINK_RETRY_JITTER: f64 = 0.0;
 
+    use std::collections::HashMap;
     use std::fmt::Display;
 
     use numaflow_kafka::sink::KafkaSinkConfig;
@@ -576,6 +637,20 @@ pub(crate) mod sink {
                 auth,
                 tls,
                 set_partition_key: kafka_config.set_key.unwrap_or(false),
+                // config is multiline string with key: value pairs.
+                // Eg:
+                //  max.poll.interval.ms: 100
+                //  socket.timeout.ms: 10000
+                //  queue.buffering.max.ms: 10000
+                kafka_raw_config: kafka_config
+                    .config
+                    .unwrap_or_default()
+                    .trim()
+                    .split('\n')
+                    .map(|s| s.split(':').collect::<Vec<&str>>())
+                    .filter(|parts| parts.len() == 2)
+                    .map(|parts| (parts[0].trim().to_string(), parts[1].trim().to_string()))
+                    .collect::<HashMap<String, String>>(),
             })))
         }
     }
@@ -1769,10 +1844,12 @@ mod jetstream_tests {
 
 #[cfg(test)]
 mod kafka_tests {
+    use super::sink::SinkType;
     use super::source::SourceType;
     use k8s_openapi::api::core::v1::SecretKeySelector;
     use numaflow_models::models::gssapi::AuthType;
     use numaflow_models::models::{Gssapi, KafkaSource, Sasl, SaslPlain, SasloAuth, Tls};
+    use std::collections::HashMap;
     use std::fs;
     use std::path::Path;
 
@@ -1789,6 +1866,67 @@ mod kafka_tests {
         if Path::new(&path).exists() {
             fs::remove_dir_all(&path).unwrap();
         }
+    }
+
+    #[test]
+    fn test_try_from_kafka_source_with_kafka_raw_config() {
+        let kafka_user_config: &str = r#"
+            max.poll.interval.ms: 100
+            socket.timeout.ms: 10000
+            queue.buffering.max.ms: 10000
+            "#;
+
+        let kafka_source = KafkaSource {
+            brokers: Some(vec!["localhost:9092".to_string()]),
+            topic: "test-topic".to_string(),
+            consumer_group: Some("test-group".to_string()),
+            sasl: None,
+            tls: None,
+            config: Some(kafka_user_config.to_string()),
+            kafka_version: None,
+        };
+
+        let source_type = SourceType::try_from(Box::new(kafka_source)).unwrap();
+        let SourceType::Kafka(config) = source_type else {
+            panic!("Expected SourceType::Kafka");
+        };
+
+        let expected_config = HashMap::from([
+            ("max.poll.interval.ms".to_string(), "100".to_string()),
+            ("socket.timeout.ms".to_string(), "10000".to_string()),
+            ("queue.buffering.max.ms".to_string(), "10000".to_string()),
+        ]);
+        assert_eq!(config.kafka_raw_config, expected_config);
+    }
+
+    #[test]
+    fn test_try_from_kafka_sink_with_kafka_raw_config() {
+        let kafka_user_config: &str = r#"
+            max.poll.interval.ms: 100
+            socket.timeout.ms: 10000
+            queue.buffering.max.ms: 10000
+            "#;
+
+        let kafka_sink = numaflow_models::models::KafkaSink {
+            brokers: Some(vec!["localhost:9092".to_string()]),
+            topic: "test-topic".to_string(),
+            config: Some(kafka_user_config.to_string()),
+            sasl: None,
+            set_key: Some(true),
+            tls: None,
+        };
+
+        let sink_type = SinkType::try_from(Box::new(kafka_sink)).unwrap();
+        let SinkType::Kafka(config) = sink_type else {
+            panic!("Expected SinkType::Kafka");
+        };
+
+        let expected_config = HashMap::from([
+            ("max.poll.interval.ms".to_string(), "100".to_string()),
+            ("socket.timeout.ms".to_string(), "10000".to_string()),
+            ("queue.buffering.max.ms".to_string(), "10000".to_string()),
+        ]);
+        assert_eq!(config.kafka_raw_config, expected_config);
     }
 
     #[test]
