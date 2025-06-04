@@ -122,7 +122,7 @@ impl ReduceTask {
 
             // we can safely delete the window from the window manager since the results are
             // successfully written to jetstream and watermark is published.
-            self.window_manager.delete_window(self.window.clone());
+            self.window_manager.gc_window(self.window.clone());
 
             // now that the processing is done, we can add this window to the GC WAL.
             let Some(gc_wal_tx) = &self.gc_wal_tx else {

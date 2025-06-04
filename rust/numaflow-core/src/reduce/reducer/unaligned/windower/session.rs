@@ -36,7 +36,6 @@ impl SessionWindowManager {
     /// Assigns windows to a message based on session window logic
     pub(crate) fn assign_windows(&self, msg: Message) -> Vec<UnalignedWindowMessage> {
         let combined_key = Self::combine_keys(&msg.keys);
-        let mut all_windows = self.all_windows.write().expect("Poisoned lock");
 
         let new_window = Window::new(
             msg.event_time,
@@ -44,64 +43,68 @@ impl SessionWindowManager {
             Arc::clone(&msg.keys),
         );
 
+        let mut all_windows = self.all_windows.write().expect("Poisoned lock");
         let window_set = all_windows.entry(combined_key).or_default();
 
-        match Self::find_window_to_merge(window_set, &new_window) {
-            Some(existing_window) => {
-                let needs_expansion = new_window.start_time < existing_window.start_time
-                    || new_window.end_time > existing_window.end_time;
+        if let Some(existing_window) = Self::find_window_to_merge(window_set, &new_window) {
+            let expanded_window = Self::expand_window_if_needed(&new_window, &existing_window);
 
-                if needs_expansion {
-                    window_set.remove(&existing_window);
+            if let Some(expanded_window) = expanded_window {
+                window_set.remove(&existing_window);
+                window_set.insert(expanded_window.clone());
 
-                    let expanded_window = Window::new(
-                        new_window.start_time.min(existing_window.start_time),
-                        new_window.end_time.max(existing_window.end_time),
-                        Arc::clone(&msg.keys),
-                    );
-
-                    window_set.insert(expanded_window.clone());
-
-                    vec![UnalignedWindowMessage {
-                        operation: UnalignedWindowOperation::Expand {
-                            message: msg,
-                            windows: vec![existing_window, expanded_window],
-                        },
-                        pnf_slot: SHARED_PNF_SLOT,
-                    }]
-                } else {
-                    vec![UnalignedWindowMessage {
-                        operation: UnalignedWindowOperation::Append {
-                            message: msg,
-                            window: existing_window,
-                        },
-                        pnf_slot: SHARED_PNF_SLOT,
-                    }]
-                }
-            }
-            None => {
-                window_set.insert(new_window.clone());
-                vec![UnalignedWindowMessage {
-                    operation: UnalignedWindowOperation::Open {
+                return vec![UnalignedWindowMessage {
+                    operation: UnalignedWindowOperation::Expand {
                         message: msg,
-                        window: new_window,
+                        windows: vec![existing_window, expanded_window],
                     },
                     pnf_slot: SHARED_PNF_SLOT,
-                }]
+                }];
             }
+
+            return vec![UnalignedWindowMessage {
+                operation: UnalignedWindowOperation::Append {
+                    message: msg,
+                    window: existing_window,
+                },
+                pnf_slot: SHARED_PNF_SLOT,
+            }];
+        }
+
+        window_set.insert(new_window.clone());
+        vec![UnalignedWindowMessage {
+            operation: UnalignedWindowOperation::Open {
+                message: msg,
+                window: new_window,
+            },
+            pnf_slot: SHARED_PNF_SLOT,
+        }]
+    }
+
+    fn expand_window_if_needed(new_window: &Window, existing_window: &Window) -> Option<Window> {
+        if new_window.start_time < existing_window.start_time
+            || new_window.end_time > existing_window.end_time
+        {
+            Some(Window::new(
+                new_window.start_time.min(existing_window.start_time),
+                new_window.end_time.max(existing_window.end_time),
+                Arc::clone(&new_window.keys),
+            ))
+        } else {
+            None
         }
     }
 
     /// Find a window that can be merged with the given window
-    fn find_window_to_merge(
-        window_set: &BTreeSet<Window>,
-        window: &Window,
-    ) -> Option<Window> {
-        window_set.iter().find(|existing_window| {
-            // Windows overlap if they intersect
-            window.start_time <= existing_window.end_time
-                && existing_window.start_time <= window.end_time
-        }).cloned()
+    fn find_window_to_merge(window_set: &BTreeSet<Window>, window: &Window) -> Option<Window> {
+        window_set
+            .iter()
+            .find(|existing_window| {
+                // Windows overlap if they intersect
+                window.start_time <= existing_window.end_time
+                    && existing_window.start_time <= window.end_time
+            })
+            .cloned()
     }
 
     /// Closes windows that have been inactive for longer than the timeout
@@ -156,12 +159,12 @@ impl SessionWindowManager {
     ) -> Vec<UnalignedWindowMessage> {
         Self::windows_that_can_be_merged(&closed_windows)
             .into_iter()
-            .filter_map(|group| Self::process_window_group(all_windows, key, group))
+            .filter_map(|group| Self::process_closing_window_group(all_windows, key, group))
             .collect()
     }
 
     /// Process a group of windows that can be merged
-    fn process_window_group(
+    fn process_closing_window_group(
         all_windows: &mut HashMap<String, BTreeSet<Window>>,
         key: &str,
         group: Vec<Window>,
@@ -280,18 +283,12 @@ impl SessionWindowManager {
 
     /// Returns the end time of the oldest window
     pub(crate) fn oldest_window_end_time(&self) -> Option<DateTime<Utc>> {
-        let all_windows = self.all_windows.read().expect("Poisoned lock");
-        let mut min_end_time = None;
-
-        for window_set in all_windows.values() {
-            if let Some(window) = window_set.iter().next() {
-                if min_end_time.is_none() || window.end_time < min_end_time.unwrap() {
-                    min_end_time = Some(window.end_time);
-                }
-            }
-        }
-
-        min_end_time
+        self.all_windows
+            .read()
+            .expect("Poisoned lock")
+            .values()
+            .flat_map(|window_set| window_set.iter().map(|window| window.end_time))
+            .min()
     }
 }
 

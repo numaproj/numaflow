@@ -1,11 +1,12 @@
 use crate::message::Message;
 use crate::reduce::reducer::unaligned::windower::accumulator::AccumulatorWindowManager;
 use crate::reduce::reducer::unaligned::windower::session::SessionWindowManager;
-use crate::shared::grpc::utc_from_timestamp;
+use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::accumulator::KeyedWindow;
 use numaflow_pb::clients::sessionreduce;
+use numaflow_pb::objects::wal::GcEvent;
 use std::cmp::Ordering;
 use std::fmt::Display;
 use std::sync::Arc;
@@ -128,6 +129,16 @@ impl From<KeyedWindow> for Window {
             )
             .into(),
             keys: Arc::from(value.keys),
+        }
+    }
+}
+
+impl From<&Window> for GcEvent {
+    fn from(value: &Window) -> Self {
+        Self {
+            start_time: Some(prost_timestamp_from_utc(value.start_time)),
+            end_time: Some(prost_timestamp_from_utc(value.end_time)),
+            keys: value.keys.to_vec(),
         }
     }
 }

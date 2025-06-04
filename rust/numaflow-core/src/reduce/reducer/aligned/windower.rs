@@ -48,7 +48,7 @@ impl AlignedWindowManager {
     }
 
     /// Deletes a window is called after the window is closed and GC is done.
-    pub(crate) fn delete_window(&self, window: Window) {
+    pub(crate) fn gc_window(&self, window: Window) {
         match self {
             AlignedWindowManager::Fixed(manager) => manager.gc_window(window),
             AlignedWindowManager::Sliding(manager) => manager.gc_window(window),

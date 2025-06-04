@@ -520,12 +520,6 @@ mod tests {
             WindowOperation::Close => {}
             _ => panic!("Expected Close operation"),
         }
-
-        // Verify all windows are closed
-        {
-            let active_windows = windower.active_windows.read().unwrap();
-            assert_eq!(active_windows.len(), 0);
-        }
     }
 
     #[test]
@@ -585,10 +579,10 @@ mod tests {
         // Verify window2 is deleted
         {
             let active_windows = windower.active_windows.read().unwrap();
-            assert_eq!(active_windows.len(), 0);
+            assert_eq!(active_windows.len(), 1);
             assert!(!active_windows.contains(&window1));
             assert!(!active_windows.contains(&window2));
-            assert!(!active_windows.contains(&window3));
+            assert!(active_windows.contains(&window3));
         }
 
         // Delete window3

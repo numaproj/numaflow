@@ -2744,4 +2744,360 @@ mod reducer_tests {
             "Config Error - No window type specified"
         );
     }
+
+    #[test]
+    fn test_session_user_defined_config() {
+        let session_config = UserDefinedConfig::session_config();
+        assert_eq!(session_config.grpc_max_message_size, 64 * 1024 * 1024);
+        assert_eq!(
+            session_config.socket_path,
+            "/var/run/numaflow/sessionreduce.sock"
+        );
+        assert_eq!(
+            session_config.server_info_path,
+            "/var/run/numaflow/sessionreducer-server-info"
+        );
+    }
+
+    #[test]
+    fn test_accumulator_user_defined_config() {
+        let accumulator_config = UserDefinedConfig::accumulator_config();
+        assert_eq!(accumulator_config.grpc_max_message_size, 64 * 1024 * 1024);
+        assert_eq!(
+            accumulator_config.socket_path,
+            "/var/run/numaflow/accumulator.sock"
+        );
+        assert_eq!(
+            accumulator_config.server_info_path,
+            "/var/run/numaflow/accumulator-server-info"
+        );
+    }
+
+    #[test]
+    fn test_fixed_window_config_from_fixed_window() {
+        use super::reduce::FixedWindowConfig;
+
+        let fixed_window = Box::new(FixedWindow {
+            length: Some(kube::core::Duration::from(Duration::from_secs(120))),
+            streaming: None,
+        });
+
+        let config = FixedWindowConfig::from(fixed_window);
+        assert_eq!(config.length, Duration::from_secs(120));
+    }
+
+    #[test]
+    fn test_fixed_window_config_from_fixed_window_default() {
+        use super::reduce::FixedWindowConfig;
+
+        let fixed_window = Box::new(FixedWindow {
+            length: None,
+            streaming: None,
+        });
+
+        let config = FixedWindowConfig::from(fixed_window);
+        assert_eq!(config.length, Duration::default());
+    }
+
+    #[test]
+    fn test_sliding_window_config_from_sliding_window() {
+        use super::reduce::SlidingWindowConfig;
+
+        let sliding_window = Box::new(SlidingWindow {
+            length: Some(kube::core::Duration::from(Duration::from_secs(180))),
+            slide: Some(kube::core::Duration::from(Duration::from_secs(60))),
+            streaming: None,
+        });
+
+        let config = SlidingWindowConfig::from(sliding_window);
+        assert_eq!(config.length, Duration::from_secs(180));
+        assert_eq!(config.slide, Duration::from_secs(60));
+    }
+
+    #[test]
+    fn test_sliding_window_config_from_sliding_window_defaults() {
+        use super::reduce::SlidingWindowConfig;
+
+        let sliding_window = Box::new(SlidingWindow {
+            length: None,
+            slide: None,
+            streaming: None,
+        });
+
+        let config = SlidingWindowConfig::from(sliding_window);
+        assert_eq!(config.length, Duration::default());
+        assert_eq!(config.slide, Duration::default());
+    }
+
+    #[test]
+    fn test_session_window_config_from_session_window() {
+        use super::reduce::SessionWindowConfig;
+
+        let session_window = Box::new(SessionWindow {
+            timeout: Some(kube::core::Duration::from(Duration::from_secs(900))),
+        });
+
+        let config = SessionWindowConfig::from(session_window);
+        assert_eq!(config.timeout, Duration::from_secs(900));
+    }
+
+    #[test]
+    fn test_session_window_config_from_session_window_default() {
+        use super::reduce::SessionWindowConfig;
+
+        let session_window = Box::new(SessionWindow { timeout: None });
+
+        let config = SessionWindowConfig::from(session_window);
+        assert_eq!(config.timeout, Duration::default());
+    }
+
+    #[test]
+    fn test_accumulator_window_config_from_accumulator_window() {
+        use super::reduce::AccumulatorWindowConfig;
+
+        let accumulator_window = Box::new(AccumulatorWindow {
+            timeout: Some(kube::core::Duration::from(Duration::from_secs(1200))),
+        });
+
+        let config = AccumulatorWindowConfig::from(accumulator_window);
+        assert_eq!(config.timeout, Duration::from_secs(1200));
+    }
+
+    #[test]
+    fn test_accumulator_window_config_from_accumulator_window_default() {
+        use super::reduce::AccumulatorWindowConfig;
+
+        let accumulator_window = Box::new(AccumulatorWindow { timeout: None });
+
+        let config = AccumulatorWindowConfig::from(accumulator_window);
+        assert_eq!(config.timeout, Duration::default());
+    }
+
+    #[test]
+    fn test_storage_config_default() {
+        use super::reduce::StorageConfig;
+
+        let default_config = StorageConfig::default();
+        assert_eq!(
+            default_config.path,
+            std::path::PathBuf::from("/var/numaflow/pbq/wals")
+        );
+        assert_eq!(default_config.max_file_size_mb, 10);
+        assert_eq!(default_config.flush_interval_ms, 100);
+        assert_eq!(default_config.channel_buffer_size, 500);
+        assert_eq!(default_config.max_segment_age_secs, 120);
+    }
+
+    #[test]
+    fn test_storage_config_from_pbq_storage_success() {
+        use super::reduce::StorageConfig;
+        use numaflow_models::models::PbqStorage;
+
+        let pbq_storage = PbqStorage {
+            persistent_volume_claim: None,
+            empty_dir: None,
+            no_store: None,
+        };
+
+        let result = StorageConfig::try_from(pbq_storage);
+        assert!(result.is_ok());
+        let config = result.unwrap();
+        assert_eq!(
+            config.path,
+            std::path::PathBuf::from("/var/numaflow/pbq/wals")
+        );
+        assert_eq!(config.max_file_size_mb, 10);
+        assert_eq!(config.flush_interval_ms, 100);
+        assert_eq!(config.channel_buffer_size, 500);
+        assert_eq!(config.max_segment_age_secs, 120);
+    }
+
+    #[test]
+    fn test_storage_config_from_pbq_storage_with_pvc_error() {
+        use super::reduce::StorageConfig;
+        use numaflow_models::models::{PbqStorage, PersistenceStrategy};
+
+        let pbq_storage = PbqStorage {
+            persistent_volume_claim: Some(Box::new(PersistenceStrategy {
+                access_mode: Some("ReadWriteOnce".to_string()),
+                storage_class_name: Some("standard".to_string()),
+                volume_size: None,
+            })),
+            empty_dir: None,
+            no_store: None,
+        };
+
+        let result = StorageConfig::try_from(pbq_storage);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Config Error - Persistent volume claim is not supported"
+        );
+    }
+
+    #[test]
+    fn test_fixed_window_with_large_duration() {
+        let window = Window {
+            fixed: Some(Box::new(FixedWindow {
+                length: Some(kube::core::Duration::from(Duration::from_secs(86400))), // 1 day
+                streaming: None,
+            })),
+            sliding: None,
+            session: None,
+            accumulator: None,
+        };
+
+        let group_by = Box::new(GroupBy {
+            allowed_lateness: Some(kube::core::Duration::from(Duration::from_secs(3600))), // 1 hour
+            keyed: Some(false),
+            storage: None,
+            window: Box::new(window),
+        });
+
+        let reducer_config = ReducerConfig::try_from(&group_by).unwrap();
+        match reducer_config {
+            ReducerConfig::Aligned(aligned_config) => {
+                assert_eq!(
+                    aligned_config.window_config.allowed_lateness,
+                    Duration::from_secs(3600)
+                );
+                assert!(!aligned_config.window_config.is_keyed);
+
+                match aligned_config.window_config.window_type {
+                    AlignedWindowType::Fixed(config) => {
+                        assert_eq!(config.length, Duration::from_secs(86400));
+                    }
+                    _ => panic!("Expected fixed window type"),
+                }
+            }
+            _ => panic!("Expected aligned reducer config"),
+        }
+    }
+
+    #[test]
+    fn test_sliding_window_with_zero_slide() {
+        let window = Window {
+            fixed: None,
+            sliding: Some(Box::new(SlidingWindow {
+                length: Some(kube::core::Duration::from(Duration::from_secs(60))),
+                slide: Some(kube::core::Duration::from(Duration::from_secs(0))),
+                streaming: None,
+            })),
+            session: None,
+            accumulator: None,
+        };
+
+        let group_by = Box::new(GroupBy {
+            allowed_lateness: None,
+            keyed: None,
+            storage: None,
+            window: Box::new(window),
+        });
+
+        let reducer_config = ReducerConfig::try_from(&group_by).unwrap();
+        match reducer_config {
+            ReducerConfig::Aligned(aligned_config) => {
+                match aligned_config.window_config.window_type {
+                    AlignedWindowType::Sliding(config) => {
+                        assert_eq!(config.length, Duration::from_secs(60));
+                        assert_eq!(config.slide, Duration::from_secs(0));
+                    }
+                    _ => panic!("Expected sliding window type"),
+                }
+            }
+            _ => panic!("Expected aligned reducer config"),
+        }
+    }
+
+    #[test]
+    fn test_session_window_with_very_long_timeout() {
+        let window = Window {
+            fixed: None,
+            sliding: None,
+            session: Some(Box::new(SessionWindow {
+                timeout: Some(kube::core::Duration::from(Duration::from_secs(7200))), // 2 hours
+            })),
+            accumulator: None,
+        };
+
+        let group_by = Box::new(GroupBy {
+            allowed_lateness: Some(kube::core::Duration::from(Duration::from_secs(600))), // 10 minutes
+            keyed: Some(true),
+            storage: None,
+            window: Box::new(window),
+        });
+
+        let reducer_config = ReducerConfig::try_from(&group_by).unwrap();
+        match reducer_config {
+            ReducerConfig::Unaligned(unaligned_config) => {
+                assert_eq!(
+                    unaligned_config.window_config.allowed_lateness,
+                    Duration::from_secs(600)
+                );
+                assert!(unaligned_config.window_config.is_keyed);
+
+                match unaligned_config.window_config.window_type {
+                    UnalignedWindowType::Session(config) => {
+                        assert_eq!(config.timeout, Duration::from_secs(7200));
+                    }
+                    _ => panic!("Expected session window type"),
+                }
+
+                // Verify session-specific user defined config
+                assert_eq!(
+                    unaligned_config.user_defined_config.socket_path,
+                    "/var/run/numaflow/sessionreduce.sock"
+                );
+            }
+            _ => panic!("Expected unaligned reducer config"),
+        }
+    }
+
+    #[test]
+    fn test_accumulator_window_with_specific_config() {
+        let window = Window {
+            fixed: None,
+            sliding: None,
+            session: None,
+            accumulator: Some(Box::new(AccumulatorWindow {
+                timeout: Some(kube::core::Duration::from(Duration::from_secs(1800))), // 30 minutes
+            })),
+        };
+
+        let group_by = Box::new(GroupBy {
+            allowed_lateness: Some(kube::core::Duration::from(Duration::from_secs(300))), // 5 minutes
+            keyed: Some(false),
+            storage: None,
+            window: Box::new(window),
+        });
+
+        let reducer_config = ReducerConfig::try_from(&group_by).unwrap();
+        match reducer_config {
+            ReducerConfig::Unaligned(unaligned_config) => {
+                assert_eq!(
+                    unaligned_config.window_config.allowed_lateness,
+                    Duration::from_secs(300)
+                );
+                assert!(!unaligned_config.window_config.is_keyed);
+
+                match unaligned_config.window_config.window_type {
+                    UnalignedWindowType::Accumulator(config) => {
+                        assert_eq!(config.timeout, Duration::from_secs(1800));
+                    }
+                    _ => panic!("Expected accumulator window type"),
+                }
+
+                // Verify accumulator-specific user defined config
+                assert_eq!(
+                    unaligned_config.user_defined_config.socket_path,
+                    "/var/run/numaflow/accumulator.sock"
+                );
+                assert_eq!(
+                    unaligned_config.user_defined_config.server_info_path,
+                    "/var/run/numaflow/accumulator-server-info"
+                );
+            }
+            _ => panic!("Expected unaligned reducer config"),
+        }
+    }
 }

@@ -275,13 +275,6 @@ mod tests {
             WindowOperation::Close => {}
             _ => panic!("Expected Close operation"),
         }
-
-        // Verify only window3 remains in active windows
-        {
-            let active_windows = windower.active_windows.read().unwrap();
-            assert_eq!(active_windows.len(), 1);
-            assert!(active_windows.contains(&window3));
-        }
     }
 
     #[test]

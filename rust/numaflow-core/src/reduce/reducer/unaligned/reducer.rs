@@ -24,58 +24,17 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-/// Enum to wrap different response types
-enum ReduceResponseWrapper {
-    Accumulator(AccumulatorResponse),
-    Session(SessionReduceResponse),
-}
-
-impl ReduceResponseWrapper {
-    fn window(&self) -> Option<ResponseWindow> {
-        match self {
-            ReduceResponseWrapper::Accumulator(resp) => {
-                resp.window.as_ref().map(|w| ResponseWindow {
-                    keys: w.keys.clone(),
-                    end_time: utc_from_timestamp(*w.end.as_ref().unwrap()),
-                    is_eof: resp.eof,
-                })
-            }
-            ReduceResponseWrapper::Session(resp) => {
-                resp.keyed_window.as_ref().map(|w| ResponseWindow {
-                    keys: w.keys.clone(),
-                    end_time: utc_from_timestamp(*w.end.as_ref().unwrap()),
-                    is_eof: resp.eof,
-                })
-            }
-        }
-    }
-
-    fn is_eof(&self) -> bool {
-        match self {
-            ReduceResponseWrapper::Accumulator(resp) => resp.eof,
-            ReduceResponseWrapper::Session(resp) => resp.eof,
-        }
-    }
-}
-
-/// Window information extracted from responses
-struct ResponseWindow {
-    keys: Vec<String>,
-    end_time: DateTime<Utc>,
-    is_eof: bool,
-}
-
-/// Represents an active reduce stream for a window.
+/// Represents an active reduce stream for a pnf slot.
 struct ActiveStream {
     /// Sender for window messages. Messages are sent to this channel is received by the unique reduce
-    /// task for that window.
+    /// task for that pnf slot.
     message_tx: mpsc::Sender<UnalignedWindowMessage>,
-    /// Handle to the task processing the window
+    /// Handle to the task processing the pnf slot.
     task_handle: JoinHandle<()>,
 }
 
-/// Represents a reduce task for a window. It is responsible for calling the user-defined reduce
-/// function for the given window and writing the output to JetStream and publishing the watermark.
+/// Represents a reduce task for a pnf slot. It is responsible for calling the user-defined reduce
+/// function for the given slot and writing the output to JetStream and publishing the watermark.
 /// Also writes the GC events to the WAL if configured.
 struct ReduceTask {
     /// Client for user-defined reduce operations.
@@ -150,9 +109,8 @@ impl ReduceTask {
             .reduce_fn(request_stream, cln_token.clone())
             .await?;
 
-        // we should tokio select on the response stream and the timeout based on the batch timeout
-        // and if the timeout is reached, we should write the GC events and delete the tracked windows
-        // and create a new js streaming writer
+        // we periodically wait for the js writer to finish writing so that we can delete the tracked
+        // windows and publish the watermark.
         let mut batch_timer = tokio::time::interval(self.batch_timeout);
         batch_timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
@@ -186,8 +144,6 @@ impl ReduceTask {
                     self.delete_tracked_windows().await;
                 }
                 response = response_stream.next() => {
-                    info!("Received response from reduce function {:?}", response);
-
                     let Some(response) = response else {
                         break;
                     };
@@ -198,17 +154,9 @@ impl ReduceTask {
                     }
 
                     let window = response.window.clone().expect("Window not set in response");
-                    let end_time = utc_from_timestamp(window.end.expect("Window end time missing"));
-
                     // create with a window with this end time as both start and end and for that key
                     // and track the max end time
-                    let window = Window {
-                        start_time: end_time,
-                        end_time,
-                        keys: window.keys.into(),
-                        id: format!("{}", end_time.timestamp_millis()).into(),
-                    };
-
+                    let window : Window = window.into();
                     writer_tx
                         .send(response.into())
                         .await
@@ -218,12 +166,17 @@ impl ReduceTask {
             }
         }
 
-        // Wait for the client to complete
-        if let Err(e) = handle.await {
+        if let Err(e) = handle.await.expect("Reduce task failed") {
+            if let Error::Cancelled() = &e {
+                info!("Accumulator task cancelled");
+                return Ok(());
+            }
+
             error!(?e, "Error while doing reduce operation");
-            return Err(Error::Reduce(format!("Reduce task failed: {}", e)));
+            return Err(e);
         }
 
+        drop(writer_tx);
         // Final cleanup: wait for writer to complete
         if let Err(e) = writer_handle.await {
             error!(?e, "Error while writing final results to JetStream");
@@ -281,18 +234,16 @@ impl ReduceTask {
 
                     drop(writer_tx);
 
-                    // Wait for the writer to finish writing the current batch
+                    // Wait for the writer to finish writing the current batch and start a new one
                     if let Err(e) = writer_handle.await {
                         error!(?e, "Error while writing results to JetStream");
                         return Err(Error::Reduce(format!("Writer task failed: {}", e)));
                     }
 
-                    // Create a new channel for the next batch
                     let (new_writer_tx, new_writer_rx) = mpsc::channel(100);
                     let writer_stream = ReceiverStream::new(new_writer_rx);
                     writer_tx = new_writer_tx;
 
-                    // Start a new writer
                     writer_handle = self
                         .js_writer
                         .clone()
@@ -310,20 +261,8 @@ impl ReduceTask {
                         break;
                     };
 
-                    let window = response.keyed_window.clone().expect("Window not set in response");
-                    let end_time = utc_from_timestamp(window.end.expect("Window end missing"));
-                    let start_time = utc_from_timestamp(window.start.expect("Window start missing"));
-
-                    // Process the response
                     if response.eof {
-                        // For session windows, track the actual window with start and end time
-                        let session_window = Window {
-                            start_time,
-                            end_time,
-                            keys: window.keys.into(),
-                            id: format!("{}-{}", start_time.timestamp_millis(), end_time.timestamp_millis()).into(),
-                        };
-
+                        let session_window: Window = response.keyed_window.expect("Window not set in response").into();
                         self.tracked_windows.insert(session_window.keys.to_vec(), session_window);
                         continue;
                     }
@@ -336,12 +275,17 @@ impl ReduceTask {
             }
         }
 
-        // Wait for the client to complete
-        if let Err(e) = handle.await {
+        if let Err(e) = handle.await.expect("Reduce task failed") {
+            if let Error::Cancelled() = &e {
+                info!("Session reduce task cancelled");
+                return Ok(());
+            }
+
             error!(?e, "Error while doing reduce operation");
-            return Err(Error::Reduce(format!("Reduce task failed: {}", e)));
+            return Err(e);
         }
 
+        drop(writer_tx);
         // Final cleanup: wait for writer to complete
         if let Err(e) = writer_handle.await {
             error!(?e, "Error while writing final results to JetStream");
@@ -380,22 +324,10 @@ impl ReduceTask {
     }
 
     // Remove the process_batch method as we're writing continuously
-
     async fn write_gc_events(&self) {
         if let Some(gc_wal_tx) = &self.gc_wal_tx {
             for (keys, window) in &self.tracked_windows {
-                let gc_event = GcEvent {
-                    start_time: Some(prost_types::Timestamp {
-                        seconds: window.start_time.timestamp(),
-                        nanos: window.start_time.timestamp_subsec_nanos() as i32,
-                    }),
-                    end_time: Some(prost_types::Timestamp {
-                        seconds: window.end_time.timestamp(),
-                        nanos: window.end_time.timestamp_subsec_nanos() as i32,
-                    }),
-                    keys: keys.clone(),
-                };
-
+                let gc_event: GcEvent = window.into();
                 let gc_event_bytes = gc_event.encode_to_vec();
                 if let Err(e) = gc_wal_tx
                     .send(SegmentWriteMessage::WriteData {

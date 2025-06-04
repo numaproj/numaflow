@@ -14,7 +14,8 @@ use crate::reduce::reducer::unaligned::windower::{
 struct WindowState {
     /// The window this state belongs to
     window: Window,
-    /// Sorted list of message timestamps, used for watermark calculation
+    /// Sorted list of message timestamps, used for watermark calculation to find the oldest event
+    /// time.
     message_timestamps: Arc<RwLock<BTreeSet<DateTime<Utc>>>>,
     /// Last seen event time for this window
     last_seen_event_time: Arc<RwLock<DateTime<Utc>>>,
@@ -45,19 +46,22 @@ impl WindowState {
 
     /// Deletes event times before the given end time
     fn delete_timestamps_before(&self, end_time: DateTime<Utc>) {
-        let mut timestamps = self.message_timestamps.write().expect("Poisoned lock");
+        let mut timestamps = self
+            .message_timestamps
+            .write()
+            .expect("Failed to acquire write lock on message_timestamps");
 
-        // Remove all timestamps before end_time (keep timestamps >= end_time)
-        timestamps.retain(|ts| *ts >= end_time);
+        // Retain timestamps greater than or equal to the end time
+        timestamps.retain(|&ts| ts >= end_time);
 
-        let mut last_seen = self.last_seen_event_time.write().expect("Poisoned lock");
-        // Update last seen event time if needed
-        if !timestamps.is_empty() {
-            *last_seen = timestamps.iter().next().cloned().unwrap();
-        } else {
-            // set it to 0
-            *last_seen = DateTime::from_timestamp_millis(0).unwrap();
-        }
+        let oldest_timestamp = timestamps.iter().next().cloned();
+
+        let mut last_seen = self
+            .last_seen_event_time
+            .write()
+            .expect("Failed to acquire write lock on last_seen_event_time");
+        *last_seen = oldest_timestamp
+            .unwrap_or_else(|| DateTime::from_timestamp_millis(-1).expect("Invalid timestamp"));
     }
 
     /// Gets the oldest timestamp in this window state
@@ -96,13 +100,13 @@ impl AccumulatorWindowManager {
         let combined_key = Self::combine_keys(&msg.keys);
         let mut result = Vec::new();
 
-        // Check if we already have a window for this key
+        // Acquire write lock once
         let mut active_windows = self.active_windows.write().expect("Poisoned lock");
 
+        // Check if a window already exists for the key
         if let Some(window_state) = active_windows.get(&combined_key) {
-            // Window exists, append message
+            // Append message to the existing window
             window_state.append_timestamp(msg.event_time);
-
             result.push(UnalignedWindowMessage {
                 operation: UnalignedWindowOperation::Append {
                     message: msg.clone(),
@@ -110,27 +114,28 @@ impl AccumulatorWindowManager {
                 },
                 pnf_slot: SHARED_PNF_SLOT,
             });
-        } else {
-            // Create a new window for this key
-            let window = Window::new(
-                Utc::now(),
-                Utc::now() + chrono::Duration::from_std(self.timeout).unwrap(),
-                Arc::clone(&msg.keys),
-            );
-
-            let window_state = WindowState::new(window.clone());
-            window_state.append_timestamp(msg.event_time);
-
-            active_windows.insert(combined_key, window_state);
-
-            result.push(UnalignedWindowMessage {
-                operation: UnalignedWindowOperation::Open {
-                    message: msg.clone(),
-                    window,
-                },
-                pnf_slot: SHARED_PNF_SLOT,
-            });
+            return result;
         }
+
+        // Create a new window for the key
+        let window = Window::new(
+            msg.event_time,
+            msg.event_time + chrono::Duration::from_std(self.timeout).unwrap(),
+            Arc::clone(&msg.keys),
+        );
+
+        let window_state = WindowState::new(window.clone());
+        window_state.append_timestamp(msg.event_time);
+
+        active_windows.insert(combined_key, window_state);
+
+        result.push(UnalignedWindowMessage {
+            operation: UnalignedWindowOperation::Open {
+                message: msg.clone(),
+                window,
+            },
+            pnf_slot: SHARED_PNF_SLOT,
+        });
 
         result
     }
@@ -138,18 +143,17 @@ impl AccumulatorWindowManager {
     /// Closes windows that have been inactive for longer than the timeout
     pub(crate) fn close_windows(&self, current_time: DateTime<Utc>) -> Vec<UnalignedWindowMessage> {
         let mut result = Vec::new();
-        let mut keys_to_delete = Vec::new();
 
-        // Find windows to close
-        let active_windows = self.active_windows.read().expect("Poisoned lock");
+        // Acquire write lock once
+        let mut active_windows = self.active_windows.write().expect("Poisoned lock");
 
-        for (key, window_state) in active_windows.iter() {
+        // Iterate and remove inactive windows
+        active_windows.retain(|_, window_state| {
             let last_seen = *window_state
                 .last_seen_event_time
                 .read()
                 .expect("Poisoned lock");
 
-            // If the last event time plus timeout is before current time, close the window
             if current_time > last_seen + chrono::Duration::from_std(self.timeout).unwrap() {
                 result.push(UnalignedWindowMessage {
                     operation: UnalignedWindowOperation::Close {
@@ -157,19 +161,11 @@ impl AccumulatorWindowManager {
                     },
                     pnf_slot: SHARED_PNF_SLOT,
                 });
-                keys_to_delete.push(key.clone());
+                false // Remove this window
+            } else {
+                true // Retain this window
             }
-        }
-
-        // Remove closed windows
-        if !keys_to_delete.is_empty() {
-            drop(active_windows); // Release read lock before acquiring write lock
-
-            let mut active_windows = self.active_windows.write().expect("Poisoned lock");
-            for key in keys_to_delete {
-                active_windows.remove(&key);
-            }
-        }
+        });
 
         result
     }
@@ -188,21 +184,10 @@ impl AccumulatorWindowManager {
     pub(crate) fn oldest_window_end_time(&self) -> Option<DateTime<Utc>> {
         let active_windows = self.active_windows.read().expect("Poisoned lock");
 
-        let mut oldest_time = None;
-
-        for window_state in active_windows.values() {
-            if let Some(timestamp) = window_state.oldest_timestamp() {
-                match oldest_time {
-                    None => oldest_time = Some(timestamp),
-                    Some(current_oldest) if timestamp < current_oldest => {
-                        oldest_time = Some(timestamp)
-                    }
-                    _ => {}
-                }
-            }
-        }
-
-        oldest_time
+        active_windows
+            .values()
+            .filter_map(|window_state| window_state.oldest_timestamp())
+            .min()
     }
 }
 
