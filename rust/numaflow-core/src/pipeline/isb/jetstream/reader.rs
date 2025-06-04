@@ -1,4 +1,5 @@
 use std::fmt;
+use std::io::Read;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -7,7 +8,9 @@ use async_nats::jetstream::{
 };
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
+use bytes::Bytes;
 use chrono::Utc;
+use flate2::read::GzDecoder;
 use prost::Message as ProtoMessage;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -21,7 +24,7 @@ use tracing::{error, info};
 use crate::Result;
 use crate::config::get_vertex_name;
 use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
-use crate::config::pipeline::isb_config::ISBConfig;
+use crate::config::pipeline::isb_config::{CompressionType, ISBConfig};
 use crate::error::Error;
 
 use crate::message::{IntOffset, Message, MessageID, MessageType, Metadata, Offset, ReadAck};
@@ -67,6 +70,7 @@ pub(crate) struct JetStreamReader {
     batch_size: usize,
     watermark_handle: Option<ISBWatermarkHandle>,
     vertex_type: String,
+    compression_type: Option<CompressionType>,
 }
 
 /// JSWrappedMessage is a wrapper around the JetStream message that includes the
@@ -76,6 +80,7 @@ struct JSWrappedMessage {
     partition_idx: u16,
     message: async_nats::jetstream::Message,
     vertex_name: String,
+    compression_type: Option<CompressionType>,
 }
 
 impl TryFrom<JSWrappedMessage> for Message {
@@ -107,11 +112,22 @@ impl TryFrom<JSWrappedMessage> for Message {
             value.partition_idx,
         ));
 
+        let body = match value.compression_type {
+            Some(CompressionType::Gzip) => {
+                let mut decoder: GzDecoder<&[u8]> = GzDecoder::new(body.payload.as_ref());
+                let mut decompressed = Vec::new();
+                decoder.read_to_end(&mut decompressed).unwrap();
+                Bytes::from(decompressed)
+            }
+            None => body.payload.into(),
+            Some(CompressionType::None) => body.payload.into(),
+        };
+
         Ok(Message {
             typ: header.kind.into(),
             keys: Arc::from(header.keys.into_boxed_slice()),
             tags: None,
-            value: body.payload.into(),
+            value: body,
             offset: offset.clone(),
             event_time: message_info.event_time.map(utc_from_timestamp).unwrap(),
             id: MessageID {
@@ -136,7 +152,8 @@ impl JetStreamReader {
     pub(crate) async fn new(reader_config: ISBReaderConfig) -> Result<Self> {
         let mut buffer_config = reader_config.config;
 
-        let mut consumer: PullConsumer = reader_config.js_ctx
+        let mut consumer: PullConsumer = reader_config
+            .js_ctx
             .get_consumer_from_stream(&reader_config.stream.name, &reader_config.stream.name)
             .await
             .map_err(|e| Error::ISB(format!("Failed to get consumer for stream {}", e)))?;
@@ -162,6 +179,9 @@ impl JetStreamReader {
             tracker_handle: reader_config.tracker_handle,
             batch_size: reader_config.batch_size,
             watermark_handle: reader_config.watermark_handle,
+            compression_type: reader_config
+                .isb_config
+                .map(|c| c.compression.compress_type),
         })
     }
 
@@ -221,6 +241,7 @@ impl JetStreamReader {
                                 partition_idx: self.stream.partition,
                                 message: jetstream_message.clone(),
                                 vertex_name: get_vertex_name().to_string(),
+                                compression_type: self.compression_type,
                             };
 
                             let mut message: Message = js_message.try_into().map_err(|e| {

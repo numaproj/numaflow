@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::hash::DefaultHasher;
+use std::io::Write;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -9,7 +10,9 @@ use async_nats::jetstream::consumer::PullConsumer;
 use async_nats::jetstream::context::{Publish, PublishAckFuture};
 use async_nats::jetstream::publish::PublishAck;
 use async_nats::jetstream::stream::RetentionPolicy::Limits;
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
+use flate2::Compression;
+use flate2::write::GzEncoder;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use tokio::time::{Instant, sleep};
@@ -21,7 +24,7 @@ use tracing::{debug, error, warn};
 use crate::Result;
 use crate::config::pipeline::ToVertexConfig;
 use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
-use crate::config::pipeline::isb_config::ISBConfig;
+use crate::config::pipeline::isb_config::{CompressionType, ISBConfig};
 use crate::error::Error;
 
 use crate::message::{IntOffset, Message, Offset};
@@ -70,13 +73,15 @@ pub(crate) struct JetstreamWriter {
     watermark_handle: Option<WatermarkHandle>,
     paf_concurrency: usize,
     vertex_type: String,
+    compression_type: Option<CompressionType>,
 }
 
 impl JetstreamWriter {
     /// Creates a JetStream Writer and a background task to make sure the Write futures (PAFs) are
     /// successful. Batch Size determines the maximum pending futures.
     pub(crate) fn new(writer_config: ISBWriterConfig) -> Self {
-        let to_vertex_streams = writer_config.config
+        let to_vertex_streams = writer_config
+            .config
             .iter()
             .flat_map(|c| c.writer_config.streams.clone())
             .collect::<Vec<Stream>>();
@@ -95,6 +100,9 @@ impl JetstreamWriter {
             watermark_handle: writer_config.watermark_handle,
             paf_concurrency: writer_config.paf_concurrency,
             vertex_type: writer_config.vertex_type,
+            compression_type: writer_config
+                .isb_config
+                .map(|c| c.compression.compress_type),
         };
 
         // spawn a task for checking whether buffer is_full
@@ -206,7 +214,7 @@ impl JetstreamWriter {
             let mut messages_stream = messages_stream;
             let mut hash = DefaultHasher::new();
 
-            while let Some(message) = messages_stream.next().await {
+            while let Some(mut message) = messages_stream.next().await {
                 let write_processing_start = Instant::now();
                 // if message needs to be dropped, ack and continue
                 if message.dropped() {
@@ -222,6 +230,24 @@ impl JetstreamWriter {
                         .inc();
                     continue;
                 }
+
+                // if compression is enabled, then compress and sent
+                message.value = if let Some(compression_type) = self.compression_type {
+                    match compression_type {
+                        CompressionType::Gzip => {
+                            let mut compressed = GzEncoder::new(Vec::new(), Compression::default());
+                            compressed.write_all(message.value.as_ref()).map_err(|e| {
+                                Error::ISB(format!("Failed to compress message: {}", e))
+                            })?;
+                            Bytes::from(compressed.finish().map_err(|e| {
+                                Error::ISB(format!("Failed to compress message: {}", e))
+                            })?)
+                        }
+                        CompressionType::None => message.value,
+                    }
+                } else {
+                    message.value
+                };
 
                 // List of PAFs(one message can be written to multiple streams)
                 let mut pafs = vec![];
