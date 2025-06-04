@@ -116,18 +116,19 @@ impl TryFrom<JSWrappedMessage> for Message {
             Some(CompressionType::Gzip) => {
                 let mut decoder: GzDecoder<&[u8]> = GzDecoder::new(body.payload.as_ref());
                 let mut decompressed = Vec::new();
-                decoder.read_to_end(&mut decompressed).unwrap();
-                Bytes::from(decompressed)
+                decoder
+                    .read_to_end(&mut decompressed)
+                    .map_err(|e| Error::ISB(format!("Failed to decompress message: {}", e)))?;
+                decompressed
             }
-            None => body.payload.into(),
-            Some(CompressionType::None) => body.payload.into(),
+            None | Some(CompressionType::None) => body.payload,
         };
 
         Ok(Message {
             typ: header.kind.into(),
             keys: Arc::from(header.keys.into_boxed_slice()),
             tags: None,
-            value: body,
+            value: Bytes::from(body),
             offset: offset.clone(),
             event_time: message_info.event_time.map(utc_from_timestamp).unwrap(),
             id: MessageID {

@@ -232,21 +232,17 @@ impl JetstreamWriter {
                 }
 
                 // if compression is enabled, then compress and sent
-                message.value = if let Some(compression_type) = self.compression_type {
-                    match compression_type {
-                        CompressionType::Gzip => {
-                            let mut compressed = GzEncoder::new(Vec::new(), Compression::default());
-                            compressed.write_all(message.value.as_ref()).map_err(|e| {
-                                Error::ISB(format!("Failed to compress message: {}", e))
-                            })?;
-                            Bytes::from(compressed.finish().map_err(|e| {
-                                Error::ISB(format!("Failed to compress message: {}", e))
-                            })?)
-                        }
-                        CompressionType::None => message.value,
+                message.value = match self.compression_type {
+                    Some(CompressionType::Gzip) => {
+                        let mut compressed = GzEncoder::new(Vec::new(), Compression::default());
+                        compressed.write_all(message.value.as_ref()).map_err(|e| {
+                            Error::ISB(format!("Failed to compress message (write_all): {}", e))
+                        })?;
+                        Bytes::from(compressed.finish().map_err(|e| {
+                            Error::ISB(format!("Failed to compress message (finish): {}", e))
+                        })?)
                     }
-                } else {
-                    message.value
+                    None | Some(CompressionType::None) => message.value,
                 };
 
                 // List of PAFs(one message can be written to multiple streams)
