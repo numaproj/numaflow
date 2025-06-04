@@ -21,11 +21,26 @@ use tracing::{error, info};
 use crate::Result;
 use crate::config::get_vertex_name;
 use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
+use crate::config::pipeline::isb_config::ISBConfig;
 use crate::error::Error;
+
 use crate::message::{IntOffset, Message, MessageID, MessageType, Metadata, Offset, ReadAck};
 use crate::metrics::{PIPELINE_PARTITION_NAME_LABEL, pipeline_metric_labels, pipeline_metrics};
 use crate::shared::grpc::utc_from_timestamp;
 use crate::tracker::TrackerHandle;
+
+/// Configuration for creating a JetStreamReader
+#[derive(Clone)]
+pub(crate) struct ISBReaderConfig {
+    pub vertex_type: String,
+    pub stream: Stream,
+    pub js_ctx: Context,
+    pub config: BufferReaderConfig,
+    pub tracker_handle: TrackerHandle,
+    pub batch_size: usize,
+    pub watermark_handle: Option<ISBWatermarkHandle>,
+    pub isb_config: Option<ISBConfig>,
+}
 use crate::watermark::isb::ISBWatermarkHandle;
 
 const ACK_RETRY_INTERVAL: u64 = 100;
@@ -118,19 +133,11 @@ impl TryFrom<JSWrappedMessage> for Message {
 }
 
 impl JetStreamReader {
-    pub(crate) async fn new(
-        vertex_type: String,
-        stream: Stream,
-        js_ctx: Context,
-        config: BufferReaderConfig,
-        tracker_handle: TrackerHandle,
-        batch_size: usize,
-        watermark_handle: Option<ISBWatermarkHandle>,
-    ) -> Result<Self> {
-        let mut config = config;
+    pub(crate) async fn new(reader_config: ISBReaderConfig) -> Result<Self> {
+        let mut buffer_config = reader_config.config;
 
-        let mut consumer: PullConsumer = js_ctx
-            .get_consumer_from_stream(&stream.name, &stream.name)
+        let mut consumer: PullConsumer = reader_config.js_ctx
+            .get_consumer_from_stream(&reader_config.stream.name, &reader_config.stream.name)
             .await
             .map_err(|e| Error::ISB(format!("Failed to get consumer for stream {}", e)))?;
 
@@ -142,19 +149,19 @@ impl JetStreamReader {
         // Calculate inProgressTickSeconds based on the ack_wait_seconds.
         let ack_wait_seconds = consumer_info.config.ack_wait.as_secs();
         let wip_ack_interval = Duration::from_secs(std::cmp::max(
-            config.wip_ack_interval.as_secs(),
+            buffer_config.wip_ack_interval.as_secs(),
             ack_wait_seconds * 2 / 3,
         ));
-        config.wip_ack_interval = wip_ack_interval;
+        buffer_config.wip_ack_interval = wip_ack_interval;
 
         Ok(Self {
-            vertex_type,
-            stream,
-            config: config.clone(),
+            vertex_type: reader_config.vertex_type,
+            stream: reader_config.stream,
+            config: buffer_config,
             consumer,
-            tracker_handle,
-            batch_size,
-            watermark_handle,
+            tracker_handle: reader_config.tracker_handle,
+            batch_size: reader_config.batch_size,
+            watermark_handle: reader_config.watermark_handle,
         })
     }
 
@@ -496,15 +503,16 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
         };
         let tracker = TrackerHandle::new(None, None);
-        let js_reader = JetStreamReader::new(
-            "Map".to_string(),
-            stream.clone(),
-            context.clone(),
-            buf_reader_config,
-            tracker.clone(),
-            500,
-            None,
-        )
+        let js_reader = JetStreamReader::new(ISBReaderConfig {
+            vertex_type: "Map".to_string(),
+            stream: stream.clone(),
+            js_ctx: context.clone(),
+            config: buf_reader_config,
+            tracker_handle: tracker.clone(),
+            batch_size: 500,
+            watermark_handle: None,
+            isb_config: None,
+        })
         .await
         .unwrap();
 
@@ -601,15 +609,16 @@ mod tests {
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
         };
-        let js_reader = JetStreamReader::new(
-            "Map".to_string(),
-            js_stream.clone(),
-            context.clone(),
-            buf_reader_config,
-            tracker_handle.clone(),
-            1,
-            None,
-        )
+        let js_reader = JetStreamReader::new(ISBReaderConfig {
+            vertex_type: "Map".to_string(),
+            stream: js_stream.clone(),
+            js_ctx: context.clone(),
+            config: buf_reader_config,
+            tracker_handle: tracker_handle.clone(),
+            batch_size: 1,
+            watermark_handle: None,
+            isb_config: None,
+        })
         .await
         .unwrap();
 

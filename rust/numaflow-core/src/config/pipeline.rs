@@ -74,7 +74,7 @@ pub(crate) struct PipelineConfig {
     pub(crate) isb_config: Option<isb_config::ISBConfig>,
 }
 
-mod isb_config {
+pub(crate) mod isb_config {
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct ISBConfig {
         pub(crate) compression: Compression,
