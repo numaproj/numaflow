@@ -990,8 +990,19 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_message_id_with_invalid_event_time() {
+    fn test_parse_message_id_with_invalid_header() {
+        let eventtime_header_value = HeaderValue::from_str("héllo").unwrap(); // 'é' is not ASCII
+        let result = parse_message_id_from_header(&eventtime_header_value).unwrap_err();
+        assert_eq!(result.0, StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_parse_header_with_invalid_event_time() {
         let eventtime_header_value = HeaderValue::from_static("abcd");
+        let result = parse_event_time_from_header(&eventtime_header_value).unwrap_err();
+        assert_eq!(result.0, StatusCode::BAD_REQUEST);
+
+        let eventtime_header_value = HeaderValue::from_str("héllo").unwrap(); // 'é' is not ASCII
         let result = parse_event_time_from_header(&eventtime_header_value).unwrap_err();
         assert_eq!(result.0, StatusCode::BAD_REQUEST);
 
