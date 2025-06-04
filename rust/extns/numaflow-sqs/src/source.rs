@@ -10,8 +10,6 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Duration;
 
-use crate::Error::ActorTaskTerminated;
-use crate::{Error, SqsConfig, SqsSourceError};
 use aws_sdk_sqs::Client;
 use aws_sdk_sqs::types::{
     DeleteMessageBatchRequestEntry, MessageSystemAttributeName, QueueAttributeName,
@@ -21,6 +19,9 @@ use chrono::{DateTime, TimeZone, Utc};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
 use tracing::{error, info};
+
+use crate::Error::ActorTaskTerminated;
+use crate::{Error, SqsConfig, SqsSourceError};
 
 pub const SQS_DEFAULT_REGION: &str = "us-west-2";
 
@@ -282,7 +283,7 @@ impl SqsActor {
             .client
             .delete_message_batch()
             .queue_url(&self.queue_url);
-        for offset in offsets {
+        for (id, offset) in offsets.iter().enumerate() {
             let offset = match std::str::from_utf8(&offset) {
                 Ok(offset) => offset,
                 Err(err) => {
@@ -295,7 +296,7 @@ impl SqsActor {
             batch_builder = batch_builder.entries(
                 DeleteMessageBatchRequestEntry::builder()
                     .receipt_handle(offset)
-                    .id(offset)
+                    .id(id.to_string())
                     .build()
                     .map_err(|err| {
                         error!(?err, "Failed to build DeleteMessageBatchRequestEntry",);
