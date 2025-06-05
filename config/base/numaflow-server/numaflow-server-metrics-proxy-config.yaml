@@ -29,15 +29,8 @@ data:
             - namespace
             - pipeline
             - vertex
+            - replica
           dimensions:
-            - name: pod
-              # expr: optional expression for prometheus query
-              # overrides the default expression
-              filters:
-                - name: pod
-                  required: false
-                - name: period
-                  required: false
             - name: vertex
               # expr: optional expression for prometheus query
               # overrides the default expression
