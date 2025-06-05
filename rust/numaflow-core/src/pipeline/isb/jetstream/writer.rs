@@ -234,7 +234,7 @@ impl JetstreamWriter {
                 // if compression is enabled, then compress and sent
                 message.value = match self.compression_type {
                     Some(CompressionType::Gzip) => {
-                        let mut compressed = GzEncoder::new(Vec::new(), Compression::default());
+                        let mut compressed = GzEncoder::new(Vec::new(), Compression::fast());
                         compressed.write_all(message.value.as_ref()).map_err(|e| {
                             Error::ISB(format!("Failed to compress message (write_all): {}", e))
                         })?;
