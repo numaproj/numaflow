@@ -9,11 +9,13 @@ use crate::reduce::reducer::unaligned::windower::{
 };
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 
+use chrono::{DateTime, Utc};
 use numaflow_pb::clients::accumulator::AccumulatorRequest;
 use numaflow_pb::clients::sessionreduce::SessionReduceRequest;
 use numaflow_pb::objects::wal::GcEvent;
 use prost::Message as ProstMessage;
 use std::collections::HashMap;
+use std::ops::Sub;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -498,6 +500,10 @@ pub(crate) struct UnalignedReducer {
     shutting_down_on_err: bool,
     /// WAL for writing GC events
     gc_wal: Option<AppendOnlyWal>,
+    /// Allowed lateness for the messages to be accepted and delay the close of book.
+    allowed_lateness: Duration,
+    /// current watermark for the reduce vertex.
+    current_watermark: DateTime<Utc>,
 }
 
 impl UnalignedReducer {
@@ -505,6 +511,7 @@ impl UnalignedReducer {
         client: UserDefinedUnalignedReduce,
         window_manager: UnalignedWindowManager,
         js_writer: JetstreamWriter,
+        allowed_lateness: Duration,
         gc_wal: Option<AppendOnlyWal>,
     ) -> Self {
         Self {
@@ -514,6 +521,8 @@ impl UnalignedReducer {
             final_result: Ok(()),
             shutting_down_on_err: false,
             gc_wal,
+            allowed_lateness,
+            current_watermark: DateTime::from_timestamp_millis(-1).expect("Invalid timestamp"),
         }
     }
 
@@ -571,6 +580,22 @@ impl UnalignedReducer {
                                     .await
                                     .expect("failed to send message to actor");
                             }
+                        }
+
+                        // update the watermark.
+                        // we cannot simply assign incoming message's watermark as the current watermark,
+                        // because it can be -1. watermark will never regress, so use max.
+                        self.current_watermark = self.current_watermark.max(msg.watermark.unwrap_or_default());
+
+                        // only drop the message if it is late and the event time is before the watermark - allowed lateness
+                        if msg.is_late && msg.event_time < self.current_watermark.sub(self.allowed_lateness) {
+                            // TODO(ajain): add a metric for this
+                            continue;
+                        }
+
+                        if self.current_watermark > msg.event_time {
+                            error!(current_watermark=?self.current_watermark, message_event_time=?msg.event_time, "Old message popped up, Watermark is behind the event time");
+                            continue;
                         }
 
                         // Convert the message to UnalignedWindowMessage

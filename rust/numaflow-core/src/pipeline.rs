@@ -642,7 +642,14 @@ async fn start_unaligned_reduce_forwarder(
     .await;
 
     let reducer = Reducer::Unaligned(
-        UnalignedReducer::new(reducer_client, window_manager, buffer_writer, gc_wal).await,
+        UnalignedReducer::new(
+            reducer_client,
+            window_manager,
+            buffer_writer,
+            unaligned_config.window_config.allowed_lateness,
+            gc_wal,
+        )
+        .await,
     );
 
     let forwarder = ReduceForwarder::new(pbq, reducer);
