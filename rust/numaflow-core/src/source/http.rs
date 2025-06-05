@@ -91,6 +91,7 @@ impl source::LagReader for CoreHttpSource {
 mod tests {
     use super::*;
     use crate::source::{LagReader, SourceAcker, SourceReader};
+    use chrono::Utc;
     use hyper::{Method, Request};
     use hyper_util::client::legacy::Client;
     use hyper_util::rt::TokioExecutor;
@@ -220,11 +221,21 @@ mod tests {
         let messages = core_http_source.read().await.unwrap();
         assert_eq!(messages.len(), 5, "Should read 5 messages (batch size)");
 
+        let current_time = Utc::now();
+
         // Verify message contents
         for (i, message) in messages.iter().enumerate() {
             assert!(message.headers.contains_key("X-Numaflow-Id"));
-            assert!(message.headers.contains_key("X-Numaflow-Event-Time"));
             assert!(message.headers.contains_key("content-type"));
+
+            // Ensure current time is set when x-numaflow-event-time header is not specified
+            assert!(
+                current_time
+                    .signed_duration_since(message.event_time)
+                    .num_seconds()
+                    .abs()
+                    < 1
+            );
 
             let body_str = String::from_utf8(message.value.to_vec()).unwrap();
             assert!(body_str.contains(&format!("test{}", i)));
