@@ -240,7 +240,7 @@ impl JetStreamReader {
 
                             // Reserve a permit before sending the message to the channel.
                             let permit = Arc::clone(&semaphore).acquire_owned().await.expect("Failed to acquire semaphore permit");
-                            tokio::spawn(Self::start_work_in_progress(
+                            tokio::spawn(Self::wait_for_ack(
                                 message_processing_start,
                                 labels.clone(),
                                 message.offset.clone(),
@@ -302,10 +302,11 @@ impl JetStreamReader {
         Ok((ReceiverStream::new(messages_rx), handle))
     }
 
-    // Intended to be run as background task which will continuously send InProgress acks to Jetstream.
-    // We will continuously retry if there is an error in acknowledging the message as work-in-progress.
-    // If the sender end of the ack_rx channel was dropped before sending a final Ack or Nak (due to some unhandled/unknown failure), we will send a Nak to Jetstream.
-    async fn start_work_in_progress(
+    /// A background task which waits for the `Ack`, meanwhile it continuously sends `WIP` acks
+    /// until the final ack/nak is received. This will continuously retry if there is an error in acknowledging.
+    /// If the sender's end of the ack_rx channel was dropped before
+    /// sending the final `Ack` or `Nak` (due to some unhandled/unknown failure), we will send `Nak` to Jetstream.
+    async fn wait_for_ack(
         message_processing_start: Instant,
         labels: Vec<(String, String)>,
         offset: Offset,
