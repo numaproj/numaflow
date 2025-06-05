@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/suite"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
@@ -52,6 +53,14 @@ func (ks *KafkaSuite) TestKafkaSourceSink() {
 			Vertices: []dfv1.AbstractVertex{
 				{
 					Name: "input",
+					ContainerTemplate: &dfv1.ContainerTemplate{
+						Env: []corev1.EnvVar{
+							{
+								Name:  "NUMAFLOW_RUNTIME",
+								Value: "rust",
+							},
+						},
+					},
 					Source: &dfv1.Source{
 						Kafka: &dfv1.KafkaSource{
 							Brokers:           []string{"kafka-broker:9092"},
@@ -68,6 +77,14 @@ func (ks *KafkaSuite) TestKafkaSourceSink() {
 				},
 				{
 					Name: "output",
+					ContainerTemplate: &dfv1.ContainerTemplate{
+						Env: []corev1.EnvVar{
+							{
+								Name:  "NUMAFLOW_RUNTIME",
+								Value: "rust",
+							},
+						},
+					},
 					Sink: &dfv1.Sink{
 						AbstractSink: dfv1.AbstractSink{
 							Kafka: &dfv1.KafkaSink{

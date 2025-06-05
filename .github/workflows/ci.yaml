@@ -221,8 +221,6 @@ jobs:
           - driver: redis
             case: e2e
           - driver: redis
-            case: kafka-e2e
-          - driver: redis
             case: api-e2e
 
     steps:
