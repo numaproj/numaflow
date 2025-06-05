@@ -13,7 +13,7 @@ spec:
         http: {}
         transformer:
           container:
-            image: quay.io/numaio/numaflow-go/mapt-time-extractor:stable
+            image: quay.io/numaio/numaflow-go/mapt-time-extraction-filter:stable
             imagePullPolicy: Always
     - name: out
       containerTemplate:
