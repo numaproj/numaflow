@@ -18,7 +18,7 @@ use bytes::Bytes;
 use chrono::{DateTime, TimeZone, Utc};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
-use tracing::{error, info};
+use tracing::error;
 
 use crate::Error::ActorTaskTerminated;
 use crate::{Error, SqsConfig, SqsSourceError};
