@@ -29,7 +29,7 @@ func isSidecarSupported() bool {
 	}
 	// e.g. 1.31
 	k8sVersion, _ := strconv.ParseFloat(v, 32)
-	return k8sVersion >= 1.29
+	return k8sVersion >= 1.34
 }
 
 // TODO: (k8s 1.27) Remove this once we deprecate the support for k8s < 1.27

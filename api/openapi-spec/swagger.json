@@ -19869,6 +19869,16 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.Compression": {
+      "description": "Compression is the compression settings for the messages in the InterStepBuffer",
+      "type": "object",
+      "properties": {
+        "type": {
+          "description": "Type is the type of compression to be used",
+          "type": "string"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.Container": {
       "description": "Container is used to define the container properties for user-defined functions, sinks, etc.",
       "type": "object",
@@ -20650,6 +20660,16 @@
         "threshold": {
           "description": "Threshold is the duration after which a source is marked as Idle due to lack of data. Ex: If watermark found to be idle after the Threshold duration then the watermark is progressed by `IncrementBy`.",
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.InterStepBuffer": {
+      "description": "InterStepBuffer configuration specifically for the pipeline.",
+      "type": "object",
+      "properties": {
+        "compression": {
+          "description": "Compression is the compression settings for the InterStepBufferService",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Compression"
         }
       }
     },
@@ -21672,7 +21692,12 @@
             "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Edge"
           }
         },
+        "interStepBuffer": {
+          "description": "InterStepBuffer configuration specific to this pipeline.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.InterStepBuffer"
+        },
         "interStepBufferServiceName": {
+          "description": "InterStepBufferServiceName is the name of the InterStepBufferService to be used by the pipeline",
           "type": "string"
         },
         "lifecycle": {
@@ -22900,6 +22925,10 @@
           "items": {
             "$ref": "#/definitions/io.k8s.api.core.v1.Container"
           }
+        },
+        "interStepBuffer": {
+          "description": "InterStepBuffer configuration specific to this pipeline.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.InterStepBuffer"
         },
         "interStepBufferServiceName": {
           "type": "string"

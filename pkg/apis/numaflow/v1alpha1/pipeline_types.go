@@ -479,6 +479,7 @@ func (p Pipeline) GetPauseGracePeriodSeconds() int64 {
 }
 
 type PipelineSpec struct {
+	// InterStepBufferServiceName is the name of the InterStepBufferService to be used by the pipeline
 	// +optional
 	InterStepBufferServiceName string `json:"interStepBufferServiceName,omitempty" protobuf:"bytes,1,opt,name=interStepBufferServiceName"`
 	// +patchStrategy=merge
@@ -504,7 +505,36 @@ type PipelineSpec struct {
 	// SideInputs defines the Side Inputs of a pipeline.
 	// +optional
 	SideInputs []SideInput `json:"sideInputs,omitempty" protobuf:"bytes,8,rep,name=sideInputs"`
+	// InterStepBuffer configuration specific to this pipeline.
+	// +optional
+	InterStepBuffer *InterStepBuffer `json:"interStepBuffer,omitempty" protobuf:"bytes,9,opt,name=interStepBuffer"`
 }
+
+// InterStepBuffer configuration specifically for the pipeline.
+type InterStepBuffer struct {
+	// Compression is the compression settings for the InterStepBufferService
+	// +optional
+	Compression *Compression `json:"compression,omitempty" protobuf:"bytes,2,opt,name=compression"`
+}
+
+// Compression is the compression settings for the messages in the InterStepBuffer
+type Compression struct {
+	// Type is the type of compression to be used
+	// +kubebuilder:validation:Enum:None;GZIP
+	// +kubebuilder:default:=None
+	// +optional
+	Type CompressionType `json:"type,omitempty" protobuf:"bytes,1,opt,name=type"`
+}
+
+// CompressionType is a string enumeration type that enumerates all possible compression types.
+type CompressionType string
+
+const (
+	// CompressionTypeNone is the default compression type, no compression is used.
+	CompressionTypeNone CompressionType = "None"
+	// CompressionTypeGZIP is the GZIP compression type.
+	CompressionTypeGZIP CompressionType = "GZIP"
+)
 
 func (pipeline PipelineSpec) GetMatchingVertices(f func(AbstractVertex) bool) map[string]*AbstractVertex {
 	mappedVertices := make(map[string]*AbstractVertex)

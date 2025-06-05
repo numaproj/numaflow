@@ -528,6 +528,9 @@ type VertexSpec struct {
 	// +kubebuilder:default={"desiredPhase": Running}
 	// +optional
 	Lifecycle VertexLifecycle `json:"lifecycle,omitempty" protobuf:"bytes,8,opt,name=lifecycle"`
+	// InterStepBuffer configuration specific to this pipeline.
+	// +optional
+	InterStepBuffer *InterStepBuffer `json:"interStepBuffer,omitempty" protobuf:"bytes,9,opt,name=interStepBuffer"`
 }
 
 type AbstractVertex struct {
