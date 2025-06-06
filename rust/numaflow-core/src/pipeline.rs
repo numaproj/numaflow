@@ -7,15 +7,18 @@ use serving::callback::CallbackHandler;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-use crate::config::components::reduce::WindowType;
-use crate::config::is_mono_vertex;
+use crate::config::components::reduce::{
+    AlignedReducerConfig, AlignedWindowType, ReducerConfig, UnalignedReducerConfig,
+    UnalignedWindowType,
+};
 use crate::config::pipeline;
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::{
-    PipelineConfig, ReduceVtxConfig, ServingStoreType, SinkVtxConfig, SourceVtxConfig,
+    PipelineConfig, ReduceVtxConfig, ServingStoreType, SinkVtxConfig, SourceVtxConfig, ToVertexType,
 };
+use crate::config::{get_vertex_replica, is_mono_vertex};
 use crate::metrics::{ComponentHealthChecks, LagReader, PendingReaderTasks, PipelineComponents};
 use crate::pipeline::forwarder::reduce_forwarder::ReduceForwarder;
 use crate::pipeline::forwarder::source_forwarder;
@@ -24,9 +27,15 @@ use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::pipeline::pipeline::isb::BufferReaderConfig;
 use crate::reduce::pbq::PBQBuilder;
 use crate::reduce::reducer::aligned::reducer::AlignedReducer;
-use crate::reduce::reducer::aligned::windower::WindowManager;
+use crate::reduce::reducer::aligned::windower::AlignedWindowManager;
 use crate::reduce::reducer::aligned::windower::fixed::FixedWindowManager;
 use crate::reduce::reducer::aligned::windower::sliding::SlidingWindowManager;
+use crate::reduce::reducer::unaligned::reducer::UnalignedReducer;
+use crate::reduce::reducer::unaligned::windower::UnalignedWindowManager;
+use crate::reduce::reducer::unaligned::windower::accumulator::AccumulatorWindowManager;
+use crate::reduce::reducer::unaligned::windower::session::SessionWindowManager;
+use crate::reduce::reducer::user_defined::UserDefinedReduce;
+use crate::reduce::reducer::{Reducer, WindowManager};
 use crate::reduce::wal::segment::WalType;
 use crate::reduce::wal::segment::append::AppendOnlyWal;
 use crate::reduce::wal::segment::compactor::{Compactor, WindowKind};
@@ -299,11 +308,43 @@ async fn start_reduce_forwarder(
     config: PipelineConfig,
     reduce_vtx_config: ReduceVtxConfig,
 ) -> Result<()> {
-    let window_manager = match &reduce_vtx_config.reducer_config.window_config.window_type {
-        WindowType::Fixed(fixed_config) => {
-            WindowManager::Fixed(FixedWindowManager::new(fixed_config.length))
+    match &reduce_vtx_config.reducer_config {
+        ReducerConfig::Aligned(aligned_config) => {
+            start_aligned_reduce_forwarder(
+                cln_token,
+                js_context,
+                config,
+                reduce_vtx_config.clone(),
+                aligned_config.clone(),
+            )
+            .await
         }
-        WindowType::Sliding(sliding_config) => {
+        ReducerConfig::Unaligned(unaligned_config) => {
+            start_unaligned_reduce_forwarder(
+                cln_token,
+                js_context,
+                config,
+                reduce_vtx_config.clone(),
+                unaligned_config.clone(),
+            )
+            .await
+        }
+    }
+}
+
+async fn start_aligned_reduce_forwarder(
+    cln_token: CancellationToken,
+    js_context: Context,
+    config: PipelineConfig,
+    reduce_vtx_config: ReduceVtxConfig,
+    aligned_config: AlignedReducerConfig,
+) -> Result<()> {
+    // Create aligned window manager based on window type
+    let window_manager = match &aligned_config.window_config.window_type {
+        AlignedWindowType::Fixed(fixed_config) => {
+            AlignedWindowManager::Fixed(FixedWindowManager::new(fixed_config.length))
+        }
+        AlignedWindowType::Sliding(sliding_config) => {
             // sliding window needs to save state if WAL is configured to avoid duplicate processing
             // since a message can be part of multiple windows.
             let state_file_path =
@@ -315,14 +356,11 @@ async fn start_reduce_forwarder(
                     None
                 };
 
-            WindowManager::Sliding(SlidingWindowManager::new(
+            AlignedWindowManager::Sliding(SlidingWindowManager::new(
                 sliding_config.length,
                 sliding_config.slide,
                 state_file_path,
             ))
-        }
-        WindowType::Session(_) | WindowType::Accumulator(_) => {
-            panic!("Session and Accumulator windows are not supported yet");
         }
     };
 
@@ -331,7 +369,7 @@ async fn start_reduce_forwarder(
         &config,
         &js_context,
         &cln_token,
-        Some(window_manager.clone()),
+        Some(WindowManager::Aligned(window_manager.clone())),
     )
     .await?;
 
@@ -344,7 +382,7 @@ async fn start_reduce_forwarder(
     // reduce pod always reads from a single stream (pod per partition)
     let stream = reader_config
         .streams
-        .first()
+        .get(*get_vertex_replica() as usize)
         .cloned()
         .ok_or_else(|| error::Error::Config("No stream found for reduce vertex".to_string()))?;
 
@@ -373,10 +411,6 @@ async fn start_reduce_forwarder(
         config.vertex_type_config.to_string(),
     )
     .await;
-
-    // Create user-defined aligned reducer client
-    let reducer_client =
-        create_components::create_aligned_reducer(reduce_vtx_config.reducer_config.clone()).await?;
 
     // Create WAL if configured
     let (wal, gc_wal) = if let Some(storage_config) = &reduce_vtx_config.wal_storage_config {
@@ -438,29 +472,190 @@ async fn start_reduce_forwarder(
     .await;
     let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
+    // Create user-defined aligned reducer client
+    let reducer_client = create_components::create_aligned_reducer(aligned_config.clone()).await?;
+
     // Start the metrics server with one of the clients
     start_metrics_server(
         config.metrics_config.clone(),
-        ComponentHealthChecks::Pipeline(PipelineComponents::Reduce(reducer_client.clone())),
+        ComponentHealthChecks::Pipeline(PipelineComponents::Reduce(UserDefinedReduce::Aligned(
+            reducer_client.clone(),
+        ))),
     )
     .await;
 
-    let reducer = AlignedReducer::new(
-        reducer_client,
-        window_manager,
-        buffer_writer,
-        gc_wal,
-        reduce_vtx_config
-            .reducer_config
-            .window_config
-            .allowed_lateness,
-    )
-    .await;
+    let reducer = Reducer::Aligned(
+        AlignedReducer::new(
+            reducer_client,
+            window_manager,
+            buffer_writer,
+            gc_wal,
+            aligned_config.window_config.allowed_lateness,
+        )
+        .await,
+    );
 
     let forwarder = ReduceForwarder::new(pbq, reducer);
     forwarder.start(cln_token).await?;
 
-    info!("Reduce forwarder has stopped successfully");
+    info!("Aligned reduce forwarder has stopped successfully");
+    Ok(())
+}
+
+async fn start_unaligned_reduce_forwarder(
+    cln_token: CancellationToken,
+    js_context: Context,
+    config: PipelineConfig,
+    reduce_vtx_config: ReduceVtxConfig,
+    unaligned_config: UnalignedReducerConfig,
+) -> Result<()> {
+    // Create unaligned window manager based on window type
+    let window_manager = match &unaligned_config.window_config.window_type {
+        UnalignedWindowType::Accumulator(accumulator_config) => {
+            UnalignedWindowManager::Accumulator(AccumulatorWindowManager::new(
+                accumulator_config.timeout,
+            ))
+        }
+        UnalignedWindowType::Session(session_config) => {
+            UnalignedWindowManager::Session(SessionWindowManager::new(session_config.timeout))
+        }
+    };
+
+    // create watermark handle, if watermark is enabled
+    let watermark_handle = create_components::create_edge_watermark_handle(
+        &config,
+        &js_context,
+        &cln_token,
+        Some(WindowManager::Unaligned(window_manager.clone())),
+    )
+    .await?;
+
+    let reader_config = &config
+        .from_vertex_config
+        .first()
+        .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
+        .reader_config;
+
+    // reduce pod always reads from a single stream (pod per partition)
+    let stream = reader_config
+        .streams
+        .get(*get_vertex_replica() as usize)
+        .cloned()
+        .ok_or_else(|| error::Error::Config("No stream found for reduce vertex".to_string()))?;
+
+    // we don't need to pass the watermark handle to the tracker because in reduce windower is
+    // responsible for identifying the lowest watermark in the pod.
+    let tracker_handle = TrackerHandle::new(None, None);
+    // Create buffer reader
+    let buffer_reader = create_buffer_reader(
+        config.vertex_type_config.to_string(),
+        stream,
+        reader_config.clone(),
+        js_context.clone(),
+        tracker_handle.clone(),
+        config.batch_size,
+        watermark_handle.clone(),
+    )
+    .await?;
+
+    // Create buffer writer
+    let buffer_writer = create_buffer_writer(
+        &config,
+        js_context.clone(),
+        tracker_handle.clone(),
+        cln_token.clone(),
+        watermark_handle.clone().map(WatermarkHandle::ISB),
+        config.vertex_type_config.to_string(),
+    )
+    .await;
+
+    // Create WAL if configured (use Unaligned WindowKind for unaligned reducers)
+    let (wal, gc_wal) = if let Some(storage_config) = &reduce_vtx_config.wal_storage_config {
+        let wal_path = storage_config.path.clone();
+
+        let append_only_wal = AppendOnlyWal::new(
+            WalType::Data,
+            wal_path.clone(),
+            storage_config.max_file_size_mb,
+            storage_config.flush_interval_ms,
+            storage_config.channel_buffer_size,
+            storage_config.max_segment_age_secs,
+        )
+        .await?;
+
+        let compactor = Compactor::new(
+            wal_path.clone(),
+            WindowKind::Unaligned,
+            storage_config.max_file_size_mb,
+            storage_config.flush_interval_ms,
+            storage_config.channel_buffer_size,
+            storage_config.max_segment_age_secs,
+        )
+        .await?;
+
+        let gc_wal = AppendOnlyWal::new(
+            WalType::Gc,
+            wal_path,
+            storage_config.max_file_size_mb,
+            storage_config.flush_interval_ms,
+            storage_config.channel_buffer_size,
+            storage_config.max_segment_age_secs,
+        )
+        .await?;
+
+        (
+            Some(crate::reduce::pbq::WAL {
+                append_only_wal,
+                compactor,
+            }),
+            Some(gc_wal),
+        )
+    } else {
+        (None, None)
+    };
+
+    // Create PBQ
+    let pbq_builder = PBQBuilder::new(buffer_reader.clone(), tracker_handle.clone());
+    let pbq = if let Some(wal) = wal {
+        pbq_builder.wal(wal).build()
+    } else {
+        pbq_builder.build()
+    };
+
+    let pending_reader = shared::metrics::create_pending_reader(
+        &config.metrics_config,
+        LagReader::ISB(vec![buffer_reader]),
+    )
+    .await;
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
+
+    // Create user-defined unaligned reducer client
+    let reducer_client =
+        create_components::create_unaligned_reducer(unaligned_config.clone()).await?;
+
+    start_metrics_server(
+        config.metrics_config.clone(),
+        ComponentHealthChecks::Pipeline(PipelineComponents::Reduce(UserDefinedReduce::Unaligned(
+            reducer_client.clone(),
+        ))),
+    )
+    .await;
+
+    let reducer = Reducer::Unaligned(
+        UnalignedReducer::new(
+            reducer_client,
+            window_manager,
+            buffer_writer,
+            unaligned_config.window_config.allowed_lateness,
+            gc_wal,
+        )
+        .await,
+    );
+
+    let forwarder = ReduceForwarder::new(pbq, reducer);
+    forwarder.start(cln_token).await?;
+
+    info!("Unaligned reduce forwarder has stopped successfully");
     Ok(())
 }
 
@@ -747,6 +942,7 @@ mod tests {
                     buffer_full_strategy: RetryUntilSuccess,
                 },
                 conditions: None,
+                vertex_type: ToVertexType::Sink,
             }],
             vertex_type_config: VertexType::Source(SourceVtxConfig {
                 source_config: SourceConfig {
@@ -1141,6 +1337,7 @@ mod tests {
                     buffer_full_strategy: RetryUntilSuccess,
                 },
                 conditions: None,
+                vertex_type: ToVertexType::Sink,
             }],
             from_vertex_config: vec![FromVertexConfig {
                 name: "map-in",

@@ -29,12 +29,12 @@ use tokio::sync::mpsc::Receiver;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
 
-use crate::config::pipeline::ToVertexConfig;
+use crate::config::pipeline::{ToVertexConfig, ToVertexType};
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::EdgeWatermarkConfig;
 use crate::error::{Error, Result};
 use crate::message::{IntOffset, Offset};
-use crate::reduce::reducer::aligned::windower::WindowManager;
+use crate::reduce::reducer::WindowManager;
 use crate::watermark::idle::isb::ISBIdleDetector;
 use crate::watermark::isb::wm_fetcher::ISBWatermarkFetcher;
 use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
@@ -423,7 +423,16 @@ impl ISBWatermarkHandle {
         // If window manager is configured, we can use the oldest window's end time - 1ms as the
         // watermark.
         if let Some(window_manager) = &self.window_manager {
-            if let Some(oldest_window) = window_manager.oldest_window() {
+            let oldest_window_end_time = match window_manager {
+                WindowManager::Aligned(aligned_manager) => {
+                    aligned_manager.oldest_window().map(|w| w.end_time)
+                }
+                WindowManager::Unaligned(unaligned_manager) => {
+                    unaligned_manager.oldest_window_end_time()
+                }
+            };
+
+            if let Some(oldest_window_et) = oldest_window_end_time {
                 // we should also compare it with the latest fetched watermark because sometimes
                 // the window end time can be greater than the watermark of the messages in the window.
                 // in that case we should use the latest fetched watermark.
@@ -433,7 +442,7 @@ impl ISBWatermarkHandle {
                     .expect("failed to acquire lock");
                 return std::cmp::min(
                     *latest_fetched_wm,
-                    Watermark::from_timestamp_millis(oldest_window.end_time.timestamp_millis() - 1)
+                    Watermark::from_timestamp_millis(oldest_window_et.timestamp_millis() - 1)
                         .expect("failed to parse time"),
                 );
             }
@@ -551,6 +560,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                vertex_type: ToVertexType::Sink,
             }],
             CancellationToken::new(),
             None,
@@ -732,6 +742,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                vertex_type: ToVertexType::Sink,
             }],
             CancellationToken::new(),
             None,
@@ -879,6 +890,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                vertex_type: ToVertexType::Sink,
             }],
             CancellationToken::new(),
             None,
