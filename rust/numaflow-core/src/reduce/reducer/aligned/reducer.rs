@@ -1,6 +1,7 @@
 use crate::error::Error;
 use crate::message::Message;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
+use crate::config::pipeline::ToVertexType;
 use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
 use crate::reduce::reducer::aligned::windower::{
     AlignedWindowManager, AlignedWindowMessage, Window, WindowOperation,
@@ -632,6 +633,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                vertex_type: ToVertexType::Sink,
             }],
             js_context.clone(),
             100,
@@ -874,6 +876,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                vertex_type: ToVertexType::Sink,
             }],
             js_context.clone(),
             100,
@@ -1119,6 +1122,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                vertex_type: ToVertexType::Sink,
             }],
             js_context.clone(),
             100,

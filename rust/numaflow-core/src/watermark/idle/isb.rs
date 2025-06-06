@@ -21,7 +21,7 @@ use std::time::Duration;
 use bytes::BytesMut;
 use chrono::{DateTime, Utc};
 
-use crate::config::pipeline::ToVertexConfig;
+use crate::config::pipeline::{ToVertexConfig, ToVertexType};
 use crate::config::pipeline::isb::Stream;
 
 /// State of each partition in the ISB. It has the information required to identify whether the
@@ -219,6 +219,7 @@ mod tests {
                 ..Default::default()
             },
             conditions: None,
+            vertex_type: ToVertexType::Sink,
         };
 
         let mut manager =
@@ -261,6 +262,7 @@ mod tests {
                 ..Default::default()
             },
             conditions: None,
+            vertex_type: ToVertexType::Sink,
         };
 
         let manager =
@@ -299,6 +301,7 @@ mod tests {
                 ..Default::default()
             },
             conditions: None,
+            vertex_type: ToVertexType::Sink,
         };
 
         let mut manager =
@@ -333,6 +336,7 @@ mod tests {
                 ..Default::default()
             },
             conditions: None,
+            vertex_type: ToVertexType::Sink,
         };
 
         let mut manager =

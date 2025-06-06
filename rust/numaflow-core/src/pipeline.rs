@@ -11,14 +11,14 @@ use crate::config::components::reduce::{
     AlignedReducerConfig, AlignedWindowType, ReducerConfig, UnalignedReducerConfig,
     UnalignedWindowType,
 };
-use crate::config::is_mono_vertex;
 use crate::config::pipeline;
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::{
-    PipelineConfig, ReduceVtxConfig, ServingStoreType, SinkVtxConfig, SourceVtxConfig,
+    PipelineConfig, ReduceVtxConfig, ServingStoreType, SinkVtxConfig, SourceVtxConfig, ToVertexType,
 };
+use crate::config::{get_vertex_replica, is_mono_vertex};
 use crate::metrics::{ComponentHealthChecks, LagReader, PendingReaderTasks, PipelineComponents};
 use crate::pipeline::forwarder::reduce_forwarder::ReduceForwarder;
 use crate::pipeline::forwarder::source_forwarder;
@@ -382,7 +382,7 @@ async fn start_aligned_reduce_forwarder(
     // reduce pod always reads from a single stream (pod per partition)
     let stream = reader_config
         .streams
-        .first()
+        .get(*get_vertex_replica() as usize)
         .cloned()
         .ok_or_else(|| error::Error::Config("No stream found for reduce vertex".to_string()))?;
 
@@ -539,7 +539,7 @@ async fn start_unaligned_reduce_forwarder(
     // reduce pod always reads from a single stream (pod per partition)
     let stream = reader_config
         .streams
-        .first()
+        .get(*get_vertex_replica() as usize)
         .cloned()
         .ok_or_else(|| error::Error::Config("No stream found for reduce vertex".to_string()))?;
 
@@ -942,6 +942,7 @@ mod tests {
                     buffer_full_strategy: RetryUntilSuccess,
                 },
                 conditions: None,
+                vertex_type: ToVertexType::Sink,
             }],
             vertex_type_config: VertexType::Source(SourceVtxConfig {
                 source_config: SourceConfig {
@@ -1336,6 +1337,7 @@ mod tests {
                     buffer_full_strategy: RetryUntilSuccess,
                 },
                 conditions: None,
+                vertex_type: ToVertexType::Sink,
             }],
             from_vertex_config: vec![FromVertexConfig {
                 name: "map-in",

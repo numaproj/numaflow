@@ -253,11 +253,41 @@ pub(crate) struct FromVertexConfig {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub(crate) enum ToVertexType {
+    Source,
+    Sink,
+    MapUDF,
+    ReduceUDF,
+}
+
+impl ToVertexType {
+    pub(crate) fn from_str(s: &str) -> Result<Self> {
+        match s {
+            VERTEX_TYPE_SOURCE => Ok(ToVertexType::Source),
+            VERTEX_TYPE_SINK => Ok(ToVertexType::Sink),
+            VERTEX_TYPE_MAP_UDF => Ok(ToVertexType::MapUDF),
+            VERTEX_TYPE_REDUCE_UDF => Ok(ToVertexType::ReduceUDF),
+            _ => Err(Error::Config(format!("Unknown vertex type: {}", s))),
+        }
+    }
+
+    pub(crate) fn as_str(&self) -> &'static str {
+        match self {
+            ToVertexType::Source => VERTEX_TYPE_SOURCE,
+            ToVertexType::Sink => VERTEX_TYPE_SINK,
+            ToVertexType::MapUDF => VERTEX_TYPE_MAP_UDF,
+            ToVertexType::ReduceUDF => VERTEX_TYPE_REDUCE_UDF,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ToVertexConfig {
     pub(crate) name: &'static str,
     pub(crate) partitions: u16,
     pub(crate) writer_config: BufferWriterConfig,
     pub(crate) conditions: Option<Box<ForwardConditions>>,
+    pub(crate) vertex_type: ToVertexType,
 }
 
 impl PipelineConfig {
@@ -502,6 +532,7 @@ impl PipelineConfig {
                         .unwrap_or(default_writer_config.buffer_full_strategy),
                 },
                 conditions: edge.conditions,
+                vertex_type: ToVertexType::from_str(&edge.to_vertex_type)?,
             });
         }
 
@@ -597,6 +628,47 @@ impl PipelineConfig {
                 threshold: idle.threshold.map(Duration::from).unwrap_or_default(),
             });
 
+        // Helper function to create bucket config for to_vertex
+        let create_to_vertex_bucket_config = |to: &ToVertexConfig| BucketConfig {
+            vertex: to.name,
+            partitions: to.partitions,
+            ot_bucket: Box::leak(
+                format!(
+                    "{}-{}-{}-{}_OT",
+                    namespace, pipeline_name, vertex_name, &to.name
+                )
+                .into_boxed_str(),
+            ),
+            hb_bucket: Box::leak(
+                format!(
+                    "{}-{}-{}-{}_PROCESSORS",
+                    namespace, pipeline_name, vertex_name, &to.name
+                )
+                .into_boxed_str(),
+            ),
+        };
+
+        // Helper function to create bucket config for from_vertex
+        let create_from_vertex_bucket_config =
+            |from: &FromVertexConfig, partitions: u16| BucketConfig {
+                vertex: from.name,
+                partitions,
+                ot_bucket: Box::leak(
+                    format!(
+                        "{}-{}-{}-{}_OT",
+                        namespace, pipeline_name, &from.name, vertex_name
+                    )
+                    .into_boxed_str(),
+                ),
+                hb_bucket: Box::leak(
+                    format!(
+                        "{}-{}-{}-{}_PROCESSORS",
+                        namespace, pipeline_name, &from.name, vertex_name
+                    )
+                    .into_boxed_str(),
+                ),
+            };
+
         match vertex {
             VertexType::Source(_) => Some(WatermarkConfig::Source(SourceWatermarkConfig {
                 max_delay: Duration::from_millis(max_delay),
@@ -617,70 +689,31 @@ impl PipelineConfig {
                 },
                 to_vertex_bucket_config: to_vertex_config
                     .iter()
-                    .map(|to| BucketConfig {
-                        vertex: to.name,
-                        partitions: to.partitions,
-                        ot_bucket: Box::leak(
-                            format!(
-                                "{}-{}-{}-{}_OT",
-                                namespace, pipeline_name, vertex_name, &to.name
-                            )
-                            .into_boxed_str(),
-                        ),
-                        hb_bucket: Box::leak(
-                            format!(
-                                "{}-{}-{}-{}_PROCESSORS",
-                                namespace, pipeline_name, vertex_name, &to.name
-                            )
-                            .into_boxed_str(),
-                        ),
-                    })
+                    .map(create_to_vertex_bucket_config)
                     .collect(),
                 idle_config,
             })),
-            VertexType::Sink(_) | VertexType::Map(_) | VertexType::Reduce(_) => {
+            VertexType::Sink(_) | VertexType::Map(_) => {
                 Some(WatermarkConfig::Edge(EdgeWatermarkConfig {
                     from_vertex_config: from_vertex_config
                         .iter()
-                        .map(|from| BucketConfig {
-                            vertex: from.name,
-                            partitions: from.partitions,
-                            ot_bucket: Box::leak(
-                                format!(
-                                    "{}-{}-{}-{}_OT",
-                                    namespace, pipeline_name, &from.name, vertex_name
-                                )
-                                .into_boxed_str(),
-                            ),
-                            hb_bucket: Box::leak(
-                                format!(
-                                    "{}-{}-{}-{}_PROCESSORS",
-                                    namespace, pipeline_name, &from.name, vertex_name
-                                )
-                                .into_boxed_str(),
-                            ),
-                        })
+                        .map(|from| create_from_vertex_bucket_config(from, from.partitions))
                         .collect(),
                     to_vertex_config: to_vertex_config
                         .iter()
-                        .map(|to| BucketConfig {
-                            vertex: to.name,
-                            partitions: to.partitions,
-                            ot_bucket: Box::leak(
-                                format!(
-                                    "{}-{}-{}-{}_OT",
-                                    namespace, pipeline_name, vertex_name, &to.name
-                                )
-                                .into_boxed_str(),
-                            ),
-                            hb_bucket: Box::leak(
-                                format!(
-                                    "{}-{}-{}-{}_PROCESSORS",
-                                    namespace, pipeline_name, vertex_name, &to.name
-                                )
-                                .into_boxed_str(),
-                            ),
-                        })
+                        .map(create_to_vertex_bucket_config)
+                        .collect(),
+                }))
+            }
+            VertexType::Reduce(_) => {
+                Some(WatermarkConfig::Edge(EdgeWatermarkConfig {
+                    from_vertex_config: from_vertex_config
+                        .iter()
+                        .map(|from| create_from_vertex_bucket_config(from, 1)) // reduce will have only one partition
+                        .collect(),
+                    to_vertex_config: to_vertex_config
+                        .iter()
+                        .map(create_to_vertex_bucket_config)
                         .collect(),
                 }))
             }
@@ -740,6 +773,33 @@ mod tests {
             serving_store_config: None,
         });
         assert_eq!(sink_type.to_string(), "Sink");
+    }
+
+    #[test]
+    fn test_to_vertex_type_conversion() {
+        // Test from_str
+        assert_eq!(
+            ToVertexType::from_str("Source").unwrap(),
+            ToVertexType::Source
+        );
+        assert_eq!(ToVertexType::from_str("Sink").unwrap(), ToVertexType::Sink);
+        assert_eq!(
+            ToVertexType::from_str("MapUDF").unwrap(),
+            ToVertexType::MapUDF
+        );
+        assert_eq!(
+            ToVertexType::from_str("ReduceUDF").unwrap(),
+            ToVertexType::ReduceUDF
+        );
+
+        // Test invalid string
+        assert!(ToVertexType::from_str("Invalid").is_err());
+
+        // Test as_str
+        assert_eq!(ToVertexType::Source.as_str(), "Source");
+        assert_eq!(ToVertexType::Sink.as_str(), "Sink");
+        assert_eq!(ToVertexType::MapUDF.as_str(), "MapUDF");
+        assert_eq!(ToVertexType::ReduceUDF.as_str(), "ReduceUDF");
     }
 
     #[test]
@@ -839,6 +899,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                vertex_type: ToVertexType::Sink,
             }],
             vertex_type_config: VertexType::Source(SourceVtxConfig {
                 source_config: SourceConfig {
@@ -894,6 +955,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                vertex_type: ToVertexType::Sink,
             }],
             vertex_type_config: VertexType::Source(SourceVtxConfig {
                 source_config: SourceConfig {

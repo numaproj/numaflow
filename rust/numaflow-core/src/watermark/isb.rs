@@ -29,7 +29,7 @@ use tokio::sync::mpsc::Receiver;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
 
-use crate::config::pipeline::ToVertexConfig;
+use crate::config::pipeline::{ToVertexConfig, ToVertexType};
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::EdgeWatermarkConfig;
 use crate::error::{Error, Result};
@@ -560,6 +560,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                vertex_type: ToVertexType::Sink,
             }],
             CancellationToken::new(),
             None,
@@ -741,6 +742,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                vertex_type: ToVertexType::Sink,
             }],
             CancellationToken::new(),
             None,
@@ -888,6 +890,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                vertex_type: ToVertexType::Sink,
             }],
             CancellationToken::new(),
             None,

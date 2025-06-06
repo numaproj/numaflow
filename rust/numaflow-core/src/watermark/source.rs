@@ -438,6 +438,7 @@ mod tests {
     use tokio::time::sleep;
 
     use super::*;
+    use crate::config::pipeline::ToVertexType;
     use crate::config::pipeline::isb::BufferWriterConfig;
     use crate::config::pipeline::watermark::{BucketConfig, IdleConfig};
     use crate::message::{IntOffset, Message};
@@ -634,6 +635,7 @@ mod tests {
                 },
                 conditions: None,
                 partitions: 1,
+                vertex_type: ToVertexType::MapUDF,
             }],
             &source_config,
             CancellationToken::new(),
@@ -748,6 +750,7 @@ mod tests {
             },
             conditions: None,
             partitions: 1,
+            vertex_type: ToVertexType::MapUDF,
         }];
 
         // create to vertex stream since we will be writing ctrl message to it
@@ -939,6 +942,7 @@ mod tests {
             },
             conditions: None,
             partitions: 1,
+            vertex_type: ToVertexType::MapUDF,
         }];
 
         // create to vertex stream since we will be writing ctrl message to it
