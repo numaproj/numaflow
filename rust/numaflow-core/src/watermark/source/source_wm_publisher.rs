@@ -57,7 +57,6 @@ impl SourceWatermarkPublisher {
                 processor_name.clone(),
                 self.js_context.clone(),
                 &[self.source_config.clone()],
-                true,
             )
             .await
             .expect("Failed to create publisher");
@@ -74,7 +73,7 @@ impl SourceWatermarkPublisher {
                 &Stream {
                     name: "source",
                     vertex: self.source_config.vertex,
-                    partition,
+                    partition: 0, // source will have only one partition
                 },
                 Utc::now().timestamp_micros(), // we don't care about the offsets
                 watermark - self.max_delay.as_millis() as i64, // consider the max delay configured by the user while publishing source watermark
@@ -104,7 +103,6 @@ impl SourceWatermarkPublisher {
                 processor_name.clone(),
                 self.js_context.clone(),
                 &self.to_vertex_configs,
-                true,
             )
             .await
             .expect("Failed to create publisher");

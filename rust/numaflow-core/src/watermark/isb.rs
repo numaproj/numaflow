@@ -217,7 +217,6 @@ impl ISBWatermarkHandle {
             processor_name,
             js_context.clone(),
             &config.to_vertex_config,
-            false,
         )
         .await?;
 
