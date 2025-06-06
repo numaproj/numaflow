@@ -73,7 +73,10 @@ impl SourceWatermarkPublisher {
                 &Stream {
                     name: "source",
                     vertex: self.source_config.vertex,
-                    partition: 0, // source will have only one partition
+                    // in source input partition is considered as a separate processor entity and this
+                    // partition represents the isb partition. Since we are publishing to source OT we
+                    // set the partition to 0.
+                    partition: 0,
                 },
                 Utc::now().timestamp_micros(), // we don't care about the offsets
                 watermark - self.max_delay.as_millis() as i64, // consider the max delay configured by the user while publishing source watermark
