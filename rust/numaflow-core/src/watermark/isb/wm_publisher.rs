@@ -46,6 +46,8 @@ pub(crate) struct ISBWatermarkPublisher {
     last_published_wm: HashMap<&'static str, Vec<LastPublishedState>>,
     /// map of vertex to its ot bucket.
     ot_buckets: HashMap<&'static str, async_nats::jetstream::kv::Store>,
+    /// indicates if this publisher is for a source vertex (partition-based publishing).
+    is_source_publisher: bool,
 }
 
 impl Drop for ISBWatermarkPublisher {
@@ -60,6 +62,7 @@ impl ISBWatermarkPublisher {
         processor_name: String,
         js_context: async_nats::jetstream::Context,
         bucket_configs: &[BucketConfig],
+        is_source_publisher: bool,
     ) -> Result<Self> {
         let mut ot_buckets = HashMap::new();
         let mut hb_buckets = Vec::with_capacity(bucket_configs.len());
@@ -94,6 +97,7 @@ impl ISBWatermarkPublisher {
             hb_handle,
             last_published_wm,
             ot_buckets,
+            is_source_publisher,
         })
     }
 
@@ -146,7 +150,13 @@ impl ISBWatermarkPublisher {
             .expect("Invalid vertex, no last published watermark state found");
 
         // we can avoid publishing the watermark if it is <= the last published watermark (optimization)
-        let last_state = &last_published_wm_state[stream.partition as usize];
+        // For source publishers, always use index 0 since each partition gets its own publisher
+        let state_index = if self.is_source_publisher {
+            0
+        } else {
+            stream.partition as usize
+        };
+        let last_state = &last_published_wm_state[state_index];
         if offset < last_state.offset || watermark <= last_state.watermark {
             return;
         }
@@ -171,8 +181,7 @@ impl ISBWatermarkPublisher {
             .ok();
 
         // update the last published watermark state
-        last_published_wm_state[stream.partition as usize] =
-            LastPublishedState { offset, watermark };
+        last_published_wm_state[state_index] = LastPublishedState { offset, watermark };
     }
 }
 
@@ -224,6 +233,7 @@ mod tests {
             "processor1".to_string(),
             js_context.clone(),
             &bucket_configs,
+            false,
         )
         .await
         .expect("Failed to create publisher");
@@ -367,6 +377,7 @@ mod tests {
             "processor1".to_string(),
             js_context.clone(),
             &bucket_configs,
+            false,
         )
         .await
         .expect("Failed to create publisher");
@@ -474,6 +485,7 @@ mod tests {
             "processor1".to_string(),
             js_context.clone(),
             &bucket_configs,
+            false,
         )
         .await
         .expect("Failed to create publisher");
@@ -502,6 +514,85 @@ mod tests {
         assert_eq!(wmb.offset, 1);
         assert_eq!(wmb.watermark, 100);
         assert!(wmb.idle);
+
+        // delete the stores
+        js_context
+            .delete_key_value(hb_bucket_name.to_string())
+            .await
+            .unwrap();
+        js_context
+            .delete_key_value(ot_bucket_name.to_string())
+            .await
+            .unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_source_publisher_with_multiple_partitions() {
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+
+        let ot_bucket_name = "source_publisher_multi_partitions_OT";
+        let hb_bucket_name = "source_publisher_multi_partitions_PROCESSORS";
+
+        let bucket_configs = vec![BucketConfig {
+            vertex: "v1",
+            partitions: 1, // source publisher always has 1 partition per instance
+            ot_bucket: ot_bucket_name,
+            hb_bucket: hb_bucket_name,
+        }];
+
+        // create key value stores
+        js_context
+            .create_key_value(Config {
+                bucket: ot_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        js_context
+            .create_key_value(Config {
+                bucket: hb_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let mut publisher = ISBWatermarkPublisher::new(
+            "source-vertex-2".to_string(), // simulating source partition 2
+            js_context.clone(),
+            &bucket_configs,
+            true,
+        )
+        .await
+        .expect("Failed to create publisher");
+
+        // Test publishing watermark for partition 2 (should use index 0 internally)
+        let stream = Stream {
+            name: "v1-2",
+            vertex: "v1",
+            partition: 2, // partition 2, but should use index 0 for source publisher
+        };
+
+        publisher.publish_watermark(&stream, 1, 100, false).await;
+
+        let ot_bucket = js_context
+            .get_key_value(ot_bucket_name)
+            .await
+            .expect("Failed to get ot bucket");
+
+        let wmb = ot_bucket
+            .get("source-vertex-2")
+            .await
+            .expect("Failed to get wmb");
+        assert!(wmb.is_some());
+
+        let wmb: WMB = wmb.unwrap().try_into().unwrap();
+        assert_eq!(wmb.offset, 1);
+        assert_eq!(wmb.watermark, 100);
+        assert_eq!(wmb.partition, 2); // partition should still be 2 in the WMB
 
         // delete the stores
         js_context

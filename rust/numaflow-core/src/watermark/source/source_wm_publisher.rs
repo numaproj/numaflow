@@ -57,10 +57,11 @@ impl SourceWatermarkPublisher {
                 processor_name.clone(),
                 self.js_context.clone(),
                 &[self.source_config.clone()],
+                true,
             )
             .await
             .expect("Failed to create publisher");
-            info!(processor = ?processor_name, partittion = ?partition,
+            info!(processor = ?processor_name, partition = ?partition,
                 "Creating new publisher for source"
             );
             self.publishers.insert(processor_name.clone(), publisher);
@@ -103,6 +104,7 @@ impl SourceWatermarkPublisher {
                 processor_name.clone(),
                 self.js_context.clone(),
                 &self.to_vertex_configs,
+                true,
             )
             .await
             .expect("Failed to create publisher");
