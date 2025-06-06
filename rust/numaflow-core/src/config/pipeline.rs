@@ -90,6 +90,7 @@ pub(crate) mod isb_config {
         None,
         Gzip,
         Zstd,
+        LZ4,
     }
 
     impl TryFrom<numaflow_models::models::Compression> for Compression {
@@ -105,6 +106,9 @@ pub(crate) mod isb_config {
                     }),
                     "zstd" => Ok(Compression {
                         compress_type: CompressionType::Zstd,
+                    }),
+                    "lz4" => Ok(Compression {
+                        compress_type: CompressionType::LZ4,
                     }),
                     "none" => Ok(Compression {
                         compress_type: CompressionType::None,
@@ -616,6 +620,7 @@ impl PipelineConfig {
                             Some(t) => match t.as_str() {
                                 "gzip" => isb_config::CompressionType::Gzip,
                                 "zstd" => isb_config::CompressionType::Zstd,
+                                "lz4" => isb_config::CompressionType::LZ4,
                                 _ => {
                                     return Err(Error::Config(format!(
                                         "Invalid compression type setting: {t}"

@@ -520,7 +520,7 @@ type InterStepBuffer struct {
 // Compression is the compression settings for the messages in the InterStepBuffer
 type Compression struct {
 	// Type is the type of compression to be used
-	// +kubebuilder:validation:Enum:None;GZIP;ZSTD
+	// +kubebuilder:validation:Enum:None;GZIP;ZSTD;LZ4
 	// +kubebuilder:default:=None
 	// +optional
 	Type CompressionType `json:"type,omitempty" protobuf:"bytes,1,opt,name=type"`
@@ -536,6 +536,8 @@ const (
 	CompressionTypeGZIP CompressionType = "GZIP"
 	// CompressionTypeZSTD is the ZSTD compression type.
 	CompressionTypeZSTD CompressionType = "ZSTD"
+	// CompressionTypeLZ4 is the LZ4 compression type.
+	CompressionTypeLZ4 CompressionType = "LZ4"
 )
 
 func (pipeline PipelineSpec) GetMatchingVertices(f func(AbstractVertex) bool) map[string]*AbstractVertex {

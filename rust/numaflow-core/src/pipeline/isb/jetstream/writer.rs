@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use async_compression::tokio::write::{GzipEncoder, ZstdEncoder};
+use async_compression::tokio::write::{GzipEncoder, Lz4Encoder, ZstdEncoder};
 use async_nats::jetstream::Context;
 use async_nats::jetstream::consumer::PullConsumer;
 use async_nats::jetstream::context::{Publish, PublishAckFuture};
@@ -250,6 +250,22 @@ impl JetstreamWriter {
                     }
                     Some(CompressionType::Zstd) => {
                         let mut encoder = ZstdEncoder::new(vec![]);
+                        encoder
+                            .write_all(message.value.as_ref())
+                            .await
+                            .map_err(|e| {
+                                Error::ISB(format!("Failed to compress message (write_all): {}", e))
+                            })?;
+                        encoder.shutdown().await.map_err(|e| {
+                            Error::ISB(format!(
+                                "Failed to flush compressed message (encoder_shutdown): {}",
+                                e
+                            ))
+                        })?;
+                        Bytes::from(encoder.into_inner())
+                    }
+                    Some(CompressionType::LZ4) => {
+                        let mut encoder = Lz4Encoder::new(vec![]);
                         encoder
                             .write_all(message.value.as_ref())
                             .await

@@ -2,7 +2,7 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_compression::tokio::bufread::{GzipDecoder, ZstdDecoder};
+use async_compression::tokio::bufread::{GzipDecoder, Lz4Decoder, ZstdDecoder};
 use async_nats::jetstream::{
     AckKind, Context, Message as JetstreamMessage, consumer::PullConsumer,
 };
@@ -131,6 +131,15 @@ impl JSWrappedMessage {
             }
             Some(CompressionType::Zstd) => {
                 let mut decoder: ZstdDecoder<&[u8]> = ZstdDecoder::new(body.payload.as_ref());
+                let mut decompressed = Vec::new();
+                decoder
+                    .read_to_end(&mut decompressed)
+                    .await
+                    .map_err(|e| Error::ISB(format!("Failed to decompress message: {}", e)))?;
+                decompressed
+            }
+            Some(CompressionType::LZ4) => {
+                let mut decoder: Lz4Decoder<&[u8]> = Lz4Decoder::new(body.payload.as_ref());
                 let mut decompressed = Vec::new();
                 decoder
                     .read_to_end(&mut decompressed)
