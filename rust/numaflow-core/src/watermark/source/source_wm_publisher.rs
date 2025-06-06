@@ -60,7 +60,7 @@ impl SourceWatermarkPublisher {
             )
             .await
             .expect("Failed to create publisher");
-            info!(processor = ?processor_name, partittion = ?partition,
+            info!(processor = ?processor_name, partition = ?partition,
                 "Creating new publisher for source"
             );
             self.publishers.insert(processor_name.clone(), publisher);
@@ -73,7 +73,10 @@ impl SourceWatermarkPublisher {
                 &Stream {
                     name: "source",
                     vertex: self.source_config.vertex,
-                    partition,
+                    // in source input partition is considered as a separate processor entity and this
+                    // partition represents the isb partition. Since we are publishing to source OT we
+                    // set the partition to 0.
+                    partition: 0,
                 },
                 Utc::now().timestamp_micros(), // we don't care about the offsets
                 watermark - self.max_delay.as_millis() as i64, // consider the max delay configured by the user while publishing source watermark

@@ -145,7 +145,6 @@ impl ISBWatermarkPublisher {
             .get_mut(stream.vertex)
             .expect("Invalid vertex, no last published watermark state found");
 
-        // we can avoid publishing the watermark if it is <= the last published watermark (optimization)
         let last_state = &last_published_wm_state[stream.partition as usize];
         if offset < last_state.offset || watermark <= last_state.watermark {
             return;
