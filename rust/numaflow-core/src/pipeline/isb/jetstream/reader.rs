@@ -1,8 +1,8 @@
 use std::fmt;
-use std::io::Read;
 use std::sync::Arc;
 use std::time::Duration;
 
+use async_compression::tokio::bufread::{GzipDecoder, ZstdDecoder};
 use async_nats::jetstream::{
     AckKind, Context, Message as JetstreamMessage, consumer::PullConsumer,
 };
@@ -10,8 +10,8 @@ use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use bytes::Bytes;
 use chrono::Utc;
-use flate2::read::GzDecoder;
 use prost::Message as ProtoMessage;
+use tokio::io::AsyncReadExt;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::{self, Instant};
@@ -83,12 +83,10 @@ struct JSWrappedMessage {
     compression_type: Option<CompressionType>,
 }
 
-impl TryFrom<JSWrappedMessage> for Message {
-    type Error = Error;
-
-    fn try_from(value: JSWrappedMessage) -> Result<Self> {
+impl JSWrappedMessage {
+    async fn into_message(self) -> Result<Message> {
         let proto_message =
-            numaflow_pb::objects::isb::Message::decode(value.message.payload.clone())
+            numaflow_pb::objects::isb::Message::decode(self.message.payload.clone())
                 .map_err(|e| Error::Proto(e.to_string()))?;
 
         let header = proto_message
@@ -109,7 +107,7 @@ impl TryFrom<JSWrappedMessage> for Message {
             .message_info
             .ok_or(Error::Proto("Missing message_info".to_string()))?;
 
-        let msg_info = value.message.info().map_err(|e| {
+        let msg_info = self.message.info().map_err(|e| {
             Error::ISB(format!(
                 "Failed to get message info from JetStream: {:?}",
                 e
@@ -118,15 +116,25 @@ impl TryFrom<JSWrappedMessage> for Message {
 
         let offset = Offset::Int(IntOffset::new(
             msg_info.stream_sequence as i64,
-            value.partition_idx,
+            self.partition_idx,
         ));
 
-        let body = match value.compression_type {
+        let body = match self.compression_type {
             Some(CompressionType::Gzip) => {
-                let mut decoder: GzDecoder<&[u8]> = GzDecoder::new(body.payload.as_ref());
+                let mut decoder: GzipDecoder<&[u8]> = GzipDecoder::new(body.payload.as_ref());
                 let mut decompressed = Vec::new();
                 decoder
                     .read_to_end(&mut decompressed)
+                    .await
+                    .map_err(|e| Error::ISB(format!("Failed to decompress message: {}", e)))?;
+                decompressed
+            }
+            Some(CompressionType::Zstd) => {
+                let mut decoder: ZstdDecoder<&[u8]> = ZstdDecoder::new(body.payload.as_ref());
+                let mut decompressed = Vec::new();
+                decoder
+                    .read_to_end(&mut decompressed)
+                    .await
                     .map_err(|e| Error::ISB(format!("Failed to decompress message: {}", e)))?;
                 decompressed
             }
@@ -141,7 +149,7 @@ impl TryFrom<JSWrappedMessage> for Message {
             offset: offset.clone(),
             event_time: message_info.event_time.map(utc_from_timestamp).unwrap(),
             id: MessageID {
-                vertex_name: value.vertex_name.into(),
+                vertex_name: self.vertex_name.into(),
                 offset: offset.to_string().into(),
                 index: 0,
             },
@@ -254,7 +262,7 @@ impl JetStreamReader {
                                 compression_type: self.compression_type,
                             };
 
-                            let mut message: Message = js_message.try_into().map_err(|e| {
+                            let mut message = js_message.into_message().await.map_err(|e| {
                                 Error::ISB(format!("Failed to convert JetStream message to Message: {:?}", e))
                             })?;
 

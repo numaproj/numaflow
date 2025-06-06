@@ -89,10 +89,11 @@ pub(crate) mod isb_config {
     pub(crate) enum CompressionType {
         None,
         Gzip,
+        Zstd,
     }
 
     impl TryFrom<numaflow_models::models::Compression> for Compression {
-        type Error = &'static str;
+        type Error = String;
         fn try_from(value: numaflow_models::models::Compression) -> Result<Self, Self::Error> {
             match value.r#type {
                 None => Ok(Compression {
@@ -102,7 +103,13 @@ pub(crate) mod isb_config {
                     "gzip" => Ok(Compression {
                         compress_type: CompressionType::Gzip,
                     }),
-                    _ => Err("Invalid compression type"),
+                    "zstd" => Ok(Compression {
+                        compress_type: CompressionType::Zstd,
+                    }),
+                    "none" => Ok(Compression {
+                        compress_type: CompressionType::None,
+                    }),
+                    _ => Err(format!("Invalid compression type: {t}")),
                 },
             }
         }
@@ -598,25 +605,30 @@ impl PipelineConfig {
             });
         }
 
-        let isb_config =
-            vertex_obj
-                .spec
-                .inter_step_buffer
-                .as_ref()
-                .map(|isb_spec| isb_config::ISBConfig {
-                    compression: isb_config::Compression {
-                        compress_type: match isb_spec.compression.as_ref() {
+        let isb_config: Option<isb_config::ISBConfig> =
+            match vertex_obj.spec.inter_step_buffer.as_ref() {
+                None => None,
+                Some(isb_spec) => {
+                    let compress_type = match isb_spec.compression.as_ref() {
+                        None => isb_config::CompressionType::None,
+                        Some(t) => match &t.r#type {
                             None => isb_config::CompressionType::None,
-                            Some(t) => match &t.r#type {
-                                None => isb_config::CompressionType::None,
-                                Some(t) => match t.as_str() {
-                                    "gzip" => isb_config::CompressionType::Gzip,
-                                    _ => isb_config::CompressionType::None,
-                                },
+                            Some(t) => match t.as_str() {
+                                "gzip" => isb_config::CompressionType::Gzip,
+                                "zstd" => isb_config::CompressionType::Zstd,
+                                _ => {
+                                    return Err(Error::Config(format!(
+                                        "Invalid compression type setting: {t}"
+                                    )));
+                                }
                             },
                         },
-                    },
-                });
+                    };
+                    Some(isb_config::ISBConfig {
+                        compression: isb_config::Compression { compress_type },
+                    })
+                }
+            };
 
         Ok(PipelineConfig {
             batch_size: batch_size as usize,

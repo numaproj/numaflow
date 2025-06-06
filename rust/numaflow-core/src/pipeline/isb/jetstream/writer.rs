@@ -1,18 +1,17 @@
 use std::collections::HashMap;
 use std::hash::DefaultHasher;
-use std::io::Write;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use async_compression::tokio::write::{GzipEncoder, ZstdEncoder};
 use async_nats::jetstream::Context;
 use async_nats::jetstream::consumer::PullConsumer;
 use async_nats::jetstream::context::{Publish, PublishAckFuture};
 use async_nats::jetstream::publish::PublishAck;
 use async_nats::jetstream::stream::RetentionPolicy::Limits;
 use bytes::{Bytes, BytesMut};
-use flate2::Compression;
-use flate2::write::GzEncoder;
+use tokio::io::AsyncWriteExt;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use tokio::time::{Instant, sleep};
@@ -234,13 +233,36 @@ impl JetstreamWriter {
                 // if compression is enabled, then compress and sent
                 message.value = match self.compression_type {
                     Some(CompressionType::Gzip) => {
-                        let mut compressed = GzEncoder::new(Vec::new(), Compression::default());
-                        compressed.write_all(message.value.as_ref()).map_err(|e| {
-                            Error::ISB(format!("Failed to compress message (write_all): {}", e))
+                        let mut encoder = GzipEncoder::new(vec![]);
+                        encoder
+                            .write_all(message.value.as_ref())
+                            .await
+                            .map_err(|e| {
+                                Error::ISB(format!("Failed to compress message (write_all): {}", e))
+                            })?;
+                        encoder.shutdown().await.map_err(|e| {
+                            Error::ISB(format!(
+                                "Failed to flush compressed message (encoder_shutdown): {}",
+                                e
+                            ))
                         })?;
-                        Bytes::from(compressed.finish().map_err(|e| {
-                            Error::ISB(format!("Failed to compress message (finish): {}", e))
-                        })?)
+                        Bytes::from(encoder.into_inner())
+                    }
+                    Some(CompressionType::Zstd) => {
+                        let mut encoder = ZstdEncoder::new(vec![]);
+                        encoder
+                            .write_all(message.value.as_ref())
+                            .await
+                            .map_err(|e| {
+                                Error::ISB(format!("Failed to compress message (write_all): {}", e))
+                            })?;
+                        encoder.shutdown().await.map_err(|e| {
+                            Error::ISB(format!(
+                                "Failed to flush compressed message (encoder_shutdown): {}",
+                                e
+                            ))
+                        })?;
+                        Bytes::from(encoder.into_inner())
                     }
                     None | Some(CompressionType::None) => message.value,
                 };
