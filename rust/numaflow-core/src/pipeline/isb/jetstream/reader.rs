@@ -1,8 +1,8 @@
 use std::fmt;
+use std::io::Read;
 use std::sync::Arc;
 use std::time::Duration;
 
-use async_compression::tokio::bufread::{GzipDecoder, Lz4Decoder, ZstdDecoder};
 use async_nats::jetstream::{
     AckKind, Context, Message as JetstreamMessage, consumer::PullConsumer,
 };
@@ -10,8 +10,8 @@ use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use bytes::Bytes;
 use chrono::Utc;
+use flate2::read::GzDecoder;
 use prost::Message as ProtoMessage;
-use tokio::io::AsyncReadExt;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::{self, Instant};
@@ -121,29 +121,29 @@ impl JSWrappedMessage {
 
         let body = match self.compression_type {
             Some(CompressionType::Gzip) => {
-                let mut decoder: GzipDecoder<&[u8]> = GzipDecoder::new(body.payload.as_ref());
-                let mut decompressed = Vec::new();
+                let mut decoder: GzDecoder<&[u8]> = GzDecoder::new(body.payload.as_ref());
+                let mut decompressed = vec![];
                 decoder
                     .read_to_end(&mut decompressed)
-                    .await
                     .map_err(|e| Error::ISB(format!("Failed to decompress message: {}", e)))?;
                 decompressed
             }
             Some(CompressionType::Zstd) => {
-                let mut decoder: ZstdDecoder<&[u8]> = ZstdDecoder::new(body.payload.as_ref());
-                let mut decompressed = Vec::new();
+                let mut decoder: zstd::Decoder<'static, std::io::BufReader<&[u8]>> =
+                    zstd::Decoder::new(body.payload.as_ref())
+                        .map_err(|e| Error::ISB(format!("Failed to create zstd encoder: {e:?}")))?;
+                let mut decompressed = vec![];
                 decoder
                     .read_to_end(&mut decompressed)
-                    .await
                     .map_err(|e| Error::ISB(format!("Failed to decompress message: {}", e)))?;
                 decompressed
             }
             Some(CompressionType::LZ4) => {
-                let mut decoder: Lz4Decoder<&[u8]> = Lz4Decoder::new(body.payload.as_ref());
-                let mut decompressed = Vec::new();
+                let mut decoder: lz4::Decoder<&[u8]> = lz4::Decoder::new(body.payload.as_ref())
+                    .map_err(|e| Error::ISB(format!("Failed to create lz4 encoder: {e:?}")))?;
+                let mut decompressed = vec![];
                 decoder
                     .read_to_end(&mut decompressed)
-                    .await
                     .map_err(|e| Error::ISB(format!("Failed to decompress message: {}", e)))?;
                 decompressed
             }

@@ -53,7 +53,9 @@ prometheus-client = "0.23.1"
 kube = "0.99.0"
 pin-project = "1.1.5"
 rand = "0.8.5"
-async-compression = { version = "0.4.23", default-features = false, features = ["tokio", "zstd", "gzip", "lz4"] }
+flate2 = "1.1.2"
+zstd = "0.13.3"
+lz4 = "1.28.1"
 
 [dev-dependencies]
 tempfile = "3.11.0"
