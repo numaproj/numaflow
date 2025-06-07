@@ -1573,6 +1573,97 @@ value is set to “1”.
 
 </table>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.Compression">
+
+Compression
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.InterStepBuffer">InterStepBuffer</a>)
+</p>
+
+<p>
+
+<p>
+
+Compression is the compression settings for the messages in the
+InterStepBuffer
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>type</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.CompressionType">
+CompressionType </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Type is the type of compression to be used
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.CompressionType">
+
+CompressionType (<code>string</code> alias)
+</p>
+
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Compression">Compression</a>)
+</p>
+
+<p>
+
+<p>
+
+CompressionType is a string enumeration type that enumerates all
+possible compression types.
+</p>
+
+</p>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.ConditionType">
 
 ConditionType (<code>string</code> alias)
@@ -4443,6 +4534,74 @@ Kubernetes meta/v1.Duration </a> </em>
 
 IncrementBy is the duration to be added to the current watermark to
 progress the watermark when source is idling.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.InterStepBuffer">
+
+InterStepBuffer
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.VertexSpec">VertexSpec</a>)
+</p>
+
+<p>
+
+<p>
+
+InterStepBuffer configuration specifically for the pipeline.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>compression</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Compression"> Compression </a>
+</em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Compression is the compression settings for the InterStepBufferService
 </p>
 
 </td>
@@ -7836,6 +7995,12 @@ Refer to the Kubernetes API documentation for the fields of the
 <td>
 
 <em>(Optional)</em>
+<p>
+
+InterStepBufferServiceName is the name of the InterStepBufferService to
+be used by the pipeline
+</p>
+
 </td>
 
 </tr>
@@ -7973,6 +8138,27 @@ for the Pipeline
 <p>
 
 SideInputs defines the Side Inputs of a pipeline.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>interStepBuffer</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.InterStepBuffer">
+InterStepBuffer </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+InterStepBuffer configuration specific to this pipeline.
 </p>
 
 </td>
@@ -8198,6 +8384,12 @@ Description
 <td>
 
 <em>(Optional)</em>
+<p>
+
+InterStepBufferServiceName is the name of the InterStepBufferService to
+be used by the pipeline
+</p>
+
 </td>
 
 </tr>
@@ -8335,6 +8527,27 @@ for the Pipeline
 <p>
 
 SideInputs defines the Side Inputs of a pipeline.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>interStepBuffer</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.InterStepBuffer">
+InterStepBuffer </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+InterStepBuffer configuration specific to this pipeline.
 </p>
 
 </td>
@@ -12905,6 +13118,27 @@ Lifecycle defines the Lifecycle properties of a vertex
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>interStepBuffer</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.InterStepBuffer">
+InterStepBuffer </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+InterStepBuffer configuration specific to this pipeline.
+</p>
+
+</td>
+
+</tr>
+
 </table>
 
 </td>
@@ -13385,6 +13619,27 @@ VertexLifecycle </a> </em>
 <p>
 
 Lifecycle defines the Lifecycle properties of a vertex
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>interStepBuffer</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.InterStepBuffer">
+InterStepBuffer </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+InterStepBuffer configuration specific to this pipeline.
 </p>
 
 </td>

@@ -232,6 +232,7 @@ async fn start_map_forwarder(
             tracker_handle.clone(),
             config.batch_size,
             watermark_handle.clone(),
+            config.isb_config.clone(),
         )
         .await?;
 
@@ -360,6 +361,7 @@ async fn start_reduce_forwarder(
         tracker_handle.clone(),
         config.batch_size,
         watermark_handle.clone(),
+        config.isb_config.clone(),
     )
     .await?;
 
@@ -527,6 +529,7 @@ async fn start_sink_forwarder(
             tracker_handle.clone(),
             config.batch_size,
             watermark_handle.clone(),
+            config.isb_config.clone(),
         )
         .await?;
         buffer_readers.push(buffer_reader);
@@ -595,15 +598,18 @@ async fn create_buffer_writer(
     watermark_handle: Option<WatermarkHandle>,
     vertex_type: String,
 ) -> JetstreamWriter {
-    JetstreamWriter::new(
-        config.to_vertex_config.clone(),
-        js_context,
-        config.paf_concurrency,
+    use crate::pipeline::isb::jetstream::writer::ISBWriterConfig;
+
+    JetstreamWriter::new(ISBWriterConfig {
+        config: config.to_vertex_config.clone(),
+        js_ctx: js_context,
+        paf_concurrency: config.paf_concurrency,
         tracker_handle,
-        cln_token,
+        cancel_token: cln_token,
         watermark_handle,
         vertex_type,
-    )
+        isb_config: config.isb_config.clone(),
+    })
 }
 
 async fn create_buffer_reader(
@@ -614,16 +620,20 @@ async fn create_buffer_reader(
     tracker_handle: TrackerHandle,
     batch_size: usize,
     watermark_handle: Option<ISBWatermarkHandle>,
+    isb_config: Option<crate::config::pipeline::isb_config::ISBConfig>,
 ) -> Result<JetStreamReader> {
-    JetStreamReader::new(
+    use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;
+
+    JetStreamReader::new(ISBReaderConfig {
         vertex_type,
         stream,
-        js_context,
-        reader_config,
+        js_ctx: js_context,
+        config: reader_config,
         tracker_handle,
         batch_size,
         watermark_handle,
-    )
+        isb_config,
+    })
     .await
 }
 
@@ -771,6 +781,7 @@ mod tests {
             },
             watermark_config: None,
             callback_config: None,
+            isb_config: None,
         };
 
         let cancellation_token = CancellationToken::new();
@@ -929,6 +940,7 @@ mod tests {
             },
             watermark_config: None,
             callback_config: None,
+            isb_config: None,
         };
 
         let cancellation_token = CancellationToken::new();
@@ -1167,6 +1179,7 @@ mod tests {
             },
             watermark_config: None,
             callback_config: None,
+            isb_config: None,
         };
 
         let cancellation_token = CancellationToken::new();

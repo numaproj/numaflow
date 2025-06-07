@@ -45,7 +45,7 @@ pub(crate) struct Message {
 }
 
 /// Type of the [Message].
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) enum MessageType {
     /// the payload is Data
     #[default]

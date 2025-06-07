@@ -71,6 +71,53 @@ pub(crate) struct PipelineConfig {
     pub(crate) metrics_config: MetricsConfig,
     pub(crate) watermark_config: Option<WatermarkConfig>,
     pub(crate) callback_config: Option<ServingCallbackConfig>,
+    pub(crate) isb_config: Option<isb_config::ISBConfig>,
+}
+
+pub(crate) mod isb_config {
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) struct ISBConfig {
+        pub(crate) compression: Compression,
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) struct Compression {
+        pub(crate) compress_type: CompressionType,
+    }
+
+    #[derive(Debug, Copy, Clone, PartialEq)]
+    pub(crate) enum CompressionType {
+        None,
+        Gzip,
+        Zstd,
+        LZ4,
+    }
+
+    impl TryFrom<numaflow_models::models::Compression> for Compression {
+        type Error = String;
+        fn try_from(value: numaflow_models::models::Compression) -> Result<Self, Self::Error> {
+            match value.r#type {
+                None => Ok(Compression {
+                    compress_type: CompressionType::None,
+                }),
+                Some(t) => match t.as_str() {
+                    "gzip" => Ok(Compression {
+                        compress_type: CompressionType::Gzip,
+                    }),
+                    "zstd" => Ok(Compression {
+                        compress_type: CompressionType::Zstd,
+                    }),
+                    "lz4" => Ok(Compression {
+                        compress_type: CompressionType::LZ4,
+                    }),
+                    "none" => Ok(Compression {
+                        compress_type: CompressionType::None,
+                    }),
+                    _ => Err(format!("Invalid compression type: {t}")),
+                },
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -98,6 +145,7 @@ impl Default for PipelineConfig {
             metrics_config: Default::default(),
             watermark_config: None,
             callback_config: None,
+            isb_config: None,
         }
     }
 }
@@ -561,6 +609,32 @@ impl PipelineConfig {
             });
         }
 
+        let isb_config: Option<isb_config::ISBConfig> =
+            match vertex_obj.spec.inter_step_buffer.as_ref() {
+                None => None,
+                Some(isb_spec) => {
+                    let compress_type = match isb_spec.compression.as_ref() {
+                        None => isb_config::CompressionType::None,
+                        Some(t) => match &t.r#type {
+                            None => isb_config::CompressionType::None,
+                            Some(t) => match t.as_str() {
+                                "gzip" => isb_config::CompressionType::Gzip,
+                                "zstd" => isb_config::CompressionType::Zstd,
+                                "lz4" => isb_config::CompressionType::LZ4,
+                                _ => {
+                                    return Err(Error::Config(format!(
+                                        "Invalid compression type setting: {t}"
+                                    )));
+                                }
+                            },
+                        },
+                    };
+                    Some(isb_config::ISBConfig {
+                        compression: isb_config::Compression { compress_type },
+                    })
+                }
+            };
+
         Ok(PipelineConfig {
             batch_size: batch_size as usize,
             paf_concurrency: get_var(ENV_PAF_BATCH_SIZE)
@@ -578,6 +652,7 @@ impl PipelineConfig {
             metrics_config: MetricsConfig::with_lookback_window_in_secs(look_back_window),
             watermark_config,
             callback_config,
+            isb_config,
         })
     }
 
@@ -724,6 +799,7 @@ mod tests {
             metrics_config: Default::default(),
             watermark_config: None,
             callback_config: None,
+            isb_config: None,
         };
 
         let config = PipelineConfig::default();

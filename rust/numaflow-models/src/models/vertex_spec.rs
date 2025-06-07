@@ -46,6 +46,8 @@ pub struct VertexSpec {
     /// List of customized init containers belonging to the pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
     #[serde(rename = "initContainers", skip_serializing_if = "Option::is_none")]
     pub init_containers: Option<Vec<k8s_openapi::api::core::v1::Container>>,
+    #[serde(rename = "interStepBuffer", skip_serializing_if = "Option::is_none")]
+    pub inter_step_buffer: Option<Box<crate::models::InterStepBuffer>>,
     #[serde(
         rename = "interStepBufferServiceName",
         skip_serializing_if = "Option::is_none"
@@ -130,6 +132,7 @@ impl VertexSpec {
             image_pull_secrets: None,
             init_container_template: None,
             init_containers: None,
+            inter_step_buffer: None,
             inter_step_buffer_service_name: None,
             lifecycle: None,
             limits: None,
