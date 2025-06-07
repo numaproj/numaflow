@@ -18,8 +18,6 @@ use crate::{
     message::{Message, Offset},
     reader::LagReader,
 };
-use backoff::retry::Retry;
-use backoff::strategy::fixed;
 use chrono::Utc;
 use numaflow_jetstream::JetstreamSource;
 use numaflow_kafka::source::KafkaSource;
@@ -64,8 +62,6 @@ use crate::transformer::Transformer;
 use crate::watermark::source::SourceWatermarkHandle;
 
 const MAX_ACK_PENDING: usize = 10000;
-const ACK_RETRY_INTERVAL: u64 = 100;
-const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
 
 /// Set of Read related items that has to be implemented to become a Source.
 pub(crate) trait SourceReader {
@@ -436,7 +432,6 @@ impl Source {
                     self.sender.clone(),
                     ack_batch,
                     _permit,
-                    cln_token.clone(),
                 ));
 
                 // transform the batch if the transformer is present, this need not
@@ -516,7 +511,6 @@ impl Source {
         source_handle: mpsc::Sender<ActorMessage>,
         ack_rx_batch: Vec<(Offset, oneshot::Receiver<ReadAck>)>,
         _permit: OwnedSemaphorePermit, // permit to release after acking the offsets.
-        cancel_token: CancellationToken,
     ) -> Result<()> {
         let n = ack_rx_batch.len();
         let mut offsets_to_ack = Vec::with_capacity(n);
@@ -537,39 +531,11 @@ impl Source {
 
         let start = Instant::now();
         if !offsets_to_ack.is_empty() {
-            Self::ack_with_retry(source_handle, offsets_to_ack, &cancel_token).await;
+            Self::ack(source_handle, offsets_to_ack).await?;
         }
         Self::send_ack_metrics(e2e_start_time, n, start);
 
         Ok(())
-    }
-
-    /// Invokes ack with infinite retries until the cancellation token is cancelled.
-    async fn ack_with_retry(
-        source_handle: mpsc::Sender<ActorMessage>,
-        offsets: Vec<Offset>,
-        cancel_token: &CancellationToken,
-    ) {
-        let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
-        let _ = Retry::retry(
-            interval,
-            async || {
-                let result = Self::ack(source_handle.clone(), offsets.clone()).await;
-                if result.is_err() {
-                    error!(?result, "Failed to send ack to source, retrying...");
-                    if cancel_token.is_cancelled() {
-                        error!(
-                            ?result,
-                            "Cancellation token received, stopping the ack retry loop"
-                        );
-                        return Ok(());
-                    }
-                }
-                result
-            },
-            |_: &Error| !cancel_token.is_cancelled(),
-        )
-        .await;
     }
 
     fn send_read_metrics(
