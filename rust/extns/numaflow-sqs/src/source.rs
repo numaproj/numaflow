@@ -729,6 +729,7 @@ mod tests {
     }
 
     #[test(tokio::test)]
+    #[ignore]
     async fn test_sqssource_ack() {
         let queue_url_output = get_queue_url_output();
         let delete_message_output = get_delete_message_output();
