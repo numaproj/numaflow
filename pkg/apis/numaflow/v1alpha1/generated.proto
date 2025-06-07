@@ -313,7 +313,7 @@ message CombinedEdge {
 // Compression is the compression settings for the messages in the InterStepBuffer
 message Compression {
   // Type is the type of compression to be used
-  // +kubebuilder:validation:Enum:None;GZIP
+  // +kubebuilder:validation:Enum:None;GZIP;ZSTD;LZ4
   // +kubebuilder:default:=None
   // +optional
   optional string type = 1;

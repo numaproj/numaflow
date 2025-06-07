@@ -234,13 +234,45 @@ impl JetstreamWriter {
                 // if compression is enabled, then compress and sent
                 message.value = match self.compression_type {
                     Some(CompressionType::Gzip) => {
-                        let mut compressed = GzEncoder::new(Vec::new(), Compression::default());
-                        compressed.write_all(message.value.as_ref()).map_err(|e| {
+                        let mut encoder = GzEncoder::new(vec![], Compression::default());
+                        encoder.write_all(message.value.as_ref()).map_err(|e| {
                             Error::ISB(format!("Failed to compress message (write_all): {}", e))
                         })?;
-                        Bytes::from(compressed.finish().map_err(|e| {
+                        Bytes::from(encoder.finish().map_err(|e| {
                             Error::ISB(format!("Failed to compress message (finish): {}", e))
                         })?)
+                    }
+                    Some(CompressionType::Zstd) => {
+                        // 3 is default if you specify 0
+                        let mut encoder = zstd::Encoder::new(vec![], 3).map_err(|e| {
+                            Error::ISB(format!("Failed to create zstd encoder: {e:?}"))
+                        })?;
+                        encoder.write_all(message.value.as_ref()).map_err(|e| {
+                            Error::ISB(format!("Failed to compress message (write_all): {:?}", e))
+                        })?;
+                        Bytes::from(encoder.finish().map_err(|e| {
+                            Error::ISB(format!(
+                                "Failed to flush compressed message (encoder_shutdown): {:?}",
+                                e
+                            ))
+                        })?)
+                    }
+                    Some(CompressionType::LZ4) => {
+                        let mut encoder =
+                            lz4::EncoderBuilder::new().build(vec![]).map_err(|e| {
+                                Error::ISB(format!("Failed to create lz4 encoder: {e:?}"))
+                            })?;
+                        encoder.write_all(message.value.as_ref()).map_err(|e| {
+                            Error::ISB(format!("Failed to compress message (write_all): {}", e))
+                        })?;
+                        let (compressed, result) = encoder.finish();
+                        if let Err(e) = result {
+                            return Err(Error::ISB(format!(
+                                "Failed to flush compressed message (encoder_shutdown): {:?}",
+                                e
+                            )));
+                        };
+                        Bytes::from(compressed)
                     }
                     None | Some(CompressionType::None) => message.value,
                 };
