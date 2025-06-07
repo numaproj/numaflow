@@ -20,7 +20,6 @@ use bytes::Bytes;
 use chrono::{DateTime, TimeZone, Utc};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
-use tracing::error;
 
 pub const SQS_DEFAULT_REGION: &str = "us-west-2";
 
@@ -276,8 +275,6 @@ impl SqsActor {
 
     /// delete message from SQS, serves as Numaflow source ack.
     async fn delete_messages(&mut self, offsets: Vec<Bytes>) -> Result<()> {
-        let n = offsets.len();
-        info!("Deleting messages from SQS: {:?}", n);
         let mut batch_builder = self
             .client
             .delete_message_batch()
@@ -295,24 +292,19 @@ impl SqsActor {
             batch_builder = batch_builder.entries(
                 DeleteMessageBatchRequestEntry::builder()
                     .receipt_handle(offset)
-                    .id(offset)
                     .build()
-                    .map_err(|err| {
-                        error!(?err, "Failed to build DeleteMessageBatchRequestEntry",);
-                        Error::Sqs(err.into())
-                    })?,
+                    .map_err(|err| Error::Sqs(err.into()))?,
             );
         }
 
         if let Err(e) = batch_builder.send().await {
-            error!(
+            tracing::error!(
                 ?e,
                 queue_url = self.queue_url,
                 "Failed to delete messages from SQS"
             );
             return Err(SqsSourceError::from(Error::Sqs(e.into())));
         }
-        info!("Successfully deleted messages from SQS: {:?}", n);
         Ok(())
     }
 
