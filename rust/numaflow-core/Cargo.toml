@@ -53,14 +53,14 @@ prometheus-client = "0.23.1"
 kube = "0.99.0"
 pin-project = "1.1.5"
 rand = "0.8.5"
-flate2 = "1.1.1"
+flate2 = "1.1.2"
+zstd = "0.13.3"
+lz4 = "1.28.1"
 
 [dev-dependencies]
 tempfile = "3.11.0"
 numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "c6aa3a8d64a189357260f78131ef4692d387ba6c" }
-pulsar = { version = "6.3.0", default-features = false, features = [
-    "tokio-rustls-runtime",
-] }
+pulsar = { version = "6.3.0", default-features = false, features = ["tokio-rustls-runtime"] }
 hyper = "1.6.0"
 hyper-rustls = "0.27.5"
 http = "1.2.0"
