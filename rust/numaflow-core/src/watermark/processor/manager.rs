@@ -9,6 +9,7 @@ use std::sync::RwLock;
 use std::time::SystemTime;
 use std::time::{Duration, UNIX_EPOCH};
 
+use crate::config::get_vertex_replica;
 use crate::config::pipeline::VertexType;
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::error::{Error, Result};
@@ -265,24 +266,17 @@ impl ProcessorManager {
             };
             let wmb: WMB = ot_value.try_into().expect("Failed to decode WMB");
 
-            // For reduce vertex types, only consider wmbs that have the same partition as the vertex replica
-            if vertex_type == VertexType::ReduceUDF && wmb.partition != vertex_replica {
-                debug!(
-                    wmb_partition = wmb.partition,
-                    vertex_replica = vertex_replica,
-                    "Skipping wmb with different partition for reduce vertex during prepopulation"
-                );
-                continue;
+            match vertex_type {
+                VertexType::Source | VertexType::Sink | VertexType::MapUDF => {
+                    processor.timelines[wmb.partition as usize].put(wmb);
+                }
+                VertexType::ReduceUDF => {
+                    if wmb.partition != vertex_replica {
+                        continue;
+                    }
+                    processor.timelines[0].put(wmb);
+                }
             }
-
-            // For reduce UDF vertex types, always append to the 0th timeline regardless of wmb partition
-            let timeline_index = if vertex_type == VertexType::ReduceUDF {
-                0
-            } else {
-                wmb.partition as usize
-            };
-            let timeline = &mut processor.timelines[timeline_index];
-            timeline.put(wmb);
         }
 
         (processors, heartbeats)
@@ -351,33 +345,21 @@ impl ProcessorManager {
                     let processor_name = Bytes::from(kv.key);
                     let wmb: WMB = kv.value.try_into().expect("Failed to decode WMB");
 
-                    debug!(wmb = ?wmb, processor = ?processor_name, "Received wmb from watcher");
-
-                    // For reduce vertex types, only consider wmbs that have the same partition as the vertex replica
-                    if vertex_type == VertexType::ReduceUDF && wmb.partition != vertex_replica {
-                        debug!(
-                            wmb_partition = wmb.partition,
-                            vertex_replica = vertex_replica,
-                            "Skipping wmb with different partition for reduce vertex"
-                        );
+                    let mut processors = processors.write().expect("failed to acquire lock");
+                    let Some(processor) = processors.get_mut(&processor_name) else {
                         continue;
-                    }
+                    };
 
-                    if let Some(processor) = processors
-                        .write()
-                        .expect("failed to acquire lock")
-                        .get_mut(&processor_name)
-                    {
-                        // For reduce UDF vertex types, always append to the 0th timeline regardless of wmb partition
-                        let timeline_index = if vertex_type == VertexType::ReduceUDF {
-                            0
-                        } else {
-                            wmb.partition as usize
-                        };
-                        let timeline = &mut processor.timelines[timeline_index];
-                        timeline.put(wmb);
-                    } else {
-                        debug!(?processor_name, "Processor not found");
+                    match vertex_type {
+                        VertexType::Source | VertexType::Sink | VertexType::MapUDF => {
+                            processor.timelines[wmb.partition as usize].put(wmb);
+                        }
+                        VertexType::ReduceUDF => {
+                            if wmb.partition != vertex_replica {
+                                continue;
+                            }
+                            processor.timelines[0].put(wmb);
+                        }
                     }
                 }
                 async_nats::jetstream::kv::Operation::Delete
