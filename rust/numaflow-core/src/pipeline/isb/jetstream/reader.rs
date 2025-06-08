@@ -87,13 +87,6 @@ impl TryFrom<JSWrappedMessage> for Message {
     type Error = Error;
 
     fn try_from(value: JSWrappedMessage) -> Result<Self> {
-        let msg_info = value.message.info().map_err(|e| {
-            Error::ISB(format!(
-                "Failed to get message info from JetStream: {:?}",
-                e
-            ))
-        })?;
-
         let proto_message =
             numaflow_pb::objects::isb::Message::decode(value.message.payload.clone())
                 .map_err(|e| Error::Proto(e.to_string()))?;
@@ -101,12 +94,28 @@ impl TryFrom<JSWrappedMessage> for Message {
         let header = proto_message
             .header
             .ok_or(Error::Proto("Missing header".to_string()))?;
+        let kind: MessageType = header.kind.into();
+        if kind == MessageType::WMB {
+            return Ok(Message {
+                typ: kind,
+                ..Default::default()
+            });
+        }
+
         let body = proto_message
             .body
             .ok_or(Error::Proto("Missing body".to_string()))?;
         let message_info = header
             .message_info
             .ok_or(Error::Proto("Missing message_info".to_string()))?;
+
+        let msg_info = value.message.info().map_err(|e| {
+            Error::ISB(format!(
+                "Failed to get message info from JetStream: {:?}",
+                e
+            ))
+        })?;
+
         let offset = Offset::Int(IntOffset::new(
             msg_info.stream_sequence as i64,
             value.partition_idx,
@@ -476,12 +485,15 @@ impl fmt::Display for JetStreamReader {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Write;
     use std::sync::Arc;
 
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
     use bytes::BytesMut;
     use chrono::Utc;
+    use flate2::Compression;
+    use flate2::write::GzEncoder;
     use tokio::time::sleep;
 
     use super::*;
@@ -734,5 +746,126 @@ mod tests {
 
         // Give some time to observe the child task behavior
         sleep(Duration::from_secs(8)).await;
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_compression_with_empty_payload() {
+        let js_url = "localhost:4222";
+        // Create JetStream context
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+
+        let stream = Stream::new("test_compression_empty", "test", 0);
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream.name).await;
+        context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                max_message_size: 1024,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        // Create ISB config with gzip compression
+        let isb_config = ISBConfig {
+            compression: crate::config::pipeline::isb_config::Compression {
+                compress_type: CompressionType::Gzip,
+            },
+        };
+
+        let buf_reader_config = BufferReaderConfig {
+            streams: vec![],
+            wip_ack_interval: Duration::from_millis(5),
+        };
+        let tracker = TrackerHandle::new(None, None);
+        let js_reader = JetStreamReader::new(ISBReaderConfig {
+            vertex_type: "Map".to_string(),
+            stream: stream.clone(),
+            js_ctx: context.clone(),
+            config: buf_reader_config,
+            tracker_handle: tracker.clone(),
+            batch_size: 500,
+            watermark_handle: None,
+            isb_config: Some(isb_config.clone()),
+        })
+        .await
+        .unwrap();
+
+        let reader_cancel_token = CancellationToken::new();
+        let (mut js_reader_rx, js_reader_task) = js_reader
+            .streaming_read(reader_cancel_token.clone())
+            .await
+            .unwrap();
+
+        let mut compressed = GzEncoder::new(Vec::new(), Compression::default());
+        compressed
+            .write_all(Bytes::new().as_ref())
+            .map_err(|e| Error::ISB(format!("Failed to compress message (write_all): {}", e)))
+            .unwrap();
+
+        let body = Bytes::from(
+            compressed
+                .finish()
+                .map_err(|e| Error::ISB(format!("Failed to compress message (finish): {}", e)))
+                .unwrap(),
+        );
+
+        // Create a message with empty payload
+        let offset = Offset::Int(IntOffset::new(1, 0));
+        let message = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["empty_key".to_string()]),
+            tags: None,
+            value: body, // Empty payload
+            offset: offset.clone(),
+            event_time: Utc::now(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex".to_string().into(),
+                offset: "offset_1".into(),
+                index: 0,
+            },
+            ..Default::default()
+        };
+
+        // Convert message to bytes and publish it
+        let message_bytes: BytesMut = message.try_into().unwrap();
+        context
+            .publish(stream.name, message_bytes.into())
+            .await
+            .unwrap();
+
+        // Read the message back
+        let received_message = js_reader_rx.next().await.expect("Should receive a message");
+
+        // Verify the message was correctly decompressed
+        assert_eq!(
+            received_message.value.len(),
+            0,
+            "Empty payload should remain empty after compression/decompression"
+        );
+        assert_eq!(received_message.keys.as_ref(), &["empty_key".to_string()]);
+        assert_eq!(received_message.offset.to_string(), offset.to_string());
+
+        // Clean up
+        tracker.discard(offset).await.unwrap();
+        reader_cancel_token.cancel();
+        js_reader_task.await.unwrap().unwrap();
+        context.delete_stream(stream.name).await.unwrap();
     }
 }
