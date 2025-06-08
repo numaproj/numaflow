@@ -21,6 +21,9 @@ pub struct PipelineSpec {
     /// Edges define the relationships between vertices
     #[serde(rename = "edges", skip_serializing_if = "Option::is_none")]
     pub edges: Option<Vec<crate::models::Edge>>,
+    #[serde(rename = "interStepBuffer", skip_serializing_if = "Option::is_none")]
+    pub inter_step_buffer: Option<Box<crate::models::InterStepBuffer>>,
+    /// InterStepBufferServiceName is the name of the InterStepBufferService to be used by the pipeline
     #[serde(
         rename = "interStepBufferServiceName",
         skip_serializing_if = "Option::is_none"
@@ -45,6 +48,7 @@ impl PipelineSpec {
     pub fn new() -> PipelineSpec {
         PipelineSpec {
             edges: None,
+            inter_step_buffer: None,
             inter_step_buffer_service_name: None,
             lifecycle: None,
             limits: None,

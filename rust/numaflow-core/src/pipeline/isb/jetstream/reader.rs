@@ -1,4 +1,5 @@
 use std::fmt;
+use std::io::Read;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -7,7 +8,9 @@ use async_nats::jetstream::{
 };
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
+use bytes::Bytes;
 use chrono::Utc;
+use flate2::read::GzDecoder;
 use prost::Message as ProtoMessage;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -21,11 +24,26 @@ use tracing::{error, info};
 use crate::Result;
 use crate::config::get_vertex_name;
 use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
+use crate::config::pipeline::isb_config::{CompressionType, ISBConfig};
 use crate::error::Error;
+
 use crate::message::{IntOffset, Message, MessageID, MessageType, Metadata, Offset, ReadAck};
 use crate::metrics::{PIPELINE_PARTITION_NAME_LABEL, pipeline_metric_labels, pipeline_metrics};
 use crate::shared::grpc::utc_from_timestamp;
 use crate::tracker::TrackerHandle;
+
+/// Configuration for creating a JetStreamReader
+#[derive(Clone)]
+pub(crate) struct ISBReaderConfig {
+    pub vertex_type: String,
+    pub stream: Stream,
+    pub js_ctx: Context,
+    pub config: BufferReaderConfig,
+    pub tracker_handle: TrackerHandle,
+    pub batch_size: usize,
+    pub watermark_handle: Option<ISBWatermarkHandle>,
+    pub isb_config: Option<ISBConfig>,
+}
 use crate::watermark::isb::ISBWatermarkHandle;
 
 const ACK_RETRY_INTERVAL: u64 = 100;
@@ -52,6 +70,7 @@ pub(crate) struct JetStreamReader {
     batch_size: usize,
     watermark_handle: Option<ISBWatermarkHandle>,
     vertex_type: String,
+    compression_type: Option<CompressionType>,
 }
 
 /// JSWrappedMessage is a wrapper around the JetStream message that includes the
@@ -61,46 +80,85 @@ struct JSWrappedMessage {
     partition_idx: u16,
     message: async_nats::jetstream::Message,
     vertex_name: String,
+    compression_type: Option<CompressionType>,
 }
 
-impl TryFrom<JSWrappedMessage> for Message {
-    type Error = Error;
-
-    fn try_from(value: JSWrappedMessage) -> Result<Self> {
-        let msg_info = value.message.info().map_err(|e| {
-            Error::ISB(format!(
-                "Failed to get message info from JetStream: {:?}",
-                e
-            ))
-        })?;
-
+impl JSWrappedMessage {
+    async fn into_message(self) -> Result<Message> {
         let proto_message =
-            numaflow_pb::objects::isb::Message::decode(value.message.payload.clone())
+            numaflow_pb::objects::isb::Message::decode(self.message.payload.clone())
                 .map_err(|e| Error::Proto(e.to_string()))?;
 
         let header = proto_message
             .header
             .ok_or(Error::Proto("Missing header".to_string()))?;
+        let kind: MessageType = header.kind.into();
+        if kind == MessageType::WMB {
+            return Ok(Message {
+                typ: kind,
+                ..Default::default()
+            });
+        }
+
         let body = proto_message
             .body
             .ok_or(Error::Proto("Missing body".to_string()))?;
         let message_info = header
             .message_info
             .ok_or(Error::Proto("Missing message_info".to_string()))?;
+
+        let msg_info = self.message.info().map_err(|e| {
+            Error::ISB(format!(
+                "Failed to get message info from JetStream: {:?}",
+                e
+            ))
+        })?;
+
         let offset = Offset::Int(IntOffset::new(
             msg_info.stream_sequence as i64,
-            value.partition_idx,
+            self.partition_idx,
         ));
+
+        let body = match self.compression_type {
+            Some(CompressionType::Gzip) => {
+                let mut decoder: GzDecoder<&[u8]> = GzDecoder::new(body.payload.as_ref());
+                let mut decompressed = vec![];
+                decoder
+                    .read_to_end(&mut decompressed)
+                    .map_err(|e| Error::ISB(format!("Failed to decompress message: {}", e)))?;
+                decompressed
+            }
+            Some(CompressionType::Zstd) => {
+                let mut decoder: zstd::Decoder<'static, std::io::BufReader<&[u8]>> =
+                    zstd::Decoder::new(body.payload.as_ref())
+                        .map_err(|e| Error::ISB(format!("Failed to create zstd encoder: {e:?}")))?;
+                let mut decompressed = vec![];
+                decoder
+                    .read_to_end(&mut decompressed)
+                    .map_err(|e| Error::ISB(format!("Failed to decompress message: {}", e)))?;
+                decompressed
+            }
+            Some(CompressionType::LZ4) => {
+                let mut decoder: lz4::Decoder<&[u8]> = lz4::Decoder::new(body.payload.as_ref())
+                    .map_err(|e| Error::ISB(format!("Failed to create lz4 encoder: {e:?}")))?;
+                let mut decompressed = vec![];
+                decoder
+                    .read_to_end(&mut decompressed)
+                    .map_err(|e| Error::ISB(format!("Failed to decompress message: {}", e)))?;
+                decompressed
+            }
+            None | Some(CompressionType::None) => body.payload,
+        };
 
         Ok(Message {
             typ: header.kind.into(),
             keys: Arc::from(header.keys.into_boxed_slice()),
             tags: None,
-            value: body.payload.into(),
+            value: Bytes::from(body),
             offset: offset.clone(),
             event_time: message_info.event_time.map(utc_from_timestamp).unwrap(),
             id: MessageID {
-                vertex_name: value.vertex_name.into(),
+                vertex_name: self.vertex_name.into(),
                 offset: offset.to_string().into(),
                 index: 0,
             },
@@ -118,19 +176,12 @@ impl TryFrom<JSWrappedMessage> for Message {
 }
 
 impl JetStreamReader {
-    pub(crate) async fn new(
-        vertex_type: String,
-        stream: Stream,
-        js_ctx: Context,
-        config: BufferReaderConfig,
-        tracker_handle: TrackerHandle,
-        batch_size: usize,
-        watermark_handle: Option<ISBWatermarkHandle>,
-    ) -> Result<Self> {
-        let mut config = config;
+    pub(crate) async fn new(reader_config: ISBReaderConfig) -> Result<Self> {
+        let mut buffer_config = reader_config.config;
 
-        let mut consumer: PullConsumer = js_ctx
-            .get_consumer_from_stream(&stream.name, &stream.name)
+        let mut consumer: PullConsumer = reader_config
+            .js_ctx
+            .get_consumer_from_stream(&reader_config.stream.name, &reader_config.stream.name)
             .await
             .map_err(|e| Error::ISB(format!("Failed to get consumer for stream {}", e)))?;
 
@@ -142,19 +193,22 @@ impl JetStreamReader {
         // Calculate inProgressTickSeconds based on the ack_wait_seconds.
         let ack_wait_seconds = consumer_info.config.ack_wait.as_secs();
         let wip_ack_interval = Duration::from_secs(std::cmp::max(
-            config.wip_ack_interval.as_secs(),
+            buffer_config.wip_ack_interval.as_secs(),
             ack_wait_seconds * 2 / 3,
         ));
-        config.wip_ack_interval = wip_ack_interval;
+        buffer_config.wip_ack_interval = wip_ack_interval;
 
         Ok(Self {
-            vertex_type,
-            stream,
-            config: config.clone(),
+            vertex_type: reader_config.vertex_type,
+            stream: reader_config.stream,
+            config: buffer_config,
             consumer,
-            tracker_handle,
-            batch_size,
-            watermark_handle,
+            tracker_handle: reader_config.tracker_handle,
+            batch_size: reader_config.batch_size,
+            watermark_handle: reader_config.watermark_handle,
+            compression_type: reader_config
+                .isb_config
+                .map(|c| c.compression.compress_type),
         })
     }
 
@@ -214,9 +268,10 @@ impl JetStreamReader {
                                 partition_idx: self.stream.partition,
                                 message: jetstream_message.clone(),
                                 vertex_name: get_vertex_name().to_string(),
+                                compression_type: self.compression_type,
                             };
 
-                            let mut message: Message = js_message.try_into().map_err(|e| {
+                            let mut message = js_message.into_message().await.map_err(|e| {
                                 Error::ISB(format!("Failed to convert JetStream message to Message: {:?}", e))
                             })?;
 
@@ -447,12 +502,15 @@ impl fmt::Display for JetStreamReader {
 
 #[cfg(test)]
 mod tests {
+    use std::io::Write;
     use std::sync::Arc;
 
     use async_nats::jetstream;
     use async_nats::jetstream::{consumer, stream};
     use bytes::BytesMut;
     use chrono::Utc;
+    use flate2::Compression;
+    use flate2::write::GzEncoder;
     use tokio::time::sleep;
 
     use super::*;
@@ -496,15 +554,16 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
         };
         let tracker = TrackerHandle::new(None, None);
-        let js_reader = JetStreamReader::new(
-            "Map".to_string(),
-            stream.clone(),
-            context.clone(),
-            buf_reader_config,
-            tracker.clone(),
-            500,
-            None,
-        )
+        let js_reader = JetStreamReader::new(ISBReaderConfig {
+            vertex_type: "Map".to_string(),
+            stream: stream.clone(),
+            js_ctx: context.clone(),
+            config: buf_reader_config,
+            tracker_handle: tracker.clone(),
+            batch_size: 500,
+            watermark_handle: None,
+            isb_config: None,
+        })
         .await
         .unwrap();
 
@@ -601,15 +660,16 @@ mod tests {
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
         };
-        let js_reader = JetStreamReader::new(
-            "Map".to_string(),
-            js_stream.clone(),
-            context.clone(),
-            buf_reader_config,
-            tracker_handle.clone(),
-            1,
-            None,
-        )
+        let js_reader = JetStreamReader::new(ISBReaderConfig {
+            vertex_type: "Map".to_string(),
+            stream: js_stream.clone(),
+            js_ctx: context.clone(),
+            config: buf_reader_config,
+            tracker_handle: tracker_handle.clone(),
+            batch_size: 1,
+            watermark_handle: None,
+            isb_config: None,
+        })
         .await
         .unwrap();
 
@@ -703,5 +763,126 @@ mod tests {
 
         // Give some time to observe the child task behavior
         sleep(Duration::from_secs(8)).await;
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_compression_with_empty_payload() {
+        let js_url = "localhost:4222";
+        // Create JetStream context
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+
+        let stream = Stream::new("test_compression_empty", "test", 0);
+        // Delete stream if it exists
+        let _ = context.delete_stream(stream.name).await;
+        context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                max_message_size: 1024,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let _consumer = context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        // Create ISB config with gzip compression
+        let isb_config = ISBConfig {
+            compression: crate::config::pipeline::isb_config::Compression {
+                compress_type: CompressionType::Gzip,
+            },
+        };
+
+        let buf_reader_config = BufferReaderConfig {
+            streams: vec![],
+            wip_ack_interval: Duration::from_millis(5),
+        };
+        let tracker = TrackerHandle::new(None, None);
+        let js_reader = JetStreamReader::new(ISBReaderConfig {
+            vertex_type: "Map".to_string(),
+            stream: stream.clone(),
+            js_ctx: context.clone(),
+            config: buf_reader_config,
+            tracker_handle: tracker.clone(),
+            batch_size: 500,
+            watermark_handle: None,
+            isb_config: Some(isb_config.clone()),
+        })
+        .await
+        .unwrap();
+
+        let reader_cancel_token = CancellationToken::new();
+        let (mut js_reader_rx, js_reader_task) = js_reader
+            .streaming_read(reader_cancel_token.clone())
+            .await
+            .unwrap();
+
+        let mut compressed = GzEncoder::new(Vec::new(), Compression::default());
+        compressed
+            .write_all(Bytes::new().as_ref())
+            .map_err(|e| Error::ISB(format!("Failed to compress message (write_all): {}", e)))
+            .unwrap();
+
+        let body = Bytes::from(
+            compressed
+                .finish()
+                .map_err(|e| Error::ISB(format!("Failed to compress message (finish): {}", e)))
+                .unwrap(),
+        );
+
+        // Create a message with empty payload
+        let offset = Offset::Int(IntOffset::new(1, 0));
+        let message = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["empty_key".to_string()]),
+            tags: None,
+            value: body, // Empty payload
+            offset: offset.clone(),
+            event_time: Utc::now(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex".to_string().into(),
+                offset: "offset_1".into(),
+                index: 0,
+            },
+            ..Default::default()
+        };
+
+        // Convert message to bytes and publish it
+        let message_bytes: BytesMut = message.try_into().unwrap();
+        context
+            .publish(stream.name, message_bytes.into())
+            .await
+            .unwrap();
+
+        // Read the message back
+        let received_message = js_reader_rx.next().await.expect("Should receive a message");
+
+        // Verify the message was correctly decompressed
+        assert_eq!(
+            received_message.value.len(),
+            0,
+            "Empty payload should remain empty after compression/decompression"
+        );
+        assert_eq!(received_message.keys.as_ref(), &["empty_key".to_string()]);
+        assert_eq!(received_message.offset.to_string(), offset.to_string());
+
+        // Clean up
+        tracker.discard(offset).await.unwrap();
+        reader_cancel_token.cancel();
+        js_reader_task.await.unwrap().unwrap();
+        context.delete_stream(stream.name).await.unwrap();
     }
 }
