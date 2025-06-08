@@ -1756,6 +1756,15 @@ spec:
                   - name
                   type: object
                 type: array
+              interStepBuffer:
+                properties:
+                  compression:
+                    properties:
+                      type:
+                        default: None
+                        type: string
+                    type: object
+                type: object
               interStepBufferServiceName:
                 type: string
               lifecycle:

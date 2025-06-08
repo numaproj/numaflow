@@ -621,8 +621,9 @@ mod tests {
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
         let tracker_handle = TrackerHandle::new(None, None);
-        let js_writer = JetstreamWriter::new(
-            vec![ToVertexConfig {
+        use crate::pipeline::isb::jetstream::writer::ISBWriterConfig;
+        let js_writer = JetstreamWriter::new(ISBWriterConfig {
+            config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
@@ -631,13 +632,14 @@ mod tests {
                 },
                 conditions: None,
             }],
-            js_context.clone(),
-            100,
-            tracker_handle.clone(),
-            cln_token.clone(),
-            None,
-            "Reduce".to_string(),
-        );
+            js_ctx: js_context.clone(),
+            paf_concurrency: 100,
+            tracker_handle: tracker_handle.clone(),
+            cancel_token: cln_token.clone(),
+            watermark_handle: None,
+            vertex_type: "Reduce".to_string(),
+            isb_config: None,
+        });
 
         // Create the AlignedReducer
         let reducer = AlignedReducer::new(
@@ -863,8 +865,9 @@ mod tests {
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
         let tracker_handle = TrackerHandle::new(None, None);
-        let js_writer = JetstreamWriter::new(
-            vec![ToVertexConfig {
+        use crate::pipeline::isb::jetstream::writer::ISBWriterConfig;
+        let js_writer = JetstreamWriter::new(ISBWriterConfig {
+            config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
@@ -873,13 +876,14 @@ mod tests {
                 },
                 conditions: None,
             }],
-            js_context.clone(),
-            100,
-            tracker_handle.clone(),
-            cln_token.clone(),
-            None,
-            "Reduce".to_string(),
-        );
+            js_ctx: js_context.clone(),
+            paf_concurrency: 100,
+            tracker_handle: tracker_handle.clone(),
+            cancel_token: cln_token.clone(),
+            watermark_handle: None,
+            vertex_type: "Reduce".to_string(),
+            isb_config: None,
+        });
 
         // Create the AlignedReducer
         let reducer = AlignedReducer::new(
@@ -1108,8 +1112,9 @@ mod tests {
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
         let tracker_handle = TrackerHandle::new(None, None);
-        let js_writer = JetstreamWriter::new(
-            vec![ToVertexConfig {
+        use crate::pipeline::isb::jetstream::writer::ISBWriterConfig;
+        let js_writer = JetstreamWriter::new(ISBWriterConfig {
+            config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
@@ -1118,13 +1123,14 @@ mod tests {
                 },
                 conditions: None,
             }],
-            js_context.clone(),
-            100,
-            tracker_handle.clone(),
-            cln_token.clone(),
-            None,
-            "Reduce".to_string(),
-        );
+            js_ctx: js_context.clone(),
+            paf_concurrency: 100,
+            tracker_handle: tracker_handle.clone(),
+            cancel_token: cln_token.clone(),
+            watermark_handle: None,
+            vertex_type: "Reduce".to_string(),
+            isb_config: None,
+        });
 
         // Create the AlignedReducer
         let reducer = AlignedReducer::new(
