@@ -121,7 +121,7 @@ impl JSWrappedMessage {
             typ: header.kind.into(),
             keys: Arc::from(header.keys.into_boxed_slice()),
             tags: None,
-            value: Bytes::from(JSWrappedMessage::decompress(self.compression_type, body)?),
+            value: Bytes::from(Self::decompress(self.compression_type, body)?),
             offset: offset.clone(),
             event_time: message_info.event_time.map(utc_from_timestamp).unwrap(),
             id: MessageID {
