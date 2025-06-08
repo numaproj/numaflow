@@ -214,7 +214,7 @@ impl JetstreamWriter {
             let mut messages_stream = messages_stream;
             let mut hash = DefaultHasher::new();
 
-            while let Some(mut message) = messages_stream.next().await {
+            while let Some(message) = messages_stream.next().await {
                 let write_processing_start = Instant::now();
                 // if message needs to be dropped, ack and continue
                 if message.dropped() {
@@ -231,51 +231,9 @@ impl JetstreamWriter {
                     continue;
                 }
 
+                let mut message = message;
                 // if compression is enabled, then compress and sent
-                message.value = match self.compression_type {
-                    Some(CompressionType::Gzip) => {
-                        let mut encoder = GzEncoder::new(vec![], Compression::default());
-                        encoder.write_all(message.value.as_ref()).map_err(|e| {
-                            Error::ISB(format!("Failed to compress message (write_all): {}", e))
-                        })?;
-                        Bytes::from(encoder.finish().map_err(|e| {
-                            Error::ISB(format!("Failed to compress message (finish): {}", e))
-                        })?)
-                    }
-                    Some(CompressionType::Zstd) => {
-                        // 3 is default if you specify 0
-                        let mut encoder = zstd::Encoder::new(vec![], 3).map_err(|e| {
-                            Error::ISB(format!("Failed to create zstd encoder: {e:?}"))
-                        })?;
-                        encoder.write_all(message.value.as_ref()).map_err(|e| {
-                            Error::ISB(format!("Failed to compress message (write_all): {:?}", e))
-                        })?;
-                        Bytes::from(encoder.finish().map_err(|e| {
-                            Error::ISB(format!(
-                                "Failed to flush compressed message (encoder_shutdown): {:?}",
-                                e
-                            ))
-                        })?)
-                    }
-                    Some(CompressionType::LZ4) => {
-                        let mut encoder =
-                            lz4::EncoderBuilder::new().build(vec![]).map_err(|e| {
-                                Error::ISB(format!("Failed to create lz4 encoder: {e:?}"))
-                            })?;
-                        encoder.write_all(message.value.as_ref()).map_err(|e| {
-                            Error::ISB(format!("Failed to compress message (write_all): {}", e))
-                        })?;
-                        let (compressed, result) = encoder.finish();
-                        if let Err(e) = result {
-                            return Err(Error::ISB(format!(
-                                "Failed to flush compressed message (encoder_shutdown): {:?}",
-                                e
-                            )));
-                        };
-                        Bytes::from(compressed)
-                    }
-                    None | Some(CompressionType::None) => message.value,
-                };
+                message.value = Self::compress(self.compression_type, message.value)?;
 
                 // List of PAFs(one message can be written to multiple streams)
                 let mut pafs = vec![];
@@ -341,6 +299,52 @@ impl JetstreamWriter {
             Ok(())
         });
         Ok(handle)
+    }
+
+    /// Compress the message body based on the compression type.
+    fn compress(compression_type: Option<CompressionType>, message: Bytes) -> Result<Bytes> {
+        match compression_type {
+            Some(CompressionType::Gzip) => {
+                let mut encoder = GzEncoder::new(vec![], Compression::default());
+                encoder.write_all(message.as_ref()).map_err(|e| {
+                    Error::ISB(format!("Failed to compress message (write_all): {}", e))
+                })?;
+                Ok(Bytes::from(encoder.finish().map_err(|e| {
+                    Error::ISB(format!("Failed to compress message (finish): {}", e))
+                })?))
+            }
+            Some(CompressionType::Zstd) => {
+                // 3 is default if you specify 0
+                let mut encoder = zstd::Encoder::new(vec![], 3)
+                    .map_err(|e| Error::ISB(format!("Failed to create zstd encoder: {e:?}")))?;
+                encoder.write_all(message.as_ref()).map_err(|e| {
+                    Error::ISB(format!("Failed to compress message (write_all): {:?}", e))
+                })?;
+                Ok(Bytes::from(encoder.finish().map_err(|e| {
+                    Error::ISB(format!(
+                        "Failed to flush compressed message (encoder_shutdown): {:?}",
+                        e
+                    ))
+                })?))
+            }
+            Some(CompressionType::LZ4) => {
+                let mut encoder = lz4::EncoderBuilder::new()
+                    .build(vec![])
+                    .map_err(|e| Error::ISB(format!("Failed to create lz4 encoder: {e:?}")))?;
+                encoder.write_all(message.as_ref()).map_err(|e| {
+                    Error::ISB(format!("Failed to compress message (write_all): {}", e))
+                })?;
+                let (compressed, result) = encoder.finish();
+                if let Err(e) = result {
+                    return Err(Error::ISB(format!(
+                        "Failed to flush compressed message (encoder_shutdown): {:?}",
+                        e
+                    )));
+                };
+                Ok(Bytes::from(compressed))
+            }
+            None | Some(CompressionType::None) => Ok(message),
+        }
     }
 
     fn send_write_metrics(
@@ -1495,5 +1499,81 @@ mod tests {
         }
 
         (streams, consumers)
+    }
+
+    // Unit tests for the compress function
+    mod compress_tests {
+        use super::*;
+        use crate::config::pipeline::isb_config::CompressionType;
+        use flate2::read::GzDecoder;
+        use lz4::Decoder;
+        use std::io::Read;
+        use zstd::Decoder as ZstdDecoder;
+
+        #[test]
+        fn test_compress_none_compression() {
+            let test_data = Bytes::from("Hello, World!");
+            let result = JetstreamWriter::compress(None, test_data.clone()).unwrap();
+            assert_eq!(result, test_data);
+        }
+
+        #[test]
+        fn test_compress_none_compression_type() {
+            let test_data = Bytes::from("Hello, World!");
+            let result =
+                JetstreamWriter::compress(Some(CompressionType::None), test_data.clone()).unwrap();
+            assert_eq!(result, test_data);
+        }
+
+        #[test]
+        fn test_compress_gzip() {
+            let test_data =
+                Bytes::from("Hello, World! This is a test message for gzip compression.");
+            let result =
+                JetstreamWriter::compress(Some(CompressionType::Gzip), test_data.clone()).unwrap();
+
+            // Verify the result is different from original (compressed)
+            assert_ne!(result, test_data);
+
+            // Verify we can decompress it back to original
+            let mut decoder = GzDecoder::new(result.as_ref());
+            let mut decompressed = Vec::new();
+            decoder.read_to_end(&mut decompressed).unwrap();
+            assert_eq!(decompressed, test_data.as_ref());
+        }
+
+        #[test]
+        fn test_compress_zstd() {
+            let test_data =
+                Bytes::from("Hello, World! This is a test message for zstd compression.");
+            let result =
+                JetstreamWriter::compress(Some(CompressionType::Zstd), test_data.clone()).unwrap();
+
+            // Verify the result is different from original (compressed)
+            assert_ne!(result, test_data);
+
+            // Verify we can decompress it back to original
+            let mut decoder = ZstdDecoder::new(result.as_ref()).unwrap();
+            let mut decompressed = Vec::new();
+            decoder.read_to_end(&mut decompressed).unwrap();
+            assert_eq!(decompressed, test_data.as_ref());
+        }
+
+        #[test]
+        fn test_compress_lz4() {
+            let test_data =
+                Bytes::from("Hello, World! This is a test message for lz4 compression.");
+            let result =
+                JetstreamWriter::compress(Some(CompressionType::LZ4), test_data.clone()).unwrap();
+
+            // Verify the result is different from original (compressed)
+            assert_ne!(result, test_data);
+
+            // Verify we can decompress it back to original
+            let mut decoder = Decoder::new(result.as_ref()).unwrap();
+            let mut decompressed = Vec::new();
+            decoder.read_to_end(&mut decompressed).unwrap();
+            assert_eq!(decompressed, test_data.as_ref());
+        }
     }
 }
