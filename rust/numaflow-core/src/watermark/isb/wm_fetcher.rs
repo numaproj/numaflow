@@ -219,6 +219,7 @@ mod tests {
         let processor_manager = ProcessorManager {
             processors: Arc::new(RwLock::new(processors)),
             handles: vec![],
+            vertex_replica: 0,
         };
 
         let mut processor_managers = HashMap::new();
@@ -357,6 +358,7 @@ mod tests {
         let processor_manager = ProcessorManager {
             processors: Arc::new(RwLock::new(processors)),
             handles: vec![],
+            vertex_replica: 0,
         };
 
         let mut processor_managers = HashMap::new();
@@ -588,6 +590,7 @@ mod tests {
         let processor_manager = ProcessorManager {
             processors: Arc::new(RwLock::new(processors)),
             handles: vec![],
+            vertex_replica: 0,
         };
 
         let mut processor_managers = HashMap::new();
@@ -711,6 +714,7 @@ mod tests {
         let processor_manager_edge1 = ProcessorManager {
             processors: Arc::new(RwLock::new(processors_edge1)),
             handles: vec![],
+            vertex_replica: 0,
         };
 
         // Create ProcessorManagers with multiple Processors and different OffsetTimelines for edge2
@@ -808,6 +812,7 @@ mod tests {
         let processor_manager_edge2 = ProcessorManager {
             processors: Arc::new(RwLock::new(processors_edge2)),
             handles: vec![],
+            vertex_replica: 0,
         };
 
         let mut processor_managers = HashMap::new();
@@ -873,6 +878,7 @@ mod tests {
         let processor_manager = ProcessorManager {
             processors: Arc::new(RwLock::new(processors)),
             handles: vec![],
+            vertex_replica: 0,
         };
 
         let mut processor_managers = HashMap::new();
@@ -953,6 +959,7 @@ mod tests {
         let processor_manager = ProcessorManager {
             processors: Arc::new(RwLock::new(processors)),
             handles: vec![],
+            vertex_replica: 0,
         };
 
         let mut processor_managers = HashMap::new();
@@ -1071,6 +1078,7 @@ mod tests {
         let processor_manager = ProcessorManager {
             processors: Arc::new(RwLock::new(processors)),
             handles: vec![],
+            vertex_replica: 0,
         };
 
         let mut processor_managers = HashMap::new();
@@ -1189,6 +1197,7 @@ mod tests {
         let processor_manager_edge1 = ProcessorManager {
             processors: Arc::new(RwLock::new(processors_edge1)),
             handles: vec![],
+            vertex_replica: 0,
         };
 
         // Create ProcessorManagers with multiple Processors and different OffsetTimelines for edge2
@@ -1286,6 +1295,7 @@ mod tests {
         let processor_manager_edge2 = ProcessorManager {
             processors: Arc::new(RwLock::new(processors_edge2)),
             handles: vec![],
+            vertex_replica: 0,
         };
 
         let mut processor_managers = HashMap::new();
@@ -1347,6 +1357,7 @@ mod tests {
         let processor_manager = ProcessorManager {
             processors: Arc::new(RwLock::new(processors)),
             handles: vec![],
+            vertex_replica: 0,
         };
 
         let mut processor_managers = HashMap::new();

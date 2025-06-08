@@ -16,7 +16,7 @@ use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::{
-    PipelineConfig, ReduceVtxConfig, ServingStoreType, SinkVtxConfig, SourceVtxConfig, ToVertexType,
+    PipelineConfig, ReduceVtxConfig, ServingStoreType, SinkVtxConfig, SourceVtxConfig,
 };
 use crate::config::{get_vertex_replica, is_mono_vertex};
 use crate::metrics::{ComponentHealthChecks, LagReader, PendingReaderTasks, PipelineComponents};
@@ -60,8 +60,8 @@ pub(crate) async fn start_forwarder(
 ) -> Result<()> {
     let js_context = create_js_context(config.js_client_config.clone()).await?;
 
-    match &config.vertex_type_config {
-        pipeline::VertexType::Source(source) => {
+    match &config.vertex_config {
+        pipeline::VertexConfig::Source(source) => {
             info!("Starting source forwarder");
 
             // create watermark handle, if watermark is enabled
@@ -88,15 +88,15 @@ pub(crate) async fn start_forwarder(
             )
             .await?;
         }
-        pipeline::VertexType::Sink(sink) => {
+        pipeline::VertexConfig::Sink(sink) => {
             info!("Starting sink forwarder");
             start_sink_forwarder(cln_token, js_context, config.clone(), sink.clone()).await?;
         }
-        pipeline::VertexType::Map(map) => {
+        pipeline::VertexConfig::Map(map) => {
             info!("Starting map forwarder");
             start_map_forwarder(cln_token, js_context, config.clone(), map.clone()).await?;
         }
-        pipeline::VertexType::Reduce(reduce) => {
+        pipeline::VertexConfig::Reduce(reduce) => {
             info!("Starting reduce forwarder");
             start_reduce_forwarder(cln_token, js_context, config.clone(), reduce.clone()).await?;
         }
@@ -132,7 +132,7 @@ async fn start_source_forwarder(
         tracker_handle.clone(),
         cln_token.clone(),
         source_watermark_handle.clone().map(WatermarkHandle::Source),
-        config.vertex_type_config.to_string(),
+        config.vertex_config.to_string(),
     )
     .await;
 
@@ -227,14 +227,14 @@ async fn start_map_forwarder(
         tracker_handle.clone(),
         cln_token.clone(),
         watermark_handle.clone().map(WatermarkHandle::ISB),
-        config.vertex_type_config.to_string(),
+        config.vertex_config.to_string(),
     )
     .await;
 
     for stream in reader_config.streams.clone() {
         info!("Creating buffer reader for stream {:?}", stream);
         let buffer_reader = create_buffer_reader(
-            config.vertex_type_config.to_string(),
+            config.vertex_config.to_string(),
             stream,
             reader_config.clone(),
             js_context.clone(),
@@ -391,7 +391,7 @@ async fn start_aligned_reduce_forwarder(
     let tracker_handle = TrackerHandle::new(None, None);
     // Create buffer reader
     let buffer_reader = create_buffer_reader(
-        config.vertex_type_config.to_string(),
+        config.vertex_config.to_string(),
         stream,
         reader_config.clone(),
         js_context.clone(),
@@ -408,7 +408,7 @@ async fn start_aligned_reduce_forwarder(
         tracker_handle.clone(),
         cln_token.clone(),
         watermark_handle.clone().map(WatermarkHandle::ISB),
-        config.vertex_type_config.to_string(),
+        config.vertex_config.to_string(),
     )
     .await;
 
@@ -548,7 +548,7 @@ async fn start_unaligned_reduce_forwarder(
     let tracker_handle = TrackerHandle::new(None, None);
     // Create buffer reader
     let buffer_reader = create_buffer_reader(
-        config.vertex_type_config.to_string(),
+        config.vertex_config.to_string(),
         stream,
         reader_config.clone(),
         js_context.clone(),
@@ -565,7 +565,7 @@ async fn start_unaligned_reduce_forwarder(
         tracker_handle.clone(),
         cln_token.clone(),
         watermark_handle.clone().map(WatermarkHandle::ISB),
-        config.vertex_type_config.to_string(),
+        config.vertex_config.to_string(),
     )
     .await;
 
@@ -715,7 +715,7 @@ async fn start_sink_forwarder(
             TrackerHandle::new(watermark_handle.clone(), serving_callback_handler.clone());
 
         let buffer_reader = create_buffer_reader(
-            config.vertex_type_config.to_string(),
+            config.vertex_config.to_string(),
             stream,
             reader_config.clone(),
             js_context.clone(),
@@ -859,9 +859,9 @@ mod tests {
     use crate::config::components::source::GeneratorConfig;
     use crate::config::components::source::SourceConfig;
     use crate::config::components::source::SourceType;
-    use crate::config::pipeline::PipelineConfig;
     use crate::config::pipeline::map::{MapType, UserDefinedConfig};
-    use crate::pipeline::pipeline::VertexType;
+    use crate::config::pipeline::{PipelineConfig, VertexType};
+    use crate::pipeline::pipeline::VertexConfig;
     use crate::pipeline::pipeline::isb;
     use crate::pipeline::pipeline::isb::{BufferReaderConfig, BufferWriterConfig};
     use crate::pipeline::pipeline::map::MapMode;
@@ -942,9 +942,10 @@ mod tests {
                     buffer_full_strategy: RetryUntilSuccess,
                 },
                 conditions: None,
-                vertex_type: ToVertexType::Sink,
+                vertex_type: VertexType::Sink,
             }],
-            vertex_type_config: VertexType::Source(SourceVtxConfig {
+            vertex_type: VertexType::Source,
+            vertex_config: VertexConfig::Source(SourceVtxConfig {
                 source_config: SourceConfig {
                     read_ahead: false,
                     source_type: SourceType::Generator(GeneratorConfig {
@@ -1109,7 +1110,8 @@ mod tests {
                 },
                 partitions: 0,
             }],
-            vertex_type_config: VertexType::Sink(SinkVtxConfig {
+            vertex_type: VertexType::Sink,
+            vertex_config: VertexConfig::Sink(SinkVtxConfig {
                 sink_config: SinkConfig {
                     sink_type: SinkType::Blackhole(BlackholeConfig::default()),
                     retry_config: None,
@@ -1337,7 +1339,7 @@ mod tests {
                     buffer_full_strategy: RetryUntilSuccess,
                 },
                 conditions: None,
-                vertex_type: ToVertexType::Sink,
+                vertex_type: VertexType::Sink,
             }],
             from_vertex_config: vec![FromVertexConfig {
                 name: "map-in",
@@ -1347,7 +1349,7 @@ mod tests {
                 },
                 partitions: 0,
             }],
-            vertex_type_config: VertexType::Map(MapVtxConfig {
+            vertex_config: VertexConfig::Map(MapVtxConfig {
                 concurrency: 10,
                 map_type: MapType::UserDefined(UserDefinedConfig {
                     grpc_max_message_size: 4 * 1024 * 1024,
@@ -1356,6 +1358,7 @@ mod tests {
                 }),
                 map_mode: MapMode::Unary,
             }),
+            vertex_type: VertexType::MapUDF,
             metrics_config: MetricsConfig {
                 metrics_server_listen_port: 2469,
                 lag_check_interval_in_secs: 5,

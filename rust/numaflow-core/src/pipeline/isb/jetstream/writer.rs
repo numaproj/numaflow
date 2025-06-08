@@ -20,7 +20,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::Result;
 use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
-use crate::config::pipeline::{ToVertexConfig, ToVertexType};
+use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, Offset};
 use crate::metrics::{
@@ -226,10 +226,10 @@ impl JetstreamWriter {
 
                     // for reduce vertex we should use the keys as the shuffle key
                     let shuffle_key = match vertex.vertex_type {
-                        ToVertexType::MapUDF | ToVertexType::Sink | ToVertexType::Source => {
+                        VertexType::MapUDF | VertexType::Sink | VertexType::Source => {
                             String::from_utf8_lossy(&message.id.offset).to_string()
                         }
-                        ToVertexType::ReduceUDF => message.keys.join(":"),
+                        VertexType::ReduceUDF => message.keys.join(":"),
                     };
 
                     info!(?shuffle_key, "Shuffle key");
@@ -623,7 +623,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
-                vertex_type: ToVertexType::Sink,
+                vertex_type: VertexType::Sink,
             }],
             context.clone(),
             100,
@@ -720,7 +720,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
-                vertex_type: ToVertexType::Sink,
+                vertex_type: VertexType::Sink,
             }],
             context.clone(),
             100,
@@ -786,7 +786,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
-                vertex_type: ToVertexType::MapUDF,
+                vertex_type: VertexType::MapUDF,
             }],
             context.clone(),
             100,
@@ -996,7 +996,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
-                vertex_type: ToVertexType::Sink,
+                vertex_type: VertexType::Sink,
             }],
             context.clone(),
             100,
@@ -1090,7 +1090,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
-                vertex_type: ToVertexType::Sink,
+                vertex_type: VertexType::Sink,
             }],
             context.clone(),
             100,
@@ -1184,7 +1184,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
-                vertex_type: ToVertexType::Sink,
+                vertex_type: VertexType::Sink,
             }],
             context.clone(),
             100,
@@ -1304,7 +1304,7 @@ mod tests {
                         operator: Some("and".to_string()),
                         values: vec!["tag1".to_string(), "tag2".to_string()],
                     }))),
-                    vertex_type: ToVertexType::Sink,
+                    vertex_type: VertexType::Sink,
                 },
                 ToVertexConfig {
                     name: "vertex2",
@@ -1317,7 +1317,7 @@ mod tests {
                         operator: Some("or".to_string()),
                         values: vec!["tag2".to_string()],
                     }))),
-                    vertex_type: ToVertexType::Sink,
+                    vertex_type: VertexType::Sink,
                 },
                 ToVertexConfig {
                     name: "vertex3",
@@ -1330,7 +1330,7 @@ mod tests {
                         operator: Some("not".to_string()),
                         values: vec!["tag1".to_string()],
                     }))),
-                    vertex_type: ToVertexType::Sink,
+                    vertex_type: VertexType::Sink,
                 },
             ],
             context.clone(),

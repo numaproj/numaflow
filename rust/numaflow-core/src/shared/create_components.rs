@@ -696,6 +696,7 @@ pub async fn create_edge_watermark_handle(
             let handle = ISBWatermarkHandle::new(
                 config.vertex_name,
                 config.replica,
+                config.vertex_type,
                 config.read_timeout,
                 js_context.clone(),
                 edge_config,

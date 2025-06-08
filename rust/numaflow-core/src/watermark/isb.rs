@@ -29,9 +29,9 @@ use tokio::sync::mpsc::Receiver;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
 
-use crate::config::pipeline::{ToVertexConfig, ToVertexType};
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::EdgeWatermarkConfig;
+use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::{Error, Result};
 use crate::message::{IntOffset, Offset};
 use crate::reduce::reducer::WindowManager;
@@ -193,6 +193,7 @@ impl ISBWatermarkHandle {
     pub(crate) async fn new(
         vertex_name: &'static str,
         vertex_replica: u16,
+        vertex_type: VertexType,
         idle_timeout: Duration,
         js_context: async_nats::jetstream::Context,
         config: &EdgeWatermarkConfig,
@@ -205,8 +206,13 @@ impl ISBWatermarkHandle {
         // create a processor manager map (from_vertex -> ProcessorManager)
         let mut processor_managers = HashMap::new();
         for from_bucket_config in &config.from_vertex_config {
-            let processor_manager =
-                ProcessorManager::new(js_context.clone(), from_bucket_config).await?;
+            let processor_manager = ProcessorManager::new(
+                js_context.clone(),
+                from_bucket_config,
+                vertex_type,
+                vertex_replica,
+            )
+            .await?;
             processor_managers.insert(from_bucket_config.vertex, processor_manager);
         }
         let fetcher =
@@ -549,6 +555,7 @@ mod tests {
         let mut handle = ISBWatermarkHandle::new(
             vertex_name,
             0,
+            VertexType::MapUDF,
             Duration::from_millis(100),
             js_context.clone(),
             &edge_config,
@@ -560,7 +567,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
-                vertex_type: ToVertexType::Sink,
+                vertex_type: VertexType::Sink,
             }],
             CancellationToken::new(),
             None,
@@ -731,6 +738,7 @@ mod tests {
         let mut handle = ISBWatermarkHandle::new(
             vertex_name,
             0,
+            VertexType::MapUDF,
             Duration::from_millis(100),
             js_context.clone(),
             &edge_config,
@@ -742,7 +750,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
-                vertex_type: ToVertexType::Sink,
+                vertex_type: VertexType::Sink,
             }],
             CancellationToken::new(),
             None,
@@ -879,6 +887,7 @@ mod tests {
         let mut handle = ISBWatermarkHandle::new(
             vertex_name,
             0,
+            VertexType::MapUDF,
             Duration::from_millis(10), // Set idle timeout to a very short duration
             js_context.clone(),
             &edge_config,
@@ -890,7 +899,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
-                vertex_type: ToVertexType::Sink,
+                vertex_type: VertexType::Sink,
             }],
             CancellationToken::new(),
             None,

@@ -21,8 +21,8 @@ use std::time::Duration;
 use bytes::BytesMut;
 use chrono::{DateTime, Utc};
 
-use crate::config::pipeline::{ToVertexConfig, ToVertexType};
 use crate::config::pipeline::isb::Stream;
+use crate::config::pipeline::{ToVertexConfig, VertexType};
 
 /// State of each partition in the ISB. It has the information required to identify whether the
 /// partition is idling or not.
@@ -219,7 +219,7 @@ mod tests {
                 ..Default::default()
             },
             conditions: None,
-            vertex_type: ToVertexType::Sink,
+            vertex_type: VertexType::Sink,
         };
 
         let mut manager =
@@ -262,7 +262,7 @@ mod tests {
                 ..Default::default()
             },
             conditions: None,
-            vertex_type: ToVertexType::Sink,
+            vertex_type: VertexType::Sink,
         };
 
         let manager =
@@ -301,7 +301,7 @@ mod tests {
                 ..Default::default()
             },
             conditions: None,
-            vertex_type: ToVertexType::Sink,
+            vertex_type: VertexType::Sink,
         };
 
         let mut manager =
@@ -336,7 +336,7 @@ mod tests {
                 ..Default::default()
             },
             conditions: None,
-            vertex_type: ToVertexType::Sink,
+            vertex_type: VertexType::Sink,
         };
 
         let mut manager =

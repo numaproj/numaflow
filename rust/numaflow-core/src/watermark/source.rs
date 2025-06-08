@@ -24,7 +24,7 @@ use tokio::sync::mpsc::Receiver;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
 
-use crate::config::pipeline::ToVertexConfig;
+use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::SourceWatermarkConfig;
 use crate::error::{Error, Result};
@@ -145,8 +145,13 @@ impl SourceWatermarkHandle {
         cln_token: CancellationToken,
     ) -> Result<Self> {
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
-        let processor_manager =
-            ProcessorManager::new(js_context.clone(), &config.source_bucket_config).await?;
+        let processor_manager = ProcessorManager::new(
+            js_context.clone(),
+            &config.source_bucket_config,
+            VertexType::Source,
+            *crate::config::get_vertex_replica(),
+        )
+        .await?;
 
         let fetcher = SourceWatermarkFetcher::new(processor_manager);
         let publisher = SourceWatermarkPublisher::new(
@@ -438,7 +443,7 @@ mod tests {
     use tokio::time::sleep;
 
     use super::*;
-    use crate::config::pipeline::ToVertexType;
+    use crate::config::pipeline::VertexType;
     use crate::config::pipeline::isb::BufferWriterConfig;
     use crate::config::pipeline::watermark::{BucketConfig, IdleConfig};
     use crate::message::{IntOffset, Message};
@@ -635,7 +640,7 @@ mod tests {
                 },
                 conditions: None,
                 partitions: 1,
-                vertex_type: ToVertexType::MapUDF,
+                vertex_type: VertexType::MapUDF,
             }],
             &source_config,
             CancellationToken::new(),
@@ -750,7 +755,7 @@ mod tests {
             },
             conditions: None,
             partitions: 1,
-            vertex_type: ToVertexType::MapUDF,
+            vertex_type: VertexType::MapUDF,
         }];
 
         // create to vertex stream since we will be writing ctrl message to it
@@ -942,7 +947,7 @@ mod tests {
             },
             conditions: None,
             partitions: 1,
-            vertex_type: ToVertexType::MapUDF,
+            vertex_type: VertexType::MapUDF,
         }];
 
         // create to vertex stream since we will be writing ctrl message to it
