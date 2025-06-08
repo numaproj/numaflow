@@ -73,9 +73,12 @@ impl SourceWatermarkPublisher {
                 &Stream {
                     name: "source",
                     vertex: self.source_config.vertex,
-                    // in source input partition is considered as a separate processor entity and this
-                    // partition represents the isb partition. Since we are publishing to source OT we
-                    // set the partition to 0.
+                    // in source, input partition is considered as a separate processor entity and this
+                    // partition represents the isb partition.
+                    // Since source has publish/fetch cycle, in the publish we have to associate the
+                    // source partition to an ISB partition (since this is within the source itself,
+                    // there will never be more than one ISB partition).
+                    // This partition is a pseudo partition sitting to proxy the source partitions.
                     partition: 0,
                 },
                 Utc::now().timestamp_micros(), // we don't care about the offsets
