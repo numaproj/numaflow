@@ -271,6 +271,8 @@ impl ProcessorManager {
                     processor.timelines[wmb.partition as usize].put(wmb);
                 }
                 VertexType::ReduceUDF => {
+                    // reduce vertex only reads from one partition so we should only consider wmbs
+                    // which belong to this vertex replica
                     if wmb.partition != vertex_replica {
                         continue;
                     }
@@ -354,6 +356,8 @@ impl ProcessorManager {
                         VertexType::Source | VertexType::Sink | VertexType::MapUDF => {
                             processor.timelines[wmb.partition as usize].put(wmb);
                         }
+                        // reduce vertex only reads from one partition so we should only consider wmbs
+                        // which belong to this vertex replica
                         VertexType::ReduceUDF => {
                             if wmb.partition != vertex_replica {
                                 continue;

@@ -8,6 +8,7 @@ use crate::reduce::reducer::unaligned::windower::{
 };
 use chrono::{DateTime, Utc};
 
+/// session window state for every key combination (combinedKey -> Sorted window set)
 type WindowStore = Arc<RwLock<HashMap<String, BTreeSet<Window>>>>;
 
 /// SessionWindowManager manages session windows.
@@ -33,7 +34,11 @@ impl SessionWindowManager {
         keys.join(":")
     }
 
-    /// Assigns windows to a message based on session window logic
+    /// Assigns windows to a message, we create a new window for the key with start time as the event time
+    /// and end time as the event time + timeout.
+    /// * If the start and end time of the existing key is same - append operation
+    /// * If the start and end time can be expanded to accommodate the new window - expand operation
+    /// * If the window is not present we will create a new window - open operation
     pub(crate) fn assign_windows(&self, msg: Message) -> Vec<UnalignedWindowMessage> {
         let combined_key = Self::combine_keys(&msg.keys);
 
@@ -81,6 +86,7 @@ impl SessionWindowManager {
         }]
     }
 
+    /// expands the window if the start or end time collides
     fn expand_window_if_needed(new_window: &Window, existing_window: &Window) -> Option<Window> {
         if new_window.start_time < existing_window.start_time
             || new_window.end_time > existing_window.end_time
@@ -95,7 +101,7 @@ impl SessionWindowManager {
         }
     }
 
-    /// Find a window that can be merged with the given window
+    /// finds a window that can be merged with the given window
     fn find_window_to_merge(window_set: &BTreeSet<Window>, window: &Window) -> Option<Window> {
         window_set
             .iter()

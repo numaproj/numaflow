@@ -22,7 +22,7 @@ use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 /// Represents an active reduce stream for a pnf slot.
 struct ActiveStream {
@@ -154,8 +154,6 @@ impl ReduceTask {
                     }
 
                     let window = response.window.clone().expect("Window not set in response");
-                    // create with a window with this end time as both start and end and for that key
-                    // and track the max end time
                     let window : Window = window.into();
                     writer_tx
                         .send(response.into())
@@ -262,6 +260,7 @@ impl ReduceTask {
                     };
 
                     if response.eof {
+                        // add to the tracked windows, so that we can gc them after the timeout
                         let session_window: Window = response.keyed_window.expect("Window not set in response").into();
                         self.tracked_windows.insert(session_window.keys.to_vec(), session_window);
                         continue;
@@ -327,7 +326,7 @@ impl ReduceTask {
         })
     }
 
-    // Remove the process_batch method as we're writing continuously
+    /// write the tracked windows to the gc wal, so that the messages gets compacted.
     async fn write_gc_events(&self) {
         if let Some(gc_wal_tx) = &self.gc_wal_tx {
             for (keys, window) in &self.tracked_windows {
@@ -346,7 +345,7 @@ impl ReduceTask {
         }
     }
 
-    /// Delete all tracked windows after writing GC events
+    /// delete all tracked windows after writing GC events
     async fn delete_tracked_windows(&mut self) {
         for (_keys, window) in self.tracked_windows.drain() {
             self.window_manager.delete_window(window);
@@ -384,10 +383,7 @@ impl UnalignedReduceActor {
             self.active_streams.len()
         );
 
-        // Collect all active streams to avoid borrowing issues
-        let active_streams: Vec<_> = self.active_streams.drain().collect();
-
-        for (window_id, active_stream) in active_streams {
+        for (window_id, active_stream) in self.active_streams.drain() {
             // Wait for the task to complete
             if let Err(e) = active_stream.task_handle.await.expect("task failed") {
                 error!(?window_id, err = ?e, "Reduce task for window failed during shutdown");
@@ -431,15 +427,14 @@ impl UnalignedReduceActor {
 
     /// Handle a window message
     async fn handle_window_message(&mut self, msg: UnalignedWindowMessage) -> crate::Result<()> {
-        // Check if pnf_slot already exists (active stream creation based on slot presence)
+        // if the active stream already exist, we can write to it
         if let Some(active_stream) = self.active_streams.get(&msg.pnf_slot) {
-            // Slot exists, send message to existing channel (append operation)
             let _ =
                 active_stream.message_tx.send(msg).await.inspect_err(|e| {
                     error!(?e, "Failed to send message reduce task, task aborted")
                 });
         } else {
-            // Slot not present, create new active stream (window open operation)
+            // Slot not present, create new active stream
             self.create_active_stream(msg).await?;
         }
         Ok(())
@@ -554,41 +549,42 @@ impl UnalignedReducer {
             actor.run().await;
         });
 
-        // Start the main task
         let handle = tokio::spawn(async move {
-            // Main processing loop
             loop {
                 tokio::select! {
-                    // Check for errors from reduce tasks
+                    // listen for errors from any running tasks
                     Some(error) = error_rx.recv() => {
                         self.handle_error(error, &cln_token);
                     }
 
-                    // Process input messages
                     read_msg = input_stream.next() => {
+                        if self.shutting_down_on_err {
+                            info!("Unaligned reducer is in shutdown mode, ignoring the message");
+                            continue;
+                        }
+
                         let Some(msg) = read_msg else {
-                            // End of stream
+                            // end of stream we can exit
                             break;
                         };
 
-                        // check if any windows can be closed
-                        if let Some(watermark) = msg.watermark {
-                            let close_window_messages = self.window_manager.close_windows(watermark);
-                            for window_msg in close_window_messages {
-                                actor_tx
-                                    .send(window_msg)
-                                    .await
-                                    .expect("failed to send message to actor");
-                            }
-                        }
-
-                        // update the watermark.
+                         // update the watermark.
                         // we cannot simply assign incoming message's watermark as the current watermark,
                         // because it can be -1. watermark will never regress, so use max.
                         self.current_watermark = self.current_watermark.max(msg.watermark.unwrap_or_default());
 
+                        // check if any windows can be closed based on the current watermark
+                        let close_window_messages = self.window_manager.close_windows(self.current_watermark);
+                        for window_msg in close_window_messages {
+                            actor_tx
+                                .send(window_msg)
+                                .await
+                                .expect("failed to send message to actor");
+                        }
+
                         // only drop the message if it is late and the event time is before the watermark - allowed lateness
                         if msg.is_late && msg.event_time < self.current_watermark.sub(self.allowed_lateness) {
+                            debug!(event_time = ?msg.event_time.timestamp_millis(), watermark = ?self.current_watermark.timestamp_millis(), "Late message detected, dropping");
                             // TODO(ajain): add a metric for this
                             continue;
                         }
@@ -612,10 +608,10 @@ impl UnalignedReducer {
             }
 
             // Drop the sender to signal the actor to stop
+            drop(actor_tx);
             info!(
                 "Unaligned Reduce component is shutting down, waiting for active reduce tasks to complete"
             );
-            drop(actor_tx);
 
             // Wait for the actor to complete
             if let Err(e) = actor_handle.await {
@@ -629,7 +625,7 @@ impl UnalignedReducer {
         Ok(handle)
     }
 
-    /// Set up the GC WAL if configured.
+    /// set up the gc wal if configured
     async fn setup_gc_wal(&mut self) -> crate::Result<Option<mpsc::Sender<SegmentWriteMessage>>> {
         if let Some(gc_wal) = self.gc_wal.take() {
             let (gc_tx, gc_rx) = mpsc::channel(100);
@@ -640,7 +636,8 @@ impl UnalignedReducer {
         }
     }
 
-    /// Handle an error from the reduce tasks
+    /// handle errors from the reduce tasks by cancelling token so that upstream knows there is an
+    /// issue and stops sending new messages.
     fn handle_error(&mut self, error: Error, cln_token: &CancellationToken) {
         error!(?error, "Error in reduce component");
         self.final_result = Err(error);

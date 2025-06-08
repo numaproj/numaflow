@@ -17,7 +17,9 @@ struct WindowState {
     /// Sorted list of message timestamps, used for watermark calculation to find the oldest event
     /// time.
     message_timestamps: Arc<RwLock<BTreeSet<DateTime<Utc>>>>,
-    /// Last seen event time for this window
+    /// lastSeenEventTime is to see what was latest we have event time ever seen. This cannot be
+    /// messageTimestamps[0] because that list will be cleared due to timeout. Since WM is global (across keys)
+    /// we need to trigger a close window to the UDF once the timeout has passed (WM > last-seen + timeout).
     last_seen_event_time: Arc<RwLock<DateTime<Utc>>>,
 }
 
@@ -100,12 +102,11 @@ impl AccumulatorWindowManager {
         let combined_key = Self::combine_keys(&msg.keys);
         let mut result = Vec::new();
 
-        // Acquire write lock once
         let mut active_windows = self.active_windows.write().expect("Poisoned lock");
 
-        // Check if a window already exists for the key
+        // Check if a window already exists for the key, if exits we can do append else we will have
+        // to create a new window for the key
         if let Some(window_state) = active_windows.get(&combined_key) {
-            // Append message to the existing window
             window_state.append_timestamp(msg.event_time);
             result.push(UnalignedWindowMessage {
                 operation: UnalignedWindowOperation::Append {
@@ -161,9 +162,9 @@ impl AccumulatorWindowManager {
                     },
                     pnf_slot: SHARED_PNF_SLOT,
                 });
-                false // Remove this window
+                false
             } else {
-                true // Retain this window
+                true
             }
         });
 
