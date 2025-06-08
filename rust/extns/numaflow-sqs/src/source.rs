@@ -285,7 +285,7 @@ impl SqsActor {
             let offset = match std::str::from_utf8(offset) {
                 Ok(offset) => offset,
                 Err(err) => {
-                    tracing::error!(?err, "failed to parse offset");
+                    error!(?err, ?offset, "failed to parse offset");
                     return Err(SqsSourceError::from(Error::Other(
                         "failed to parse offset".to_string(),
                     )));
