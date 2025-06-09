@@ -1356,9 +1356,10 @@ func (h *handler) DiscoverMetrics(c *gin.Context) {
 			for _, metric := range pattern.Metrics {
 				var requiredFilters []Filter
 				// Populate the required filters
-				// TODO (ajain): check at required filters, if filter is vertex skip mono-vertex object and vice-versa
-				// This way more patterns can be clubbed, currently checking at dimension level for cpu/memory metrics
-				// OR implement metric based configuration for next release which has already been tested
+				// TODO (ajain): place a check at filters instead of dimension level
+				// so that more patterns can be clubbed
+				// OR
+				// shift to metrics approach (already tested) instead of patterns approach
 				for _, filter := range metric.Filters {
 					requiredFilters = append(requiredFilters, Filter{
 						Name:     filter,

@@ -305,9 +305,9 @@ const LineChartComponent = ({
             return pod?.name;
           }
         case "replica":
-          // currently not used in any of the metrics
-          // if used in future for pending metrics, it is to ensure replica is taken 
-          // as 0, if it is a required filter.
+          // Currently "replica" is not used in any of the metrics as a required filter
+          // Need may arise in case of pending metrics 
+          // If so, then set replica to 0, as pending calculation is done only for 0th replica.
           return "0";
         default:
           return "";
