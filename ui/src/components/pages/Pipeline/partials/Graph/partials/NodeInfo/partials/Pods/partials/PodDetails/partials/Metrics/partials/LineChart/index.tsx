@@ -304,6 +304,11 @@ const LineChartComponent = ({
           } else {
             return pod?.name;
           }
+        case "replica":
+          // currently not used in any of the metrics
+          // if used in future for pending metrics, it is to ensure replica is taken 
+          // as 0, if it is a required filter.
+          return "0";
         default:
           return "";
       }
