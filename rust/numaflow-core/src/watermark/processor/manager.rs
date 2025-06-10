@@ -116,7 +116,7 @@ impl ProcessorManager {
     /// Creates a new ProcessorManager. It prepopulates the processor-map with previous data
     /// fetched from the OT and HB buckets.
     pub(crate) async fn new(
-        js_context: async_nats::jetstream::Context,
+        js_context: async_nats::jetstream::context::Context,
         bucket_config: &BucketConfig,
         vertex_type: VertexType,
         vertex_replica: u16,
@@ -488,7 +488,7 @@ impl ProcessorManager {
 #[cfg(test)]
 mod tests {
     use async_nats::jetstream;
-    use async_nats::jetstream::Context;
+    use async_nats::jetstream::context::Context;
     use async_nats::jetstream::kv::Config;
     use async_nats::jetstream::kv::Store;
     use bytes::{Bytes, BytesMut};
@@ -515,8 +515,14 @@ mod tests {
     #[tokio::test]
     async fn test_processor_manager_tracks_heartbeats_and_wmbs() {
         let js_context = setup_nats().await;
-        let ot_bucket = create_kv_bucket(&js_context, "ot_bucket").await;
-        let hb_bucket = create_kv_bucket(&js_context, "hb_bucket").await;
+        let ot_bucket_name = "test_processor_manager_tracks_heartbeats_and_wmbs_OT";
+        let hb_bucket_name = "test_processor_manager_tracks_heartbeats_and_wmbs_PROCESSORS";
+
+        let _ = js_context.delete_key_value(ot_bucket_name).await;
+        let _ = js_context.delete_key_value(hb_bucket_name).await;
+
+        let ot_bucket = create_kv_bucket(&js_context, ot_bucket_name).await;
+        let hb_bucket = create_kv_bucket(&js_context, hb_bucket_name).await;
 
         let bucket_config = BucketConfig {
             vertex: "test",
@@ -592,25 +598,25 @@ mod tests {
         // Abort the tasks
         hb_task.abort();
         ot_task.abort();
-
-        // delete the kv store
-        js_context.delete_key_value("ot_bucket").await.unwrap();
-        js_context.delete_key_value("hb_bucket").await.unwrap();
     }
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_processor_manager_tracks_multiple_processors() {
         let js_context = setup_nats().await;
-        let ot_bucket =
-            create_kv_bucket(&js_context, "test_processor_manager_multi_ot_bucket").await;
-        let hb_bucket =
-            create_kv_bucket(&js_context, "test_processor_manager_multi_hb_bucket").await;
+        let ot_bucket_name = "test_processor_manager_multi_ot_bucket";
+        let hb_bucket_name = "test_processor_manager_multi_hb_bucket";
+
+        let _ = js_context.delete_key_value(ot_bucket_name).await;
+        let _ = js_context.delete_key_value(hb_bucket_name).await;
+
+        let ot_bucket = create_kv_bucket(&js_context, ot_bucket_name).await;
+        let hb_bucket = create_kv_bucket(&js_context, hb_bucket_name).await;
 
         let bucket_config = BucketConfig {
             vertex: "test",
-            ot_bucket: "test_processor_manager_multi_ot_bucket",
-            hb_bucket: "test_processor_manager_multi_hb_bucket",
+            ot_bucket: ot_bucket_name,
+            hb_bucket: hb_bucket_name,
             partitions: 1,
         };
 
@@ -633,8 +639,7 @@ mod tests {
                 let processor_name = processor_name.clone();
                 tokio::spawn(async move {
                     loop {
-                        let heartbeat =
-                            numaflow_pb::objects::watermark::Heartbeat { heartbeat: 100 };
+                        let heartbeat = Heartbeat { heartbeat: 100 };
                         let mut bytes = BytesMut::new();
                         heartbeat
                             .encode(&mut bytes)
@@ -726,28 +731,24 @@ mod tests {
         for ot_task in ot_tasks {
             ot_task.abort();
         }
-
-        // delete the kv store
-        js_context
-            .delete_key_value("test_processor_manager_multi_ot_bucket")
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value("test_processor_manager_multi_hb_bucket")
-            .await
-            .unwrap();
     }
 
     #[tokio::test]
     async fn test_reduce_udf_partition_filtering() {
         let js_context = setup_nats().await;
-        let ot_bucket = create_kv_bucket(&js_context, "test_reduce_udf_filtering_ot_bucket").await;
-        let hb_bucket = create_kv_bucket(&js_context, "test_reduce_udf_filtering_hb_bucket").await;
+        let ot_bucket_name = "test_reduce_udf_filtering_ot_bucket";
+        let hb_bucket_name = "test_reduce_udf_filtering_hb_bucket";
+
+        let _ = js_context.delete_key_value(ot_bucket_name).await;
+        let _ = js_context.delete_key_value(hb_bucket_name).await;
+
+        let ot_bucket = create_kv_bucket(&js_context, ot_bucket_name).await;
+        let hb_bucket = create_kv_bucket(&js_context, hb_bucket_name).await;
 
         let bucket_config = BucketConfig {
             vertex: "test",
-            ot_bucket: "test_reduce_udf_filtering_ot_bucket",
-            hb_bucket: "test_reduce_udf_filtering_hb_bucket",
+            ot_bucket: ot_bucket_name,
+            hb_bucket: hb_bucket_name,
             partitions: 3,
         };
 
@@ -763,19 +764,21 @@ mod tests {
 
         let processor_name = Bytes::from("test_processor");
 
-        // Publish heartbeat first
-        let heartbeat = numaflow_pb::objects::watermark::Heartbeat { heartbeat: 100 };
-        let mut bytes = BytesMut::new();
-        heartbeat
-            .encode(&mut bytes)
-            .expect("Failed to encode heartbeat");
-        hb_bucket
-            .put(
-                String::from_utf8(processor_name.to_vec()).unwrap(),
-                bytes.freeze(),
-            )
-            .await
-            .unwrap();
+        // Spawn a task to keep publishing heartbeats
+        let hb_task = tokio::spawn(async move {
+            loop {
+                let heartbeat = Heartbeat { heartbeat: 100 };
+                let mut bytes = BytesMut::new();
+                heartbeat
+                    .encode(&mut bytes)
+                    .expect("Failed to encode heartbeat");
+                hb_bucket
+                    .put("test_processor", bytes.freeze())
+                    .await
+                    .unwrap();
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+        });
 
         // Wait for processor to be added and then publish WMBs
         let start_time = tokio::time::Instant::now();
@@ -899,14 +902,6 @@ mod tests {
             );
         }
 
-        // delete the kv store
-        js_context
-            .delete_key_value("test_reduce_udf_filtering_ot_bucket")
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value("test_reduce_udf_filtering_hb_bucket")
-            .await
-            .unwrap();
+        hb_task.abort();
     }
 }
