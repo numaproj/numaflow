@@ -145,7 +145,7 @@ export const PodsHeatMap = ({
             </tr>
           </thead>
           <tbody className="hexagon-table-tbody">
-            {tooltipData.data.data.container?.map(
+            {tooltipData.data.data.container?.filter((c: any) => c?.name !== "monitor").map(
               (container: ContainerHealth) => (
                 <tr style={{ textAlign: "left" }} key={container.name}>
                   <td className="hexagon-table-td">{container.name}</td>

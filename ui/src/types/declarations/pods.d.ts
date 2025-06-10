@@ -104,6 +104,7 @@ export interface ContainerInfoProps {
   lastStartedAt: string;
   lastTerminationReason?: string;
   lastTerminationMessage?: string;
+  lastTerminationExitCode?: number;
   waitingReason?: string;
   waitingMessage?: string;
   requestedCPU?: string;

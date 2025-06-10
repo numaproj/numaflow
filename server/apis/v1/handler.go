@@ -1712,14 +1712,22 @@ func (h *handler) getContainerDetails(pod corev1.Pod) map[string]ContainerDetail
 			State:        h.getContainerStatus(status.State),
 			RestartCount: status.RestartCount,
 		}
+		// Reason the container is not yet running
+		// Message regarding why the container is not yet running
 		if status.State.Waiting != nil {
 			details.WaitingReason = status.State.Waiting.Reason
 			details.WaitingMessage = status.State.Waiting.Message
 		}
+		// Details about a terminated container
+		// Reason from the last termination
+		// Message regarding the last termination
+		// Exit status from last termination
 		if status.LastTerminationState.Terminated != nil {
 			details.LastTerminationReason = status.LastTerminationState.Terminated.Reason
 			details.LastTerminationMessage = status.LastTerminationState.Terminated.Message
+			details.LastTerminationExitCode = status.LastTerminationState.Terminated.ExitCode
 		}
+		// Time at which the container last (re-)started
 		if status.State.Running != nil {
 			details.LastStartedAt = status.State.Running.StartedAt.Format(time.RFC3339)
 		}
