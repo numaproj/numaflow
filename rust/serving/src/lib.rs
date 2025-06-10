@@ -217,8 +217,6 @@ mod tests {
 
         let env_vars = [
             ("NUMAFLOW_POD", "serving-serve-cbdf"),
-            ("NUMAFLOW_SERVING_APP_LISTEN_HTTPS_PORT", "32443"),
-            ("NUMAFLOW_SERVING_APP_LISTEN_HTTP_PORT", "32445"),
             (
                 "NUMAFLOW_SERVING_CALLBACK_STORE",
                 "serving-test-run-kv-store",
@@ -230,7 +228,7 @@ mod tests {
             ("NUMAFLOW_SERVING_STATUS_STORE", "serving-test-run-kv-store"),
             (
                 "NUMAFLOW_SERVING_SPEC",
-                "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQifQ==",
+                "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQiLCJwb3J0cyI6eyJodHRwcyI6MzI0NDMsImh0dHAiOjMyNDQ1fX0=",
             ),
             (
                 "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC",

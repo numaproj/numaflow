@@ -143,6 +143,11 @@ func (sp ServingSpec) GetHttpPort() int32 {
 	return *sp.Ports.HTTP
 }
 
+// IsHttpConfigured returns true if HTTP port is explicitly configured by the user
+func (sp ServingSpec) IsHttpConfigured() bool {
+	return sp.Ports != nil && sp.Ports.HTTP != nil
+}
+
 // Generate the stream name in JetStream used for serving source
 func (sp ServingPipeline) GenerateSourceStreamName() string {
 	return fmt.Sprintf("serving-source-%s", sp.Name)
@@ -174,6 +179,17 @@ func (sp ServingPipeline) GetServingServiceObj() *corev1.Service {
 		KeyComponent:           ComponentServingServer,
 		KeyServingPipelineName: sp.Name,
 	}
+
+	// Build service ports - always include HTTPS, only include HTTP if configured
+	servicePorts := []corev1.ServicePort{
+		{Name: "https", Port: ServingServiceHttpsPort, TargetPort: intstr.FromInt32(sp.Spec.Serving.GetHttpsPort())},
+	}
+	if sp.Spec.Serving.IsHttpConfigured() {
+		servicePorts = append(servicePorts, corev1.ServicePort{
+			Name: "http", Port: ServingServiceHttpPort, TargetPort: intstr.FromInt32(sp.Spec.Serving.GetHttpPort()),
+		})
+	}
+
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: sp.Namespace,
@@ -184,10 +200,7 @@ func (sp ServingPipeline) GetServingServiceObj() *corev1.Service {
 			Labels: labels,
 		},
 		Spec: corev1.ServiceSpec{
-			Ports: []corev1.ServicePort{
-				{Name: "tcp", Port: ServingServiceHttpsPort, TargetPort: intstr.FromInt32(sp.Spec.Serving.GetHttpsPort())},
-				{Name: "tcp", Port: ServingServiceHttpPort, TargetPort: intstr.FromInt32(sp.Spec.Serving.GetHttpPort())},
-			},
+			Ports:    servicePorts,
 			Selector: labels,
 		},
 	}
@@ -239,11 +252,17 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 		},
 	}
 	volumeMounts := []corev1.VolumeMount{{Name: varVolumeName, MountPath: PathVarRun}}
+
+	// Build container ports - always include HTTPS, only include HTTP if configured
+	containerPorts := []corev1.ContainerPort{
+		{ContainerPort: sp.Spec.Serving.GetHttpsPort()},
+	}
+	if sp.Spec.Serving.IsHttpConfigured() {
+		containerPorts = append(containerPorts, corev1.ContainerPort{ContainerPort: sp.Spec.Serving.GetHttpPort()})
+	}
+
 	c := corev1.Container{
-		Ports: []corev1.ContainerPort{
-			{ContainerPort: ServingServiceHttpsPort},
-			{ContainerPort: ServingServiceHttpPort},
-		},
+		Ports:           containerPorts,
 		Name:            CtrMain,
 		Image:           req.Image,
 		ImagePullPolicy: req.PullPolicy,
