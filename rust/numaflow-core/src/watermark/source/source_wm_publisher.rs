@@ -60,7 +60,7 @@ impl SourceWatermarkPublisher {
             )
             .await
             .expect("Failed to create publisher");
-            info!(processor = ?processor_name, partittion = ?partition,
+            info!(processor = ?processor_name, partition = ?partition,
                 "Creating new publisher for source"
             );
             self.publishers.insert(processor_name.clone(), publisher);
@@ -73,6 +73,12 @@ impl SourceWatermarkPublisher {
                 &Stream {
                     name: "source",
                     vertex: self.source_config.vertex,
+                    // in source, input partition is considered as a separate processor entity and this
+                    // partition represents the isb partition.
+                    // Since source has publish/fetch cycle, in the publish we have to associate the
+                    // source partition to an ISB partition (since this is within the source itself,
+                    // there will never be more than one ISB partition).
+                    // This partition is a pseudo partition sitting to proxy the source partitions.
                     partition: 0,
                 },
                 Utc::now().timestamp_micros(), // we don't care about the offsets

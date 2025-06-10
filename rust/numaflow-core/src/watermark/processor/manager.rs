@@ -9,7 +9,6 @@ use std::sync::RwLock;
 use std::time::SystemTime;
 use std::time::{Duration, UNIX_EPOCH};
 
-use crate::config::get_vertex_replica;
 use crate::config::pipeline::VertexType;
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::error::{Error, Result};
@@ -97,8 +96,6 @@ pub(crate) struct ProcessorManager {
     pub(crate) processors: Arc<RwLock<HashMap<Bytes, Processor>>>,
     /// Handles of ot listener, hb listener and processor refresher tasks
     pub(crate) handles: Vec<tokio::task::JoinHandle<()>>,
-    /// Replica number of the vertex
-    pub(crate) vertex_replica: u16,
 }
 
 impl Debug for ProcessorManager {
@@ -185,7 +182,6 @@ impl ProcessorManager {
         Ok(ProcessorManager {
             processors,
             handles: vec![ot_handle, hb_handle, refresh_handle],
-            vertex_replica,
         })
     }
 

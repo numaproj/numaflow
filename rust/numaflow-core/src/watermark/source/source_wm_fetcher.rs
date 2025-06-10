@@ -103,7 +103,6 @@ mod tests {
         let processor_manager = ProcessorManager {
             processors: Arc::new(RwLock::new(processors)),
             handles: vec![],
-            vertex_replica: 0,
         };
 
         let mut fetcher = SourceWatermarkFetcher::new(processor_manager);
@@ -183,7 +182,6 @@ mod tests {
         let processor_manager = ProcessorManager {
             processors: Arc::new(RwLock::new(processors)),
             handles: vec![],
-            vertex_replica: 0,
         };
 
         let mut fetcher = SourceWatermarkFetcher::new(processor_manager);

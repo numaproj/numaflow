@@ -262,8 +262,9 @@ mod tests {
             .await
             .unwrap();
 
-        let writer = JetstreamWriter::new(
-            vec![ToVertexConfig {
+        use crate::pipeline::isb::jetstream::writer::ISBWriterConfig;
+        let writer = JetstreamWriter::new(ISBWriterConfig {
+            config: vec![ToVertexConfig {
                 partitions: 1,
                 writer_config: BufferWriterConfig {
                     streams: vec![stream.clone()],
@@ -273,13 +274,14 @@ mod tests {
                 name: "test-vertex",
                 vertex_type: VertexType::MapUDF,
             }],
-            context.clone(),
-            100,
-            tracker_handle.clone(),
-            cln_token.clone(),
-            None,
-            "Source".to_string(),
-        );
+            js_ctx: context.clone(),
+            paf_concurrency: 100,
+            tracker_handle: tracker_handle.clone(),
+            cancel_token: cln_token.clone(),
+            watermark_handle: None,
+            vertex_type: "Source".to_string(),
+            isb_config: None,
+        });
 
         // create the forwarder with the source, transformer, and writer
         let forwarder = SourceForwarder::new(source.clone(), writer);
