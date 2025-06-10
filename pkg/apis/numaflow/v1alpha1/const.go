@@ -157,7 +157,7 @@ const (
 	EnvServingHostIP                    = "NUMAFLOW_SERVING_HOST_IP"
 	EnvK8sServerVersion                 = "K8S_SERVER_VERSION"
 	EnvNumaflowRuntime                  = "NUMAFLOW_RUNTIME"
-	EnvServingSettings                  = "NUMAFLOW_SERVING_SOURCE_SETTINGS"
+	EnvServingSpec                      = "NUMAFLOW_SERVING_SPEC"
 	EnvServingCallbackStore             = "NUMAFLOW_SERVING_CALLBACK_STORE"
 	EnvServingResponseStore             = "NUMAFLOW_SERVING_RESPONSE_STORE"
 	EnvServingStatusStore               = "NUMAFLOW_SERVING_STATUS_STORE"

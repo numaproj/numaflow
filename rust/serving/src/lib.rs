@@ -229,7 +229,7 @@ mod tests {
             ),
             ("NUMAFLOW_SERVING_STATUS_STORE", "serving-test-run-kv-store"),
             (
-                "NUMAFLOW_SERVING_SOURCE_SETTINGS",
+                "NUMAFLOW_SERVING_SPEC",
                 "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQifQ==",
             ),
             (

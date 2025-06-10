@@ -83,6 +83,7 @@ where
 }
 
 /// Start the main application Router and the axum server.
+/// Returns Ok(()) immediately if HTTP port is not configured.
 pub(crate) async fn start_main_server_http<T, U>(
     app: AppState<T, U>,
     cancel_token: CancellationToken,
@@ -91,7 +92,11 @@ where
     T: Clone + Send + Sync + DataStore + 'static,
     U: Clone + Send + Sync + CallbackStore + 'static,
 {
-    let app_addr: SocketAddr = format!("0.0.0.0:{}", &app.settings.app_listen_http_port)
+    let Some(http_port) = app.settings.app_listen_http_port else {
+        info!("HTTP port is not configured, skipping HTTP server startup");
+        return Ok(());
+    };
+    let app_addr: SocketAddr = format!("0.0.0.0:{}", http_port)
         .parse()
         .map_err(|e| InitError(format!("{e:?}")))?;
 

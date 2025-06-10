@@ -8512,6 +8512,75 @@ successfully drained.
 
 </table>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.Ports">
+
+Ports
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServingSpec">ServingSpec</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>https</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>http</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.Probe">
 
 Probe
@@ -10499,6 +10568,27 @@ Description
 <p>
 
 Whether to create a ClusterIP Service
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>ports</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Ports"> Ports </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Ports to listen on, default we will use 8443 for HTTPS. To start http
+server the http port should be explicitly set.
 </p>
 
 </td>

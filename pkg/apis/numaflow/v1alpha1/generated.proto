@@ -1315,6 +1315,14 @@ message PipelineStatus {
   optional bool drainedOnPause = 12;
 }
 
+message Ports {
+  // +optional
+  optional int32 https = 1;
+
+  // +optional
+  optional int32 http = 2;
+}
+
 // Probe is used to customize the configuration for Readiness and Liveness probes.
 message Probe {
   // Number of seconds after the container has started before liveness probes are initiated.
@@ -1624,26 +1632,31 @@ message ServingSpec {
   // +optional
   optional bool service = 2;
 
+  // Ports to listen on, default we will use 8443 for HTTPS. To start http server
+  // the http port should be explicitly set.
+  // +optional
+  optional Ports ports = 3;
+
   // The header key from which the message id will be extracted
-  optional string msgIDHeaderKey = 3;
+  optional string msgIDHeaderKey = 4;
 
   // Request timeout in seconds. Default value is 120 seconds.
   // +optional
-  optional uint32 requestTimeoutSeconds = 4;
+  optional uint32 requestTimeoutSeconds = 5;
 
   // +optional
-  optional ServingStore store = 5;
+  optional ServingStore store = 6;
 
   // Container template for the serving container.
   // +optional
-  optional ContainerTemplate containerTemplate = 6;
+  optional ContainerTemplate containerTemplate = 7;
 
   // Initial replicas of the serving server deployment.
   // +optional
-  optional int32 replicas = 7;
+  optional int32 replicas = 8;
 
   // +optional
-  optional AbstractPodTemplate abstractPodTemplate = 8;
+  optional AbstractPodTemplate abstractPodTemplate = 9;
 }
 
 // ServingStore defines information of a Serving Store used in a pipeline

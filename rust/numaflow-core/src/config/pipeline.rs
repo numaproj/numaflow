@@ -15,7 +15,7 @@ use super::{
 };
 use crate::Result;
 use crate::config::ENV_NUMAFLOW_SERVING_CALLBACK_STORE;
-use crate::config::ENV_NUMAFLOW_SERVING_SOURCE_SETTINGS;
+use crate::config::ENV_NUMAFLOW_SERVING_SPEC;
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::sink::SinkType;
@@ -263,7 +263,7 @@ impl PipelineConfig {
                     ENV_PAF_BATCH_SIZE,
                     ENV_CALLBACK_ENABLED,
                     ENV_CALLBACK_CONCURRENCY,
-                    ENV_NUMAFLOW_SERVING_SOURCE_SETTINGS,
+                    ENV_NUMAFLOW_SERVING_SPEC,
                     ENV_NUMAFLOW_SERVING_CALLBACK_STORE,
                     ENV_NUMAFLOW_SERVING_RESPONSE_STORE,
                 ]
@@ -348,23 +348,23 @@ impl PipelineConfig {
                 None
             };
 
-            let serving_store_config = if let Some(serving_settings) =
-                env_vars.get(ENV_NUMAFLOW_SERVING_SOURCE_SETTINGS)
+            let serving_store_config = if let Some(serving_spec) =
+                env_vars.get(ENV_NUMAFLOW_SERVING_SPEC)
             {
-                let serving_settings_decoded = BASE64_STANDARD
-                    .decode(serving_settings.as_bytes())
+                let serving_spec_decoded = BASE64_STANDARD
+                    .decode(serving_spec.as_bytes())
                     .map_err(|e| {
                         Error::Config(
                             format!(
-                                "Failed to base64 decode value of environment variable '{ENV_NUMAFLOW_SERVING_SOURCE_SETTINGS}'. value='{serving_settings}'. Err={e:?}"
+                                "Failed to base64 decode value of environment variable '{ENV_NUMAFLOW_SERVING_SPEC}'. value='{serving_spec}'. Err={e:?}"
                             )
                         )
                     })?;
                 let serving_spec: numaflow_models::models::ServingSpec =
-                    from_slice(serving_settings_decoded.as_slice()).map_err(|e| {
+                    from_slice(serving_spec_decoded.as_slice()).map_err(|e| {
                         Error::Config(
                             format!(
-                                "Failed to base64 decode value of environment variable '{ENV_NUMAFLOW_SERVING_SOURCE_SETTINGS}'. value='{serving_settings}'. Err={e:?}"
+                                "Failed to base64 decode value of environment variable '{ENV_NUMAFLOW_SERVING_SPEC}'. value='{serving_spec}'. Err={e:?}"
                             )
                         )
                     })?;
@@ -721,7 +721,7 @@ mod tests {
         let env_vars = [
             ("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222"),
             (
-                "NUMAFLOW_SERVING_SOURCE_SETTINGS",
+                "NUMAFLOW_SERVING_SPEC",
                 "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQifQ==",
             ),
             ("NUMAFLOW_SERVING_CALLBACK_STORE", "test-kv-store"),

@@ -21750,6 +21750,19 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.Ports": {
+      "type": "object",
+      "properties": {
+        "http": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "https": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.Probe": {
       "description": "Probe is used to customize the configuration for Readiness and Liveness probes.",
       "type": "object",
@@ -22197,6 +22210,10 @@
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "ports": {
+          "description": "Ports to listen on, default we will use 8443 for HTTPS. To start http server the http port should be explicitly set.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Ports"
         },
         "priority": {
           "description": "The priority value. Various system components use this field to find the priority of the Redis pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",

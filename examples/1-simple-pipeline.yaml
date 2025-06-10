@@ -12,12 +12,24 @@ spec:
         generator:
           rpu: 5
           duration: 1s
-    - name: cat
+    - name: cat-one
       scale:
         min: 1
       udf:
-        container:
-          image: quay.io/numaio/numaflow-go/map-forward-message:stable
+        builtin:
+          name: cat # A builtin UDF which simply cats the message
+    - name: cat-two
+      scale:
+        min: 1
+      udf:
+        builtin:
+          name: cat # A builtin UDF which simply cats the message
+    - name: cat-three
+      scale:
+        min: 1
+      udf:
+        builtin:
+          name: cat # A builtin UDF which simply cats the message
     - name: out
       scale:
         min: 1
@@ -25,6 +37,10 @@ spec:
         log: {}
   edges:
     - from: in
-      to: cat
-    - from: cat
+      to: cat-one
+    - from: cat-one
+      to: cat-two
+    - from: cat-two
+      to: cat-three
+    - from: cat-three
       to: out

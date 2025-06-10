@@ -126,6 +126,8 @@ pub mod pipeline_spec;
 pub use self::pipeline_spec::PipelineSpec;
 pub mod pipeline_status;
 pub use self::pipeline_status::PipelineStatus;
+pub mod ports;
+pub use self::ports::Ports;
 pub mod probe;
 pub use self::probe::Probe;
 pub mod pulsar_auth;
