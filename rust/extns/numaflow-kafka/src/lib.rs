@@ -180,10 +180,12 @@ fn update_auth_config(
                 client_secret,
                 token_endpoint,
             } => {
-                client_config.set("sasl.mechanisms", "OAUTHBEARER");
-                client_config.set("sasl.oauthbearer.client.id", client_id);
-                client_config.set("sasl.oauthbearer.client.secret", client_secret);
-                client_config.set("sasl.oauthbearer.token.endpoint.url", token_endpoint);
+                client_config
+                    .set("sasl.mechanism", "OAUTHBEARER")
+                    .set("sasl.oauthbearer.method", "oidc")
+                    .set("sasl.oauthbearer.client.id", client_id)
+                    .set("sasl.oauthbearer.client.secret", client_secret)
+                    .set("sasl.oauthbearer.token.endpoint.url", token_endpoint);
             }
         }
     }
