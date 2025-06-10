@@ -3013,7 +3013,7 @@ dependencies = [
 [[package]]
 name = "rdkafka"
 version = "0.37.0"
-source = "git+https://github.com/BulkBeing/rust-rdkafka.git?branch=fix-curl-static-feature-flag#e1b7dfd9af575cb394cf1182041fc0620f2ad4f9"
+source = "git+https://github.com/numaproj-labs/rust-rdkafka.git?rev=b5c79588583b6ae5446d0d4ba99f7c6ee709420e#b5c79588583b6ae5446d0d4ba99f7c6ee709420e"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -3030,7 +3030,7 @@ dependencies = [
 [[package]]
 name = "rdkafka-sys"
 version = "4.8.0+2.3.0"
-source = "git+https://github.com/BulkBeing/rust-rdkafka.git?branch=fix-curl-static-feature-flag#e1b7dfd9af575cb394cf1182041fc0620f2ad4f9"
+source = "git+https://github.com/numaproj-labs/rust-rdkafka.git?rev=b5c79588583b6ae5446d0d4ba99f7c6ee709420e#b5c79588583b6ae5446d0d4ba99f7c6ee709420e"
 dependencies = [
  "cmake",
  "curl-sys",
