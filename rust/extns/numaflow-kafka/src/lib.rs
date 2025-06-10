@@ -181,7 +181,7 @@ fn update_auth_config(
                 token_endpoint,
             } => {
                 client_config
-                    .set("sasl.mechanism", "OAUTHBEARER")
+                    .set("sasl.mechanisms", "OAUTHBEARER")
                     .set("sasl.oauthbearer.method", "oidc")
                     .set("sasl.oauthbearer.client.id", client_id)
                     .set("sasl.oauthbearer.client.secret", client_secret)
@@ -330,6 +330,7 @@ mod tests {
         let expected_config = [
             ("security.protocol", "SASL_PLAINTEXT"),
             ("sasl.mechanisms", "OAUTHBEARER"),
+            ("sasl.oauthbearer.method", "oidc"),
             ("sasl.oauthbearer.client.id", "cid"),
             ("sasl.oauthbearer.client.secret", "csecret"),
             ("sasl.oauthbearer.token.endpoint.url", "https://token"),
