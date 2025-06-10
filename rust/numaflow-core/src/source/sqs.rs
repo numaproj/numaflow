@@ -1,6 +1,7 @@
-use numaflow_sqs::source::{SqsMessage, SqsSource, SqsSourceBuilder, SqsSourceConfig};
 use std::sync::Arc;
 use std::time::Duration;
+
+use numaflow_sqs::source::{SqsMessage, SqsSource, SqsSourceBuilder, SqsSourceConfig};
 
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
@@ -282,6 +283,19 @@ pub mod tests {
             })
             .then_output(|| {
                 aws_sdk_sqs::operation::delete_message_batch::DeleteMessageBatchOutput::builder()
+                    .successful(
+                        aws_sdk_sqs::types::DeleteMessageBatchResultEntry::builder()
+                            .id("1")
+                            .build()
+                            .unwrap(),
+                    )
+                    .failed(
+                        aws_sdk_sqs::types::BatchResultErrorEntry::builder()
+                            .id("") // Empty string ID (minimal valid value)
+                            .code("") // Empty string code (minimal valid value)
+                            .build()
+                            .unwrap(),
+                    )
                     .build()
                     .unwrap()
             });
