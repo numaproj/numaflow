@@ -5,13 +5,16 @@ metadata:
 spec:
   vertices:
     - name: in
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       source:
-        http: { }
+        http: {}
         transformer:
-          builtin:
-            name: eventTimeExtractor
-            kwargs:
-              expression: json(payload).item[1].time
+          container:
+            image: quay.io/numaio/numaflow-go/mapt-event-time-extractor:stable
+            imagePullPolicy: Always
     - name: out
       scale:
         min: 1
