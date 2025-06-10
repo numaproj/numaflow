@@ -1,8 +1,8 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::map::{self, MapRequest, MapResponse, map_client::MapClient};
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::Mutex;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
@@ -11,8 +11,10 @@ use tonic::{Request, Streaming};
 use tracing::error;
 
 use crate::config::get_vertex_name;
+use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageID, Offset};
+use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
 use crate::shared::grpc::prost_timestamp_from_utc;
 
 type ResponseSenderMap =
@@ -24,7 +26,9 @@ type StreamResponseSenderMap =
 struct ParentMessageInfo {
     offset: Offset,
     event_time: DateTime<Utc>,
+    is_late: bool,
     headers: HashMap<String, String>,
+    start_time: Instant,
 }
 
 impl From<Message> for MapRequest {
@@ -99,6 +103,11 @@ impl UserDefinedUnaryMap {
                 let mut senders = sender_map.lock().await;
                 for (_, (_, sender)) in senders.drain() {
                     let _ = sender.send(Err(Error::Grpc(e.clone())));
+                    pipeline_metrics()
+                        .forwarder
+                        .udf_error_total
+                        .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                        .inc();
                 }
                 None
             }
@@ -118,7 +127,15 @@ impl UserDefinedUnaryMap {
             offset: message.offset.clone(),
             event_time: message.event_time,
             headers: message.headers.clone(),
+            is_late: message.is_late,
+            start_time: Instant::now(),
         };
+
+        pipeline_metrics()
+            .forwarder
+            .udf_read_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .inc();
 
         self.senders
             .lock()
@@ -185,6 +202,11 @@ impl UserDefinedBatchMap {
                     sender
                         .send(Err(Error::Grpc(e.clone())))
                         .expect("failed to send error response");
+                    pipeline_metrics()
+                        .forwarder
+                        .udf_error_total
+                        .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                        .inc();
                 }
                 None
             }
@@ -193,9 +215,13 @@ impl UserDefinedBatchMap {
                 if !sender_map.lock().await.is_empty() {
                     error!("received EOT but not all responses have been received");
                 }
+                pipeline_metrics()
+                    .forwarder
+                    .udf_processing_time
+                    .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                    .observe(Instant::now().elapsed().as_micros() as f64);
                 continue;
             }
-
             process_response(&sender_map, resp).await
         }
     }
@@ -212,7 +238,15 @@ impl UserDefinedBatchMap {
                 offset: message.offset.clone(),
                 event_time: message.event_time,
                 headers: message.headers.clone(),
+                is_late: message.is_late,
+                start_time: Instant::now(),
             };
+
+            pipeline_metrics()
+                .forwarder
+                .udf_read_total
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                .inc();
 
             self.senders
                 .lock()
@@ -246,6 +280,19 @@ async fn process_response(sender_map: &ResponseSenderMap, resp: MapResponse) {
         for (i, result) in resp.results.into_iter().enumerate() {
             response_messages.push(UserDefinedMessage(result, &msg_info, i as i32).into());
         }
+
+        pipeline_metrics()
+            .forwarder
+            .udf_write_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .inc_by(response_messages.len() as u64);
+
+        pipeline_metrics()
+            .forwarder
+            .udf_processing_time
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .observe(msg_info.start_time.elapsed().as_micros() as f64);
+
         sender
             .send(Ok(response_messages))
             .expect("failed to send response");
@@ -345,6 +392,11 @@ impl UserDefinedStreamMap {
                 let mut senders = sender_map.lock().await;
                 for (_, (_, sender)) in senders.drain() {
                     let _ = sender.send(Err(Error::Grpc(e.clone()))).await;
+                    pipeline_metrics()
+                        .forwarder
+                        .udf_error_total
+                        .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                        .inc();
                 }
                 None
             }
@@ -355,9 +407,20 @@ impl UserDefinedStreamMap {
                 .remove(&resp.id)
                 .expect("map entry should always be present");
 
+            pipeline_metrics()
+                .forwarder
+                .udf_write_total
+                .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                .inc();
+
             // once we get eot, we can drop the sender to let the callee
             // know that we are done sending responses
             if let Some(map::TransmissionStatus { eot: true }) = resp.status {
+                pipeline_metrics()
+                    .forwarder
+                    .udf_processing_time
+                    .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+                    .observe(message_info.start_time.elapsed().as_micros() as f64);
                 continue;
             }
 
@@ -390,7 +453,15 @@ impl UserDefinedStreamMap {
             offset: message.offset.clone(),
             event_time: message.event_time,
             headers: message.headers.clone(),
+            start_time: Instant::now(),
+            is_late: message.is_late,
         };
+
+        pipeline_metrics()
+            .forwarder
+            .udf_read_total
+            .get_or_create(pipeline_metric_labels(VERTEX_TYPE_MAP_UDF))
+            .inc();
 
         self.senders
             .lock()
@@ -423,6 +494,7 @@ impl From<UserDefinedMessage<'_>> for Message {
             headers: value.1.headers.clone(),
             watermark: None,
             metadata: None,
+            is_late: value.1.is_late,
         }
     }
 }
@@ -495,8 +567,7 @@ mod tests {
                 offset: "0".to_string().into(),
                 index: 0,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -585,8 +656,7 @@ mod tests {
                     offset: "0".to_string().into(),
                     index: 0,
                 },
-                headers: Default::default(),
-                metadata: None,
+                ..Default::default()
             },
             crate::message::Message {
                 typ: Default::default(),
@@ -601,8 +671,7 @@ mod tests {
                     offset: "1".to_string().into(),
                     index: 1,
                 },
-                headers: Default::default(),
-                metadata: None,
+                ..Default::default()
             },
         ];
 
@@ -700,8 +769,7 @@ mod tests {
                 offset: "0".to_string().into(),
                 index: 0,
             },
-            headers: Default::default(),
-            metadata: None,
+            ..Default::default()
         };
 
         let (tx, mut rx) = tokio::sync::mpsc::channel(3);

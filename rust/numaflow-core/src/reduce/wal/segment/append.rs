@@ -4,7 +4,7 @@ use crate::reduce::wal::segment::WalType;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use std::path::Path;
-use std::{io, path::PathBuf};
+use std::path::PathBuf;
 use tokio::io::BufWriter;
 use tokio::task::JoinHandle;
 use tokio::{
@@ -56,6 +56,8 @@ struct SegmentWriteActor {
     flush_interval: Duration,
     /// Maximum file size per segment.
     max_file_size: u64,
+    /// Maximum age of a segment file before rotation
+    max_segment_age: chrono::Duration,
     /// The result of [SegmentWriteMessage] operation.
     result_tx: Sender<Offset>,
 }
@@ -77,6 +79,7 @@ impl SegmentWriteActor {
         current_file: BufWriter<File>,
         max_file_size: u64,
         flush_interval: Duration,
+        max_segment_age: chrono::Duration,
         result_tx: Sender<Offset>,
     ) -> Self {
         Self {
@@ -89,6 +92,7 @@ impl SegmentWriteActor {
             file_index: 0,
             max_file_size,
             flush_interval,
+            max_segment_age,
             result_tx,
         }
     }
@@ -162,7 +166,24 @@ impl SegmentWriteActor {
     /// This is not Cancel Safe. We can make it cancel safe by removing the buffering and instead of
     /// `write_all`, we should use `write`.
     async fn write_data(&mut self, data: Bytes) -> WalResult<()> {
+        // Check if we need to rotate based on size
         if self.current_size > 0 && self.current_size + data.len() as u64 >= self.max_file_size {
+            debug!(
+                current_size = self.current_size,
+                max_size = self.max_file_size,
+                "Rotating segment file due to size threshold"
+            );
+            self.rotate_file(true).await?;
+        }
+
+        // Check if we need to rotate based on time
+        if self.current_size > 0
+            && Utc::now().signed_duration_since(self.create_time) > self.max_segment_age
+        {
+            debug!(
+                max_age = ?self.max_segment_age,
+                "Rotating segment file due to age threshold"
+            );
             self.rotate_file(true).await?;
         }
 
@@ -189,16 +210,14 @@ impl SegmentWriteActor {
         base_path: &Path,
         idx: usize,
     ) -> WalResult<(String, BufWriter<File>)> {
-        let timestamp_nanos = Utc::now()
-            .timestamp_nanos_opt()
-            .unwrap_or(Utc::now().timestamp_micros());
+        let timestamp = Utc::now().timestamp_micros();
 
         // the name is important. sorting is based on the timestamp and then on file-index.
         let filename = format!(
             "{}_{}_{}.wal{}",
             wal_type.segment_prefix(),
             idx,
-            timestamp_nanos,
+            timestamp,
             wal_type.segment_suffix()
         );
 
@@ -252,6 +271,7 @@ impl SegmentWriteActor {
                 .trim_end_matches(&self.wal_type.segment_suffix());
             format!("{}.frozen", to_file_name)
         };
+
         tokio::fs::rename(&self.current_file_name, &to_file_name).await?;
         info!(?self.current_file_name, ?to_file_name, "rename successful");
 
@@ -266,7 +286,6 @@ impl SegmentWriteActor {
             self.create_time = Utc::now();
             self.current_size = 0;
         }
-
         Ok(())
     }
 }
@@ -278,6 +297,7 @@ pub(crate) struct AppendOnlyWal {
     base_path: PathBuf,
     max_file_size_mb: u64,
     flush_interval_ms: u64,
+    max_segment_age_secs: u64,
     channel_buffer_size: usize,
 }
 
@@ -289,13 +309,15 @@ impl AppendOnlyWal {
         max_file_size_mb: u64,
         flush_interval_ms: u64,
         channel_buffer_size: usize,
-    ) -> Result<Self, io::Error> {
+        max_segment_age_secs: u64,
+    ) -> WalResult<Self> {
         tokio::fs::create_dir_all(&base_path).await?;
         Ok(Self {
             wal_type,
             base_path,
             max_file_size_mb,
             flush_interval_ms,
+            max_segment_age_secs,
             channel_buffer_size,
         })
     }
@@ -313,6 +335,7 @@ impl AppendOnlyWal {
 
         let max_file_size_bytes = self.max_file_size_mb * 1024 * 1024;
         let flush_duration = Duration::from_millis(self.flush_interval_ms);
+        let max_segment_age = chrono::Duration::seconds(self.max_segment_age_secs as i64);
 
         let mut actor = SegmentWriteActor::new(
             self.wal_type,
@@ -322,6 +345,7 @@ impl AppendOnlyWal {
             file_buf,
             max_file_size_bytes,
             flush_duration,
+            max_segment_age,
             result_tx,
         );
 
@@ -357,6 +381,7 @@ mod tests {
         let max_file_size_mb = 1;
         let flush_interval_ms = 50;
         let channel_buffer = 10;
+        let max_segment_age_secs = 300; // 5 minutes
 
         let wal_writer = AppendOnlyWal::new(
             WalType::Data,
@@ -364,6 +389,7 @@ mod tests {
             max_file_size_mb,
             flush_interval_ms,
             channel_buffer,
+            max_segment_age_secs,
         )
         .await
         .expect("WAL creation failed");
@@ -524,6 +550,7 @@ mod tests {
         let max_file_size_mb = 10;
         let flush_interval_ms = 50;
         let channel_buffer = 10;
+        let max_segment_age_secs = 300; // 5 minutes
 
         let wal_writer = AppendOnlyWal::new(
             WalType::Data,
@@ -531,6 +558,7 @@ mod tests {
             max_file_size_mb,
             flush_interval_ms,
             channel_buffer,
+            max_segment_age_secs,
         )
         .await
         .expect("failed to create wal");
@@ -596,6 +624,7 @@ mod tests {
         let max_file_size_mb = 10;
         let flush_interval_ms = 50;
         let channel_buffer = 10;
+        let max_segment_age_secs = 300; // 5 minutes
 
         let wal_writer = AppendOnlyWal::new(
             WalType::Data,
@@ -603,6 +632,7 @@ mod tests {
             max_file_size_mb,
             flush_interval_ms,
             channel_buffer,
+            max_segment_age_secs,
         )
         .await
         .expect("failed to create wal");
@@ -691,5 +721,85 @@ mod tests {
         //     .await
         //     .expect("writer shouldn't fail")
         //     .expect("WAL shouldn't raise error");
+    }
+
+    #[tokio::test]
+    async fn test_wal_time_based_rotation() {
+        let temp_dir = tempdir().unwrap();
+        let base_path = temp_dir.path().to_path_buf();
+        let max_file_size_mb = 10; // Large enough to not trigger size-based rotation
+        let flush_interval_ms = 50;
+        let channel_buffer = 10;
+        let max_segment_age_secs = 2; // Very short for testing
+
+        let wal_writer = AppendOnlyWal::new(
+            WalType::Data,
+            base_path.clone(),
+            max_file_size_mb,
+            flush_interval_ms,
+            channel_buffer,
+            max_segment_age_secs,
+        )
+        .await
+        .expect("failed to create wal");
+
+        let (wal_tx, wal_rx) = mpsc::channel::<SegmentWriteMessage>(channel_buffer);
+        let (_result_rx, _writer_handle) = wal_writer
+            .streaming_write(ReceiverStream::new(wal_rx))
+            .await
+            .expect("Failed to start WAL service");
+
+        // Send some data to the WAL
+        let id1 = Some(Offset::String(StringOffset::new("msg-001".to_string(), 0)));
+        let data1 = Bytes::from("data before time-based rotation");
+        wal_tx
+            .send(SegmentWriteMessage::WriteData {
+                offset: id1.clone(),
+                data: data1.clone(),
+            })
+            .await
+            .unwrap();
+
+        // Wait for the segment age to exceed the threshold
+        tokio::time::sleep(Duration::from_secs(max_segment_age_secs + 1)).await;
+
+        // Send more data after the time threshold
+        let id2 = Some(Offset::String(StringOffset::new("msg-002".to_string(), 0)));
+        let data2 = Bytes::from("data after time-based rotation");
+        wal_tx
+            .send(SegmentWriteMessage::WriteData {
+                offset: id2.clone(),
+                data: data2.clone(),
+            })
+            .await
+            .unwrap();
+
+        // Allow some time for the rotation to complete
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        // Verify the files
+        let mut files: Vec<_> = fs::read_dir(&base_path)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| path.extension().map_or(false, |ext| ext == "frozen"))
+            .collect();
+        files.sort();
+
+        assert!(
+            files.len() >= 1,
+            "There should be at least one frozen file after time-based rotation"
+        );
+
+        // Verify the content of the rotated file
+        let rotated_file_content = fs::read(&files[0]).unwrap();
+        let mut expected_rotated_content = BytesMut::new();
+        expected_rotated_content.extend_from_slice(&data1.len().to_le_bytes());
+        expected_rotated_content.extend_from_slice(&data1);
+        assert_eq!(
+            rotated_file_content, expected_rotated_content,
+            "Rotated file content mismatch"
+        );
+
+        drop(wal_tx);
     }
 }

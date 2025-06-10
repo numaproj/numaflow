@@ -39,10 +39,13 @@ pub(crate) struct Message {
     pub(crate) headers: HashMap<String, String>,
     /// Additional metadata that could be passed per message between the vertices.
     pub(crate) metadata: Option<Metadata>,
+    /// is_late is used to indicate if the message is a late data. Late data is data that arrives
+    /// after the watermark has passed. This is set only at source.
+    pub(crate) is_late: bool,
 }
 
 /// Type of the [Message].
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) enum MessageType {
     /// the payload is Data
     #[default]
@@ -93,6 +96,7 @@ impl Default for Message {
             headers: HashMap::new(),
             metadata: None,
             typ: Default::default(),
+            is_late: false,
         }
     }
 }
@@ -198,6 +202,7 @@ pub(crate) enum ReadAck {
 pub(crate) struct MessageID {
     pub(crate) vertex_name: Bytes,
     pub(crate) offset: Bytes,
+    /// Index is used to identify the index of the message in case of flatmap.
     pub(crate) index: i32,
 }
 
@@ -259,7 +264,7 @@ impl TryFrom<Message> for BytesMut {
             header: Some(numaflow_pb::objects::isb::Header {
                 message_info: Some(numaflow_pb::objects::isb::MessageInfo {
                     event_time: Some(prost_timestamp_from_utc(message.event_time)),
-                    is_late: false, // Set this according to your logic
+                    is_late: message.is_late,
                 }),
                 kind: message.typ.into(),
                 id: Some(message.id.into()),
@@ -330,6 +335,7 @@ mod tests {
             },
             headers: HashMap::new(),
             metadata: None,
+            is_late: false,
         };
 
         let result: Result<BytesMut> = message.clone().try_into();

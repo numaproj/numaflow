@@ -206,6 +206,8 @@ where
             // requests don't hang forever.
             TimeoutLayer::new(Duration::from_secs(app.settings.drain_timeout_secs)),
         )
+        // add early validations
+        .layer(middleware::from_fn(validate_request))
         // Add auth middleware to all user facing routes
         .layer(middleware::from_fn_with_state(
             app.settings.api_auth_token.clone(),
@@ -242,8 +244,30 @@ async fn graceful_shutdown(handle: Handle, duration_secs: u64) {
 
 const PUBLISH_ENDPOINTS: [&str; 3] = ["/v1/process/sync", "/v1/process/async", "/v1/process/fetch"];
 
-// auth middleware to do token based authentication for all user facing routes
-// if auth is enabled.
+/// validate the request before passing it to the handler
+pub(crate) async fn validate_request(request: axum::extract::Request, next: Next) -> Response {
+    // check if the request id contains "."
+    if let Some(header) = request.headers().get("X-Numaflow-Id") {
+        // make sure value does not contain "."
+        if header
+            .to_str()
+            .expect("header should be a string")
+            .contains(".")
+        {
+            return Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body(Body::from(format!(
+                    "Header-ID should not contain '.', found {}",
+                    header.to_str().expect("header should be a string")
+                )))
+                .expect("failed to build response");
+        }
+    };
+
+    next.run(request).await
+}
+
+/// auth middleware to do token based authentication for all user facing routes if auth is enabled.
 async fn auth_middleware(
     State(api_auth_token): State<Option<String>>,
     request: axum::extract::Request,
@@ -422,6 +446,68 @@ mod tests {
         let request = Request::builder().uri("/health").body(Body::empty())?;
         let response = router.clone().oneshot(request).await?;
         assert_eq!(response.status(), StatusCode::OK);
+        Ok(())
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_validate_request() -> Result<()> {
+        let settings = Settings {
+            api_auth_token: Some("test-token".into()),
+            ..Default::default()
+        };
+
+        let datum_store = InMemoryDataStore::new(None);
+        let callback_store = InMemoryCallbackStore::new(None);
+        let store_name = "test_validate_request";
+        let js_url = "localhost:4222";
+        let client = async_nats::connect(js_url).await.unwrap();
+        let context = jetstream::new(client);
+        let _ = context.delete_key_value(store_name).await;
+
+        let _ = context
+            .create_key_value(jetstream::kv::Config {
+                bucket: store_name.to_string(),
+                history: 5,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let status_tracker = StatusTracker::new(context.clone(), store_name, "0", None)
+            .await
+            .unwrap();
+
+        let pipeline_spec = PIPELINE_SPEC_ENCODED.parse().unwrap();
+        let msg_graph = MessageGraph::from_pipeline(&pipeline_spec)?;
+        let callback_state =
+            CallbackState::new(msg_graph, datum_store, callback_store, status_tracker).await?;
+
+        let nats_connection = async_nats::connect("localhost:4222")
+            .await
+            .expect("Failed to establish Jetstream connection");
+        let js_context = jetstream::new(nats_connection);
+
+        let app_state = AppState {
+            js_context,
+            settings: Arc::new(settings),
+            orchestrator_state: callback_state,
+            cancellation_token: CancellationToken::new(),
+        };
+
+        let router = router_with_auth(app_state).await.unwrap();
+        let res = router
+            .oneshot(
+                axum::extract::Request::builder()
+                    .method("POST")
+                    .uri("/v1/process/sync")
+                    .header("X-Numaflow-Id", "test.id")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await?;
+
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
         Ok(())
     }
 

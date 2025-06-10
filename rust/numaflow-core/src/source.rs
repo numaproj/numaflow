@@ -4,20 +4,25 @@
 //! [Source]: https://numaflow.numaproj.io/user-guide/sources/overview/
 //! [Watermark]: https://numaflow.numaproj.io/core-concepts/watermarks/
 
+use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_vertex_name, is_mono_vertex};
 use crate::error::{Error, Result};
 use crate::message::ReadAck;
 use crate::metrics::{
-    monovertex_metrics, mvtx_forward_metric_labels, pipeline_forward_metric_labels,
-    pipeline_isb_metric_labels, pipeline_metrics,
+    PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
+    pipeline_isb_metric_labels, pipeline_metric_labels, pipeline_metrics,
 };
+use crate::source::http::CoreHttpSource;
 use crate::tracker::TrackerHandle;
 use crate::{
     message::{Message, Offset},
-    metrics,
     reader::LagReader,
 };
+use backoff::retry::Retry;
+use backoff::strategy::fixed;
+use chrono::Utc;
 use numaflow_jetstream::JetstreamSource;
+use numaflow_kafka::source::KafkaSource;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pulsar::source::PulsarSource;
 use numaflow_sqs::source::SqsSource;
@@ -52,10 +57,15 @@ pub(crate) mod jetstream;
 
 pub(crate) mod sqs;
 
+pub(crate) mod http;
+pub(crate) mod kafka;
+
 use crate::transformer::Transformer;
 use crate::watermark::source::SourceWatermarkHandle;
 
 const MAX_ACK_PENDING: usize = 10000;
+const ACK_RETRY_INTERVAL: u64 = 100;
+const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
 
 /// Set of Read related items that has to be implemented to become a Source.
 pub(crate) trait SourceReader {
@@ -89,6 +99,8 @@ pub(crate) enum SourceType {
     Pulsar(PulsarSource),
     Sqs(SqsSource),
     Jetstream(JetstreamSource),
+    Kafka(KafkaSource),
+    Http(CoreHttpSource),
 }
 
 enum ActorMessage {
@@ -243,6 +255,23 @@ impl Source {
                     actor.run().await;
                 });
             }
+            SourceType::Kafka(kafka) => {
+                tokio::spawn(async move {
+                    let actor = SourceActor::new(receiver, kafka.clone(), kafka.clone(), kafka);
+                    actor.run().await;
+                });
+            }
+            SourceType::Http(http_source) => {
+                tokio::spawn(async move {
+                    let actor = SourceActor::new(
+                        receiver,
+                        http_source.clone(),
+                        http_source.clone(),
+                        http_source,
+                    );
+                    actor.run().await;
+                });
+            }
         };
 
         Self {
@@ -315,9 +344,9 @@ impl Source {
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let (messages_tx, messages_rx) = mpsc::channel(2 * self.read_batch_size);
 
-        let mut pipeline_labels = pipeline_forward_metric_labels("Source").clone();
+        let mut pipeline_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
         pipeline_labels.push((
-            metrics::PIPELINE_PARTITION_NAME_LABEL.to_string(),
+            PIPELINE_PARTITION_NAME_LABEL.to_string(),
             get_vertex_name().to_string(),
         ));
 
@@ -334,6 +363,8 @@ impl Source {
                 false => 1,
             };
             let semaphore = Arc::new(Semaphore::new(max_ack_tasks));
+            let mut processed_msgs_count: usize = 0;
+            let mut last_logged_at = Instant::now();
 
             let mut result = Ok(());
             loop {
@@ -360,7 +391,14 @@ impl Source {
                 };
 
                 let msgs_len = messages.len();
-                Self::send_read_metrics(&pipeline_labels, mvtx_labels, read_start_time, msgs_len);
+                let msgs_bytes = messages.iter().map(|msg| msg.value.len()).sum();
+                Self::send_read_metrics(
+                    &pipeline_labels,
+                    mvtx_labels,
+                    read_start_time,
+                    msgs_len,
+                    msgs_bytes,
+                );
 
                 // attempt to publish idle watermark since we are not able to read any message from
                 // the source.
@@ -398,11 +436,12 @@ impl Source {
                     self.sender.clone(),
                     ack_batch,
                     _permit,
+                    cln_token.clone(),
                 ));
 
                 // transform the batch if the transformer is present, this need not
                 // be streaming because transformation should be fast operation.
-                let messages = match self.transformer.as_mut() {
+                let mut messages = match self.transformer.as_mut() {
                     None => messages,
                     Some(transformer) => match transformer
                         .transform_batch(messages, cln_token.clone())
@@ -430,6 +469,12 @@ impl Source {
                     watermark_handle
                         .generate_and_publish_source_watermark(&messages)
                         .await;
+
+                    let watermark = watermark_handle.fetch_source_watermark().await;
+                    // compare with the event time of the message and set is_late
+                    for message in messages.iter_mut() {
+                        message.is_late = message.event_time < watermark;
+                    }
                 }
 
                 // write the messages to downstream.
@@ -438,6 +483,17 @@ impl Source {
                         .send(message)
                         .await
                         .expect("send should not fail");
+
+                    processed_msgs_count += 1;
+                    if last_logged_at.elapsed().as_secs() >= 1 {
+                        info!(
+                            "Processed {} messages in {:?}",
+                            processed_msgs_count,
+                            Utc::now()
+                        );
+                        processed_msgs_count = 0;
+                        last_logged_at = Instant::now();
+                    }
                 }
             }
             info!(status=?result, "Source stopped, waiting for inflight messages to be acked");
@@ -460,6 +516,7 @@ impl Source {
         source_handle: mpsc::Sender<ActorMessage>,
         ack_rx_batch: Vec<(Offset, oneshot::Receiver<ReadAck>)>,
         _permit: OwnedSemaphorePermit, // permit to release after acking the offsets.
+        cancel_token: CancellationToken,
     ) -> Result<()> {
         let n = ack_rx_batch.len();
         let mut offsets_to_ack = Vec::with_capacity(n);
@@ -480,11 +537,39 @@ impl Source {
 
         let start = Instant::now();
         if !offsets_to_ack.is_empty() {
-            Self::ack(source_handle, offsets_to_ack).await?;
+            Self::ack_with_retry(source_handle, offsets_to_ack, &cancel_token).await;
         }
         Self::send_ack_metrics(e2e_start_time, n, start);
 
         Ok(())
+    }
+
+    /// Invokes ack with infinite retries until the cancellation token is cancelled.
+    async fn ack_with_retry(
+        source_handle: mpsc::Sender<ActorMessage>,
+        offsets: Vec<Offset>,
+        cancel_token: &CancellationToken,
+    ) {
+        let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
+        let _ = Retry::retry(
+            interval,
+            async || {
+                let result = Self::ack(source_handle.clone(), offsets.clone()).await;
+                if result.is_err() {
+                    error!(?result, "Failed to send ack to source, retrying...");
+                    if cancel_token.is_cancelled() {
+                        error!(
+                            ?result,
+                            "Cancellation token received, stopping the ack retry loop"
+                        );
+                        return Ok(());
+                    }
+                }
+                result
+            },
+            |_: &Error| !cancel_token.is_cancelled(),
+        )
+        .await;
     }
 
     fn send_read_metrics(
@@ -492,6 +577,7 @@ impl Source {
         mvtx_labels: &Vec<(String, String)>,
         read_start_time: Instant,
         n: usize,
+        msgs_bytes: usize,
     ) {
         if is_mono_vertex() {
             monovertex_metrics()
@@ -510,7 +596,22 @@ impl Source {
                 .inc_by(n as u64);
             pipeline_metrics()
                 .forwarder
-                .read_time
+                .data_read_total
+                .get_or_create(pipeline_labels)
+                .inc_by(n as u64);
+            pipeline_metrics()
+                .forwarder
+                .read_bytes_total
+                .get_or_create(pipeline_labels)
+                .inc_by(msgs_bytes as u64);
+            pipeline_metrics()
+                .forwarder
+                .data_read_bytes_total
+                .get_or_create(pipeline_labels)
+                .inc_by(msgs_bytes as u64);
+            pipeline_metrics()
+                .forwarder
+                .read_processing_time
                 .get_or_create(pipeline_labels)
                 .observe(read_start_time.elapsed().as_micros() as f64);
         }
@@ -535,7 +636,7 @@ impl Source {
         } else {
             pipeline_metrics()
                 .forwarder
-                .ack_time
+                .ack_processing_time
                 .get_or_create(pipeline_isb_metric_labels())
                 .observe(start.elapsed().as_micros() as f64);
 
@@ -547,7 +648,7 @@ impl Source {
 
             pipeline_metrics()
                 .forwarder
-                .processed_time
+                .forward_chunk_processing_time
                 .get_or_create(pipeline_isb_metric_labels())
                 .observe(e2e_start_time.elapsed().as_micros() as f64);
         }

@@ -22,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 
+	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
@@ -131,6 +132,14 @@ func ValidatePipeline(pl *dfv1.Pipeline) error {
 			return fmt.Errorf("cannot define multiple edges from vertex %q to vertex %q", e.From, e.To)
 		} else {
 			toFromEdge[e.From+e.To] = true
+		}
+
+		if e.Conditions != nil {
+			if e.Conditions.Tags != nil {
+				if len(e.Conditions.Tags.Values) == 0 {
+					return fmt.Errorf("invalid edge: conditional forwarding requires at least one tag value")
+				}
+			}
 		}
 	}
 
@@ -603,8 +612,8 @@ func validateSource(source dfv1.Source) error {
 // validateSink initiates the validation of the sink spec
 func validateSink(sink dfv1.Sink) error {
 	// check the sinks retry strategy validity.
-	if ok := hasValidSinkRetryStrategy(sink); !ok {
-		return fmt.Errorf("given OnFailure strategy is fallback but fallback sink is not provided")
+	if err := hasValidSinkRetryStrategy(sink); err != nil {
+		return err
 	}
 	// TODO: add more validations for each sink type
 	return nil
@@ -612,18 +621,46 @@ func validateSink(sink dfv1.Sink) error {
 
 // HasValidSinkRetryStrategy checks if the provided RetryStrategy is valid based on the sink's configuration.
 // This validation ensures that the retry strategy is compatible with the sink's current setup
-func hasValidSinkRetryStrategy(s dfv1.Sink) bool {
+func hasValidSinkRetryStrategy(s dfv1.Sink) error {
 	// If the OnFailure strategy is set to fallback, but no fallback sink is provided in the Sink struct,
 	// we return an error
 	if s.RetryStrategy.OnFailure != nil && *s.RetryStrategy.OnFailure == dfv1.OnFailureFallback && !hasValidFallbackSink(&s) {
-		return false
+		return fmt.Errorf("given OnFailure strategy is fallback but fallback sink is not provided")
 	}
-	// If steps are provided in the strategy they cannot be 0, as we do not allow no tries for writing
-	if s.RetryStrategy.BackOff != nil && s.RetryStrategy.BackOff.Steps != nil && *s.RetryStrategy.BackOff.Steps == 0 {
-		return false
+
+	if s.RetryStrategy.BackOff != nil {
+		// If steps are provided in the strategy they cannot be 0, as we do not allow no tries for writing
+		if s.RetryStrategy.BackOff.Steps != nil && *s.RetryStrategy.BackOff.Steps == 0 {
+			return fmt.Errorf("steps in backoff strategy cannot be 0")
+		}
+		// If factor is provided in the strategy it should be greater than or equal to 1
+		if s.RetryStrategy.BackOff.Factor != nil && *s.RetryStrategy.BackOff.Factor < 1 {
+			return fmt.Errorf("factor in backoff strategy cannot be less than 1")
+		}
+
+		// If cap and interval are provided, cap must be greater than or equal to interval
+		if s.RetryStrategy.BackOff.Cap != nil && s.RetryStrategy.BackOff.Interval != nil {
+			if s.RetryStrategy.BackOff.Cap.Duration < s.RetryStrategy.BackOff.Interval.Duration {
+				return fmt.Errorf("cap in backoff strategy cannot be less than interval")
+			}
+		}
+
+		// If cap is provided but interval isn't, cap must be greater than or equal to default interval value
+		if s.RetryStrategy.BackOff.Cap != nil && s.RetryStrategy.BackOff.Interval == nil {
+			if s.RetryStrategy.BackOff.Cap.Duration < v1alpha1.DefaultRetryInterval {
+				return fmt.Errorf("cap in backoff strategy cannot be less than default interval value, if interval is not provided")
+			}
+		}
+
+		// If jitter is provided, it should be greater than or equal to 0 and less than 1
+		// Jitter is typically used to introduce small random variations to avoid synchronized retries
+		// A jitter value less than 1 ensures that the delay remains within a reasonable range around the base delay.
+		if s.RetryStrategy.BackOff.Jitter != nil && (*s.RetryStrategy.BackOff.Jitter < 0 || *s.RetryStrategy.BackOff.Jitter >= 1) {
+			return fmt.Errorf("jitter in backoff strategy should be between 0 and 1")
+		}
 	}
-	// If no errors are found, the function returns true indicating the validation passed.
-	return true
+	// If no errors are found, the function returns nil indicating the validation passed.
+	return nil
 }
 
 // HasValidFallbackSink checks if the Sink vertex has a valid fallback sink configured

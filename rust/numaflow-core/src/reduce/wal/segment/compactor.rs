@@ -12,7 +12,6 @@
 //! #### Unaligned kind
 //! 1. Replay all the GC events and store the max end time for every key combination(map[key] = max end time)
 //! 2. Replay all the data events and only retain the messages with event time > max end time for that key
-//!
 
 use crate::reduce::wal::error::WalResult;
 use crate::reduce::wal::segment::GcEventEntry;
@@ -28,12 +27,14 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::{Duration, UNIX_EPOCH};
 use tokio::sync::mpsc;
+use tokio::sync::mpsc::Sender;
 use tokio::task::JoinHandle;
 use tokio_stream::{StreamExt, wrappers::ReceiverStream};
 use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tracing::{debug, info};
 
 /// WALs can represent two Kinds of Windows and data is different for each Kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum WindowKind {
     /// Aligned represents Fixed and Sliding Windows.
     Aligned,
@@ -50,10 +51,12 @@ pub(crate) struct Compactor {
     segment_wal: ReplayWal,
     /// Compaction WAL for Read Only
     compaction_ro_wal: ReplayWal,
-    /// New Compaction WAL for writing compacted data
-    compaction_ao_wal: AppendOnlyWal,
+    /// Compaction Append WAL tx for writing compacted data
+    compaction_ao_tx: Sender<SegmentWriteMessage>,
     /// Kind of Window, Aligned or Unaligned
     kind: WindowKind,
+    /// join handle for the compaction writer task
+    writer_task_handle: JoinHandle<WalResult<()>>,
 }
 
 const WAL_KEY_SEPERATOR: &str = ":";
@@ -66,6 +69,7 @@ impl Compactor {
         max_file_size_mb: u64,
         flush_interval_ms: u64,
         channel_buffer_size: usize,
+        max_segment_age_secs: u64,
     ) -> WalResult<Self> {
         let segment_wal = ReplayWal::new(WalType::Data, path.clone());
         let gc_wal = ReplayWal::new(WalType::Gc, path.clone());
@@ -76,52 +80,69 @@ impl Compactor {
             max_file_size_mb,
             flush_interval_ms,
             channel_buffer_size,
+            max_segment_age_secs,
         )
         .await?;
+
+        let (compaction_ao_tx, compaction_ao_rx) = mpsc::channel(500);
+        let (_, handle) = compaction_ao_wal
+            .streaming_write(ReceiverStream::new(compaction_ao_rx))
+            .await?;
 
         Ok(Self {
             gc_wal,
             segment_wal,
             compaction_ro_wal,
-            compaction_ao_wal,
+            compaction_ao_tx,
             kind,
+            writer_task_handle: handle,
         })
     }
 
-    /// Compact and replay the compacted data.
-    pub(crate) async fn compact_with_replay(
+    /// Starts the compaction process with replay and periodic execution.
+    ///
+    /// # Parameters
+    /// * `replay_tx` - Channel to replay compacted data. Compaction runs once and replays data first.
+    /// * `interval` - Interval for periodic compaction. Compaction runs periodically after initial replay.
+    /// * `cln_token` - Cancellation token for periodic compaction.
+    pub(crate) async fn start_compaction_with_replay(
         self,
-        tx: mpsc::Sender<Bytes>,
-    ) -> WalResult<JoinHandle<WalResult<()>>> {
-        Ok(tokio::spawn(async move { self.compact(Some(tx)).await }))
-    }
-
-    /// Starts the compaction process every `interval_ms` milliseconds.
-    pub(crate) async fn start_compaction(
-        self,
-        duration: Duration,
+        replay_tx: Sender<Bytes>,
+        interval: Duration,
         cln_token: CancellationToken,
     ) -> WalResult<JoinHandle<WalResult<()>>> {
-        let mut tick = tokio::time::interval(duration);
-        let result: JoinHandle<WalResult<()>> = tokio::spawn(async move {
+        Ok(tokio::spawn(async move {
+            // First do a one-time compaction with replay
+            self.compact(Some(replay_tx)).await?;
+
+            // Then start periodic compaction
+            let mut tick = tokio::time::interval(interval);
             loop {
                 tokio::select! {
-                _ = tick.tick() => {
+                    _ = tick.tick() => {
                         self.compact(None).await?;
-                     }
-                _ = cln_token.cancelled() => {
+                    }
+                    _ = cln_token.cancelled() => {
                         break;
                     }
                 }
             }
-            Ok(())
-        });
-        Ok(result)
+
+            info!("Cancellation token received, stopping compaction task...");
+            // drop the compactor append wal tx to signal the writer task to shut down
+            drop(self.compaction_ao_tx);
+
+            // Wait for the writer task to complete and return the result
+            let result = self.writer_task_handle.await.expect("task failed");
+            info!("Compaction task completed");
+
+            result
+        }))
     }
 
     /// Compact first needs to get all the GC files and build a compaction map. This map will have
     /// the oldest data before which all can be deleted.
-    pub(crate) async fn compact(&self, replay_tx: Option<mpsc::Sender<Bytes>>) -> WalResult<()> {
+    async fn compact(&self, replay_tx: Option<Sender<Bytes>>) -> WalResult<()> {
         match self.kind {
             WindowKind::Aligned => self.compact_aligned(replay_tx.clone()).await?,
             WindowKind::Unaligned => self.compact_unaligned(replay_tx).await?,
@@ -143,6 +164,8 @@ impl Compactor {
         // Get the oldest time and scanned GC files
         let (oldest_time, gc_files) = self.build_aligned_compaction().await?;
 
+        debug!(oldest_time = ?oldest_time.timestamp_millis(), "Event time till which the data has been processed");
+
         let compact = AlignedCompaction(oldest_time);
 
         // Compact the compaction_ro_wal
@@ -155,7 +178,7 @@ impl Compactor {
 
         // Delete the GC files
         for gc_file in gc_files {
-            info!(gc_file = %gc_file.display(), "removing segment file");
+            debug!(gc_file = %gc_file.display(), "removing segment file");
             tokio::fs::remove_file(gc_file).await?;
         }
 
@@ -176,6 +199,8 @@ impl Compactor {
     async fn compact_unaligned(&self, replay_tx: Option<mpsc::Sender<Bytes>>) -> WalResult<()> {
         // Get the oldest time map and scanned GC files
         let (oldest_time_map, gc_files) = self.build_unaligned_compaction().await?;
+
+        info!(oldest_time_map = ?oldest_time_map, "Event time map till which the data has been processed");
 
         let compact = UnalignedCompaction(oldest_time_map);
 
@@ -208,13 +233,7 @@ impl Compactor {
         // Get a streaming reader for the WAL
         let (mut rx, handle) = wal.clone().streaming_read()?;
 
-        let (wal_tx, wal_rx) = mpsc::channel(100);
-        let (_result_rx, writer_handle) = self
-            .compaction_ao_wal
-            .clone()
-            .streaming_write(ReceiverStream::new(wal_rx))
-            .await
-            .map_err(|e| format!("Failed to start compaction WAL writer: {}", e))?;
+        let wal_tx = self.compaction_ao_tx.clone();
 
         // Process each WAL entry
         while let Some(entry) = rx.next().await {
@@ -247,9 +266,11 @@ impl Compactor {
                         }
                     }
                 }
+
                 SegmentEntry::DataFooter { .. } => {
                     unimplemented!()
                 }
+
                 SegmentEntry::CmdFileSwitch { filename } => {
                     // Send rotate message after processing each file
                     wal_tx
@@ -266,7 +287,7 @@ impl Compactor {
                         )
                     })?;
 
-                    info!(filename = %filename.display(), "removing segment file");
+                    debug!(filename = %filename.display(), "removing segment file");
                 }
             }
         }
@@ -278,11 +299,6 @@ impl Compactor {
 
         // Drop the sender to close the channel
         drop(wal_tx);
-
-        // Wait for the writer to complete
-        writer_handle
-            .await
-            .map_err(|e| format!("Compaction writer failed: {}", e))??;
 
         Ok(())
     }
@@ -306,6 +322,7 @@ impl Compactor {
                     // Decode the GC event.
                     let gc: GcEvent = prost::Message::decode(data)
                         .map_err(|e| format!("Failed to decode GC event: {e}"))?;
+                    println!("GC event: {:?}", gc);
                     let gc: GcEventEntry = gc.into();
 
                     // Update the oldest time if the current GC event's end time is newer.
@@ -413,7 +430,9 @@ impl ShouldRetain for AlignedCompaction {
             .expect("Failed to extract event time from message");
 
         // Retain the message if its event time is greater than the oldest time
-        Ok(event_time > self.0)
+        // we should only compact the messages with event time strictly less than
+        // the oldest time.
+        Ok(event_time >= self.0)
     }
 }
 
@@ -445,7 +464,9 @@ impl ShouldRetain for UnalignedCompaction {
         // Check if the key exists in the map
         if let Some(oldest_time) = self.0.get(&key) {
             // Retain the message if its event time is greater than the oldest time for this key
-            return Ok(event_time > *oldest_time);
+            // we should only compact the messages with event time strictly less than
+            // the oldest time.
+            return Ok(event_time >= *oldest_time);
         }
 
         // If the key is not in the map, retain the message
@@ -461,7 +482,6 @@ mod tests {
     use crate::shared::grpc::prost_timestamp_from_utc;
     use bytes::Bytes;
     use chrono::TimeZone;
-    use prost_types;
     use std::fs;
     use std::sync::Arc;
     use tempfile::tempdir;
@@ -486,6 +506,7 @@ mod tests {
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             1000, // channel_buffer_size
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -522,6 +543,7 @@ mod tests {
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             100,  // channel_buffer_size
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -579,6 +601,7 @@ mod tests {
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             1000, // channel_buffer_size
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -594,7 +617,6 @@ mod tests {
                     nanos: 0,
                 }),
                 keys: vec!["key1".to_string(), "key2".to_string()],
-                ..Default::default()
             },
             GcEvent {
                 start_time: Some(prost_types::Timestamp {
@@ -606,7 +628,6 @@ mod tests {
                     nanos: 0,
                 }),
                 keys: vec!["key1".to_string(), "key2".to_string()],
-                ..Default::default()
             },
             GcEvent {
                 start_time: Some(prost_types::Timestamp {
@@ -618,7 +639,6 @@ mod tests {
                     nanos: 0,
                 }),
                 keys: vec!["key3".to_string(), "key4".to_string()],
-                ..Default::default()
             },
         ];
 
@@ -629,6 +649,7 @@ mod tests {
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             100,  // channel_buffer_size
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -692,6 +713,7 @@ mod tests {
             1,    // 1MB
             1000, // 1s flush interval
             500,  // channel buffer
+            300,  // max_segment_age_secs
         )
         .await
         .unwrap();
@@ -713,7 +735,7 @@ mod tests {
             keys: vec![],
         };
 
-        let (tx, rx) = tokio::sync::mpsc::channel(10);
+        let (tx, rx) = mpsc::channel(10);
         let (_offset_stream, handle) = gc_wal
             .streaming_write(ReceiverStream::new(rx))
             .await
@@ -743,6 +765,7 @@ mod tests {
             1,    // 1MB
             1000, // 1s flush interval
             500,  // channel buffer
+            300,  // max_segment_age_secs
         )
         .await
         .unwrap();
@@ -756,10 +779,10 @@ mod tests {
 
         let write_result_cnt = tokio::spawn(async move {
             let mut counter = 0;
-            while let Some(_) = offset_stream.next().await {
+            while offset_stream.next().await.is_some() {
                 counter += 1;
             }
-            return counter;
+            counter
         });
 
         let start_time = Utc.with_ymd_and_hms(2025, 4, 1, 1, 0, 0).unwrap();
@@ -805,21 +828,25 @@ mod tests {
             1,    // 1MB
             1000, // 1s flush interval
             500,  // channel buffer
+            300,  // max_segment_age_secs
         )
         .await
         .unwrap();
 
         compactor.compact(None).await.unwrap();
 
+        drop(compactor.compaction_ao_tx);
+        compactor.writer_task_handle.await.unwrap().unwrap();
+
         // Verify compacted data
         let compaction_wal = ReplayWal::new(WalType::Compact, test_path);
         let (mut rx, handle) = compaction_wal.streaming_read().unwrap();
+        let mut replayed_event_times = vec![];
 
         let mut remaining_message_count = 0;
         while let Some(entry) = rx.next().await {
             if let SegmentEntry::DataEntry { data, .. } = entry {
-                let msg: numaflow_pb::objects::isb::ReadMessage =
-                    prost::Message::decode(data).unwrap();
+                let msg: isb::ReadMessage = prost::Message::decode(data).unwrap();
                 if let Some(header) = msg.message.unwrap().header {
                     if let Some(message_info) = header.message_info {
                         let event_time = message_info
@@ -827,9 +854,10 @@ mod tests {
                             .map(utc_from_timestamp)
                             .expect("event time should not be empty");
                         assert!(
-                            event_time > gc_end_2,
-                            "Found message with event_time <= gc_end_2"
+                            event_time >= gc_end_2,
+                            "Found message with event_time < gc_end_2"
                         );
+                        replayed_event_times.push(event_time);
                     }
                 }
                 remaining_message_count += 1;
@@ -838,11 +866,20 @@ mod tests {
         handle.await.unwrap().unwrap();
 
         // Verify the number of remaining messages
-        // Messages with event_time <= gc_end_2 should be removed
+        // with event_time <= gc_end_2 should be removed
         assert_eq!(
-            remaining_message_count, 980,
-            "Expected 980 messages to remain after compaction"
+            remaining_message_count, 981,
+            "Expected 981 messages to remain after compaction"
         );
+
+        // Verify that the event times are in increasing order
+        for i in 1..replayed_event_times.len() {
+            assert_eq!(
+                replayed_event_times[i - 1] + chrono::Duration::seconds(1),
+                replayed_event_times[i],
+                "Event times are not in increasing order"
+            );
+        }
     }
 
     #[tokio::test]
@@ -863,6 +900,7 @@ mod tests {
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             100,  // channel_buffer_size
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -911,6 +949,7 @@ mod tests {
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             100,  // channel_buffer_size
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -980,15 +1019,21 @@ mod tests {
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             100,  // channel_buffer_size
+            300,  // max_segment_age_secs
         )
         .await?;
 
         // Create a channel to receive replayed messages
         let (replay_tx, mut replay_rx) = mpsc::channel(100);
 
-        // Call compact_with_replay
-        let handle = compactor.compact_with_replay(replay_tx).await?;
+        let cln_token = CancellationToken::new();
 
+        // Call start_compaction with replay
+        let handle = compactor
+            .start_compaction_with_replay(replay_tx, Duration::from_secs(60), cln_token.clone())
+            .await?;
+
+        cln_token.cancel();
         // Wait for compaction to complete
         handle
             .await
@@ -996,8 +1041,10 @@ mod tests {
 
         // Count the number of messages received through the replay channel
         let mut replayed_count = 0;
+        let mut replayed_event_times = Vec::new();
+
         while let Ok(data) = replay_rx.try_recv() {
-            let msg: numaflow_pb::objects::isb::ReadMessage = prost::Message::decode(data)
+            let msg: isb::ReadMessage = prost::Message::decode(data)
                 .map_err(|e| format!("Failed to decode message: {e}"))?;
 
             // Verify that the message has an event time after the GC end time
@@ -1008,6 +1055,9 @@ mod tests {
                         event_time > gc_end,
                         "Found message with event_time <= gc_end"
                     );
+
+                    // Store the event time for later verification
+                    replayed_event_times.push(event_time);
                 }
             }
             replayed_count += 1;
@@ -1018,6 +1068,27 @@ mod tests {
             replayed_count, 1,
             "Expected only one message to be replayed"
         );
+
+        // Verify that the event time is as expected
+        assert_eq!(
+            replayed_event_times.len(),
+            1,
+            "Expected one event time to be recorded"
+        );
+
+        assert_eq!(
+            replayed_event_times[0], after_time,
+            "Event time of replayed message does not match the original message"
+        );
+
+        // check the order of the replayed event by checking if their event time is increasing by 1
+        for i in 1..replayed_event_times.len() {
+            assert_eq!(
+                replayed_event_times[i - 1] + chrono::Duration::seconds(1),
+                replayed_event_times[i],
+                "Event times are not in increasing order"
+            );
+        }
 
         Ok(())
     }
@@ -1040,6 +1111,7 @@ mod tests {
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             100,  // channel_buffer_size
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -1050,10 +1122,10 @@ mod tests {
 
         let write_result_cnt = tokio::spawn(async move {
             let mut counter = 0;
-            while let Some(_) = gc_wal_write_rx.next().await {
+            while (gc_wal_write_rx.next().await).is_some() {
                 counter += 1;
             }
-            return counter;
+            counter
         });
 
         // GC event for key1:key2 with end time
@@ -1063,7 +1135,6 @@ mod tests {
             start_time: Some(prost_timestamp_from_utc(gc_start_1)),
             end_time: Some(prost_timestamp_from_utc(gc_end_1)),
             keys: vec!["key1".to_string(), "key2".to_string()],
-            ..Default::default()
         };
 
         // GC event for key3:key4 with a different end time
@@ -1073,7 +1144,6 @@ mod tests {
             start_time: Some(prost_timestamp_from_utc(gc_start_2)),
             end_time: Some(prost_timestamp_from_utc(gc_end_2)),
             keys: vec!["key3".to_string(), "key4".to_string()],
-            ..Default::default()
         };
 
         // Write the GC events to the WAL
@@ -1105,6 +1175,7 @@ mod tests {
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             100,  // channel_buffer_size
+            300,  // max_segment_age_secs
         )
         .await?;
 
@@ -1195,15 +1266,21 @@ mod tests {
             100,  // max_file_size_mb
             1000, // flush_interval_ms
             100,  // channel_buffer_size
+            300,  // max_segment_age_secs
         )
         .await?;
 
         // Create a channel to receive replayed messages
         let (replay_tx, mut replay_rx) = mpsc::channel(100);
 
-        // Call compact_with_replay
-        let handle = compactor.compact_with_replay(replay_tx).await?;
+        let cln_token = CancellationToken::new();
 
+        // Call start_compaction with replay
+        let handle = compactor
+            .start_compaction_with_replay(replay_tx, Duration::from_secs(60), cln_token.clone())
+            .await?;
+
+        cln_token.cancel();
         // Wait for compaction to complete
         handle
             .await
@@ -1215,7 +1292,7 @@ mod tests {
         let mut key3_key4_count = 0;
 
         while let Ok(data) = replay_rx.try_recv() {
-            let msg: numaflow_pb::objects::isb::ReadMessage = prost::Message::decode(data)
+            let msg: isb::ReadMessage = prost::Message::decode(data)
                 .map_err(|e| format!("Failed to decode message: {e}"))?;
 
             // Verify that the message has an event time after the appropriate GC end time

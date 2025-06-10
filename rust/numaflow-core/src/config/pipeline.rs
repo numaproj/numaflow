@@ -17,6 +17,9 @@ use crate::Result;
 use crate::config::ENV_NUMAFLOW_SERVING_CALLBACK_STORE;
 use crate::config::ENV_NUMAFLOW_SERVING_SPEC;
 use crate::config::components::metrics::MetricsConfig;
+use crate::config::components::reduce::{
+    ReducerConfig, ReducerType, StorageConfig, UserDefinedConfig,
+};
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::sink::SinkType;
 use crate::config::components::source::SourceConfig;
@@ -44,6 +47,10 @@ pub(crate) const DEFAULT_STREAM_MAP_SOCKET: &str = "/var/run/numaflow/mapstream.
 const DEFAULT_MAP_SERVER_INFO_FILE: &str = "/var/run/numaflow/mapper-server-info";
 const DEFAULT_SERVING_STORE_SOCKET: &str = "/var/run/numaflow/serving.sock";
 const DEFAULT_SERVING_STORE_SERVER_INFO_FILE: &str = "/var/run/numaflow/serving-server-info";
+pub(crate) const VERTEX_TYPE_SOURCE: &str = "Source";
+pub(crate) const VERTEX_TYPE_SINK: &str = "Sink";
+pub(crate) const VERTEX_TYPE_MAP_UDF: &str = "MapUDF";
+pub(crate) const VERTEX_TYPE_REDUCE_UDF: &str = "ReduceUDF";
 
 pub(crate) mod isb;
 pub(crate) mod watermark;
@@ -64,6 +71,53 @@ pub(crate) struct PipelineConfig {
     pub(crate) metrics_config: MetricsConfig,
     pub(crate) watermark_config: Option<WatermarkConfig>,
     pub(crate) callback_config: Option<ServingCallbackConfig>,
+    pub(crate) isb_config: Option<isb_config::ISBConfig>,
+}
+
+pub(crate) mod isb_config {
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) struct ISBConfig {
+        pub(crate) compression: Compression,
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) struct Compression {
+        pub(crate) compress_type: CompressionType,
+    }
+
+    #[derive(Debug, Copy, Clone, PartialEq)]
+    pub(crate) enum CompressionType {
+        None,
+        Gzip,
+        Zstd,
+        LZ4,
+    }
+
+    impl TryFrom<numaflow_models::models::Compression> for Compression {
+        type Error = String;
+        fn try_from(value: numaflow_models::models::Compression) -> Result<Self, Self::Error> {
+            match value.r#type {
+                None => Ok(Compression {
+                    compress_type: CompressionType::None,
+                }),
+                Some(t) => match t.as_str() {
+                    "gzip" => Ok(Compression {
+                        compress_type: CompressionType::Gzip,
+                    }),
+                    "zstd" => Ok(Compression {
+                        compress_type: CompressionType::Zstd,
+                    }),
+                    "lz4" => Ok(Compression {
+                        compress_type: CompressionType::LZ4,
+                    }),
+                    "none" => Ok(Compression {
+                        compress_type: CompressionType::None,
+                    }),
+                    _ => Err(format!("Invalid compression type: {t}")),
+                },
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -91,6 +145,7 @@ impl Default for PipelineConfig {
             metrics_config: Default::default(),
             watermark_config: None,
             callback_config: None,
+            isb_config: None,
         }
     }
 }
@@ -191,6 +246,13 @@ pub(crate) enum VertexType {
     Source(SourceVtxConfig),
     Sink(SinkVtxConfig),
     Map(MapVtxConfig),
+    Reduce(ReduceVtxConfig),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct ReduceVtxConfig {
+    pub(crate) reducer_config: ReducerConfig,
+    pub(crate) wal_storage_config: Option<StorageConfig>,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
@@ -225,9 +287,10 @@ impl Default for UserDefinedStoreConfig {
 impl std::fmt::Display for VertexType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match self {
-            VertexType::Source(_) => write!(f, "Source"),
-            VertexType::Sink(_) => write!(f, "Sink"),
-            VertexType::Map(_) => write!(f, "Map"),
+            VertexType::Source(_) => write!(f, "{}", VERTEX_TYPE_SOURCE),
+            VertexType::Sink(_) => write!(f, "{}", VERTEX_TYPE_SINK),
+            VertexType::Map(_) => write!(f, "{}", VERTEX_TYPE_MAP_UDF),
+            VertexType::Reduce(_) => write!(f, "{}", VERTEX_TYPE_REDUCE_UDF),
         }
     }
 }
@@ -270,8 +333,6 @@ impl PipelineConfig {
                 .contains(&key.as_str())
             })
             .collect();
-
-        info!("Env vars found - {:#?}", env_vars);
 
         let get_var = |var: &str| -> Result<String> {
             Ok(env_vars
@@ -391,15 +452,37 @@ impl PipelineConfig {
                 fb_sink_config,
                 serving_store_config,
             })
-        } else if let Some(map) = vertex_obj.spec.udf {
-            VertexType::Map(MapVtxConfig {
-                concurrency: batch_size as usize,
-                map_type: map.try_into()?,
-                map_mode: MapMode::Unary,
-            })
+        } else if let Some(udf) = vertex_obj.spec.udf {
+            if let Some(group_by) = &udf.group_by {
+                // This is a reduce vertex
+                let reducer_config = ReducerConfig {
+                    reducer_type: ReducerType::UserDefined(UserDefinedConfig::default()),
+                    window_config: group_by.try_into()?,
+                };
+
+                let storage_config = group_by.storage.as_ref().and_then(|storage| {
+                    if storage.no_store.is_some() {
+                        None
+                    } else {
+                        Some(Default::default())
+                    }
+                });
+
+                VertexType::Reduce(ReduceVtxConfig {
+                    reducer_config,
+                    wal_storage_config: storage_config,
+                })
+            } else {
+                // This is a map vertex
+                VertexType::Map(MapVtxConfig {
+                    concurrency: batch_size as usize,
+                    map_type: udf.try_into()?,
+                    map_mode: MapMode::Unary,
+                })
+            }
         } else {
             return Err(Error::Config(
-                "Only source and sink are supported ATM".to_string(),
+                "Only source, sink, map, and reduce are supported".to_string(),
             ));
         };
 
@@ -526,6 +609,32 @@ impl PipelineConfig {
             });
         }
 
+        let isb_config: Option<isb_config::ISBConfig> =
+            match vertex_obj.spec.inter_step_buffer.as_ref() {
+                None => None,
+                Some(isb_spec) => {
+                    let compress_type = match isb_spec.compression.as_ref() {
+                        None => isb_config::CompressionType::None,
+                        Some(t) => match &t.r#type {
+                            None => isb_config::CompressionType::None,
+                            Some(t) => match t.as_str() {
+                                "gzip" => isb_config::CompressionType::Gzip,
+                                "zstd" => isb_config::CompressionType::Zstd,
+                                "lz4" => isb_config::CompressionType::LZ4,
+                                _ => {
+                                    return Err(Error::Config(format!(
+                                        "Invalid compression type setting: {t}"
+                                    )));
+                                }
+                            },
+                        },
+                    };
+                    Some(isb_config::ISBConfig {
+                        compression: isb_config::Compression { compress_type },
+                    })
+                }
+            };
+
         Ok(PipelineConfig {
             batch_size: batch_size as usize,
             paf_concurrency: get_var(ENV_PAF_BATCH_SIZE)
@@ -543,6 +652,7 @@ impl PipelineConfig {
             metrics_config: MetricsConfig::with_lookback_window_in_secs(look_back_window),
             watermark_config,
             callback_config,
+            isb_config,
         })
     }
 
@@ -610,7 +720,7 @@ impl PipelineConfig {
                     .collect(),
                 idle_config,
             })),
-            VertexType::Sink(_) | VertexType::Map(_) => {
+            VertexType::Sink(_) | VertexType::Map(_) | VertexType::Reduce(_) => {
                 Some(WatermarkConfig::Edge(EdgeWatermarkConfig {
                     from_vertex_config: from_vertex_config
                         .iter()
@@ -689,6 +799,7 @@ mod tests {
             metrics_config: Default::default(),
             watermark_config: None,
             callback_config: None,
+            isb_config: None,
         };
 
         let config = PipelineConfig::default();

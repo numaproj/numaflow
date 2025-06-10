@@ -30,10 +30,10 @@ const (
 	OnFailureDrop     OnFailureRetryStrategy = "drop"     // Drop the operation and perform no further action.
 )
 
-// RetryStrategy struct encapsulates the settings for retrying operations in the event of failures.
-// It includes a BackOff strategy to manage the timing of retries and defines the action to take upon failure.
+// The RetryStrategy struct defines the configuration for handling operation retries in case of failures.
+// It incorporates an Exponential BackOff strategy to control retry timing and specifies the actions to take upon failure.
 type RetryStrategy struct {
-	// BackOff specifies the parameters for the backoff strategy, controlling how delays between retries should increase.
+	// BackOff specifies the parameters for the exponential backoff strategy, controlling how delays between retries should increase.
 	// +optional
 	BackOff *Backoff `json:"backoff,omitempty" protobuf:"bytes,1,opt,name=backoff"`
 	// OnFailure specifies the action to take when the specified retry strategy fails.
@@ -49,40 +49,64 @@ type RetryStrategy struct {
 
 // Backoff defines parameters used to systematically configure the retry strategy.
 type Backoff struct {
-	// Interval sets the delay to wait before retry, after a failure occurs.
+	// Interval sets the initial retry duration, after a failure occurs.
 	// +kubebuilder:default="1ms"
 	// +optional
 	Interval *metav1.Duration `json:"interval,omitempty" protobuf:"bytes,1,opt,name=interval"`
-	// Steps defines the number of times to try writing to a sink including retries
+	// Steps defines the maximum number of retry attempts
 	// +optional
 	Steps *uint32 `json:"steps,omitempty" protobuf:"bytes,2,opt,name=steps"`
-	// TODO(Retry): Enable after we add support for exponential backoff
-	//// +optional
-	//Cap *metav1.Duration `json:"cap,omitempty" protobuf:"bytes,3,opt,name=cap"`
-	//// +optional
-	//Factor *floatstr `json:"factor,omitempty" protobuf:"bytes,2,opt,name=factor"`
-	//// +optional
-	//Jitter *floatstr `json:"jitter,omitempty" protobuf:"bytes,3,opt,name=jitter"`
+	// Interval is multiplied by factor each iteration, if factor is not zero
+	// and the limits imposed by Steps and Cap have not been reached.
+	// +optional
+	Factor *float64 `json:"factor,omitempty" protobuf:"bytes,3,opt,name=factor"`
+	// A limit on revised values of the interval parameter. If a
+	// multiplication by the factor parameter would make the interval
+	// exceed the cap then the interval is set to the cap and the
+	// steps parameter is set to zero.
+	// +optional
+	Cap *metav1.Duration `json:"cap,omitempty" protobuf:"bytes,4,opt,name=cap"`
+	// The sleep at each iteration is the interval plus an additional
+	// amount chosen uniformly at random from the interval between
+	// zero and `jitter*interval`.
+	// +optional
+	Jitter *float64 `json:"jitter,omitempty" protobuf:"bytes,5,opt,name=jitter"`
 }
 
 // GetBackoff constructs a wait.Backoff configuration using default values and optionally overrides
 // these defaults with custom settings specified in the RetryStrategy.
 func (r RetryStrategy) GetBackoff() wait.Backoff {
 	// Initialize the Backoff structure with default values.
+	// Default backoff strategy is indefinite number of
+	// retries with fixed interval of 1ms between retries.
 	wt := wait.Backoff{
 		Duration: DefaultRetryInterval,
 		Steps:    DefaultRetrySteps,
+		Factor:   DefaultFactor,
+		Cap:      DefaultMaxRetryInterval,
 	}
 
-	// If a custom back-off configuration is present, check and substitute the respective parts.
+	// If a custom exponential back-off configuration is present, check and substitute the respective parts.
 	if r.BackOff != nil {
-		// If a custom Interval is specified, override the default Duration.
+		// If a custom Interval is specified, override the default Interval.
 		if r.BackOff.Interval != nil {
 			wt.Duration = r.BackOff.Interval.Duration
 		}
 		// If custom Steps are specified, override the default Steps.
 		if r.BackOff.Steps != nil {
 			wt.Steps = int(*r.BackOff.Steps)
+		}
+		// If a custom Factor is specified, override the default Factor.
+		if r.BackOff.Factor != nil {
+			wt.Factor = *r.BackOff.Factor
+		}
+		// If a custom Cap is specified, set the Cap.
+		if r.BackOff.Cap != nil {
+			wt.Cap = r.BackOff.Cap.Duration
+		}
+		// If a custom Jitter is specified, set the Jitter.
+		if r.BackOff.Jitter != nil {
+			wt.Jitter = *r.BackOff.Jitter
 		}
 	}
 

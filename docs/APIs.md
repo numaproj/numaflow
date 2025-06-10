@@ -1099,7 +1099,7 @@ Kubernetes meta/v1.Duration </a> </em>
 <em>(Optional)</em>
 <p>
 
-Interval sets the delay to wait before retry, after a failure occurs.
+Interval sets the initial retry duration, after a failure occurs.
 </p>
 
 </td>
@@ -1118,8 +1118,71 @@ Interval sets the delay to wait before retry, after a failure occurs.
 <em>(Optional)</em>
 <p>
 
-Steps defines the number of times to try writing to a sink including
-retries
+Steps defines the maximum number of retry attempts
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>factor</code></br> <em> float64 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Interval is multiplied by factor each iteration, if factor is not zero
+and the limits imposed by Steps and Cap have not been reached.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>cap</code></br> <em>
+<a href="https://pkg.go.dev/k8s.io/apimachinery/pkg/apis/meta/v1#Duration">
+Kubernetes meta/v1.Duration </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+A limit on revised values of the interval parameter. If a multiplication
+by the factor parameter would make the interval exceed the cap then the
+interval is set to the cap and the steps parameter is set to zero.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>jitter</code></br> <em> float64 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+The sleep at each iteration is the interval plus an additional amount
+chosen uniformly at random from the interval between zero and
+<code>jitter\*interval</code>.
 </p>
 
 </td>
@@ -1509,6 +1572,97 @@ value is set to “1”.
 </tbody>
 
 </table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.Compression">
+
+Compression
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.InterStepBuffer">InterStepBuffer</a>)
+</p>
+
+<p>
+
+<p>
+
+Compression is the compression settings for the messages in the
+InterStepBuffer
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>type</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.CompressionType">
+CompressionType </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Type is the type of compression to be used
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.CompressionType">
+
+CompressionType (<code>string</code> alias)
+</p>
+
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Compression">Compression</a>)
+</p>
+
+<p>
+
+<p>
+
+CompressionType is a string enumeration type that enumerates all
+possible compression types.
+</p>
+
+</p>
 
 <h3 id="numaflow.numaproj.io/v1alpha1.ConditionType">
 
@@ -4380,6 +4534,74 @@ Kubernetes meta/v1.Duration </a> </em>
 
 IncrementBy is the duration to be added to the current watermark to
 progress the watermark when source is idling.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.InterStepBuffer">
+
+InterStepBuffer
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.VertexSpec">VertexSpec</a>)
+</p>
+
+<p>
+
+<p>
+
+InterStepBuffer configuration specifically for the pipeline.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>compression</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Compression"> Compression </a>
+</em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Compression is the compression settings for the InterStepBufferService
 </p>
 
 </td>
@@ -7773,6 +7995,12 @@ Refer to the Kubernetes API documentation for the fields of the
 <td>
 
 <em>(Optional)</em>
+<p>
+
+InterStepBufferServiceName is the name of the InterStepBufferService to
+be used by the pipeline
+</p>
+
 </td>
 
 </tr>
@@ -7910,6 +8138,27 @@ for the Pipeline
 <p>
 
 SideInputs defines the Side Inputs of a pipeline.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>interStepBuffer</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.InterStepBuffer">
+InterStepBuffer </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+InterStepBuffer configuration specific to this pipeline.
 </p>
 
 </td>
@@ -8135,6 +8384,12 @@ Description
 <td>
 
 <em>(Optional)</em>
+<p>
+
+InterStepBufferServiceName is the name of the InterStepBufferService to
+be used by the pipeline
+</p>
+
 </td>
 
 </tr>
@@ -8272,6 +8527,27 @@ for the Pipeline
 <p>
 
 SideInputs defines the Side Inputs of a pipeline.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>interStepBuffer</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.InterStepBuffer">
+InterStepBuffer </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+InterStepBuffer configuration specific to this pipeline.
 </p>
 
 </td>
@@ -9307,9 +9583,10 @@ RetryStrategy
 
 <p>
 
-RetryStrategy struct encapsulates the settings for retrying operations
-in the event of failures. It includes a BackOff strategy to manage the
-timing of retries and defines the action to take upon failure.
+The RetryStrategy struct defines the configuration for handling
+operation retries in case of failures. It incorporates an Exponential
+BackOff strategy to control retry timing and specifies the actions to
+take upon failure.
 </p>
 
 </p>
@@ -9349,8 +9626,8 @@ Description
 <em>(Optional)</em>
 <p>
 
-BackOff specifies the parameters for the backoff strategy, controlling
-how delays between retries should increase.
+BackOff specifies the parameters for the exponential backoff strategy,
+controlling how delays between retries should increase.
 </p>
 
 </td>
@@ -12931,6 +13208,27 @@ Lifecycle defines the Lifecycle properties of a vertex
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>interStepBuffer</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.InterStepBuffer">
+InterStepBuffer </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+InterStepBuffer configuration specific to this pipeline.
+</p>
+
+</td>
+
+</tr>
+
 </table>
 
 </td>
@@ -13411,6 +13709,27 @@ VertexLifecycle </a> </em>
 <p>
 
 Lifecycle defines the Lifecycle properties of a vertex
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>interStepBuffer</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.InterStepBuffer">
+InterStepBuffer </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+InterStepBuffer configuration specific to this pipeline.
 </p>
 
 </td>

@@ -5,17 +5,21 @@ use crate::reduce::wal::WalMessage;
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use crate::reduce::wal::segment::compactor::Compactor;
 use crate::tracker::TrackerHandle;
+use std::time::Duration;
 use tokio::sync::mpsc::{self, Sender};
 use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
+use tracing::info;
 
 /// WAL for storing the data. If None, we will not persist the data.
 #[allow(clippy::upper_case_acronyms)]
 pub(crate) struct WAL {
-    append_only_wal: AppendOnlyWal,
-    compactor: Compactor,
+    /// Segment WAL which is only for appending.
+    pub(crate) append_only_wal: AppendOnlyWal,
+    /// Compactor for compacting the Segment WAL with GC WAL.
+    pub(crate) compactor: Compactor,
 }
 
 /// PBQBuilder is a builder for PBQ.
@@ -70,10 +74,44 @@ impl PBQ {
         };
 
         let handle = tokio::spawn(async move {
-            // Replay messages from WAL
-            Self::replay_wal(wal.compactor, &tx).await?;
+            let start = std::time::Instant::now();
+            // Create a channel for WAL replay
+            let (wal_tx, mut wal_rx) = mpsc::channel(500);
 
-            // Read from ISB and write to WAL
+            // Clone the tx for use in the replay handler
+            let messages_tx = tx.clone();
+
+            // starts the compaction process, for the first time it compacts and replays the
+            // unprocessed data then it does the periodic compaction.
+            let compaction_handle = wal
+                .compactor
+                .start_compaction_with_replay(
+                    wal_tx,
+                    Duration::from_secs(60),
+                    cancellation_token.clone(),
+                )
+                .await?;
+
+            let mut replayed_count = 0;
+
+            // Process replayed messages
+            while let Some(msg) = wal_rx.recv().await {
+                let msg: WalMessage = msg.try_into().expect("Failed to parse WAL message");
+                messages_tx
+                    .send(msg.into())
+                    .await
+                    .expect("Receiver dropped");
+                replayed_count += 1;
+            }
+
+            info!(
+                time_taken_ms = start.elapsed().as_millis(),
+                ?replayed_count,
+                "Finished replaying from WAL, starting to read from ISB"
+            );
+
+            // After replaying the unprocessed data, start reading the new set of messages from ISB
+            // and also persist them in WAL.
             Self::read_isb_and_write_wal(
                 self.isb_reader,
                 wal.append_only_wal,
@@ -83,24 +121,14 @@ impl PBQ {
             )
             .await?;
 
+            // Wait for compaction task to exit gracefully
+            compaction_handle.await.expect("task failed")?;
+
+            info!("PBQ streaming read completed");
             Ok(())
         });
 
         Ok((ReceiverStream::new(rx), handle))
-    }
-
-    /// Replays messages from the WAL converts them to [crate::message::Message] and sends them to
-    /// the tx channel.
-    async fn replay_wal(compactor: Compactor, tx: &Sender<Message>) -> Result<()> {
-        let (wal_tx, mut wal_rx) = mpsc::channel(100);
-        compactor.compact_with_replay(wal_tx).await?;
-
-        while let Some(msg) = wal_rx.recv().await {
-            let msg: WalMessage = msg.try_into().unwrap();
-            tx.send(msg.into()).await.expect("Receiver dropped");
-        }
-
-        Ok(())
     }
 
     /// Reads from ISB and writes to WAL.
@@ -144,9 +172,11 @@ impl PBQ {
             tx.send(msg).await.expect("Receiver dropped");
         }
 
+        isb_handle.await.expect("task failed")?;
+
+        // drop the sender to signal the wal eof and wait for the wal task to exit gracefully
         drop(wal_tx);
         wal_handle.await.expect("task failed")?;
-        isb_handle.await.expect("task failed")?;
 
         Ok(())
     }
@@ -164,7 +194,6 @@ mod tests {
     use async_nats::jetstream::{consumer, stream};
     use bytes::BytesMut;
     use chrono::Utc;
-    use std::collections::HashMap;
     use std::sync::Arc;
     use std::time::Duration;
 
@@ -206,15 +235,17 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
         };
         let tracker = TrackerHandle::new(None, None);
-        let js_reader = JetStreamReader::new(
-            "test".to_string(),
-            stream.clone(),
-            context.clone(),
-            buf_reader_config,
-            tracker.clone(),
-            500,
-            None,
-        )
+        use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;
+        let js_reader = JetStreamReader::new(ISBReaderConfig {
+            vertex_type: "test".to_string(),
+            stream: stream.clone(),
+            js_ctx: context.clone(),
+            config: buf_reader_config,
+            tracker_handle: tracker.clone(),
+            batch_size: 500,
+            watermark_handle: None,
+            isb_config: None,
+        })
         .await
         .unwrap();
 
@@ -244,8 +275,7 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                headers: HashMap::new(),
-                metadata: None,
+                ..Default::default()
             };
             let message_bytes: BytesMut = message.try_into().unwrap();
             context
@@ -318,15 +348,17 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
         };
         let tracker = TrackerHandle::new(None, None);
-        let js_reader = JetStreamReader::new(
-            "test".to_string(),
-            stream.clone(),
-            context.clone(),
-            buf_reader_config,
-            tracker.clone(),
-            500,
-            None,
-        )
+        use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;
+        let js_reader = JetStreamReader::new(ISBReaderConfig {
+            vertex_type: "test".to_string(),
+            stream: stream.clone(),
+            js_ctx: context.clone(),
+            config: buf_reader_config,
+            tracker_handle: tracker.clone(),
+            batch_size: 500,
+            watermark_handle: None,
+            isb_config: None,
+        })
         .await
         .unwrap();
 
@@ -337,11 +369,12 @@ mod tests {
             10,  // 10MB max file size
             100, // 100ms flush interval
             100, // channel buffer
+            300, // max_segment_age_secs
         )
         .await
         .unwrap();
 
-        let compactor = Compactor::new(wal_path.clone(), WindowKind::Aligned, 10, 100, 100)
+        let compactor = Compactor::new(wal_path.clone(), WindowKind::Aligned, 10, 100, 100, 300)
             .await
             .unwrap();
 
@@ -378,8 +411,7 @@ mod tests {
                     offset: format!("offset_{}", i).into(),
                     index: i as i32,
                 },
-                headers: HashMap::new(),
-                metadata: None,
+                ..Default::default()
             };
             let message_bytes: BytesMut = message.try_into().unwrap();
             context
@@ -402,9 +434,10 @@ mod tests {
         reader_cancel_token.cancel();
         handle.await.unwrap().unwrap();
 
-        let append_only_wal = AppendOnlyWal::new(WalType::Data, wal_path.clone(), 10, 100, 100)
-            .await
-            .unwrap();
+        let append_only_wal =
+            AppendOnlyWal::new(WalType::Data, wal_path.clone(), 10, 100, 100, 300)
+                .await
+                .unwrap();
 
         let (tx, rx) = mpsc::channel::<SegmentWriteMessage>(10);
         let (_result_rx, writer_handle) = append_only_wal
@@ -498,9 +531,10 @@ mod tests {
             .unwrap();
 
         // First, write some messages directly to WAL
-        let append_only_wal = AppendOnlyWal::new(WalType::Data, wal_path.clone(), 10, 100, 100)
-            .await
-            .unwrap();
+        let append_only_wal =
+            AppendOnlyWal::new(WalType::Data, wal_path.clone(), 10, 100, 100, 300)
+                .await
+                .unwrap();
 
         let (tx, rx) = mpsc::channel::<SegmentWriteMessage>(100);
         let (_result_rx, writer_handle) = append_only_wal
@@ -523,8 +557,7 @@ mod tests {
                     offset: format!("wal_offset_{}", i).into(),
                     index: i as i32,
                 },
-                headers: HashMap::new(),
-                metadata: None,
+                ..Default::default()
             };
 
             let wal_message = WalMessage {
@@ -549,24 +582,27 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
         };
         let tracker = TrackerHandle::new(None, None);
-        let js_reader = JetStreamReader::new(
-            "test".to_string(),
-            stream.clone(),
-            context.clone(),
-            buf_reader_config,
-            tracker.clone(),
-            500,
-            None,
-        )
+        use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;
+        let js_reader = JetStreamReader::new(ISBReaderConfig {
+            vertex_type: "test".to_string(),
+            stream: stream.clone(),
+            js_ctx: context.clone(),
+            config: buf_reader_config,
+            tracker_handle: tracker.clone(),
+            batch_size: 500,
+            watermark_handle: None,
+            isb_config: None,
+        })
         .await
         .unwrap();
 
         // Create new WAL components for PBQ
-        let append_only_wal = AppendOnlyWal::new(WalType::Data, wal_path.clone(), 10, 100, 100)
-            .await
-            .unwrap();
+        let append_only_wal =
+            AppendOnlyWal::new(WalType::Data, wal_path.clone(), 10, 100, 100, 300)
+                .await
+                .unwrap();
 
-        let compactor = Compactor::new(wal_path.clone(), WindowKind::Aligned, 10, 100, 100)
+        let compactor = Compactor::new(wal_path.clone(), WindowKind::Aligned, 10, 100, 100, 300)
             .await
             .unwrap();
 
@@ -633,8 +669,7 @@ mod tests {
                     offset: format!("isb_offset_{}", i).into(),
                     index: i as i32,
                 },
-                headers: HashMap::new(),
-                metadata: None,
+                ..Default::default()
             };
             let message_bytes: BytesMut = message.try_into().unwrap();
             context

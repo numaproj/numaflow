@@ -38,6 +38,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole":                        schema_pkg_apis_numaflow_v1alpha1_Blackhole(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.BufferServiceConfig":              schema_pkg_apis_numaflow_v1alpha1_BufferServiceConfig(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CombinedEdge":                     schema_pkg_apis_numaflow_v1alpha1_CombinedEdge(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Compression":                      schema_pkg_apis_numaflow_v1alpha1_Compression(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container":                        schema_pkg_apis_numaflow_v1alpha1_Container(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate":                schema_pkg_apis_numaflow_v1alpha1_ContainerTemplate(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DaemonTemplate":                   schema_pkg_apis_numaflow_v1alpha1_DaemonTemplate(ref),
@@ -60,6 +61,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GroupBy":                          schema_pkg_apis_numaflow_v1alpha1_GroupBy(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.HTTPSource":                       schema_pkg_apis_numaflow_v1alpha1_HTTPSource(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.IdleSource":                       schema_pkg_apis_numaflow_v1alpha1_IdleSource(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBuffer":                  schema_pkg_apis_numaflow_v1alpha1_InterStepBuffer(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBufferService":           schema_pkg_apis_numaflow_v1alpha1_InterStepBufferService(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBufferServiceList":       schema_pkg_apis_numaflow_v1alpha1_InterStepBufferServiceList(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBufferServiceSpec":       schema_pkg_apis_numaflow_v1alpha1_InterStepBufferServiceSpec(ref),
@@ -676,15 +678,35 @@ func schema_pkg_apis_numaflow_v1alpha1_Backoff(ref common.ReferenceCallback) com
 				Properties: map[string]spec.Schema{
 					"interval": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Interval sets the delay to wait before retry, after a failure occurs.",
+							Description: "Interval sets the initial retry duration, after a failure occurs.",
 							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
 						},
 					},
 					"steps": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Steps defines the number of times to try writing to a sink including retries",
+							Description: "Steps defines the maximum number of retry attempts",
 							Type:        []string{"integer"},
 							Format:      "int64",
+						},
+					},
+					"factor": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Interval is multiplied by factor each iteration, if factor is not zero and the limits imposed by Steps and Cap have not been reached.",
+							Type:        []string{"number"},
+							Format:      "double",
+						},
+					},
+					"cap": {
+						SchemaProps: spec.SchemaProps{
+							Description: "A limit on revised values of the interval parameter. If a multiplication by the factor parameter would make the interval exceed the cap then the interval is set to the cap and the steps parameter is set to zero.",
+							Ref:         ref("k8s.io/apimachinery/pkg/apis/meta/v1.Duration"),
+						},
+					},
+					"jitter": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The sleep at each iteration is the interval plus an additional amount chosen uniformly at random from the interval between zero and `jitter*interval`.",
+							Type:        []string{"number"},
+							Format:      "double",
 						},
 					},
 				},
@@ -837,6 +859,26 @@ func schema_pkg_apis_numaflow_v1alpha1_CombinedEdge(ref common.ReferenceCallback
 		},
 		Dependencies: []string{
 			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_Compression(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Compression is the compression settings for the messages in the InterStepBuffer",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"type": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Type is the type of compression to be used",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -2268,6 +2310,27 @@ func schema_pkg_apis_numaflow_v1alpha1_IdleSource(ref common.ReferenceCallback) 
 		},
 		Dependencies: []string{
 			"k8s.io/apimachinery/pkg/apis/meta/v1.Duration"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_InterStepBuffer(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "InterStepBuffer configuration specifically for the pipeline.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"compression": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Compression is the compression settings for the InterStepBufferService",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Compression"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Compression"},
 	}
 }
 
@@ -4178,8 +4241,9 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineSpec(ref common.ReferenceCallback
 				Properties: map[string]spec.Schema{
 					"interStepBufferServiceName": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "InterStepBufferServiceName is the name of the InterStepBufferService to be used by the pipeline",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"vertices": {
@@ -4255,11 +4319,17 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineSpec(ref common.ReferenceCallback
 							},
 						},
 					},
+					"interStepBuffer": {
+						SchemaProps: spec.SchemaProps{
+							Description: "InterStepBuffer configuration specific to this pipeline.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBuffer"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractVertex", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Lifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInput", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractVertex", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBuffer", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Lifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInput", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark"},
 	}
 }
 
@@ -4637,12 +4707,12 @@ func schema_pkg_apis_numaflow_v1alpha1_RetryStrategy(ref common.ReferenceCallbac
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "RetryStrategy struct encapsulates the settings for retrying operations in the event of failures. It includes a BackOff strategy to manage the timing of retries and defines the action to take upon failure.",
+				Description: "The RetryStrategy struct defines the configuration for handling operation retries in case of failures. It incorporates an Exponential BackOff strategy to control retry timing and specifies the actions to take upon failure.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"backoff": {
 						SchemaProps: spec.SchemaProps{
-							Description: "BackOff specifies the parameters for the backoff strategy, controlling how delays between retries should increase.",
+							Description: "BackOff specifies the parameters for the exponential backoff strategy, controlling how delays between retries should increase.",
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Backoff"),
 						},
 					},
@@ -6714,12 +6784,18 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLifecycle"),
 						},
 					},
+					"interStepBuffer": {
+						SchemaProps: spec.SchemaProps{
+							Description: "InterStepBuffer configuration specific to this pipeline.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBuffer"),
+						},
+					},
 				},
 				Required: []string{"name", "pipelineName"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CombinedEdge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodResourceClaim", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CombinedEdge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBuffer", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodResourceClaim", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
 	}
 }
 

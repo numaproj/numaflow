@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.5.0-rc3 (2025-05-18)
+
+ * [40839123](https://github.com/numaproj/numaflow/commit/408391237923536f482099a1040f02b104832375) Update manifests to v1.5.0-rc3
+ * [abc72d3b](https://github.com/numaproj/numaflow/commit/abc72d3bb4e1f70d990ee07dcc5dc51030b5d768) fix: potential incorrect k8s minor version (#2647)
+ * [f3968694](https://github.com/numaproj/numaflow/commit/f396869467d3b78ced4dfcc23267d082155911d4) feat: exponential backoff retry strategy for sink (#2614)
+ * [b3a691a4](https://github.com/numaproj/numaflow/commit/b3a691a414241e6a74016f0a7cebd224b924c078) fix: honour retry config in case of Pipeline in Rust (#2638)
+ * [35c80b14](https://github.com/numaproj/numaflow/commit/35c80b14f2edc74dfb1cc078393776703e1231de) fix: broken retry strategy in sink (#2626)
+
+### Contributors
+
+ * Adarsh Jain
+ * Derek Wang
+ * Yashash H L
+
 ## v1.5.0-rc2 (2025-05-12)
 
  * [bec31d7f](https://github.com/numaproj/numaflow/commit/bec31d7fd7fd444b3db33f7a97ca71fe19b96675) Update manifests to v1.5.0-rc2
@@ -154,6 +168,14 @@
  * Yashash H L
  * dependabot[bot]
  * shrivardhan
+
+## v1.4.6 (2025-05-18)
+
+ * [b966b1bb](https://github.com/numaproj/numaflow/commit/b966b1bbc88337fcec8580dea3417fbc3710ce2e) Update manifests to v1.4.6
+
+### Contributors
+
+ * Derek Wang
 
 ## v1.4.5 (2025-05-13)
 

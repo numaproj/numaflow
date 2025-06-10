@@ -12,19 +12,7 @@ spec:
         generator:
           rpu: 5
           duration: 1s
-    - name: cat-one
-      scale:
-        min: 1
-      udf:
-        builtin:
-          name: cat # A builtin UDF which simply cats the message
-    - name: cat-two
-      scale:
-        min: 1
-      udf:
-        builtin:
-          name: cat # A builtin UDF which simply cats the message
-    - name: cat-three
+    - name: cat
       scale:
         min: 1
       udf:
@@ -37,10 +25,6 @@ spec:
         log: {}
   edges:
     - from: in
-      to: cat-one
-    - from: cat-one
-      to: cat-two
-    - from: cat-two
-      to: cat-three
-    - from: cat-three
+      to: cat
+    - from: cat
       to: out

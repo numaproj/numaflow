@@ -19760,12 +19760,26 @@
     "io.numaproj.numaflow.v1alpha1.Backoff": {
       "description": "Backoff defines parameters used to systematically configure the retry strategy.",
       "properties": {
+        "cap": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
+          "description": "A limit on revised values of the interval parameter. If a multiplication by the factor parameter would make the interval exceed the cap then the interval is set to the cap and the steps parameter is set to zero."
+        },
+        "factor": {
+          "description": "Interval is multiplied by factor each iteration, if factor is not zero and the limits imposed by Steps and Cap have not been reached.",
+          "format": "double",
+          "type": "number"
+        },
         "interval": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
-          "description": "Interval sets the delay to wait before retry, after a failure occurs."
+          "description": "Interval sets the initial retry duration, after a failure occurs."
+        },
+        "jitter": {
+          "description": "The sleep at each iteration is the interval plus an additional amount chosen uniformly at random from the interval between zero and `jitter*interval`.",
+          "format": "double",
+          "type": "number"
         },
         "steps": {
-          "description": "Steps defines the number of times to try writing to a sink including retries",
+          "description": "Steps defines the maximum number of retry attempts",
           "format": "int64",
           "type": "integer"
         }
@@ -19849,6 +19863,16 @@
         "fromVertexType",
         "toVertexType"
       ],
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.Compression": {
+      "description": "Compression is the compression settings for the messages in the InterStepBuffer",
+      "properties": {
+        "type": {
+          "description": "Type is the type of compression to be used",
+          "type": "string"
+        }
+      },
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.Container": {
@@ -20631,6 +20655,16 @@
         "threshold": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
           "description": "Threshold is the duration after which a source is marked as Idle due to lack of data. Ex: If watermark found to be idle after the Threshold duration then the watermark is progressed by `IncrementBy`."
+        }
+      },
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.InterStepBuffer": {
+      "description": "InterStepBuffer configuration specifically for the pipeline.",
+      "properties": {
+        "compression": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Compression",
+          "description": "Compression is the compression settings for the InterStepBufferService"
         }
       },
       "type": "object"
@@ -21671,7 +21705,12 @@
           },
           "type": "array"
         },
+        "interStepBuffer": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.InterStepBuffer",
+          "description": "InterStepBuffer configuration specific to this pipeline."
+        },
         "interStepBufferServiceName": {
+          "description": "InterStepBufferServiceName is the name of the InterStepBufferService to be used by the pipeline",
           "type": "string"
         },
         "lifecycle": {
@@ -21914,11 +21953,11 @@
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.RetryStrategy": {
-      "description": "RetryStrategy struct encapsulates the settings for retrying operations in the event of failures. It includes a BackOff strategy to manage the timing of retries and defines the action to take upon failure.",
+      "description": "The RetryStrategy struct defines the configuration for handling operation retries in case of failures. It incorporates an Exponential BackOff strategy to control retry timing and specifies the actions to take upon failure.",
       "properties": {
         "backoff": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Backoff",
-          "description": "BackOff specifies the parameters for the backoff strategy, controlling how delays between retries should increase."
+          "description": "BackOff specifies the parameters for the exponential backoff strategy, controlling how delays between retries should increase."
         },
         "onFailure": {
           "description": "OnFailure specifies the action to take when the specified retry strategy fails. The possible values are: 1. \"retry\": start another round of retrying the operation, 2. \"fallback\": re-route the operation to a fallback sink and 3. \"drop\": drop the operation and perform no further action. The default action is to retry.",
@@ -22921,6 +22960,10 @@
             "$ref": "#/definitions/io.k8s.api.core.v1.Container"
           },
           "type": "array"
+        },
+        "interStepBuffer": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.InterStepBuffer",
+          "description": "InterStepBuffer configuration specific to this pipeline."
         },
         "interStepBufferServiceName": {
           "type": "string"
