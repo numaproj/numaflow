@@ -1356,6 +1356,10 @@ func (h *handler) DiscoverMetrics(c *gin.Context) {
 			for _, metric := range pattern.Metrics {
 				var requiredFilters []Filter
 				// Populate the required filters
+				// TODO (ajain): place a check at filters instead of dimension level
+				// so that more patterns can be clubbed
+				// OR
+				// shift to metrics approach (already tested) instead of patterns approach
 				for _, filter := range metric.Filters {
 					requiredFilters = append(requiredFilters, Filter{
 						Name:     filter,
