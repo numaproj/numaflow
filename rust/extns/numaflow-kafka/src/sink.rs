@@ -87,7 +87,7 @@ pub fn new_sink(config: KafkaSinkConfig) -> crate::Result<KafkaSink> {
         .set("bootstrap.servers", config.brokers.join(","))
         .set_log_level(RDKafkaLogLevel::Warning);
 
-    crate::update_auth_config(&mut client_config, config.tls, config.auth);
+    crate::update_auth_config(&mut client_config, config.tls, config.auth)?;
 
     let producer: FutureProducer = client_config
         .create()

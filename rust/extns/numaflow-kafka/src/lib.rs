@@ -20,6 +20,12 @@ pub enum Error {
     Other(String),
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum GssAPIAuthType {
+    KeyTab,
+    UserAuth,
+}
+
 /// Represents the SASL authentication mechanism for connecting to Kafka.
 ///
 /// See the [Kafka Security documentation](https://kafka.apache.org/documentation/#security_sasl) for more details on each mechanism.
@@ -61,8 +67,10 @@ pub enum KafkaSaslAuth {
         keytab: Option<String>,
         /// Path to the Kerberos configuration file (optional).
         kerberos_config: Option<String>,
-        /// Authentication type (e.g., "kinit").
-        auth_type: String,
+        /// Authentication type (e.g., "").
+        /// KRB5_USER_AUTH for auth using password
+        /// KRB5_KEYTAB_AUTH for auth using keytab
+        auth_type: GssAPIAuthType,
     },
     /// SASL/OAUTHBEARER authentication mechanism.
     ///
@@ -108,7 +116,7 @@ fn update_auth_config(
     client_config: &mut ClientConfig,
     tls_config: Option<TlsConfig>,
     auth_config: Option<KafkaSaslAuth>,
-) {
+) -> Result<()> {
     let tls_enabled = tls_config.is_some();
     if let Some(tls_config) = tls_config {
         client_config.set("security.protocol", "SSL");
@@ -160,10 +168,10 @@ fn update_auth_config(
                 service_name,
                 realm: _,
                 username,
-                password: _,
+                password,
                 keytab,
                 kerberos_config,
-                auth_type: _,
+                auth_type,
             } => {
                 client_config.set("sasl.mechanisms", "GSSAPI");
                 client_config.set("sasl.kerberos.service.name", service_name);
@@ -171,9 +179,38 @@ fn update_auth_config(
                 if let Some(keytab) = keytab {
                     client_config.set("sasl.kerberos.keytab", keytab);
                 }
+
+                const CONFIG_FILE_PATH: &str = "/tmp/krb5.conf";
+                let kinit_cmd = match auth_type {
+                    GssAPIAuthType::UserAuth => {
+                        let password = password.unwrap_or_default(); // FIXME:
+                        format!(
+                            r#"echo '{password}' | kinit -R %{{sasl.kerberos.principal}} || echo '{password}' | kinit  %{{sasl.kerberos.principal}}"#
+                        )
+                    }
+                    GssAPIAuthType::KeyTab => {
+                        // Default value. https://docs.confluent.io/platform/current/clients/librdkafka/html/md_CONFIGURATION.html
+                        r##"kinit -R -t "%{sasl.kerberos.keytab}" -k %{sasl.kerberos.principal} || kinit -t "%{sasl.kerberos.keytab}" -k %{sasl.kerberos.principal}"##.to_string()
+                    }
+                };
+
                 if let Some(kerberos_config) = kerberos_config {
-                    client_config.set("sasl.kerberos.kinit.cmd", kerberos_config);
+                    std::fs::write(CONFIG_FILE_PATH, &kerberos_config).map_err(|err| {
+                        Error::Other(format!(
+                            "Saving kerberos config to file {kerberos_config}: {err:?}"
+                        ))
+                    })?;
+                    client_config.set(
+                        "sasl.kerberos.kinit.cmd",
+                        format!("export KRB5_CONFIG={CONFIG_FILE_PATH} && {kinit_cmd}"),
+                    );
+                } else {
+                    client_config.set("sasl.kerberos.kinit.cmd", kinit_cmd);
                 }
+                tracing::info!(
+                    kinit_cmd = client_config.get("sasl.kerberos.kinit.cmd"),
+                    "Running kinit command"
+                );
             }
             KafkaSaslAuth::Oauth {
                 client_id,
@@ -187,6 +224,7 @@ fn update_auth_config(
             }
         }
     }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -198,7 +236,7 @@ mod tests {
     #[test]
     fn test_update_auth_config_none() {
         let mut config = ClientConfig::new();
-        update_auth_config(&mut config, None, None);
+        update_auth_config(&mut config, None, None).unwrap();
         // Should not set any security or SASL keys
         assert!(config.get("security.protocol").is_none());
         assert!(config.get("sasl.mechanisms").is_none());
@@ -215,7 +253,7 @@ mod tests {
                 client_cert_private_key: "CLIENT_KEY_DATA".to_string(),
             }),
         };
-        update_auth_config(&mut config, Some(tls), None);
+        update_auth_config(&mut config, Some(tls), None).unwrap();
         let expected_config = [
             ("security.protocol", "SSL"),
             ("enable.ssl.certificate.verification", "false"),
@@ -236,7 +274,7 @@ mod tests {
             username: "user".to_string(),
             password: "pass".to_string(),
         };
-        update_auth_config(&mut config, None, Some(auth));
+        update_auth_config(&mut config, None, Some(auth)).unwrap();
         let expected_config = [
             ("security.protocol", "SASL_PLAINTEXT"),
             ("sasl.mechanisms", "PLAIN"),
@@ -256,7 +294,7 @@ mod tests {
             username: "user256".to_string(),
             password: "pass256".to_string(),
         };
-        update_auth_config(&mut config, None, Some(auth));
+        update_auth_config(&mut config, None, Some(auth)).unwrap();
         let expected_config = [
             ("security.protocol", "SASL_PLAINTEXT"),
             ("sasl.mechanisms", "SCRAM-SHA-256"),
@@ -276,7 +314,7 @@ mod tests {
             username: "user512".to_string(),
             password: "pass512".to_string(),
         };
-        update_auth_config(&mut config, None, Some(auth));
+        update_auth_config(&mut config, None, Some(auth)).unwrap();
         let expected_config = [
             ("security.protocol", "SASL_PLAINTEXT"),
             ("sasl.mechanisms", "SCRAM-SHA-512"),
@@ -299,9 +337,9 @@ mod tests {
             password: None,
             keytab: Some("/path/to/keytab".to_string()),
             kerberos_config: Some("/path/to/krb5.conf".to_string()),
-            auth_type: "kinit".to_string(),
+            auth_type: GssAPIAuthType::KeyTab,
         };
-        update_auth_config(&mut config, None, Some(auth));
+        update_auth_config(&mut config, None, Some(auth)).unwrap();
         let expected_config = [
             ("security.protocol", "SASL_PLAINTEXT"),
             ("sasl.mechanisms", "GSSAPI"),
@@ -324,7 +362,7 @@ mod tests {
             client_secret: "csecret".to_string(),
             token_endpoint: "https://token".to_string(),
         };
-        update_auth_config(&mut config, None, Some(auth));
+        update_auth_config(&mut config, None, Some(auth)).unwrap();
         let expected_config = [
             ("security.protocol", "SASL_PLAINTEXT"),
             ("sasl.mechanisms", "OAUTHBEARER"),
@@ -350,7 +388,7 @@ mod tests {
             username: "user".to_string(),
             password: "pass".to_string(),
         };
-        update_auth_config(&mut config, Some(tls), Some(auth));
+        update_auth_config(&mut config, Some(tls), Some(auth)).unwrap();
         let expected_config = [
             ("security.protocol", "SASL_SSL"),
             ("sasl.mechanisms", "PLAIN"),
