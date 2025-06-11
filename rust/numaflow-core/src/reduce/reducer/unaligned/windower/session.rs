@@ -7,6 +7,7 @@ use crate::reduce::reducer::unaligned::windower::{
     SHARED_PNF_SLOT, UnalignedWindowMessage, UnalignedWindowOperation, Window,
 };
 use chrono::{DateTime, Utc};
+use tracing::info;
 
 /// session window state for every key combination (combinedKey -> Sorted window set)
 type WindowStore = Arc<RwLock<HashMap<String, BTreeSet<Window>>>>;
@@ -269,6 +270,7 @@ impl SessionWindowManager {
             merged_groups.push(merged_group);
         }
 
+        info!("Merged groups: {:?}", merged_groups);
         merged_groups
     }
 

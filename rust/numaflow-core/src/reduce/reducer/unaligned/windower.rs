@@ -8,7 +8,7 @@ use numaflow_pb::clients::accumulator::KeyedWindow;
 use numaflow_pb::clients::sessionreduce;
 use numaflow_pb::objects::wal::GcEvent;
 use std::cmp::Ordering;
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 use std::sync::Arc;
 
 pub(crate) mod accumulator;
@@ -36,7 +36,7 @@ pub(crate) enum WindowOperation {
 /// A Window is represented by its start and end time. All the data which event time falls within
 /// this window will be reduced by the Reduce function associated with it. The association is via the
 /// id. The Windows when sorted are sorted by the end time.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub(crate) struct Window {
     /// Start time of the window.
     pub(crate) start_time: DateTime<Utc>,
@@ -70,6 +70,17 @@ impl Display for Window {
             self.end_time.timestamp_millis(),
             self.keys
         )
+    }
+}
+
+impl Debug for Window {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Window")
+            .field("start_time", &self.start_time.timestamp_millis())
+            .field("end_time", &self.end_time.timestamp_millis())
+            .field("id", &self.id)
+            .field("keys", &self.keys)
+            .finish()
     }
 }
 

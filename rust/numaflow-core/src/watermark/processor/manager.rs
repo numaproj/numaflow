@@ -526,8 +526,8 @@ mod tests {
 
         let bucket_config = BucketConfig {
             vertex: "test",
-            ot_bucket: "ot_bucket",
-            hb_bucket: "hb_bucket",
+            ot_bucket: ot_bucket_name,
+            hb_bucket: hb_bucket_name,
             partitions: 1,
         };
 

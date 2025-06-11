@@ -3,39 +3,52 @@ kind: Pipeline
 metadata:
   name: simple-session-counter
 spec:
-  watermark:
-    maxDelay: 30s
   vertices:
     - name: in
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       scale:
         min: 1
       source:
         http: {}
     - name: even-odd
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       scale:
         min: 1
       udf:
         container:
-          image: quay.io/numaio/numaflow-go/map-even-odd:stable
-          imagePullPolicy: Always
+          image: quay.io/numaio/numaflow-go/map-forward-message:stable
     - name: compute-count
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       partitions: 1
       udf:
         container:
           # see https://github.com/numaproj/numaflow-go/tree/main/pkg/sessionreducer/examples/counter
           # computes the count of even numbers and odd numbers in a session
-          image: quay.io/numaio/numaflow-go/session-counter:stable
-          imagePullPolicy: Always
+          image: quay.io/numaio/numaflow-rs/session-counter:stable
+          imagePullPolicy: Never
         groupBy:
           window:
             session:
-              timeout: 120s # session window will be closed after 120 seconds of inactivity
+              timeout: 10s # session window will be closed after 120 seconds of inactivity
           keyed: true
           storage:
             persistentVolumeClaim:
               volumeSize: 2Gi
               accessMode: ReadWriteOnce
     - name: sink
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       scale:
         min: 1
       sink:

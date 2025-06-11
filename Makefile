@@ -180,7 +180,7 @@ ui-test: ui-build
 	./hack/test-ui.sh
 
 .PHONY: image
-image: clean ui-build dist/$(BINARY_NAME)-linux-$(HOST_ARCH)
+image: clean dist/$(BINARY_NAME)-linux-$(HOST_ARCH)
 ifdef GITHUB_ACTIONS
 	# The binary will be built in a separate Github Actions job
 	cp -pv numaflow-rs-linux-amd64 dist/numaflow-rs-linux-amd64
