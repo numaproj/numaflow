@@ -29,6 +29,7 @@ struct ParentMessageInfo {
     is_late: bool,
     headers: HashMap<String, String>,
     start_time: Instant,
+    current_index: i32,
 }
 
 impl From<Message> for MapRequest {
@@ -129,6 +130,7 @@ impl UserDefinedUnaryMap {
             headers: message.headers.clone(),
             is_late: message.is_late,
             start_time: Instant::now(),
+            current_index: 0,
         };
 
         pipeline_metrics()
@@ -240,6 +242,7 @@ impl UserDefinedBatchMap {
                 headers: message.headers.clone(),
                 is_late: message.is_late,
                 start_time: Instant::now(),
+                current_index: 0,
             };
 
             pipeline_metrics()
@@ -401,7 +404,7 @@ impl UserDefinedStreamMap {
                 None
             }
         } {
-            let (message_info, response_sender) = sender_map
+            let (mut message_info, response_sender) = sender_map
                 .lock()
                 .await
                 .remove(&resp.id)
@@ -424,13 +427,14 @@ impl UserDefinedStreamMap {
                 continue;
             }
 
-            for (i, result) in resp.results.into_iter().enumerate() {
+            for result in resp.results.into_iter() {
                 response_sender
                     .send(Ok(
-                        UserDefinedMessage(result, &message_info, i as i32).into()
+                        UserDefinedMessage(result, &message_info, message_info.current_index).into()
                     ))
                     .await
                     .expect("failed to send response");
+                message_info.current_index += 1;
             }
 
             // Write the sender back to the map, because we need to send
@@ -455,6 +459,7 @@ impl UserDefinedStreamMap {
             headers: message.headers.clone(),
             start_time: Instant::now(),
             is_late: message.is_late,
+            current_index: 0,
         };
 
         pipeline_metrics()
@@ -790,6 +795,10 @@ mod tests {
             .map(|r| String::from_utf8(Vec::from(r.value.clone())).unwrap())
             .collect();
         assert_eq!(values, vec!["test", "map", "stream"]);
+
+        // Verify that message indices are properly incremented
+        let indices: Vec<i32> = responses.iter().map(|r| r.id.index).collect();
+        assert_eq!(indices, vec![0, 1, 2]);
 
         // we need to drop the client, because if there are any in-flight requests
         // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85
