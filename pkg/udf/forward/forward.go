@@ -478,7 +478,7 @@ func (isdf *InterStepDataForward) streamMessage(ctx context.Context, dataMessage
 		return nil, fmt.Errorf("failed to applyUDF, error: %w", err)
 	}
 
-	metrics.ConcurrentUDFProcessingTime.With(metricLabels).Observe(float64(time.Since(start).Microseconds()))
+	metrics.UDFProcessingTime.With(metricLabels).Observe(float64(time.Since(start).Microseconds()))
 
 	return writeOffsets, nil
 }
