@@ -191,14 +191,6 @@ var (
 		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*15, 10),
 	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex})
 
-	// ConcurrentUDFProcessingTime is a histogram to Observe UDF Processing times as a whole
-	ConcurrentUDFProcessingTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Subsystem: "forwarder",
-		Name:      "concurrent_udf_processing_time",
-		Help:      "Processing times of Concurrent UDF (100 microseconds to 20 minutes)",
-		Buckets:   prometheus.ExponentialBucketsRange(100, 60000000*20, 10),
-	}, []string{LabelVertex, LabelPipeline, LabelVertexType, LabelVertexReplicaIndex})
-
 	// UDFReadMessagesCount is used to indicate the number of messages read by UDF
 	UDFReadMessagesCount = promauto.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: "forwarder",
