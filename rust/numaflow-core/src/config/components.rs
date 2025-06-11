@@ -1,4 +1,4 @@
-use numaflow_kafka::TlsConfig;
+use numaflow_kafka::{GssAPIAuthType, TlsConfig};
 use numaflow_models::models::{Sasl, Tls};
 
 use crate::Error;
@@ -1199,7 +1199,14 @@ fn parse_kafka_auth_config(
                         } else {
                             None
                         };
-                    let auth_type = format!("{:?}", gssapi.auth_type);
+                    let auth_type = match gssapi.auth_type {
+                        numaflow_models::models::gssapi::AuthType::KeytabAuth => {
+                            GssAPIAuthType::KeyTab
+                        }
+                        numaflow_models::models::gssapi::AuthType::UserAuth => {
+                            GssAPIAuthType::UserAuth
+                        }
+                    };
                     Some(numaflow_kafka::KafkaSaslAuth::Gssapi {
                         service_name,
                         realm,
@@ -1847,6 +1854,7 @@ mod kafka_tests {
     use super::sink::SinkType;
     use super::source::SourceType;
     use k8s_openapi::api::core::v1::SecretKeySelector;
+    use numaflow_kafka::GssAPIAuthType;
     use numaflow_models::models::gssapi::AuthType;
     use numaflow_models::models::{Gssapi, KafkaSource, Sasl, SaslPlain, SasloAuth, Tls};
     use std::collections::HashMap;
@@ -2402,7 +2410,7 @@ mod kafka_tests {
                     assert_eq!(password, Some("test-pass".to_string()));
                     assert!(keytab.is_none());
                     assert!(kerberos_config.is_none());
-                    assert_eq!(auth_type, "UserAuth");
+                    assert_eq!(auth_type, GssAPIAuthType::UserAuth);
                 }
                 _ => panic!("Unexpected KafkaAuth variant"),
             }
@@ -2475,7 +2483,7 @@ mod kafka_tests {
                     assert!(password.is_none());
                     assert_eq!(keytab, Some("test-keytab".to_string()));
                     assert!(kerberos_config.is_none());
-                    assert_eq!(auth_type, "KeytabAuth");
+                    assert_eq!(auth_type, GssAPIAuthType::KeyTab);
                 }
                 _ => panic!("Unexpected KafkaAuth variant"),
             }
