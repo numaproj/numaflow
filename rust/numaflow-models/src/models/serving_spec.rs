@@ -46,6 +46,8 @@ pub struct ServingSpec {
     /// NodeSelector is a selector which must be true for the pod to fit on a node. Selector which must match a node's labels for the pod to be scheduled on that node. More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/
     #[serde(rename = "nodeSelector", skip_serializing_if = "Option::is_none")]
     pub node_selector: Option<::std::collections::HashMap<String, String>>,
+    #[serde(rename = "ports", skip_serializing_if = "Option::is_none")]
+    pub ports: Option<Box<crate::models::Ports>>,
     /// The priority value. Various system components use this field to find the priority of the Redis pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
     #[serde(rename = "priority", skip_serializing_if = "Option::is_none")]
     pub priority: Option<i32>,
@@ -95,6 +97,7 @@ impl ServingSpec {
             metadata: None,
             msg_id_header_key,
             node_selector: None,
+            ports: None,
             priority: None,
             priority_class_name: None,
             replicas: None,

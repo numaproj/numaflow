@@ -12466,6 +12466,15 @@ spec:
                     additionalProperties:
                       type: string
                     type: object
+                  ports:
+                    properties:
+                      http:
+                        format: int32
+                        type: integer
+                      https:
+                        format: int32
+                        type: integer
+                    type: object
                   priority:
                     format: int32
                     type: integer

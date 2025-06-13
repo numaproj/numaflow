@@ -151,12 +151,13 @@ const (
 	EnvMemoryLimit                      = "NUMAFLOW_MEMORY_LIMIT"
 	EnvGoDebug                          = "GODEBUG"
 	EnvServingJetstreamStream           = "NUMAFLOW_SERVING_JETSTREAM_STREAM"
-	EnvServingPort                      = "NUMAFLOW_SERVING_APP_LISTEN_PORT"
+	EnvServingPort                      = "NUMAFLOW_SERVING_APP_LISTEN_HTTPS_PORT"
+	EnvServingHttpPort                  = "NUMAFLOW_SERVING_APP_LISTEN_HTTP_PORT"
 	EnvServingMinPipelineSpec           = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC"
 	EnvServingHostIP                    = "NUMAFLOW_SERVING_HOST_IP"
 	EnvK8sServerVersion                 = "K8S_SERVER_VERSION"
 	EnvNumaflowRuntime                  = "NUMAFLOW_RUNTIME"
-	EnvServingSettings                  = "NUMAFLOW_SERVING_SOURCE_SETTINGS"
+	EnvServingSpec                      = "NUMAFLOW_SERVING_SPEC"
 	EnvServingCallbackStore             = "NUMAFLOW_SERVING_CALLBACK_STORE"
 	EnvServingResponseStore             = "NUMAFLOW_SERVING_RESPONSE_STORE"
 	EnvServingStatusStore               = "NUMAFLOW_SERVING_STATUS_STORE"
@@ -175,7 +176,8 @@ const (
 	MonoVertexMonitorPort       = 2470
 	MonoVertexMonitorPortName   = "monitor"
 	MonoVertexDaemonServicePort = 4327
-	ServingServicePort          = 8443
+	ServingServiceHttpsPort     = 8443
+	ServingServiceHttpPort      = 8090
 
 	DefaultRequeueAfter = 10 * time.Second
 
