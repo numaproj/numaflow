@@ -19,11 +19,11 @@ use tokio::time::{Instant, sleep};
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::Result;
-use crate::config::pipeline::ToVertexConfig;
 use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
+use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::config::pipeline::isb_config::{CompressionType, ISBConfig};
 use crate::error::Error;
 
@@ -243,12 +243,21 @@ impl JetstreamWriter {
                         continue;
                     }
 
+                    // for reduce vertex we should use the keys as the shuffle key
+                    let shuffle_key = match vertex.vertex_type {
+                        VertexType::MapUDF | VertexType::Sink | VertexType::Source => {
+                            String::from_utf8_lossy(&message.id.offset).to_string()
+                        }
+                        VertexType::ReduceUDF => message.keys.join(":"),
+                    };
+
+                    info!(?shuffle_key, "Shuffle key");
+
                     // check to which partition the message should be written
-                    let partition = forward::determine_partition(
-                        String::from_utf8_lossy(&message.id.offset).to_string(),
-                        vertex.partitions,
-                        &mut hash,
-                    );
+                    let partition =
+                        forward::determine_partition(shuffle_key, vertex.partitions, &mut hash);
+
+                    info!(?partition, "Partition");
 
                     // write the message to the corresponding stream
                     let stream = vertex
@@ -679,6 +688,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                vertex_type: VertexType::Sink,
             }],
             js_ctx: context.clone(),
             paf_concurrency: 100,
@@ -776,6 +786,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                vertex_type: VertexType::Sink,
             }],
             js_ctx: context.clone(),
             paf_concurrency: 100,
@@ -842,6 +853,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                vertex_type: VertexType::MapUDF,
             }],
             js_ctx: context.clone(),
             paf_concurrency: 100,
@@ -1052,6 +1064,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                vertex_type: VertexType::Sink,
             }],
             js_ctx: context.clone(),
             paf_concurrency: 100,
@@ -1146,6 +1159,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                vertex_type: VertexType::Sink,
             }],
             js_ctx: context.clone(),
             paf_concurrency: 100,
@@ -1240,6 +1254,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                vertex_type: VertexType::Sink,
             }],
             js_ctx: context.clone(),
             paf_concurrency: 100,
@@ -1360,6 +1375,7 @@ mod tests {
                         operator: Some("and".to_string()),
                         values: vec!["tag1".to_string(), "tag2".to_string()],
                     }))),
+                    vertex_type: VertexType::Sink,
                 },
                 ToVertexConfig {
                     name: "vertex2",
@@ -1372,6 +1388,7 @@ mod tests {
                         operator: Some("or".to_string()),
                         values: vec!["tag2".to_string()],
                     }))),
+                    vertex_type: VertexType::Sink,
                 },
                 ToVertexConfig {
                     name: "vertex3",
@@ -1384,6 +1401,7 @@ mod tests {
                         operator: Some("not".to_string()),
                         values: vec!["tag1".to_string()],
                     }))),
+                    vertex_type: VertexType::Sink,
                 },
             ],
             js_ctx: context.clone(),

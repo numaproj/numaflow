@@ -6,12 +6,11 @@
 //! last fetched watermark per partition and returns the smallest watermark among all the last fetched
 //! watermarks across the partitions this is to make sure the watermark is min across all the incoming
 //! partitions.
-use std::collections::HashMap;
-
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::error::Result;
 use crate::watermark::processor::manager::ProcessorManager;
 use crate::watermark::wmb::Watermark;
+use std::collections::HashMap;
 
 /// ISBWatermarkFetcher is the watermark fetcher for the incoming edges.
 pub(crate) struct ISBWatermarkFetcher {
