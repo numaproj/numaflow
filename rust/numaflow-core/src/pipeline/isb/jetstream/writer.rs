@@ -29,8 +29,8 @@ use crate::error::Error;
 
 use crate::message::{IntOffset, Message, Offset};
 use crate::metrics::{
-    PIPELINE_PARTITION_NAME_LABEL, pipeline_isb_metric_labels, pipeline_metric_labels,
-    pipeline_metrics,
+    PIPELINE_PARTITION_NAME_LABEL, pipeline_drop_metric_labels, pipeline_isb_metric_labels,
+    pipeline_metric_labels, pipeline_metrics,
 };
 use crate::shared::forward;
 use crate::tracker::TrackerHandle;
@@ -423,12 +423,20 @@ impl JetstreamWriter {
                             pipeline_metrics()
                                 .forwarder
                                 .drop_total
-                                .get_or_create(pipeline_isb_metric_labels())
+                                .get_or_create(&pipeline_drop_metric_labels(
+                                    &self.vertex_type,
+                                    stream.name,
+                                    "Buffer full!",
+                                ))
                                 .inc();
                             pipeline_metrics()
                                 .forwarder
                                 .drop_bytes_total
-                                .get_or_create(pipeline_isb_metric_labels())
+                                .get_or_create(&pipeline_drop_metric_labels(
+                                    &self.vertex_type,
+                                    stream.name,
+                                    "Buffer full!",
+                                ))
                                 .inc_by(msg_bytes as u64);
                             return None;
                         }

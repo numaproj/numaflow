@@ -5,15 +5,21 @@ metadata:
 spec:
   vertices:
     - name: in
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       source:
         http: {}
         transformer:
-          builtin:
-            name: timeExtractionFilter
-            kwargs:
-              filterExpr: int(json(payload).id) < 100
-              eventTimeExpr: json(payload).time
+          container:
+            image: quay.io/numaio/numaflow-go/mapt-time-extractor:stable
+            imagePullPolicy: Always
     - name: out
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       partitions: 2
       scale:
         min: 1
