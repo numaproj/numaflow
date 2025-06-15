@@ -39,6 +39,7 @@ pub(crate) struct ISBReaderConfig {
     pub config: BufferReaderConfig,
     pub tracker_handle: TrackerHandle,
     pub batch_size: usize,
+    pub read_timeout: Duration,
     pub watermark_handle: Option<ISBWatermarkHandle>,
     pub isb_config: Option<ISBConfig>,
 }
@@ -66,6 +67,7 @@ pub(crate) struct JetStreamReader {
     consumer: PullConsumer,
     tracker_handle: TrackerHandle,
     batch_size: usize,
+    read_timeout: Duration,
     watermark_handle: Option<ISBWatermarkHandle>,
     vertex_type: String,
     compression_type: Option<CompressionType>,
@@ -210,6 +212,7 @@ impl JetStreamReader {
             consumer,
             tracker_handle: reader_config.tracker_handle,
             batch_size: reader_config.batch_size,
+            read_timeout: reader_config.read_timeout,
             watermark_handle: reader_config.watermark_handle,
             compression_type: reader_config
                 .isb_config
@@ -228,10 +231,9 @@ impl JetStreamReader {
         cancel_token: CancellationToken,
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let batch_size = self.batch_size;
-        let read_timeout = Duration::from_millis(100); // Add a reasonable timeout
+        let read_timeout = self.read_timeout;
 
-        let (messages_tx, messages_rx) = mpsc::channel(2 * batch_size);
-
+        let (messages_tx, messages_rx) = mpsc::channel(batch_size);
         let handle: JoinHandle<Result<()>> = tokio::spawn({
             async move {
                 let mut labels = pipeline_metric_labels(&self.vertex_type).clone();
@@ -628,6 +630,7 @@ mod tests {
             config: buf_reader_config,
             tracker_handle: tracker.clone(),
             batch_size: 500,
+            read_timeout: Duration::from_millis(100),
             watermark_handle: None,
             isb_config: None,
         })
@@ -734,6 +737,7 @@ mod tests {
             config: buf_reader_config,
             tracker_handle: tracker_handle.clone(),
             batch_size: 1,
+            read_timeout: Duration::from_millis(100),
             watermark_handle: None,
             isb_config: None,
         })
@@ -884,6 +888,7 @@ mod tests {
             config: buf_reader_config,
             tracker_handle: tracker.clone(),
             batch_size: 500,
+            read_timeout: Duration::from_millis(100),
             watermark_handle: None,
             isb_config: Some(isb_config.clone()),
         })
