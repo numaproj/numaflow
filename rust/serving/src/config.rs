@@ -7,11 +7,12 @@ use base64::prelude::BASE64_STANDARD;
 use bytes::Bytes;
 use rcgen::{Certificate, CertifiedKey, KeyPair, generate_simple_self_signed};
 use serde::{Deserialize, Serialize};
+use serde_json::from_slice;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use tracing::info;
 
-const ENV_NUMAFLOW_SERVING_APP_PORT: &str = "NUMAFLOW_SERVING_APP_LISTEN_PORT";
+const DEFAULT_SERVING_HTTPS_PORT: u16 = 8443;
 pub const ENV_MIN_PIPELINE_SPEC: &str = "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC";
 pub const DEFAULT_ID_HEADER: &str = "X-Numaflow-Id";
 pub const DEFAULT_POD_HASH_KEY: &str = "X-Numaflow-Pod-Hash";
@@ -24,6 +25,7 @@ const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM
 const ENV_NUMAFLOW_SERVING_CALLBACK_STORE: &str = "NUMAFLOW_SERVING_CALLBACK_STORE";
 const ENV_NUMAFLOW_SERVING_RESPONSE_STORE: &str = "NUMAFLOW_SERVING_RESPONSE_STORE";
 const ENV_NUMAFLOW_SERVING_STATUS_STORE: &str = "NUMAFLOW_SERVING_STATUS_STORE";
+const ENV_NUMAFLOW_SERVING_SPEC: &str = "NUMAFLOW_SERVING_SPEC";
 const ENV_NUMAFLOW_POD: &str = "NUMAFLOW_POD";
 
 pub fn generate_certs() -> Result<(Certificate, KeyPair), String> {
@@ -78,7 +80,8 @@ pub struct Settings {
     /// The client may also set the value of this header when sending the payload.
     pub tid_header: &'static str,
     pub pod_hash: &'static str,
-    pub app_listen_port: u16,
+    pub app_listen_https_port: u16,
+    pub app_listen_http_port: Option<u16>,
     pub metrics_server_listen_port: u16,
     pub upstream_addr: &'static str,
     pub drain_timeout_secs: u64,
@@ -105,7 +108,8 @@ impl Default for Settings {
         Self {
             tid_header: DEFAULT_ID_HEADER,
             pod_hash: "0",
-            app_listen_port: 3000,
+            app_listen_https_port: DEFAULT_SERVING_HTTPS_PORT,
+            app_listen_http_port: None,
             metrics_server_listen_port: 3001,
             upstream_addr: "localhost:8888",
             drain_timeout_secs: 600,
@@ -233,39 +237,43 @@ impl TryFrom<HashMap<String, String>> for Settings {
             ..Default::default()
         };
 
-        if let Some(app_port) = env_vars.get(ENV_NUMAFLOW_SERVING_APP_PORT) {
-            settings.app_listen_port = app_port.parse().map_err(|e| {
-                ParseConfig(format!(
-                    "Parsing {ENV_NUMAFLOW_SERVING_APP_PORT}(set to '{app_port}'): {e:?}"
-                ))
-            })?;
-        }
+        let serving_spec = env_vars.get(ENV_NUMAFLOW_SERVING_SPEC).ok_or_else(|| {
+            ParseConfig("Environment variable NUMAFLOW_SERVING_SPEC is not set".into())
+        })?;
 
-        let serving_server_settings_encoded = env_vars
-            .get("NUMAFLOW_SERVING_SOURCE_SETTINGS")
-            .ok_or_else(|| {
+        let serving_spec_decoded = BASE64_STANDARD
+            .decode(serving_spec.as_bytes())
+            .map_err(|e| {
                 ParseConfig(
-                    "Environment variable NUMAFLOW_SERVING_SOURCE_SETTINGS is not set".into(),
+                    format!(
+                        "Failed to base64 decode value of environment variable '{ENV_NUMAFLOW_SERVING_SPEC}'. value='{serving_spec}'. Err={e:?}"
+                    )
                 )
             })?;
-        let serving_server_settings_decoded = BASE64_STANDARD
-            .decode(serving_server_settings_encoded.as_bytes())
-            .map_err(|e| ParseConfig(format!("decoding {ENV_MIN_PIPELINE_SPEC}: {e:?}")))?;
-
-        let serving_server_settings: numaflow_models::models::ServingSpec =
-            serde_json::from_slice(serving_server_settings_decoded.as_slice()).map_err(|err| {
-                ParseConfig(format!(
-                    "Parsing Serving settings from environment variable 'NUMAFLOW_SERVING_SOURCE_SETTINGS': {err:?}"
-                ))
+        let serving_spec: numaflow_models::models::ServingSpec =
+            from_slice(serving_spec_decoded.as_slice()).map_err(|e| {
+                ParseConfig(
+                    format!(
+                        "Failed to base64 decode value of environment variable '{ENV_NUMAFLOW_SERVING_SPEC}'. value='{serving_spec}'. Err={e:?}"
+                    )
+                )
             })?;
 
-        settings.store_type = if serving_server_settings.store.is_some() {
+        // Configure ports from serving spec, with defaults
+        if let Some(ports) = &serving_spec.ports {
+            if let Some(https_port) = ports.https {
+                settings.app_listen_https_port = https_port as u16;
+            }
+            settings.app_listen_http_port = ports.http.map(|port| port as u16);
+        }
+
+        settings.store_type = if serving_spec.store.is_some() {
             StoreType::UserDefined(UserDefinedStoreConfig::default())
         } else {
             StoreType::Nats
         };
 
-        settings.tid_header = Box::leak(serving_server_settings.msg_id_header_key.into_boxed_str());
+        settings.tid_header = Box::leak(serving_spec.msg_id_header_key.into_boxed_str());
         settings.pod_hash = Box::leak(
             env_vars
                 .get(ENV_NUMAFLOW_POD)
@@ -277,12 +285,10 @@ impl TryFrom<HashMap<String, String>> for Settings {
                 .into_boxed_str(),
         );
 
-        settings.drain_timeout_secs = serving_server_settings
-            .request_timeout_seconds
-            .unwrap_or(120)
-            .max(1) as u64; // Ensure timeout is at least 1 second
+        settings.drain_timeout_secs =
+            serving_spec.request_timeout_seconds.unwrap_or(120).max(1) as u64; // Ensure timeout is at least 1 second
 
-        if let Some(auth) = serving_server_settings.auth {
+        if let Some(auth) = serving_spec.auth {
             let token = auth.token.unwrap();
             let auth_token = get_secret_from_volume(&token.name, &token.key)
                 .map_err(|e| ParseConfig(e.to_string()))?;
@@ -314,7 +320,8 @@ mod tests {
 
         assert_eq!(settings.tid_header, "X-Numaflow-Id");
         assert_eq!(settings.pod_hash, "0");
-        assert_eq!(settings.app_listen_port, 3000);
+        assert_eq!(settings.app_listen_https_port, 8443);
+        assert_eq!(settings.app_listen_http_port, None);
         assert_eq!(settings.metrics_server_listen_port, 3001);
         assert_eq!(settings.upstream_addr, "localhost:8888");
         assert_eq!(settings.drain_timeout_secs, 600);
@@ -325,7 +332,6 @@ mod tests {
     fn test_pipeline_config_parse() {
         // Set up the environment variables
         let env_vars = [
-            (ENV_NUMAFLOW_SERVING_APP_PORT, "8443"),
             (ENV_NUMAFLOW_POD, "serving-server-kddc"),
             ("NUMAFLOW_ISBSVC_JETSTREAM_USER", "testuser"),
             ("NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD", "testpasswd"),
@@ -333,8 +339,8 @@ mod tests {
             ("NUMAFLOW_SERVING_STATUS_STORE", "test-kv-store"),
             ("NUMAFLOW_SERVING_RESPONSE_STORE", "test-kv-store"),
             (
-                "NUMAFLOW_SERVING_SOURCE_SETTINGS",
-                "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQifQ==",
+                "NUMAFLOW_SERVING_SPEC",
+                "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQiLCJwb3J0cyI6eyJodHRwcyI6ODQ0M319",
             ),
             (
                 ENV_MIN_PIPELINE_SPEC,
@@ -353,7 +359,8 @@ mod tests {
         let expected_config = Settings {
             tid_header: "X-Numaflow-Id".into(),
             pod_hash: "kddc".into(),
-            app_listen_port: 8443,
+            app_listen_https_port: 8443,
+            app_listen_http_port: None,
             metrics_server_listen_port: 3001,
             upstream_addr: "localhost:8888".into(),
             drain_timeout_secs: 120,
