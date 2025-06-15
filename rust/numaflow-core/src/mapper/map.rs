@@ -404,60 +404,46 @@ impl MapHandle {
                 return;
             }
 
-            tokio::select! {
-                result = receiver => {
-                    match result {
-                        Ok(Ok(mapped_messages)) => {
-                            // update the tracker with the number of messages sent and send the mapped messages
-                            tracker_handle
-                                .update(
-                                    offset.clone(),
-                                    mapped_messages.iter().map(|m| m.tags.clone()).collect(),
-                                )
-                                .await
-                                .expect("failed to update tracker");
+            match receiver.await {
+                Ok(Ok(mapped_messages)) => {
+                    // update the tracker with the number of messages sent and send the mapped messages
+                    tracker_handle
+                        .update(
+                            offset.clone(),
+                            mapped_messages.iter().map(|m| m.tags.clone()).collect(),
+                        )
+                        .await
+                        .expect("failed to update tracker");
 
-                            // done with the batch
-                            tracker_handle
-                                .eof(offset)
-                                .await
-                                .expect("failed to update eof");
-                            // send messages downstream
-                            for mapped_message in mapped_messages {
-                                output_tx
-                                    .send(mapped_message)
-                                    .await
-                                    .expect("failed to send response");
-                            }
-                        }
-                        Ok(Err(_map_err)) => {
-                            error!(err=?_map_err, ?offset, "failed to map message");
-                            tracker_handle
-                                .discard(offset)
-                                .await
-                                .expect("failed to discard message");
-                            let _ = error_tx.send(_map_err).await;
-                        }
-                        Err(err) => {
-                            error!(?err, ?offset, "failed to receive message");
-                            tracker_handle
-                                .discard(offset)
-                                .await
-                                .expect("failed to discard message");
-                            let _ = error_tx
-                                .send(Error::Mapper(format!("failed to receive message: {}", err)))
-                                .await;
-                        }
+                    // done with the batch
+                    tracker_handle
+                        .eof(offset)
+                        .await
+                        .expect("failed to update eof");
+                    // send messages downstream
+                    for mapped_message in mapped_messages {
+                        output_tx
+                            .send(mapped_message)
+                            .await
+                            .expect("failed to send response");
                     }
-                },
-                _ = cln_token.cancelled() => {
-                    error!(?offset, "Cancellation token received, discarding message");
+                }
+                Ok(Err(_map_err)) => {
+                    error!(err=?_map_err, ?offset, "failed to map message");
+                    tracker_handle
+                        .discard(offset)
+                        .await
+                        .expect("failed to discard message");
+                    let _ = error_tx.send(_map_err).await;
+                }
+                Err(err) => {
+                    error!(?err, ?offset, "failed to receive message");
                     tracker_handle
                         .discard(offset)
                         .await
                         .expect("failed to discard message");
                     let _ = error_tx
-                        .send(Error::Mapper("Operation cancelled".to_string()))
+                        .send(Error::Mapper(format!("failed to receive message: {}", err)))
                         .await;
                 }
             }
