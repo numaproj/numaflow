@@ -631,6 +631,7 @@ mod tests {
     use crate::config::components::source::SourceConfig;
     use crate::config::components::source::SourceType;
     use crate::config::pipeline::PipelineConfig;
+    use crate::config::pipeline::isb::Stream;
     use crate::config::pipeline::map::{MapType, UserDefinedConfig};
     use crate::pipeline::pipeline::VertexType;
     use crate::pipeline::pipeline::isb;
