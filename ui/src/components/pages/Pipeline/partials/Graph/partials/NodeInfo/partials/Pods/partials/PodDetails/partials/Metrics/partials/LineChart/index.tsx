@@ -33,7 +33,12 @@ import {
   MONO_VERTEX_SINK_WRITE_TIME_LATENCY,
   POD_CPU_UTILIZATION,
   POD_MEMORY_UTILIZATION,
+  UDF_PROCESSING_TIME_LATENCY,
+  VERTEX_ACK_PROCESSING_TIME_LATENCY,
   VERTEX_PENDING_MESSAGES,
+  VERTEX_READ_PROCESSING_TIME_LATENCY,
+  VERTEX_WRITE_PROCESSING_TIME_LATENCY,
+  VERTEX_PROCESSING_TIME_LATENCY
 } from "../../utils/constants";
 import { AppContext } from "../../../../../../../../../../../../../../../App";
 import { AppContextProps } from "../../../../../../../../../../../../../../../types/declarations/app";
@@ -181,6 +186,11 @@ const getDefaultFormatter = (value: number, displayName: string) => {
   switch (displayName) {
     case MONO_VERTEX_PROCESSING_TIME_LATENCY:
     case MONO_VERTEX_SINK_WRITE_TIME_LATENCY:
+    case VERTEX_READ_PROCESSING_TIME_LATENCY:
+    case VERTEX_WRITE_PROCESSING_TIME_LATENCY:
+    case VERTEX_PROCESSING_TIME_LATENCY:
+    case VERTEX_ACK_PROCESSING_TIME_LATENCY:
+    case UDF_PROCESSING_TIME_LATENCY:
       if (value === 0) {
         return "0";
       } else if (value < 1000) {
