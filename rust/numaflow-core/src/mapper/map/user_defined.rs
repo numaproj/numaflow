@@ -29,6 +29,8 @@ struct ParentMessageInfo {
     is_late: bool,
     headers: HashMap<String, String>,
     start_time: Instant,
+    /// this remains 0 for all except map-streaming because in map-streaming there could be more than
+    /// one response for a single request.
     current_index: i32,
 }
 

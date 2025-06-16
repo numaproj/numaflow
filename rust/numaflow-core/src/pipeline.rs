@@ -239,7 +239,7 @@ async fn start_map_forwarder(
         let mapper = create_components::create_mapper(
             config.batch_size,
             config.read_timeout,
-            config.graceful_timeout,
+            config.graceful_shutdown_time,
             map_vtx_config.clone(),
             tracker_handle.clone(),
             cln_token.clone(),

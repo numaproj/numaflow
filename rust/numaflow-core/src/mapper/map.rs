@@ -132,7 +132,7 @@ enum ActorSender {
 pub(crate) struct MapHandle {
     batch_size: usize,
     read_timeout: Duration,
-    graceful_timeout: Duration,
+    graceful_shutdown_time: Duration,
     concurrency: usize,
     tracker: TrackerHandle,
     actor_sender: ActorSender,
@@ -201,7 +201,7 @@ impl MapHandle {
             actor_sender,
             batch_size,
             read_timeout,
-            graceful_timeout,
+            graceful_shutdown_time: graceful_timeout,
             concurrency,
             tracker: tracker_handle,
             final_result: Ok(()),
@@ -225,16 +225,23 @@ impl MapHandle {
 
         // we spawn one of the 3 map types
         let handle = tokio::spawn(async move {
-            let map_cln_token = CancellationToken::new();
-
             let parent_cln_token = cln_token.clone();
-            let child_cln_token = map_cln_token.clone();
-            let graceful_timeout = self.graceful_timeout;
+
+            // create a new cancellation token for the map component, this token is used for hard
+            // shutdown, the parent token is used for graceful shutdown.
+            let hard_shutdown_token = CancellationToken::new();
+            // the one that calls shutdown
+            let hard_shutdown_token_owner = hard_shutdown_token.clone();
+            let graceful_timeout = self.graceful_shutdown_time;
+
             // spawn a task to cancel the token after graceful timeout when the main token is cancelled
-            tokio::spawn(async move {
+            let shutdown_handle = tokio::spawn(async move {
+                // initiate graceful shutdown
                 parent_cln_token.cancelled().await;
+                // wait for graceful timeout
                 tokio::time::sleep(graceful_timeout).await;
-                child_cln_token.cancel();
+                // cancel the token to hard shutdown
+                hard_shutdown_token_owner.cancel();
             });
 
             let mut input_stream = input_stream;
@@ -277,7 +284,7 @@ impl MapHandle {
                                     output_tx.clone(),
                                     self.tracker.clone(),
                                     error_tx.clone(),
-                                    map_cln_token.clone(),
+                                    hard_shutdown_token.clone(),
                                 ).await;
                             }
                         },
@@ -371,6 +378,13 @@ impl MapHandle {
                 .await
                 .map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {}", e)))?;
             info!(status=?self.final_result, "Map component is completed with status");
+
+            // abort the shutdown handle since we are done processing, no need to wait for the
+            // hard shutdown
+            if !shutdown_handle.is_finished() {
+                shutdown_handle.abort();
+            }
+
             self.final_result.clone()
         });
 
