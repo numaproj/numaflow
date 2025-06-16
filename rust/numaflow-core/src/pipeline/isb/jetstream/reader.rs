@@ -268,7 +268,7 @@ impl JetStreamReader {
 
                     let mut batch_count = 0;
                     for message in read_messages {
-                        self.update_metrics(&labels, &message);
+                        Self::update_metrics(&labels, &message);
                         if let Err(e) = messages_tx.send(message).await {
                             error!(?e, "Failed to send message to channel");
                             break;
@@ -389,6 +389,7 @@ impl JetStreamReader {
                 self.config.wip_ack_interval,
                 permit,
                 cancel_token.clone(),
+                start,
             ));
 
             read_messages.push(message);
@@ -407,7 +408,7 @@ impl JetStreamReader {
         info!(stream=?self.stream, "All inflight messages are successfully acked/nacked");
     }
 
-    fn update_metrics(&self, labels: &[(String, String)], message: &Message) {
+    fn update_metrics(labels: &[(String, String)], message: &Message) {
         let message_bytes = message.value.len();
         let labels_vec = labels.to_vec();
         pipeline_metrics()
@@ -436,6 +437,7 @@ impl JetStreamReader {
     /// until the final ack/nak is received. This will continuously retry if there is an error in acknowledging.
     /// If the sender's end of the ack_rx channel was dropped before
     /// sending the final `Ack` or `Nak` (due to some unhandled/unknown failure), we will send `Nak` to Jetstream.
+    #[allow(clippy::too_many_arguments)]
     async fn start_work_in_progress(
         labels: Vec<(String, String)>,
         offset: Offset,
@@ -444,6 +446,7 @@ impl JetStreamReader {
         tick: Duration,
         _permit: OwnedSemaphorePermit, // permit to release after acking the offsets.
         cancel_token: CancellationToken,
+        message_processing_start: Instant,
     ) {
         let start = Instant::now();
         let mut interval = time::interval_at(start + tick, tick);
@@ -477,6 +480,7 @@ impl JetStreamReader {
 
             match ack {
                 ReadAck::Ack => {
+                    let ack_start = Instant::now();
                     Self::invoke_ack_with_retry(&msg, AckKind::Ack, &cancel_token, offset.clone())
                         .await;
 
@@ -484,13 +488,18 @@ impl JetStreamReader {
                         .forwarder
                         .ack_processing_time
                         .get_or_create(&labels)
-                        .observe(start.elapsed().as_micros() as f64);
+                        .observe(ack_start.elapsed().as_micros() as f64);
 
                     pipeline_metrics()
                         .forwarder
                         .ack_total
                         .get_or_create(&labels)
                         .inc();
+                    pipeline_metrics()
+                        .forwarder
+                        .e2e_time
+                        .get_or_create(&labels)
+                        .observe(message_processing_start.elapsed().as_micros() as f64);
                     return;
                 }
                 ReadAck::Nak => {

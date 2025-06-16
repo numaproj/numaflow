@@ -10,7 +10,6 @@ use tracing::info;
 use crate::config::components::reduce::WindowType;
 use crate::config::is_mono_vertex;
 use crate::config::pipeline;
-use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::{
