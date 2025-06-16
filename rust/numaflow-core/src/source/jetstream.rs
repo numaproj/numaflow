@@ -142,11 +142,12 @@ mod tests {
             .await
             .unwrap();
 
+        let consumer = format!("{}_consumer", stream_name);
         stream
             .get_or_create_consumer(
-                stream_name,
+                &consumer,
                 async_nats::jetstream::consumer::pull::Config {
-                    durable_name: Some(stream_name.to_string()),
+                    durable_name: Some(consumer.clone()),
                     ..Default::default()
                 },
             )
@@ -164,7 +165,7 @@ mod tests {
         let config = numaflow_jetstream::JetstreamSourceConfig {
             addr: "localhost".to_string(),
             stream: stream_name.to_string(),
-            consumer: stream_name.to_string(),
+            consumer,
             auth: None,
             tls: None,
         };

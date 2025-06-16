@@ -15,6 +15,8 @@ import { useMetricsDiscoveryDataFetch } from "../../../../../../../../../../../.
 import {
   dimensionReverseMap,
   VERTEX_PENDING_MESSAGES,
+  UDF_READ_PROCESSING_RATE,
+  UDF_WRITE_PROCESSING_RATE,
 } from "./utils/constants";
 import {
   VertexDetailsContext,
@@ -126,6 +128,8 @@ export function Metrics({
           type === "source" &&
           metric?.display_name === VERTEX_PENDING_MESSAGES
         )
+          return null;
+        if (type !== "udf" && (metric?.display_name === UDF_READ_PROCESSING_RATE || metric?.display_name === UDF_WRITE_PROCESSING_RATE))
           return null;
         const panelId = `${metric?.metric_name}-panel`;
         return (
