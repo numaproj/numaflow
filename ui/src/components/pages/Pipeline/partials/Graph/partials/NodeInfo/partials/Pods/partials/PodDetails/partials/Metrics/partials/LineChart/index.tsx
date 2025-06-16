@@ -34,6 +34,8 @@ import {
   POD_CPU_UTILIZATION,
   POD_MEMORY_UTILIZATION,
   VERTEX_PENDING_MESSAGES,
+  VERTEX_READ_PROCESSING_TIME_LATENCY,
+  VERTEX_WRITE_PROCESSING_TIME_LATENCY,
 } from "../../utils/constants";
 import { AppContext } from "../../../../../../../../../../../../../../../App";
 import { AppContextProps } from "../../../../../../../../../../../../../../../types/declarations/app";
@@ -181,6 +183,8 @@ const getDefaultFormatter = (value: number, displayName: string) => {
   switch (displayName) {
     case MONO_VERTEX_PROCESSING_TIME_LATENCY:
     case MONO_VERTEX_SINK_WRITE_TIME_LATENCY:
+    case VERTEX_READ_PROCESSING_TIME_LATENCY:
+    case VERTEX_WRITE_PROCESSING_TIME_LATENCY:
       if (value === 0) {
         return "0";
       } else if (value < 1000) {
@@ -304,6 +308,11 @@ const LineChartComponent = ({
           } else {
             return pod?.name;
           }
+        case "replica":
+          // Currently "replica" is not used in any of the metrics as a required filter
+          // Need may arise in case of pending metrics 
+          // If so, then set replica to 0, as pending calculation is done only for 0th replica.
+          return "0";
         default:
           return "";
       }

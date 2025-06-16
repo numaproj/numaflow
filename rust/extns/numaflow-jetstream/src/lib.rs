@@ -154,7 +154,7 @@ impl JetstreamActor {
 
         let js_ctx = async_nats::jetstream::new(client);
         let consumer: PullConsumer = js_ctx
-            .get_consumer_from_stream(&config.stream, &config.consumer)
+            .get_consumer_from_stream(&config.consumer, &config.stream)
             .await
             .map_err(|err| {
                 Error::Jetstream(format!(

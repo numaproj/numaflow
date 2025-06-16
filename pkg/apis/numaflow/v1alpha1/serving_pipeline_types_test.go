@@ -22,6 +22,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -211,6 +212,148 @@ func Test_getStoreSidecarContainerSpec(t *testing.T) {
 	assert.Equal(t, int32(VertexMetricsPort), container.LivenessProbe.HTTPGet.Port.IntVal)
 }
 
+func Test_IsHttpConfigured(t *testing.T) {
+	tests := []struct {
+		name     string
+		spec     ServingSpec
+		expected bool
+	}{
+		{
+			name:     "no ports configured",
+			spec:     ServingSpec{},
+			expected: false,
+		},
+		{
+			name: "only https port configured",
+			spec: ServingSpec{
+				Ports: &Ports{
+					HTTPS: ptr.To[int32](8443),
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "only http port configured",
+			spec: ServingSpec{
+				Ports: &Ports{
+					HTTP: ptr.To[int32](8080),
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "both ports configured",
+			spec: ServingSpec{
+				Ports: &Ports{
+					HTTPS: ptr.To[int32](8443),
+					HTTP:  ptr.To[int32](8080),
+				},
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.spec.IsHttpConfigured()
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func Test_GetServingServiceObj(t *testing.T) {
+	tests := []struct {
+		name          string
+		spec          ServingSpec
+		expectedPorts int
+		expectHttp    bool
+		expectHttps   bool
+	}{
+		{
+			name: "service disabled",
+			spec: ServingSpec{
+				Service: false,
+			},
+			expectedPorts: 0, // service should be nil
+		},
+		{
+			name: "only https configured",
+			spec: ServingSpec{
+				Service: true,
+				Ports: &Ports{
+					HTTPS: ptr.To[int32](8443),
+				},
+			},
+			expectedPorts: 1,
+			expectHttps:   true,
+			expectHttp:    false,
+		},
+		{
+			name: "both http and https configured",
+			spec: ServingSpec{
+				Service: true,
+				Ports: &Ports{
+					HTTPS: ptr.To[int32](8443),
+					HTTP:  ptr.To[int32](8080),
+				},
+			},
+			expectedPorts: 2,
+			expectHttps:   true,
+			expectHttp:    true,
+		},
+		{
+			name: "no ports configured (defaults)",
+			spec: ServingSpec{
+				Service: true,
+			},
+			expectedPorts: 1, // only https should be included
+			expectHttps:   true,
+			expectHttp:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sp := ServingPipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-serving-pipeline",
+					Namespace: "test-namespace",
+				},
+				Spec: ServingPipelineSpec{
+					Serving: tt.spec,
+				},
+			}
+
+			svc := sp.GetServingServiceObj()
+
+			if tt.expectedPorts == 0 {
+				assert.Nil(t, svc, "service should be nil when disabled")
+				return
+			}
+
+			assert.NotNil(t, svc, "service should not be nil")
+			assert.Equal(t, tt.expectedPorts, len(svc.Spec.Ports), "unexpected number of ports")
+
+			// Check for specific ports
+			foundHttp := false
+			foundHttps := false
+			for _, port := range svc.Spec.Ports {
+				if port.Name == "http" {
+					foundHttp = true
+					assert.Equal(t, int32(ServingServiceHttpPort), port.Port)
+				}
+				if port.Name == "https" {
+					foundHttps = true
+					assert.Equal(t, int32(ServingServiceHttpsPort), port.Port)
+				}
+			}
+
+			assert.Equal(t, tt.expectHttp, foundHttp, "HTTP port presence mismatch")
+			assert.Equal(t, tt.expectHttps, foundHttps, "HTTPS port presence mismatch")
+		})
+	}
+}
+
 func Test_GetPipelineObj(t *testing.T) {
 	sp := ServingPipeline{
 		ObjectMeta: metav1.ObjectMeta{
@@ -277,7 +420,7 @@ func Test_GetPipelineObj(t *testing.T) {
 
 	// Validate environment variables
 	envVars := sourceVertex.ContainerTemplate.Env
-	assert.Contains(t, envVars, corev1.EnvVar{Name: "NUMAFLOW_SERVING_SOURCE_SETTINGS", Value: "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6bnVsbCwiY29udGFpbmVyVGVtcGxhdGUiOnsicmVzb3VyY2VzIjp7InJlcXVlc3RzIjp7Im1lbW9yeSI6IjE5NDJNaSJ9fSwiZW52IjpbeyJuYW1lIjoiVEVTVF9FTlYiLCJ2YWx1ZSI6InRlc3QtdmFsdWUifV19LCJtZXRhZGF0YSI6eyJhbm5vdGF0aW9ucyI6eyJlIjoiZiJ9LCJsYWJlbHMiOnsiYSI6ImIifX19"})
+	assert.Contains(t, envVars, corev1.EnvVar{Name: "NUMAFLOW_SERVING_SPEC", Value: "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6bnVsbCwiY29udGFpbmVyVGVtcGxhdGUiOnsicmVzb3VyY2VzIjp7InJlcXVlc3RzIjp7Im1lbW9yeSI6IjE5NDJNaSJ9fSwiZW52IjpbeyJuYW1lIjoiVEVTVF9FTlYiLCJ2YWx1ZSI6InRlc3QtdmFsdWUifV19LCJtZXRhZGF0YSI6eyJhbm5vdGF0aW9ucyI6eyJlIjoiZiJ9LCJsYWJlbHMiOnsiYSI6ImIifX19"})
 	assert.Contains(t, envVars, corev1.EnvVar{Name: "NUMAFLOW_SERVING_CALLBACK_STORE", Value: "serving-store-test-serving-pipeline_SERVING_CALLBACK_STORE"})
 	assert.Contains(t, envVars, corev1.EnvVar{Name: "NUMAFLOW_SERVING_RESPONSE_STORE", Value: "serving-store-test-serving-pipeline_SERVING_RESPONSE_STORE"})
 	assert.Contains(t, envVars, corev1.EnvVar{Name: "NUMAFLOW_SERVING_STATUS_STORE", Value: "serving-store-test-serving-pipeline_SERVING_STATUS_STORE"})
@@ -293,4 +436,106 @@ func Test_GetPipelineObj(t *testing.T) {
 	assert.Equal(t, deploy.Spec.Template.Spec.Containers[0].Resources.Requests.Memory().String(), "1942Mi")
 	assert.Equal(t, "b", deploy.Spec.Template.Labels["a"])
 	assert.Equal(t, "f", deploy.Spec.Template.Annotations["e"])
+}
+
+func Test_GetServingDeploymentObj_ContainerPorts(t *testing.T) {
+	tests := []struct {
+		name          string
+		spec          ServingSpec
+		expectedPorts int
+		expectHttp    bool
+		expectHttps   bool
+	}{
+		{
+			name: "only https configured",
+			spec: ServingSpec{
+				Service: true,
+				Ports: &Ports{
+					HTTPS: ptr.To[int32](8443),
+				},
+			},
+			expectedPorts: 1,
+			expectHttps:   true,
+			expectHttp:    false,
+		},
+		{
+			name: "both http and https configured",
+			spec: ServingSpec{
+				Service: true,
+				Ports: &Ports{
+					HTTPS: ptr.To[int32](8443),
+					HTTP:  ptr.To[int32](8080),
+				},
+			},
+			expectedPorts: 2,
+			expectHttps:   true,
+			expectHttp:    true,
+		},
+		{
+			name: "no ports configured (defaults)",
+			spec: ServingSpec{
+				Service: true,
+			},
+			expectedPorts: 1, // only https should be included
+			expectHttps:   true,
+			expectHttp:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sp := ServingPipeline{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-serving-pipeline",
+					Namespace: "test-namespace",
+				},
+				Spec: ServingPipelineSpec{
+					Pipeline: PipelineSpec{
+						Vertices: []AbstractVertex{
+							{Name: "input", Source: &Source{}},
+							{Name: "output", Sink: &Sink{}},
+						},
+						Edges: []Edge{
+							{From: "input", To: "output"},
+						},
+					},
+					Serving: tt.spec,
+				},
+			}
+
+			req := GetServingPipelineResourceReq{
+				ISBSvcConfig: BufferServiceConfig{
+					JetStream: &JetStreamConfig{
+						URL: "nats://test-url",
+					},
+				},
+				Image:      "test-image",
+				PullPolicy: corev1.PullIfNotPresent,
+				Env:        []corev1.EnvVar{},
+			}
+
+			deploy, err := sp.GetServingDeploymentObj(req)
+			assert.NoError(t, err)
+			assert.NotNil(t, deploy)
+
+			// Check container ports
+			container := deploy.Spec.Template.Spec.Containers[0]
+			assert.Equal(t, tt.expectedPorts, len(container.Ports), "unexpected number of container ports")
+
+			// Check for specific ports
+			foundHttp := false
+			foundHttps := false
+			for _, port := range container.Ports {
+				if tt.spec.IsHttpConfigured() && port.ContainerPort == tt.spec.GetHttpPort() {
+					foundHttp = true
+				}
+				if port.ContainerPort == tt.spec.GetHttpsPort() {
+					foundHttps = true
+				}
+			}
+
+			assert.Equal(t, tt.expectHttp, foundHttp, "HTTP container port presence mismatch")
+			assert.Equal(t, tt.expectHttps, foundHttps, "HTTPS container port presence mismatch")
+		})
+	}
 }

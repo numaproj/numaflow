@@ -277,7 +277,10 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		},
 	}
 
-	volumeMounts := []corev1.VolumeMount{{Name: varVolumeName, MountPath: PathVarRun}}
+	volumeMounts := []corev1.VolumeMount{
+		{Name: varVolumeName, MountPath: PathVarRun},
+		{Name: RuntimeDirVolume, MountPath: RuntimeDirMountPath},
+	}
 	containerRequest := getContainerReq{
 		isbSvcType:      req.ISBSvcType,
 		env:             envVars,

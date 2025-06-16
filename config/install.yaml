@@ -34212,6 +34212,15 @@ spec:
                     additionalProperties:
                       type: string
                     type: object
+                  ports:
+                    properties:
+                      http:
+                        format: int32
+                        type: integer
+                      https:
+                        format: int32
+                        type: integer
+                    type: object
                   priority:
                     format: int32
                     type: integer
@@ -42060,15 +42069,47 @@ data:
     This metric represents a histogram to keep track of the total time taken to write
     to the Sink.\n      required_filters:\n        - namespace\n        - mvtx_name\n
     \     dimensions:\n        - name: mono-vertex\n        - name: pod\n          filters:\n
-    \           - name: pod\n              required: false\n\n- name: vertex_throughput\n
-    \ objects: \n    - vertex\n  title: Vertex Throughput and Message Rates\n  description:
-    This pattern measures the throughput of a vertex in messages per second across
-    different dimensions\n  expr: sum(rate($metric_name{$filters}[$duration])) by
-    ($dimension)\n  params:\n    - name: duration\n      required: true\n    - name:
+    \           - name: pod\n              required: false\n\n\n- name: vertex_histogram\n
+    \ objects: \n    - vertex\n  title: Pipeline Histogram Metrics\n  description:
+    This pattern is for P99, P95, P90 and P50 quantiles for a vertex across different
+    dimensions\n  expr: |\n    histogram_quantile($quantile, sum by($dimension,le)
+    (rate($metric_name{$filters}[$duration])))\n  params:\n    - name: quantile\n
+    \     required: true\n    - name: duration\n      required: true\n    - name:
     start_time\n      required: false\n    - name: end_time\n      required: false\n
-    \ metrics:\n    - metric_name: forwarder_data_read_total\n      display_name:
+    \ metrics:\n    - metric_name: forwarder_write_processing_time_bucket\n      display_name:
+    Vertex Write Processing Time Latency\n      metric_description: This metric represents
+    a histogram to keep track of the total time taken to write a message.\n      required_filters:\n
+    \       - namespace\n        - pipeline\n        - vertex\n      dimensions:\n
+    \       - name: vertex\n        - name: pod\n          filters:\n            -
+    name: pod\n              required: false\n    - metric_name: forwarder_read_processing_time_bucket\n
+    \     display_name: Vertex Read Processing Time Latency\n      metric_description:
+    This metric represents a histogram to keep track of the total time taken to read
+    messages.\n      required_filters:\n        - namespace\n        - pipeline\n
+    \       - vertex\n      dimensions:\n        - name: vertex\n        - name: pod\n
+    \         filters:\n            - name: pod\n              required: false\n\n-
+    name: vertex_throughput\n  objects: \n    - vertex\n  title: Vertex Throughput
+    and Message Rates\n  description: This pattern measures the throughput of a vertex
+    in messages per second across different dimensions\n  expr: sum(rate($metric_name{$filters}[$duration]))
+    by ($dimension)\n  params:\n    - name: duration\n      required: true\n    -
+    name: start_time\n      required: false\n    - name: end_time\n      required:
+    false\n  metrics:\n    - metric_name: forwarder_data_read_total\n      display_name:
     Vertex Read Processing Rate\n      metric_description: This metric represents
     the total number of data messages read per second.\n      required_filters:\n
+    \       - namespace\n        - pipeline\n        - vertex\n      dimensions:\n
+    \       - name: vertex\n        - name: pod\n          filters:\n            -
+    name: pod\n              required: false\n    - metric_name: forwarder_write_total\n
+    \     display_name: Vertex Write Processing Rate\n      metric_description: This
+    metric represents the total number of messages written per second.\n      required_filters:\n
+    \       - namespace\n        - pipeline\n        - vertex\n      dimensions:\n
+    \       - name: vertex\n        - name: pod\n          filters:\n            -
+    name: pod\n              required: false\n    - metric_name: forwarder_udf_read_total\n
+    \     display_name: UDF Read Processing Rate\n      metric_description: This metric
+    represents the total number of messages read per second.\n      required_filters:\n
+    \       - namespace\n        - pipeline\n        - vertex\n      dimensions:\n
+    \       - name: vertex\n        - name: pod\n          filters:\n            -
+    name: pod\n              required: false\n    - metric_name: forwarder_udf_write_total\n
+    \     display_name: UDF Write Processing Rate\n      metric_description: This
+    metric represents the total number of messages written per second.\n      required_filters:\n
     \       - namespace\n        - pipeline\n        - vertex\n      dimensions:\n
     \       - name: vertex\n        - name: pod\n          filters:\n            -
     name: pod\n              required: false\n\n- name: mono_vertex_throughput\n  objects:
@@ -42082,6 +42123,11 @@ data:
     number of data messages read per second.\n      required_filters:\n        - namespace\n
     \       - mvtx_name\n      dimensions:\n        - name: mono-vertex\n        -
     name: pod\n          filters:\n            - name: pod\n              required:
+    false\n    - metric_name: monovtx_sink_write_total\n      display_name: MonoVertex
+    Sink Write Processing Rate\n      metric_description: This metric represents the
+    total number of data messages written by sink per second.\n      required_filters:\n
+    \       - namespace\n        - mvtx_name\n      dimensions:\n        - name: mono-vertex\n
+    \       - name: pod\n          filters:\n            - name: pod\n              required:
     false\n\n- name: pod_cpu_memory_utilization\n  objects: \n    - mono-vertex\n
     \   - vertex\n  title: CPU and Memory Utilisation by Pod\n  description: This
     pattern represents the CPU and Memory utilisation by pod for mono-vertex and vertex\n
