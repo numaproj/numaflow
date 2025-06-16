@@ -398,7 +398,7 @@ impl JetStreamReader {
 
     async fn wait_for_ack_completion(&self, semaphore: Arc<Semaphore>) {
         info!(stream=?self.stream, "Jetstream reader stopped, waiting for ack tasks to complete");
-        let _permit = semaphore
+        let _permit = Arc::clone(&semaphore)
             .acquire_many_owned(MAX_ACK_PENDING as u32)
             .await
             .expect("Failed to acquire semaphore permit");
@@ -499,7 +499,6 @@ impl JetStreamReader {
                         offset.clone(),
                     )
                     .await;
-
                     warn!(?offset, "Sent Nak to Jetstream for message");
                     return;
                 }
@@ -683,12 +682,11 @@ mod tests {
             "Expected 10 messages from the jetstream reader"
         );
 
-        for offset in offsets {
-            tracker.discard(offset).await.unwrap();
-        }
         reader_cancel_token.cancel();
+        for offset in offsets {
+            tracker.delete(offset).await.unwrap();
+        }
         js_reader_task.await.unwrap().unwrap();
-
         context.delete_stream(stream.name).await.unwrap();
     }
 
@@ -952,7 +950,7 @@ mod tests {
         assert_eq!(received_message.offset.to_string(), offset.to_string());
 
         // Clean up
-        tracker.discard(offset).await.unwrap();
+        tracker.delete(offset).await.unwrap();
         reader_cancel_token.cancel();
         js_reader_task.await.unwrap().unwrap();
         context.delete_stream(stream.name).await.unwrap();
