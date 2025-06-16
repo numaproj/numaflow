@@ -36,9 +36,12 @@ export const dimensionReverseMap: { [p: string]: string } = {
 export const VERTEX_PENDING_MESSAGES = "Vertex Pending Messages";
 export const UDF_READ_PROCESSING_RATE = "UDF Read Processing Rate";
 export const UDF_WRITE_PROCESSING_RATE = "UDF Write Processing Rate";
+export const UDF_PROCESSING_TIME_LATENCY = "UDF Processing Time Latency";
 export const VERTEX_PROCESSING_RATE = "Vertex Read Processing Rate";
 export const MONO_VERTEX_PENDING_MESSAGES = "MonoVertex Pending Messages";
 export const MONO_VERTEX_PROCESSING_RATE = "MonoVertex Read Processing Rate";
+export const VERTEX_PROCESSING_TIME_LATENCY = "Vertex Processing Time Latency";
+export const VERTEX_ACK_PROCESSING_TIME_LATENCY = "Vertex Ack Processing Time Latency";
 export const MONO_VERTEX_PROCESSING_TIME_LATENCY =
   "MonoVertex Processing Time Latency";
 export const MONO_VERTEX_SINK_WRITE_TIME_LATENCY =
