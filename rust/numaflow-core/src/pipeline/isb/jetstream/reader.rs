@@ -301,6 +301,7 @@ impl JetStreamReader {
                             // Reserve a permit before sending the message to the channel.
                             let permit = Arc::clone(&semaphore).acquire_owned().await.expect("Failed to acquire semaphore permit");
                             tokio::spawn(Self::wait_for_ack(
+                                message_processing_start,
                                 labels.clone(),
                                 message.offset.clone(),
                                 jetstream_message,
@@ -334,11 +335,6 @@ impl JetStreamReader {
                                 .data_read_bytes_total
                                 .get_or_create(&labels)
                                 .inc_by(message_bytes as u64);
-                            pipeline_metrics()
-                                .forwarder
-                                .read_processing_time
-                                .get_or_create(&labels)
-                                .observe(message_processing_start.elapsed().as_micros() as f64);
 
                             processed_msgs_count += 1;
                             if last_logged_at.elapsed().as_secs() >= 1 {
@@ -371,6 +367,7 @@ impl JetStreamReader {
     /// If the sender's end of the ack_rx channel was dropped before
     /// sending the final `Ack` or `Nak` (due to some unhandled/unknown failure), we will send `Nak` to Jetstream.
     async fn wait_for_ack(
+        message_processing_start: Instant,
         labels: Vec<(String, String)>,
         offset: Offset,
         msg: JetstreamMessage,
@@ -411,6 +408,7 @@ impl JetStreamReader {
 
             match ack {
                 ReadAck::Ack => {
+                    let ack_start = Instant::now();
                     Self::invoke_ack_with_retry(&msg, AckKind::Ack, &cancel_token, offset.clone())
                         .await;
 
@@ -418,13 +416,18 @@ impl JetStreamReader {
                         .forwarder
                         .ack_processing_time
                         .get_or_create(&labels)
-                        .observe(start.elapsed().as_micros() as f64);
+                        .observe(ack_start.elapsed().as_micros() as f64);
 
                     pipeline_metrics()
                         .forwarder
                         .ack_total
                         .get_or_create(&labels)
                         .inc();
+                    pipeline_metrics()
+                        .forwarder
+                        .e2e_time
+                        .get_or_create(&labels)
+                        .observe(message_processing_start.elapsed().as_micros() as f64);
                     return;
                 }
                 ReadAck::Nak => {
@@ -435,7 +438,6 @@ impl JetStreamReader {
                         offset.clone(),
                     )
                     .await;
-
                     warn!(?offset, "Sent Nak to Jetstream for message");
                     return;
                 }
