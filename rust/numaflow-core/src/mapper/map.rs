@@ -1,6 +1,5 @@
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::time::timeout;
 
 use numaflow_pb::clients::map::map_client::MapClient;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
@@ -133,6 +132,7 @@ enum ActorSender {
 pub(crate) struct MapHandle {
     batch_size: usize,
     read_timeout: Duration,
+    graceful_timeout: Duration,
     concurrency: usize,
     tracker: TrackerHandle,
     actor_sender: ActorSender,
@@ -154,6 +154,7 @@ impl MapHandle {
         map_mode: MapMode,
         batch_size: usize,
         read_timeout: Duration,
+        graceful_timeout: Duration,
         concurrency: usize,
         client: MapClient<Channel>,
         tracker_handle: TrackerHandle,
@@ -200,6 +201,7 @@ impl MapHandle {
             actor_sender,
             batch_size,
             read_timeout,
+            graceful_timeout,
             concurrency,
             tracker: tracker_handle,
             final_result: Ok(()),
@@ -227,10 +229,11 @@ impl MapHandle {
 
             let parent_cln_token = cln_token.clone();
             let child_cln_token = map_cln_token.clone();
-            // spawn a task to cancel the token 10s after the main token is cancelled
+            let graceful_timeout = self.graceful_timeout;
+            // spawn a task to cancel the token after graceful timeout when the main token is cancelled
             tokio::spawn(async move {
                 parent_cln_token.cancelled().await;
-                tokio::time::sleep(Duration::from_secs(10)).await;
+                tokio::time::sleep(graceful_timeout).await;
                 child_cln_token.cancel();
             });
 
@@ -694,6 +697,7 @@ mod tests {
             MapMode::Unary,
             500,
             Duration::from_millis(1000),
+            Duration::from_secs(10),
             10,
             client,
             tracker_handle.clone(),
@@ -785,6 +789,7 @@ mod tests {
             MapMode::Unary,
             10,
             Duration::from_millis(10),
+            Duration::from_secs(10),
             10,
             client,
             tracker_handle.clone(),
@@ -875,6 +880,7 @@ mod tests {
             MapMode::Unary,
             500,
             Duration::from_millis(1000),
+            Duration::from_secs(10),
             10,
             client,
             tracker_handle.clone(),
@@ -977,6 +983,7 @@ mod tests {
             MapMode::Batch,
             500,
             Duration::from_millis(1000),
+            Duration::from_secs(10),
             10,
             client,
             tracker_handle.clone(),
@@ -1089,6 +1096,7 @@ mod tests {
             MapMode::Batch,
             500,
             Duration::from_millis(1000),
+            Duration::from_secs(10),
             10,
             client,
             tracker_handle.clone(),
@@ -1202,6 +1210,7 @@ mod tests {
             MapMode::Stream,
             500,
             Duration::from_millis(1000),
+            Duration::from_secs(10),
             10,
             client,
             tracker_handle.clone(),
@@ -1298,6 +1307,7 @@ mod tests {
             MapMode::Stream,
             500,
             Duration::from_millis(1000),
+            Duration::from_secs(10),
             10,
             client,
             tracker_handle,

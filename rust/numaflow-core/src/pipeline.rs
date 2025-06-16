@@ -239,6 +239,7 @@ async fn start_map_forwarder(
         let mapper = create_components::create_mapper(
             config.batch_size,
             config.read_timeout,
+            config.graceful_timeout,
             map_vtx_config.clone(),
             tracker_handle.clone(),
             cln_token.clone(),
@@ -735,9 +736,7 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
-            watermark_config: None,
-            callback_config: None,
-            isb_config: None,
+            ..Default::default()
         };
 
         let cancellation_token = CancellationToken::new();
@@ -894,9 +893,7 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
-            watermark_config: None,
-            callback_config: None,
-            isb_config: None,
+            ..Default::default()
         };
 
         let cancellation_token = CancellationToken::new();
@@ -1133,9 +1130,7 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
-            watermark_config: None,
-            callback_config: None,
-            isb_config: None,
+            ..Default::default()
         };
 
         let cancellation_token = CancellationToken::new();
