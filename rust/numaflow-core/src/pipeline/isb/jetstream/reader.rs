@@ -314,7 +314,7 @@ impl JetStreamReader {
             .await
         {
             Ok(mut messages) => {
-                let mut batch = Vec::new();
+                let mut batch = Vec::with_capacity(batch_size);
                 while let Some(message) = messages.next().await {
                     match message {
                         Ok(msg) => batch.push(msg),
@@ -340,7 +340,7 @@ impl JetStreamReader {
             "Fetched messages from Jetstream"
         );
 
-        let mut read_messages = Vec::new();
+        let mut read_messages = Vec::with_capacity(jetstream_messages.len());
         for jetstream_message in jetstream_messages {
             let js_message = JSWrappedMessage {
                 partition_idx: self.stream.partition,
