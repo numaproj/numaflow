@@ -27,7 +27,7 @@ use tokio::time::{self, Instant};
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
-use tracing::warn;
+use tracing::{debug, warn};
 use tracing::{error, info};
 
 /// Configuration for creating a JetStreamReader
@@ -295,6 +295,7 @@ impl JetStreamReader {
         Ok((ReceiverStream::new(messages_rx), handle))
     }
 
+    /// fetches messages in batch from JetStream.
     async fn fetch_messages(
         &mut self,
         batch_size: usize,
@@ -333,7 +334,7 @@ impl JetStreamReader {
             }
         };
 
-        info!(
+        debug!(
             time_taken_ms = ?start.elapsed().as_millis(),
             count = ?jetstream_messages.len(),
             "Fetched messages from Jetstream"
@@ -396,6 +397,7 @@ impl JetStreamReader {
         Ok(read_messages)
     }
 
+    /// Waits for all the work-in-progress tasks to be completed.
     async fn wait_for_ack_completion(&self, semaphore: Arc<Semaphore>) {
         info!(stream=?self.stream, "Jetstream reader stopped, waiting for ack tasks to complete");
         let _permit = Arc::clone(&semaphore)
