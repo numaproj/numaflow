@@ -23,8 +23,8 @@ use tracing::{debug, error, info, warn};
 
 use crate::Result;
 use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
-use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::config::pipeline::isb_config::{CompressionType, ISBConfig};
+use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::Error;
 
 use crate::message::{IntOffset, Message, Offset};
