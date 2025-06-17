@@ -319,18 +319,15 @@ impl JetStreamReader {
                     match message {
                         Ok(msg) => batch.push(msg),
                         Err(e) => {
-                            error!(?e, stream=?self.stream, "Failed to fetch message from batch");
+                            warn!(?e, stream=?self.stream, "Failed to fetch a message from batch (ignoring, will be retried)");
                         }
                     }
                 }
                 batch
             }
             Err(e) => {
-                error!(?e, stream=?self.stream, "Failed to get message batch from Jetstream");
-                return Err(Error::ISB(format!(
-                    "Failed to get message batch from Jetstream: {:?}",
-                    e
-                )));
+                warn!(?e, stream=?self.stream, "Failed to get message batch from Jetstream (ignoring, will be retried)");
+                vec![]
             }
         };
 
