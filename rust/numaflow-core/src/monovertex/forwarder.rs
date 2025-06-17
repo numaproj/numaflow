@@ -223,7 +223,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
-        let transformer = Transformer::new(10, 10, client, tracker_handle.clone())
+        let transformer = Transformer::new(10, 10, Duration::from_secs(10), client, tracker_handle.clone())
             .await
             .unwrap();
 
@@ -354,7 +354,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
-        let transformer = Transformer::new(10, 10, client, tracker_handle.clone())
+        let transformer = Transformer::new(10, 10, Duration::from_secs(10), client, tracker_handle.clone())
             .await
             .unwrap();
 
