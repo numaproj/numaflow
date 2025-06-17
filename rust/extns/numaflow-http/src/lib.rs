@@ -22,19 +22,27 @@ use chrono::{DateTime, Utc};
 use rcgen::{Certificate, CertifiedKey, generate_simple_self_signed};
 use serde::Serialize;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::fmt::Debug;
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use std::time::Duration;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{Mutex, mpsc, oneshot};
 use tracing::{debug, error, info, trace, warn};
 use uuid::Uuid;
+
+/// Map that tracks inflight HTTP requests. This is passed to ack actor to send response back to
+/// the client. The entries are inserted at [axum::handler].
+type InflightRequestsMap = Arc<Mutex<HashMap<String, oneshot::Sender<StatusCode>>>>;
 
 /// HTTP source that manages incoming HTTP requests and forwards them to a processing channel
 struct HttpSourceActor {
     server_rx: mpsc::Receiver<HttpMessage>,
     _server_handle: tokio::task::JoinHandle<Result<()>>,
     timeout: Duration,
+    /// Map of inflight requests and their response channels
+    inflight_requests: InflightRequestsMap,
 }
 
 /// Error types for the HTTP source
@@ -170,18 +178,21 @@ pub enum HttpActorMessage {
 impl HttpSourceActor {
     async fn new(http_source_config: HttpSourceConfig) -> Self {
         let (tx, rx) = mpsc::channel(http_source_config.buffer_size); // Increased buffer size for better throughput
+        let inflight_requests = Arc::new(Mutex::new(HashMap::new()));
 
         let server_handle = tokio::spawn(start_server(
             http_source_config.vertex_name,
             tx,
             http_source_config.addr,
             http_source_config.token,
+            Arc::clone(&inflight_requests),
         ));
 
         Self {
             server_rx: rx,
             timeout: http_source_config.timeout,
             _server_handle: server_handle,
+            inflight_requests,
         }
     }
 
@@ -212,6 +223,9 @@ impl HttpSourceActor {
                 }
             }
         }
+
+        // Send error responses to any pending requests during shutdown
+        self.fail_pending_requests().await;
 
         info!("HttpSource processor stopped");
         Ok(())
@@ -253,9 +267,41 @@ impl HttpSourceActor {
         }
     }
 
-    /// http source cannot implement ack, we have already returned 202 or 429 accordingly
-    async fn ack(&self, _offsets: Vec<String>) -> Result<()> {
+    /// Acknowledge messages and send HTTP responses back to clients
+    async fn ack(&self, offsets: Vec<String>) -> Result<()> {
+        let mut pending_responses = self.inflight_requests.lock().await;
+
+        for offset in offsets {
+            if let Some(response_tx) = pending_responses.remove(&offset) {
+                // Send can fail, when the client disconnects because timeout etc. (buffer full case)
+                let _ = response_tx.send(StatusCode::OK).map_err(|_| {
+                    warn!(message_id = %offset, "Failed to send response for acknowledged message - client may have disconnected");
+                });
+            }
+        }
+
         Ok(())
+    }
+
+    /// Send error responses to all pending requests during shutdown.
+    /// We cannot avoid this today because HTTP reads ahead (has a channel buffer) and the
+    /// current Source trait does not support "initiate shutdown".
+    /// https://github.com/numaproj/numaflow/issues/2734
+    async fn fail_pending_requests(&self) {
+        let mut pending_responses = self.inflight_requests.lock().await;
+        if pending_responses.is_empty() {
+            return;
+        }
+
+        error!(
+            pending_count = pending_responses.len(),
+            "Sending error responses to pending requests during shutdown. \
+            This is a known issue (https://github.com/numaproj/numaflow/issues/2734)."
+        );
+
+        for (_, response_tx) in pending_responses.drain() {
+            let _ = response_tx.send(StatusCode::INTERNAL_SERVER_ERROR);
+        }
     }
 }
 
@@ -332,6 +378,7 @@ pub async fn send_message(tx: mpsc::Sender<HttpMessage>, message: HttpMessage) -
 #[derive(Clone)]
 struct HttpState {
     tx: mpsc::Sender<HttpMessage>,
+    inflight_requests: InflightRequestsMap,
 }
 
 /// Create an Axum router with the HTTP source endpoints
@@ -339,6 +386,7 @@ pub fn create_router(
     vertex_name: &'static str,
     token: Option<&'static str>,
     tx: mpsc::Sender<HttpMessage>,
+    inflight_requests: InflightRequestsMap,
 ) -> Router {
     Router::new()
         .route("/health", get(health_handler))
@@ -368,7 +416,10 @@ pub fn create_router(
                 (StatusCode::UNAUTHORIZED, "Unauthorized").into_response()
             },
         ))
-        .with_state(HttpState { tx })
+        .with_state(HttpState {
+            tx,
+            inflight_requests,
+        })
 }
 
 /// Generate self-signed TLS certificate
@@ -385,8 +436,9 @@ pub async fn start_server(
     tx: mpsc::Sender<HttpMessage>,
     addr: SocketAddr,
     token: Option<&'static str>,
+    inflight_requests: InflightRequestsMap,
 ) -> Result<()> {
-    let router = create_router(vertex_name, token, tx);
+    let router = create_router(vertex_name, token, tx, inflight_requests);
 
     info!(?addr, "Starting HTTPS source server");
 
@@ -465,6 +517,29 @@ async fn data_handler(
         }
     }
 
+    // Create oneshot channel for response
+    let (response_tx, response_rx) = oneshot::channel();
+
+    // Store the response sender in the pending responses map, accept only if it is not in the hashmap
+    {
+        let mut pending_responses = http_source.inflight_requests.lock().await;
+        let entry = pending_responses.entry(id.clone());
+        if let Entry::Vacant(val) = entry {
+            val.insert(response_tx);
+        } else {
+            return (
+                StatusCode::CONFLICT,
+                axum::Json(serde_json::json!({
+                    "error": "Duplicate request ID",
+                    "id": id
+                })),
+            )
+                .into_response();
+        }
+
+        //pending_responses.insert(id.clone(), response_tx);
+    }
+
     // Create the HTTP message
     let message = HttpMessage {
         body,
@@ -476,40 +551,79 @@ async fn data_handler(
     // Send the message to the processing channel
     match send_message(http_source.tx, message).await {
         Ok(()) => {
-            trace!(?id, "Successfully queued message");
-            (
-                StatusCode::OK,
-                axum::Json(DataResponse {
-                    message: "Data received successfully".to_string(),
-                    id,
-                }),
-            )
-                .into_response()
+            trace!(?id, "Successfully queued message, waiting for ack");
+
+            // Wait for the response from the ack mechanism
+            match response_rx.await {
+                Ok(status_code) => {
+                    match status_code {
+                        StatusCode::OK => (
+                            StatusCode::OK,
+                            axum::Json(DataResponse {
+                                message: "Data received successfully".to_string(),
+                                id,
+                            }),
+                        )
+                            .into_response(),
+                        _ => {
+                            // This handles shutdown case where we send INTERNAL_SERVER_ERROR
+                            (
+                                status_code,
+                                axum::Json(serde_json::json!({
+                                    "error": "Request processing failed",
+                                    "id": id
+                                })),
+                            )
+                                .into_response()
+                        }
+                    }
+                }
+                Err(_) => {
+                    // Oneshot receiver was dropped, likely due to shutdown
+                    warn!(?id, "Response channel was dropped, likely due to shutdown");
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        axum::Json(serde_json::json!({
+                            "error": "Request processing was interrupted",
+                            "id": id
+                        })),
+                    )
+                        .into_response()
+                }
+            }
         }
-        Err(e) => match e {
-            Error::ChannelFull() => {
-                warn!(?e, "Buffer is full");
-                (
-                    StatusCode::TOO_MANY_REQUESTS,
-                    axum::Json(serde_json::json!({
-                        "error": "Pipeline has stalled, buffer is full",
-                        "details": e.to_string()
-                    })),
-                )
-                    .into_response()
+        Err(e) => {
+            // Remove from pending responses since we're returning immediately
+            {
+                let mut pending_responses = http_source.inflight_requests.lock().await;
+                pending_responses.remove(&id);
             }
-            e => {
-                error!(?e, "Failed to queue message");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    axum::Json(serde_json::json!({
-                        "error": "Failed to process request",
-                        "details": e.to_string()
-                    })),
-                )
-                    .into_response()
+
+            match e {
+                Error::ChannelFull() => {
+                    warn!(?e, "Buffer is full");
+                    (
+                        StatusCode::TOO_MANY_REQUESTS,
+                        axum::Json(serde_json::json!({
+                            "error": "Pipeline has stalled, buffer is full",
+                            "details": e.to_string()
+                        })),
+                    )
+                        .into_response()
+                }
+                e => {
+                    error!(?e, "Failed to queue message");
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        axum::Json(serde_json::json!({
+                            "error": "Failed to process request",
+                            "details": e.to_string()
+                        })),
+                    )
+                        .into_response()
+                }
             }
-        },
+        }
     }
 }
 
@@ -646,8 +760,9 @@ mod tests {
     #[tokio::test]
     async fn test_health_endpoint() {
         let (tx, _rx) = mpsc::channel(500);
+        let pending_responses: InflightRequestsMap = Arc::new(Mutex::new(HashMap::new()));
 
-        let app = create_router("test", None, tx);
+        let app = create_router("test", None, tx, pending_responses);
 
         let request = Request::builder()
             .method(Method::GET)
@@ -661,9 +776,23 @@ mod tests {
 
     #[tokio::test]
     async fn test_data_endpoint() {
-        let (tx, rx) = mpsc::channel(10);
+        let (tx, mut rx) = mpsc::channel(10);
+        let pending_responses: InflightRequestsMap = Arc::new(Mutex::new(HashMap::new()));
 
-        let app = create_router("test", None, tx);
+        let app = create_router("test", None, tx, Arc::clone(&pending_responses));
+
+        // Spawn a task to simulate ack after receiving the message
+        let pending_responses_clone = Arc::clone(&pending_responses);
+        tokio::spawn(async move {
+            // Wait for message to arrive
+            if let Some(message) = rx.recv().await {
+                // Simulate ack by sending OK response
+                let mut pending = pending_responses_clone.lock().await;
+                if let Some(response_tx) = pending.remove(&message.id) {
+                    let _ = response_tx.send(StatusCode::OK);
+                }
+            }
+        });
 
         let request = Request::builder()
             .method(Method::POST)
@@ -674,15 +803,27 @@ mod tests {
 
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-
-        assert_eq!(rx.len(), 1);
     }
 
     #[tokio::test]
     async fn test_data_endpoint_with_custom_id() {
-        let (tx, rx) = mpsc::channel(10);
+        let (tx, mut rx) = mpsc::channel(10);
+        let pending_responses: InflightRequestsMap = Arc::new(Mutex::new(HashMap::new()));
 
-        let app = create_router("test", None, tx);
+        let app = create_router("test", None, tx, Arc::clone(&pending_responses));
+
+        // Spawn a task to simulate ack after receiving the message
+        let pending_responses_clone = Arc::clone(&pending_responses);
+        tokio::spawn(async move {
+            // Wait for message to arrive
+            if let Some(message) = rx.recv().await {
+                // Simulate ack by sending OK response
+                let mut pending = pending_responses_clone.lock().await;
+                if let Some(response_tx) = pending.remove(&message.id) {
+                    let _ = response_tx.send(StatusCode::OK);
+                }
+            }
+        });
 
         let custom_id = "custom-test-id";
         let request = Request::builder()
@@ -695,8 +836,6 @@ mod tests {
 
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-
-        assert_eq!(rx.len(), 1);
     }
     #[tokio::test]
     async fn test_http_source_read_with_real_server() {
@@ -725,7 +864,7 @@ mod tests {
         // Configure TLS client to accept any certificate (for testing with self-signed certs)
         let tls_config = rustls::ClientConfig::builder()
             .dangerous()
-            .with_custom_certificate_verifier(std::sync::Arc::new(AcceptAnyCertVerifier))
+            .with_custom_certificate_verifier(Arc::new(AcceptAnyCertVerifier))
             .with_no_client_auth();
 
         let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
@@ -735,24 +874,32 @@ mod tests {
             .build();
         let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build(https_connector);
 
-        // Send multiple HTTPS requests to the server
+        // Send multiple HTTPS requests to the server in background tasks
         let test_data = vec![
             (r#"{"message": "test1"}"#, "application/json"),
             (r#"{"message": "test2"}"#, "application/json"),
             ("plain text data", "text/plain"),
         ];
 
+        let mut request_handles = Vec::new();
         for (body_data, content_type) in &test_data {
-            let request = Request::builder()
-                .method(Method::POST)
-                .uri(format!("https://{}/vertices/test", addr))
-                .header("Content-Type", *content_type)
-                .header("X-Numaflow-Id", format!("test-id-{}", uuid::Uuid::now_v7()))
-                .body((*body_data).to_string())
-                .unwrap();
+            let client_clone = client.clone();
+            let addr_clone = addr;
+            let body_data = (*body_data).to_string();
+            let content_type = (*content_type).to_string();
 
-            let response = client.request(request).await.unwrap();
-            assert_eq!(response.status(), StatusCode::OK);
+            let handle = tokio::spawn(async move {
+                let request = Request::builder()
+                    .method(Method::POST)
+                    .uri(format!("https://{}/vertices/test", addr_clone))
+                    .header("Content-Type", content_type)
+                    .header("X-Numaflow-Id", format!("test-id-{}", Uuid::now_v7()))
+                    .body(body_data)
+                    .unwrap();
+
+                client_clone.request(request).await.unwrap()
+            });
+            request_handles.push(handle);
         }
 
         // Use the actor to read messages from HttpSource
@@ -770,6 +917,26 @@ mod tests {
 
         // Verify we got the expected number of messages
         assert_eq!(messages.len(), test_data.len());
+
+        // Ack the messages so the HTTP requests can complete
+        let offsets: Vec<String> = messages.iter().map(|m| m.id.clone()).collect();
+        let (ack_tx, ack_rx) = oneshot::channel();
+        actor_tx
+            .send(HttpActorMessage::Ack {
+                offsets: offsets.clone(),
+                response_tx: ack_tx,
+            })
+            .await
+            .unwrap();
+
+        let ack_result = ack_rx.await.unwrap();
+        assert!(ack_result.is_ok());
+
+        // Now wait for all HTTP requests to complete
+        for handle in request_handles {
+            let response = handle.await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+        }
 
         let current_time = Utc::now();
 
@@ -803,19 +970,7 @@ mod tests {
         let pending_count = pending_rx.await.unwrap();
         assert_eq!(pending_count, Some(0)); // Should be 0 since we read all messages
 
-        // Test ack (should always succeed for HTTP source)
-        let offsets: Vec<String> = messages.iter().map(|m| m.id.clone()).collect();
-        let (ack_tx, ack_rx) = oneshot::channel();
-        actor_tx
-            .send(HttpActorMessage::Ack {
-                offsets,
-                response_tx: ack_tx,
-            })
-            .await
-            .unwrap();
-
-        let ack_result = ack_rx.await.unwrap();
-        assert!(ack_result.is_ok());
+        // Note: We already tested ack above when we acked the messages to complete the HTTP requests
 
         // Clean up
         drop(actor_tx);
@@ -880,7 +1035,7 @@ mod tests {
         // Configure TLS client to accept any certificate (for testing with self-signed certs)
         let tls_config = rustls::ClientConfig::builder()
             .dangerous()
-            .with_custom_certificate_verifier(std::sync::Arc::new(AcceptAnyCertVerifier))
+            .with_custom_certificate_verifier(Arc::new(AcceptAnyCertVerifier))
             .with_no_client_auth();
 
         let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
@@ -890,20 +1045,29 @@ mod tests {
             .build();
         let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build(https_connector);
 
-        // Send test requests
+        // Send test requests in background tasks
+        let mut request_handles = Vec::new();
         for i in 0..5 {
-            let request = Request::builder()
-                .method(Method::POST)
-                .uri(format!("https://{}/vertices/test", addr))
-                .header("Content-Type", "application/json")
-                .header("X-Numaflow-Id", format!("test-id-{}", i))
-                .header("x-numaflow-event-time", 1431628200000i64.to_string())
-                .body(format!(r#"{{"message": "test{}"}}"#, i))
-                .unwrap();
+            let client_clone = client.clone();
+            let addr_clone = addr;
 
-            let response = client.request(request).await.unwrap();
-            assert_eq!(response.status(), StatusCode::OK);
+            let handle = tokio::spawn(async move {
+                let request = Request::builder()
+                    .method(Method::POST)
+                    .uri(format!("https://{}/vertices/test", addr_clone))
+                    .header("Content-Type", "application/json")
+                    .header("X-Numaflow-Id", format!("test-id-{}", i))
+                    .header("x-numaflow-event-time", 1431628200000i64.to_string())
+                    .body(format!(r#"{{"message": "test{}"}}"#, i))
+                    .unwrap();
+
+                client_clone.request(request).await.unwrap()
+            });
+            request_handles.push(handle);
         }
+
+        // Wait a bit for requests to be queued
+        tokio::time::sleep(Duration::from_millis(100)).await;
 
         // Test pending count
         let pending = handle.pending().await;
@@ -940,8 +1104,27 @@ mod tests {
         assert!(ack_result.is_ok(), "Ack should succeed");
 
         // Read remaining messages
-        let messages = handle.read(5).await.unwrap();
-        assert_eq!(messages.len(), 2, "Should read remaining 2 messages");
+        let remaining_messages = handle.read(5).await.unwrap();
+        assert_eq!(
+            remaining_messages.len(),
+            2,
+            "Should read remaining 2 messages"
+        );
+
+        // Ack the remaining messages
+        let remaining_offsets: Vec<String> =
+            remaining_messages.iter().map(|m| m.id.clone()).collect();
+        let ack_result = handle.ack(remaining_offsets).await;
+        assert!(
+            ack_result.is_ok(),
+            "Ack should succeed for remaining messages"
+        );
+
+        // Now wait for all HTTP requests to complete
+        for handle in request_handles {
+            let response = handle.await.unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+        }
 
         // Verify no more pending messages
         let pending = handle.pending().await;
@@ -951,11 +1134,25 @@ mod tests {
     #[tokio::test]
     async fn test_auth_token_validation() {
         // Create a channel for the HTTP source
-        let (tx, _rx) = mpsc::channel(10);
+        let (tx, mut rx) = mpsc::channel(10);
+        let pending_responses: InflightRequestsMap = Arc::new(Mutex::new(HashMap::new()));
 
         // Set up router with auth token
         let test_token = "test-token";
-        let app = create_router("test", Some(test_token), tx);
+        let app = create_router("test", Some(test_token), tx, Arc::clone(&pending_responses));
+
+        // Spawn a task to simulate ack for successful requests
+        let pending_responses_clone = Arc::clone(&pending_responses);
+        tokio::spawn(async move {
+            // Wait for message to arrive
+            if let Some(message) = rx.recv().await {
+                // Simulate ack by sending OK response
+                let mut pending = pending_responses_clone.lock().await;
+                if let Some(response_tx) = pending.remove(&message.id) {
+                    let _ = response_tx.send(StatusCode::OK);
+                }
+            }
+        });
 
         // Test request with correct token
         let request = Request::builder()
@@ -991,6 +1188,131 @@ mod tests {
 
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_response_after_ack_behavior() {
+        // Test that HTTP responses are only sent after acknowledgment
+        let (tx, mut rx) = mpsc::channel(10);
+        let pending_responses: InflightRequestsMap = Arc::new(Mutex::new(HashMap::new()));
+
+        let app = create_router("test", None, tx, Arc::clone(&pending_responses));
+
+        // Send a request in a background task
+        let request_handle = tokio::spawn(async move {
+            let request = Request::builder()
+                .method(Method::POST)
+                .uri("/vertices/test")
+                .header("Content-Type", "application/json")
+                .header("X-Numaflow-Id", "test-ack-behavior")
+                .body(Body::from(r#"{"test": "ack_behavior"}"#))
+                .unwrap();
+
+            app.oneshot(request).await.unwrap()
+        });
+
+        // Wait for the message to be queued
+        let message = rx.recv().await.unwrap();
+        assert_eq!(message.id, "test-ack-behavior");
+
+        // Verify that the request is still pending (hasn't completed yet)
+        assert!(!request_handle.is_finished());
+
+        // Simulate ack by sending OK response
+        {
+            let mut pending = pending_responses.lock().await;
+            if let Some(response_tx) = pending.remove(&message.id) {
+                let _ = response_tx.send(StatusCode::OK);
+            }
+        }
+
+        // Now the request should complete
+        let response = request_handle.await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_duplicate_x_numaflow_id() {
+        // Test that duplicate x-numaflow-id headers return CONFLICT status
+        let (tx, mut rx) = mpsc::channel(10);
+        let pending_responses: InflightRequestsMap = Arc::new(Mutex::new(HashMap::new()));
+
+        let app = create_router("test", None, tx, Arc::clone(&pending_responses));
+
+        // Spawn a task to simulate ack for the first successful request
+        let pending_responses_clone = Arc::clone(&pending_responses);
+        tokio::spawn(async move {
+            // Wait for the first message to arrive
+            if let Some(message) = rx.recv().await {
+                // Simulate ack by sending OK response
+                let mut pending = pending_responses_clone.lock().await;
+                if let Some(response_tx) = pending.remove(&message.id) {
+                    let _ = response_tx.send(StatusCode::OK);
+                }
+            }
+        });
+
+        let duplicate_id = "duplicate-test-id";
+
+        // Send first request with the ID
+        let first_request = Request::builder()
+            .method(Method::POST)
+            .uri("/vertices/test")
+            .header("Content-Type", "application/json")
+            .header("X-Numaflow-Id", duplicate_id)
+            .body(Body::from(r#"{"test": "first_request"}"#))
+            .unwrap();
+
+        // Send second request with the same ID
+        let second_request = Request::builder()
+            .method(Method::POST)
+            .uri("/vertices/test")
+            .header("Content-Type", "application/json")
+            .header("X-Numaflow-Id", duplicate_id)
+            .body(Body::from(r#"{"test": "second_request"}"#))
+            .unwrap();
+
+        // Send both requests concurrently to test race conditions
+        let (first_response, second_response) = tokio::join!(
+            app.clone().oneshot(first_request),
+            app.oneshot(second_request)
+        );
+
+        let first_response = first_response.unwrap();
+        let second_response = second_response.unwrap();
+
+        // One should succeed (OK) and one should fail (CONFLICT)
+        // We can't guarantee which one will be first due to concurrency
+        let statuses = [first_response.status(), second_response.status()];
+
+        assert!(
+            statuses.contains(&StatusCode::OK),
+            "One request should succeed with OK status"
+        );
+        assert!(
+            statuses.contains(&StatusCode::CONFLICT),
+            "One request should fail with CONFLICT status"
+        );
+
+        // Verify the CONFLICT response contains the expected error message
+        let conflict_response = if first_response.status() == StatusCode::CONFLICT {
+            first_response
+        } else {
+            second_response
+        };
+
+        assert_eq!(conflict_response.status(), StatusCode::CONFLICT);
+
+        // Read the response body to verify the error message
+        let body_bytes = axum::body::to_bytes(conflict_response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8(body_bytes.to_vec()).unwrap();
+
+        // Parse JSON response
+        let json_response: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+        assert_eq!(json_response["error"], "Duplicate request ID");
+        assert_eq!(json_response["id"], duplicate_id);
     }
 
     #[test]
