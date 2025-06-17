@@ -41919,7 +41919,7 @@ data:
             replicas: 3
         versions:
         - version: latest
-          natsImage: nats:2.10.17
+          natsImage: nats:2.10.29
           metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
           configReloaderImage: natsio/nats-server-config-reloader:0.7.0
           startCommand: /nats-server
@@ -41980,6 +41980,11 @@ data:
           startCommand: /nats-server
         - version: 2.10.17
           natsImage: nats:2.10.17
+          metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
+          configReloaderImage: natsio/nats-server-config-reloader:0.7.0
+          startCommand: /nats-server
+        - version: 2.10.29
+          natsImage: nats:2.10.29
           metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
           configReloaderImage: natsio/nats-server-config-reloader:0.7.0
           startCommand: /nats-server

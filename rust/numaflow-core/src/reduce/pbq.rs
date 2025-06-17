@@ -243,6 +243,7 @@ mod tests {
             config: buf_reader_config,
             tracker_handle: tracker.clone(),
             batch_size: 500,
+            read_timeout: Duration::from_millis(100),
             watermark_handle: None,
             isb_config: None,
         })
@@ -356,6 +357,7 @@ mod tests {
             config: buf_reader_config,
             tracker_handle: tracker.clone(),
             batch_size: 500,
+            read_timeout: Duration::from_millis(100),
             watermark_handle: None,
             isb_config: None,
         })
@@ -590,6 +592,7 @@ mod tests {
             config: buf_reader_config,
             tracker_handle: tracker.clone(),
             batch_size: 500,
+            read_timeout: Duration::from_millis(100),
             watermark_handle: None,
             isb_config: None,
         })
