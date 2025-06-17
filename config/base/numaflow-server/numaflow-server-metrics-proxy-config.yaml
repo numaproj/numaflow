@@ -135,7 +135,7 @@ data:
                   required: false
         - metric_name: monovtx_ack_time_bucket
           display_name: MonoVertex Ack Time Latency
-          metric_description: This metric represents a histogram to keep track of the total time taken to read message.
+          metric_description: This metric represents a histogram to keep track of the total time taken to ack message.
           required_filters:
             - namespace
             - mvtx_name

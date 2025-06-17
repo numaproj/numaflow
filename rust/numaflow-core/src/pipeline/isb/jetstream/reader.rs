@@ -401,7 +401,6 @@ impl JetStreamReader {
             read_messages.push(message);
         }
 
-
         Ok(read_messages)
     }
 

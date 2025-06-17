@@ -41960,7 +41960,7 @@ data:
     \       - name: mono-vertex\n        - name: pod\n          filters:\n            -
     name: pod\n              required: false\n    - metric_name: monovtx_ack_time_bucket\n
     \     display_name: MonoVertex Ack Time Latency\n      metric_description: This
-    metric represents a histogram to keep track of the total time taken to read message.\n
+    metric represents a histogram to keep track of the total time taken to ack message.\n
     \     required_filters:\n        - namespace\n        - mvtx_name\n      dimensions:\n
     \       - name: mono-vertex\n        - name: pod\n          filters:\n            -
     name: pod\n              required: false\n    - metric_name: monovtx_transformer_time_bucket\n
