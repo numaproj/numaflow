@@ -795,6 +795,7 @@ mod tests {
         shutdown_tx
             .send(())
             .expect("failed to send shutdown signal");
+
         tokio::time::sleep(Duration::from_millis(50)).await;
 
         // Wait for the reduce handle to complete

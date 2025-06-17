@@ -2247,6 +2247,27 @@ dependencies = [
 [[package]]
 name = "numaflow"
 version = "0.2.1"
+source = "git+https://github.com/numaproj/numaflow-rs.git?rev=80a58be6a6bdd65c22b184ea6cc8d36458e800d7#80a58be6a6bdd65c22b184ea6cc8d36458e800d7"
+dependencies = [
+ "chrono",
+ "hyper-util",
+ "prost 0.13.5",
+ "prost-types",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tonic",
+ "tonic-build",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "numaflow"
+version = "0.2.1"
 source = "git+https://github.com/numaproj/numaflow-rs.git?rev=c6aa3a8d64a189357260f78131ef4692d387ba6c#c6aa3a8d64a189357260f78131ef4692d387ba6c"
 dependencies = [
  "chrono",
@@ -2287,7 +2308,7 @@ dependencies = [
  "k8s-openapi",
  "kube",
  "lz4",
- "numaflow 0.2.1",
+ "numaflow 0.2.1 (git+https://github.com/numaproj/numaflow-rs.git?rev=80a58be6a6bdd65c22b184ea6cc8d36458e800d7)",
  "numaflow-http",
  "numaflow-jetstream",
  "numaflow-kafka",
@@ -3591,7 +3612,7 @@ dependencies = [
  "chrono",
  "http 1.3.1",
  "hyper-util",
- "numaflow 0.2.1",
+ "numaflow 0.2.1 (git+https://github.com/numaproj/numaflow-rs.git?rev=c6aa3a8d64a189357260f78131ef4692d387ba6c)",
  "numaflow-models",
  "numaflow-pb",
  "parking_lot",

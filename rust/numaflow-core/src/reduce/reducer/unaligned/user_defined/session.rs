@@ -198,12 +198,14 @@ impl UserDefinedSessionReduce {
 
                     // Process next response
                     response = response_stream.message() => {
+                        println!("Received response");
                         let response = match response {
                             Ok(r) => r,
                             Err(e) => return Err(crate::Error::Reduce(format!("failed to receive response: {}", e))),
                         };
 
                         let Some(response) = response else {
+                            println!("No more responses");
                             break;
                         };
 
@@ -229,4 +231,341 @@ impl UserDefinedSessionReduce {
     }
 }
 
-// TODO: add tests
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use chrono::{TimeZone, Utc};
+    use numaflow::session_reduce;
+    use numaflow_pb::clients::sessionreduce::session_reduce_client::SessionReduceClient;
+    use tempfile::TempDir;
+    use tokio::sync::mpsc;
+    use tokio_stream::wrappers::ReceiverStream;
+    use tokio_util::sync::CancellationToken;
+
+    use super::*;
+    use crate::message::{MessageID, Offset, StringOffset};
+    use crate::reduce::reducer::unaligned::windower::{
+        UnalignedWindowMessage, UnalignedWindowOperation, Window,
+    };
+    use crate::shared::grpc::create_rpc_channel;
+    use tokio_stream::StreamExt;
+
+    struct Counter {
+        count: Arc<std::sync::atomic::AtomicU32>,
+    }
+
+    struct CounterCreator {}
+
+    impl session_reduce::SessionReducerCreator for CounterCreator {
+        type R = Counter;
+
+        fn create(&self) -> Self::R {
+            Counter::new()
+        }
+    }
+
+    impl Counter {
+        fn new() -> Self {
+            Self {
+                count: Arc::new(std::sync::atomic::AtomicU32::new(0)),
+            }
+        }
+    }
+
+    #[tonic::async_trait]
+    impl session_reduce::SessionReducer for Counter {
+        async fn session_reduce(
+            &self,
+            keys: Vec<String>,
+            mut input: mpsc::Receiver<session_reduce::SessionReduceRequest>,
+            output: mpsc::Sender<session_reduce::Message>,
+        ) {
+            // Count all incoming messages in this session
+            while input.recv().await.is_some() {
+                self.count
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
+
+            // Send the current count as the result
+            let count_value = self.count.load(std::sync::atomic::Ordering::Relaxed);
+            let message =
+                session_reduce::Message::new(count_value.to_string().into_bytes()).with_keys(keys);
+
+            if let Err(e) = output.send(message).await {
+                eprintln!("Failed to send message: {}", e);
+            }
+        }
+
+        async fn accumulator(&self) -> Vec<u8> {
+            // Return the current count as bytes for accumulator
+            let count = self.count.load(std::sync::atomic::Ordering::Relaxed);
+            count.to_string().into_bytes()
+        }
+
+        async fn merge_accumulator(&self, accumulator: Vec<u8>) {
+            // Parse the accumulator value and add it to our count
+            if let Ok(accumulator_str) = String::from_utf8(accumulator) {
+                if let Ok(accumulator_count) = accumulator_str.parse::<u32>() {
+                    self.count
+                        .fetch_add(accumulator_count, std::sync::atomic::Ordering::Relaxed);
+                } else {
+                    eprintln!("Failed to parse accumulator value: {}", accumulator_str);
+                }
+            } else {
+                eprintln!("Failed to convert accumulator bytes to string");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_session_reduce_basic() -> crate::Result<()> {
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("session_reduce.sock");
+        let server_info_file = tmp_dir.path().join("session_reduce-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let handle = tokio::spawn(async move {
+            session_reduce::Server::new(CounterCreator {})
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let mut client = UserDefinedSessionReduce::new(SessionReduceClient::new(
+            create_rpc_channel(sock_file).await?,
+        ))
+        .await;
+
+        // Create a simple test message
+        let message = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key1".into()]),
+            tags: None,
+            value: "value1".into(),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
+            event_time: Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 10).unwrap(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "0".to_string().into(),
+                index: 0,
+            },
+            ..Default::default()
+        };
+
+        // Create a session window
+        let window = Window::new(
+            Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap(),
+            Utc.with_ymd_and_hms(2023, 1, 1, 0, 1, 0).unwrap(),
+            Arc::from(vec!["key1".to_string()]),
+        );
+
+        // Create window operation
+        let window_message = UnalignedWindowMessage {
+            operation: UnalignedWindowOperation::Open {
+                message: message.clone(),
+                window: window.clone(),
+            },
+            pnf_slot: "GLOBAL_SLOT",
+        };
+
+        let close_message = UnalignedWindowMessage {
+            operation: UnalignedWindowOperation::Close {
+                window: window.clone(),
+            },
+            pnf_slot: "GLOBAL_SLOT",
+        };
+
+        // Create a channel to send window messages
+        let (window_tx, window_rx) = mpsc::channel(10);
+        window_tx.send(window_message.into()).await.unwrap();
+        window_tx.send(close_message.into()).await.unwrap();
+        drop(window_tx); // Close the channel to signal end of input
+
+        // Create a cancellation token
+        let cln_token = CancellationToken::new();
+
+        // Call reduce_fn
+        let (mut response_stream, session_reduce_handle) = client
+            .reduce_fn(ReceiverStream::new(window_rx), cln_token)
+            .await
+            .expect("reduce_fn failed");
+
+        // Wait for the result
+        let result = tokio::time::timeout(Duration::from_secs(5), response_stream.next())
+            .await
+            .expect("timeout waiting for result")
+            .expect("no result received");
+
+        // Convert response to message
+        let result_message: Message = result.into();
+
+        // Verify the result
+        assert_eq!(result_message.keys.to_vec(), vec!["key1"]);
+        assert_eq!(
+            String::from_utf8(result_message.value.to_vec()).unwrap(),
+            "1"
+        ); // Counter should be 1
+
+        // Shutdown the server
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Wait for the handle to complete
+        // handle
+        //     .await
+        //     .expect("handle failed")
+        //     .expect("reduce_fn task failed");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_session_reduce_multiple_messages() -> crate::Result<()> {
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("session_multi.sock");
+        let server_info_file = tmp_dir.path().join("session_multi-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let _handle = tokio::spawn(async move {
+            session_reduce::Server::new(CounterCreator {})
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let mut client = UserDefinedSessionReduce::new(SessionReduceClient::new(
+            create_rpc_channel(sock_file).await?,
+        ))
+        .await;
+
+        // Create test messages
+        let message1 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key1".into()]),
+            tags: None,
+            value: "value1".into(),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
+            event_time: Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 10).unwrap(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "0".to_string().into(),
+                index: 0,
+            },
+            ..Default::default()
+        };
+
+        let message2 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key1".into()]),
+            tags: None,
+            value: "value2".into(),
+            offset: Offset::String(StringOffset::new("1".to_string(), 1)),
+            event_time: Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 20).unwrap(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "1".to_string().into(),
+                index: 1,
+            },
+            ..Default::default()
+        };
+
+        // Create a session window
+        let window = Window::new(
+            Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap(),
+            Utc.with_ymd_and_hms(2023, 1, 1, 0, 1, 0).unwrap(),
+            Arc::from(vec!["key1".to_string()]),
+        );
+
+        // Create window operations
+        let open_message = UnalignedWindowMessage {
+            operation: UnalignedWindowOperation::Open {
+                message: message1.clone(),
+                window: window.clone(),
+            },
+            pnf_slot: "GLOBAL_SLOT",
+        };
+
+        let append_message = UnalignedWindowMessage {
+            operation: UnalignedWindowOperation::Append {
+                message: message2.clone(),
+                window: window.clone(),
+            },
+            pnf_slot: "GLOBAL_SLOT",
+        };
+
+        let close_message = UnalignedWindowMessage {
+            operation: UnalignedWindowOperation::Close {
+                window: window.clone(),
+            },
+            pnf_slot: "GLOBAL_SLOT",
+        };
+
+        // Create a channel to send window messages
+        let (window_tx, window_rx) = mpsc::channel(10);
+        window_tx.send(open_message.into()).await.unwrap();
+        window_tx.send(append_message.into()).await.unwrap();
+        window_tx.send(close_message.into()).await.unwrap();
+        drop(window_tx); // Close the channel to signal end of input
+
+        // Create a cancellation token
+        let cln_token = CancellationToken::new();
+
+        // Call reduce_fn
+        let (mut response_stream, handle) = client
+            .reduce_fn(ReceiverStream::new(window_rx), cln_token)
+            .await
+            .expect("reduce_fn failed");
+
+        // Wait for the result
+        let result = tokio::time::timeout(Duration::from_secs(5), response_stream.next())
+            .await
+            .expect("timeout waiting for result")
+            .expect("no result received");
+
+        // Convert response to message
+        let result_message: Message = result.into();
+
+        // Verify the result
+        assert_eq!(result_message.keys.to_vec(), vec!["key1"]);
+        assert_eq!(
+            String::from_utf8(result_message.value.to_vec()).unwrap(),
+            "2"
+        ); // Counter should be 2
+
+        // Wait for the handle to complete
+        handle
+            .await
+            .expect("handle failed")
+            .expect("reduce_fn task failed");
+
+        // Shutdown the server
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        Ok(())
+    }
+}
