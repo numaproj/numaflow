@@ -22,6 +22,7 @@ use chrono::{DateTime, Utc};
 use rcgen::{Certificate, CertifiedKey, generate_simple_self_signed};
 use serde::Serialize;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::fmt::Debug;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -31,7 +32,8 @@ use tokio::sync::{Mutex, mpsc, oneshot};
 use tracing::{debug, error, info, trace, warn};
 use uuid::Uuid;
 
-/// Type alias for the map that tracks inflight HTTP requests
+/// Map that tracks inflight HTTP requests. This is passed to ack actor to send response back to
+/// the client. The entries are inserted at [axum::handler].
 type InflightRequestsMap = Arc<Mutex<HashMap<String, oneshot::Sender<StatusCode>>>>;
 
 /// HTTP source that manages incoming HTTP requests and forwards them to a processing channel
@@ -223,7 +225,8 @@ impl HttpSourceActor {
         }
 
         // Send error responses to any pending requests during shutdown
-        self.shutdown_pending_requests().await;
+        self.fail_pending_requests().await;
+
         info!("HttpSource processor stopped");
         Ok(())
     }
@@ -280,16 +283,20 @@ impl HttpSourceActor {
         Ok(())
     }
 
-    /// Send error responses to all pending requests during shutdown
-    async fn shutdown_pending_requests(&self) {
+    /// Send error responses to all pending requests during shutdown.
+    /// We cannot avoid this today because HTTP reads ahead (has a channel buffer) and the
+    /// current Source trait does not support "initiate shutdown".
+    /// https://github.com/numaproj/numaflow/issues/2734
+    async fn fail_pending_requests(&self) {
         let mut pending_responses = self.inflight_requests.lock().await;
         if pending_responses.is_empty() {
             return;
         }
 
-        warn!(
+        error!(
             pending_count = pending_responses.len(),
-            "Sending error responses to pending requests during shutdown"
+            "Sending error responses to pending requests during shutdown. \
+            This is a known issue (https://github.com/numaproj/numaflow/issues/2734)."
         );
 
         for (_, response_tx) in pending_responses.drain() {
@@ -513,10 +520,24 @@ async fn data_handler(
     // Create oneshot channel for response
     let (response_tx, response_rx) = oneshot::channel();
 
-    // Store the response sender in the pending responses map
+    // Store the response sender in the pending responses map, accept only if it is not in the hashmap
     {
         let mut pending_responses = http_source.inflight_requests.lock().await;
-        pending_responses.insert(id.clone(), response_tx);
+        let entry = pending_responses.entry(id.clone());
+        if let Entry::Vacant(val) = entry {
+            val.insert(response_tx);
+        } else {
+            return (
+                StatusCode::CONFLICT,
+                axum::Json(serde_json::json!({
+                    "error": "Duplicate request ID",
+                    "id": id
+                })),
+            )
+                .into_response();
+        }
+
+        //pending_responses.insert(id.clone(), response_tx);
     }
 
     // Create the HTTP message
@@ -1208,6 +1229,90 @@ mod tests {
         // Now the request should complete
         let response = request_handle.await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_duplicate_x_numaflow_id() {
+        // Test that duplicate x-numaflow-id headers return CONFLICT status
+        let (tx, mut rx) = mpsc::channel(10);
+        let pending_responses: InflightRequestsMap = Arc::new(Mutex::new(HashMap::new()));
+
+        let app = create_router("test", None, tx, Arc::clone(&pending_responses));
+
+        // Spawn a task to simulate ack for the first successful request
+        let pending_responses_clone = Arc::clone(&pending_responses);
+        tokio::spawn(async move {
+            // Wait for the first message to arrive
+            if let Some(message) = rx.recv().await {
+                // Simulate ack by sending OK response
+                let mut pending = pending_responses_clone.lock().await;
+                if let Some(response_tx) = pending.remove(&message.id) {
+                    let _ = response_tx.send(StatusCode::OK);
+                }
+            }
+        });
+
+        let duplicate_id = "duplicate-test-id";
+
+        // Send first request with the ID
+        let first_request = Request::builder()
+            .method(Method::POST)
+            .uri("/vertices/test")
+            .header("Content-Type", "application/json")
+            .header("X-Numaflow-Id", duplicate_id)
+            .body(Body::from(r#"{"test": "first_request"}"#))
+            .unwrap();
+
+        // Send second request with the same ID
+        let second_request = Request::builder()
+            .method(Method::POST)
+            .uri("/vertices/test")
+            .header("Content-Type", "application/json")
+            .header("X-Numaflow-Id", duplicate_id)
+            .body(Body::from(r#"{"test": "second_request"}"#))
+            .unwrap();
+
+        // Send both requests concurrently to test race conditions
+        let (first_response, second_response) = tokio::join!(
+            app.clone().oneshot(first_request),
+            app.oneshot(second_request)
+        );
+
+        let first_response = first_response.unwrap();
+        let second_response = second_response.unwrap();
+
+        // One should succeed (OK) and one should fail (CONFLICT)
+        // We can't guarantee which one will be first due to concurrency
+        let statuses = [first_response.status(), second_response.status()];
+
+        assert!(
+            statuses.contains(&StatusCode::OK),
+            "One request should succeed with OK status"
+        );
+        assert!(
+            statuses.contains(&StatusCode::CONFLICT),
+            "One request should fail with CONFLICT status"
+        );
+
+        // Verify the CONFLICT response contains the expected error message
+        let conflict_response = if first_response.status() == StatusCode::CONFLICT {
+            first_response
+        } else {
+            second_response
+        };
+
+        assert_eq!(conflict_response.status(), StatusCode::CONFLICT);
+
+        // Read the response body to verify the error message
+        let body_bytes = axum::body::to_bytes(conflict_response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8(body_bytes.to_vec()).unwrap();
+
+        // Parse JSON response
+        let json_response: serde_json::Value = serde_json::from_str(&body_str).unwrap();
+        assert_eq!(json_response["error"], "Duplicate request ID");
+        assert_eq!(json_response["id"], duplicate_id);
     }
 
     #[test]

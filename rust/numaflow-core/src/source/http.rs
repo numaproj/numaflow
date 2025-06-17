@@ -84,6 +84,7 @@ impl SourceAcker for CoreHttpSource {
             .filter_map(|o| match o {
                 Offset::String(s) => Some(s.offset),
                 Offset::Int(_) => {
+                    // this should not happen since we create the offsets
                     error!("HTTP offsets should be string");
                     None
                 }
