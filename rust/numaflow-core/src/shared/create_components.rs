@@ -242,6 +242,7 @@ pub(crate) async fn create_transformer(
 pub(crate) async fn create_mapper(
     batch_size: usize,
     read_timeout: Duration,
+    graceful_timeout: Duration,
     map_config: MapVtxConfig,
     tracker_handle: TrackerHandle,
     cln_token: CancellationToken,
@@ -287,6 +288,7 @@ pub(crate) async fn create_mapper(
                         server_info.get_map_mode().unwrap_or(MapMode::Unary),
                         batch_size,
                         read_timeout,
+                        graceful_timeout,
                         map_config.concurrency,
                         map_grpc_client.clone(),
                         tracker_handle,
@@ -319,6 +321,7 @@ pub(crate) async fn create_mapper(
                         server_info.get_map_mode().unwrap_or(MapMode::Unary),
                         batch_size,
                         read_timeout,
+                        graceful_timeout,
                         map_config.concurrency,
                         map_grpc_client.clone(),
                         tracker_handle,
