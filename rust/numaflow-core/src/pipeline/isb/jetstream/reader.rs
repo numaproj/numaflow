@@ -525,16 +525,11 @@ impl JetStreamReader {
         let _ = Retry::retry(
             interval,
             async || {
-                let result = match msg.ack_with(ack_kind).await {
-                    Ok(_) => Ok(()),
-                    Err(e) => {
-                        warn!(error = ?e, ?ack_kind, "Failed to send ack to Jetstream for message");
-                        Err(Error::Connection(format!(
-                            "Failed to send {:?}: {:?}",
-                            ack_kind, e
-                        )))
-                    }
+                let result = match ack_kind {
+                    AckKind::Ack => msg.double_ack().await, // double ack is used for exactly once semantics
+                    _ => msg.ack_with(ack_kind).await,
                 };
+
                 if result.is_err() && cancel_token.is_cancelled() {
                     error!(
                         ?result,
@@ -544,7 +539,8 @@ impl JetStreamReader {
                     );
                     return Ok(());
                 }
-                result
+
+                result.map_err(|e| Error::Connection("Failed to send ack to Jetstream".to_string()))
             },
             |_: &Error| true,
         )
