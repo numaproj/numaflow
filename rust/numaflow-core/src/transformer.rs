@@ -2,6 +2,7 @@ use bytes::Bytes;
 use numaflow_monitor::runtime;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::{Semaphore, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
@@ -69,6 +70,7 @@ impl TransformerActor {
 pub(crate) struct Transformer {
     sender: mpsc::Sender<TransformerActorMessage>,
     concurrency: usize,
+    graceful_shutdown_time: Duration,
     tracker_handle: TrackerHandle,
     health_checker: Option<SourceTransformClient<Channel>>,
 }
@@ -77,6 +79,7 @@ impl Transformer {
     pub(crate) async fn new(
         batch_size: usize,
         concurrency: usize,
+        graceful_timeout: Duration,
         client: SourceTransformClient<Channel>,
         tracker_handle: TrackerHandle,
     ) -> Result<Self> {
@@ -92,6 +95,7 @@ impl Transformer {
 
         Ok(Self {
             concurrency,
+            graceful_shutdown_time: graceful_timeout,
             sender,
             tracker_handle,
             health_checker: Some(client),
@@ -103,7 +107,7 @@ impl Transformer {
     async fn transform(
         transform_handle: mpsc::Sender<TransformerActorMessage>,
         read_msg: Message,
-        cln_token: CancellationToken,
+        hard_shutdown_token: CancellationToken,
     ) -> Result<Vec<Message>> {
         let (sender, receiver) = oneshot::channel();
         let msg = TransformerActorMessage {
@@ -119,8 +123,8 @@ impl Transformer {
 
         // wait for the response
         let response = tokio::select! {
-            _ = cln_token.cancelled() => {
-                return Err(Error::Transformer("cancellation token cancelled".to_string()));
+            _ = hard_shutdown_token.cancelled() => {
+                return Err(Error::Transformer("Operation cancelled".to_string()));
             }
             response = receiver => {
                 response.map_err(|e| Error::Transformer(format!("failed to receive response from server: {}", e)))??
@@ -161,6 +165,26 @@ impl Transformer {
             get_vertex_name().to_string(),
         ));
 
+        // create a new cancellation token for the transformer component, this token is used for hard
+        // shutdown, the parent token is used for graceful shutdown.
+        let hard_shutdown_token = CancellationToken::new();
+        // the one that calls shutdown
+        let hard_shutdown_token_owner = hard_shutdown_token.clone();
+        let graceful_timeout = self.graceful_shutdown_time;
+
+        // clone the token before moving it into the async closure
+        let cln_token_for_shutdown = cln_token.clone();
+
+        // spawn a task to cancel the token after graceful timeout when the main token is cancelled
+        let shutdown_handle = tokio::spawn(async move {
+            // initiate graceful shutdown
+            cln_token_for_shutdown.cancelled().await;
+            // wait for graceful timeout
+            tokio::time::sleep(graceful_timeout).await;
+            // cancel the token to hard shutdown
+            hard_shutdown_token_owner.cancel();
+        });
+
         // increment read message count for pipeline
         if !is_mono_vertex() {
             pipeline_metrics()
@@ -176,7 +200,7 @@ impl Transformer {
                 let permit_fut = Arc::clone(&semaphore).acquire_owned();
                 let transform_handle = transform_handle.clone();
                 let tracker_handle = tracker_handle.clone();
-                let cln_token = cln_token.clone();
+                let hard_shutdown_token = hard_shutdown_token.clone();
 
                 tokio::spawn(async move {
                     let permit = permit_fut.await.map_err(|e| {
@@ -187,7 +211,7 @@ impl Transformer {
                     let transformed_messages = Transformer::transform(
                         transform_handle,
                         read_msg.clone(),
-                        cln_token.clone(),
+                        hard_shutdown_token.clone(),
                     )
                     .await?;
 
@@ -241,6 +265,9 @@ impl Transformer {
             write_messages_count,
             &labels,
         );
+
+        // cleanup the shutdown handle
+        shutdown_handle.abort();
         Ok(transformed_messages)
     }
 
@@ -347,7 +374,14 @@ mod tests {
         let tracker_handle = TrackerHandle::new(None, None);
 
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
-        let transformer = Transformer::new(500, 10, client, tracker_handle.clone()).await?;
+        let transformer = Transformer::new(
+            500,
+            10,
+            Duration::from_secs(10),
+            client,
+            tracker_handle.clone(),
+        )
+        .await?;
 
         let message = Message {
             typ: Default::default(),
@@ -417,7 +451,14 @@ mod tests {
 
         let tracker_handle = TrackerHandle::new(None, None);
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
-        let transformer = Transformer::new(500, 10, client, tracker_handle.clone()).await?;
+        let transformer = Transformer::new(
+            500,
+            10,
+            Duration::from_secs(10),
+            client,
+            tracker_handle.clone(),
+        )
+        .await?;
 
         let mut messages = vec![];
         for i in 0..5 {
@@ -498,7 +539,14 @@ mod tests {
 
         let tracker_handle = TrackerHandle::new(None, None);
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
-        let transformer = Transformer::new(500, 10, client, tracker_handle.clone()).await?;
+        let transformer = Transformer::new(
+            500,
+            10,
+            Duration::from_secs(10),
+            client,
+            tracker_handle.clone(),
+        )
+        .await?;
 
         let message = Message {
             typ: Default::default(),
