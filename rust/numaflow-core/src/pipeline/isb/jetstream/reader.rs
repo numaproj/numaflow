@@ -394,6 +394,11 @@ impl JetStreamReader {
 
             read_messages.push(message);
         }
+        pipeline_metrics()
+            .forwarder
+            .read_processing_time
+            .get_or_create(&labels.to_vec())
+            .observe(start.elapsed().as_micros() as f64);
 
         Ok(read_messages)
     }
