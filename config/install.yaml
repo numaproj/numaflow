@@ -42089,7 +42089,7 @@ data:
     This metric represents a histogram to keep track of the total time taken by transformer(if
     present).\n      required_filters:\n        - namespace\n        - mvtx_name\n
     \     dimensions:\n        - name: mono-vertex\n        - name: pod\n          filters:\n
-    \           - name: pod\n              required: false\n\n\n- name: vertex_histogram\n
+    \           - name: pod\n              required: false\n\n- name: vertex_histogram\n
     \ objects: \n    - vertex\n  title: Pipeline Histogram Metrics\n  description:
     This pattern is for P99, P95, P90 and P50 quantiles for a vertex across different
     dimensions\n  expr: |\n    histogram_quantile($quantile, sum by($dimension,le)

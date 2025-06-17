@@ -158,7 +158,6 @@ data:
                 - name: pod
                   required: false
 
-
     - name: vertex_histogram
       objects: 
         - vertex

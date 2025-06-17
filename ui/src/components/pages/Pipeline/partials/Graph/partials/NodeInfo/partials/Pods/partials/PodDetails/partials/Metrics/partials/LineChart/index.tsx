@@ -44,7 +44,7 @@ import {
   MONO_VERTEX_ACK_PROCESSING_TIME_LATENCY,
   MONO_VERTEX_TRANSFORMER_PROCESSING_TIME_LATENCY,
   MONO_VERTEX_READ_TIME_LATENCY,
-  MONO_VERTEX_FALLBACK_SINK_WRITE_TIME_LATENCY
+  MONO_VERTEX_FALLBACK_SINK_WRITE_TIME_LATENCY,
 } from "../../utils/constants";
 import { AppContext } from "../../../../../../../../../../../../../../../App";
 import { AppContextProps } from "../../../../../../../../../../../../../../../types/declarations/app";
@@ -328,7 +328,7 @@ const LineChartComponent = ({
           }
         case "replica":
           // Currently "replica" is not used in any of the metrics as a required filter
-          // Need may arise in case of pending metrics 
+          // Need may arise in case of pending metrics
           // If so, then set replica to 0, as pending calculation is done only for 0th replica.
           return "0";
         default:
