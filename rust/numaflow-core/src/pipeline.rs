@@ -126,6 +126,7 @@ async fn start_source_forwarder(
 
     let transformer = create_components::create_transformer(
         config.batch_size,
+        config.graceful_shutdown_time,
         source_config.transformer_config.clone(),
         tracker_handle.clone(),
         cln_token.clone(),
