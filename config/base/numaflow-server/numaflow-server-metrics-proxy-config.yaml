@@ -121,6 +121,42 @@ data:
               filters:
                 - name: pod
                   required: false
+        - metric_name: monovtx_read_time_bucket
+          display_name: MonoVertex Read Time Latency
+          metric_description: This metric represents a histogram to keep track of the total time taken to read message.
+          required_filters:
+            - namespace
+            - mvtx_name
+          dimensions:
+            - name: mono-vertex
+            - name: pod
+              filters:
+                - name: pod
+                  required: false
+        - metric_name: monovtx_ack_time_bucket
+          display_name: MonoVertex Ack Time Latency
+          metric_description: This metric represents a histogram to keep track of the total time taken to read message.
+          required_filters:
+            - namespace
+            - mvtx_name
+          dimensions:
+            - name: mono-vertex
+            - name: pod
+              filters:
+                - name: pod
+                  required: false
+        - metric_name: monovtx_transformer_time_bucket
+          display_name: MonoVertex Transformer Processing Time Latency
+          metric_description: This metric represents a histogram to keep track of the total time taken by transformer(if present).
+          required_filters:
+            - namespace
+            - mvtx_name
+          dimensions:
+            - name: mono-vertex
+            - name: pod
+              filters:
+                - name: pod
+                  required: false
 
 
     - name: vertex_histogram
@@ -207,7 +243,7 @@ data:
                   required: false
 
     - name: vertex_throughput
-      objects: 
+      objects:
         - vertex
       title: Vertex Throughput and Message Rates
       description: This pattern measures the throughput of a vertex in messages per second across different dimensions

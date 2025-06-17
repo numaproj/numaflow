@@ -42074,6 +42074,21 @@ data:
     This metric represents a histogram to keep track of the total time taken to write
     to the Sink.\n      required_filters:\n        - namespace\n        - mvtx_name\n
     \     dimensions:\n        - name: mono-vertex\n        - name: pod\n          filters:\n
+    \           - name: pod\n              required: false\n    - metric_name: monovtx_read_time_bucket\n
+    \     display_name: MonoVertex Read Time Latency\n      metric_description: This
+    metric represents a histogram to keep track of the total time taken to read message.\n
+    \     required_filters:\n        - namespace\n        - mvtx_name\n      dimensions:\n
+    \       - name: mono-vertex\n        - name: pod\n          filters:\n            -
+    name: pod\n              required: false\n    - metric_name: monovtx_ack_time_bucket\n
+    \     display_name: MonoVertex Ack Time Latency\n      metric_description: This
+    metric represents a histogram to keep track of the total time taken to read message.\n
+    \     required_filters:\n        - namespace\n        - mvtx_name\n      dimensions:\n
+    \       - name: mono-vertex\n        - name: pod\n          filters:\n            -
+    name: pod\n              required: false\n    - metric_name: monovtx_transformer_time_bucket\n
+    \     display_name: MonoVertex Transformer Processing Time Latency\n      metric_description:
+    This metric represents a histogram to keep track of the total time taken by transformer(if
+    present).\n      required_filters:\n        - namespace\n        - mvtx_name\n
+    \     dimensions:\n        - name: mono-vertex\n        - name: pod\n          filters:\n
     \           - name: pod\n              required: false\n\n\n- name: vertex_histogram\n
     \ objects: \n    - vertex\n  title: Pipeline Histogram Metrics\n  description:
     This pattern is for P99, P95, P90 and P50 quantiles for a vertex across different
@@ -42109,7 +42124,7 @@ data:
     \     required_filters:\n        - namespace\n        - pipeline\n        - vertex\n
     \     dimensions:\n        - name: vertex\n        - name: pod\n          filters:\n
     \           - name: pod\n              required: false\n\n- name: vertex_throughput\n
-    \ objects: \n    - vertex\n  title: Vertex Throughput and Message Rates\n  description:
+    \ objects:\n    - vertex\n  title: Vertex Throughput and Message Rates\n  description:
     This pattern measures the throughput of a vertex in messages per second across
     different dimensions\n  expr: sum(rate($metric_name{$filters}[$duration])) by
     ($dimension)\n  params:\n    - name: duration\n      required: true\n    - name:

@@ -67,7 +67,7 @@ export const FALLBACK_SINK_WRITE_TIME_LATENCY = "Fallback Sink Write Time Latenc
 
 // MonoVertex Latency Metrics
 export const MONO_VERTEX_TRANSFORMER_PROCESSING_TIME_LATENCY = "MonoVertex Transformer Processing Time Latency";
-export const MONO_VERTEX_READ_PROCESSING_TIME_LATENCY = "MonoVertex Read Processing Time Latency";
+export const MONO_VERTEX_READ_TIME_LATENCY = "MonoVertex Read Time Latency";
 export const MONO_VERTEX_ACK_PROCESSING_TIME_LATENCY = "MonoVertex Ack Time Latency";
 export const MONO_VERTEX_PROCESSING_TIME_LATENCY = "MonoVertex Processing Time Latency";
 export const MONO_VERTEX_SINK_WRITE_TIME_LATENCY = "MonoVertex Sink Write Time Latency";
