@@ -194,6 +194,7 @@ pub(crate) async fn create_sink_writer(
 /// Creates a transformer if it is configured
 pub(crate) async fn create_transformer(
     batch_size: usize,
+    graceful_timeout: Duration,
     transformer_config: Option<TransformerConfig>,
     tracker_handle: TrackerHandle,
     cln_token: CancellationToken,
@@ -229,6 +230,7 @@ pub(crate) async fn create_transformer(
                 Transformer::new(
                     batch_size,
                     transformer_config.concurrency,
+                    graceful_timeout,
                     transformer_grpc_client.clone(),
                     tracker_handle,
                 )
