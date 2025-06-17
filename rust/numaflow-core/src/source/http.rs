@@ -120,6 +120,7 @@ mod tests {
     use rustls::{DigitallySignedStruct, SignatureScheme};
     use std::net::TcpListener;
     use std::time::Duration;
+    use tokio::task::JoinSet;
     use tokio::time::sleep;
 
     // Custom certificate verifier that accepts any certificate (for testing)
@@ -215,23 +216,43 @@ mod tests {
             .build();
         let client = Client::builder(TokioExecutor::new()).build(https_connector);
 
-        // Send test requests
-        for i in 0..7 {
-            let request = Request::builder()
-                .method(Method::POST)
-                .uri(format!("https://{}/vertices/test", addr))
-                .header("Content-Type", "application/json")
-                .header("X-Numaflow-Id", format!("test-id-{}", i))
-                .body(format!(r#"{{"message": "test{}"}}"#, i))
-                .unwrap();
+        let request_handle = tokio::spawn(async move {
+            // concurrently invoke each request in a separate tokio task and join at the end
+            let mut join_set = JoinSet::new();
+            // Send test requests
+            for i in 0..7 {
+                let client = client.clone();
+                join_set.spawn(async move {
+                    let request = Request::builder()
+                        .method(Method::POST)
+                        .uri(format!("https://{}/vertices/test", addr))
+                        .header("Content-Type", "application/json")
+                        .header("X-Numaflow-Id", format!("test-id-{}", i))
+                        .body(format!(r#"{{"message": "test{}"}}"#, i))
+                        .unwrap();
 
-            let response = client.request(request).await.unwrap();
-            assert_eq!(response.status(), 200);
-        }
+                    let response = client.request(request).await.unwrap();
+                    assert_eq!(response.status(), 200);
+                });
+            }
 
-        // Test pending count
-        let pending = core_http_source.pending().await.unwrap();
-        assert_eq!(pending, Some(7), "Should have 7 pending messages");
+            while let Some(task) = join_set.join_next().await {
+                task.unwrap();
+            }
+        });
+
+        // wait for 1s to make sure all the requests are sent
+        let start = tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                let pending = core_http_source.pending().await.unwrap();
+                if pending == Some(7) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+        assert!(start.is_ok(), "Timeout occurred before pending became 7");
 
         // Test partitions
         let partitions = core_http_source.partitions().await.unwrap();
@@ -261,7 +282,11 @@ mod tests {
             assert!(body_str.contains(&format!("test{}", i)));
         }
 
-        // Test pending count after reading
+        // Ack the messages
+        let offsets = messages.iter().map(|m| m.offset.clone()).collect();
+        core_http_source.ack(offsets).await.unwrap();
+
+        // Test pending count after reading and acking
         let pending = core_http_source.pending().await.unwrap();
         assert_eq!(
             pending,
@@ -269,17 +294,18 @@ mod tests {
             "Should have 2 pending messages after reading 5"
         );
 
-        // Test ack method (should always succeed for HTTP source)
-        let offsets = messages.iter().map(|m| m.offset.clone()).collect();
-        let ack_result = core_http_source.ack(offsets).await;
-        assert!(ack_result.is_ok(), "Ack should succeed");
-
         // Read remaining messages
         let messages = core_http_source.read().await.unwrap();
         assert_eq!(messages.len(), 2, "Should read remaining 2 messages");
 
+        // Ack the remaining messages
+        let offsets = messages.iter().map(|m| m.offset.clone()).collect();
+        core_http_source.ack(offsets).await.unwrap();
+
         // Verify no more pending messages
         let pending = core_http_source.pending().await.unwrap();
         assert_eq!(pending, Some(0), "Should have 0 pending messages");
+
+        request_handle.await.unwrap();
     }
 }
