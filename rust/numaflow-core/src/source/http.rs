@@ -7,6 +7,7 @@ use crate::source;
 use crate::source::{SourceAcker, SourceReader};
 use numaflow_http::HttpMessage;
 use std::sync::Arc;
+use tracing::error;
 
 impl From<numaflow_http::Error> for crate::error::Error {
     fn from(value: numaflow_http::Error) -> Self {
@@ -76,8 +77,27 @@ impl SourceReader for CoreHttpSource {
 }
 
 impl SourceAcker for CoreHttpSource {
-    async fn ack(&mut self, _: Vec<Offset>) -> Result<()> {
-        self.http_source.ack(vec![]).await.map_err(|e| e.into())
+    async fn ack(&mut self, offsets: Vec<Offset>) -> Result<()> {
+        // extract the ids from the offsets, id was used to create the offset
+        let ids = offsets
+            .into_iter()
+            .filter_map(|o| match o {
+                Offset::String(s) => Some(s.offset),
+                Offset::Int(_) => {
+                    error!("HTTP offsets should be string");
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        self.http_source
+            .ack(
+                ids.into_iter()
+                    .map(|o| String::from_utf8(o.to_vec()).expect("UTF-8 error"))
+                    .collect(),
+            )
+            .await
+            .map_err(|e| e.into())
     }
 }
 
