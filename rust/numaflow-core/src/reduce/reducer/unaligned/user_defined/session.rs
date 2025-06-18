@@ -198,14 +198,12 @@ impl UserDefinedSessionReduce {
 
                     // Process next response
                     response = response_stream.message() => {
-                        println!("Received response");
                         let response = match response {
                             Ok(r) => r,
                             Err(e) => return Err(crate::Error::Reduce(format!("failed to receive response: {}", e))),
                         };
 
                         let Some(response) = response else {
-                            println!("No more responses");
                             break;
                         };
 
