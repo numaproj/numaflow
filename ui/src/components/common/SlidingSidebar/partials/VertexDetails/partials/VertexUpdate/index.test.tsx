@@ -90,15 +90,19 @@ describe("VertexUpdate", () => {
       const mutationBtn = screen.getByTestId("spec-editor-mutated");
       fireEvent.click(mutationBtn);
     });
-    expect(mockSetModalOnClose).toHaveBeenCalledWith(undefined);
+    await waitFor(() => {
+      expect(mockSetModalOnClose).toHaveBeenCalledWith(undefined);
+    });
     mockSetModalOnClose.mockClear();
     act(() => {
       const mutationBtn = screen.getByTestId("spec-editor-mutated");
       fireEvent.click(mutationBtn);
     });
-    expect(mockSetModalOnClose).toHaveBeenCalledWith({
-      iconType: "warn",
-      message: "Are you sure you want to discard your changes?",
+    await waitFor(() => {
+      expect(mockSetModalOnClose).toHaveBeenCalledWith({
+        iconType: "warn",
+        message: "Are you sure you want to discard your changes?",
+      });
     });
   });
 
@@ -179,7 +183,7 @@ describe("VertexUpdate", () => {
     await waitFor(() => {
       expect(screen.getByTestId("spec-editor-reset")).toBeInTheDocument();
     });
-    // Click 
+    // Click
     act(() => {
       const submitBtn = screen.getByTestId("spec-editor-submit");
       fireEvent.click(submitBtn);
@@ -192,8 +196,9 @@ describe("VertexUpdate", () => {
       ).toBeInTheDocument();
     });
     // Wait for onUpdateComplete call
-    await new Promise((r) => setTimeout(r, 1000));
-    expect(mockRefresh).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(mockRefresh).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("submit failure", async () => {

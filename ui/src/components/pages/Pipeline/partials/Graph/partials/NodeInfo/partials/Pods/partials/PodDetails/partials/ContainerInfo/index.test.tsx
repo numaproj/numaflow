@@ -1,7 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { ContainerInfo } from "./index";
-import { ContainerInfoProps, PodContainerSpec, PodSpecificInfoProps } from "../../../../../../../../../../../../../types/declarations/pods";
+import {
+  ContainerInfoProps,
+  PodContainerSpec,
+  PodSpecificInfoProps,
+} from "../../../../../../../../../../../../../types/declarations/pods";
 
 const podContainerSpec: PodContainerSpec = {
   name: "numa",
