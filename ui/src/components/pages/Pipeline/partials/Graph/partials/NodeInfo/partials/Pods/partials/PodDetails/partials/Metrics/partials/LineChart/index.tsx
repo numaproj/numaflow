@@ -38,7 +38,13 @@ import {
   VERTEX_PENDING_MESSAGES,
   VERTEX_READ_PROCESSING_TIME_LATENCY,
   VERTEX_WRITE_PROCESSING_TIME_LATENCY,
-  VERTEX_PROCESSING_TIME_LATENCY
+  VERTEX_PROCESSING_TIME_LATENCY,
+  FALLBACK_SINK_WRITE_TIME_LATENCY,
+  SOURCE_TRANSFORMER_PROCESSING_TIME_LATENCY,
+  MONO_VERTEX_ACK_PROCESSING_TIME_LATENCY,
+  MONO_VERTEX_TRANSFORMER_PROCESSING_TIME_LATENCY,
+  MONO_VERTEX_READ_TIME_LATENCY,
+  MONO_VERTEX_FALLBACK_SINK_WRITE_TIME_LATENCY,
 } from "../../utils/constants";
 import { AppContext } from "../../../../../../../../../../../../../../../App";
 import { AppContextProps } from "../../../../../../../../../../../../../../../types/declarations/app";
@@ -191,6 +197,12 @@ const getDefaultFormatter = (value: number, displayName: string) => {
     case VERTEX_PROCESSING_TIME_LATENCY:
     case VERTEX_ACK_PROCESSING_TIME_LATENCY:
     case UDF_PROCESSING_TIME_LATENCY:
+    case SOURCE_TRANSFORMER_PROCESSING_TIME_LATENCY:
+    case FALLBACK_SINK_WRITE_TIME_LATENCY:
+    case MONO_VERTEX_TRANSFORMER_PROCESSING_TIME_LATENCY:
+    case MONO_VERTEX_READ_TIME_LATENCY:
+    case MONO_VERTEX_ACK_PROCESSING_TIME_LATENCY:
+    case MONO_VERTEX_FALLBACK_SINK_WRITE_TIME_LATENCY:
       if (value === 0) {
         return "0";
       } else if (value < 1000) {
@@ -316,7 +328,7 @@ const LineChartComponent = ({
           }
         case "replica":
           // Currently "replica" is not used in any of the metrics as a required filter
-          // Need may arise in case of pending metrics 
+          // Need may arise in case of pending metrics
           // If so, then set replica to 0, as pending calculation is done only for 0th replica.
           return "0";
         default:
