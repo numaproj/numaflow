@@ -9,7 +9,7 @@ use std::time::{Duration, SystemTime};
 
 use bytes::BytesMut;
 use prost::Message;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::BucketConfig;
@@ -161,12 +161,12 @@ impl ISBWatermarkPublisher {
         .try_into()
         .expect("Failed to convert WMB to bytes");
 
-        // ot writes can fail when isb is not healthy, we can ignore since subsequent writes will
-        // go through
+        // ot writes can fail when isb is not healthy, we can ignore failures
+        // since subsequent writes will go through
         ot_bucket
             .put(self.processor_name.clone(), wmb_bytes.freeze())
             .await
-            .map_err(|e| error!("Failed to write wmb to ot bucket: {}", e))
+            .map_err(|e| warn!(?e, "Failed to write wmb to ot bucket (ignoring)"))
             .ok();
 
         // update the last published watermark state
