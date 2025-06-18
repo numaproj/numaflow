@@ -21843,6 +21843,29 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.PulsarSink": {
+      "type": "object",
+      "required": [
+        "serverAddr",
+        "topic",
+        "producerName"
+      ],
+      "properties": {
+        "auth": {
+          "description": "Auth information",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PulsarAuth"
+        },
+        "producerName": {
+          "type": "string"
+        },
+        "serverAddr": {
+          "type": "string"
+        },
+        "topic": {
+          "type": "string"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.PulsarSource": {
       "type": "object",
       "required": [

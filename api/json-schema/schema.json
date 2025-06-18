@@ -21857,6 +21857,29 @@
       },
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.PulsarSink": {
+      "properties": {
+        "auth": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PulsarAuth",
+          "description": "Auth information"
+        },
+        "producerName": {
+          "type": "string"
+        },
+        "serverAddr": {
+          "type": "string"
+        },
+        "topic": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "serverAddr",
+        "topic",
+        "producerName"
+      ],
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.PulsarSource": {
       "properties": {
         "auth": {

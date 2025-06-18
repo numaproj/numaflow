@@ -1396,6 +1396,18 @@ message PulsarAuth {
   optional .k8s.io.api.core.v1.SecretKeySelector token = 1;
 }
 
+message PulsarSink {
+  optional string serverAddr = 1;
+
+  optional string topic = 2;
+
+  optional string producerName = 3;
+
+  // Auth information
+  // +optional
+  optional PulsarAuth auth = 6;
+}
+
 message PulsarSource {
   optional string serverAddr = 1;
 

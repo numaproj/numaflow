@@ -95,6 +95,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Ports":                            schema_pkg_apis_numaflow_v1alpha1_Ports(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Probe":                            schema_pkg_apis_numaflow_v1alpha1_Probe(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarAuth":                       schema_pkg_apis_numaflow_v1alpha1_PulsarAuth(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarSink":                       schema_pkg_apis_numaflow_v1alpha1_PulsarSink(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarSource":                     schema_pkg_apis_numaflow_v1alpha1_PulsarSource(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisBufferService":               schema_pkg_apis_numaflow_v1alpha1_RedisBufferService(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisConfig":                      schema_pkg_apis_numaflow_v1alpha1_RedisConfig(ref),
@@ -4524,6 +4525,48 @@ func schema_pkg_apis_numaflow_v1alpha1_PulsarAuth(ref common.ReferenceCallback) 
 		},
 		Dependencies: []string{
 			"k8s.io/api/core/v1.SecretKeySelector"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_PulsarSink(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"serverAddr": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"topic": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"producerName": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"auth": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Auth information",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarAuth"),
+						},
+					},
+				},
+				Required: []string{"serverAddr", "topic", "producerName"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarAuth"},
 	}
 }
 

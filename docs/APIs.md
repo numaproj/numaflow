@@ -9014,6 +9014,7 @@ PulsarAuth
 <p>
 
 (<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.PulsarSink">PulsarSink</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.PulsarSource">PulsarSource</a>)
 </p>
 
@@ -9063,6 +9064,101 @@ Kubernetes core/v1.SecretKeySelector </a> </em>
 <p>
 
 JWT Token auth
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.PulsarSink">
+
+PulsarSink
+</h3>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>serverAddr</code></br> <em> string </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>topic</code></br> <em> string </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>producerName</code></br> <em> string </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>auth</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.PulsarAuth"> PulsarAuth </a>
+</em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Auth information
 </p>
 
 </td>
