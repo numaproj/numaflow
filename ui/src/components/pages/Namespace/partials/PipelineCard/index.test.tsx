@@ -609,7 +609,7 @@ describe("PipelineCard", () => {
     );
 
     const wrapperNode = getByTestId("pipeline-card-edit-select");
-    const button = within(wrapperNode).getByRole("button");
+    const button = within(wrapperNode).getByRole("combobox");
 
     fireEvent.mouseDown(button);
     expect(screen.getByText("Pipeline")).toBeInTheDocument();
@@ -641,7 +641,7 @@ describe("PipelineCard", () => {
     );
 
     const wrapperNode = getByTestId("pipeline-card-edit-select");
-    const button = within(wrapperNode).getByRole("button");
+    const button = within(wrapperNode).getByRole("combobox");
 
     fireEvent.mouseDown(button);
     expect(screen.getByText("ISB Service")).toBeInTheDocument();
