@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { ContainerInfo } from "./index";
 import {
@@ -29,7 +29,7 @@ const podDetails = {
 const containerName = "numa";
 
 describe("ContainerInfo screen", () => {
-  it("loads screen", () => {
+  it("loads screen", async () => {
     render(
       <ContainerInfo
         namespaceId={"numaflow-system"}
@@ -43,7 +43,11 @@ describe("ContainerInfo screen", () => {
         podSpecificInfo={{} as PodSpecificInfoProps}
       />
     );
-    expect(screen.getByTestId("containerInfo")).toBeInTheDocument();
-    expect(screen.getByTestId("containerInfo")).toBeVisible();
+    await waitFor(() =>
+      expect(screen.getByTestId("containerInfo")).toBeInTheDocument()
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("containerInfo")).toBeVisible()
+    );
   });
 });
