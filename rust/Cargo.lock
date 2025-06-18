@@ -2247,7 +2247,7 @@ dependencies = [
 [[package]]
 name = "numaflow"
 version = "0.2.1"
-source = "git+https://github.com/numaproj/numaflow-rs.git?rev=80a58be6a6bdd65c22b184ea6cc8d36458e800d7#80a58be6a6bdd65c22b184ea6cc8d36458e800d7"
+source = "git+https://github.com/numaproj/numaflow-rs.git?rev=aaa8d7b5e96538ca41bb137353194062689442a4#aaa8d7b5e96538ca41bb137353194062689442a4"
 dependencies = [
  "chrono",
  "hyper-util",
@@ -2308,7 +2308,7 @@ dependencies = [
  "k8s-openapi",
  "kube",
  "lz4",
- "numaflow 0.2.1 (git+https://github.com/numaproj/numaflow-rs.git?rev=80a58be6a6bdd65c22b184ea6cc8d36458e800d7)",
+ "numaflow 0.2.1 (git+https://github.com/numaproj/numaflow-rs.git?rev=aaa8d7b5e96538ca41bb137353194062689442a4)",
  "numaflow-http",
  "numaflow-jetstream",
  "numaflow-kafka",

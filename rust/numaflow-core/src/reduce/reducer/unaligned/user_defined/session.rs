@@ -421,13 +421,15 @@ mod tests {
             .send(())
             .expect("failed to send shutdown signal");
 
-        tokio::time::sleep(Duration::from_millis(50)).await;
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        session_reduce_handle
+            .await
+            .expect("session reduce handle failed")
+            .expect("session reduce failed");
 
         // Wait for the handle to complete
-        // handle
-        //     .await
-        //     .expect("handle failed")
-        //     .expect("reduce_fn task failed");
+        handle.await.expect("handle failed");
 
         Ok(())
     }
@@ -566,6 +568,431 @@ mod tests {
             .expect("failed to send shutdown signal");
         tokio::time::sleep(Duration::from_millis(50)).await;
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_session_reduce_with_merging() -> crate::Result<()> {
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("session_merge.sock");
+        let server_info_file = tmp_dir.path().join("session_merge-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let handle = tokio::spawn(async move {
+            session_reduce::Server::new(CounterCreator {})
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // Wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let mut client = UserDefinedSessionReduce::new(SessionReduceClient::new(
+            create_rpc_channel(sock_file).await?,
+        ))
+        .await;
+
+        // Create base time
+        let base_time = Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap();
+
+        // Create test messages with different keys
+        let message1 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key1".into(), "subkey1".into()]),
+            tags: None,
+            value: "value1".into(),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
+            event_time: base_time + chrono::Duration::seconds(10),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "0".to_string().into(),
+                index: 0,
+            },
+            ..Default::default()
+        };
+
+        let message2 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key1".into(), "subkey1".into()]),
+            tags: None,
+            value: "value2".into(),
+            offset: Offset::String(StringOffset::new("1".to_string(), 1)),
+            event_time: base_time + chrono::Duration::seconds(40),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "1".to_string().into(),
+                index: 1,
+            },
+            ..Default::default()
+        };
+
+        let message3 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key2".into(), "subkey2".into()]),
+            tags: None,
+            value: "value3".into(),
+            offset: Offset::String(StringOffset::new("2".to_string(), 2)),
+            event_time: base_time + chrono::Duration::seconds(20),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "2".to_string().into(),
+                index: 2,
+            },
+            ..Default::default()
+        };
+
+        // Create windows with overlapping times for the same key
+        let window1 = Window::new(
+            base_time,
+            base_time + chrono::Duration::seconds(30),
+            Arc::from(vec!["key1".to_string(), "subkey1".to_string()]),
+        );
+
+        let window2 = Window::new(
+            base_time + chrono::Duration::seconds(25),
+            base_time + chrono::Duration::seconds(55),
+            Arc::from(vec!["key1".to_string(), "subkey1".to_string()]),
+        );
+
+        // Window for different key
+        let window3 = Window::new(
+            base_time + chrono::Duration::seconds(15),
+            base_time + chrono::Duration::seconds(45),
+            Arc::from(vec!["key2".to_string(), "subkey2".to_string()]),
+        );
+
+        // Create merged window (result of merging window1 and window2)
+        let merged_window = Window::new(
+            base_time,
+            base_time + chrono::Duration::seconds(55),
+            Arc::from(vec!["key1".to_string(), "subkey1".to_string()]),
+        );
+
+        // Create a channel to send window messages
+        let (window_tx, window_rx) = mpsc::channel(10);
+
+        // Send operations for first key
+        window_tx
+            .send(
+                UnalignedWindowMessage {
+                    operation: UnalignedWindowOperation::Open {
+                        message: message1.clone(),
+                        window: window1.clone(),
+                    },
+                    pnf_slot: "GLOBAL_SLOT",
+                }
+                .into(),
+            )
+            .await
+            .unwrap();
+
+        // Send operations for second key
+        window_tx
+            .send(
+                UnalignedWindowMessage {
+                    operation: UnalignedWindowOperation::Open {
+                        message: message3.clone(),
+                        window: window3.clone(),
+                    },
+                    pnf_slot: "GLOBAL_SLOT",
+                }
+                .into(),
+            )
+            .await
+            .unwrap();
+
+        // Open second window for first key
+        window_tx
+            .send(
+                UnalignedWindowMessage {
+                    operation: UnalignedWindowOperation::Open {
+                        message: message2.clone(),
+                        window: window2.clone(),
+                    },
+                    pnf_slot: "GLOBAL_SLOT",
+                }
+                .into(),
+            )
+            .await
+            .unwrap();
+
+        // Merge windows for first key
+        window_tx
+            .send(
+                UnalignedWindowMessage {
+                    operation: UnalignedWindowOperation::Merge {
+                        windows: vec![window1.clone(), window2.clone()],
+                    },
+                    pnf_slot: "GLOBAL_SLOT",
+                }
+                .into(),
+            )
+            .await
+            .unwrap();
+
+        // Close windows
+        window_tx
+            .send(
+                UnalignedWindowMessage {
+                    operation: UnalignedWindowOperation::Close {
+                        window: merged_window.clone(),
+                    },
+                    pnf_slot: "GLOBAL_SLOT",
+                }
+                .into(),
+            )
+            .await
+            .unwrap();
+
+        window_tx
+            .send(
+                UnalignedWindowMessage {
+                    operation: UnalignedWindowOperation::Close {
+                        window: window3.clone(),
+                    },
+                    pnf_slot: "GLOBAL_SLOT",
+                }
+                .into(),
+            )
+            .await
+            .unwrap();
+
+        drop(window_tx); // Close the channel to signal end of input
+
+        // Create a cancellation token
+        let cln_token = CancellationToken::new();
+
+        // Call reduce_fn
+        let (mut response_stream, session_handle) = client
+            .reduce_fn(ReceiverStream::new(window_rx), cln_token)
+            .await
+            .expect("reduce_fn failed");
+
+        // Collect all results
+        let mut results = Vec::new();
+        while let Some(result) =
+            tokio::time::timeout(Duration::from_secs(5), response_stream.next())
+                .await
+                .expect("timeout waiting for result")
+        {
+            if result.eof {
+                continue;
+            }
+            results.push(result);
+        }
+
+        // We should have 2 results  (one for each key group)
+        assert_eq!(results.len(), 2);
+
+        // Convert responses to messages and verify
+        let result_messages: Vec<Message> = results.into_iter().map(Into::into).collect();
+
+        // Sort results by keys for consistent testing
+        let mut result_messages = result_messages;
+        result_messages.sort_by(|a, b| a.keys.cmp(&b.keys));
+
+        // First result should be for key1:subkey1 with count 2
+        assert_eq!(result_messages[0].keys.to_vec(), vec!["key1", "subkey1"]);
+        assert_eq!(
+            String::from_utf8(result_messages[0].value.to_vec()).unwrap(),
+            "2"
+        );
+
+        // Second result should be for key2:subkey2 with count 1
+        assert_eq!(result_messages[1].keys.to_vec(), vec!["key2", "subkey2"]);
+        assert_eq!(
+            String::from_utf8(result_messages[1].value.to_vec()).unwrap(),
+            "1"
+        );
+
+        // Wait for the handle to complete
+        session_handle
+            .await
+            .expect("handle failed")
+            .expect("reduce_fn task failed");
+
+        // Shutdown the server
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+
+        // wait for server to shutdown
+        handle.await.expect("handle failed");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_session_reduce_with_expand_operation() -> crate::Result<()> {
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("session_expand.sock");
+        let server_info_file = tmp_dir.path().join("session_expand-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let handle = tokio::spawn(async move {
+            session_reduce::Server::new(CounterCreator {})
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // Wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let mut client = UserDefinedSessionReduce::new(SessionReduceClient::new(
+            create_rpc_channel(sock_file).await?,
+        ))
+        .await;
+
+        // Create base time
+        let base_time = Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap();
+
+        // Create messages with different event times
+        let message1 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key1".into(), "subkey1".into()]),
+            tags: None,
+            value: "value1".into(),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
+            event_time: base_time + chrono::Duration::seconds(10),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "0".to_string().into(),
+                index: 0,
+            },
+            ..Default::default()
+        };
+
+        let message2 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key1".into(), "subkey1".into()]),
+            tags: None,
+            value: "value2".into(),
+            offset: Offset::String(StringOffset::new("1".to_string(), 1)),
+            event_time: base_time + chrono::Duration::seconds(70),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "1".to_string().into(),
+                index: 1,
+            },
+            ..Default::default()
+        };
+
+        // Create initial window
+        let window1 = Window::new(
+            base_time,
+            base_time + chrono::Duration::seconds(30),
+            Arc::from(vec!["key1".to_string(), "subkey1".to_string()]),
+        );
+
+        // Create expanded window
+        let expanded_window = Window::new(
+            base_time,
+            base_time + chrono::Duration::seconds(100),
+            Arc::from(vec!["key1".to_string(), "subkey1".to_string()]),
+        );
+
+        // Create a channel to send window messages
+        let (window_tx, window_rx) = mpsc::channel(10);
+
+        // Open initial window
+        window_tx
+            .send(
+                UnalignedWindowMessage {
+                    operation: UnalignedWindowOperation::Open {
+                        message: message1.clone(),
+                        window: window1.clone(),
+                    },
+                    pnf_slot: "GLOBAL_SLOT",
+                }
+                .into(),
+            )
+            .await
+            .unwrap();
+
+        // Expand window with second message
+        window_tx
+            .send(
+                UnalignedWindowMessage {
+                    operation: UnalignedWindowOperation::Expand {
+                        message: message2.clone(),
+                        windows: vec![window1.clone(), expanded_window.clone()],
+                    },
+                    pnf_slot: "GLOBAL_SLOT",
+                }
+                .into(),
+            )
+            .await
+            .unwrap();
+
+        // Close expanded window
+        window_tx
+            .send(
+                UnalignedWindowMessage {
+                    operation: UnalignedWindowOperation::Close {
+                        window: expanded_window.clone(),
+                    },
+                    pnf_slot: "GLOBAL_SLOT",
+                }
+                .into(),
+            )
+            .await
+            .unwrap();
+
+        drop(window_tx); // Close the channel to signal end of input
+
+        // Create a cancellation token
+        let cln_token = CancellationToken::new();
+
+        // Call reduce_fn
+        let (mut response_stream, session_handle) = client
+            .reduce_fn(ReceiverStream::new(window_rx), cln_token)
+            .await
+            .expect("reduce_fn failed");
+
+        // Get the result
+        let result = tokio::time::timeout(Duration::from_secs(5), response_stream.next())
+            .await
+            .expect("timeout waiting for result")
+            .expect("no result received");
+
+        // Convert response to message
+        let result_message: Message = result.into();
+
+        // Verify the result
+        assert_eq!(result_message.keys.to_vec(), vec!["key1", "subkey1"]);
+        assert_eq!(
+            String::from_utf8(result_message.value.to_vec()).unwrap(),
+            "2"
+        ); // Counter should be 2
+
+        // Wait for the session handle to complete
+        session_handle
+            .await
+            .expect("reduce_fn task failed")
+            .unwrap();
+
+        // Shutdown the server
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+
+        // wait for the server to complete
+        handle.await.expect("handle failed");
         Ok(())
     }
 }

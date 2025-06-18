@@ -59,7 +59,7 @@ lz4 = "1.28.1"
 
 [dev-dependencies]
 tempfile = "3.11.0"
-numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "80a58be6a6bdd65c22b184ea6cc8d36458e800d7" }
+numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "aaa8d7b5e96538ca41bb137353194062689442a4" }
 pulsar = { version = "6.3.0", default-features = false, features = ["tokio-rustls-runtime"] }
 hyper = "1.6.0"
 hyper-rustls = "0.27.5"
