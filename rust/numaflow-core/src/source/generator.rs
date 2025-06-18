@@ -117,6 +117,8 @@ mod stream_generator {
         fn generate_payload(&self, value: i64) -> Vec<u8> {
             #[derive(serde::Serialize)]
             struct Data {
+                /// Unique ID for the message
+                id: String,
                 value: i64,
                 // only to ensure a desired message size
                 #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -132,7 +134,12 @@ mod stream_generator {
                 })
                 .unwrap_or_default();
 
-            let data = Data { value, padding };
+            let id = chrono::Utc::now()
+                .timestamp_nanos_opt()
+                .unwrap_or(chrono::Utc::now().timestamp_micros());
+            let id = format!("{}-{}", id, get_vertex_replica());
+            let data = Data { id, value, padding };
+
             serde_json::to_vec(&data).unwrap()
         }
 
@@ -153,7 +160,9 @@ mod stream_generator {
 
         /// creates a single message that can be returned by the generator.
         fn create_message(&mut self) -> Message {
-            let id = chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default();
+            let id = chrono::Utc::now()
+                .timestamp_nanos_opt()
+                .unwrap_or(chrono::Utc::now().timestamp_micros());
 
             let offset = Offset::Int(IntOffset::new(id, *get_vertex_replica()));
 
