@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { PodInfo } from "./index";
-import { PodContainerSpec } from "../../../../../../../../../../../../../types/declarations/pods";
+import { ContainerInfo } from "./index";
+import { ContainerInfoProps, PodContainerSpec, PodSpecificInfoProps } from "../../../../../../../../../../../../../types/declarations/pods";
 
 const podContainerSpec: PodContainerSpec = {
   name: "numa",
@@ -24,16 +24,22 @@ const podDetails = {
 };
 const containerName = "numa";
 
-describe("PodInfo screen", () => {
+describe("ContainerInfo screen", () => {
   it("loads screen", () => {
     render(
-      <PodInfo
+      <ContainerInfo
+        namespaceId={"numaflow-system"}
+        pipelineId={"simple-pipeline"}
+        vertexId={"infer"}
+        type={"udf"}
         pod={pod}
         podDetails={podDetails}
         containerName={containerName}
+        containerInfo={{} as ContainerInfoProps}
+        podSpecificInfo={{} as PodSpecificInfoProps}
       />
     );
-    expect(screen.getByTestId("podInfo")).toBeInTheDocument();
-    expect(screen.getByTestId("podInfo")).toBeVisible();
+    expect(screen.getByTestId("containerInfo")).toBeInTheDocument();
+    expect(screen.getByTestId("containerInfo")).toBeVisible();
   });
 });
