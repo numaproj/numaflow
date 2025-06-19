@@ -150,6 +150,10 @@ message AbstractSink {
   // SQS sink is used to write the data to the AWS SQS.
   // +optional
   optional SqsSink sqs = 6;
+
+  // Pulsar sink is used to write the data to the Apache Pulsar.
+  // +optional
+  optional PulsarSink pulsar = 7;
 }
 
 message AbstractVertex {

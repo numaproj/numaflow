@@ -19,7 +19,7 @@ pub(crate) mod source {
     use numaflow_jetstream::{JetstreamSourceConfig, NatsAuth, TlsClientAuthCerts, TlsConfig};
     use numaflow_kafka::source::KafkaSourceConfig;
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source, SqsSource};
-    use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
+    use numaflow_pulsar::{PulsarAuth, source::PulsarSourceConfig};
     use numaflow_sqs::source::SqsSourceConfig;
     use serde::{Deserialize, Serialize};
     use tracing::warn;
@@ -491,7 +491,8 @@ pub(crate) mod sink {
     use std::fmt::Display;
 
     use numaflow_kafka::sink::KafkaSinkConfig;
-    use numaflow_models::models::{Backoff, KafkaSink, RetryStrategy, Sink, SqsSink};
+    use numaflow_models::models::{Backoff, KafkaSink, PulsarSink, RetryStrategy, Sink, SqsSink};
+    use numaflow_pulsar::sink::Config as PulsarSinkConfig;
     use numaflow_sqs::sink::SqsSinkConfig;
 
     use crate::Result;
@@ -513,6 +514,7 @@ pub(crate) mod sink {
         UserDefined(UserDefinedConfig),
         Sqs(SqsSinkConfig),
         Kafka(Box<KafkaSinkConfig>),
+        Pulsar(Box<PulsarSinkConfig>),
     }
 
     impl SinkType {
@@ -537,6 +539,7 @@ pub(crate) mod sink {
                 .or_else(|| sink.serve.as_ref().map(|_| Ok(SinkType::Serve)))
                 .or_else(|| sink.sqs.as_ref().map(|sqs| sqs.clone().try_into()))
                 .or_else(|| sink.kafka.as_ref().map(|kafka| kafka.clone().try_into()))
+                .or_else(|| sink.pulsar.as_ref().map(|pulsar| pulsar.clone().try_into()))
                 .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
         }
 
@@ -558,8 +561,20 @@ pub(crate) mod sink {
                             .as_ref()
                             .map(|_| Ok(SinkType::Blackhole(BlackholeConfig::default())))
                     })
-                    .or_else(|| sink.serve.as_ref().map(|_| Ok(SinkType::Serve)))
+                    .or_else(|| fallback.serve.as_ref().map(|_| Ok(SinkType::Serve)))
                     .or_else(|| fallback.sqs.as_ref().map(|sqs| sqs.clone().try_into()))
+                    .or_else(|| {
+                        fallback
+                            .kafka
+                            .as_ref()
+                            .map(|kafka| kafka.clone().try_into())
+                    })
+                    .or_else(|| {
+                        fallback
+                            .pulsar
+                            .as_ref()
+                            .map(|pulsar| pulsar.clone().try_into())
+                    })
                     .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
             } else {
                 Err(Error::Config("Fallback sink not found".to_string()))
@@ -652,6 +667,38 @@ pub(crate) mod sink {
                     .map(|parts| (parts[0].trim().to_string(), parts[1].trim().to_string()))
                     .collect::<HashMap<String, String>>(),
             })))
+        }
+    }
+
+    impl TryFrom<Box<PulsarSink>> for SinkType {
+        type Error = Error;
+        fn try_from(sink_config: Box<PulsarSink>) -> std::result::Result<Self, Self::Error> {
+            let auth = match sink_config.auth {
+                Some(auth) => {
+                    let Some(auth) = auth.token else {
+                        return Err(Error::Config(
+                            "Authentication configuration is enabled, however JWT token is not provided in Pulsar sink configuration".to_string(),
+                        ));
+                    };
+                    let token = crate::shared::create_components::get_secret_from_volume(
+                        &auth.name, &auth.key,
+                    )
+                    .map_err(|e| {
+                        Error::Config(format!(
+                            "Failed to get JWT token for configuring Pulsar producer: {e:?}"
+                        ))
+                    })?;
+                    Some(numaflow_pulsar::PulsarAuth::JWT(token))
+                }
+                None => None,
+            };
+            let pulsar_sink_config = numaflow_pulsar::sink::Config {
+                addr: sink_config.server_addr,
+                topic: sink_config.topic,
+                producer_name: sink_config.producer_name,
+                auth,
+            };
+            Ok(SinkType::Pulsar(Box::new(pulsar_sink_config)))
         }
     }
 

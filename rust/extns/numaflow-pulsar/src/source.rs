@@ -12,7 +12,7 @@ use tokio::{
 };
 use tonic::codegen::tokio_stream::StreamExt;
 
-use crate::{Error, Result};
+use crate::{Error, PulsarAuth, Result};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PulsarSourceConfig {
@@ -22,21 +22,6 @@ pub struct PulsarSourceConfig {
     pub subscription: String,
     pub max_unack: usize,
     pub auth: Option<PulsarAuth>,
-}
-
-#[derive(Clone, PartialEq)]
-pub enum PulsarAuth {
-    JWT(String),
-}
-
-impl std::fmt::Debug for PulsarAuth {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PulsarAuth::JWT(token) => {
-                write!(f, "{}****{}", &token[..6], &token[token.len() - 6..])
-            }
-        }
-    }
 }
 
 enum ConsumerActorMessage {

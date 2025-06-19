@@ -138,6 +138,11 @@ func (in *AbstractSink) DeepCopyInto(out *AbstractSink) {
 		*out = new(SqsSink)
 		**out = **in
 	}
+	if in.Pulsar != nil {
+		in, out := &in.Pulsar, &out.Pulsar
+		*out = new(PulsarSink)
+		(*in).DeepCopyInto(*out)
+	}
 	return
 }
 

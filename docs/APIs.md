@@ -556,6 +556,27 @@ SQS sink is used to write the data to the AWS SQS.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>pulsar</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.PulsarSink"> PulsarSink </a>
+</em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Pulsar sink is used to write the data to the Apache Pulsar.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -9078,6 +9099,12 @@ JWT Token auth
 
 PulsarSink
 </h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractSink">AbstractSink</a>)
+</p>
 
 <p>
 

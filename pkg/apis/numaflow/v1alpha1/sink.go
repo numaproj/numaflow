@@ -52,6 +52,9 @@ type AbstractSink struct {
 	// SQS sink is used to write the data to the AWS SQS.
 	// +optional
 	Sqs *SqsSink `json:"sqs,omitempty" protobuf:"bytes,6,opt,name=sqs"`
+	// Pulsar sink is used to write the data to the Apache Pulsar.
+	// +optional
+	Pulsar *PulsarSink `json:"pulsar,omitempty" protobuf:"bytes,7,opt,name=pulsar"`
 }
 
 func (s Sink) getContainers(req getContainerReq) ([]corev1.Container, []corev1.Container, error) {
