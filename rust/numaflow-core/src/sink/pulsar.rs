@@ -11,17 +11,26 @@ impl TryFrom<Message> for PulsarMessage {
 
     fn try_from(mut msg: Message) -> Result<Self> {
         let id = msg.id.to_string();
-        // Add all message keys to the Kafka headers
+        // Add all message keys to the Pulsar properties
+        // We do the same for Kafka sink with Kafka headers.
         msg.headers
             .insert("__key_len".to_string(), msg.keys.len().to_string());
         for (i, key) in msg.keys.iter().enumerate() {
             msg.headers.insert(format!("__key_{i}"), key.to_string());
         }
 
+        let event_time = msg.event_time.timestamp_millis();
+        // The pulsar client library uses u64 for event time.
+        // So the value can not be earlier than 1970-01-01 00:00:00 UTC.
+        if event_time < 0 {
+            return Err(Error::Sink(format!("Event time is negative: {event_time}")));
+        }
+
         Ok(Self {
             id,
             properties: msg.headers,
             payload: msg.value,
+            event_time_epoch_ms: event_time as u64,
         })
     }
 }

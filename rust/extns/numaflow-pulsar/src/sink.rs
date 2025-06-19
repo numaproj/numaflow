@@ -28,6 +28,8 @@ pub struct Message {
     pub id: String,
     /// User-defined propreties of the message
     pub properties: HashMap<String, String>,
+    /// Event time of the message. Epoch time in milliseconds
+    pub event_time_epoch_ms: u64,
     /// The message payload
     pub payload: Bytes,
 }
@@ -37,6 +39,7 @@ impl SerializeMessage for Message {
         Ok(producer::Message {
             payload: input.payload.to_vec(),
             properties: input.properties,
+            event_time: Some(input.event_time_epoch_ms),
             ..Default::default()
         })
     }
