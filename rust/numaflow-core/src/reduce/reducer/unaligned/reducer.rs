@@ -1254,7 +1254,7 @@ mod tests {
         });
 
         // Wait for the server to start
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(50)).await;
 
         // Create the session client
         let session_client = UserDefinedSessionReduce::new(SessionReduceClient::new(
@@ -1264,7 +1264,7 @@ mod tests {
 
         let client = UserDefinedUnalignedReduce::Session(session_client);
 
-        // Create a session window manager with 30s timeout (shorter for merging test)
+        // Create a session window manager with 30s timeout
         let windower = SessionWindowManager::new(Duration::from_secs(30));
         let window_manager = UnalignedWindowManager::Session(windower);
 
@@ -1411,11 +1411,29 @@ mod tests {
             ..Default::default()
         };
 
+        // Message 5: With watermark to trigger window close
+        let msg5 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key3".into()]),
+            tags: None,
+            value: "value5".into(),
+            offset: Offset::String(StringOffset::new("4".to_string(), 4)),
+            event_time: base_time + chrono::Duration::seconds(200),
+            watermark: Some(base_time + chrono::Duration::seconds(180)), // Past key-2 session timeout
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "4".to_string().into(),
+                index: 4,
+            },
+            ..Default::default()
+        };
+
         // Send the messages
         input_tx.send(msg1).await.unwrap();
         input_tx.send(msg2).await.unwrap();
         input_tx.send(msg3).await.unwrap();
         input_tx.send(msg4).await.unwrap();
+        input_tx.send(msg5).await.unwrap();
 
         // Create a consumer to read the results
         let consumer: PullConsumer = js_context
@@ -1426,7 +1444,7 @@ mod tests {
         // Read messages from the stream
         let mut messages = consumer
             .batch()
-            .expires(Duration::from_secs(2))
+            .expires(Duration::from_secs(1))
             .max_messages(2)
             .messages()
             .await
@@ -1482,8 +1500,6 @@ mod tests {
         shutdown_tx
             .send(())
             .expect("failed to send shutdown signal");
-
-        tokio::time::sleep(Duration::from_millis(50)).await;
 
         server_handle.await.expect("server handle failed");
 
