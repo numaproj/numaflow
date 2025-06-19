@@ -739,7 +739,7 @@ mod tests {
         }
     }
 
-    // #[cfg(feature = "nats-tests")]
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_unaligned_session_reducer_basic() -> crate::Result<()> {
         // Set up the session reducer server
@@ -952,11 +952,7 @@ mod tests {
             .send(())
             .expect("failed to send shutdown signal");
 
-        // Wait for the server to shut down
-        assert!(
-            server_handle.is_finished(),
-            "Expected gRPC server to have shut down"
-        );
+        server_handle.await.expect("server handle failed");
 
         // Clean up JetStream
         js_context.delete_stream(stream.name).await.unwrap();
@@ -964,7 +960,7 @@ mod tests {
         Ok(())
     }
 
-    // #[cfg(feature = "nats-tests")]
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_unaligned_session_reducer_multiple_keys() -> crate::Result<()> {
         // Set up the session reducer server
@@ -1489,11 +1485,7 @@ mod tests {
 
         tokio::time::sleep(Duration::from_millis(50)).await;
 
-        // Wait for the server to shut down
-        assert!(
-            server_handle.is_finished(),
-            "Expected gRPC server to have shut down"
-        );
+        server_handle.await.expect("server handle failed");
 
         // Clean up JetStream
         js_context.delete_stream(stream.name).await.unwrap();
