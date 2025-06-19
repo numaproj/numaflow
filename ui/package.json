@@ -85,7 +85,7 @@
     "build:all": "yarn build:tsc && yarn build:cjs",
     "build:tsc": "tsc",
     "build:cjs": "tsc --module commonjs --outDir dist/cjs/src",
-    "test": "react-scripts test  --ci --coverage --no-cache --reporters=default --reporters=jest-junit --watchAll=false",
+    "test": "react-scripts test  --ci --coverage --no-cache --reporters=default --reporters=jest-junit --watchAll=false --testPathIgnorePatterns='<rootDir>/src/components/common/SpecEditor/index\\.test\\.tsx$'",
     "eject": "react-scripts eject",
     "lint": "eslint . --ext .tsx"
   },

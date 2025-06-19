@@ -12,8 +12,7 @@ ensure_yarn
 
 test_ui() {
     yarn --cwd ui lint
-    # Temporarily skip test(s) which does not pass
-    yarn --cwd ui test --testPathIgnorePatterns 'src/components/common/SpecEditor/index\.test\.tsx$'
+    yarn --cwd ui test
 }
 
 test_ui
