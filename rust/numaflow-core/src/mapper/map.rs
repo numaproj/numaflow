@@ -126,6 +126,7 @@ enum ActorSender {
 pub(crate) struct MapHandle {
     batch_size: usize,
     read_timeout: Duration,
+    graceful_shutdown_time: Duration,
     concurrency: usize,
     tracker: TrackerHandle,
     actor_sender: ActorSender,
@@ -147,6 +148,7 @@ impl MapHandle {
         map_mode: MapMode,
         batch_size: usize,
         read_timeout: Duration,
+        graceful_timeout: Duration,
         concurrency: usize,
         client: MapClient<Channel>,
         tracker_handle: TrackerHandle,
@@ -193,6 +195,7 @@ impl MapHandle {
             actor_sender,
             batch_size,
             read_timeout,
+            graceful_shutdown_time: graceful_timeout,
             concurrency,
             tracker: tracker_handle,
             final_result: Ok(()),
@@ -216,6 +219,25 @@ impl MapHandle {
 
         // we spawn one of the 3 map types
         let handle = tokio::spawn(async move {
+            let parent_cln_token = cln_token.clone();
+
+            // create a new cancellation token for the map component, this token is used for hard
+            // shutdown, the parent token is used for graceful shutdown.
+            let hard_shutdown_token = CancellationToken::new();
+            // the one that calls shutdown
+            let hard_shutdown_token_owner = hard_shutdown_token.clone();
+            let graceful_timeout = self.graceful_shutdown_time;
+
+            // spawn a task to cancel the token after graceful timeout when the main token is cancelled
+            let shutdown_handle = tokio::spawn(async move {
+                // initiate graceful shutdown
+                parent_cln_token.cancelled().await;
+                // wait for graceful timeout
+                tokio::time::sleep(graceful_timeout).await;
+                // cancel the token to hard shutdown
+                hard_shutdown_token_owner.cancel();
+            });
+
             let mut input_stream = input_stream;
             // we capture the first error that triggered the map component shutdown
             // based on the map mode, send the message to the appropriate actor handle.
@@ -238,26 +260,26 @@ impl MapHandle {
                             }
                         },
                         read_msg = input_stream.next() => {
-                            if let Some(read_msg) = read_msg {
-                                // if there are errors then we need to drain the stream and nack
-                                if self.shutting_down_on_err {
-                                    warn!(offset = ?read_msg.offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
-                                    self.tracker.discard(read_msg.offset).await.expect("failed to discard message");
-                                } else {
-                                    let permit = Arc::clone(&semaphore).acquire_owned()
-                                        .await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {}", e)))?;
-                                    Self::unary(
-                                        map_handle.clone(),
-                                        permit,
-                                        read_msg,
-                                        output_tx.clone(),
-                                        self.tracker.clone(),
-                                        error_tx.clone(),
-                                        cln_token.clone(),
-                                    ).await;
-                                }
-                            } else {
+                            let Some(read_msg) = read_msg else {
                                 break;
+                            };
+
+                            // if there are errors then we need to drain the stream and nack
+                            if self.shutting_down_on_err {
+                                warn!(offset = ?read_msg.offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
+                                self.tracker.discard(read_msg.offset).await.expect("failed to discard message");
+                            } else {
+                                let permit = Arc::clone(&semaphore).acquire_owned()
+                                    .await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {}", e)))?;
+                                Self::unary(
+                                    map_handle.clone(),
+                                    permit,
+                                    read_msg,
+                                    output_tx.clone(),
+                                    self.tracker.clone(),
+                                    error_tx.clone(),
+                                    hard_shutdown_token.clone(),
+                                ).await;
                             }
                         },
                     }
@@ -318,25 +340,25 @@ impl MapHandle {
                             }
                         },
                         read_msg = input_stream.next() => {
-                            if let Some(read_msg) = read_msg {
-                                if self.shutting_down_on_err {
-                                    warn!(offset = ?read_msg.offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
-                                    self.tracker.discard(read_msg.offset).await.expect("failed to discard message");
-                                } else {
-                                    let permit = Arc::clone(&semaphore).acquire_owned().await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {}", e)))?;
-                                    let error_tx = error_tx.clone();
-                                    Self::stream(
-                                        map_handle.clone(),
-                                        permit,
-                                        read_msg,
-                                        output_tx.clone(),
-                                        self.tracker.clone(),
-                                        error_tx,
-                                        cln_token.clone(),
-                                    ).await;
-                                }
-                            } else {
+                            let Some(read_msg) = read_msg else {
                                 break;
+                            };
+
+                            if self.shutting_down_on_err {
+                                warn!(offset = ?read_msg.offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
+                                self.tracker.discard(read_msg.offset).await.expect("failed to discard message");
+                            } else {
+                                let permit = Arc::clone(&semaphore).acquire_owned().await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {}", e)))?;
+                                let error_tx = error_tx.clone();
+                                Self::stream(
+                                    map_handle.clone(),
+                                    permit,
+                                    read_msg,
+                                    output_tx.clone(),
+                                    self.tracker.clone(),
+                                    error_tx,
+                                    cln_token.clone(),
+                                ).await;
                             }
                         },
                     }
@@ -350,6 +372,13 @@ impl MapHandle {
                 .await
                 .map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {}", e)))?;
             info!(status=?self.final_result, "Map component is completed with status");
+
+            // abort the shutdown handle since we are done processing, no need to wait for the
+            // hard shutdown
+            if !shutdown_handle.is_finished() {
+                shutdown_handle.abort();
+            }
+
             self.final_result.clone()
         });
 
@@ -410,12 +439,11 @@ impl MapHandle {
                                 )
                                 .await
                                 .expect("failed to update tracker");
-
-                            // done with the batch
                             tracker_handle
                                 .eof(offset)
                                 .await
                                 .expect("failed to update eof");
+
                             // send messages downstream
                             for mapped_message in mapped_messages {
                                 output_tx
@@ -450,9 +478,6 @@ impl MapHandle {
                         .discard(offset)
                         .await
                         .expect("failed to discard message");
-                    let _ = error_tx
-                        .send(Error::Mapper("Operation cancelled".to_string()))
-                        .await;
                 }
             }
         });
@@ -488,6 +513,7 @@ impl MapHandle {
                             offset = Some(message.offset.clone());
                         }
                     }
+
                     if let Some(offset) = offset {
                         tracker_handle
                             .update(
@@ -679,6 +705,7 @@ mod tests {
             MapMode::Unary,
             500,
             Duration::from_millis(1000),
+            Duration::from_secs(10),
             10,
             client,
             tracker_handle.clone(),
@@ -770,6 +797,7 @@ mod tests {
             MapMode::Unary,
             10,
             Duration::from_millis(10),
+            Duration::from_secs(10),
             10,
             client,
             tracker_handle.clone(),
@@ -860,6 +888,7 @@ mod tests {
             MapMode::Unary,
             500,
             Duration::from_millis(1000),
+            Duration::from_secs(10),
             10,
             client,
             tracker_handle.clone(),
@@ -962,6 +991,7 @@ mod tests {
             MapMode::Batch,
             500,
             Duration::from_millis(1000),
+            Duration::from_secs(10),
             10,
             client,
             tracker_handle.clone(),
@@ -1074,6 +1104,7 @@ mod tests {
             MapMode::Batch,
             500,
             Duration::from_millis(1000),
+            Duration::from_secs(10),
             10,
             client,
             tracker_handle.clone(),
@@ -1187,6 +1218,7 @@ mod tests {
             MapMode::Stream,
             500,
             Duration::from_millis(1000),
+            Duration::from_secs(10),
             10,
             client,
             tracker_handle.clone(),
@@ -1283,6 +1315,7 @@ mod tests {
             MapMode::Stream,
             500,
             Duration::from_millis(1000),
+            Duration::from_secs(10),
             10,
             client,
             tracker_handle,

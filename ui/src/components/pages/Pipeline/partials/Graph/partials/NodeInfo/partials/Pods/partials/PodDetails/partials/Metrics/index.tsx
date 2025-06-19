@@ -17,6 +17,10 @@ import {
   VERTEX_PENDING_MESSAGES,
   UDF_READ_PROCESSING_RATE,
   UDF_WRITE_PROCESSING_RATE,
+  UDF_PROCESSING_TIME_LATENCY,
+  VERTEX_PROCESSING_TIME_LATENCY,
+  UDF_DROP_TOTAL,
+  UDF_ERROR_TOTAL,
 } from "./utils/constants";
 import {
   VertexDetailsContext,
@@ -129,8 +133,25 @@ export function Metrics({
           metric?.display_name === VERTEX_PENDING_MESSAGES
         )
           return null;
-        if (type !== "udf" && (metric?.display_name === UDF_READ_PROCESSING_RATE || metric?.display_name === UDF_WRITE_PROCESSING_RATE))
+
+        if (
+          type !== "udf" &&
+          [
+            UDF_READ_PROCESSING_RATE,
+            UDF_WRITE_PROCESSING_RATE,
+            UDF_PROCESSING_TIME_LATENCY,
+            UDF_DROP_TOTAL,
+            UDF_ERROR_TOTAL,
+          ].includes(metric?.display_name)
+        )
           return null;
+
+        if (
+          type === "udf" &&
+          metric?.display_name === VERTEX_PROCESSING_TIME_LATENCY
+        )
+          return null;
+
         const panelId = `${metric?.metric_name}-panel`;
         return (
           <Accordion

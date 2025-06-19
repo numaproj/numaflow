@@ -34,10 +34,12 @@ use crate::error::Error;
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
 const DEFAULT_LOOKBACK_WINDOW_IN_SECS: u16 = 120;
+const DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS: u64 = 20; // time we will wait for UDFs to finish before shutting down
 const ENV_NUMAFLOW_SERVING_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
 const ENV_PAF_BATCH_SIZE: &str = "PAF_BATCH_SIZE";
+const ENV_NUMAFLOW_GRACEFUL_TIMEOUT_SECS: &str = "NUMAFLOW_GRACEFUL_TIMEOUT_SECS";
 const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
 const DEFAULT_MAP_SOCKET: &str = "/var/run/numaflow/map.sock";
 pub(crate) const DEFAULT_BATCH_MAP_SOCKET: &str = "/var/run/numaflow/batchmap.sock";
@@ -59,9 +61,9 @@ pub(crate) struct PipelineConfig {
     pub(crate) vertex_name: &'static str,
     pub(crate) replica: u16,
     pub(crate) batch_size: usize,
-    // FIXME(cr): we cannot leak this as a paf, we need to use a different terminology.
     pub(crate) paf_concurrency: usize,
     pub(crate) read_timeout: Duration,
+    pub(crate) graceful_shutdown_time: Duration,
     pub(crate) js_client_config: isb::jetstream::ClientConfig, // TODO: make it enum, since we can have different ISB implementations
     pub(crate) from_vertex_config: Vec<FromVertexConfig>,
     pub(crate) to_vertex_config: Vec<ToVertexConfig>,
@@ -134,6 +136,7 @@ impl Default for PipelineConfig {
             batch_size: DEFAULT_BATCH_SIZE as usize,
             paf_concurrency: (DEFAULT_BATCH_SIZE * 2) as usize,
             read_timeout: Duration::from_secs(DEFAULT_TIMEOUT_IN_MS as u64),
+            graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig::default(),
             from_vertex_config: vec![],
             to_vertex_config: vec![],
@@ -365,6 +368,7 @@ impl PipelineConfig {
                     ENV_NUMAFLOW_SERVING_SPEC,
                     ENV_NUMAFLOW_SERVING_CALLBACK_STORE,
                     ENV_NUMAFLOW_SERVING_RESPONSE_STORE,
+                    ENV_NUMAFLOW_GRACEFUL_TIMEOUT_SECS,
                 ]
                 .contains(&key.as_str())
             })
@@ -667,6 +671,11 @@ impl PipelineConfig {
                 }
             };
 
+        let graceful_shutdown_time_secs = env_vars
+            .get(ENV_NUMAFLOW_GRACEFUL_TIMEOUT_SECS)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS);
+
         Ok(PipelineConfig {
             batch_size: batch_size as usize,
             paf_concurrency: get_var(ENV_PAF_BATCH_SIZE)
@@ -674,6 +683,7 @@ impl PipelineConfig {
                 .parse()
                 .unwrap(),
             read_timeout: Duration::from_millis(timeout_in_ms as u64),
+            graceful_shutdown_time: Duration::from_secs(graceful_shutdown_time_secs),
             pipeline_name: Box::leak(pipeline_name.into_boxed_str()),
             vertex_name: Box::leak(vertex_name.into_boxed_str()),
             replica: *replica,
@@ -824,6 +834,7 @@ mod tests {
             batch_size: DEFAULT_BATCH_SIZE as usize,
             paf_concurrency: (DEFAULT_BATCH_SIZE * 2) as usize,
             read_timeout: Duration::from_secs(DEFAULT_TIMEOUT_IN_MS as u64),
+            graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig::default(),
             from_vertex_config: vec![],
             to_vertex_config: vec![],
@@ -904,6 +915,7 @@ mod tests {
             batch_size: 500,
             paf_concurrency: 1000,
             read_timeout: Duration::from_secs(1),
+            graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
                 user: None,
@@ -963,6 +975,7 @@ mod tests {
             batch_size: 1000,
             paf_concurrency: 1000,
             read_timeout: Duration::from_secs(1),
+            graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
                 user: None,
@@ -1019,6 +1032,7 @@ mod tests {
             batch_size: 50,
             paf_concurrency: 1000,
             read_timeout: Duration::from_secs(1),
+            graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
                 user: None,
@@ -1160,6 +1174,7 @@ mod tests {
             batch_size: 500,
             paf_concurrency: 1000,
             read_timeout: Duration::from_secs(1),
+            graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
                 user: None,
@@ -1197,5 +1212,33 @@ mod tests {
         };
 
         assert_eq!(pipeline_config, expected);
+    }
+
+    #[test]
+    fn test_graceful_timeout_env_var() {
+        let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLXBpcGVsaW5lLW1hcCIsIm5hbWVzcGFjZSI6ImRlZmF1bHQiLCJjcmVhdGlvblRpbWVzdGFtcCI6bnVsbH0sInNwZWMiOnsibmFtZSI6Im1hcCIsInVkZiI6eyJjb250YWluZXIiOnsidGVtcGxhdGUiOiJkZWZhdWx0In19LCJsaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJzY2FsZSI6eyJtaW4iOjF9LCJwaXBlbGluZU5hbWUiOiJzaW1wbGUtcGlwZWxpbmUiLCJpbnRlclN0ZXBCdWZmZXJTZXJ2aWNlTmFtZSI6IiIsInJlcGxpY2FzIjowLCJmcm9tRWRnZXMiOlt7ImZyb20iOiJpbiIsInRvIjoibWFwIiwiY29uZGl0aW9ucyI6bnVsbCwiZnJvbVZlcnRleFR5cGUiOiJTb3VyY2UiLCJmcm9tVmVydGV4UGFydGl0aW9uQ291bnQiOjEsImZyb21WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJNYXAiLCJ0b1ZlcnRleFBhcnRpdGlvbkNvdW50IjoxLCJ0b1ZlcnRleExpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH19XSwid2F0ZXJtYXJrIjp7Im1heERlbGF5IjoiMHMifX0sInN0YXR1cyI6eyJwaGFzZSI6IiIsInJlcGxpY2FzIjowLCJkZXNpcmVkUmVwbGljYXMiOjAsImxhc3RTY2FsZWRBdCI6bnVsbH19";
+
+        // Test with custom graceful timeout
+        let env_vars = [
+            ("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222"),
+            ("NUMAFLOW_GRACEFUL_TIMEOUT_SECS", "30"),
+        ];
+        let pipeline_config =
+            PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
+
+        assert_eq!(
+            pipeline_config.graceful_shutdown_time,
+            Duration::from_secs(30)
+        );
+
+        // Test with default graceful timeout (no env var)
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let pipeline_config =
+            PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
+
+        assert_eq!(
+            pipeline_config.graceful_shutdown_time,
+            Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS)
+        );
     }
 }

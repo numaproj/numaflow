@@ -29,8 +29,8 @@ use crate::error::Error;
 
 use crate::message::{IntOffset, Message, Offset};
 use crate::metrics::{
-    PIPELINE_PARTITION_NAME_LABEL, pipeline_isb_metric_labels, pipeline_metric_labels,
-    pipeline_metrics,
+    PIPELINE_PARTITION_NAME_LABEL, pipeline_drop_metric_labels, pipeline_isb_metric_labels,
+    pipeline_metric_labels, pipeline_metrics,
 };
 use crate::shared::forward;
 use crate::tracker::TrackerHandle;
@@ -276,14 +276,7 @@ impl JetstreamWriter {
                         )
                         .await
                     {
-                        let partition_name = stream.name;
-                        Self::send_write_metrics(
-                            partition_name,
-                            &self.vertex_type,
-                            message.clone(),
-                            write_processing_start,
-                        );
-                        pafs.push((stream, paf));
+                        pafs.push((stream, write_processing_start, paf));
                     }
                 }
 
@@ -432,12 +425,20 @@ impl JetstreamWriter {
                             pipeline_metrics()
                                 .forwarder
                                 .drop_total
-                                .get_or_create(pipeline_isb_metric_labels())
+                                .get_or_create(&pipeline_drop_metric_labels(
+                                    &self.vertex_type,
+                                    stream.name,
+                                    "Buffer full",
+                                ))
                                 .inc();
                             pipeline_metrics()
                                 .forwarder
                                 .drop_bytes_total
-                                .get_or_create(pipeline_isb_metric_labels())
+                                .get_or_create(&pipeline_drop_metric_labels(
+                                    &self.vertex_type,
+                                    stream.name,
+                                    "Buffer full",
+                                ))
                                 .inc_by(msg_bytes as u64);
                             return None;
                         }
@@ -478,7 +479,7 @@ impl JetstreamWriter {
     /// natural backpressure.
     pub(super) async fn resolve_pafs(
         &self,
-        pafs: Vec<(Stream, PublishAckFuture)>,
+        pafs: Vec<(Stream, Instant, PublishAckFuture)>,
         message: Message,
         cln_token: CancellationToken,
     ) -> Result<()> {
@@ -495,9 +496,17 @@ impl JetstreamWriter {
             let mut offsets = Vec::new();
 
             // resolve the pafs
-            for (stream, paf) in pafs {
+            for (stream, write_processing_start, paf) in pafs {
                 let ack = match paf.await {
-                    Ok(ack) => Ok(ack),
+                    Ok(ack) => {
+                        Self::send_write_metrics(
+                            stream.name,
+                            &this.vertex_type,
+                            message.clone(),
+                            write_processing_start,
+                        );
+                        Ok(ack)
+                    }
                     Err(e) => {
                         error!(
                             ?e, stream = ?stream,
