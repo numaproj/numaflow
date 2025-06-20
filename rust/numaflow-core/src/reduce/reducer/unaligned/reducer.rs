@@ -117,7 +117,6 @@ impl ReduceTask {
         loop {
             tokio::select! {
                 _ = batch_timer.tick() => {
-
                     drop(writer_tx);
                     // wait for the writer to finish writing the current batch
                     if let Err(e) = writer_handle.await {
@@ -150,7 +149,7 @@ impl ReduceTask {
 
                     // Process the response
                     if response.eof {
-                        break;
+                        continue;
                     }
 
                     let window = response.window.clone().expect("Window not set in response");
@@ -657,6 +656,7 @@ mod tests {
     use crate::config::pipeline::{ToVertexConfig, VertexType};
     use crate::message::{Message, MessageID, Offset, StringOffset};
     use crate::pipeline::isb::jetstream::writer::{ISBWriterConfig, JetstreamWriter};
+    use crate::reduce::reducer::unaligned::user_defined::accumulator::UserDefinedAccumulator;
     use crate::reduce::reducer::unaligned::user_defined::session::UserDefinedSessionReduce;
     use crate::reduce::reducer::unaligned::windower::session::SessionWindowManager;
     use crate::shared::grpc::create_rpc_channel;
@@ -664,7 +664,7 @@ mod tests {
     use async_nats::jetstream::consumer::PullConsumer;
     use async_nats::jetstream::{self, consumer, stream};
     use chrono::{TimeZone, Utc};
-    use numaflow::session_reduce;
+    use numaflow::{accumulator, session_reduce};
     use numaflow_pb::clients::sessionreduce::session_reduce_client::SessionReduceClient;
     use prost::Message as ProstMessage;
     use tempfile::TempDir;
@@ -735,6 +735,61 @@ mod tests {
                 }
             } else {
                 eprintln!("Failed to convert accumulator bytes to string");
+            }
+        }
+    }
+
+    /// Simple accumulator that fires a message every 3 messages with updated key
+    struct AccumulatorCounter {
+        count: Arc<std::sync::atomic::AtomicU32>,
+    }
+
+    struct AccumulatorCounterCreator {}
+
+    impl accumulator::AccumulatorCreator for AccumulatorCounterCreator {
+        type A = AccumulatorCounter;
+
+        fn create(&self) -> Self::A {
+            AccumulatorCounter::new()
+        }
+    }
+
+    impl AccumulatorCounter {
+        fn new() -> Self {
+            Self {
+                count: Arc::new(std::sync::atomic::AtomicU32::new(0)),
+            }
+        }
+    }
+
+    #[tonic::async_trait]
+    impl accumulator::Accumulator for AccumulatorCounter {
+        async fn accumulate(
+            &self,
+            mut input: mpsc::Receiver<accumulator::AccumulatorRequest>,
+            output: mpsc::Sender<accumulator::Message>,
+        ) {
+            while let Some(request) = input.recv().await {
+                // Increment count for each message
+                let current_count = self
+                    .count
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                    + 1;
+
+                // Fire a message every 3 messages with updated key
+                if current_count % 3 == 0 {
+                    let keys = request.keys.clone();
+                    let updated_key = format!("{}_{}", keys.join(":"), current_count);
+
+                    let mut message = accumulator::Message::from_datum(request);
+                    message = message.with_keys(vec![updated_key]);
+                    message = message.with_value(format!("count_{}", current_count).into_bytes());
+
+                    if let Err(e) = output.send(message).await {
+                        eprintln!("Failed to send message: {}", e);
+                        break;
+                    }
+                }
             }
         }
     }
@@ -1213,6 +1268,439 @@ mod tests {
             result_count, 2,
             "Expected exactly two result messages for three keys"
         );
+
+        cln_token.cancel();
+        drop(input_tx);
+
+        // Wait for the reducer to complete
+        reducer_handle.await.expect("reducer handle failed")?;
+
+        // Shutdown the server
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+
+        server_handle.await.expect("server handle failed");
+
+        // Clean up JetStream
+        js_context.delete_stream(stream.name).await.unwrap();
+
+        Ok(())
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_unaligned_accumulator_reducer_basic() -> crate::Result<()> {
+        // Set up the accumulator reducer server
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("accumulator_reduce_basic.sock");
+        let server_info_file = tmp_dir.path().join("accumulator_reduce_basic-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let server_handle = tokio::spawn(async move {
+            numaflow::accumulator::Server::new(AccumulatorCounterCreator {})
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // Wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Create the accumulator client
+        let accumulator_client = UserDefinedAccumulator::new(
+            numaflow_pb::clients::accumulator::accumulator_client::AccumulatorClient::new(
+                create_rpc_channel(sock_file).await?,
+            ),
+        )
+        .await;
+
+        let client = UserDefinedUnalignedReduce::Accumulator(accumulator_client);
+
+        // Create a simple accumulator window manager with 60s timeout
+        let windower =
+            crate::reduce::reducer::unaligned::windower::accumulator::AccumulatorWindowManager::new(
+                Duration::from_secs(60),
+            );
+        let window_manager = UnalignedWindowManager::Accumulator(windower);
+
+        // Set up JetStream
+        let js_url = "localhost:4222";
+        let nats_client = async_nats::connect(js_url).await.unwrap();
+        let js_context = jetstream::new(nats_client);
+
+        // Create output stream
+        let stream = Stream::new("test_unaligned_accumulator_basic", "test", 0);
+        // Delete stream if it exists
+        let _ = js_context.delete_stream(stream.name).await;
+
+        let _stream = js_context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        // Create consumer
+        let _consumer = js_context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        // Create JetstreamWriter
+        let cln_token = CancellationToken::new();
+        let tracker_handle = TrackerHandle::new(None, None);
+        let js_writer = JetstreamWriter::new(ISBWriterConfig {
+            config: vec![ToVertexConfig {
+                name: "test-vertex",
+                partitions: 1,
+                writer_config: BufferWriterConfig {
+                    streams: vec![stream.clone()],
+                    ..Default::default()
+                },
+                conditions: None,
+                vertex_type: VertexType::Sink,
+            }],
+            js_ctx: js_context.clone(),
+            paf_concurrency: 100,
+            tracker_handle: tracker_handle.clone(),
+            cancel_token: cln_token.clone(),
+            watermark_handle: None,
+            vertex_type: "Reduce".to_string(),
+            isb_config: None,
+        });
+
+        // Create the UnalignedReducer
+        let reducer = UnalignedReducer::new(
+            client,
+            window_manager,
+            js_writer,
+            Duration::from_secs(0), // No allowed lateness for testing
+            None,                   // No GC WAL for testing
+        )
+        .await;
+
+        // Create a channel for input messages
+        let (input_tx, input_rx) = mpsc::channel(10);
+        let input_stream = ReceiverStream::new(input_rx);
+
+        // Start the reducer
+        let reducer_handle = reducer.start(input_stream, cln_token.clone()).await?;
+
+        // Create test messages - accumulator fires every 3 messages
+        let base_time = Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap();
+
+        // Send 6 messages to trigger 2 accumulator outputs
+        for i in 0..6 {
+            let msg = Message {
+                typ: Default::default(),
+                keys: Arc::from(vec!["key1".into()]),
+                tags: None,
+                value: format!("value{}", i + 1).into(),
+                offset: Offset::String(StringOffset::new(i.to_string(), i)),
+                event_time: base_time + chrono::Duration::seconds(((i + 1) * 10) as i64),
+                watermark: None,
+                id: MessageID {
+                    vertex_name: "vertex_name".to_string().into(),
+                    offset: i.to_string().into(),
+                    index: i as i32,
+                },
+                ..Default::default()
+            };
+            input_tx.send(msg).await.unwrap();
+        }
+
+        // Create a consumer to read the results
+        let consumer: PullConsumer = js_context
+            .get_consumer_from_stream(&stream.name, &stream.name)
+            .await
+            .unwrap();
+
+        // Read messages from the stream
+        let mut messages = consumer
+            .batch()
+            .expires(Duration::from_secs(3))
+            .max_messages(2)
+            .messages()
+            .await
+            .unwrap();
+
+        let mut result_count = 0;
+        let expected_counts = vec!["count_3", "count_6"];
+
+        while let Some(msg) = messages.next().await {
+            let msg = msg.unwrap();
+            let data = msg.payload.to_vec();
+
+            // Acknowledge the message
+            msg.ack().await.unwrap();
+
+            // Parse the message
+            let message: numaflow_pb::objects::isb::Message =
+                prost::Message::decode(data.as_ref()).unwrap();
+
+            // Verify the result
+            let expected_key = format!("key1_{}", if result_count == 0 { 3 } else { 6 });
+            assert_eq!(message.header.unwrap().keys.to_vec(), vec![expected_key]);
+            assert_eq!(
+                message.body.unwrap().payload.to_vec(),
+                expected_counts[result_count].as_bytes().to_vec()
+            );
+
+            result_count += 1;
+        }
+
+        assert_eq!(result_count, 2, "Expected exactly two result messages");
+
+        cln_token.cancel();
+        drop(input_tx);
+
+        // Wait for the reducer to complete
+        reducer_handle.await.expect("reducer handle failed")?;
+
+        // Shutdown the server
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+
+        server_handle.await.expect("server handle failed");
+
+        // Clean up JetStream
+        js_context.delete_stream(stream.name).await.unwrap();
+
+        Ok(())
+    }
+
+    // #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_unaligned_accumulator_reducer_multiple_keys() -> crate::Result<()> {
+        // Set up the accumulator reducer server
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("accumulator_reduce_multi_keys.sock");
+        let server_info_file = tmp_dir
+            .path()
+            .join("accumulator_reduce_multi_keys-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let server_handle = tokio::spawn(async move {
+            numaflow::accumulator::Server::new(AccumulatorCounterCreator {})
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // Wait for the server to start
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Create the accumulator client
+        let accumulator_client = UserDefinedAccumulator::new(
+            numaflow_pb::clients::accumulator::accumulator_client::AccumulatorClient::new(
+                create_rpc_channel(sock_file).await?,
+            ),
+        )
+        .await;
+
+        let client = UserDefinedUnalignedReduce::Accumulator(accumulator_client);
+
+        // Create a simple accumulator window manager with 60s timeout
+        let windower =
+            crate::reduce::reducer::unaligned::windower::accumulator::AccumulatorWindowManager::new(
+                Duration::from_secs(60),
+            );
+        let window_manager = UnalignedWindowManager::Accumulator(windower);
+
+        // Set up JetStream
+        let js_url = "localhost:4222";
+        let nats_client = async_nats::connect(js_url).await.unwrap();
+        let js_context = jetstream::new(nats_client);
+
+        // Create output stream
+        let stream = Stream::new("test_unaligned_accumulator_multi_keys", "test", 0);
+        // Delete stream if it exists
+        let _ = js_context.delete_stream(stream.name).await;
+
+        let _stream = js_context
+            .get_or_create_stream(stream::Config {
+                name: stream.name.to_string(),
+                subjects: vec![stream.name.to_string()],
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        // Create consumer
+        let _consumer = js_context
+            .create_consumer_on_stream(
+                consumer::Config {
+                    name: Some(stream.name.to_string()),
+                    ack_policy: consumer::AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                stream.name,
+            )
+            .await
+            .unwrap();
+
+        // Create JetstreamWriter
+        let cln_token = CancellationToken::new();
+        let tracker_handle = TrackerHandle::new(None, None);
+        let js_writer = JetstreamWriter::new(ISBWriterConfig {
+            config: vec![ToVertexConfig {
+                name: "test-vertex",
+                partitions: 1,
+                writer_config: BufferWriterConfig {
+                    streams: vec![stream.clone()],
+                    ..Default::default()
+                },
+                conditions: None,
+                vertex_type: VertexType::Sink,
+            }],
+            js_ctx: js_context.clone(),
+            paf_concurrency: 100,
+            tracker_handle: tracker_handle.clone(),
+            cancel_token: cln_token.clone(),
+            watermark_handle: None,
+            vertex_type: "Reduce".to_string(),
+            isb_config: None,
+        });
+
+        // Create the UnalignedReducer
+        let reducer = UnalignedReducer::new(
+            client,
+            window_manager,
+            js_writer,
+            Duration::from_secs(0), // No allowed lateness for testing
+            None,                   // No GC WAL for testing
+        )
+        .await;
+
+        // Create a channel for input messages
+        let (input_tx, input_rx) = mpsc::channel(10);
+        let input_stream = ReceiverStream::new(input_rx);
+
+        // Start the reducer
+        let reducer_handle = reducer.start(input_stream, cln_token.clone()).await?;
+
+        // Create test messages with the same key - accumulator fires every 3 messages
+        let base_time = Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap();
+
+        // Send 6 messages to the same key to get 2 accumulator outputs (at 3 and 6)
+        for i in 0..6 {
+            let msg = Message {
+                typ: Default::default(),
+                keys: Arc::from(vec!["key-1".into()]),
+                tags: None,
+                value: format!("value_multi_{}", i + 1).into(),
+                offset: Offset::String(StringOffset::new(i.to_string(), i)),
+                event_time: base_time + chrono::Duration::seconds(((i + 1) * 10) as i64),
+                watermark: None,
+                id: MessageID {
+                    vertex_name: "id-one".to_string().into(),
+                    offset: i.to_string().into(),
+                    index: i as i32,
+                },
+                ..Default::default()
+            };
+            input_tx.send(msg).await.unwrap();
+            let msg = Message {
+                typ: Default::default(),
+                keys: Arc::from(vec!["key-2".into()]),
+                tags: None,
+                value: format!("value_multi_{}", i + 1).into(),
+                offset: Offset::String(StringOffset::new(i.to_string(), i)),
+                event_time: base_time + chrono::Duration::seconds(((i + 1) * 10) as i64),
+                watermark: None,
+                id: MessageID {
+                    vertex_name: "id-two".to_string().into(),
+                    offset: i.to_string().into(),
+                    index: i as i32,
+                },
+                ..Default::default()
+            };
+            input_tx.send(msg).await.unwrap();
+        }
+
+        // Create a consumer to read the results
+        let consumer: PullConsumer = js_context
+            .get_consumer_from_stream(&stream.name, &stream.name)
+            .await
+            .unwrap();
+
+        // Read messages from the stream
+        let mut messages = consumer
+            .batch()
+            .expires(Duration::from_secs(1))
+            .max_messages(4)
+            .messages()
+            .await
+            .unwrap();
+
+        let mut result_count = 0;
+        let mut received_keys = HashSet::new();
+
+        while let Some(msg) = messages.next().await {
+            let msg = msg.unwrap();
+            let data = msg.payload.to_vec();
+
+            // Acknowledge the message
+            msg.ack().await.unwrap();
+
+            // Parse the message
+            let message: numaflow_pb::objects::isb::Message =
+                prost::Message::decode(data.as_ref()).unwrap();
+
+            // Extract and store the key
+            let key = message.header.unwrap().keys[0].clone();
+            received_keys.insert(key.clone());
+
+            // Verify the count based on the key - accumulator fires at count 3 and 6
+            let expected_count = if key.ends_with("_3") {
+                "count_3"
+            } else if key.ends_with("_6") {
+                "count_6"
+            } else {
+                panic!("Unexpected key: {}", key)
+            };
+
+            assert_eq!(
+                String::from_utf8(message.body.unwrap().payload.to_vec()).unwrap(),
+                expected_count
+            );
+
+            result_count += 1;
+        }
+
+        // Verify we received results for both counts
+        let has_count_3 = received_keys.iter().any(|k| k.ends_with("_3"));
+        let has_count_6 = received_keys.iter().any(|k| k.ends_with("_6"));
+        assert!(
+            has_count_3,
+            "Missing result for count_3, received keys: {:?}",
+            received_keys
+        );
+        assert!(
+            has_count_6,
+            "Missing result for count_6, received keys: {:?}",
+            received_keys
+        );
+        assert_eq!(result_count, 4, "Expected exactly two result messages");
 
         cln_token.cancel();
         drop(input_tx);

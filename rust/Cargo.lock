@@ -2247,28 +2247,7 @@ dependencies = [
 [[package]]
 name = "numaflow"
 version = "0.2.1"
-source = "git+https://github.com/numaproj/numaflow-rs.git?rev=aaa8d7b5e96538ca41bb137353194062689442a4#aaa8d7b5e96538ca41bb137353194062689442a4"
-dependencies = [
- "chrono",
- "hyper-util",
- "prost 0.13.5",
- "prost-types",
- "serde",
- "serde_json",
- "thiserror 2.0.12",
- "tokio",
- "tokio-stream",
- "tokio-util",
- "tonic",
- "tonic-build",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "numaflow"
-version = "0.2.1"
-source = "git+https://github.com/numaproj/numaflow-rs.git?rev=c6aa3a8d64a189357260f78131ef4692d387ba6c#c6aa3a8d64a189357260f78131ef4692d387ba6c"
+source = "git+https://github.com/numaproj/numaflow-rs.git?rev=9a12a1d832d4fece830452044bd7706dc8b2a381#9a12a1d832d4fece830452044bd7706dc8b2a381"
 dependencies = [
  "chrono",
  "hyper-util",
@@ -2308,7 +2287,7 @@ dependencies = [
  "k8s-openapi",
  "kube",
  "lz4",
- "numaflow 0.2.1 (git+https://github.com/numaproj/numaflow-rs.git?rev=aaa8d7b5e96538ca41bb137353194062689442a4)",
+ "numaflow 0.2.1",
  "numaflow-http",
  "numaflow-jetstream",
  "numaflow-kafka",
@@ -3612,7 +3591,7 @@ dependencies = [
  "chrono",
  "http 1.3.1",
  "hyper-util",
- "numaflow 0.2.1 (git+https://github.com/numaproj/numaflow-rs.git?rev=c6aa3a8d64a189357260f78131ef4692d387ba6c)",
+ "numaflow 0.2.1",
  "numaflow-models",
  "numaflow-pb",
  "parking_lot",

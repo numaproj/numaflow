@@ -251,13 +251,9 @@ impl JetstreamWriter {
                         VertexType::ReduceUDF => message.keys.join(":"),
                     };
 
-                    info!(?shuffle_key, "Shuffle key");
-
                     // check to which partition the message should be written
                     let partition =
                         forward::determine_partition(shuffle_key, vertex.partitions, &mut hash);
-
-                    info!(?partition, "Partition");
 
                     // write the message to the corresponding stream
                     let stream = vertex
