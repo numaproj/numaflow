@@ -243,7 +243,6 @@ const CustomEdge: FC<EdgeProps> = ({
           <Tooltip
             title={
               <div className={"edge-tooltip"}>
-                <div>Pending</div>
                 <div
                   style={{
                     display: "flex",
