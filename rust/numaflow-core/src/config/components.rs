@@ -1619,9 +1619,11 @@ mod sink_tests {
                     queue_owner_aws_account_id: "123456789012".to_string(),
                 })),
                 kafka: None,
+                pulsar: None,
             })),
             retry_strategy: None,
             kafka: None,
+            pulsar: None,
         };
 
         let result = SinkType::fallback_sinktype(&sink);
@@ -1645,6 +1647,7 @@ mod sink_tests {
             fallback: None,
             retry_strategy: None,
             kafka: None,
+            pulsar: None,
         };
         let result = SinkType::fallback_sinktype(&sink_without_fallback);
         assert!(result.is_err());
@@ -1671,9 +1674,11 @@ mod sink_tests {
                     queue_owner_aws_account_id: "123456789012".to_string(),
                 })),
                 kafka: None,
+                pulsar: None,
             })),
             retry_strategy: None,
             kafka: None,
+            pulsar: None,
         };
         let result = SinkType::fallback_sinktype(&sink_missing_region);
         assert!(result.is_err());
@@ -1696,9 +1701,11 @@ mod sink_tests {
                 serve: None,
                 sqs: None,
                 kafka: None,
+                pulsar: None,
             })),
             retry_strategy: None,
             kafka: None,
+            pulsar: None,
         };
         let result = SinkType::fallback_sinktype(&sink_empty_fallback);
         assert!(result.is_err());
