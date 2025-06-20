@@ -1,33 +1,65 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: gssapi
+data:
+  username: a2Fma2F0ZXN0L2hvc3QubGltYS5pbnRlcm5hbAo=
+  password: cm9vdAo=
+  config: |
+    W2xpYmRlZmF1bHRzXQogIGRlZmF1bHRfcmVhbG0gPSBFWEFNUExFLkNPTQogIHVkcF9wcmVmZXJl
+    bmNlX2xpbWl0ID0gMQoKW3JlYWxtc10KICBFWEFNUExFLkNPTSA9IHsKICAgIGtkYyA9IGhvc3Qu
+    bGltYS5pbnRlcm5hbDo4OAogICAgYWRtaW5fc2VydmVyID0gaG9zdC5saW1hLmludGVybmFsOjc0
+    OQogIH0KCltkb21haW5fcmVhbG1dCiAgLmV4YW1wbGUuY29tID0gRVhBTVBMRS5DT00KICBleGFt
+    cGxlLmNvbSA9IEVYQU1QTEUuQ09NCg==
+
+---
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
   name: join-on-map
 spec:
   vertices:
-    - name: http-in
-      source:
-        http: {}
     - name: kafka-in
+      scale:
+        min: 1
+        max: 1
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       source:
         kafka:
           brokers:
-            - my-broker1:19700
-            - my-broker2:19700
+            - host.lima.internal:9094
           topic: my-topic
           consumerGroup: my-consumer-group
-    # Both of the incoming Vertices join on this Map Vertex
-    - name: cat
-      udf:
-        builtin:
-          name: cat # A built-in UDF which simply cats the message
+          sasl:
+            mechanism: GSSAPI
+            gssapi:
+              serviceName: kafka
+              realm: EXAMPLE.COM
+              authType: KRB5_USER_AUTH
+              usernameSecret: # Pointing to a secret reference which contains the username
+                name: gssapi
+                key: username
+              passwordSecret: # Pointing to a secret reference which contains the username
+                name: gssapi
+                key: password
+              kerberosConfigSecret: # Pointing to a secret reference which contains the kerberos config
+                name: gssapi
+                key: config
+
     - name: out
+      scale:
+        min: 1
+        max: 1
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       sink:
         # A simple log printing sink
         log: {}
   edges:
-    - from: http-in
-      to: cat
     - from: kafka-in
-      to: cat
-    - from: cat
       to: out
