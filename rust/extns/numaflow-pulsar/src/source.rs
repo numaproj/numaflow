@@ -10,7 +10,7 @@ use tokio::{
     sync::{mpsc, oneshot},
     time,
 };
-use tonic::codegen::tokio_stream::StreamExt;
+use tokio_stream::StreamExt;
 
 use crate::{Error, PulsarAuth, Result};
 
