@@ -54,12 +54,12 @@ impl From<PulsarResponse> for ResponseFromSink {
 
 impl Sink for PulsarSink {
     async fn sink(&mut self, messages: Vec<Message>) -> Result<Vec<ResponseFromSink>> {
-        let kafka_messages: Vec<PulsarMessage> = messages
+        let pulsar_messages: Vec<PulsarMessage> = messages
             .into_iter()
             .map(TryInto::try_into)
             .collect::<Result<_>>()?;
         Ok(self
-            .sink_messages(kafka_messages)
+            .sink_messages(pulsar_messages)
             .await
             .map_err(|e| Error::Sink(e.to_string()))?
             .into_iter()
