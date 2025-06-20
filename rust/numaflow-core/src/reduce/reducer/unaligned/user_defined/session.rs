@@ -291,9 +291,7 @@ mod tests {
             let message =
                 session_reduce::Message::new(count_value.to_string().into_bytes()).with_keys(keys);
 
-            if let Err(e) = output.send(message).await {
-                eprintln!("Failed to send message: {}", e);
-            }
+            output.send(message).await.unwrap();
         }
 
         async fn accumulator(&self) -> Vec<u8> {
@@ -308,11 +306,7 @@ mod tests {
                 if let Ok(accumulator_count) = accumulator_str.parse::<u32>() {
                     self.count
                         .fetch_add(accumulator_count, std::sync::atomic::Ordering::Relaxed);
-                } else {
-                    eprintln!("Failed to parse accumulator value: {}", accumulator_str);
                 }
-            } else {
-                eprintln!("Failed to convert accumulator bytes to string");
             }
         }
     }

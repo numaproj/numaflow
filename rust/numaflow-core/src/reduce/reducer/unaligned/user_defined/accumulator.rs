@@ -266,10 +266,7 @@ mod tests {
                     message = message.with_keys(vec![updated_key]);
                     message = message.with_value(format!("count_{}", current_count).into_bytes());
 
-                    if let Err(e) = output.send(message).await {
-                        eprintln!("Failed to send message: {}", e);
-                        break;
-                    }
+                    output.send(message).await.unwrap();
                 }
             }
         }

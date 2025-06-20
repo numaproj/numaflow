@@ -15,7 +15,7 @@ spec:
         min: 1
       source:
         generator:
-          rpu: 1
+          rpu: 10
           keyCount: 1
     - name: input-two
       containerTemplate:
@@ -26,7 +26,7 @@ spec:
         min: 1
       source:
         generator:
-          rpu: 1
+          rpu: 10
           keyCount: 1
     - name: accum
       containerTemplate:
@@ -35,11 +35,11 @@ spec:
             value: "rust"
       udf:
         container:
-          image: quay.io/numaio/numaflow-go/stream-sorter:stable
+          image: quay.io/numaio/numaflow-rs/stream-sorter:stable
         groupBy:
           window:
             accumulator:
-              timeout: 300s
+              timeout: 30s
           keyed: true
           storage:
             persistentVolumeClaim:

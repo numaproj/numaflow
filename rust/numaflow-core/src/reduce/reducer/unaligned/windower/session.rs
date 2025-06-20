@@ -89,17 +89,15 @@ impl SessionWindowManager {
 
     /// expands the window if the start or end time collides
     fn expand_window_if_needed(new_window: &Window, existing_window: &Window) -> Option<Window> {
-        if new_window.start_time < existing_window.start_time
-            || new_window.end_time > existing_window.end_time
-        {
-            Some(Window::new(
-                new_window.start_time.min(existing_window.start_time),
-                new_window.end_time.max(existing_window.end_time),
-                Arc::clone(&new_window.keys),
-            ))
-        } else {
-            None
-        }
+        (new_window.start_time < existing_window.start_time
+            || new_window.end_time > existing_window.end_time)
+            .then(|| {
+                Window::new(
+                    new_window.start_time.min(existing_window.start_time),
+                    new_window.end_time.max(existing_window.end_time),
+                    Arc::clone(&new_window.keys),
+                )
+            })
     }
 
     /// finds a window that can be merged with the given window
@@ -181,7 +179,6 @@ impl SessionWindowManager {
         }
 
         let window_to_close = Self::merge_windows(&group);
-
         // Try to merge with active windows
         match Self::try_merge_with_active(all_windows, key, &window_to_close) {
             Some((old_active, new_merged)) => Some(UnalignedWindowMessage {
