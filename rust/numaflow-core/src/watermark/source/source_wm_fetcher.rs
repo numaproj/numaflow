@@ -3,6 +3,7 @@
 //! timelines to determine the watermark. We don't care about offsets here since the watermark starts
 //! at source, we only consider the head watermark and consider the minimum watermark of all the active
 //! processors.
+
 use crate::watermark::processor::manager::ProcessorManager;
 use crate::watermark::wmb::Watermark;
 

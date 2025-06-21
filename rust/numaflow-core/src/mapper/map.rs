@@ -44,12 +44,6 @@ struct UnaryMapperActor {
     mapper: UserDefinedUnaryMap,
 }
 
-impl Drop for UnaryMapperActor {
-    fn drop(&mut self) {
-        info!("Dropping UnaryMapperActor");
-    }
-}
-
 impl UnaryMapperActor {
     fn new(receiver: mpsc::Receiver<UnaryActorMessage>, mapper: UserDefinedUnaryMap) -> Self {
         Self { receiver, mapper }

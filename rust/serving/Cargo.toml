@@ -44,5 +44,5 @@ tokio-util = "0.7.14"
 [dev-dependencies]
 reqwest = { workspace = true, features = ["json"] }
 rustls.workspace = true
-numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "c6aa3a8d64a189357260f78131ef4692d387ba6c" }
+numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "9a12a1d832d4fece830452044bd7706dc8b2a381" }
 tempfile = "3.14.0"

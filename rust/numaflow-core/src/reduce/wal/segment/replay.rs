@@ -18,6 +18,7 @@ use tracing::{debug, info};
 /// Segment Entry as recorded in the WAL.
 #[derive(Debug)]
 pub(in crate::reduce) enum SegmentEntry {
+    #[allow(dead_code)]
     /// Data entry in the Segment
     DataEntry { size: u64, data: Bytes },
     /// The file has been switched

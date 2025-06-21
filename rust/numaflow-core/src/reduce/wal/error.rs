@@ -6,6 +6,7 @@ pub(crate) type WalResult<T> = Result<T, Error>;
 
 #[derive(Debug)]
 pub(crate) enum Error {
+    #[allow(dead_code)]
     /// Error while writing a particular WAL entry.
     WriteEntry {
         /// The unique message ID. This can be used for NACK if needed.

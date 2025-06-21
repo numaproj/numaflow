@@ -3,7 +3,7 @@ use crate::message::Message;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
 use crate::reduce::reducer::aligned::windower::{
-    AlignedWindowMessage, Window, WindowManager, WindowOperation,
+    AlignedWindowManager, AlignedWindowMessage, Window, WindowOperation,
 };
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use bytes::Bytes;
@@ -37,7 +37,7 @@ struct ReduceTask {
     gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
     error_tx: mpsc::Sender<Error>,
     window: Window,
-    window_manager: WindowManager,
+    window_manager: AlignedWindowManager,
 }
 
 impl ReduceTask {
@@ -48,7 +48,7 @@ impl ReduceTask {
         gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
         error_tx: mpsc::Sender<Error>,
         window: Window,
-        window_manager: WindowManager,
+        window_manager: AlignedWindowManager,
     ) -> Self {
         Self {
             client,
@@ -112,7 +112,7 @@ impl ReduceTask {
                 return;
             }
 
-            // oldest window is used to determine the GC event incase of sliding windows, unlike fixed
+            // oldest window is used to determine the GC event in case of sliding windows, unlike fixed
             // messages can be part of multiple windows in sliding, so we can only gc the messages
             // that are less than the oldest window's start time.
             let oldest_window = self
@@ -122,7 +122,7 @@ impl ReduceTask {
 
             // we can safely delete the window from the window manager since the results are
             // successfully written to jetstream and watermark is published.
-            self.window_manager.delete_window(self.window.clone());
+            self.window_manager.gc_window(self.window.clone());
 
             // now that the processing is done, we can add this window to the GC WAL.
             let Some(gc_wal_tx) = &self.gc_wal_tx else {
@@ -131,7 +131,7 @@ impl ReduceTask {
             };
 
             // Send GC event if WAL is configured
-            let gc_event: GcEvent = if let WindowManager::Sliding(_) = self.window_manager {
+            let gc_event: GcEvent = if let AlignedWindowManager::Sliding(_) = self.window_manager {
                 // for sliding window a message can be part of multiple windows, we can only delete the
                 // messages that are less than the oldest window's start time.
                 Window {
@@ -143,7 +143,7 @@ impl ReduceTask {
             } else {
                 // messages of fixed window are not part of multiple windows, so we can delete all the
                 // messages that are less than the window's end time.
-                self.window.clone().into()
+                self.window.into()
             };
 
             debug!(?gc_event, "Sending GC event to WAL");
@@ -175,7 +175,7 @@ struct AlignedReduceActor {
     /// Sender for GC WAL messages. It is optional since users can specify not to use WAL.
     gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
     /// WindowManager for assigning windows to messages and closing windows.
-    window_manager: WindowManager,
+    window_manager: AlignedWindowManager,
     /// Cancellation token to signal tasks to stop
     cln_token: CancellationToken,
 }
@@ -208,7 +208,7 @@ impl AlignedReduceActor {
         js_writer: JetstreamWriter,
         error_tx: mpsc::Sender<Error>,
         gc_wal_tx: Option<mpsc::Sender<SegmentWriteMessage>>,
-        window_manager: WindowManager,
+        window_manager: AlignedWindowManager,
         cln_token: CancellationToken,
     ) -> Self {
         Self {
@@ -273,7 +273,17 @@ impl AlignedReduceActor {
         );
 
         // Send the open command with the first message
-        message_tx.send(window_msg).await.expect("Receiver dropped");
+        if let Err(e) = message_tx.send(window_msg).await {
+            if !self.cln_token.is_cancelled() {
+                self.error_tx
+                    .send(Error::Reduce(format!(
+                        "Failed to send message to reduce task: {}",
+                        e
+                    )))
+                    .await
+                    .expect("Failed to send error");
+            }
+        }
     }
 
     /// sends the message to the reduce task for the window.
@@ -293,11 +303,17 @@ impl AlignedReduceActor {
         };
 
         // Send the append message
-        active_stream
-            .message_tx
-            .send(window_msg)
-            .await
-            .expect("Receiver dropped");
+        if let Err(e) = active_stream.message_tx.send(window_msg).await {
+            if !self.cln_token.is_cancelled() {
+                self.error_tx
+                    .send(Error::Reduce(format!(
+                        "Failed to send message to reduce task: {}",
+                        e
+                    )))
+                    .await
+                    .expect("Failed to send error");
+            }
+        }
     }
 
     /// Closes the reduce task for the window.
@@ -326,7 +342,7 @@ impl AlignedReduceActor {
 pub(crate) struct AlignedReducer {
     client: UserDefinedAlignedReduce,
     /// Window manager for assigning windows to messages and closing windows.
-    window_manager: WindowManager,
+    window_manager: AlignedWindowManager,
     /// Writer for writing results to JetStream
     js_writer: JetstreamWriter,
     /// Final state of the component (any error will set this as Err).
@@ -339,15 +355,18 @@ pub(crate) struct AlignedReducer {
     allowed_lateness: Duration,
     /// current watermark for the reduce vertex.
     current_watermark: DateTime<Utc>,
+    /// Graceful shutdown timeout duration.
+    graceful_timeout: Duration,
 }
 
 impl AlignedReducer {
     pub(crate) async fn new(
         client: UserDefinedAlignedReduce,
-        window_manager: WindowManager,
+        window_manager: AlignedWindowManager,
         js_writer: JetstreamWriter,
         gc_wal: Option<AppendOnlyWal>,
         allowed_lateness: Duration,
+        graceful_timeout: Duration,
     ) -> Self {
         Self {
             client,
@@ -358,6 +377,7 @@ impl AlignedReducer {
             gc_wal,
             allowed_lateness,
             current_watermark: DateTime::from_timestamp_millis(-1).expect("Invalid timestamp"),
+            graceful_timeout,
         }
     }
 
@@ -371,6 +391,24 @@ impl AlignedReducer {
         let (error_tx, mut error_rx) = mpsc::channel(10);
         let gc_wal_handle = self.setup_gc_wal().await?;
 
+        let parent_cln_token = cln_token.clone();
+        // create a new cancellation token for the map component, this token is used for hard
+        // shutdown, the parent token is used for graceful shutdown.
+        let hard_shutdown_token = CancellationToken::new();
+        // the one that calls shutdown
+        let hard_shutdown_token_owner = hard_shutdown_token.clone();
+        let graceful_timeout = self.graceful_timeout;
+
+        // spawn a task to cancel the token after graceful timeout when the main token is cancelled
+        let shutdown_handle = tokio::spawn(async move {
+            // initiate graceful shutdown
+            parent_cln_token.cancelled().await;
+            // wait for graceful timeout
+            tokio::time::sleep(graceful_timeout).await;
+            // cancel the token to hard shutdown
+            hard_shutdown_token_owner.cancel();
+        });
+
         // Create the actor channel and start the actor
         let (actor_tx, actor_rx) = mpsc::channel(100);
         let actor = AlignedReduceActor::new(
@@ -380,7 +418,7 @@ impl AlignedReducer {
             error_tx.clone(),
             gc_wal_handle,
             self.window_manager.clone(),
-            cln_token.clone(),
+            hard_shutdown_token.clone(),
         )
         .await;
 
@@ -406,6 +444,12 @@ impl AlignedReducer {
                             break;
                         };
 
+                        // If shutting down, drain the stream
+                        if self.shutting_down_on_err {
+                            info!("Reduce component is shutting down due to an error, not accepting the message");
+                            continue;
+                        }
+
                         // update the watermark.
                         // we cannot simply assign incoming message's watermark as the current watermark,
                         // because it can be -1. watermark will never regress, so use max.
@@ -419,12 +463,6 @@ impl AlignedReducer {
 
                         if self.current_watermark > msg.event_time {
                             error!(current_watermark=?self.current_watermark, message_event_time=?msg.event_time, "Old message popped up, Watermark is behind the event time");
-                            continue;
-                        }
-
-                        // If shutting down, drain the stream
-                        if self.shutting_down_on_err {
-                            info!("Reduce component is shutting down due to an error, not accepting the message");
                             continue;
                         }
 
@@ -446,7 +484,9 @@ impl AlignedReducer {
             }
 
             // Drop the sender to signal the actor to stop
-            info!("Reduce component is shutting down, waiting for active reduce tasks to complete");
+            info!(
+                "Aligned Reduce component is shutting down, waiting for active reduce tasks to complete"
+            );
             drop(actor_tx);
 
             // Wait for the actor to complete
@@ -456,13 +496,15 @@ impl AlignedReducer {
 
             // For sliding: we need to make sure to store the window manager state before exiting
             // from the reducer component
-            if let WindowManager::Sliding(manager) = self.window_manager {
+            if let AlignedWindowManager::Sliding(manager) = self.window_manager {
                 if let Err(e) = manager.save_state() {
                     error!("Failed to save window state: {:?}", e);
                 }
             }
 
-            info!(status=?self.final_result, "Reduce component successfully completed");
+            shutdown_handle.abort();
+
+            info!(status=?self.final_result, "Aligned Reduce component successfully completed");
             self.final_result
         });
 
@@ -500,8 +542,8 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
-    use crate::config::pipeline::ToVertexConfig;
     use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
+    use crate::config::pipeline::{ToVertexConfig, VertexType};
     use crate::message::{Message, MessageID, Offset, StringOffset};
     use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
     use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
@@ -631,6 +673,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: VertexType::Sink,
             }],
             js_ctx: js_context.clone(),
             paf_concurrency: 100,
@@ -644,10 +687,11 @@ mod tests {
         // Create the AlignedReducer
         let reducer = AlignedReducer::new(
             client,
-            WindowManager::Fixed(windower),
+            AlignedWindowManager::Fixed(windower),
             js_writer,
             None, // No GC WAL for testing
             Duration::from_secs(0),
+            Duration::from_millis(50),
         )
         .await;
 
@@ -875,6 +919,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: VertexType::Sink,
             }],
             js_ctx: js_context.clone(),
             paf_concurrency: 100,
@@ -888,10 +933,11 @@ mod tests {
         // Create the AlignedReducer
         let reducer = AlignedReducer::new(
             client,
-            WindowManager::Sliding(windower),
+            AlignedWindowManager::Sliding(windower),
             js_writer,
             None, // No GC WAL for testing
             Duration::from_secs(0),
+            Duration::from_millis(50),
         )
         .await;
 
@@ -1122,6 +1168,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: VertexType::Sink,
             }],
             js_ctx: js_context.clone(),
             paf_concurrency: 100,
@@ -1135,10 +1182,11 @@ mod tests {
         // Create the AlignedReducer
         let reducer = AlignedReducer::new(
             client,
-            WindowManager::Fixed(windower),
+            AlignedWindowManager::Fixed(windower),
             js_writer,
             None, // No GC WAL for testing
             Duration::from_secs(0),
+            Duration::from_millis(50),
         )
         .await;
 

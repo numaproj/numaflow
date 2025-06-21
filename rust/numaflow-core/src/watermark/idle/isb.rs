@@ -200,9 +200,9 @@ mod tests {
     use tokio::time::sleep;
 
     use super::*;
-    use crate::config::pipeline::ToVertexConfig;
     use crate::config::pipeline::isb::BufferWriterConfig;
     use crate::config::pipeline::isb::Stream;
+    use crate::config::pipeline::{ToVertexConfig, VertexType};
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
@@ -219,6 +219,7 @@ mod tests {
                 ..Default::default()
             },
             conditions: None,
+            to_vertex_type: VertexType::Sink,
         };
 
         let mut manager =
@@ -261,6 +262,7 @@ mod tests {
                 ..Default::default()
             },
             conditions: None,
+            to_vertex_type: VertexType::Sink,
         };
 
         let manager =
@@ -299,6 +301,7 @@ mod tests {
                 ..Default::default()
             },
             conditions: None,
+            to_vertex_type: VertexType::Sink,
         };
 
         let mut manager =
@@ -333,6 +336,7 @@ mod tests {
                 ..Default::default()
             },
             conditions: None,
+            to_vertex_type: VertexType::Sink,
         };
 
         let mut manager =

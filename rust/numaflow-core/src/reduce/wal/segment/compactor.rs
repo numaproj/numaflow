@@ -322,7 +322,6 @@ impl Compactor {
                     // Decode the GC event.
                     let gc: GcEvent = prost::Message::decode(data)
                         .map_err(|e| format!("Failed to decode GC event: {e}"))?;
-                    println!("GC event: {:?}", gc);
                     let gc: GcEventEntry = gc.into();
 
                     // Update the oldest time if the current GC event's end time is newer.

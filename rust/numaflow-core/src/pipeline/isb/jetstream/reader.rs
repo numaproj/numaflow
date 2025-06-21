@@ -12,6 +12,7 @@ use crate::message::{IntOffset, Message, MessageID, MessageType, Metadata, Offse
 use crate::metrics::{PIPELINE_PARTITION_NAME_LABEL, pipeline_metric_labels, pipeline_metrics};
 use crate::shared::grpc::utc_from_timestamp;
 use crate::tracker::TrackerHandle;
+use crate::watermark::isb::ISBWatermarkHandle;
 use async_nats::jetstream::{
     AckKind, Context, Message as JetstreamMessage, consumer::PullConsumer,
 };
@@ -43,7 +44,6 @@ pub(crate) struct ISBReaderConfig {
     pub watermark_handle: Option<ISBWatermarkHandle>,
     pub isb_config: Option<ISBConfig>,
 }
-use crate::watermark::isb::ISBWatermarkHandle;
 
 const ACK_RETRY_INTERVAL: u64 = 100;
 const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
@@ -547,7 +547,7 @@ impl JetStreamReader {
                 }
 
                 result.map_err(|e| {
-                    Error::Connection(format!("Failed to send ack to Jetstream: {e:?}"))
+                    Error::Connection(format!("Failed to send {:?} to Jetstream: {}", ack_kind, e))
                 })
             },
             |_: &Error| true,
