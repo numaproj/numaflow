@@ -328,9 +328,7 @@ mod tests {
         // Get the window
         let window = {
             let active_windows = windower.active_windows.read().unwrap();
-            let window_state = active_windows
-                .get(&combine_keys(&msg1.keys))
-                .unwrap();
+            let window_state = active_windows.get(&combine_keys(&msg1.keys)).unwrap();
             window_state.window.clone()
         };
 
@@ -342,9 +340,7 @@ mod tests {
 
         // Verify only msg2's timestamp remains
         let active_windows = windower.active_windows.read().unwrap();
-        let window_state = active_windows
-            .get(&combine_keys(&msg1.keys))
-            .unwrap();
+        let window_state = active_windows.get(&combine_keys(&msg1.keys)).unwrap();
         let timestamps = window_state.message_timestamps.read().unwrap();
 
         assert_eq!(timestamps.len(), 1);
