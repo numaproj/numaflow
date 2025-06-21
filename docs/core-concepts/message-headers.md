@@ -1,18 +1,17 @@
 # Message Headers
 
-Message Headers are metadata key-value pairs attached to each message (also called a *datum*) as it flows through the Numaflow pipeline. They provide contextual information about the message — such as event timestamps, routing keys, or custom tags — without modifying the message’s main content.
-
-Headers allow components like User-Defined Functions (UDFs), sources, and sinks to make informed processing decisions, perform filtering, enable conditional routing, or log events with context.
+Message Headers are metadata key-value pairs attached to each message (also called a datum) as it flows through the Numaflow pipeline.
+They provide contextual information about the message—such as event timestamps, routing keys, or custom tags—without modifying the message's main content.
+Message headers are immutable and cannot be manipulated through the SDKs.
 
 ---
 
 ## Use Cases
-
 1. **Propagating Source Metadata**  
    Carry metadata from external systems (like Kafka or HTTP) into the pipeline by copying their headers into message headers.
 
 2. **Tracing and Debugging**  
-   Attach unique IDs or trace information to each message, making it easier to follow a message’s journey through the pipeline for troubleshooting.
+   Attach unique IDs or trace information to each message, making it easier to follow a message's journey through the pipeline for troubleshooting.
 
 3. **Conditional Routing and Processing**  
    Use header values (such as priority, type, or custom flags) to decide how messages are routed or processed at different steps.
@@ -21,7 +20,7 @@ Headers allow components like User-Defined Functions (UDFs), sources, and sinks 
    Store audit information (e.g., who triggered the message, when it was created) in headers for logging and compliance tracking.
 
 5. **Custom Enrichment in UDFs**  
-   UDFs can read, modify, or add headers to enrich messages with new metadata or processing results.
+   UDFs can read message headers to enrich processing logic, but they cannot modify or add new headers.
 
 6. **Feature Flags and Experimentation**  
    Pass feature flags or experiment IDs in headers to enable A/B testing or canary deployments within your data processing logic.
@@ -29,7 +28,6 @@ Headers allow components like User-Defined Functions (UDFs), sources, and sinks 
 ---
 
 ## Application References
-
 - **Kafka Source Example**  
   In `pkg/sources/kafka/reader.go`, when a message is read from Kafka, all Kafka headers are copied into the Numaflow message headers. This allows downstream components to access all original Kafka metadata.
 
@@ -38,63 +36,61 @@ Headers allow components like User-Defined Functions (UDFs), sources, and sinks 
 
 - **Accessing Headers in UDFs**
 
+  > ⚠️ Note: Headers are read-only in UDFs. You can access them, but not modify or add new headers.
+
   - **Go SDK**  
-    The `datum` object gives you a `map[string]string` of all headers.
+    The `datum` object provides a `map[string]string` of all headers:
     ```go
     headers := datum.Headers()
-    fmt.Println(headers["__key"])
+    fmt.Println(headers["X-My-Header"])
     ```
 
   - **Python SDK**  
-    The `datum` object exposes headers as a dictionary.
+    The `datum` object exposes headers as a dictionary:
     ```python
     headers = datum.headers
-    print(headers.get("__key"))
+    print(headers.get("X-My-Header"))
     ```
 
-> Under the hood, both SDKs retrieve this header information from the Go backend, where core pipeline logic runs.
+> Under the hood, header information is preserved and passed through the dataplane, making it accessible across all SDKs.
 
 ---
 
 ## How Message Headers Work in Numaflow
-
 1. **Creation at the Source**  
    Headers are created at the beginning of the pipeline. For example, Kafka headers or HTTP request headers are copied into the Numaflow message when the source ingests it.
 
 2. **Propagation Through the Pipeline**  
-   As the datum flows through the pipeline—from source to UDF to sink—the headers are preserved and passed through each vertex and buffer unless explicitly changed.
+   As the datum flows through the pipeline—from source to UDF to sink—the headers are preserved and passed through each vertex and buffer.
 
-3. **Reading and Modifying in UDFs**  
-   Developers can access and modify headers using the SDKs. This enables logic like tagging, enrichment, or selective processing based on metadata.
+3. **Reading in UDFs**  
+   Developers can access headers using the SDKs to make decisions such as filtering, routing, or branching logic. Headers are read-only and cannot be modified or added in UDFs.
 
 4. **Delivery to the Sink**  
-   When the datum reaches the sink, the headers are still attached. Sinks can use this data for routing, logging, or integration with other systems.
+   When the datum reaches the sink, the headers are still attached. Sinks can use this data for routing, logging, or integration with external systems.
 
 This end-to-end propagation ensures metadata remains intact and useful across the full lifecycle of a message.
 
 ---
 
-## Example Pipeline with Headers
-
-Here’s a minimal example of a pipeline where message headers are passed from a Kafka source to a UDF, then to a log sink.
+## Example Pipeline with Headers (HTTP Source)
+Here's a minimal example of a pipeline where HTTP headers are passed from an HTTP source to a UDF, then to a log sink:
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: header-demo-pipeline
+  name: http-header-demo
 spec:
   vertices:
     - name: in
       source:
-        kafka:
-          brokers:
-            - my-kafka-broker:9092
-          topic: my-topic
+        http: {}
     - name: process
       udf:
         container:
-          image: my-udf-image
+          # A simple UDF that logs the message and its headers
+          image: quay.io/numaproj/numaflow-go/map-log:v1.2.1
     - name: out
       sink:
         log: {}
@@ -103,3 +99,17 @@ spec:
       to: process
     - from: process
       to: out
+```
+
+You can send a request to the HTTP source with custom headers using `curl`. First, port-forward the pod (replace `${pod-name}` with your actual pod name):
+
+```bash
+kubectl port-forward pod/${pod-name} 8443:8443
+```
+
+Then, send the request:
+
+```bash
+curl -k -H "X-My-Header: test-value" -d "hello" https://localhost:8443/vertices/in
+```
+In your UDF, `X-My-Header` will be available as a message header.
