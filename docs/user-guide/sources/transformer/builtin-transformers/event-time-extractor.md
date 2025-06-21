@@ -1,4 +1,6 @@
-# Event Time Extractor
+# Event Time Extractor [Deprecated]
+
+  > ⚠️ Note: Builtins for transformer are deprecated. An example in Go for event time extractor can be found [here.](https://github.com/numaproj/numaflow-go/tree/main/pkg/sourcetransformer/examples/event_time_extractor) 
 
 A `eventTimeExtractor` built-in transformer extracts event time from the payload of the message, based on a user-provided `expression` and an optional `format` specification.
 

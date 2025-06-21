@@ -1,4 +1,6 @@
-# Built-in Functions
+# Built-in Functions [Deprecated]
+
+  > ⚠️ Note: Builtins for transformer are deprecated and will be removed with 1.6 release.
 
 Numaflow provides some built-in source data transformers that can be used directly.
 

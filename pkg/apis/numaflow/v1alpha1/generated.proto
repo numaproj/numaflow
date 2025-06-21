@@ -1936,17 +1936,6 @@ message Templates {
   optional VertexTemplate vertex = 4;
 }
 
-message Transformer {
-  // +kubebuilder:validation:Enum=eventTimeExtractor;filter;timeExtractionFilter
-  optional string name = 1;
-
-  // +optional
-  repeated string args = 2;
-
-  // +optional
-  map<string, string> kwargs = 3;
-}
-
 message UDF {
   // +optional
   optional Container container = 1;
@@ -1969,9 +1958,6 @@ message UDSource {
 message UDTransformer {
   // +optional
   optional Container container = 1;
-
-  // +optional
-  optional Transformer builtin = 2;
 }
 
 // UpdateStrategy indicates the strategy that the
