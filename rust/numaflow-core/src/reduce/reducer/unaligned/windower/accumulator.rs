@@ -9,6 +9,12 @@ use crate::reduce::reducer::unaligned::windower::{
     SHARED_PNF_SLOT, UnalignedWindowMessage, UnalignedWindowOperation, Window,
 };
 
+/// Combines keys into a single string for use as a map key
+#[inline]
+fn combine_keys(keys: &[String]) -> String {
+    keys.join(":")
+}
+
 /// Represents the state of an accumulator window, tracking message timestamps
 #[derive(Debug, Clone)]
 struct WindowState {
@@ -92,53 +98,46 @@ impl AccumulatorWindowManager {
         }
     }
 
-    /// Combines keys into a single string for use as a map key
-    fn combine_keys(keys: &[String]) -> String {
-        keys.join(":")
-    }
-
     /// Assigns windows to a message. For accumulator windows, each key gets exactly one window.
     pub(crate) fn assign_windows(&self, msg: Message) -> Vec<UnalignedWindowMessage> {
-        let combined_key = Self::combine_keys(&msg.keys);
-        let mut result = Vec::new();
+        let combined_key = combine_keys(&msg.keys);
+        let event_time = msg.event_time;
+        let keys = Arc::clone(&msg.keys);
 
         let mut active_windows = self.active_windows.write().expect("Poisoned lock");
 
         // Check if a window already exists for the key, if exits we can do append else we will have
         // to create a new window for the key
         if let Some(window_state) = active_windows.get(&combined_key) {
-            window_state.append_timestamp(msg.event_time);
-            result.push(UnalignedWindowMessage {
+            window_state.append_timestamp(event_time);
+            return vec![UnalignedWindowMessage {
                 operation: UnalignedWindowOperation::Append {
-                    message: msg.clone(),
+                    message: msg,
                     window: window_state.window.clone(),
                 },
                 pnf_slot: SHARED_PNF_SLOT,
-            });
-            return result;
+            }];
         }
 
         // Create a new window for the key
         let window = Window::new(
-            msg.event_time,
-            msg.event_time + chrono::Duration::from_std(self.timeout).unwrap(),
-            Arc::clone(&msg.keys),
+            event_time,
+            event_time + chrono::Duration::from_std(self.timeout).unwrap(),
+            keys,
         );
 
         let window_state = WindowState::new(window.clone());
-        window_state.append_timestamp(msg.event_time);
+        window_state.append_timestamp(event_time);
 
         active_windows.insert(combined_key, window_state);
 
-        result.push(UnalignedWindowMessage {
+        vec![UnalignedWindowMessage {
             operation: UnalignedWindowOperation::Open {
-                message: msg.clone(),
+                message: msg,
                 window,
             },
             pnf_slot: SHARED_PNF_SLOT,
-        });
-
-        result
+        }]
     }
 
     /// Closes windows that have been inactive for longer than the timeout
@@ -173,7 +172,7 @@ impl AccumulatorWindowManager {
 
     /// Deletes event times before the given window's end time for the given keyed window
     pub(crate) fn delete_window(&self, window: Window) {
-        let combined_key = Self::combine_keys(&window.keys);
+        let combined_key = combine_keys(&window.keys);
 
         let active_windows = self.active_windows.read().expect("Poisoned lock");
         if let Some(window_state) = active_windows.get(&combined_key) {
@@ -330,7 +329,7 @@ mod tests {
         let window = {
             let active_windows = windower.active_windows.read().unwrap();
             let window_state = active_windows
-                .get(&AccumulatorWindowManager::combine_keys(&msg1.keys))
+                .get(&combine_keys(&msg1.keys))
                 .unwrap();
             window_state.window.clone()
         };
@@ -344,7 +343,7 @@ mod tests {
         // Verify only msg2's timestamp remains
         let active_windows = windower.active_windows.read().unwrap();
         let window_state = active_windows
-            .get(&AccumulatorWindowManager::combine_keys(&msg1.keys))
+            .get(&combine_keys(&msg1.keys))
             .unwrap();
         let timestamps = window_state.message_timestamps.read().unwrap();
 

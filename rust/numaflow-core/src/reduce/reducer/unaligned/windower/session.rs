@@ -9,6 +9,12 @@ use crate::reduce::reducer::unaligned::windower::{
 use chrono::{DateTime, Utc};
 use tracing::info;
 
+/// Combines keys into a single string for use as a map key
+#[inline]
+fn combine_keys(keys: &[String]) -> String {
+    keys.join(":")
+}
+
 /// session window state for every key combination (combinedKey -> Sorted window set)
 type WindowStore = Arc<RwLock<HashMap<String, BTreeSet<Window>>>>;
 
@@ -30,23 +36,20 @@ impl SessionWindowManager {
         }
     }
 
-    /// Combines keys into a single string for use as a map key
-    fn combine_keys(keys: &[String]) -> String {
-        keys.join(":")
-    }
-
     /// Assigns windows to a message, we create a new window for the key with start time as the event time
     /// and end time as the event time + timeout.
     /// * If the start and end time of the existing key is same - append operation
     /// * If the start and end time can be expanded to accommodate the new window - expand operation
     /// * If the window is not present we will create a new window - open operation
     pub(crate) fn assign_windows(&self, msg: Message) -> Vec<UnalignedWindowMessage> {
-        let combined_key = Self::combine_keys(&msg.keys);
+        let combined_key = combine_keys(&msg.keys);
+        let event_time = msg.event_time;
+        let keys = Arc::clone(&msg.keys);
 
         let new_window = Window::new(
-            msg.event_time,
-            msg.event_time + chrono::Duration::from_std(self.timeout).unwrap(),
-            Arc::clone(&msg.keys),
+            event_time,
+            event_time + chrono::Duration::from_std(self.timeout).unwrap(),
+            keys,
         );
 
         let mut all_windows = self.all_windows.write().expect("Poisoned lock");
@@ -136,17 +139,18 @@ impl SessionWindowManager {
         let mut closed_windows_by_key = HashMap::new();
 
         for (key, window_set) in all_windows.iter_mut() {
-            let expired_windows: Vec<_> = window_set
+            // First collect expired windows to avoid borrowing issues
+            let expired_windows: Vec<Window> = window_set
                 .iter()
                 .filter(|window| window.end_time <= watermark)
                 .cloned()
                 .collect();
 
             if !expired_windows.is_empty() {
+                // Remove expired windows from the set
                 for window in &expired_windows {
                     window_set.remove(window);
                 }
-
                 closed_windows_by_key.insert(key.clone(), expired_windows);
             }
         }
@@ -274,7 +278,7 @@ impl SessionWindowManager {
     /// Deletes a window from the window list
     pub(crate) fn delete_window(&self, window: Window) {
         let mut all_windows = self.all_windows.write().expect("Poisoned lock");
-        let combined_key = Self::combine_keys(&window.keys);
+        let combined_key = combine_keys(&window.keys);
 
         if let Some(window_set) = all_windows.get_mut(&combined_key) {
             window_set.remove(&window);
