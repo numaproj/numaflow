@@ -355,6 +355,8 @@ pub(crate) struct AlignedReducer {
     allowed_lateness: Duration,
     /// current watermark for the reduce vertex.
     current_watermark: DateTime<Utc>,
+    /// Graceful shutdown timeout duration.
+    graceful_timeout: Duration,
 }
 
 impl AlignedReducer {
@@ -364,6 +366,7 @@ impl AlignedReducer {
         js_writer: JetstreamWriter,
         gc_wal: Option<AppendOnlyWal>,
         allowed_lateness: Duration,
+        graceful_timeout: Duration,
     ) -> Self {
         Self {
             client,
@@ -374,6 +377,7 @@ impl AlignedReducer {
             gc_wal,
             allowed_lateness,
             current_watermark: DateTime::from_timestamp_millis(-1).expect("Invalid timestamp"),
+            graceful_timeout,
         }
     }
 
@@ -393,7 +397,7 @@ impl AlignedReducer {
         let hard_shutdown_token = CancellationToken::new();
         // the one that calls shutdown
         let hard_shutdown_token_owner = hard_shutdown_token.clone();
-        let graceful_timeout = Duration::from_secs(20);
+        let graceful_timeout = self.graceful_timeout;
 
         // spawn a task to cancel the token after graceful timeout when the main token is cancelled
         let shutdown_handle = tokio::spawn(async move {
@@ -687,6 +691,7 @@ mod tests {
             js_writer,
             None, // No GC WAL for testing
             Duration::from_secs(0),
+            Duration::from_millis(50),
         )
         .await;
 
@@ -932,6 +937,7 @@ mod tests {
             js_writer,
             None, // No GC WAL for testing
             Duration::from_secs(0),
+            Duration::from_millis(50),
         )
         .await;
 
@@ -1180,6 +1186,7 @@ mod tests {
             js_writer,
             None, // No GC WAL for testing
             Duration::from_secs(0),
+            Duration::from_millis(50),
         )
         .await;
 

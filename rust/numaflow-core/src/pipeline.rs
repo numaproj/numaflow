@@ -495,6 +495,7 @@ async fn start_aligned_reduce_forwarder(
             buffer_writer,
             gc_wal,
             aligned_config.window_config.allowed_lateness,
+            config.graceful_shutdown_time,
         )
         .await,
     );
@@ -654,6 +655,7 @@ async fn start_unaligned_reduce_forwarder(
             buffer_writer,
             unaligned_config.window_config.allowed_lateness,
             gc_wal,
+            config.graceful_shutdown_time,
         )
         .await,
     );

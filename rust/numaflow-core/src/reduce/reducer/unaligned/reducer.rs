@@ -498,6 +498,8 @@ pub(crate) struct UnalignedReducer {
     allowed_lateness: Duration,
     /// current watermark for the reduce vertex.
     current_watermark: DateTime<Utc>,
+    /// Graceful shutdown timeout duration.
+    graceful_timeout: Duration,
 }
 
 impl UnalignedReducer {
@@ -507,6 +509,7 @@ impl UnalignedReducer {
         js_writer: JetstreamWriter,
         allowed_lateness: Duration,
         gc_wal: Option<AppendOnlyWal>,
+        graceful_timeout: Duration,
     ) -> Self {
         Self {
             client,
@@ -517,6 +520,7 @@ impl UnalignedReducer {
             gc_wal,
             allowed_lateness,
             current_watermark: DateTime::from_timestamp_millis(-1).expect("Invalid timestamp"),
+            graceful_timeout,
         }
     }
 
@@ -530,6 +534,24 @@ impl UnalignedReducer {
         let (error_tx, mut error_rx) = mpsc::channel(10);
         let gc_wal_handle = self.setup_gc_wal().await?;
 
+        let parent_cln_token = cln_token.clone();
+        // create a new cancellation token for the map component, this token is used for hard
+        // shutdown, the parent token is used for graceful shutdown.
+        let hard_shutdown_token = CancellationToken::new();
+        // the one that calls shutdown
+        let hard_shutdown_token_owner = hard_shutdown_token.clone();
+        let graceful_timeout = self.graceful_timeout;
+
+        // spawn a task to cancel the token after graceful timeout when the main token is cancelled
+        let shutdown_handle = tokio::spawn(async move {
+            // initiate graceful shutdown
+            parent_cln_token.cancelled().await;
+            // wait for graceful timeout
+            tokio::time::sleep(graceful_timeout).await;
+            // cancel the token to hard shutdown
+            hard_shutdown_token_owner.cancel();
+        });
+
         // Create the actor channel and start the actor
         let (actor_tx, actor_rx) = mpsc::channel(100);
         let actor = UnalignedReduceActor::new(
@@ -539,7 +561,7 @@ impl UnalignedReducer {
             error_tx.clone(),
             gc_wal_handle,
             self.window_manager.clone(),
-            cln_token.clone(),
+            hard_shutdown_token.clone(),
         )
         .await;
 
@@ -616,6 +638,10 @@ impl UnalignedReducer {
             if let Err(e) = actor_handle.await {
                 error!("Error waiting for actor to complete: {:?}", e);
             }
+
+            // abort the shutdown handle since we are done processing, no need to wait for the
+            // hard shutdown.
+            shutdown_handle.abort();
 
             info!(status=?self.final_result, "UnalignedReduce component successfully completed");
             self.final_result
@@ -882,6 +908,7 @@ mod tests {
             js_writer,
             Duration::from_secs(0), // No allowed lateness for testing
             None,                   // No GC WAL for testing
+            Duration::from_millis(50),
         )
         .await;
 
@@ -1103,6 +1130,7 @@ mod tests {
             js_writer,
             Duration::from_secs(0), // No allowed lateness for testing
             None,                   // No GC WAL for testing
+            Duration::from_millis(50),
         )
         .await;
 
@@ -1381,6 +1409,7 @@ mod tests {
             js_writer,
             Duration::from_secs(0), // No allowed lateness for testing
             None,                   // No GC WAL for testing
+            Duration::from_millis(50),
         )
         .await;
 
@@ -1475,7 +1504,7 @@ mod tests {
         Ok(())
     }
 
-    // #[cfg(feature = "nats-tests")]
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_unaligned_accumulator_reducer_multiple_keys() -> crate::Result<()> {
         // Set up the accumulator reducer server
@@ -1579,6 +1608,7 @@ mod tests {
             js_writer,
             Duration::from_secs(0), // No allowed lateness for testing
             None,                   // No GC WAL for testing
+            Duration::from_millis(50),
         )
         .await;
 
@@ -1809,6 +1839,7 @@ mod tests {
             js_writer,
             Duration::from_secs(0), // No allowed lateness for testing
             None,                   // No GC WAL for testing
+            Duration::from_millis(50),
         )
         .await;
 
