@@ -552,9 +552,9 @@ describe("PipelineCard", () => {
       </AppContext.Provider>
     );
 
-    expect(screen.getByText("simple-pipeline")).toBeInTheDocument();
-    expect(screen.getByText("Paused")).toBeInTheDocument();
-    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(await screen.findByText("simple-pipeline")).toBeInTheDocument();
+    expect(await screen.findByText("Paused")).toBeInTheDocument();
+    expect(await screen.findByText("3")).toBeInTheDocument();
   });
 
   it("renders correctly when namespace is not managed", async () => {
@@ -580,13 +580,13 @@ describe("PipelineCard", () => {
       </AppContext.Provider>
     );
 
-    expect(screen.getByText("simple-pipeline")).toBeInTheDocument();
-    expect(screen.getByText("Paused")).toBeInTheDocument();
-    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(await screen.findByText("simple-pipeline")).toBeInTheDocument();
+    expect(await screen.findByText("Paused")).toBeInTheDocument();
+    expect(await screen.findByText("3")).toBeInTheDocument();
   });
 
   it("Tests handleEditChange", async () => {
-    const { getByTestId } = render(
+    const { findByTestId } = render(
       <AppContext.Provider
         value={{
           setSidebarProps: mockSetSidebarProps,
@@ -608,17 +608,17 @@ describe("PipelineCard", () => {
       </AppContext.Provider>
     );
 
-    const wrapperNode = getByTestId("pipeline-card-edit-select");
-    const button = within(wrapperNode).getByRole("button");
+    const wrapperNode = await findByTestId("pipeline-card-edit-select");
+    const button = within(wrapperNode).getByRole("combobox");
 
     fireEvent.mouseDown(button);
-    expect(screen.getByText("Pipeline")).toBeInTheDocument();
-    screen.getAllByText("Pipeline")[0].click();
+    expect(await screen.findByText("Pipeline")).toBeInTheDocument();
+    fireEvent.click((await screen.findAllByText("Pipeline"))[0]);
 
-    expect(screen.getByText("simple-pipeline")).toBeInTheDocument();
+    expect(await screen.findByText("simple-pipeline")).toBeInTheDocument();
   });
   it("Tests handleEditChange for isb", async () => {
-    const { getByTestId } = render(
+    const { findByTestId } = render(
       <AppContext.Provider
         value={{
           setSidebarProps: mockSetSidebarProps,
@@ -640,14 +640,14 @@ describe("PipelineCard", () => {
       </AppContext.Provider>
     );
 
-    const wrapperNode = getByTestId("pipeline-card-edit-select");
-    const button = within(wrapperNode).getByRole("button");
+    const wrapperNode = await findByTestId("pipeline-card-edit-select");
+    const button = within(wrapperNode).getByRole("combobox");
 
     fireEvent.mouseDown(button);
-    expect(screen.getByText("ISB Service")).toBeInTheDocument();
-    screen.getAllByText("ISB Service")[0].click();
+    expect(await screen.findByText("ISB Service")).toBeInTheDocument();
+    fireEvent.click((await screen.findAllByText("ISB Service"))[0]);
 
-    expect(screen.getByText("simple-pipeline")).toBeInTheDocument();
+    expect(await screen.findByText("simple-pipeline")).toBeInTheDocument();
   });
 
   it("Tests if the component renders correctly when isbData is null", async () => {
@@ -673,7 +673,7 @@ describe("PipelineCard", () => {
       </AppContext.Provider>
     );
 
-    expect(screen.getByText("simple-pipeline")).toBeInTheDocument();
-    expect(screen.getByText("Paused")).toBeInTheDocument();
+    expect(await screen.findByText("simple-pipeline")).toBeInTheDocument();
+    expect(await screen.findByText("Paused")).toBeInTheDocument();
   });
 });

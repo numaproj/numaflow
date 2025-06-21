@@ -1,10 +1,9 @@
-import React from "react";
+import React, { act } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { AppContext } from "../../../../../App";
 import { BrowserRouter } from "react-router-dom";
 import { PipelineSummaryStatus } from "./index";
-import { act } from "react-dom/test-utils";
 import { useParams } from "react-router-dom";
 
 jest.mock("react-router-dom", () => ({

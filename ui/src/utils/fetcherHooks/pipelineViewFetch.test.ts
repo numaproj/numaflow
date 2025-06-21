@@ -266,7 +266,9 @@ describe("Custom Pipeline hook", () => {
       usePipelineViewFetch("test-namespace", "test-pipeline", jest.fn())
     );
 
-    expect(result.current.loading).toBe(true); // loading is true initially
+    await waitFor(() => {
+      expect(result.current.loading).toBe(true); // loading is true initially
+    });
   });
 
   it("returns error when fetch fails", async () => {

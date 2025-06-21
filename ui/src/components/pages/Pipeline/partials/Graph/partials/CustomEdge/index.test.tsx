@@ -1,8 +1,7 @@
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { Position } from "@reactflow/core";
-import { ReactFlowProvider } from "reactflow";
+import { Position, ReactFlowProvider } from "@xyflow/react";
 import CustomEdge from "./index";
 import { HighlightContext } from "../..";
 

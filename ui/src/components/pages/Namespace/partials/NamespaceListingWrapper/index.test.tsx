@@ -1,8 +1,7 @@
-import React from "react";
+import React, { act } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { BrowserRouter } from "react-router-dom";
-import { act } from "react-dom/test-utils";
 
 import { NamespaceListingWrapper } from "./index";
 import { AppContext } from "../../../../../App";

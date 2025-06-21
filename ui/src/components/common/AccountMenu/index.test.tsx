@@ -1,11 +1,10 @@
-import React from "react";
+import React, { act } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 
 import AccountMenu from "./index";
 import { BrowserRouter } from "react-router-dom";
 import { AppContext } from "../../../App";
-import { act } from "react-dom/test-utils";
 
 jest.mock("react-router-dom", () => ({
   ...jest.requireActual("react-router-dom"),

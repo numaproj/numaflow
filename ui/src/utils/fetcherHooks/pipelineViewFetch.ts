@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { Edge, MarkerType, Node } from "reactflow";
+import { Edge, MarkerType, Node } from "@xyflow/react";
 import { isEqual } from "lodash";
 import { getBaseHref } from "../index";
 import { AppContextProps } from "../../types/declarations/app";
@@ -458,7 +458,7 @@ export const usePipelineViewFetch = (
     const newVertices: Node[] = [];
     if (spec?.vertices && buffers && vertexPods && vertexMetrics) {
       spec.vertices.forEach((vertex: any) => {
-        const newNode = {} as Node;
+        const newNode = {} as Node<Record<string, any>>;
         newNode.id = vertex?.name;
         newNode.data = { name: vertex?.name };
         newNode.data.podnum = vertexPods.has(vertex?.name)
@@ -586,11 +586,11 @@ export const usePipelineViewFetch = (
             selfEdge: selfEdges.has(id),
             backEdgeHeight: backEdgesHeight.get(id) || 0,
             fromNodeOutDegree: nodeOutDegree.get(edge?.from) || 0,
+            edgeWatermark: edgeWatermark.has(id)
+              ? edgeWatermark.get(id)
+              : null,
           },
         } as Edge;
-        pipelineEdge.data.edgeWatermark = edgeWatermark.has(pipelineEdge.id)
-          ? edgeWatermark.get(pipelineEdge.id)
-          : null;
         pipelineEdge.animated = true;
         pipelineEdge.type = "custom";
         if (backEdges.has(id)) {

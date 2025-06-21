@@ -410,15 +410,20 @@ export function PodLogs({
           placement={"top"}
           arrow
         >
-          <IconButton data-testid="wrap-lines-button" onClick={handleWrapLines}>
-            <WrapTextIcon
-              sx={{
-                ...logsBtnStyle,
-                background: wrapLines ? "lightgray" : "none",
-                borderRadius: "1rem",
-              }}
-            />
-          </IconButton>
+          <span>
+            <IconButton
+              data-testid="wrap-lines-button"
+              onClick={handleWrapLines}
+            >
+              <WrapTextIcon
+                sx={{
+                  ...logsBtnStyle,
+                  background: wrapLines ? "lightgray" : "none",
+                  borderRadius: "1rem",
+                }}
+              />
+            </IconButton>
+          </span>
         </Tooltip>
         <Tooltip
           title={
@@ -429,13 +434,15 @@ export function PodLogs({
           placement={"top"}
           arrow
         >
-          <IconButton data-testid="pause-button" onClick={handlePause}>
-            {paused ? (
-              <PlayArrowIcon sx={logsBtnStyle} />
-            ) : (
-              <PauseIcon sx={logsBtnStyle} />
-            )}
-          </IconButton>
+          <span>
+            <IconButton data-testid="pause-button" onClick={handlePause}>
+              {paused ? (
+                <PlayArrowIcon sx={logsBtnStyle} />
+              ) : (
+                <PauseIcon sx={logsBtnStyle} />
+              )}
+            </IconButton>
+          </span>
         </Tooltip>
         <Tooltip
           title={
@@ -446,13 +453,18 @@ export function PodLogs({
           placement={"top"}
           arrow
         >
-          <IconButton data-testid="color-mode-button" onClick={handleColorMode}>
-            {colorMode === "light" ? (
-              <DarkMode sx={logsBtnStyle} />
-            ) : (
-              <LightMode sx={logsBtnStyle} />
-            )}
-          </IconButton>
+          <span>
+            <IconButton
+              data-testid="color-mode-button"
+              onClick={handleColorMode}
+            >
+              {colorMode === "light" ? (
+                <DarkMode sx={logsBtnStyle} />
+              ) : (
+                <LightMode sx={logsBtnStyle} />
+              )}
+            </IconButton>
+          </span>
         </Tooltip>
         <Tooltip
           title={
@@ -463,25 +475,29 @@ export function PodLogs({
           placement={"top"}
           arrow
         >
-          <IconButton data-testid="order-button" onClick={handleOrder}>
-            {logsOrder === "asc" ? (
-              <ArrowDownward sx={logsBtnStyle} />
-            ) : (
-              <ArrowUpward sx={logsBtnStyle} />
-            )}
-          </IconButton>
+          <span>
+            <IconButton data-testid="order-button" onClick={handleOrder}>
+              {logsOrder === "asc" ? (
+                <ArrowDownward sx={logsBtnStyle} />
+              ) : (
+                <ArrowUpward sx={logsBtnStyle} />
+              )}
+            </IconButton>
+          </span>
         </Tooltip>
         <Tooltip
           title={<div className={"icon-tooltip"}>Download logs</div>}
           placement={"top"}
           arrow
         >
-          <IconButton
-            data-testid="download-logs-button"
-            onClick={handleLogsDownload}
-          >
-            <Download sx={logsBtnStyle} />
-          </IconButton>
+          <span>
+            <IconButton
+              data-testid="download-logs-button"
+              onClick={handleLogsDownload}
+            >
+              <Download sx={logsBtnStyle} />
+            </IconButton>
+          </span>
         </Tooltip>
         <Tooltip
           title={
@@ -492,20 +508,22 @@ export function PodLogs({
           placement={"top"}
           arrow
         >
-          <IconButton
-            data-testid="toggle-timestamps-button"
-            onClick={handleTimestamps}
-            disabled={paused}
-          >
-            <ClockIcon
-              sx={{
-                height: "2.4rem",
-                width: "2.4rem",
-                background: enableTimestamp ? "lightgray" : "none",
-                borderRadius: "1rem",
-              }}
-            />
-          </IconButton>
+          <span>
+            <IconButton
+              data-testid="toggle-timestamps-button"
+              onClick={handleTimestamps}
+              disabled={paused}
+            >
+              <ClockIcon
+                sx={{
+                  height: "2.4rem",
+                  width: "2.4rem",
+                  background: enableTimestamp ? "lightgray" : "none",
+                  borderRadius: "1rem",
+                }}
+              />
+            </IconButton>
+          </span>
         </Tooltip>
         <Select
           labelId="level-filter"
