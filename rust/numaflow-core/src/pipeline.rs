@@ -1,11 +1,14 @@
+use std::path::PathBuf;
 use std::time::Duration;
 
 use async_nats::jetstream::Context;
 use async_nats::{ConnectOptions, jetstream};
 use futures::future::try_join_all;
 use serving::callback::CallbackHandler;
+use tokio::fs;
+use tokio::time::{interval, timeout};
 use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::config::components::reduce::{
     AlignedReducerConfig, AlignedWindowType, ReducerConfig, UnalignedReducerConfig,
@@ -303,12 +306,97 @@ async fn start_map_forwarder(
     Ok(())
 }
 
+/// Guard to manage the lifecycle of a fence file. Used when persistence is enabled for reduce.
+/// File will be deleted when the guard is dropped.
+struct FenceGuard {
+    fence_file_path: PathBuf,
+}
+
+impl FenceGuard {
+    /// Creates a new fence guard with the specified fence file path.
+    async fn new(fence_file_path: PathBuf) -> Result<Self> {
+        // Create the fence file
+        fs::write(&fence_file_path, "")
+            .await
+            .map_err(|e| error::Error::Config(format!("Failed to create fence file: {}", e)))?;
+        Ok(FenceGuard { fence_file_path })
+    }
+}
+
+impl Drop for FenceGuard {
+    fn drop(&mut self) {
+        if let Err(e) = std::fs::remove_file(&self.fence_file_path) {
+            warn!(
+                "Failed to remove fence file {:?}: {}",
+                self.fence_file_path, e
+            );
+        }
+    }
+}
+
+/// Waits for a fence file to be available, checking every 5 seconds, up to a specified timeout.
+async fn wait_for_fence_availability(
+    fence_file_path: &PathBuf,
+    timeout_duration: Duration,
+) -> Result<()> {
+    let result = timeout(timeout_duration, async {
+        let mut check_interval = interval(Duration::from_secs(5)); // Check every 5 seconds
+
+        loop {
+            check_interval.tick().await;
+
+            // Check if the fence file exists
+            match fs::metadata(fence_file_path).await {
+                Ok(_) => {
+                    info!(
+                        "Fence file {:?} still exists, waiting for it to be deleted...",
+                        fence_file_path
+                    );
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    // File doesn't exist, fence is available
+                    info!("Fence file {:?} is now available", fence_file_path);
+                    return Ok(());
+                }
+                Err(e) => {
+                    // Other error occurred
+                    return Err(error::Error::Config(format!(
+                        "Error checking fence file {:?}: {}",
+                        fence_file_path, e
+                    )));
+                }
+            }
+        }
+    })
+    .await;
+
+    result.map_err(|e| error::Error::Config(format!("Fence wait timed out: {}", e)))?
+}
+
 async fn start_reduce_forwarder(
     cln_token: CancellationToken,
     js_context: Context,
     config: PipelineConfig,
     reduce_vtx_config: ReduceVtxConfig,
 ) -> Result<()> {
+    // create fence guard if WAL is configured to make sure the previous WAL instance has exited gracefully
+    // before we start resuming from WAL.
+    let _fence_guard = if let Some(storage_config) = &reduce_vtx_config.wal_storage_config {
+        let fence_file_name = format!("{}-{}", config.vertex_name, config.replica);
+        let fence_file_path = storage_config.path.join(fence_file_name);
+
+        let fence_timeout = Duration::from_secs(300); // 5 minutes
+        if let Err(e) = wait_for_fence_availability(&fence_file_path, fence_timeout).await {
+            error!(
+                ?e,
+                "Timed out waiting for delete of fence file, creating a new file"
+            );
+        }
+        Some(FenceGuard::new(fence_file_path).await?)
+    } else {
+        None
+    };
+
     match &reduce_vtx_config.reducer_config {
         ReducerConfig::Aligned(aligned_config) => {
             start_aligned_reduce_forwarder(
@@ -1375,5 +1463,45 @@ mod tests {
         for stream in input_streams.iter().chain(output_streams.iter()) {
             context.delete_stream(stream.name).await.unwrap();
         }
+    }
+
+    #[tokio::test]
+    async fn test_fence_guard_creation_and_cleanup() {
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let fence_file_path = tmp_dir.path().join("test-fence-file");
+
+        // Verify file doesn't exist initially
+        assert!(!fence_file_path.exists());
+
+        {
+            // Create fence guard
+            let _guard = FenceGuard::new(fence_file_path.clone()).await.unwrap();
+
+            // Verify file exists while guard is in scope
+            assert!(fence_file_path.exists());
+        } // Guard goes out of scope here
+
+        // Give a small delay for the Drop to execute
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        // Verify file is cleaned up after guard is dropped
+        assert!(!fence_file_path.exists());
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_fence_availability_timeout() {
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let fence_file_path = tmp_dir.path().join("persistent-fence");
+
+        // Create the fence file and keep it
+        fs::write(&fence_file_path, "").await.unwrap();
+
+        // Should timeout since file is never removed
+        let result =
+            wait_for_fence_availability(&fence_file_path, Duration::from_millis(100)).await;
+        assert!(result.is_err());
+
+        // Clean up
+        fs::remove_file(&fence_file_path).await.unwrap();
     }
 }
