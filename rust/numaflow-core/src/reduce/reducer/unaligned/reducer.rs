@@ -106,7 +106,7 @@ impl ReduceTask {
 
         let mut client_clone = client.clone();
         let (mut response_stream, handle) = client_clone
-            .reduce_fn(request_stream, cln_token.clone())
+            .accumulator_fn(request_stream, cln_token.clone())
             .await?;
 
         // we periodically wait for the js writer to finish writing so that we can delete the tracked
@@ -864,7 +864,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
-                vertex_type: VertexType::Sink,
+                to_vertex_type: VertexType::Sink,
             }],
             js_ctx: js_context.clone(),
             paf_concurrency: 100,
@@ -1085,7 +1085,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
-                vertex_type: VertexType::Sink,
+                to_vertex_type: VertexType::Sink,
             }],
             js_ctx: js_context.clone(),
             paf_concurrency: 100,
@@ -1363,7 +1363,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
-                vertex_type: VertexType::Sink,
+                to_vertex_type: VertexType::Sink,
             }],
             js_ctx: js_context.clone(),
             paf_concurrency: 100,
@@ -1561,7 +1561,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
-                vertex_type: VertexType::Sink,
+                to_vertex_type: VertexType::Sink,
             }],
             js_ctx: js_context.clone(),
             paf_concurrency: 100,
@@ -1791,7 +1791,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
-                vertex_type: VertexType::Sink,
+                to_vertex_type: VertexType::Sink,
             }],
             js_ctx: js_context.clone(),
             paf_concurrency: 100,

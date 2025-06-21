@@ -278,7 +278,7 @@ mod tests {
                 },
                 conditions: None,
                 name: "test-vertex",
-                vertex_type: VertexType::MapUDF,
+                to_vertex_type: VertexType::MapUDF,
             }],
             js_ctx: context.clone(),
             paf_concurrency: 100,

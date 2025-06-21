@@ -912,7 +912,7 @@ mod tests {
                     buffer_full_strategy: RetryUntilSuccess,
                 },
                 conditions: None,
-                vertex_type: VertexType::Sink,
+                to_vertex_type: VertexType::Sink,
             }],
             vertex_type: VertexType::Source,
             vertex_config: VertexConfig::Source(SourceVtxConfig {
@@ -1307,7 +1307,7 @@ mod tests {
                     buffer_full_strategy: RetryUntilSuccess,
                 },
                 conditions: None,
-                vertex_type: VertexType::Sink,
+                to_vertex_type: VertexType::Sink,
             }],
             from_vertex_config: vec![FromVertexConfig {
                 name: "map-in",

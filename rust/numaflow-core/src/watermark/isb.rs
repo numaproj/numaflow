@@ -567,7 +567,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
-                vertex_type: VertexType::Sink,
+                to_vertex_type: VertexType::Sink,
             }],
             CancellationToken::new(),
             None,
@@ -750,7 +750,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
-                vertex_type: VertexType::Sink,
+                to_vertex_type: VertexType::Sink,
             }],
             CancellationToken::new(),
             None,
@@ -899,7 +899,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
-                vertex_type: VertexType::Sink,
+                to_vertex_type: VertexType::Sink,
             }],
             CancellationToken::new(),
             None,

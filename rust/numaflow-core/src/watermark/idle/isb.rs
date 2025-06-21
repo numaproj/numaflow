@@ -219,7 +219,7 @@ mod tests {
                 ..Default::default()
             },
             conditions: None,
-            vertex_type: VertexType::Sink,
+            to_vertex_type: VertexType::Sink,
         };
 
         let mut manager =
@@ -262,7 +262,7 @@ mod tests {
                 ..Default::default()
             },
             conditions: None,
-            vertex_type: VertexType::Sink,
+            to_vertex_type: VertexType::Sink,
         };
 
         let manager =
@@ -301,7 +301,7 @@ mod tests {
                 ..Default::default()
             },
             conditions: None,
-            vertex_type: VertexType::Sink,
+            to_vertex_type: VertexType::Sink,
         };
 
         let mut manager =
@@ -336,7 +336,7 @@ mod tests {
                 ..Default::default()
             },
             conditions: None,
-            vertex_type: VertexType::Sink,
+            to_vertex_type: VertexType::Sink,
         };
 
         let mut manager =

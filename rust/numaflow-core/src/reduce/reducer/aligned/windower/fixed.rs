@@ -17,7 +17,6 @@ use crate::message::Message;
 use crate::reduce::reducer::aligned::windower;
 use crate::reduce::reducer::aligned::windower::{AlignedWindowMessage, Window, WindowOperation};
 use chrono::{DateTime, TimeZone, Utc};
-use tracing::info;
 
 #[derive(Debug, Clone)]
 pub(crate) struct FixedWindowManager {
@@ -52,10 +51,6 @@ impl FixedWindowManager {
 
     /// Assigns windows to a message
     pub(crate) fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage> {
-        info!(
-            "Assigning windows to message with et {}",
-            msg.event_time.timestamp_millis()
-        );
         let window = self.create_window(&msg);
 
         // Check if window already exists
@@ -65,10 +60,8 @@ impl FixedWindowManager {
             .expect("Poisoned lock for active_windows");
         let operation = if active_windows.contains(&window) {
             // Window exists, append message
-            info!("Window exists, appending message, window {:?}", window);
             WindowOperation::Append(msg)
         } else {
-            info!("New window, opening it, window {:?}", window);
             // New window, insert it
             active_windows.insert(window.clone());
             WindowOperation::Open(msg)
@@ -81,10 +74,6 @@ impl FixedWindowManager {
     /// Closes any windows that can be closed because the Watermark has advanced beyond the window
     /// end time.
     pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage> {
-        info!(
-            "Closing windows with watermark {}",
-            watermark.timestamp_millis()
-        );
         let active_windows = self
             .active_windows
             .write()
@@ -100,17 +89,11 @@ impl FixedWindowManager {
             })
             .collect();
 
-        info!(
-            "Closing {} windows with watermark {}",
-            result.len(),
-            watermark.timestamp_millis()
-        );
         result
     }
 
     /// Deletes a window after it is closed and GC is done.
     pub(crate) fn gc_window(&self, window: Window) {
-        info!("Deleting window {:?}", window);
         // Remove the window from active_windows
         self.active_windows
             .write()

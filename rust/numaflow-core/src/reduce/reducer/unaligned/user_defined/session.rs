@@ -103,9 +103,10 @@ impl From<UnalignedWindowMessage> for SessionReduceRequest {
 }
 
 /// Wrapper for SessionReduceResponse that includes index and vertex name.
-pub(crate) struct UdSessionReducerResponse {
+pub(crate) struct UserDefinedSessionResponse {
     pub response: SessionReduceResponse,
     pub index: i32,
+    /// vertex name for creating the message ID
     pub vertex_name: &'static str,
 }
 
@@ -124,11 +125,7 @@ impl From<SessionReduceResponse> for Message {
         Message {
             typ: Default::default(),
             keys: Arc::from(result.keys),
-            tags: if result.tags.is_empty() {
-                None
-            } else {
-                Some(Arc::from(result.tags))
-            },
+            tags: (!result.tags.is_empty()).then(|| Arc::from(result.tags)),
             value: result.value.into(),
             offset: Offset::Int(IntOffset::new(0, 0)),
             event_time: utc_from_timestamp(window.end.unwrap()),
@@ -142,7 +139,7 @@ impl From<SessionReduceResponse> for Message {
                 offset: offset_str.into(),
                 index: 0,
             },
-            headers: HashMap::new(),
+            headers: HashMap::new(), // reset headers since it is a new message
             metadata: None,
             is_late: false,
         }

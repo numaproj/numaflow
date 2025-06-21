@@ -346,7 +346,7 @@ pub(crate) struct ToVertexConfig {
     pub(crate) partitions: u16,
     pub(crate) writer_config: BufferWriterConfig,
     pub(crate) conditions: Option<Box<ForwardConditions>>,
-    pub(crate) vertex_type: VertexType,
+    pub(crate) to_vertex_type: VertexType,
 }
 
 impl PipelineConfig {
@@ -592,7 +592,7 @@ impl PipelineConfig {
                         .unwrap_or(default_writer_config.buffer_full_strategy),
                 },
                 conditions: edge.conditions,
-                vertex_type: VertexType::from_str(&edge.to_vertex_type)?,
+                to_vertex_type: VertexType::from_str(&edge.to_vertex_type)?,
             });
         }
 
@@ -992,7 +992,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
-                vertex_type: VertexType::Sink,
+                to_vertex_type: VertexType::Sink,
             }],
             vertex_config: VertexConfig::Source(SourceVtxConfig {
                 source_config: SourceConfig {
@@ -1049,7 +1049,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
-                vertex_type: VertexType::Sink,
+                to_vertex_type: VertexType::Sink,
             }],
             vertex_config: VertexConfig::Source(SourceVtxConfig {
                 source_config: SourceConfig {

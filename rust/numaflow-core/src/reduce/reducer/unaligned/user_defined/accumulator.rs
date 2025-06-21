@@ -10,7 +10,6 @@ use numaflow_pb::clients::accumulator::{
 };
 
 use numaflow_pb::clients::accumulator;
-use std::collections::HashMap;
 use std::sync::Arc;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
@@ -25,7 +24,7 @@ impl From<Message> for accumulator::Payload {
             event_time: Some(prost_timestamp_from_utc(msg.event_time)),
             watermark: msg.watermark.map(prost_timestamp_from_utc),
             id: msg.id.to_string(),
-            headers: msg.headers.clone(),
+            headers: msg.headers,
         }
     }
 }
@@ -82,10 +81,10 @@ impl From<UnalignedWindowMessage> for AccumulatorRequest {
     }
 }
 
-/// Wrapper for AccumulatorReduceResponse that includes index and vertex name.
-pub(crate) struct UdAccumulatorReducerResponse {
+/// Wrapper for [AccumulatorResponse] that includes index and vertex name.
+pub(crate) struct UserDefinedAccumulatorResponse {
     pub(crate) response: AccumulatorResponse,
-    pub(crate) index: i32,
+    /// vertex name for creating the message ID
     pub(crate) vertex_name: &'static str,
 }
 
@@ -113,7 +112,7 @@ impl From<AccumulatorResponse> for Message {
                 offset: result.id.into(),
                 index: 0,
             },
-            headers: HashMap::new(),
+            headers: result.headers,
             metadata: None,
             is_late: false,
         }
@@ -133,7 +132,7 @@ impl UserDefinedAccumulator {
 
     /// Calls the reduce_fn on the user-defined accumulator on a separate tokio task.
     /// If the cancellation token is triggered, it will stop processing and return early.
-    pub(crate) async fn reduce_fn(
+    pub(crate) async fn accumulator_fn(
         &mut self,
         stream: ReceiverStream<AccumulatorRequest>,
         cln_token: CancellationToken,
@@ -399,7 +398,7 @@ mod tests {
 
         // Call reduce_fn
         let (mut response_stream, accumulator_handle) = client
-            .reduce_fn(ReceiverStream::new(window_rx), cln_token)
+            .accumulator_fn(ReceiverStream::new(window_rx), cln_token)
             .await
             .expect("reduce_fn failed");
 
@@ -620,7 +619,7 @@ mod tests {
 
         // Call reduce_fn
         let (mut response_stream, handle) = client
-            .reduce_fn(ReceiverStream::new(window_rx), cln_token)
+            .accumulator_fn(ReceiverStream::new(window_rx), cln_token)
             .await
             .expect("reduce_fn failed");
 
