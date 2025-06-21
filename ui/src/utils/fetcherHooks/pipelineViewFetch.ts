@@ -540,23 +540,30 @@ export const usePipelineViewFetch = (
   const edges = useMemo(() => {
     const newEdges: Edge[] = [];
     if (spec?.edges && buffers && edgeWatermark) {
-      // backpressure for a buffer is the count of total pending message
-      // map from edge-id( from-Vertex - to-Vertex ) to sum of backpressure
-      const edgeBackpressureLabel = new Map();
+      // backpressure for a buffer is the count of pending messages
+      // map from edge-id( from-Vertex - to-Vertex ) to sum of pending and ackPending counts
+      const edgePendingLabel = new Map();
+      const edgeAckPendingLabel = new Map();
       const edgeIsFull = new Map();
 
       buffers.forEach((buffer) => {
         const sidx = ns_pl.length;
         const eidx = buffer?.bufferName?.lastIndexOf("-");
         const id = buffer?.bufferName?.substring(sidx, eidx);
-        // condition check is similar for isFull so combining into one
-        if (edgeBackpressureLabel.get(id) === undefined) {
-          edgeBackpressureLabel.set(id, Number(buffer?.totalMessages));
+        
+        // Initialize or accumulate pending count
+        if (edgePendingLabel.get(id) === undefined) {
+          edgePendingLabel.set(id, Number(buffer?.pendingCount));
+          edgeAckPendingLabel.set(id, Number(buffer?.ackPendingCount));
           edgeIsFull.set(id, buffer?.isFull);
         } else {
-          edgeBackpressureLabel.set(
+          edgePendingLabel.set(
             id,
-            edgeBackpressureLabel.get(id) + Number(buffer?.totalMessages)
+            edgePendingLabel.get(id) + Number(buffer?.pendingCount)
+          );
+          edgeAckPendingLabel.set(
+            id,
+            edgeAckPendingLabel.get(id) + Number(buffer?.ackPendingCount)
           );
           if (buffer?.isFull === true && buffer?.isFull !== edgeIsFull.get(id))
             edgeIsFull.set(id, buffer.isFull);
@@ -577,7 +584,9 @@ export const usePipelineViewFetch = (
           target: edge?.to,
           data: {
             conditions: edge?.conditions,
-            backpressureLabel: edgeBackpressureLabel.get(edge?.to),
+            pendingLabel: edgePendingLabel.get(edge?.to),
+            ackPendingLabel: edgeAckPendingLabel.get(edge?.to),
+            backpressureLabel: edgePendingLabel.get(edge?.to), // Keep for backward compatibility
             isFull: edgeIsFull.get(edge?.to),
             source: edge?.from,
             target: edge?.to,
