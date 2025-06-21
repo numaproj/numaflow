@@ -1134,7 +1134,7 @@ pub(crate) mod reduce {
     impl Default for StorageConfig {
         fn default() -> Self {
             Self {
-                path: std::path::PathBuf::from("/var/numaflow/pbq/wals"),
+                path: std::path::PathBuf::from("/var/numaflow/pbq"),
                 max_file_size_mb: 10,
                 flush_interval_ms: 100,
                 channel_buffer_size: 500,
