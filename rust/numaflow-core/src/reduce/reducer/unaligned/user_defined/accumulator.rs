@@ -81,17 +81,9 @@ impl From<UnalignedWindowMessage> for AccumulatorRequest {
     }
 }
 
-/// Wrapper for [AccumulatorResponse] that includes index and vertex name.
-pub(crate) struct UserDefinedAccumulatorResponse {
-    pub(crate) response: AccumulatorResponse,
-    /// vertex name for creating the message ID
-    pub(crate) vertex_name: &'static str,
-}
-
 impl From<AccumulatorResponse> for Message {
     fn from(response: AccumulatorResponse) -> Self {
         let result = response.payload.unwrap_or_default();
-        let window = response.window.unwrap_or_default();
         let tags = response.tags;
 
         Message {
@@ -104,9 +96,7 @@ impl From<AccumulatorResponse> for Message {
                 .event_time
                 .map(utc_from_timestamp)
                 .expect("event time should be present"),
-            watermark: window
-                .end
-                .map(|ts| utc_from_timestamp(ts) - chrono::Duration::milliseconds(1)),
+            watermark: result.watermark.map(utc_from_timestamp),
             id: MessageID {
                 vertex_name: get_vertex_name().to_string().into(),
                 offset: result.id.into(),

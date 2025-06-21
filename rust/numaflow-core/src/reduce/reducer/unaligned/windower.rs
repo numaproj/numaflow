@@ -16,23 +16,6 @@ pub(crate) mod session;
 
 const SHARED_PNF_SLOT: &str = "GLOBAL_SLOT";
 
-/// Window operations that can be performed on a [Window]. It is derived from the [Message] and the
-/// window kind.
-#[derive(Debug, Clone)]
-pub(crate) enum WindowOperation {
-    /// Open is create a new Window (Open the Book).
-    Open(Message),
-    /// Close operation for the [Window] (Close of Book). Only the window on the SDK side will be closed,
-    /// other windows for the same partition can be open.
-    Close,
-    /// Append inserts more data into the opened Window.
-    Append(Message),
-    /// Merge operation for merging more than one windows
-    Merge(Message),
-    /// Expand operation for expanding the window length
-    Expand(Message),
-}
-
 /// A Window is represented by its start and end time. All the data which event time falls within
 /// this window will be reduced by the Reduce function associated with it. The association is via the
 /// id. The Windows when sorted are sorted by the end time.

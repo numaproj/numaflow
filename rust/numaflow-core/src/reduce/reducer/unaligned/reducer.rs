@@ -218,7 +218,7 @@ impl ReduceTask {
 
         let mut client_clone = client.clone();
         let (mut response_stream, handle) = client_clone
-            .reduce_fn(request_stream, cln_token.clone())
+            .session_reduce_fn(request_stream, cln_token.clone())
             .await?;
 
         // Set up batch timer for periodic flushing
@@ -258,9 +258,9 @@ impl ReduceTask {
                         break;
                     };
 
-                    if response.eof {
+                    if response.response.eof {
                         // add to the tracked windows, so that we can gc them after the timeout
-                        let session_window: Window = response.keyed_window.expect("Window not set in response").into();
+                        let session_window: Window = response.response.keyed_window.expect("Window not set in response").into();
                         self.tracked_windows.insert(session_window.keys.to_vec(), session_window);
                         continue;
                     }

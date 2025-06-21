@@ -110,8 +110,9 @@ pub(crate) struct UserDefinedSessionResponse {
     pub vertex_name: &'static str,
 }
 
-impl From<SessionReduceResponse> for Message {
-    fn from(response: SessionReduceResponse) -> Self {
+impl From<UserDefinedSessionResponse> for Message {
+    fn from(user_response: UserDefinedSessionResponse) -> Self {
+        let response = user_response.response;
         let result = response.result.unwrap_or_default();
         let window = response.keyed_window.unwrap_or_default();
 
@@ -129,15 +130,13 @@ impl From<SessionReduceResponse> for Message {
             value: result.value.into(),
             offset: Offset::Int(IntOffset::new(0, 0)),
             event_time: utc_from_timestamp(window.end.unwrap()),
-            watermark: window
-                .end
-                .map(|ts| utc_from_timestamp(ts) - chrono::Duration::milliseconds(1)),
+            watermark: window.end.map(utc_from_timestamp),
             // this will be unique for each response which will be used for dedup (index is used because
             // each window can have multiple reduce responses)
             id: MessageID {
-                vertex_name: get_vertex_name().to_string().into(),
+                vertex_name: user_response.vertex_name.into(),
                 offset: offset_str.into(),
-                index: 0,
+                index: user_response.index,
             },
             headers: HashMap::new(), // reset headers since it is a new message
             metadata: None,
@@ -159,18 +158,19 @@ impl UserDefinedSessionReduce {
 
     /// Calls the reduce_fn on the user-defined session reducer on a separate tokio task.
     /// If the cancellation token is triggered, it will stop processing and return early.
-    pub(crate) async fn reduce_fn(
+    pub(crate) async fn session_reduce_fn(
         &mut self,
         stream: ReceiverStream<SessionReduceRequest>,
         cln_token: CancellationToken,
     ) -> crate::Result<(
-        ReceiverStream<SessionReduceResponse>,
+        ReceiverStream<UserDefinedSessionResponse>,
         JoinHandle<crate::Result<()>>,
     )> {
         // Create a channel for responses
         let (result_tx, result_rx) = tokio::sync::mpsc::channel(100);
 
         let mut client = self.client.clone();
+        let vertex_name = get_vertex_name();
 
         // Start a background task to process responses
         let handle = tokio::spawn(async move {
@@ -184,6 +184,10 @@ impl UserDefinedSessionReduce {
                     )));
                 }
             };
+
+            // Track response indices per window key combination which will be used for constructing
+            // message id which is required for dedup.
+            let mut response_indices: HashMap<Vec<String>, i32> = HashMap::new();
 
             loop {
                 tokio::select! {
@@ -204,7 +208,28 @@ impl UserDefinedSessionReduce {
                             break;
                         };
 
-                        if result_tx.send(response).await.is_err() {
+                        let window_keys = response.keyed_window
+                            .as_ref()
+                            .map(|w| w.keys.clone())
+                            .unwrap_or_default();
+
+                        let index = if response.eof {
+                            response_indices.remove(&window_keys);
+                            0
+                        } else {
+                            let current_index = response_indices.entry(window_keys).or_insert(0);
+                            let index = *current_index;
+                            *current_index += 1;
+                            index
+                        };
+
+                        let user_response = UserDefinedSessionResponse {
+                            response,
+                            index,
+                            vertex_name,
+                        };
+
+                        if result_tx.send(user_response).await.is_err() {
                             return Err(crate::Error::Reduce("failed to send response".to_string()));
                         }
                     }
@@ -385,7 +410,7 @@ mod tests {
 
         // Call reduce_fn
         let (mut response_stream, session_reduce_handle) = client
-            .reduce_fn(ReceiverStream::new(window_rx), cln_token)
+            .session_reduce_fn(ReceiverStream::new(window_rx), cln_token)
             .await
             .expect("reduce_fn failed");
 
@@ -525,7 +550,7 @@ mod tests {
 
         // Call reduce_fn
         let (mut response_stream, handle) = client
-            .reduce_fn(ReceiverStream::new(window_rx), cln_token)
+            .session_reduce_fn(ReceiverStream::new(window_rx), cln_token)
             .await
             .expect("reduce_fn failed");
 
@@ -761,7 +786,7 @@ mod tests {
 
         // Call reduce_fn
         let (mut response_stream, session_handle) = client
-            .reduce_fn(ReceiverStream::new(window_rx), cln_token)
+            .session_reduce_fn(ReceiverStream::new(window_rx), cln_token)
             .await
             .expect("reduce_fn failed");
 
@@ -772,7 +797,7 @@ mod tests {
                 .await
                 .expect("timeout waiting for result")
         {
-            if result.eof {
+            if result.response.eof {
                 continue;
             }
             results.push(result);
@@ -949,7 +974,7 @@ mod tests {
 
         // Call reduce_fn
         let (mut response_stream, session_handle) = client
-            .reduce_fn(ReceiverStream::new(window_rx), cln_token)
+            .session_reduce_fn(ReceiverStream::new(window_rx), cln_token)
             .await
             .expect("reduce_fn failed");
 
@@ -982,6 +1007,121 @@ mod tests {
 
         // wait for the server to complete
         handle.await.expect("handle failed");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_session_reduce_indexing() -> crate::Result<()> {
+        // This test verifies that the indexing is working correctly for multiple responses
+        // from the same window key combination
+        let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("session_indexing.sock");
+        let server_info_file = tmp_dir.path().join("session_indexing-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+        let handle = tokio::spawn(async move {
+            session_reduce::Server::new(CounterCreator {})
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        // Wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let mut client = UserDefinedSessionReduce::new(SessionReduceClient::new(
+            create_rpc_channel(sock_file).await?,
+        ))
+        .await;
+
+        // Create a simple test message
+        let message = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key1".into()]),
+            tags: None,
+            value: "value1".into(),
+            offset: Offset::String(StringOffset::new("0".to_string(), 0)),
+            event_time: Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 10).unwrap(),
+            watermark: None,
+            id: MessageID {
+                vertex_name: "vertex_name".to_string().into(),
+                offset: "0".to_string().into(),
+                index: 0,
+            },
+            ..Default::default()
+        };
+
+        // Create a session window
+        let window = Window::new(
+            Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap(),
+            Utc.with_ymd_and_hms(2023, 1, 1, 0, 1, 0).unwrap(),
+            Arc::from(vec!["key1".to_string()]),
+        );
+
+        // Create window operation
+        let window_message = UnalignedWindowMessage {
+            operation: UnalignedWindowOperation::Open {
+                message: message.clone(),
+                window: window.clone(),
+            },
+            pnf_slot: "GLOBAL_SLOT",
+        };
+
+        let close_message = UnalignedWindowMessage {
+            operation: UnalignedWindowOperation::Close {
+                window: window.clone(),
+            },
+            pnf_slot: "GLOBAL_SLOT",
+        };
+
+        // Create a channel to send window messages
+        let (window_tx, window_rx) = mpsc::channel(10);
+        window_tx.send(window_message.into()).await.unwrap();
+        window_tx.send(close_message.into()).await.unwrap();
+        drop(window_tx); // Close the channel to signal end of input
+
+        // Create a cancellation token
+        let cln_token = CancellationToken::new();
+
+        // Call reduce_fn
+        let (mut response_stream, session_reduce_handle) = client
+            .session_reduce_fn(ReceiverStream::new(window_rx), cln_token)
+            .await
+            .expect("reduce_fn failed");
+
+        // Wait for the result
+        let result = tokio::time::timeout(Duration::from_secs(5), response_stream.next())
+            .await
+            .expect("timeout waiting for result")
+            .expect("no result received");
+
+        // Verify the indexing - first response should have index 0
+        assert_eq!(result.index, 0);
+        assert_eq!(result.vertex_name, get_vertex_name());
+
+        // Convert response to message and verify the message ID has the correct index
+        let result_message: Message = result.into();
+        assert_eq!(result_message.id.index, 0);
+
+        // Shutdown the server
+        shutdown_tx
+            .send(())
+            .expect("failed to send shutdown signal");
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        session_reduce_handle
+            .await
+            .expect("session reduce handle failed")
+            .expect("session reduce failed");
+
+        // Wait for the handle to complete
+        handle.await.expect("handle failed");
+
         Ok(())
     }
 }
