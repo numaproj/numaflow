@@ -8,19 +8,19 @@
       
       
       
-      <link rel="icon" href="../../../../assets/numaproj.svg">
+      <link rel="icon" href="../../assets/numaproj.svg">
       <meta name="generator" content="mkdocs-1.3.0, mkdocs-material-8.3.9">
     
     
       
-        <title>Authorization - Numaflow - Data/streaming processing platform on Kubernetes</title>
+        <title>Message Headers - Numaflow - Data/streaming processing platform on Kubernetes</title>
       
     
     
-      <link rel="stylesheet" href="../../../../assets/stylesheets/main.1d29e8d0.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.1d29e8d0.min.css">
       
         
-        <link rel="stylesheet" href="../../../../assets/stylesheets/palette.cbb835fc.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.cbb835fc.min.css">
         
       
       
@@ -36,7 +36,7 @@
       
     
     
-    <script>__md_scope=new URL("../../../..",location),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
   
@@ -74,7 +74,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#authorization" class="md-skip">
+        <a href="#message-headers" class="md-skip">
           Skip to content
         </a>
       
@@ -90,9 +90,9 @@
 
 <header class="md-header md-header--lifted" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../../.." title="Numaflow - Data/streaming processing platform on Kubernetes" class="md-header__button md-logo" aria-label="Numaflow - Data/streaming processing platform on Kubernetes" data-md-component="logo">
+    <a href="../.." title="Numaflow - Data/streaming processing platform on Kubernetes" class="md-header__button md-logo" aria-label="Numaflow - Data/streaming processing platform on Kubernetes" data-md-component="logo">
       
-  <img src="../../../../assets/logo.png" alt="logo">
+  <img src="../../assets/logo.png" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -108,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Authorization
+              Message Headers
             
           </span>
         </div>
@@ -199,7 +199,7 @@
 
 
   <li class="md-tabs__item">
-    <a href="../../../.." class="md-tabs__link">
+    <a href="../.." class="md-tabs__link">
       Home
     </a>
   </li>
@@ -214,7 +214,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../../../quick-start/" class="md-tabs__link">
+      <a href="../../quick-start/" class="md-tabs__link">
         Getting Started
       </a>
     </li>
@@ -223,6 +223,8 @@
       
         
   
+  
+    
   
 
 
@@ -235,7 +237,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../../../core-concepts/overview/" class="md-tabs__link">
+      <a href="../overview/" class="md-tabs__link md-tabs__link--active">
         User Guide
       </a>
     </li>
@@ -247,15 +249,13 @@
         
   
   
-    
-  
 
 
   
   
   
     <li class="md-tabs__item">
-      <a href="../../../releases/" class="md-tabs__link md-tabs__link--active">
+      <a href="../../operations/releases/" class="md-tabs__link">
         Operator Manual
       </a>
     </li>
@@ -271,7 +271,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../../../development/development/" class="md-tabs__link">
+      <a href="../../development/development/" class="md-tabs__link">
         Contributor Guide
       </a>
     </li>
@@ -317,9 +317,9 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../../.." title="Numaflow - Data/streaming processing platform on Kubernetes" class="md-nav__button md-logo" aria-label="Numaflow - Data/streaming processing platform on Kubernetes" data-md-component="logo">
+    <a href="../.." title="Numaflow - Data/streaming processing platform on Kubernetes" class="md-nav__button md-logo" aria-label="Numaflow - Data/streaming processing platform on Kubernetes" data-md-component="logo">
       
-  <img src="../../../../assets/logo.png" alt="logo">
+  <img src="../../assets/logo.png" alt="logo">
 
     </a>
     Numaflow - Data/streaming processing platform on Kubernetes
@@ -347,7 +347,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../.." class="md-nav__link">
+      <a href="../.." class="md-nav__link">
         Home
       </a>
     </li>
@@ -388,7 +388,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../quick-start/" class="md-nav__link">
+      <a href="../../quick-start/" class="md-nav__link">
         Quick Start
       </a>
     </li>
@@ -408,12 +408,14 @@
 
   
   
+    
+  
   
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3" type="checkbox" id="__nav_3" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3" type="checkbox" id="__nav_3" checked>
       
       
       
@@ -462,7 +464,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/overview/" class="md-nav__link">
+      <a href="../overview/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -476,7 +478,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/pipeline/" class="md-nav__link">
+      <a href="../pipeline/" class="md-nav__link">
         Pipeline
       </a>
     </li>
@@ -490,7 +492,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/monovertex/" class="md-nav__link">
+      <a href="../monovertex/" class="md-nav__link">
         MonoVertex
       </a>
     </li>
@@ -504,7 +506,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/serving/" class="md-nav__link">
+      <a href="../serving/" class="md-nav__link">
         ServingPipeline
       </a>
     </li>
@@ -518,7 +520,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/vertex/" class="md-nav__link">
+      <a href="../vertex/" class="md-nav__link">
         Vertex
       </a>
     </li>
@@ -532,7 +534,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/inter-step-buffer/" class="md-nav__link">
+      <a href="../inter-step-buffer/" class="md-nav__link">
         Inter-Step Buffer
       </a>
     </li>
@@ -546,7 +548,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/inter-step-buffer-service/" class="md-nav__link">
+      <a href="../inter-step-buffer-service/" class="md-nav__link">
         Inter-Step Buffer Service
       </a>
     </li>
@@ -560,7 +562,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../core-concepts/watermarks/" class="md-nav__link">
+      <a href="../watermarks/" class="md-nav__link">
         Watermarks
       </a>
     </li>
@@ -607,7 +609,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/overview/" class="md-nav__link">
+      <a href="../../user-guide/sources/overview/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -621,7 +623,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/generator/" class="md-nav__link">
+      <a href="../../user-guide/sources/generator/" class="md-nav__link">
         Generator Source
       </a>
     </li>
@@ -635,7 +637,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/http/" class="md-nav__link">
+      <a href="../../user-guide/sources/http/" class="md-nav__link">
         HTTP Source
       </a>
     </li>
@@ -649,7 +651,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/kafka/" class="md-nav__link">
+      <a href="../../user-guide/sources/kafka/" class="md-nav__link">
         Kafka Source
       </a>
     </li>
@@ -663,7 +665,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/pulsar/" class="md-nav__link">
+      <a href="../../user-guide/sources/pulsar/" class="md-nav__link">
         Pulsar Source
       </a>
     </li>
@@ -677,7 +679,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/nats/" class="md-nav__link">
+      <a href="../../user-guide/sources/nats/" class="md-nav__link">
         Nats Source
       </a>
     </li>
@@ -691,7 +693,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/sqs/" class="md-nav__link">
+      <a href="../../user-guide/sources/sqs/" class="md-nav__link">
         SQS Source
       </a>
     </li>
@@ -705,7 +707,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/user-defined-sources/" class="md-nav__link">
+      <a href="../../user-guide/sources/user-defined-sources/" class="md-nav__link">
         User-defined Sources
       </a>
     </li>
@@ -745,7 +747,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/transformer/overview/" class="md-nav__link">
+      <a href="../../user-guide/sources/transformer/overview/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -785,7 +787,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/transformer/builtin-transformers/" class="md-nav__link">
+      <a href="../../user-guide/sources/transformer/builtin-transformers/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -799,7 +801,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/transformer/builtin-transformers/filter/" class="md-nav__link">
+      <a href="../../user-guide/sources/transformer/builtin-transformers/filter/" class="md-nav__link">
         Filter
       </a>
     </li>
@@ -813,7 +815,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/transformer/builtin-transformers/event-time-extractor/" class="md-nav__link">
+      <a href="../../user-guide/sources/transformer/builtin-transformers/event-time-extractor/" class="md-nav__link">
         Event Time Extractor
       </a>
     </li>
@@ -827,7 +829,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sources/transformer/builtin-transformers/time-extraction-filter/" class="md-nav__link">
+      <a href="../../user-guide/sources/transformer/builtin-transformers/time-extraction-filter/" class="md-nav__link">
         Event Time Extraction Filter
       </a>
     </li>
@@ -888,7 +890,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sinks/overview/" class="md-nav__link">
+      <a href="../../user-guide/sinks/overview/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -902,7 +904,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sinks/kafka/" class="md-nav__link">
+      <a href="../../user-guide/sinks/kafka/" class="md-nav__link">
         Kafka Sink
       </a>
     </li>
@@ -916,7 +918,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sinks/log/" class="md-nav__link">
+      <a href="../../user-guide/sinks/log/" class="md-nav__link">
         Log Sink
       </a>
     </li>
@@ -930,7 +932,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sinks/blackhole/" class="md-nav__link">
+      <a href="../../user-guide/sinks/blackhole/" class="md-nav__link">
         Blackhole Sink
       </a>
     </li>
@@ -944,7 +946,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sinks/user-defined-sinks/" class="md-nav__link">
+      <a href="../../user-guide/sinks/user-defined-sinks/" class="md-nav__link">
         User-defined Sinks
       </a>
     </li>
@@ -958,7 +960,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sinks/fallback/" class="md-nav__link">
+      <a href="../../user-guide/sinks/fallback/" class="md-nav__link">
         Fallback Sink
       </a>
     </li>
@@ -972,7 +974,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sinks/retry-strategy/" class="md-nav__link">
+      <a href="../../user-guide/sinks/retry-strategy/" class="md-nav__link">
         Retry Strategy
       </a>
     </li>
@@ -1019,7 +1021,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/user-defined-functions/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/user-defined-functions/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -1059,7 +1061,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/map/map/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/map/map/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -1099,7 +1101,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/map/builtin-functions/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/map/builtin-functions/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -1113,7 +1115,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/map/builtin-functions/cat/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/map/builtin-functions/cat/" class="md-nav__link">
         Cat
       </a>
     </li>
@@ -1127,7 +1129,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/map/builtin-functions/filter/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/map/builtin-functions/filter/" class="md-nav__link">
         Filter
       </a>
     </li>
@@ -1148,7 +1150,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/map/examples/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/map/examples/" class="md-nav__link">
         Examples
       </a>
     </li>
@@ -1195,7 +1197,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/reduce/reduce/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/reduce/reduce/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -1235,7 +1237,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/reduce/windowing/windowing/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/reduce/windowing/windowing/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -1249,7 +1251,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/reduce/windowing/fixed/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/reduce/windowing/fixed/" class="md-nav__link">
         Fixed
       </a>
     </li>
@@ -1263,7 +1265,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/reduce/windowing/sliding/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/reduce/windowing/sliding/" class="md-nav__link">
         Sliding
       </a>
     </li>
@@ -1277,7 +1279,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/reduce/windowing/session/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/reduce/windowing/session/" class="md-nav__link">
         Session
       </a>
     </li>
@@ -1291,7 +1293,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/reduce/windowing/accumulator/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/reduce/windowing/accumulator/" class="md-nav__link">
         Accumulator
       </a>
     </li>
@@ -1312,7 +1314,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/user-defined-functions/reduce/examples/" class="md-nav__link">
+      <a href="../../user-guide/user-defined-functions/reduce/examples/" class="md-nav__link">
         Examples
       </a>
     </li>
@@ -1366,7 +1368,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sdks/overview/" class="md-nav__link">
+      <a href="../../user-guide/sdks/overview/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -1380,7 +1382,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sdks/compatibility/" class="md-nav__link">
+      <a href="../../user-guide/sdks/compatibility/" class="md-nav__link">
         Compatibility
       </a>
     </li>
@@ -1394,7 +1396,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/sdks/features/" class="md-nav__link">
+      <a href="../../user-guide/sdks/features/" class="md-nav__link">
         Features
       </a>
     </li>
@@ -1413,12 +1415,14 @@
               
   
   
+    
+  
   
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_6" type="checkbox" id="__nav_3_6" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_6" type="checkbox" id="__nav_3_6" checked>
       
       
       
@@ -1439,11 +1443,73 @@
               
   
   
+    
   
-    <li class="md-nav__item">
-      <a href="../../../../core-concepts/message-headers/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          Message Headers
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         Message Headers
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#use-cases" class="md-nav__link">
+    Use Cases
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#application-references" class="md-nav__link">
+    Application References
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-message-headers-work-in-numaflow" class="md-nav__link">
+    How Message Headers Work in Numaflow
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-pipeline-with-headers-http-source" class="md-nav__link">
+    Example Pipeline with Headers (HTTP Source)
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -1455,7 +1521,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/pipeline-tuning/" class="md-nav__link">
+      <a href="../../user-guide/reference/pipeline-tuning/" class="md-nav__link">
         Pipeline Tuning
       </a>
     </li>
@@ -1469,7 +1535,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/autoscaling/" class="md-nav__link">
+      <a href="../../user-guide/reference/autoscaling/" class="md-nav__link">
         Autoscaling
       </a>
     </li>
@@ -1483,7 +1549,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/conditional-forwarding/" class="md-nav__link">
+      <a href="../../user-guide/reference/conditional-forwarding/" class="md-nav__link">
         Conditional Forwarding
       </a>
     </li>
@@ -1497,7 +1563,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/pipeline-operations/" class="md-nav__link">
+      <a href="../../user-guide/reference/pipeline-operations/" class="md-nav__link">
         Pipeline Operations
       </a>
     </li>
@@ -1511,7 +1577,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/join-vertex/" class="md-nav__link">
+      <a href="../../user-guide/reference/join-vertex/" class="md-nav__link">
         Joins and Cycles
       </a>
     </li>
@@ -1525,7 +1591,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/multi-partition/" class="md-nav__link">
+      <a href="../../user-guide/reference/multi-partition/" class="md-nav__link">
         Multi-partitioned Edges
       </a>
     </li>
@@ -1539,7 +1605,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/side-inputs/" class="md-nav__link">
+      <a href="../../user-guide/reference/side-inputs/" class="md-nav__link">
         Side Inputs
       </a>
     </li>
@@ -1553,7 +1619,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/mvtx-tuning/" class="md-nav__link">
+      <a href="../../user-guide/reference/mvtx-tuning/" class="md-nav__link">
         MonoVertex Tuning
       </a>
     </li>
@@ -1567,7 +1633,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/mvtx-operations/" class="md-nav__link">
+      <a href="../../user-guide/reference/mvtx-operations/" class="md-nav__link">
         MonoVertex Operations
       </a>
     </li>
@@ -1607,7 +1673,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/pod-specifications/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/pod-specifications/" class="md-nav__link">
         Pod Specifications
       </a>
     </li>
@@ -1621,7 +1687,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/container-resources/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/container-resources/" class="md-nav__link">
         Container Resources
       </a>
     </li>
@@ -1635,7 +1701,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/volumes/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/volumes/" class="md-nav__link">
         Volumes
       </a>
     </li>
@@ -1649,7 +1715,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/environment-variables/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/environment-variables/" class="md-nav__link">
         Environment Variables
       </a>
     </li>
@@ -1663,7 +1729,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/labels-and-annotations/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/labels-and-annotations/" class="md-nav__link">
         Labels And Annotations
       </a>
     </li>
@@ -1677,7 +1743,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/init-containers/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/init-containers/" class="md-nav__link">
         Init Containers
       </a>
     </li>
@@ -1691,7 +1757,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/sidecar-containers/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/sidecar-containers/" class="md-nav__link">
         Sidecar Containers
       </a>
     </li>
@@ -1705,7 +1771,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/liveness-and-readiness/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/liveness-and-readiness/" class="md-nav__link">
         Liveness and Readiness
       </a>
     </li>
@@ -1719,7 +1785,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/pipeline-customization/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/pipeline-customization/" class="md-nav__link">
         Pipeline Customization
       </a>
     </li>
@@ -1733,7 +1799,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/dra/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/dra/" class="md-nav__link">
         Dynamic Resource Allocation
       </a>
     </li>
@@ -1747,7 +1813,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/istio/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/istio/" class="md-nav__link">
         Running on Istio
       </a>
     </li>
@@ -1761,7 +1827,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/max-message-size/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/max-message-size/" class="md-nav__link">
         Maximum Message Size
       </a>
     </li>
@@ -1775,7 +1841,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/configuration/update-strategy/" class="md-nav__link">
+      <a href="../../user-guide/reference/configuration/update-strategy/" class="md-nav__link">
         Update Strategy
       </a>
     </li>
@@ -1796,7 +1862,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/reference/kustomize/kustomize/" class="md-nav__link">
+      <a href="../../user-guide/reference/kustomize/kustomize/" class="md-nav__link">
         Kustomize Integration
       </a>
     </li>
@@ -1810,7 +1876,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../APIs/" class="md-nav__link">
+      <a href="../../APIs/" class="md-nav__link">
         APIs
       </a>
     </li>
@@ -1857,7 +1923,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/use-cases/overview/" class="md-nav__link">
+      <a href="../../user-guide/use-cases/overview/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -1871,7 +1937,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/use-cases/monitoring-and-observability/" class="md-nav__link">
+      <a href="../../user-guide/use-cases/monitoring-and-observability/" class="md-nav__link">
         Monitoring and Observability
       </a>
     </li>
@@ -1918,7 +1984,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/UI/overview/" class="md-nav__link">
+      <a href="../../user-guide/UI/overview/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -1932,7 +1998,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/UI/errors/" class="md-nav__link">
+      <a href="../../user-guide/UI/errors/" class="md-nav__link">
         Errors
       </a>
     </li>
@@ -1946,7 +2012,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/UI/logs/" class="md-nav__link">
+      <a href="../../user-guide/UI/logs/" class="md-nav__link">
         Logs
       </a>
     </li>
@@ -1960,7 +2026,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/UI/metrics-tab/" class="md-nav__link">
+      <a href="../../user-guide/UI/metrics-tab/" class="md-nav__link">
         Metrics
       </a>
     </li>
@@ -1974,7 +2040,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/UI/pods-view/" class="md-nav__link">
+      <a href="../../user-guide/UI/pods-view/" class="md-nav__link">
         Pods View
       </a>
     </li>
@@ -1995,7 +2061,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../user-guide/FAQ/" class="md-nav__link">
+      <a href="../../user-guide/FAQ/" class="md-nav__link">
         FAQs
       </a>
     </li>
@@ -2015,14 +2081,12 @@
 
   
   
-    
-  
   
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_4" type="checkbox" id="__nav_4" checked>
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_4" type="checkbox" id="__nav_4" >
       
       
       
@@ -2045,7 +2109,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../releases/" class="md-nav__link">
+      <a href="../../operations/releases/" class="md-nav__link">
         Releases ⧉
       </a>
     </li>
@@ -2059,7 +2123,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../installation/" class="md-nav__link">
+      <a href="../../operations/installation/" class="md-nav__link">
         Installation
       </a>
     </li>
@@ -2073,7 +2137,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../validating-webhook/" class="md-nav__link">
+      <a href="../../operations/validating-webhook/" class="md-nav__link">
         Validating Webhook
       </a>
     </li>
@@ -2085,14 +2149,12 @@
               
   
   
-    
-  
   
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_4_4" type="checkbox" id="__nav_4_4" checked>
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_4_4" type="checkbox" id="__nav_4_4" >
       
       
       
@@ -2115,7 +2177,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../controller-configmap/" class="md-nav__link">
+      <a href="../../operations/controller-configmap/" class="md-nav__link">
         Controller Configuration
       </a>
     </li>
@@ -2127,14 +2189,12 @@
               
   
   
-    
-  
   
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_4_4_2" type="checkbox" id="__nav_4_4_2" checked>
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_4_4_2" type="checkbox" id="__nav_4_4_2" >
       
       
       
@@ -2157,7 +2217,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../ui-access-path/" class="md-nav__link">
+      <a href="../../operations/ui/ui-access-path/" class="md-nav__link">
         Access Path
       </a>
     </li>
@@ -2197,7 +2257,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../authn/authentication/" class="md-nav__link">
+      <a href="../../operations/ui/authn/authentication/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -2211,7 +2271,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../authn/dex/" class="md-nav__link">
+      <a href="../../operations/ui/authn/dex/" class="md-nav__link">
         SSO with Dex
       </a>
     </li>
@@ -2225,7 +2285,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../authn/local-users/" class="md-nav__link">
+      <a href="../../operations/ui/authn/local-users/" class="md-nav__link">
         Local Users
       </a>
     </li>
@@ -2244,59 +2304,11 @@
               
   
   
-    
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          Authorization
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../operations/ui/authz/rbac/" class="md-nav__link">
         Authorization
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#rules" class="md-nav__link">
-    Rules
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#configuration" class="md-nav__link">
-    Configuration
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -2315,7 +2327,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../metrics/metrics/" class="md-nav__link">
+      <a href="../../operations/metrics/metrics/" class="md-nav__link">
         Metrics
       </a>
     </li>
@@ -2329,7 +2341,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../grafana/" class="md-nav__link">
+      <a href="../../operations/grafana/" class="md-nav__link">
         Grafana
       </a>
     </li>
@@ -2350,7 +2362,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../security/" class="md-nav__link">
+      <a href="../../operations/security/" class="md-nav__link">
         Security
       </a>
     </li>
@@ -2398,7 +2410,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../development/development/" class="md-nav__link">
+      <a href="../../development/development/" class="md-nav__link">
         Development
       </a>
     </li>
@@ -2438,7 +2450,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../specifications/overview/" class="md-nav__link">
+      <a href="../../specifications/overview/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -2452,7 +2464,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../specifications/controllers/" class="md-nav__link">
+      <a href="../../specifications/controllers/" class="md-nav__link">
         Controllers
       </a>
     </li>
@@ -2466,7 +2478,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../specifications/autoscaling/" class="md-nav__link">
+      <a href="../../specifications/autoscaling/" class="md-nav__link">
         Autoscaling
       </a>
     </li>
@@ -2480,7 +2492,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../specifications/edges-buffers-buckets/" class="md-nav__link">
+      <a href="../../specifications/edges-buffers-buckets/" class="md-nav__link">
         Edges, Buffers and Buckets
       </a>
     </li>
@@ -2494,7 +2506,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../specifications/side-inputs/" class="md-nav__link">
+      <a href="../../specifications/side-inputs/" class="md-nav__link">
         Side Inputs
       </a>
     </li>
@@ -2508,7 +2520,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../specifications/authorization/" class="md-nav__link">
+      <a href="../../specifications/authorization/" class="md-nav__link">
         UI Authorization
       </a>
     </li>
@@ -2529,7 +2541,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../development/debugging/" class="md-nav__link">
+      <a href="../../development/debugging/" class="md-nav__link">
         How To Debug
       </a>
     </li>
@@ -2543,7 +2555,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../development/static-code-analysis/" class="md-nav__link">
+      <a href="../../development/static-code-analysis/" class="md-nav__link">
         Static Code Analysis
       </a>
     </li>
@@ -2557,7 +2569,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../development/releasing/" class="md-nav__link">
+      <a href="../../development/releasing/" class="md-nav__link">
         How To Release
       </a>
     </li>
@@ -2613,15 +2625,29 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#rules" class="md-nav__link">
-    Rules
+  <a href="#use-cases" class="md-nav__link">
+    Use Cases
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#configuration" class="md-nav__link">
-    Configuration
+  <a href="#application-references" class="md-nav__link">
+    Application References
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-message-headers-work-in-numaflow" class="md-nav__link">
+    How Message Headers Work in Numaflow
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-pipeline-with-headers-http-source" class="md-nav__link">
+    Example Pipeline with Headers (HTTP Source)
   </a>
   
 </li>
@@ -2638,74 +2664,135 @@
             <article class="md-content__inner md-typeset">
               
                 
-  <a href="https://github.com/numaproj/numaflow/edit/main/docs/operations/ui/authz/rbac.md" title="Edit this page" class="md-content__button md-icon">
+  <a href="https://github.com/numaproj/numaflow/edit/main/docs/core-concepts/message-headers.md" title="Edit this page" class="md-content__button md-icon">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
   </a>
 
 
 
-<h1 id="authorization">Authorization<a class="headerlink" href="#authorization" title="Permanent link">&para;</a></h1>
-<p>Numaflow UI utilizes a role-based access control (RBAC) model to manage authorization, the RBAC policy and permissions are defined in the ConfigMap <code>numaflow-server-rbac-config</code>.</p>
-<p>There are two main sections in the ConfigMap.</p>
-<h2 id="rules">Rules<a class="headerlink" href="#rules" title="Permanent link">&para;</a></h2>
-<p><code>Policies</code> and <code>groups</code> are the two main entities defined in rules section, both of them work in conjunction with each other. The <code>groups</code> are used to define a set of users with the same permissions and the <code>policies</code> are used to define the specific permissions for these users or groups.</p>
-<div class="highlight"><pre><span></span><code># Policies go here
-p, role:admin, *, *, *
-p, role:readonly, *, *, GET
-
-# Groups go here
-g, admin, role:admin
-g, my-github-org:my-github-team, role:readonly
+<h1 id="message-headers">Message Headers<a class="headerlink" href="#message-headers" title="Permanent link">&para;</a></h1>
+<p>Message Headers are metadata key-value pairs attached to each message (also called a datum) as it flows through the Numaflow pipeline.
+They provide contextual information about the message—such as event timestamps, routing keys, or custom tags—without modifying the message's main content.
+Message headers are immutable and cannot be manipulated through the SDKs.</p>
+<hr />
+<h2 id="use-cases">Use Cases<a class="headerlink" href="#use-cases" title="Permanent link">&para;</a></h2>
+<ol>
+<li>
+<p><strong>Propagating Source Metadata</strong><br />
+   Carry metadata from external systems (like Kafka or HTTP) into the pipeline by copying their headers into message headers.</p>
+</li>
+<li>
+<p><strong>Tracing and Debugging</strong><br />
+   Attach unique IDs or trace information to each message, making it easier to follow a message's journey through the pipeline for troubleshooting.</p>
+</li>
+<li>
+<p><strong>Conditional Routing and Processing</strong><br />
+   Use header values (such as priority, type, or custom flags) to decide how messages are routed or processed at different steps.</p>
+</li>
+<li>
+<p><strong>Auditing and Compliance</strong><br />
+   Store audit information (e.g., who triggered the message, when it was created) in headers for logging and compliance tracking.</p>
+</li>
+<li>
+<p><strong>Custom Enrichment in UDFs</strong><br />
+   UDFs can read message headers to enrich processing logic, but they cannot modify or add new headers.</p>
+</li>
+<li>
+<p><strong>Feature Flags and Experimentation</strong><br />
+   Pass feature flags or experiment IDs in headers to enable A/B testing or canary deployments within your data processing logic.</p>
+</li>
+</ol>
+<hr />
+<h2 id="application-references">Application References<a class="headerlink" href="#application-references" title="Permanent link">&para;</a></h2>
+<ul>
+<li>
+<p><strong>Kafka Source Example</strong><br />
+  In <code>pkg/sources/kafka/reader.go</code>, when a message is read from Kafka, all Kafka headers are copied into the Numaflow message headers. This allows downstream components to access all original Kafka metadata.</p>
+</li>
+<li>
+<p><strong>HTTP Source Example</strong><br />
+  In <code>pkg/sources/http/http.go</code>, HTTP headers from incoming requests are added to the message headers. This means any custom or standard HTTP header is available throughout the pipeline.</p>
+</li>
+<li>
+<p><strong>Accessing Headers in UDFs</strong></p>
+</li>
+</ul>
+<blockquote>
+<p>⚠️ Note: Headers are read-only in UDFs. You can access them, but not modify or add new headers.</p>
+</blockquote>
+<ul>
+<li>
+<p><strong>Go SDK</strong><br />
+    The <code>datum</code> object provides a <code>map[string]string</code> of all headers:
+    <div class="highlight"><pre><span></span><code><span class="nx">headers</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">datum</span><span class="p">.</span><span class="nx">Headers</span><span class="p">()</span>
+<span class="nx">fmt</span><span class="p">.</span><span class="nx">Println</span><span class="p">(</span><span class="nx">headers</span><span class="p">[</span><span class="s">&quot;X-My-Header&quot;</span><span class="p">])</span>
+</code></pre></div></p>
+</li>
+<li>
+<p><strong>Python SDK</strong><br />
+    The <code>datum</code> object exposes headers as a dictionary:
+    <div class="highlight"><pre><span></span><code><span class="n">headers</span> <span class="o">=</span> <span class="n">datum</span><span class="o">.</span><span class="n">headers</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;X-My-Header&quot;</span><span class="p">))</span>
+</code></pre></div></p>
+</li>
+</ul>
+<blockquote>
+<p>Under the hood, header information is preserved and passed through the dataplane, making it accessible across all SDKs.</p>
+</blockquote>
+<hr />
+<h2 id="how-message-headers-work-in-numaflow">How Message Headers Work in Numaflow<a class="headerlink" href="#how-message-headers-work-in-numaflow" title="Permanent link">&para;</a></h2>
+<ol>
+<li>
+<p><strong>Creation at the Source</strong><br />
+   Headers are created at the beginning of the pipeline. For example, Kafka headers or HTTP request headers are copied into the Numaflow message when the source ingests it.</p>
+</li>
+<li>
+<p><strong>Propagation Through the Pipeline</strong><br />
+   As the datum flows through the pipeline—from source to UDF to sink—the headers are preserved and passed through each vertex and buffer.</p>
+</li>
+<li>
+<p><strong>Reading in UDFs</strong><br />
+   Developers can access headers using the SDKs to make decisions such as filtering, routing, or branching logic. Headers are read-only and cannot be modified or added in UDFs.</p>
+</li>
+<li>
+<p><strong>Delivery to the Sink</strong><br />
+   When the datum reaches the sink, the headers are still attached. Sinks can use this data for routing, logging, or integration with external systems.</p>
+</li>
+</ol>
+<p>This end-to-end propagation ensures metadata remains intact and useful across the full lifecycle of a message.</p>
+<hr />
+<h2 id="example-pipeline-with-headers-http-source">Example Pipeline with Headers (HTTP Source)<a class="headerlink" href="#example-pipeline-with-headers-http-source" title="Permanent link">&para;</a></h2>
+<p>Here's a minimal example of a pipeline where HTTP headers are passed from an HTTP source to a UDF, then to a log sink:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http-header-demo</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
+<span class="w">      </span><span class="nt">source</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">http</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">process</span>
+<span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">container</span><span class="p">:</span>
+<span class="w">          </span><span class="c1"># A simple UDF that logs the message and its headers</span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">quay.io/numaproj/numaflow-go/map-log:v1.2.1</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
+<span class="w">      </span><span class="nt">sink</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">log</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+<span class="w">  </span><span class="nt">edges</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">in</span>
+<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">process</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">from</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">process</span>
+<span class="w">      </span><span class="nt">to</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">out</span>
 </code></pre></div>
-<p>Here we have defined two policies for the custom groups <code>role:admin</code> and <code>role:readonly</code>.</p>
-<ul>
-<li>The first policy allows the group <code>role:admin</code> to access all resources in all namespaces with all actions.</li>
-<li>The second policy allows the group <code>role:readonly</code> to access all resources in all namespaces with the <code>GET</code> action.</li>
-</ul>
-<p>To add a new <strong>policy</strong>, add a new line in the format:</p>
-<div class="highlight"><pre><span></span><code>p, &lt;user/group&gt;, &lt;namespace&gt;, &lt;resource&gt;, &lt;action&gt;
+<p>You can send a request to the HTTP source with custom headers using <code>curl</code>. First, port-forward the pod (replace <code>${pod-name}</code> with your actual pod name):</p>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>port-forward<span class="w"> </span>pod/<span class="si">${</span><span class="nv">pod</span><span class="p">-name</span><span class="si">}</span><span class="w"> </span><span class="m">8443</span>:8443
 </code></pre></div>
-<ul>
-<li><code>User/Group</code>: The user/group requesting access to a resource. This is the identifier extracted from the authentication token, such as a username, email address, or ID. Or could be a group defined in the groups section.</li>
-<li><code>Resource</code>: The namespace in the cluster which is being accessed by the user. This can allow for selective access to namespaces.</li>
-<li><code>Object</code> : This could be a specific resource in the namespace, such as a pipeline, isbsvc or any event based resource.</li>
-<li><code>Action</code>: The action being performed on the resource using the API. These follow the standard HTTP verbs, such as GET, POST, PUT, DELETE, etc.</li>
-</ul>
-<p>The namespace, resource and action supports a <strong><em>wildcard</em></strong> <code>*</code> as an allow all function.</p>
-<p>Few examples:</p>
-<ul>
-<li>a policy line <code>p, test@test.com, *, *, POST</code> would allow the user with the given email address to access all resources in all namespaces with the POST action.</li>
-<li>a policy line <code>p, test_user, *, *, *</code> would allow the user with the given username to access all resources in all namespaces with all actions.</li>
-<li>a policy line <code>p, role:admin_ns, test_ns, *, *</code> would allow the group role:admin_ns to access all resources in the namespace test_ns with all actions.</li>
-<li>a policy line <code>p, test_user, test_ns, *, GET</code> would allow the user with the given username to access all resources in the namespace test_ns with the GET action.</li>
-</ul>
-<p><strong>Groups</strong> can be defined by adding a new line in the format:</p>
-<div class="highlight"><pre><span></span><code>g, &lt;user&gt;, &lt;group&gt;
+<p>Then, send the request:</p>
+<p><div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-k<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;X-My-Header: test-value&quot;</span><span class="w"> </span>-d<span class="w"> </span><span class="s2">&quot;hello&quot;</span><span class="w"> </span>https://localhost:8443/vertices/in
 </code></pre></div>
-<p>Here user is the identifier extracted from the authentication token, such as a username, email address, or ID. And group is the name of the group to which the user is being added.</p>
-<p>These are useful for defining a set of users with the same permissions. The group can be used in the policy definition in place of the user. And thus any user added to the group will have the same permissions as the group.</p>
-<p>Few examples:</p>
-<ul>
-<li>a group line <code>g, test@test.com, role:readonly</code> would add the user with the given email address to the group role:readonly.</li>
-<li>a group line <code>g, test_user, role:admin</code> would add the user with the given username to the group role:admin.</li>
-</ul>
-<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
-<p>This defines certain properties for the Casbin enforcer. The properties are defined in the following format:</p>
-<div class="highlight"><pre><span></span><code>  rbac-conf.yaml: |
-    policy.default: role:readonly
-    policy.scopes: groups,email,username
-</code></pre></div>
-<p>We see two properties defined here:</p>
-<ul>
-<li><strong>policy.default</strong>: This defines the default role for a user. If a user does not have any roles defined, then this role will be used for the user. This is useful for defining a default role for all users.</li>
-<li><strong>policy.scopes</strong>: The scopes field controls which authentication scopes to examine during rbac enforcement. We can have multiple scopes, and the first scope that matches with the policy will be used.</li>
-<li>"groups", which means that the groups field of the user's token will be examined, This is <strong>default</strong> value and is used if no scopes are defined.</li>
-<li>"email", which means that the email field of the user's token will be examined</li>
-<li>"username", which means that the username field of the user's token will be examined</li>
-</ul>
-<p>Multiple scopes can be provided as a comma-separated, e.g <code>"groups,email,username"</code></p>
-<p>This scope information is used to extract the user information from the token and then used to enforce the policies. Thus is it important to have the rules defined in the above section to map with the scopes expected in the configuration.</p>
-<p><strong>Note</strong>: The rbac-conf.yaml file can be updated during runtime and the changes will be reflected immediately. This is useful for changing the default role for all users or adding a new scope to be used for rbac enforcement.</p>
+In your UDF, <code>X-My-Header</code> will be available as a message header.</p>
 
               
             </article>
@@ -2726,7 +2813,7 @@ g, my-github-org:my-github-team, role:readonly
     <nav class="md-footer__inner md-grid" aria-label="Footer" >
       
         
-        <a href="../../authn/local-users/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Local Users" rel="prev">
+        <a href="../../user-guide/sdks/features/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Features" rel="prev">
           <div class="md-footer__button md-icon">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
           </div>
@@ -2735,20 +2822,20 @@ g, my-github-org:my-github-team, role:readonly
               <span class="md-footer__direction">
                 Previous
               </span>
-              Local Users
+              Features
             </div>
           </div>
         </a>
       
       
         
-        <a href="../../../metrics/metrics/" class="md-footer__link md-footer__link--next" aria-label="Next: Metrics" rel="next">
+        <a href="../../user-guide/reference/pipeline-tuning/" class="md-footer__link md-footer__link--next" aria-label="Next: Pipeline Tuning" rel="next">
           <div class="md-footer__title">
             <div class="md-ellipsis">
               <span class="md-footer__direction">
                 Next
               </span>
-              Metrics
+              Pipeline Tuning
             </div>
           </div>
           <div class="md-footer__button md-icon">
@@ -2778,10 +2865,10 @@ g, my-github-org:my-github-team, role:readonly
     <div class="md-dialog" data-md-component="dialog">
       <div class="md-dialog__inner md-typeset"></div>
     </div>
-    <script id="__config" type="application/json">{"base": "../../../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.top"], "search": "../../../../assets/javascripts/workers/search.b97dbffb.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.placeholder": "Search", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version.title": "Select version"}}</script>
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.tabs", "navigation.tabs.sticky", "navigation.top"], "search": "../../assets/javascripts/workers/search.b97dbffb.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.config.lang": "en", "search.config.pipeline": "trimmer, stopWordFilter", "search.config.separator": "[\\s\\-]+", "search.placeholder": "Search", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version.title": "Select version"}}</script>
     
     
-      <script src="../../../../assets/javascripts/bundle.6c7ad80a.min.js"></script>
+      <script src="../../assets/javascripts/bundle.6c7ad80a.min.js"></script>
       
     
   </body>

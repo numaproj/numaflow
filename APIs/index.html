@@ -1440,6 +1440,20 @@
   
   
     <li class="md-nav__item">
+      <a href="../core-concepts/message-headers/" class="md-nav__link">
+        Message Headers
+      </a>
+    </li>
+  
+
+            
+          
+            
+              
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../user-guide/reference/pipeline-tuning/" class="md-nav__link">
         Pipeline Tuning
       </a>
@@ -1569,18 +1583,18 @@
     <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_6_10" type="checkbox" id="__nav_3_6_10" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_6_11" type="checkbox" id="__nav_3_6_11" >
       
       
       
       
-        <label class="md-nav__link" for="__nav_3_6_10">
+        <label class="md-nav__link" for="__nav_3_6_11">
           Configuration
           <span class="md-nav__icon md-icon"></span>
         </label>
       
       <nav class="md-nav" aria-label="Configuration" data-md-level="3">
-        <label class="md-nav__title" for="__nav_3_6_10">
+        <label class="md-nav__title" for="__nav_3_6_11">
           <span class="md-nav__icon md-icon"></span>
           Configuration
         </label>
@@ -3113,6 +3127,27 @@ ServingPipeline.
 <p>
 
 SQS sink is used to write the data to the AWS SQS.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>pulsar</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.PulsarSink"> PulsarSink </a>
+</em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Pulsar sink is used to write the data to the Apache Pulsar.
 </p>
 
 </td>
@@ -11577,6 +11612,7 @@ PulsarAuth
 <p>
 
 (<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.PulsarSink">PulsarSink</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.PulsarSource">PulsarSource</a>)
 </p>
 
@@ -11626,6 +11662,107 @@ Kubernetes core/v1.SecretKeySelector </a> </em>
 <p>
 
 JWT Token auth
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.PulsarSink">
+
+PulsarSink
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractSink">AbstractSink</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>serverAddr</code></br> <em> string </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>topic</code></br> <em> string </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>producerName</code></br> <em> string </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>auth</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.PulsarAuth"> PulsarAuth </a>
+</em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Auth information
 </p>
 
 </td>
