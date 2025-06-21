@@ -546,7 +546,9 @@ impl JetStreamReader {
                     return Ok(());
                 }
 
-                result.map_err(|e| Error::Connection("Failed to send ack to Jetstream".to_string()))
+                result.map_err(|e| {
+                    Error::Connection(format!("Failed to send ack to Jetstream: {e:?}"))
+                })
             },
             |_: &Error| true,
         )

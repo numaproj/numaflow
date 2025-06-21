@@ -19,7 +19,7 @@ pub(crate) mod source {
     use numaflow_jetstream::{JetstreamSourceConfig, NatsAuth, TlsClientAuthCerts, TlsConfig};
     use numaflow_kafka::source::KafkaSourceConfig;
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source, SqsSource};
-    use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
+    use numaflow_pulsar::{PulsarAuth, source::PulsarSourceConfig};
     use numaflow_sqs::source::SqsSourceConfig;
     use serde::{Deserialize, Serialize};
     use tracing::warn;
@@ -491,7 +491,8 @@ pub(crate) mod sink {
     use std::fmt::Display;
 
     use numaflow_kafka::sink::KafkaSinkConfig;
-    use numaflow_models::models::{Backoff, KafkaSink, RetryStrategy, Sink, SqsSink};
+    use numaflow_models::models::{Backoff, KafkaSink, PulsarSink, RetryStrategy, Sink, SqsSink};
+    use numaflow_pulsar::sink::Config as PulsarSinkConfig;
     use numaflow_sqs::sink::SqsSinkConfig;
 
     use crate::Result;
@@ -513,6 +514,7 @@ pub(crate) mod sink {
         UserDefined(UserDefinedConfig),
         Sqs(SqsSinkConfig),
         Kafka(Box<KafkaSinkConfig>),
+        Pulsar(Box<PulsarSinkConfig>),
     }
 
     impl SinkType {
@@ -537,6 +539,7 @@ pub(crate) mod sink {
                 .or_else(|| sink.serve.as_ref().map(|_| Ok(SinkType::Serve)))
                 .or_else(|| sink.sqs.as_ref().map(|sqs| sqs.clone().try_into()))
                 .or_else(|| sink.kafka.as_ref().map(|kafka| kafka.clone().try_into()))
+                .or_else(|| sink.pulsar.as_ref().map(|pulsar| pulsar.clone().try_into()))
                 .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
         }
 
@@ -558,8 +561,20 @@ pub(crate) mod sink {
                             .as_ref()
                             .map(|_| Ok(SinkType::Blackhole(BlackholeConfig::default())))
                     })
-                    .or_else(|| sink.serve.as_ref().map(|_| Ok(SinkType::Serve)))
+                    .or_else(|| fallback.serve.as_ref().map(|_| Ok(SinkType::Serve)))
                     .or_else(|| fallback.sqs.as_ref().map(|sqs| sqs.clone().try_into()))
+                    .or_else(|| {
+                        fallback
+                            .kafka
+                            .as_ref()
+                            .map(|kafka| kafka.clone().try_into())
+                    })
+                    .or_else(|| {
+                        fallback
+                            .pulsar
+                            .as_ref()
+                            .map(|pulsar| pulsar.clone().try_into())
+                    })
                     .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
             } else {
                 Err(Error::Config("Fallback sink not found".to_string()))
@@ -652,6 +667,38 @@ pub(crate) mod sink {
                     .map(|parts| (parts[0].trim().to_string(), parts[1].trim().to_string()))
                     .collect::<HashMap<String, String>>(),
             })))
+        }
+    }
+
+    impl TryFrom<Box<PulsarSink>> for SinkType {
+        type Error = Error;
+        fn try_from(sink_config: Box<PulsarSink>) -> std::result::Result<Self, Self::Error> {
+            let auth = match sink_config.auth {
+                Some(auth) => {
+                    let Some(auth) = auth.token else {
+                        return Err(Error::Config(
+                            "Authentication configuration is enabled, however JWT token is not provided in the Pulsar sink configuration".to_string(),
+                        ));
+                    };
+                    let token = crate::shared::create_components::get_secret_from_volume(
+                        &auth.name, &auth.key,
+                    )
+                    .map_err(|e| {
+                        Error::Config(format!(
+                            "Failed to get JWT token for configuring Pulsar producer: {e:?}"
+                        ))
+                    })?;
+                    Some(numaflow_pulsar::PulsarAuth::JWT(token))
+                }
+                None => None,
+            };
+            let pulsar_sink_config = numaflow_pulsar::sink::Config {
+                addr: sink_config.server_addr,
+                topic: sink_config.topic,
+                producer_name: sink_config.producer_name,
+                auth,
+            };
+            Ok(SinkType::Pulsar(Box::new(pulsar_sink_config)))
         }
     }
 
@@ -1382,6 +1429,21 @@ mod sink_tests {
     use numaflow_models::models::{Backoff, RetryStrategy};
     use numaflow_sqs::sink::SqsSinkConfig;
 
+    const SECRET_BASE_PATH: &str = "/tmp/numaflow";
+
+    fn setup_secret(name: &str, key: &str, value: &str) {
+        let path = format!("{SECRET_BASE_PATH}/{name}");
+        std::fs::create_dir_all(&path).unwrap();
+        std::fs::write(format!("{path}/{key}"), value).unwrap();
+    }
+
+    fn cleanup_secret(name: &str) {
+        let path = format!("{SECRET_BASE_PATH}/{name}");
+        if std::path::Path::new(&path).exists() {
+            std::fs::remove_dir_all(&path).unwrap();
+        }
+    }
+
     #[test]
     fn test_default_log_config() {
         let default_config = LogConfig::default();
@@ -1572,9 +1634,11 @@ mod sink_tests {
                     queue_owner_aws_account_id: "123456789012".to_string(),
                 })),
                 kafka: None,
+                pulsar: None,
             })),
             retry_strategy: None,
             kafka: None,
+            pulsar: None,
         };
 
         let result = SinkType::fallback_sinktype(&sink);
@@ -1598,6 +1662,7 @@ mod sink_tests {
             fallback: None,
             retry_strategy: None,
             kafka: None,
+            pulsar: None,
         };
         let result = SinkType::fallback_sinktype(&sink_without_fallback);
         assert!(result.is_err());
@@ -1624,9 +1689,11 @@ mod sink_tests {
                     queue_owner_aws_account_id: "123456789012".to_string(),
                 })),
                 kafka: None,
+                pulsar: None,
             })),
             retry_strategy: None,
             kafka: None,
+            pulsar: None,
         };
         let result = SinkType::fallback_sinktype(&sink_missing_region);
         assert!(result.is_err());
@@ -1649,15 +1716,307 @@ mod sink_tests {
                 serve: None,
                 sqs: None,
                 kafka: None,
+                pulsar: None,
             })),
             retry_strategy: None,
             kafka: None,
+            pulsar: None,
         };
         let result = SinkType::fallback_sinktype(&sink_empty_fallback);
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().to_string(),
             "Config Error - Sink type not found"
+        );
+    }
+
+    #[test]
+    fn test_pulsar_sink_type_conversion() {
+        use k8s_openapi::api::core::v1::SecretKeySelector;
+        use numaflow_models::models::PulsarSink;
+
+        // Test case 1: Valid configuration without authentication
+        let valid_pulsar_sink = Box::new(PulsarSink {
+            auth: None,
+            producer_name: "test-producer".to_string(),
+            server_addr: "pulsar://localhost:6650".to_string(),
+            topic: "persistent://public/default/test-topic".to_string(),
+        });
+
+        let result = SinkType::try_from(valid_pulsar_sink);
+        assert!(result.is_ok());
+        if let Ok(SinkType::Pulsar(config)) = result {
+            assert_eq!(config.addr, "pulsar://localhost:6650");
+            assert_eq!(config.topic, "persistent://public/default/test-topic");
+            assert_eq!(config.producer_name, "test-producer");
+            assert!(config.auth.is_none());
+        } else {
+            panic!("Expected SinkType::Pulsar");
+        }
+
+        // Test case 2: Valid configuration with JWT authentication
+        let secret_name = "test_pulsar_sink_type_conversion_jwt-secret";
+        let token_key = "token";
+        setup_secret(secret_name, token_key, "test-jwt-token");
+
+        let valid_pulsar_sink_with_auth = Box::new(PulsarSink {
+            auth: Some(Box::new(numaflow_models::models::PulsarAuth {
+                token: Some(SecretKeySelector {
+                    name: secret_name.to_string(),
+                    key: token_key.to_string(),
+                    ..Default::default()
+                }),
+            })),
+            producer_name: "test-producer".to_string(),
+            server_addr: "pulsar://localhost:6650".to_string(),
+            topic: "persistent://public/default/test-topic".to_string(),
+        });
+
+        let result = SinkType::try_from(valid_pulsar_sink_with_auth);
+        assert!(result.is_ok());
+        if let Ok(SinkType::Pulsar(config)) = result {
+            assert_eq!(config.addr, "pulsar://localhost:6650");
+            assert_eq!(config.topic, "persistent://public/default/test-topic");
+            assert_eq!(config.producer_name, "test-producer");
+            let auth = config.auth.unwrap();
+            let numaflow_pulsar::PulsarAuth::JWT(token) = auth;
+            assert_eq!(token, "test-jwt-token");
+        } else {
+            panic!("Expected SinkType::Pulsar");
+        }
+
+        cleanup_secret(secret_name);
+    }
+
+    #[test]
+    fn test_pulsar_sink_type_conversion_with_missing_token() {
+        use numaflow_models::models::PulsarSink;
+
+        // Test case: Authentication is specified but token is missing
+        let invalid_pulsar_sink = Box::new(PulsarSink {
+            auth: Some(Box::new(numaflow_models::models::PulsarAuth {
+                token: None,
+            })),
+            producer_name: "test-producer".to_string(),
+            server_addr: "pulsar://localhost:6650".to_string(),
+            topic: "test-topic".to_string(),
+        });
+
+        let result = SinkType::try_from(invalid_pulsar_sink);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Config Error - Authentication configuration is enabled, however JWT token is not provided in the Pulsar sink configuration"
+        );
+    }
+
+    #[test]
+    fn test_pulsar_sink_type_conversion_with_invalid_secret() {
+        use k8s_openapi::api::core::v1::SecretKeySelector;
+        use numaflow_models::models::PulsarSink;
+
+        // Test case: Authentication is specified but secret file doesn't exist
+        let invalid_pulsar_sink = Box::new(PulsarSink {
+            auth: Some(Box::new(numaflow_models::models::PulsarAuth {
+                token: Some(SecretKeySelector {
+                    name: "non-existent-secret".to_string(),
+                    key: "token".to_string(),
+                    ..Default::default()
+                }),
+            })),
+            producer_name: "test-producer".to_string(),
+            server_addr: "pulsar://localhost:6650".to_string(),
+            topic: "test-topic".to_string(),
+        });
+
+        let result = SinkType::try_from(invalid_pulsar_sink);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Failed to get JWT token for configuring Pulsar producer")
+        );
+    }
+
+    #[test]
+    fn test_pulsar_fallback_sink_type() {
+        use k8s_openapi::api::core::v1::SecretKeySelector;
+        use numaflow_models::models::{AbstractSink, PulsarSink, Sink};
+
+        // Test case 1: Valid Pulsar fallback configuration without auth
+        let sink = Sink {
+            udsink: None,
+            log: None,
+            blackhole: None,
+            serve: None,
+            sqs: None,
+            fallback: Some(Box::new(AbstractSink {
+                udsink: None,
+                log: None,
+                blackhole: None,
+                serve: None,
+                sqs: None,
+                kafka: None,
+                pulsar: Some(Box::new(PulsarSink {
+                    auth: None,
+                    producer_name: "fallback-producer".to_string(),
+                    server_addr: "pulsar://localhost:6650".to_string(),
+                    topic: "fallback-topic".to_string(),
+                })),
+            })),
+            retry_strategy: None,
+            kafka: None,
+            pulsar: None,
+        };
+
+        let result = SinkType::fallback_sinktype(&sink);
+        assert!(result.is_ok());
+        match result {
+            Ok(SinkType::Pulsar(config)) => {
+                assert_eq!(config.addr, "pulsar://localhost:6650");
+                assert_eq!(config.topic, "fallback-topic");
+                assert_eq!(config.producer_name, "fallback-producer");
+                assert!(config.auth.is_none());
+            }
+            _ => panic!("Expected SinkType::Pulsar for fallback sink"),
+        }
+
+        // Test case 2: Valid Pulsar fallback configuration with JWT auth
+        let secret_name = "test_pulsar_fallback_sink_type_jwt-secret";
+        let token_key = "token";
+        setup_secret(secret_name, token_key, "fallback-jwt-token");
+
+        let sink_with_auth = Sink {
+            udsink: None,
+            log: None,
+            blackhole: None,
+            serve: None,
+            sqs: None,
+            fallback: Some(Box::new(AbstractSink {
+                udsink: None,
+                log: None,
+                blackhole: None,
+                serve: None,
+                sqs: None,
+                kafka: None,
+                pulsar: Some(Box::new(PulsarSink {
+                    auth: Some(Box::new(numaflow_models::models::PulsarAuth {
+                        token: Some(SecretKeySelector {
+                            name: secret_name.to_string(),
+                            key: token_key.to_string(),
+                            ..Default::default()
+                        }),
+                    })),
+                    producer_name: "fallback-producer".to_string(),
+                    server_addr: "pulsar://localhost:6650".to_string(),
+                    topic: "fallback-topic".to_string(),
+                })),
+            })),
+            retry_strategy: None,
+            kafka: None,
+            pulsar: None,
+        };
+
+        let result = SinkType::fallback_sinktype(&sink_with_auth);
+        assert!(result.is_ok());
+        match result {
+            Ok(SinkType::Pulsar(config)) => {
+                assert_eq!(config.addr, "pulsar://localhost:6650");
+                assert_eq!(config.topic, "fallback-topic");
+                assert_eq!(config.producer_name, "fallback-producer");
+                let auth = config.auth.unwrap();
+                let numaflow_pulsar::PulsarAuth::JWT(token) = auth;
+                assert_eq!(token, "fallback-jwt-token");
+            }
+            _ => panic!("Expected SinkType::Pulsar for fallback sink"),
+        }
+
+        cleanup_secret(secret_name);
+    }
+
+    #[test]
+    fn test_pulsar_fallback_sink_type_with_missing_token() {
+        use numaflow_models::models::{AbstractSink, PulsarSink, Sink};
+
+        // Test case: Fallback Pulsar sink with authentication but missing token
+        let sink = Sink {
+            udsink: None,
+            log: None,
+            blackhole: None,
+            serve: None,
+            sqs: None,
+            fallback: Some(Box::new(AbstractSink {
+                udsink: None,
+                log: None,
+                blackhole: None,
+                serve: None,
+                sqs: None,
+                kafka: None,
+                pulsar: Some(Box::new(PulsarSink {
+                    auth: Some(Box::new(numaflow_models::models::PulsarAuth {
+                        token: None,
+                    })),
+                    producer_name: "fallback-producer".to_string(),
+                    server_addr: "pulsar://localhost:6650".to_string(),
+                    topic: "fallback-topic".to_string(),
+                })),
+            })),
+            retry_strategy: None,
+            kafka: None,
+            pulsar: None,
+        };
+
+        let result = SinkType::fallback_sinktype(&sink);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Config Error - Authentication configuration is enabled, however JWT token is not provided in the Pulsar sink configuration"
+        );
+    }
+
+    #[test]
+    fn test_pulsar_fallback_sink_type_with_invalid_secret() {
+        use k8s_openapi::api::core::v1::SecretKeySelector;
+        use numaflow_models::models::{AbstractSink, PulsarSink, Sink};
+
+        // Test case: Fallback Pulsar sink with authentication but invalid secret
+        let sink = Sink {
+            udsink: None,
+            log: None,
+            blackhole: None,
+            serve: None,
+            sqs: None,
+            fallback: Some(Box::new(AbstractSink {
+                udsink: None,
+                log: None,
+                blackhole: None,
+                serve: None,
+                sqs: None,
+                kafka: None,
+                pulsar: Some(Box::new(PulsarSink {
+                    auth: Some(Box::new(numaflow_models::models::PulsarAuth {
+                        token: Some(SecretKeySelector {
+                            name: "non-existent-secret".to_string(),
+                            key: "token".to_string(),
+                            ..Default::default()
+                        }),
+                    })),
+                    producer_name: "fallback-producer".to_string(),
+                    server_addr: "pulsar://localhost:6650".to_string(),
+                    topic: "fallback-topic".to_string(),
+                })),
+            })),
+            retry_strategy: None,
+            kafka: None,
+            pulsar: None,
+        };
+
+        let result = SinkType::fallback_sinktype(&sink);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Failed to get JWT token for configuring Pulsar producer")
         );
     }
 }

@@ -1,5 +1,6 @@
 use tokio::sync::oneshot;
 
+pub mod sink;
 pub mod source;
 
 pub type Result<T> = core::result::Result<T, Error>;
@@ -31,5 +32,20 @@ impl From<pulsar::Error> for Error {
 impl From<String> for Error {
     fn from(value: String) -> Self {
         Error::Other(value)
+    }
+}
+
+#[derive(Clone, PartialEq)]
+pub enum PulsarAuth {
+    JWT(String),
+}
+
+impl std::fmt::Debug for PulsarAuth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PulsarAuth::JWT(token) => {
+                write!(f, "{}****{}", &token[..6], &token[token.len() - 6..])
+            }
+        }
     }
 }
