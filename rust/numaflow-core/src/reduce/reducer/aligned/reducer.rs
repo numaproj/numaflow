@@ -143,7 +143,7 @@ impl ReduceTask {
             } else {
                 // messages of fixed window are not part of multiple windows, so we can delete all the
                 // messages that are less than the window's end time.
-                self.window.clone().into()
+                self.window.into()
             };
 
             debug!(?gc_event, "Sending GC event to WAL");
@@ -273,7 +273,17 @@ impl AlignedReduceActor {
         );
 
         // Send the open command with the first message
-        message_tx.send(window_msg).await.expect("Receiver dropped");
+        if let Err(e) = message_tx.send(window_msg).await {
+            if !self.cln_token.is_cancelled() {
+                self.error_tx
+                    .send(Error::Reduce(format!(
+                        "Failed to send message to reduce task: {}",
+                        e
+                    )))
+                    .await
+                    .expect("Failed to send error");
+            }
+        }
     }
 
     /// sends the message to the reduce task for the window.
@@ -293,11 +303,17 @@ impl AlignedReduceActor {
         };
 
         // Send the append message
-        active_stream
-            .message_tx
-            .send(window_msg)
-            .await
-            .expect("Receiver dropped");
+        if let Err(e) = active_stream.message_tx.send(window_msg).await {
+            if !self.cln_token.is_cancelled() {
+                self.error_tx
+                    .send(Error::Reduce(format!(
+                        "Failed to send message to reduce task: {}",
+                        e
+                    )))
+                    .await
+                    .expect("Failed to send error");
+            }
+        }
     }
 
     /// Closes the reduce task for the window.
@@ -371,6 +387,24 @@ impl AlignedReducer {
         let (error_tx, mut error_rx) = mpsc::channel(10);
         let gc_wal_handle = self.setup_gc_wal().await?;
 
+        let parent_cln_token = cln_token.clone();
+        // create a new cancellation token for the map component, this token is used for hard
+        // shutdown, the parent token is used for graceful shutdown.
+        let hard_shutdown_token = CancellationToken::new();
+        // the one that calls shutdown
+        let hard_shutdown_token_owner = hard_shutdown_token.clone();
+        let graceful_timeout = Duration::from_secs(20);
+
+        // spawn a task to cancel the token after graceful timeout when the main token is cancelled
+        let shutdown_handle = tokio::spawn(async move {
+            // initiate graceful shutdown
+            parent_cln_token.cancelled().await;
+            // wait for graceful timeout
+            tokio::time::sleep(graceful_timeout).await;
+            // cancel the token to hard shutdown
+            hard_shutdown_token_owner.cancel();
+        });
+
         // Create the actor channel and start the actor
         let (actor_tx, actor_rx) = mpsc::channel(100);
         let actor = AlignedReduceActor::new(
@@ -380,7 +414,7 @@ impl AlignedReducer {
             error_tx.clone(),
             gc_wal_handle,
             self.window_manager.clone(),
-            cln_token.clone(),
+            hard_shutdown_token.clone(),
         )
         .await;
 
@@ -406,6 +440,12 @@ impl AlignedReducer {
                             break;
                         };
 
+                        // If shutting down, drain the stream
+                        if self.shutting_down_on_err {
+                            info!("Reduce component is shutting down due to an error, not accepting the message");
+                            continue;
+                        }
+
                         // update the watermark.
                         // we cannot simply assign incoming message's watermark as the current watermark,
                         // because it can be -1. watermark will never regress, so use max.
@@ -419,12 +459,6 @@ impl AlignedReducer {
 
                         if self.current_watermark > msg.event_time {
                             error!(current_watermark=?self.current_watermark, message_event_time=?msg.event_time, "Old message popped up, Watermark is behind the event time");
-                            continue;
-                        }
-
-                        // If shutting down, drain the stream
-                        if self.shutting_down_on_err {
-                            info!("Reduce component is shutting down due to an error, not accepting the message");
                             continue;
                         }
 
@@ -463,6 +497,8 @@ impl AlignedReducer {
                     error!("Failed to save window state: {:?}", e);
                 }
             }
+
+            shutdown_handle.abort();
 
             info!(status=?self.final_result, "Aligned Reduce component successfully completed");
             self.final_result
