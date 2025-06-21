@@ -595,7 +595,9 @@ async fn start_sink_forwarder(
 }
 
 /// Creates a jetstream context based on the provided configuration
-async fn create_js_context(config: pipeline::isb::jetstream::ClientConfig) -> Result<Context> {
+pub(crate) async fn create_js_context(
+    config: pipeline::isb::jetstream::ClientConfig,
+) -> Result<Context> {
     // TODO: make these configurable. today this is hardcoded on Golang code too.
     let mut opts = ConnectOptions::new()
         .max_reconnects(None) // unlimited reconnects
