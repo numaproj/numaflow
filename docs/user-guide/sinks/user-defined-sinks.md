@@ -2,6 +2,8 @@
 
 A `Pipeline` may have multiple Sinks. These sinks could either be a pre-defined sink such as `kafka`, `log`, etc., or a `user-defined sink`.
 
+Numaflow provides builtin Sinks but there are many use cases where an user might want to write a custom Sink implementation, and User Defined Sink (`udsink`) can be used to write those custom Sinks.
+
 A pre-defined sink vertex runs single-container pods, while a user-defined sink runs two-container pods.
 
 > **Related Topics:**
@@ -13,11 +15,11 @@ A pre-defined sink vertex runs single-container pods, while a user-defined sink 
 
 You can build your own user-defined sinks in multiple languages. Check the SDK examples section below for detailed implementation patterns and working examples.
 
-## 🔁 Message–Response Contract
+## Message–Response Contract
 
-When developing a user-defined sink in Numaflow, your sink container communicates with the sidecar via batches of messages. For each batch of messages received, your sink must return a list of responses that strictly adheres to the following contract:
+When developing a user-defined sink in Numaflow, your sink container communicates with the sidecar via an ordered batches of messages. For each batch of messages received, your sink must return a list of responses that strictly adheres to the following contract:
 
-### 📌 Core Rules:
+### Core Rules:
 
 1. **Response Count:**
    - For every batch of `N` input messages received, your sink **must return exactly** `N` responses.
@@ -34,21 +36,21 @@ When developing a user-defined sink in Numaflow, your sink container communicate
      - `FALLBACK`
      - `SERVE`
 
-### 🎯 Response Types
+### Response Types
 
-#### ✅ **OK** (`ResponseOK`)
+#### **OK** (`ResponseOK`)
 - **Meaning:** Message was successfully processed and written to the sink.
 - **Action:** Message is acknowledged and removed from the pipeline.
 - **Use Case:** Normal successful operations.
 
-#### ❌ **FAILURE** (`ResponseFailure`)
+#### **FAILURE** (`ResponseFailure`)
 - **Meaning:** Permanent error occurred during processing.
 - **Action:** Message will be dropped from the pipeline (no retry).
 - **Requirement:** Must include a descriptive error message.
 - **Use Case:** Invalid data, unsupported formats, or unrecoverable failures.
 - **Related:** See [Retry Strategy](./retry-strategy.md) for configuring retry behavior.
 
-#### 🔄 **FALLBACK** (`ResponseFallback`)
+#### **FALLBACK** (`ResponseFallback`)
 - **Meaning:** Message should be routed to the fallback sink (dead-letter queue).
 - **Action:** Message is immediately sent to the configured fallback sink without retry.
 - **Requirements:** 
@@ -57,13 +59,13 @@ When developing a user-defined sink in Numaflow, your sink container communicate
 - **Use Case:** Messages that cannot be processed by the primary sink but should be preserved.
 - **Related:** See [Fallback Sink](./fallback.md) for detailed configuration.
 
-#### 🍽️ **SERVE** (`ResponseServe`)
+#### **SERVE** (`ResponseServe`)
 - **Meaning:** Message should be stored in the serving store for later retrieval.
 - **Action:** Message is stored in the configured serving store (e.g., NATS or user-defined).
 - **Requirements:** Serving store must be configured in the pipeline spec.
 - **Use Case:** Storing results for serving pipelines or caching responses.
 
-### 🧪 Example
+###  Example
 
 If the input batch is:
 
@@ -85,7 +87,7 @@ Then your response must be:
 ]
 ```
 
-### ⚠️ Important Assumptions & Constraints
+###  Important Assumptions & Constraints
 
 #### **Message ID Uniqueness:**
 - Within a single sink iterator, no duplicate datumIDs exist.
@@ -98,19 +100,19 @@ Then your response must be:
 #### **Retry Behavior:**
 - FAILURE responses follow the configured retry strategy if enabled.
 - FALLBACK responses bypass retry and go directly to the fallback sink.
-- OK responses require no retry.
+- OK responses are not retried.
 
 #### **Batch Processing:**
 - Messages are processed in batches for efficiency.
 - All messages in a batch must be responded to before the next batch.
-- Incorrect response counts or missing IDs may cause batch rejection or runtime errors.
+- Incorrect response counts or missing IDs will cause stalling of processing.
 
 #### **Idempotency:**
 - Since retries can occur for FAILURE statuses, your sink implementation must be idempotent to avoid duplicated side effects.
 
 ### 🔧 SDK Methods
 
-Use the appropriate SDK methods to generate responses:
+Check the links below to see the examples for different languages.
 
 **Golang:**
 ```go
@@ -136,7 +138,7 @@ Response.fallback(id)
 Response.serve(id, serve_response)
 ```
 
-### 📚 Explore SDK Examples
+###  Explore SDK Examples
 
 For more detailed examples and implementation patterns, check out the official SDK repositories:
 
@@ -146,11 +148,11 @@ For more detailed examples and implementation patterns, check out the official S
 
 These repositories contain complete working examples of user-defined sinks with various response types and error handling patterns.
 
-### ⚠️ **Reminder**
+### **Reminder**
 
-Always validate that the number of responses equals the number of incoming messages before returning your response to the sidecar. Incorrect response counts or missing IDs will cause pipeline errors.
+Always validate that the number of responses equals the number of incoming messages before returning your response to the sidecar. Incorrect response counts or missing IDs will stall the pipeline.
 
-## Example User-defined Sink Vertex Configuration
+## Example User-Defined Sink Vertex Configuration
 
 ```yaml
 spec:
@@ -172,7 +174,7 @@ Some environment variables are available in the user-defined sink container:
 - `NUMAFLOW_PIPELINE_NAME` - Name of the pipeline.
 - `NUMAFLOW_VERTEX_NAME` - Name of the vertex.
 
-## User-defined Sinks Contributed by the Open Source Community
+## User-Defined Sinks Contributed by the Open Source Community
 
 If you're looking for examples and usages contributed by the open source community, head over to [the numaproj-contrib repositories](https://github.com/orgs/numaproj-contrib/repositories).
 
