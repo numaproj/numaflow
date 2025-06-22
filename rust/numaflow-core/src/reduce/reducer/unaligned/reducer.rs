@@ -49,8 +49,10 @@ struct ReduceTask {
     window_manager: UnalignedWindowManager,
     /// Maximum time to wait before writing a batch
     batch_timeout: Duration,
-    /// Map to track windows for each key combination
-    /// For session: stores the actual window for that keys
+    /// Map to track windows for each key combination. It is an optimization to avoid writing GC
+    /// events for every message. The tracked windows are deleted after writing GC events which happens
+    /// after each batch write to the ISB is completed.
+    /// For session: stores the window that got closed for that keys.
     /// For accumulator: stores a window with max end time (same start and end time)
     tracked_windows: HashMap<Vec<String>, Window>,
 }
@@ -76,7 +78,9 @@ impl ReduceTask {
         }
     }
 
-    /// accumulator reduce
+    /// accumulator reduce implementation. It internally batches writes to JetStream to checkpoint
+    /// that the writes have been persisted. Once persisted it deletes the window and watermark can
+    /// progress.
     async fn accumulator_reduce(
         &mut self,
         client: UserDefinedAccumulator,
@@ -117,6 +121,7 @@ impl ReduceTask {
         loop {
             tokio::select! {
                 _ = batch_timer.tick() => {
+                    // Drop the current writer channel to signal the writer to stop so we can wait
                     drop(writer_tx);
                     // wait for the writer to finish writing the current batch
                     if let Err(e) = writer_handle.await {
@@ -152,19 +157,24 @@ impl ReduceTask {
                         continue;
                     }
 
+                    // the response window is monotonic with start-time as 0 and endtime as monotonically
+                    // increasing WM. This is because each message is an independent entity since
+                    // accumulator acts like a Global Window.
                     let window = response.window.clone().expect("Window not set in response");
                     let window : Window = window.into();
                     writer_tx
                         .send(response.into())
                         .await
                         .expect("Failed to send response to writer");
+
                     self.tracked_windows.insert(window.keys.to_vec(), window);
                 }
             }
         }
 
+        // final drop the writer channel to signal the writer to stop so we can wait for it to finish
         drop(writer_tx);
-        // Final cleanup: wait for writer to complete
+        // wait for writer to complete
         if let Err(e) = writer_handle.await {
             error!(?e, "Error while writing final results to JetStream");
             return Err(Error::Reduce(format!("Writer task failed: {}", e)));
@@ -189,7 +199,9 @@ impl ReduceTask {
         }
     }
 
-    /// session reduce
+    /// session reduce  implementation. It internally batches writes to JetStream to checkpoint
+    /// that the writes have been persisted. Once persisted it deletes the window and watermark can
+    /// progress. In session window we add to the tracked only when the reduce function returns EOF.
     async fn session_reduce(
         &mut self,
         client: UserDefinedSessionReduce,

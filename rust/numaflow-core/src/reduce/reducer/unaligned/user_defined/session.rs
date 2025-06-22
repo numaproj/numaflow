@@ -105,7 +105,7 @@ impl From<UnalignedWindowMessage> for SessionReduceRequest {
 /// Wrapper for SessionReduceResponse that includes index and vertex name.
 pub(crate) struct UserDefinedSessionResponse {
     pub response: SessionReduceResponse,
-    pub index: i32,
+    pub index: u32,
     /// vertex name for creating the message ID
     pub vertex_name: &'static str,
 }
@@ -136,7 +136,7 @@ impl From<UserDefinedSessionResponse> for Message {
             id: MessageID {
                 vertex_name: user_response.vertex_name.into(),
                 offset: offset_str.into(),
-                index: user_response.index,
+                index: user_response.index as i32,
             },
             headers: HashMap::new(), // reset headers since it is a new message
             metadata: None,
@@ -187,7 +187,7 @@ impl UserDefinedSessionReduce {
 
             // Track response indices per window key combination which will be used for constructing
             // message id which is required for dedup.
-            let mut response_indices: HashMap<Vec<String>, i32> = HashMap::new();
+            let mut response_indices: HashMap<Vec<String>, u32> = HashMap::new();
 
             loop {
                 tokio::select! {
@@ -213,6 +213,7 @@ impl UserDefinedSessionReduce {
                             .map(|w| w.keys.clone())
                             .unwrap_or_default();
 
+                        // If EOF, remove the index for the window keys, else increment the index
                         let index = if response.eof {
                             response_indices.remove(&window_keys);
                             0

@@ -340,7 +340,7 @@ async fn wait_for_fence_availability(
     timeout_duration: Duration,
 ) -> Result<()> {
     let result = timeout(timeout_duration, async {
-        let mut check_interval = interval(Duration::from_secs(5)); // Check every 5 seconds
+        let mut check_interval = interval(Duration::from_secs(1));
 
         loop {
             check_interval.tick().await;
@@ -349,7 +349,7 @@ async fn wait_for_fence_availability(
             match fs::metadata(fence_file_path).await {
                 Ok(_) => {
                     info!(
-                        "Fence file {:?} still exists, waiting for it to be deleted...",
+                        "Fence file {:?} exists, waiting for it to be deleted...",
                         fence_file_path
                     );
                 }
