@@ -90,19 +90,15 @@ describe("VertexUpdate", () => {
       const mutationBtn = screen.getByTestId("spec-editor-mutated");
       fireEvent.click(mutationBtn);
     });
-    await waitFor(() => {
-      expect(mockSetModalOnClose).toHaveBeenCalledWith(undefined);
-    });
+    expect(mockSetModalOnClose).toHaveBeenCalledWith(undefined);
     mockSetModalOnClose.mockClear();
     act(() => {
       const mutationBtn = screen.getByTestId("spec-editor-mutated");
       fireEvent.click(mutationBtn);
     });
-    await waitFor(() => {
-      expect(mockSetModalOnClose).toHaveBeenCalledWith({
-        iconType: "warn",
-        message: "Are you sure you want to discard your changes?",
-      });
+    expect(mockSetModalOnClose).toHaveBeenCalledWith({
+      iconType: "warn",
+      message: "Are you sure you want to discard your changes?",
     });
   });
 
