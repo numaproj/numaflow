@@ -590,7 +590,6 @@ export const usePipelineViewFetch = (
             conditions: edge?.conditions,
             pendingLabel: edgePendingLabel.get(edge?.to),
             ackPendingLabel: edgeAckPendingLabel.get(edge?.to),
-            backpressureLabel: edgePendingLabel.get(edge?.to), // Keep for backward compatibility
             isFull: edgeIsFull.get(edge?.to),
             source: edge?.from,
             target: edge?.to,
@@ -657,8 +656,7 @@ export const usePipelineViewFetch = (
           if (vertex in vertexToHandleMap) {
             const handleID = vertexToHandleMap[vertex];
             const idSplit = handleID.split("-");
-            const handleNumber = Number(idSplit[1]);
-            vertexToHandleMap[vertex] = "3-" + (isNaN(handleNumber) ? 0 : handleNumber + 1);
+            vertexToHandleMap[vertex] = "3-" + (Number(idSplit[1]) + 1);
           } else {
             vertexToHandleMap[vertex] = "3-0";
           }
