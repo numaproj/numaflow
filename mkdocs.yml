@@ -95,6 +95,7 @@ nav:
           - Compatibility: user-guide/sdks/compatibility.md
           - Features: user-guide/sdks/features.md
       - Reference:
+          - Message Headers: "core-concepts/message-headers.md"
           - user-guide/reference/pipeline-tuning.md
           - user-guide/reference/autoscaling.md
           - user-guide/reference/conditional-forwarding.md

@@ -111,12 +111,21 @@ pub(crate) async fn create_sink_writer(
             )
         }
         SinkType::Kafka(sink_config) => {
-            let sink_config = *sink_config.clone();
+            let sink_config = *sink_config;
             let kafka_sink = numaflow_kafka::sink::new_sink(sink_config)?;
             SinkWriterBuilder::new(
                 batch_size,
                 read_timeout,
                 SinkClientType::Kafka(kafka_sink),
+                tracker_handle,
+            )
+        }
+        SinkType::Pulsar(pulsar_sink_config) => {
+            let pulsar_sink = numaflow_pulsar::sink::new_sink(*pulsar_sink_config).await?;
+            SinkWriterBuilder::new(
+                batch_size,
+                read_timeout,
+                SinkClientType::Pulsar(pulsar_sink),
                 tracker_handle,
             )
         }
@@ -178,6 +187,13 @@ pub(crate) async fn create_sink_writer(
                 let kafka_sink = numaflow_kafka::sink::new_sink(sink_config)?;
                 Ok(sink_writer_builder
                     .fb_sink_client(SinkClientType::Kafka(kafka_sink))
+                    .build()
+                    .await?)
+            }
+            SinkType::Pulsar(pulsar_sink_config) => {
+                let pulsar_sink = numaflow_pulsar::sink::new_sink(*pulsar_sink_config).await?;
+                Ok(sink_writer_builder
+                    .fb_sink_client(SinkClientType::Pulsar(pulsar_sink))
                     .build()
                     .await?)
             }
