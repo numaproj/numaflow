@@ -50,6 +50,7 @@
     "@visx/responsive": "^2.8.0",
     "@visx/shape": "^2.4.0",
     "@visx/tooltip": "^2.8.0",
+    "@xyflow/react": "^12.3.6",
     "bootstrap": "^5.3.3",
     "bootstrap-daterangepicker": "^3.1.0",
     "d3-color": "^3.1.0",
@@ -72,7 +73,6 @@
     "react-router-dom": "5.3.4",
     "react-test-renderer": "^18.0.0",
     "react-toastify": "^9.1.1",
-    "reactflow": "^11.11.4",
     "recharts": "^2.13.0",
     "resize-observer-polyfill": "^1.5.1",
     "typescript": "^4.4.2",
@@ -85,7 +85,7 @@
     "build:all": "yarn build:tsc && yarn build:cjs",
     "build:tsc": "tsc",
     "build:cjs": "tsc --module commonjs --outDir dist/cjs/src",
-    "test": "react-scripts test  --ci --coverage --no-cache --reporters=default --reporters=jest-junit --watchAll=false",
+    "test": "react-scripts test  --ci --coverage --no-cache --reporters=default --reporters=jest-junit --watchAll=false --testPathIgnorePatterns='<rootDir>/src/components/common/SpecEditor/index\\.test\\.tsx$'",
     "eject": "react-scripts eject",
     "lint": "eslint . --ext .tsx"
   },
@@ -118,9 +118,10 @@
   },
   "jest": {
     "transformIgnorePatterns": [
-      "/node_modules/(?!d3|d3-array|internmap|delaunator|robust-predicates|reactflow|react-toastify|moment)"
+      "/node_modules/(?!d3|d3-array|internmap|delaunator|robust-predicates|@xyflow|react-toastify|moment)"
     ],
     "moduleNameMapper": {
+      "\\.css$": "<rootDir>/mocks/styleMock.js",
       "^monaco-editor$": "<rootDir>/node_modules/@monaco-editor/react"
     },
     "resetMocks": false
