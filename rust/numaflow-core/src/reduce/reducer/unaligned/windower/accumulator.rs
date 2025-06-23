@@ -1,3 +1,28 @@
+//! # Accumulator Window Manager
+//!
+//! AccumulatorWindowManager manages [Accumulator Windows], is very similar to session windows, the
+//! windows are tracked at key level and for every key combination we will have a new global window,
+//! The window is created when the first message arrives for the key, the window state is cleared when
+//! there are no messages for a timeout duration. We track the timestamps of the messages in the window
+//! and use that to calculate the lowest watermark. When we get the response from the SDK for a keyed
+//! window, all the messages with event time less than the response watermark will be deleted from the
+//! window, Once the timestamps are empty for a window and if it's idle for a timeout duration, the
+//! window will be closed. Similar to session windows we use a shared pnf slot because windows are
+//! tracked at the key level. Same pnf slot will be used for all the windows, using different window
+//! operations we decide what operation to be performed on the keyed window. We only have on single
+//! [WAL] for all the windows and compaction is done based on the deleted windows.
+//!
+//!
+//! ## Window Operations
+//!
+//! - **Open**: Create a new accumulator window when first message arrives for a key (Global window)
+//! - **Append**: Add subsequent messages to the existing window for the same key
+//! - **Close**: Close the window when there are no messages for a timeout duration and clear the window
+//!   state.
+//!
+//! [Accumulator Windows]: https://numaflow.numaproj.io/user-guide/user-defined-functions/reduce/windowing/accumulator/
+//! [WAL]: crate::reduce::wal
+
 use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;

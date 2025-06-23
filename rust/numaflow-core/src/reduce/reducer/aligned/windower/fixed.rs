@@ -1,10 +1,9 @@
-//! In [Fixed Window] each event belongs to exactly one window and we can assign the message to the window
+//! In [Fixed Window] each event belongs to exactly one window, and we can assign the message to the window
 //! directly using the event time after rounding it to the nearest window [boundary](windower::truncate_to_duration).
 //! The window is defined by the length of the window. The window is aligned to the epoch. For example,
 //! if the window length is 30s, and the event time is 100, then the window this event belongs to will
-//! be `[90, 120)`. There will be a [WAL] for each window. The GC (garbage collection) of WAL is
-//! very simple since each window has its own WAL and the GC can be done by deleting the WAL. During
-//! startup, we will replay the WALs and recreate each per WAL and simply replay the messages to that window.
+//! be `[90, 120)`. We only have a single [WAL] for all the windows (we do not have per window WALs).
+//! The compactor takes care of compacting the WALs based on the deleted windows.
 //!
 //! [Fixed Window]: https://numaflow.numaproj.io/user-guide/user-defined-functions/reduce/windowing/fixed/
 //! [WAL]: crate::reduce::wal

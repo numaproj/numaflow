@@ -1,9 +1,27 @@
-//! SessionWindowManager manages [Session Window]. Session windows are tracked at the key level, windows
-//! don't have a fixed start and end time and are created when a message is received. The window is
-//! closed when there are no messages for the key for longer than the timeout duration.
+//! # Session Window Manager
+//!
+//! SessionWindowManager manages [Session Window], a type of unaligned window where the window's
+//! end time keeps moving until there is no data for a given time duration. Unlike fixed and sliding
+//! windows, session windows are tracked at key level, and they don't have a fixed start and end time.
+//! Multiple session windows share a common pnf slot, since windows are tracked at the key level it's
+//! not optimal to create bidirectional streams with the SDK for every window, so we use a shared pnf
+//! slot. Using the common slot we decide what operation to be performed on the keyed window. Below
+//! are the different operations that can be performed on a session window. Unlike other window types,
+//! we have concept of merging windows, since the windows are dynamic in nature we can end up creating
+//! multiple windows for the same key which can be merged later.  We only have on single [WAL] for all
+//! the windows and compaction is done based on the deleted windows.
+//!
+//! ## Different Session Window Operations
+//!
+//! - **Open**: Create a new window when a message arrives for a new key or after timeout
+//! - **Append**: Add message to existing window when it falls within the current window bounds
+//! - **Expand**: Extend window boundaries when a message extends beyond current start/end times
+//! - **Merge**: Combine multiple windows when an out-of-order message bridges the gap
+//! - **Close**: Finalize window when no messages arrive within the timeout duration
 //!
 //! [Session Window]: https://numaflow.numaproj.io/user-guide/user-defined-functions/reduce/windowing/session/
 //! [WAL]: crate::reduce::wal
+
 use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
