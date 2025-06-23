@@ -96,3 +96,4 @@ reqwest = { version = "0.12.12", default-features = false, features = [
 uuid = "1.16.0"
 futures = "0.3.31"
 rcgen = "0.13.1"
+chrono = "0.4.41"

@@ -10,7 +10,6 @@ use tracing::info;
 use crate::config::components::reduce::WindowType;
 use crate::config::is_mono_vertex;
 use crate::config::pipeline;
-use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::{
@@ -19,9 +18,8 @@ use crate::config::pipeline::{
 use crate::metrics::{ComponentHealthChecks, LagReader, PendingReaderTasks, PipelineComponents};
 use crate::pipeline::forwarder::reduce_forwarder::ReduceForwarder;
 use crate::pipeline::forwarder::source_forwarder;
-use crate::pipeline::isb::jetstream::reader::JetStreamReader;
-use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
-use crate::pipeline::pipeline::isb::BufferReaderConfig;
+use crate::pipeline::isb::jetstream::reader::{ISBReaderConfig, JetStreamReader};
+use crate::pipeline::isb::jetstream::writer::{ISBWriterConfig, JetstreamWriter};
 use crate::reduce::pbq::PBQBuilder;
 use crate::reduce::reducer::aligned::reducer::AlignedReducer;
 use crate::reduce::reducer::aligned::windower::WindowManager;
@@ -37,7 +35,6 @@ use crate::sink::serve::nats::NatsServingStore;
 use crate::sink::serve::user_defined::UserDefinedStore;
 use crate::tracker::TrackerHandle;
 use crate::watermark::WatermarkHandle;
-use crate::watermark::isb::ISBWatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
 use crate::{Result, error, shared};
 
@@ -116,19 +113,20 @@ async fn start_source_forwarder(
         None
     };
     let tracker_handle = TrackerHandle::new(None, serving_callback_handler);
-
-    let buffer_writer = create_buffer_writer(
-        &config,
-        js_context.clone(),
-        tracker_handle.clone(),
-        cln_token.clone(),
-        source_watermark_handle.clone().map(WatermarkHandle::Source),
-        config.vertex_type_config.to_string(),
-    )
-    .await;
+    let buffer_writer = JetstreamWriter::new(ISBWriterConfig {
+        config: config.to_vertex_config.clone(),
+        js_ctx: js_context,
+        paf_concurrency: config.paf_concurrency,
+        tracker_handle: tracker_handle.clone(),
+        cancel_token: cln_token.clone(),
+        watermark_handle: source_watermark_handle.clone().map(WatermarkHandle::Source),
+        vertex_type: config.vertex_type_config.to_string(),
+        isb_config: config.isb_config.clone(),
+    });
 
     let transformer = create_components::create_transformer(
         config.batch_size,
+        config.graceful_shutdown_time,
         source_config.transformer_config.clone(),
         tracker_handle.clone(),
         cln_token.clone(),
@@ -211,35 +209,37 @@ async fn start_map_forwarder(
     // create tracker and buffer writer, they can be shared across all forwarders
     let tracker_handle =
         TrackerHandle::new(watermark_handle.clone(), serving_callback_handler.clone());
-
-    let buffer_writer = create_buffer_writer(
-        &config,
-        js_context.clone(),
-        tracker_handle.clone(),
-        cln_token.clone(),
-        watermark_handle.clone().map(WatermarkHandle::ISB),
-        config.vertex_type_config.to_string(),
-    )
-    .await;
+    let buffer_writer = JetstreamWriter::new(ISBWriterConfig {
+        config: config.to_vertex_config.clone(),
+        js_ctx: js_context.clone(),
+        paf_concurrency: config.paf_concurrency,
+        tracker_handle: tracker_handle.clone(),
+        cancel_token: cln_token.clone(),
+        watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
+        vertex_type: config.vertex_type_config.to_string(),
+        isb_config: config.isb_config.clone(),
+    });
 
     for stream in reader_config.streams.clone() {
         info!("Creating buffer reader for stream {:?}", stream);
-        let buffer_reader = create_buffer_reader(
-            config.vertex_type_config.to_string(),
+        let buffer_reader = JetStreamReader::new(ISBReaderConfig {
+            vertex_type: config.vertex_type_config.to_string(),
             stream,
-            reader_config.clone(),
-            js_context.clone(),
-            tracker_handle.clone(),
-            config.batch_size,
-            watermark_handle.clone(),
-            config.isb_config.clone(),
-        )
+            js_ctx: js_context.clone(),
+            config: reader_config.clone(),
+            tracker_handle: tracker_handle.clone(),
+            batch_size: config.batch_size,
+            read_timeout: config.read_timeout,
+            watermark_handle: watermark_handle.clone(),
+            isb_config: config.isb_config.clone(),
+        })
         .await?;
 
         isb_lag_readers.push(buffer_reader.clone());
         let mapper = create_components::create_mapper(
             config.batch_size,
             config.read_timeout,
+            config.graceful_shutdown_time,
             map_vtx_config.clone(),
             tracker_handle.clone(),
             cln_token.clone(),
@@ -353,28 +353,30 @@ async fn start_reduce_forwarder(
     // responsible for identifying the lowest watermark in the pod.
     let tracker_handle = TrackerHandle::new(None, None);
     // Create buffer reader
-    let buffer_reader = create_buffer_reader(
-        config.vertex_type_config.to_string(),
+    let buffer_reader = JetStreamReader::new(ISBReaderConfig {
+        vertex_type: config.vertex_type_config.to_string(),
         stream,
-        reader_config.clone(),
-        js_context.clone(),
-        tracker_handle.clone(),
-        config.batch_size,
-        watermark_handle.clone(),
-        config.isb_config.clone(),
-    )
+        js_ctx: js_context.clone(),
+        config: reader_config.clone(),
+        tracker_handle: tracker_handle.clone(),
+        batch_size: config.batch_size,
+        read_timeout: config.read_timeout,
+        watermark_handle: watermark_handle.clone(),
+        isb_config: config.isb_config.clone(),
+    })
     .await?;
 
     // Create buffer writer
-    let buffer_writer = create_buffer_writer(
-        &config,
-        js_context.clone(),
-        tracker_handle.clone(),
-        cln_token.clone(),
-        watermark_handle.clone().map(WatermarkHandle::ISB),
-        config.vertex_type_config.to_string(),
-    )
-    .await;
+    let buffer_writer = JetstreamWriter::new(ISBWriterConfig {
+        config: config.to_vertex_config.clone(),
+        js_ctx: js_context.clone(),
+        paf_concurrency: config.paf_concurrency,
+        tracker_handle: tracker_handle.clone(),
+        cancel_token: cln_token.clone(),
+        watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
+        vertex_type: config.vertex_type_config.to_string(),
+        isb_config: config.isb_config.clone(),
+    });
 
     // Create user-defined aligned reducer client
     let reducer_client =
@@ -521,17 +523,19 @@ async fn start_sink_forwarder(
         let tracker_handle =
             TrackerHandle::new(watermark_handle.clone(), serving_callback_handler.clone());
 
-        let buffer_reader = create_buffer_reader(
-            config.vertex_type_config.to_string(),
+        let buffer_reader = JetStreamReader::new(ISBReaderConfig {
+            vertex_type: config.vertex_type_config.to_string(),
             stream,
-            reader_config.clone(),
-            js_context.clone(),
-            tracker_handle.clone(),
-            config.batch_size,
-            watermark_handle.clone(),
-            config.isb_config.clone(),
-        )
+            js_ctx: js_context.clone(),
+            config: reader_config.clone(),
+            tracker_handle: tracker_handle.clone(),
+            batch_size: config.batch_size,
+            read_timeout: config.read_timeout,
+            watermark_handle: watermark_handle.clone(),
+            isb_config: config.isb_config.clone(),
+        })
         .await?;
+
         buffer_readers.push(buffer_reader);
 
         let sink_writer = create_components::create_sink_writer(
@@ -590,53 +594,6 @@ async fn start_sink_forwarder(
     Ok(())
 }
 
-async fn create_buffer_writer(
-    config: &PipelineConfig,
-    js_context: Context,
-    tracker_handle: TrackerHandle,
-    cln_token: CancellationToken,
-    watermark_handle: Option<WatermarkHandle>,
-    vertex_type: String,
-) -> JetstreamWriter {
-    use crate::pipeline::isb::jetstream::writer::ISBWriterConfig;
-
-    JetstreamWriter::new(ISBWriterConfig {
-        config: config.to_vertex_config.clone(),
-        js_ctx: js_context,
-        paf_concurrency: config.paf_concurrency,
-        tracker_handle,
-        cancel_token: cln_token,
-        watermark_handle,
-        vertex_type,
-        isb_config: config.isb_config.clone(),
-    })
-}
-
-async fn create_buffer_reader(
-    vertex_type: String,
-    stream: Stream,
-    reader_config: BufferReaderConfig,
-    js_context: Context,
-    tracker_handle: TrackerHandle,
-    batch_size: usize,
-    watermark_handle: Option<ISBWatermarkHandle>,
-    isb_config: Option<crate::config::pipeline::isb_config::ISBConfig>,
-) -> Result<JetStreamReader> {
-    use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;
-
-    JetStreamReader::new(ISBReaderConfig {
-        vertex_type,
-        stream,
-        js_ctx: js_context,
-        config: reader_config,
-        tracker_handle,
-        batch_size,
-        watermark_handle,
-        isb_config,
-    })
-    .await
-}
-
 /// Creates a jetstream context based on the provided configuration
 async fn create_js_context(config: pipeline::isb::jetstream::ClientConfig) -> Result<Context> {
     // TODO: make these configurable. today this is hardcoded on Golang code too.
@@ -675,6 +632,7 @@ mod tests {
     use crate::config::components::source::SourceConfig;
     use crate::config::components::source::SourceType;
     use crate::config::pipeline::PipelineConfig;
+    use crate::config::pipeline::isb::Stream;
     use crate::config::pipeline::map::{MapType, UserDefinedConfig};
     use crate::pipeline::pipeline::VertexType;
     use crate::pipeline::pipeline::isb;
@@ -779,9 +737,7 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
-            watermark_config: None,
-            callback_config: None,
-            isb_config: None,
+            ..Default::default()
         };
 
         let cancellation_token = CancellationToken::new();
@@ -938,9 +894,7 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
-            watermark_config: None,
-            callback_config: None,
-            isb_config: None,
+            ..Default::default()
         };
 
         let cancellation_token = CancellationToken::new();
@@ -1177,9 +1131,7 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
-            watermark_config: None,
-            callback_config: None,
-            isb_config: None,
+            ..Default::default()
         };
 
         let cancellation_token = CancellationToken::new();

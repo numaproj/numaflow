@@ -150,6 +150,10 @@ message AbstractSink {
   // SQS sink is used to write the data to the AWS SQS.
   // +optional
   optional SqsSink sqs = 6;
+
+  // Pulsar sink is used to write the data to the Apache Pulsar.
+  // +optional
+  optional PulsarSink pulsar = 7;
 }
 
 message AbstractVertex {
@@ -1394,6 +1398,18 @@ message PulsarAuth {
   // JWT Token auth
   // +optional
   optional .k8s.io.api.core.v1.SecretKeySelector token = 1;
+}
+
+message PulsarSink {
+  optional string serverAddr = 1;
+
+  optional string topic = 2;
+
+  optional string producerName = 3;
+
+  // Auth information
+  // +optional
+  optional PulsarAuth auth = 6;
 }
 
 message PulsarSource {

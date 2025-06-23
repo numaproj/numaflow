@@ -179,7 +179,7 @@ describe("VertexUpdate", () => {
     await waitFor(() => {
       expect(screen.getByTestId("spec-editor-reset")).toBeInTheDocument();
     });
-    // Click 
+    // Click
     act(() => {
       const submitBtn = screen.getByTestId("spec-editor-submit");
       fireEvent.click(submitBtn);
@@ -192,8 +192,9 @@ describe("VertexUpdate", () => {
       ).toBeInTheDocument();
     });
     // Wait for onUpdateComplete call
-    await new Promise((r) => setTimeout(r, 1000));
-    expect(mockRefresh).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(mockRefresh).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("submit failure", async () => {
