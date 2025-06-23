@@ -23,4 +23,14 @@ type PulsarAuth struct {
 	// JWT Token auth
 	// +optional
 	Token *corev1.SecretKeySelector `json:"token,omitempty" protobuf:"bytes,1,opt,name=token"`
+	// Authentication using HTTP basic https://pulsar.apache.org/docs/4.0.x/security-basic-auth/
+	// +optional
+	BasicAuth *PulsarBasicAuth `json:"basicAuth,omitempty" protobuf:"bytes,2,opt,name=basicAuth"`
+}
+
+type PulsarBasicAuth struct {
+	// +optional
+	Username *corev1.SecretKeySelector `json:"username,omitempty" protobuf:"bytes,1,opt,name=username"`
+	// +optional
+	Password *corev1.SecretKeySelector `json:"password,omitempty" protobuf:"bytes,2,opt,name=password"`
 }
