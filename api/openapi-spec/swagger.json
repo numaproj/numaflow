@@ -19577,6 +19577,10 @@
           "description": "Log sink is used to write the data to the log.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log"
         },
+        "pulsar": {
+          "description": "Pulsar sink is used to write the data to the Apache Pulsar.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PulsarSink"
+        },
         "serve": {
           "description": "Serve sink is used to return results when working with a ServingPipeline.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServeSink"
@@ -21843,6 +21847,29 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.PulsarSink": {
+      "type": "object",
+      "required": [
+        "serverAddr",
+        "topic",
+        "producerName"
+      ],
+      "properties": {
+        "auth": {
+          "description": "Auth information",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PulsarAuth"
+        },
+        "producerName": {
+          "type": "string"
+        },
+        "serverAddr": {
+          "type": "string"
+        },
+        "topic": {
+          "type": "string"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.PulsarSource": {
       "type": "object",
       "required": [
@@ -22479,6 +22506,10 @@
         "log": {
           "description": "Log sink is used to write the data to the log.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log"
+        },
+        "pulsar": {
+          "description": "Pulsar sink is used to write the data to the Apache Pulsar.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PulsarSink"
         },
         "retryStrategy": {
           "description": "RetryStrategy struct encapsulates the settings for retrying operations in the event of failures.",

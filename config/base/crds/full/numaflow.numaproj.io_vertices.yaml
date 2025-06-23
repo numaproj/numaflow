@@ -3159,6 +3159,35 @@ spec:
                         type: object
                       log:
                         type: object
+                      pulsar:
+                        properties:
+                          auth:
+                            properties:
+                              token:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    default: ""
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                                x-kubernetes-map-type: atomic
+                            type: object
+                          producerName:
+                            type: string
+                          serverAddr:
+                            type: string
+                          topic:
+                            type: string
+                        required:
+                        - producerName
+                        - serverAddr
+                        - topic
+                        type: object
                       serve:
                         type: object
                       sqs:
@@ -3743,6 +3772,35 @@ spec:
                     - topic
                     type: object
                   log:
+                    type: object
+                  pulsar:
+                    properties:
+                      auth:
+                        properties:
+                          token:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                default: ""
+                                type: string
+                              optional:
+                                type: boolean
+                            required:
+                            - key
+                            type: object
+                            x-kubernetes-map-type: atomic
+                        type: object
+                      producerName:
+                        type: string
+                      serverAddr:
+                        type: string
+                      topic:
+                        type: string
+                    required:
+                    - producerName
+                    - serverAddr
+                    - topic
                     type: object
                   retryStrategy:
                     properties:

@@ -111,12 +111,21 @@ pub(crate) async fn create_sink_writer(
             )
         }
         SinkType::Kafka(sink_config) => {
-            let sink_config = *sink_config.clone();
+            let sink_config = *sink_config;
             let kafka_sink = numaflow_kafka::sink::new_sink(sink_config)?;
             SinkWriterBuilder::new(
                 batch_size,
                 read_timeout,
                 SinkClientType::Kafka(kafka_sink),
+                tracker_handle,
+            )
+        }
+        SinkType::Pulsar(pulsar_sink_config) => {
+            let pulsar_sink = numaflow_pulsar::sink::new_sink(*pulsar_sink_config).await?;
+            SinkWriterBuilder::new(
+                batch_size,
+                read_timeout,
+                SinkClientType::Pulsar(pulsar_sink),
                 tracker_handle,
             )
         }
@@ -181,6 +190,13 @@ pub(crate) async fn create_sink_writer(
                     .build()
                     .await?)
             }
+            SinkType::Pulsar(pulsar_sink_config) => {
+                let pulsar_sink = numaflow_pulsar::sink::new_sink(*pulsar_sink_config).await?;
+                Ok(sink_writer_builder
+                    .fb_sink_client(SinkClientType::Pulsar(pulsar_sink))
+                    .build()
+                    .await?)
+            }
         };
     }
 
@@ -194,6 +210,7 @@ pub(crate) async fn create_sink_writer(
 /// Creates a transformer if it is configured
 pub(crate) async fn create_transformer(
     batch_size: usize,
+    graceful_timeout: Duration,
     transformer_config: Option<TransformerConfig>,
     tracker_handle: TrackerHandle,
     cln_token: CancellationToken,
@@ -229,6 +246,7 @@ pub(crate) async fn create_transformer(
                 Transformer::new(
                     batch_size,
                     transformer_config.concurrency,
+                    graceful_timeout,
                     transformer_grpc_client.clone(),
                     tracker_handle,
                 )
@@ -242,6 +260,7 @@ pub(crate) async fn create_transformer(
 pub(crate) async fn create_mapper(
     batch_size: usize,
     read_timeout: Duration,
+    graceful_timeout: Duration,
     map_config: MapVtxConfig,
     tracker_handle: TrackerHandle,
     cln_token: CancellationToken,
@@ -287,6 +306,7 @@ pub(crate) async fn create_mapper(
                         server_info.get_map_mode().unwrap_or(MapMode::Unary),
                         batch_size,
                         read_timeout,
+                        graceful_timeout,
                         map_config.concurrency,
                         map_grpc_client.clone(),
                         tracker_handle,
@@ -319,6 +339,7 @@ pub(crate) async fn create_mapper(
                         server_info.get_map_mode().unwrap_or(MapMode::Unary),
                         batch_size,
                         read_timeout,
+                        graceful_timeout,
                         map_config.concurrency,
                         map_grpc_client.clone(),
                         tracker_handle,

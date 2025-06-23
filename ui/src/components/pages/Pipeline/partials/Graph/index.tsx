@@ -7,7 +7,7 @@ import React, {
   useState,
   useContext,
 } from "react";
-import ReactFlow, {
+import {
   applyEdgeChanges,
   applyNodeChanges,
   Edge,
@@ -20,8 +20,9 @@ import ReactFlow, {
   Panel,
   useReactFlow,
   useViewport,
+  ReactFlow,
   ReactFlowProvider,
-} from "reactflow";
+} from "@xyflow/react";
 import {
   Accordion,
   AccordionSummary,
@@ -68,7 +69,7 @@ import monoVertex from "../../../../../images/monoVertex.svg";
 import input from "../../../../../images/input0.svg";
 import generator from "../../../../../images/generator0.svg";
 
-import "reactflow/dist/style.css";
+import "@xyflow/react/dist/style.css";
 import "./style.css";
 
 const nodeWidth = 252;
@@ -571,12 +572,13 @@ const Flow = (props: FlowProps) => {
 };
 
 // hides the side input edges
-const hide = (hidden: { [x: string]: any }) => (edge: Edge) => {
-  edge.hidden = hidden[edge?.data?.source];
-  return edge;
-};
+const hide =
+  (hidden: { [x: string]: any }) => (edge: Edge<Record<string, any>>) => {
+    edge.hidden = hidden[edge?.data?.source];
+    return edge;
+  };
 
-const getHiddenValue = (edges: Edge[]) => {
+const getHiddenValue = (edges: Edge<Record<string, any>>[]) => {
   const hiddenEdges: { [key: string]: boolean } = {};
   edges?.forEach((edge) => {
     if (edge?.data?.sideInputEdge) {
@@ -642,7 +644,7 @@ export default function Graph(props: GraphProps) {
   const [edgeId, setEdgeId] = useState<string>();
 
   const openEdgeSidebar = useCallback(
-    (edge: Edge) => {
+    (edge: Edge<Record<string, any>>) => {
       if (!setSidebarProps) {
         return;
       }
@@ -699,7 +701,7 @@ export default function Graph(props: GraphProps) {
   }, [hidden, data]);
 
   const openNodeSidebar = useCallback(
-    (node: Node) => {
+    (node: Node<Record<string, any>>) => {
       if (!setSidebarProps) {
         return;
       }
