@@ -553,17 +553,21 @@ export const usePipelineViewFetch = (
         
         // Initialize or accumulate pending count
         if (edgePendingLabel.get(id) === undefined) {
-          edgePendingLabel.set(id, Number(buffer?.pendingCount));
-          edgeAckPendingLabel.set(id, Number(buffer?.ackPendingCount));
+          const pendingCount = Number(buffer?.pendingCount);
+          const ackPendingCount = Number(buffer?.ackPendingCount);
+          edgePendingLabel.set(id, isNaN(pendingCount) ? 0 : pendingCount);
+          edgeAckPendingLabel.set(id, isNaN(ackPendingCount) ? 0 : ackPendingCount);
           edgeIsFull.set(id, buffer?.isFull);
         } else {
+          const pendingCount = Number(buffer?.pendingCount);
+          const ackPendingCount = Number(buffer?.ackPendingCount);
           edgePendingLabel.set(
             id,
-            edgePendingLabel.get(id) + Number(buffer?.pendingCount)
+            edgePendingLabel.get(id) + (isNaN(pendingCount) ? 0 : pendingCount)
           );
           edgeAckPendingLabel.set(
             id,
-            edgeAckPendingLabel.get(id) + Number(buffer?.ackPendingCount)
+            edgeAckPendingLabel.get(id) + (isNaN(ackPendingCount) ? 0 : ackPendingCount)
           );
           if (buffer?.isFull === true && buffer?.isFull !== edgeIsFull.get(id))
             edgeIsFull.set(id, buffer.isFull);
@@ -653,7 +657,8 @@ export const usePipelineViewFetch = (
           if (vertex in vertexToHandleMap) {
             const handleID = vertexToHandleMap[vertex];
             const idSplit = handleID.split("-");
-            vertexToHandleMap[vertex] = "3-" + (Number(idSplit[1]) + 1);
+            const handleNumber = Number(idSplit[1]);
+            vertexToHandleMap[vertex] = "3-" + (isNaN(handleNumber) ? 0 : handleNumber + 1);
           } else {
             vertexToHandleMap[vertex] = "3-0";
           }
