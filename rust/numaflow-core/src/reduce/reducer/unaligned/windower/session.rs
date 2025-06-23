@@ -262,35 +262,53 @@ impl SessionWindowManager {
         Window::new(start_time, end_time, Arc::clone(&first.keys))
     }
 
-    /// Groups windows that can be merged together
+    /// Groups windows that can be merged together.
+    /// This function takes a slice of windows (each window defined by a start and end time)
+    /// and returns a slice of slices of windows that can be merged based on their overlapping times.
+    /// A window can be merged with another if its end time is after the start time of the next window.
+    ///
+    /// For example, given the windows (75, 85), (60, 90), (80, 100) and (110, 120),
+    /// the function returns Vec<Vec<Window>>{{(60, 90), (75, 85), (80, 100)}, {(110, 120)}}
+    /// because the first three windows overlap and can be merged, while the last window stands alone.
+    ///
+    /// Note: The input windows are assumed to be sorted by end time in ascending order.
     fn windows_that_can_be_merged(windows: &[Window]) -> Vec<Vec<Window>> {
+        // If there are no windows, return empty vec
         if windows.is_empty() {
             return Vec::new();
         }
 
-        let mut sorted_windows = windows.to_vec();
-        sorted_windows.sort_by(|a, b| b.end_time.cmp(&a.end_time));
-
+        // Initialize an empty vec to hold slices of mergeable windows
         let mut merged_groups = Vec::new();
-        let mut i = 0;
 
-        while i < sorted_windows.len() {
-            let mut merged_group = vec![sorted_windows[i].clone()];
-            let mut last_window = sorted_windows[i].clone();
+        let mut i = windows.len();
+        // Reverse iterate over the windows because it is sorted by end-time in ascending order.
+        while i > 0 {
+            i -= 1;
 
-            i += 1;
+            // Initialize a slice to hold the current window and any subsequent mergeable windows
+            let mut merged_group = vec![windows[i].clone()];
 
-            while i < sorted_windows.len() && sorted_windows[i].end_time >= last_window.start_time {
-                merged_group.push(sorted_windows[i].clone());
+            // Set the last window to be the current window
+            let mut last_window = windows[i].clone();
 
-                // Update the last window to include this window
-                if sorted_windows[i].start_time < last_window.start_time {
-                    last_window.start_time = sorted_windows[i].start_time;
+            // Check if the end time of the last window is after the start time of the previous window
+            // If it is that means they should be merged, add the previous window to the merged slice
+            // and update the end time of the last window
+            while i > 0 && windows[i - 1].end_time > last_window.start_time {
+                i -= 1;
+                merged_group.push(windows[i].clone());
+
+                // Merge the window into last_window to expand the range
+                if windows[i].start_time < last_window.start_time {
+                    last_window.start_time = windows[i].start_time;
                 }
-
-                i += 1;
+                if windows[i].end_time > last_window.end_time {
+                    last_window.end_time = windows[i].end_time;
+                }
             }
 
+            // Add the merged slice to the slice of all mergeable windows
             merged_groups.push(merged_group);
         }
 
@@ -661,5 +679,59 @@ mod tests {
         let expected_oldest =
             msg2.event_time + chrono::Duration::from_std(windower.timeout).unwrap();
         assert_eq!(oldest_time, expected_oldest);
+    }
+
+    #[test]
+    fn test_windows_that_can_be_merged_go_style_algorithm() {
+        // Test the optimized Go-style algorithm with the same example from Go documentation
+        let now = Utc::now();
+
+        // Create windows matching the Go example: (75, 85), (60, 90), (80, 100) and (110, 120)
+        let window1 = Window::new(
+            now + chrono::Duration::seconds(75),
+            now + chrono::Duration::seconds(85),
+            Arc::from(vec!["test_key".to_string()]),
+        );
+        let window2 = Window::new(
+            now + chrono::Duration::seconds(60),
+            now + chrono::Duration::seconds(90),
+            Arc::from(vec!["test_key".to_string()]),
+        );
+        let window3 = Window::new(
+            now + chrono::Duration::seconds(80),
+            now + chrono::Duration::seconds(100),
+            Arc::from(vec!["test_key".to_string()]),
+        );
+        let window4 = Window::new(
+            now + chrono::Duration::seconds(110),
+            now + chrono::Duration::seconds(120),
+            Arc::from(vec!["test_key".to_string()]),
+        );
+
+        // Input windows sorted by end time (ascending): (85, 90, 100, 120)
+        let windows = vec![window1, window2, window3, window4];
+
+        // Test merging
+        let merged_groups = SessionWindowManager::windows_that_can_be_merged(&windows);
+
+        // Should have 2 groups: one with the first three overlapping windows, one with the standalone window
+        assert_eq!(merged_groups.len(), 2);
+
+        // First group should have 1 window (the standalone window4 with end time 120)
+        assert_eq!(merged_groups[0].len(), 1);
+        assert_eq!(merged_groups[0][0].end_time, now + chrono::Duration::seconds(120));
+
+        // Second group should have 3 windows (the overlapping windows)
+        assert_eq!(merged_groups[1].len(), 3);
+
+        // Verify the windows in the second group are the overlapping ones
+        let second_group_end_times: Vec<_> = merged_groups[1]
+            .iter()
+            .map(|w| w.end_time)
+            .collect();
+
+        assert!(second_group_end_times.contains(&(now + chrono::Duration::seconds(85))));
+        assert!(second_group_end_times.contains(&(now + chrono::Duration::seconds(90))));
+        assert!(second_group_end_times.contains(&(now + chrono::Duration::seconds(100))));
     }
 }
