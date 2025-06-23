@@ -199,3 +199,8 @@ impl UnalignedWindowManager {
         }
     }
 }
+
+/// Combines keys into a single string for use as a map key
+fn combine_keys(keys: &[String]) -> String {
+    keys.join(":")
+}
