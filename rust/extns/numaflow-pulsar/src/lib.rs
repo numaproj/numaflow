@@ -38,6 +38,7 @@ impl From<String> for Error {
 #[derive(Clone, PartialEq)]
 pub enum PulsarAuth {
     JWT(String),
+    HTTPBasic { username: String, password: String },
 }
 
 impl std::fmt::Debug for PulsarAuth {
@@ -45,6 +46,14 @@ impl std::fmt::Debug for PulsarAuth {
         match self {
             PulsarAuth::JWT(token) => {
                 write!(f, "{}****{}", &token[..6], &token[token.len() - 6..])
+            }
+            PulsarAuth::HTTPBasic { username, password } => {
+                write!(
+                    f,
+                    "username={}, password=****{}",
+                    username,
+                    &password[password.len() - 3..]
+                )
             }
         }
     }
