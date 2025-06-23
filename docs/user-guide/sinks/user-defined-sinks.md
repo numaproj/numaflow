@@ -1,8 +1,7 @@
 # User-defined Sinks
 
-A `Pipeline` may have multiple Sinks. These sinks could either be a pre-defined sink such as `kafka`, `log`, etc., or a `user-defined sink`.
-
 Numaflow provides builtin Sinks but there are many use cases where an user might want to write a custom Sink implementation, and User Defined Sink (`udsink`) can be used to write those custom Sinks.
+
 
 A pre-defined sink vertex runs single-container pods, while a user-defined sink runs two-container pods.
 
@@ -110,7 +109,7 @@ Then your response must be:
 #### **Idempotency:**
 - Since retries can occur for FAILURE statuses, your sink implementation must be idempotent to avoid duplicated side effects.
 
-### 🔧 SDK Methods
+### SDK Methods
 
 Check the links below to see the examples for different languages.
 
