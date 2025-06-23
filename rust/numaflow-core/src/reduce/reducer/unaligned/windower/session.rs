@@ -20,24 +20,33 @@ fn combine_keys(keys: &[String]) -> String {
     keys.join(":")
 }
 
-/// session window state for every key combination (combinedKey -> Sorted window set)
-type WindowStore = Arc<RwLock<HashMap<String, BTreeSet<Window>>>>;
+/// Active session windows for every key combination (combinedKey -> Sorted window set)
+type ActiveWindowStore = Arc<RwLock<HashMap<String, BTreeSet<Window>>>>;
+
+/// Closed session windows sorted by end time. We need to keep track of closed windows so that we can
+/// find the oldest window computed and forwarded. The watermark is progressed based on the latest
+/// closed window end time. The oldest window in the active_windows will be greater than the latest
+/// closed window.
+type ClosedWindowStore = Arc<RwLock<BTreeSet<Window>>>;
 
 /// SessionWindowManager manages session windows.
 #[derive(Debug, Clone)]
 pub(crate) struct SessionWindowManager {
     /// Timeout duration after which inactive windows are closed
     timeout: Duration,
-    /// All windows (both active and closed) mapped by combined key (joined keys)
+    /// Active windows mapped by combined key (joined keys)
     /// Windows are sorted by end time within each key using Window's Ord implementation
-    all_windows: WindowStore,
+    active_windows: ActiveWindowStore,
+    /// Closed windows sorted by end time. These windows have been closed but not yet garbage collected.
+    closed_windows: ClosedWindowStore,
 }
 
 impl SessionWindowManager {
     pub(crate) fn new(timeout: Duration) -> Self {
         Self {
             timeout,
-            all_windows: Arc::new(RwLock::new(HashMap::new())),
+            active_windows: Arc::new(RwLock::new(HashMap::new())),
+            closed_windows: Arc::new(RwLock::new(BTreeSet::new())),
         }
     }
 
@@ -57,8 +66,8 @@ impl SessionWindowManager {
             keys,
         );
 
-        let mut all_windows = self.all_windows.write().expect("Poisoned lock");
-        let window_set = all_windows.entry(combined_key).or_default();
+        let mut active_windows = self.active_windows.write().expect("Poisoned lock");
+        let window_set = active_windows.entry(combined_key).or_default();
 
         if let Some(existing_window) = Self::find_window_to_merge(window_set, &new_window) {
             let expanded_window = Self::expand_window_if_needed(&new_window, &existing_window);
@@ -122,16 +131,16 @@ impl SessionWindowManager {
 
     /// Closes windows that have been inactive for longer than the timeout
     pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<UnalignedWindowMessage> {
-        let mut all_windows = self.all_windows.write().expect("Poisoned lock");
+        let mut active_windows = self.active_windows.write().expect("Poisoned lock");
 
-        // Extract and remove expired windows
-        let closed_windows_by_key = Self::extract_expired_windows(&mut all_windows, watermark);
+        // Extract and remove expired windows from active windows
+        let closed_windows_by_key = Self::extract_expired_windows(&mut active_windows, watermark);
 
         // Process each key's closed windows
         closed_windows_by_key
             .into_iter()
             .flat_map(|(key, windows)| {
-                Self::process_closed_windows(&mut all_windows, &key, windows)
+                self.process_closed_windows(&mut active_windows, &key, windows)
             })
             .collect()
     }
@@ -167,19 +176,21 @@ impl SessionWindowManager {
 
     /// Process closed windows for a specific key
     fn process_closed_windows(
-        all_windows: &mut HashMap<String, BTreeSet<Window>>,
+        &self,
+        active_windows: &mut HashMap<String, BTreeSet<Window>>,
         key: &str,
         closed_windows: Vec<Window>,
     ) -> Vec<UnalignedWindowMessage> {
         Self::windows_that_can_be_merged(&closed_windows)
             .into_iter()
-            .filter_map(|group| Self::process_closing_window_group(all_windows, key, group))
+            .filter_map(|group| self.process_closing_window_group(active_windows, key, group))
             .collect()
     }
 
     /// Process a group of windows that can be merged
     fn process_closing_window_group(
-        all_windows: &mut HashMap<String, BTreeSet<Window>>,
+        &self,
+        active_windows: &mut HashMap<String, BTreeSet<Window>>,
         key: &str,
         group: Vec<Window>,
     ) -> Option<UnalignedWindowMessage> {
@@ -189,29 +200,37 @@ impl SessionWindowManager {
 
         let window_to_close = Self::merge_windows(&group);
         // Try to merge with active windows
-        match Self::try_merge_with_active(all_windows, key, &window_to_close) {
+        match Self::try_merge_with_active(active_windows, key, &window_to_close) {
             Some((old_active, new_merged)) => Some(UnalignedWindowMessage {
                 operation: UnalignedWindowOperation::Merge {
                     windows: vec![window_to_close, old_active, new_merged],
                 },
                 pnf_slot: SHARED_PNF_SLOT,
             }),
-            None => Some(UnalignedWindowMessage {
-                operation: UnalignedWindowOperation::Close {
-                    window: window_to_close,
-                },
-                pnf_slot: SHARED_PNF_SLOT,
-            }),
+            None => {
+                // Move window to closed_windows
+                self.closed_windows
+                    .write()
+                    .expect("Poisoned lock")
+                    .insert(window_to_close.clone());
+
+                Some(UnalignedWindowMessage {
+                    operation: UnalignedWindowOperation::Close {
+                        window: window_to_close,
+                    },
+                    pnf_slot: SHARED_PNF_SLOT,
+                })
+            }
         }
     }
 
     /// Try to merge a window with active windows
     fn try_merge_with_active(
-        all_windows: &mut HashMap<String, BTreeSet<Window>>,
+        active_windows: &mut HashMap<String, BTreeSet<Window>>,
         key: &str,
         window: &Window,
     ) -> Option<(Window, Window)> {
-        let window_set = all_windows.get_mut(key)?;
+        let window_set = active_windows.get_mut(key)?;
         let active_window = Self::find_window_to_merge(window_set, window)?;
 
         window_set.remove(&active_window);
@@ -279,29 +298,34 @@ impl SessionWindowManager {
         merged_groups
     }
 
-    /// Deletes a window from the window list
+    /// Deletes a window from the closed windows list after garbage collection
     pub(crate) fn delete_window(&self, window: Window) {
-        let mut all_windows = self.all_windows.write().expect("Poisoned lock");
-        let combined_key = combine_keys(&window.keys);
-
-        if let Some(window_set) = all_windows.get_mut(&combined_key) {
-            window_set.remove(&window);
-
-            // Remove the key if no windows left
-            if window_set.is_empty() {
-                all_windows.remove(&combined_key);
-            }
-        }
+        // Remove the window from closed_windows
+        self.closed_windows
+            .write()
+            .expect("Poisoned lock")
+            .remove(&window);
     }
 
-    /// Returns the end time of the oldest window
+    /// Returns the end time of the oldest window among both active and closed windows
     pub(crate) fn oldest_window_end_time(&self) -> Option<DateTime<Utc>> {
-        self.all_windows
+        // Get the oldest window from closed_windows first, if closed_windows is empty, get the oldest
+        // from active_windows
+        // NOTE: closed windows will always have a lower end time than active_windows
+        self.closed_windows
             .read()
             .expect("Poisoned lock")
-            .values()
-            .flat_map(|window_set| window_set.iter().map(|window| window.end_time))
-            .min()
+            .iter()
+            .next()
+            .map(|window| window.end_time)
+            .or_else(|| {
+                self.active_windows
+                    .read()
+                    .expect("Poisoned lock")
+                    .values()
+                    .flat_map(|window_set| window_set.iter().map(|window| window.end_time))
+                    .min()
+            })
     }
 }
 
@@ -511,5 +535,131 @@ mod tests {
 
         // Second group should have 2 windows (window2 and window1)
         assert_eq!(merged_groups[1].len(), 2);
+    }
+
+    #[test]
+    fn test_closed_windows_tracking() {
+        // Create session windower with 1s timeout
+        let windower = SessionWindowManager::new(Duration::from_secs(1));
+        let now = Utc::now();
+
+        // Create a test message
+        let msg = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["test_key".to_string()]),
+            tags: None,
+            value: "test_value".as_bytes().to_vec().into(),
+            offset: Default::default(),
+            event_time: now - chrono::Duration::seconds(2),
+            ..Default::default()
+        };
+
+        // Assign windows - this should create an active window
+        windower.assign_windows(msg.clone());
+
+        // Verify window is in active_windows
+        {
+            let active_windows = windower.active_windows.read().unwrap();
+            assert_eq!(active_windows.len(), 1);
+            let closed_windows = windower.closed_windows.read().unwrap();
+            assert_eq!(closed_windows.len(), 0);
+        }
+
+        // Close windows with current time - this should move window to closed_windows
+        let closed = windower.close_windows(now);
+        assert_eq!(closed.len(), 1);
+
+        // Verify window is now in closed_windows and not in active_windows
+        {
+            let active_windows = windower.active_windows.read().unwrap();
+            assert_eq!(active_windows.len(), 0);
+            let closed_windows = windower.closed_windows.read().unwrap();
+            assert_eq!(closed_windows.len(), 1);
+        }
+
+        // Get the closed window for deletion
+        let closed_window = if let UnalignedWindowMessage {
+            operation: UnalignedWindowOperation::Close { window },
+            ..
+        } = &closed[0]
+        {
+            window.clone()
+        } else {
+            panic!("Expected Close message");
+        };
+
+        // Delete the closed window - this should remove it from closed_windows
+        windower.delete_window(closed_window);
+
+        // Verify window is removed from closed_windows
+        {
+            let active_windows = windower.active_windows.read().unwrap();
+            assert_eq!(active_windows.len(), 0);
+            let closed_windows = windower.closed_windows.read().unwrap();
+            assert_eq!(closed_windows.len(), 0);
+        }
+    }
+
+    #[test]
+    fn test_oldest_window_end_time_with_closed_windows() {
+        // Create session windower with 5s timeout
+        let windower = SessionWindowManager::new(Duration::from_secs(5));
+        let now = Utc::now();
+
+        // Create first message (older) - window will be [now-10s, now-5s]
+        let msg1 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key1".to_string()]),
+            tags: None,
+            value: "test_value1".as_bytes().to_vec().into(),
+            offset: Default::default(),
+            event_time: now - chrono::Duration::seconds(10),
+            ..Default::default()
+        };
+
+        // Create second message (newer) - window will be [now-5s, now]
+        let msg2 = Message {
+            typ: Default::default(),
+            keys: Arc::from(vec!["key2".to_string()]),
+            tags: None,
+            value: "test_value2".as_bytes().to_vec().into(),
+            offset: Default::default(),
+            event_time: now - chrono::Duration::seconds(5),
+            ..Default::default()
+        };
+
+        // Assign both messages to create active windows
+        windower.assign_windows(msg1.clone());
+        windower.assign_windows(msg2.clone());
+
+        // Close the older window by setting watermark to close only the first window
+        // msg1 window end time: (now - 10s) + 5s = now - 5s
+        // msg2 window end time: (now - 5s) + 5s = now
+        // watermark: now - 3s should close msg1's window but not msg2's
+        let watermark = now - chrono::Duration::seconds(3);
+        let closed = windower.close_windows(watermark);
+        assert_eq!(closed.len(), 1);
+
+        // Now we should have one closed window (older) and one active window (newer)
+        // The oldest window end time should be from the closed window
+        let oldest_time = windower.oldest_window_end_time().unwrap();
+        let expected_oldest =
+            msg1.event_time + chrono::Duration::from_std(windower.timeout).unwrap();
+        assert_eq!(oldest_time, expected_oldest);
+
+        // Delete the closed window
+        if let UnalignedWindowMessage {
+            operation: UnalignedWindowOperation::Close { window },
+            ..
+        } = &closed[0]
+        {
+            windower.delete_window(window.clone());
+        }
+
+        // Now the oldest window end time should be from the active window
+        let oldest_time = windower.oldest_window_end_time().unwrap();
+        let expected_oldest =
+            msg2.event_time + chrono::Duration::from_std(windower.timeout).unwrap();
+        assert_eq!(oldest_time, expected_oldest);
     }
 }
