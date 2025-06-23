@@ -3,19 +3,20 @@ import { FC, memo, useCallback, useContext, useEffect, useMemo } from "react";
 import { Tooltip } from "@mui/material";
 import {
   BaseEdge,
+  Edge,
   EdgeProps,
   EdgeLabelRenderer,
   getSimpleBezierPath,
-} from "reactflow";
+} from "@xyflow/react";
 import { duration } from "moment";
 import { HighlightContext } from "../../index";
 import { HighlightContextProps } from "../../../../../../../types/declarations/graph";
 import error from "../../../../../../../images/error.svg";
 
-import "reactflow/dist/style.css";
+import "@xyflow/react/dist/style.css";
 import "./style.css";
 
-const CustomEdge: FC<EdgeProps> = ({
+const CustomEdge: FC<EdgeProps<Edge<Record<string, any>>>> = ({
   id,
   sourceX,
   sourceY,
