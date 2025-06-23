@@ -1,3 +1,9 @@
+//! SessionWindowManager manages [Session Window]. Session windows are tracked at the key level, windows
+//! don't have a fixed start and end time and are created when a message is received. The window is
+//! closed when there are no messages for the key for longer than the timeout duration.
+//!
+//! [Session Window]: https://numaflow.numaproj.io/user-guide/user-defined-functions/reduce/windowing/session/
+//! [WAL]: crate::reduce::wal
 use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -10,7 +16,6 @@ use chrono::{DateTime, Utc};
 use tracing::info;
 
 /// Combines keys into a single string for use as a map key
-#[inline]
 fn combine_keys(keys: &[String]) -> String {
     keys.join(":")
 }
@@ -244,7 +249,6 @@ impl SessionWindowManager {
             return Vec::new();
         }
 
-        // Sort windows by end time (descending)
         let mut sorted_windows = windows.to_vec();
         sorted_windows.sort_by(|a, b| b.end_time.cmp(&a.end_time));
 

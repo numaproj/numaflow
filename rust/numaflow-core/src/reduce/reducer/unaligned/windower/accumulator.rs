@@ -10,7 +10,6 @@ use crate::reduce::reducer::unaligned::windower::{
 };
 
 /// Combines keys into a single string for use as a map key
-#[inline]
 fn combine_keys(keys: &[String]) -> String {
     keys.join(":")
 }
@@ -144,7 +143,6 @@ impl AccumulatorWindowManager {
     pub(crate) fn close_windows(&self, current_time: DateTime<Utc>) -> Vec<UnalignedWindowMessage> {
         let mut result = Vec::new();
 
-        // Acquire write lock once
         let mut active_windows = self.active_windows.write().expect("Poisoned lock");
 
         // Iterate and remove inactive windows
@@ -170,7 +168,8 @@ impl AccumulatorWindowManager {
         result
     }
 
-    /// Deletes event times before the given window's end time for the given keyed window
+    /// Deletes all the timestamps before the given end time for the window, actual delete happens
+    /// when the window is closed because of inactivity.
     pub(crate) fn delete_window(&self, window: Window) {
         let combined_key = combine_keys(&window.keys);
 

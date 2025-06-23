@@ -3239,7 +3239,7 @@ mod reducer_tests {
         let default_config = StorageConfig::default();
         assert_eq!(
             default_config.path,
-            std::path::PathBuf::from("/var/numaflow/pbq/wals")
+            std::path::PathBuf::from("/var/numaflow/pbq")
         );
         assert_eq!(default_config.max_file_size_mb, 10);
         assert_eq!(default_config.flush_interval_ms, 100);
@@ -3261,10 +3261,7 @@ mod reducer_tests {
         let result = StorageConfig::try_from(pbq_storage);
         assert!(result.is_ok());
         let config = result.unwrap();
-        assert_eq!(
-            config.path,
-            std::path::PathBuf::from("/var/numaflow/pbq/wals")
-        );
+        assert_eq!(config.path, std::path::PathBuf::from("/var/numaflow/pbq"));
         assert_eq!(config.max_file_size_mb, 10);
         assert_eq!(config.flush_interval_ms, 100);
         assert_eq!(config.channel_buffer_size, 500);

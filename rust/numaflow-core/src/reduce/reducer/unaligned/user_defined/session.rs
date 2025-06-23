@@ -105,6 +105,7 @@ impl From<UnalignedWindowMessage> for SessionReduceRequest {
 /// Wrapper for SessionReduceResponse that includes index and vertex name.
 pub(crate) struct UserDefinedSessionResponse {
     pub response: SessionReduceResponse,
+    /// monotonically increasing index for each response per window key combination
     pub index: u32,
     /// vertex name for creating the message ID
     pub vertex_name: &'static str,

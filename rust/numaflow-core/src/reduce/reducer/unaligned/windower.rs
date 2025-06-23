@@ -1,3 +1,7 @@
+//! Windower is responsible for managing the windows and exposes functions for assigning windows to
+//! messages and closing windows when there are no messages for a timeout duration. In case of
+//! unaligned, windows are tracked at the key level and assignment happens based on the event-time
+//! of the message.
 use crate::message::Message;
 use crate::reduce::reducer::unaligned::windower::accumulator::AccumulatorWindowManager;
 use crate::reduce::reducer::unaligned::windower::session::SessionWindowManager;
@@ -16,7 +20,7 @@ pub(crate) mod session;
 
 const SHARED_PNF_SLOT: &str = "GLOBAL_SLOT";
 
-/// A Window is represented by its start and end time. All the data which event time falls within
+/// A Window is represented by its start and end time and the keys. All the data which event time falls within
 /// this window will be reduced by the Reduce function associated with it. The association is via the
 /// id. The Windows when sorted are sorted by the end time.
 #[derive(Clone, PartialEq, Eq)]
@@ -196,6 +200,7 @@ pub(crate) enum UnalignedWindowOperation {
     },
 }
 
+/// UnalignedWindowManager enum that can be either a AccumulatorWindowManager or a SessionWindowManager.
 #[derive(Debug, Clone)]
 pub(crate) enum UnalignedWindowManager {
     Accumulator(AccumulatorWindowManager),
@@ -203,6 +208,7 @@ pub(crate) enum UnalignedWindowManager {
 }
 
 impl UnalignedWindowManager {
+    /// Assigns windows to a message.
     pub(crate) fn assign_windows(&self, msg: Message) -> Vec<UnalignedWindowMessage> {
         match self {
             UnalignedWindowManager::Accumulator(manager) => manager.assign_windows(msg),
@@ -210,6 +216,8 @@ impl UnalignedWindowManager {
         }
     }
 
+    /// Closes any windows that can be closed because the Watermark has advanced beyond the window
+    /// end time.
     pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<UnalignedWindowMessage> {
         match self {
             UnalignedWindowManager::Accumulator(manager) => manager.close_windows(watermark),
@@ -217,6 +225,7 @@ impl UnalignedWindowManager {
         }
     }
 
+    /// Deletes a window from the tracked windows.
     pub(crate) fn delete_window(&self, window: Window) {
         match self {
             UnalignedWindowManager::Accumulator(manager) => manager.delete_window(window),
@@ -224,6 +233,7 @@ impl UnalignedWindowManager {
         }
     }
 
+    /// Returns the end time of the oldest window
     pub(crate) fn oldest_window_end_time(&self) -> Option<DateTime<Utc>> {
         match self {
             UnalignedWindowManager::Accumulator(manager) => manager.oldest_window_end_time(),
