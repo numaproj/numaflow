@@ -58,67 +58,19 @@ const mockSummarySections = [
           healthy: 5,
           warning: 0,
           critical: 0,
-          tooltip: {
-            key: null,
-            ref: null,
-            props: {
-              children: {
-                key: null,
-                ref: null,
-                props: {
-                  children: [
-                    {
-                      type: "b",
-                      key: null,
-                      ref: null,
-                      props: { children: "Healthy:" },
-                      _owner: null,
-                      _store: {},
-                    },
-                    "  The ISB service is operating optimally. No issues or anomalies detected.",
-                    {
-                      type: "hr",
-                      key: null,
-                      ref: null,
-                      props: {},
-                      _owner: null,
-                      _store: {},
-                    },
-                    {
-                      type: "b",
-                      key: null,
-                      ref: null,
-                      props: { children: "Warning:" },
-                      _owner: null,
-                      _store: {},
-                    },
-                    "  The ISB service is experiencing minor issues or degradation within the data processing pipeline. Consider monitoring and further investigation.",
-                    {
-                      type: "hr",
-                      key: null,
-                      ref: null,
-                      props: {},
-                      _owner: null,
-                      _store: {},
-                    },
-                    {
-                      type: "b",
-                      key: null,
-                      ref: null,
-                      props: { children: "Critical:" },
-                      _owner: null,
-                      _store: {},
-                    },
-                    "  The ISB service is in a critical state. Immediate attention required.",
-                  ],
-                },
-                _owner: null,
-                _store: {},
-              },
-            },
-            _owner: null,
-            _store: {},
-          },
+          tooltip: (
+            <div>
+              <b>Healthy:</b> The ISB service is operating optimally. No issues
+              or anomalies detected.
+              <hr />
+              <b>Warning:</b> The ISB service is experiencing minor issues or
+              degradation within the data processing pipeline. Consider
+              monitoring and further investigation.
+              <hr />
+              <b>Critical:</b> The ISB service is in a critical state. Immediate
+              attention required.
+            </div>
+          ),
         },
       },
     ],
