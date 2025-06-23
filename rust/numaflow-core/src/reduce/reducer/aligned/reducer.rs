@@ -3,7 +3,7 @@ use crate::message::Message;
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
 use crate::reduce::reducer::aligned::windower::{
-    AlignedWindowManager, AlignedWindowMessage, Window, WindowOperation,
+    AlignedWindowManager, AlignedWindowMessage, AlignedWindowOperation, Window,
 };
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use bytes::Bytes;
@@ -137,7 +137,6 @@ impl ReduceTask {
                 Window {
                     start_time: oldest_window.start_time,
                     end_time: oldest_window.start_time,
-                    id: oldest_window.id,
                 }
                 .into()
             } else {
@@ -234,9 +233,9 @@ impl AlignedReduceActor {
     /// Handle a window message based on its operation type
     async fn handle_window_message(&mut self, window_msg: AlignedWindowMessage) {
         match &window_msg.operation {
-            WindowOperation::Open(_) => self.window_open(window_msg).await,
-            WindowOperation::Append(_) => self.window_append(window_msg).await,
-            WindowOperation::Close => self.window_close(window_msg).await,
+            AlignedWindowOperation::Open { .. } => self.window_open(window_msg).await,
+            AlignedWindowOperation::Append { .. } => self.window_append(window_msg).await,
+            AlignedWindowOperation::Close { .. } => self.window_close(window_msg).await,
         }
     }
 
@@ -246,7 +245,12 @@ impl AlignedReduceActor {
         // Create a new channel for this window's messages
         let (message_tx, message_rx) = mpsc::channel(100);
         let message_stream = ReceiverStream::new(message_rx);
-        let window = window_msg.window.clone();
+
+        // Extract window from the operation
+        let window = match &window_msg.operation {
+            AlignedWindowOperation::Open { window, .. } => window.clone(),
+            _ => panic!("Expected Open operation in window_open"),
+        };
 
         // Create a ReduceTask
         let reduce_task = ReduceTask::new(
@@ -265,7 +269,7 @@ impl AlignedReduceActor {
             .await;
 
         self.active_streams.insert(
-            window.pnf_slot(),
+            window_msg.pnf_slot.clone(),
             ActiveStream {
                 message_tx: message_tx.clone(),
                 task_handle,
@@ -288,11 +292,10 @@ impl AlignedReduceActor {
 
     /// sends the message to the reduce task for the window.
     async fn window_append(&mut self, window_msg: AlignedWindowMessage) {
-        let window = window_msg.window.clone();
-        let window_id = window.pnf_slot();
+        let window_id = &window_msg.pnf_slot;
 
         // Get the existing stream or log error if not found create a new one.
-        let Some(active_stream) = self.active_streams.get(&window_id) else {
+        let Some(active_stream) = self.active_streams.get(window_id) else {
             // windows may not be found during replay, because the windower doesn't send the open
             // message for the active windows that got replayed, hence we create a new one.
             // this happens because of out-of-order messages and we have to ensure that the (t+1)th
@@ -318,10 +321,10 @@ impl AlignedReduceActor {
 
     /// Closes the reduce task for the window.
     async fn window_close(&mut self, window_msg: AlignedWindowMessage) {
-        let window_id = window_msg.window.pnf_slot();
+        let window_id = &window_msg.pnf_slot;
 
         // Get the existing stream or log error if not found
-        let Some(active_stream) = self.active_streams.remove(&window_id) else {
+        let Some(active_stream) = self.active_streams.remove(window_id) else {
             error!("No active stream found for window {:?}", window_id);
             return;
         };

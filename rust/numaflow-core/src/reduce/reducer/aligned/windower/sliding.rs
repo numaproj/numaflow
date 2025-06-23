@@ -57,7 +57,7 @@ use std::time::Duration;
 use crate::message::Message;
 use crate::reduce::error::{Error, ReduceResult};
 use crate::reduce::reducer::aligned::windower::{
-    AlignedWindowMessage, Window, WindowOperation, truncate_to_duration,
+    AlignedWindowMessage, AlignedWindowOperation, Window, truncate_to_duration, window_pnf_slot,
 };
 use crate::shared::grpc::utc_from_timestamp;
 use chrono::{DateTime, TimeZone, Utc};
@@ -176,8 +176,10 @@ impl SlidingWindowManager {
         // Move windows from active to closed
         for window in windows_to_close {
             result.push(AlignedWindowMessage {
-                operation: WindowOperation::Close,
-                window: window.clone(),
+                operation: AlignedWindowOperation::Close {
+                    window: window.clone(),
+                },
+                pnf_slot: window_pnf_slot(&window),
             });
             active_windows.remove(&window);
             closed_windows.insert(window);
@@ -328,8 +330,11 @@ impl SlidingWindowManager {
             if active_windows.contains(window) {
                 // Window exists, append message
                 result.push(AlignedWindowMessage {
-                    operation: WindowOperation::Append(msg.clone()),
-                    window: window.clone(),
+                    operation: AlignedWindowOperation::Append {
+                        message: msg.clone(),
+                        window: window.clone(),
+                    },
+                    pnf_slot: window_pnf_slot(window),
                 });
             } else if window.end_time.timestamp_millis()
                 > self.max_deleted_window_end_time.load(Ordering::Relaxed)
@@ -341,8 +346,11 @@ impl SlidingWindowManager {
                 // avoid creating the materialized window again.
                 active_windows.insert(window.clone());
                 result.push(AlignedWindowMessage {
-                    operation: WindowOperation::Open(msg.clone()),
-                    window: window.clone(),
+                    operation: AlignedWindowOperation::Open {
+                        message: msg.clone(),
+                        window: window.clone(),
+                    },
+                    pnf_slot: window_pnf_slot(window),
                 });
             }
         }
@@ -385,10 +393,11 @@ mod tests {
         assert_eq!(window_msgs.len(), 3);
 
         // Check first window: [60000, 120000)
-        assert_eq!(window_msgs[0].window.start_time.timestamp_millis(), 60000);
-        assert_eq!(window_msgs[0].window.end_time.timestamp_millis(), 120000);
         match &window_msgs[0].operation {
-            WindowOperation::Open(_) => {}
+            AlignedWindowOperation::Open { window, .. } => {
+                assert_eq!(window.start_time.timestamp_millis(), 60000);
+                assert_eq!(window.end_time.timestamp_millis(), 120000);
+            }
             _ => panic!("Expected Open operation"),
         }
 
@@ -408,7 +417,7 @@ mod tests {
         // All operations should be Append
         for window_msg in &window_msgs2 {
             match &window_msg.operation {
-                WindowOperation::Append(_) => {}
+                AlignedWindowOperation::Append { .. } => {}
                 _ => panic!("Expected Append operation"),
             }
         }
@@ -440,18 +449,20 @@ mod tests {
         // Verify results - should be assigned to exactly 2 windows
         assert_eq!(window_msgs.len(), 2);
 
-        assert_eq!(window_msgs[0].window.start_time.timestamp(), 600);
-        assert_eq!(window_msgs[0].window.end_time.timestamp(), 660);
         match &window_msgs[0].operation {
-            WindowOperation::Open(_) => {}
+            AlignedWindowOperation::Open { window, .. } => {
+                assert_eq!(window.start_time.timestamp(), 600);
+                assert_eq!(window.end_time.timestamp(), 660);
+            }
             _ => panic!("Expected Open operation"),
         }
 
         // Check second window: [560, 620)
-        assert_eq!(window_msgs[1].window.start_time.timestamp(), 560);
-        assert_eq!(window_msgs[1].window.end_time.timestamp(), 620);
         match &window_msgs[1].operation {
-            WindowOperation::Open(_) => {}
+            AlignedWindowOperation::Open { window, .. } => {
+                assert_eq!(window.start_time.timestamp(), 560);
+                assert_eq!(window.end_time.timestamp(), 620);
+            }
             _ => panic!("Expected Open operation"),
         }
 
@@ -479,7 +490,7 @@ mod tests {
         // All operations should be Append
         for window_msg in &window_msgs2 {
             match &window_msg.operation {
-                WindowOperation::Append(_) => {}
+                AlignedWindowOperation::Append { .. } => {}
                 _ => panic!("Expected Append operation"),
             }
         }
@@ -522,40 +533,27 @@ mod tests {
         assert_eq!(closed.len(), 3);
 
         // Check that all windows are closed in order of end time
-
-        assert_eq!(
-            closed[0].window.start_time,
-            base_time - chrono::Duration::seconds(20)
-        );
-        assert_eq!(
-            closed[0].window.end_time,
-            base_time + chrono::Duration::seconds(40)
-        );
         match &closed[0].operation {
-            WindowOperation::Close => {}
+            AlignedWindowOperation::Close { window } => {
+                assert_eq!(window.start_time, base_time - chrono::Duration::seconds(20));
+                assert_eq!(window.end_time, base_time + chrono::Duration::seconds(40));
+            }
             _ => panic!("Expected Close operation"),
         }
 
-        assert_eq!(
-            closed[1].window.start_time,
-            base_time - chrono::Duration::seconds(10)
-        );
-        assert_eq!(
-            closed[1].window.end_time,
-            base_time + chrono::Duration::seconds(50)
-        );
         match &closed[1].operation {
-            WindowOperation::Close => {}
+            AlignedWindowOperation::Close { window } => {
+                assert_eq!(window.start_time, base_time - chrono::Duration::seconds(10));
+                assert_eq!(window.end_time, base_time + chrono::Duration::seconds(50));
+            }
             _ => panic!("Expected Close operation"),
         }
 
-        assert_eq!(closed[2].window.start_time, base_time);
-        assert_eq!(
-            closed[2].window.end_time,
-            base_time + chrono::Duration::seconds(60)
-        );
         match &closed[2].operation {
-            WindowOperation::Close => {}
+            AlignedWindowOperation::Close { window } => {
+                assert_eq!(window.start_time, base_time);
+                assert_eq!(window.end_time, base_time + chrono::Duration::seconds(60));
+            }
             _ => panic!("Expected Close operation"),
         }
 
@@ -808,29 +806,30 @@ mod tests {
 
         // Check all windows match expected windows
         for (i, window_msg) in window_msgs.iter().enumerate() {
-            // Check operation type
-            match &window_msg.operation {
-                WindowOperation::Open(open_msg) => {
+            // Check operation type and extract window
+            let window = match &window_msg.operation {
+                AlignedWindowOperation::Open {
+                    message: open_msg,
+                    window,
+                } => {
                     assert_eq!(open_msg.event_time, msg.event_time);
-                    assert_eq!(
-                        window_msg.window.start_time,
-                        Utc.timestamp_millis_opt(100000).unwrap()
-                    );
-                    assert_eq!(
-                        window_msg.window.end_time,
-                        Utc.timestamp_millis_opt(160000).unwrap()
-                    );
+                    assert_eq!(window.start_time, Utc.timestamp_millis_opt(100000).unwrap());
+                    assert_eq!(window.end_time, Utc.timestamp_millis_opt(160000).unwrap());
+                    window
                 }
-                WindowOperation::Append(append_msg) => {
+                AlignedWindowOperation::Append {
+                    message: append_msg,
+                    window,
+                } => {
                     assert_eq!(append_msg.event_time, msg.event_time);
+                    window
                 }
-                WindowOperation::Close => {
+                AlignedWindowOperation::Close { .. } => {
                     panic!("Expected Open or Append operation");
                 }
-            }
+            };
 
             // Verify window matches expected window
-            let window = &window_msg.window;
             assert_eq!(window.start_time, expected_windows[i].start_time);
             assert_eq!(window.end_time, expected_windows[i].end_time);
         }
@@ -849,10 +848,13 @@ mod tests {
         for window_msg in &window_msgs_two {
             // largest window should be open, rest are append
             match &window_msg.operation {
-                WindowOperation::Append(append_msg) => {
+                AlignedWindowOperation::Append {
+                    message: append_msg,
+                    ..
+                } => {
                     assert_eq!(append_msg.event_time, msg2.event_time);
                 }
-                WindowOperation::Close | WindowOperation::Open(_) => {
+                AlignedWindowOperation::Close { .. } | AlignedWindowOperation::Open { .. } => {
                     panic!("Expected Append operation");
                 }
             }
