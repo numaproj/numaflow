@@ -572,6 +572,20 @@ mod tests {
         let edge_ot_bucket_name = "test_publish_source_edge_watermark_edge_OT";
         let edge_hb_bucket_name = "test_publish_source_edge_watermark_edge_PROCESSORS";
 
+        // delete the stores
+        let _ = js_context
+            .delete_key_value(source_ot_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(source_hb_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(edge_ot_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(edge_hb_bucket_name.to_string())
+            .await;
+
         let source_config = SourceWatermarkConfig {
             max_delay: Default::default(),
             source_bucket_config: BucketConfig {
@@ -692,8 +706,10 @@ mod tests {
             handle
                 .publish_source_isb_watermark(stream.clone(), offset, 0)
                 .await;
+        }
 
-            // check if the watermark is published
+        // check if the watermark is published
+        for _ in 0..10 {
             let wmb = ot_bucket
                 .get("source_vertex-0")
                 .await
@@ -704,31 +720,13 @@ mod tests {
                 wmb_found = true;
                 break;
             } else {
-                tokio::time::sleep(Duration::from_millis(100)).await;
+                tokio::time::sleep(Duration::from_millis(10)).await;
             }
         }
 
         if !wmb_found {
             panic!("Failed to get watermark");
         }
-
-        // delete the stores
-        js_context
-            .delete_key_value(source_hb_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(source_ot_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(edge_hb_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(edge_ot_bucket_name.to_string())
-            .await
-            .unwrap();
     }
 
     #[cfg(feature = "nats-tests")]
