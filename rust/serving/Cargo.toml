@@ -29,7 +29,7 @@ serde_json = "1.0.120"
 tower-http = { version = "0.6.2", features = ["trace", "timeout"] }
 uuid = { workspace = true, features = ["std", "v7"] }
 trait-variant = "0.1.2"
-chrono = { version = "0.4", features = ["serde"] }
+chrono = { workspace = true, features = ["serde"] }
 base64 = "0.22.1"
 parking_lot = "0.12.3"
 prometheus-client = "0.23.1"
@@ -44,5 +44,5 @@ tokio-util = "0.7.14"
 [dev-dependencies]
 reqwest = { workspace = true, features = ["json"] }
 rustls.workspace = true
-numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "c6aa3a8d64a189357260f78131ef4692d387ba6c" }
+numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "9a12a1d832d4fece830452044bd7706dc8b2a381" }
 tempfile = "3.14.0"

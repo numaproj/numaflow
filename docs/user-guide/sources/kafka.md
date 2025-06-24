@@ -113,7 +113,7 @@ spec:
 ### How to start the Kafka Source from a specific offset based on datetime?
 In order to start the Kafka Source from a specific offset based on datetime, we need to reset the offset before we start the pipeline.
 
-For example, we have a topic `quickstart-events` with 3 partitions and a consumer group `console-consumer-94457`. This example uses [Kafka 3.6.1](https://archive.apache.org/dist/kafka/3.6.1/RELEASE_NOTES.html) and localhost.
+For example, we have a topic `quickstart-events` with 3 partitions and a consumer group `console-consumer-94457`. This example uses `Kafka 3.6.1` and localhost.
 ```shell
 ➜  kafka_2.13-3.6.1 bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe --topic quickstart-events            
 Topic: quickstart-events	TopicId: WqIN6j7hTQqGZUQWdF7AdA	PartitionCount: 3	ReplicationFactor: 1	Configs: 

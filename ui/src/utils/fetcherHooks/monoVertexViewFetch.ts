@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { Node } from "reactflow";
+import { Node } from "@xyflow/react";
 import { isEqual } from "lodash";
 import { getBaseHref } from "../index";
 import { AppContextProps } from "../../types/declarations/app";

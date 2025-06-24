@@ -19572,6 +19572,10 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log",
           "description": "Log sink is used to write the data to the log."
         },
+        "pulsar": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PulsarSink",
+          "description": "Pulsar sink is used to write the data to the Apache Pulsar."
+        },
         "serve": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServeSink",
           "description": "Serve sink is used to return results when working with a ServingPipeline."
@@ -21850,11 +21854,49 @@
     "io.numaproj.numaflow.v1alpha1.PulsarAuth": {
       "description": "PulsarAuth defines how to authenticate with Pulsar",
       "properties": {
+        "basicAuth": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PulsarBasicAuth",
+          "description": "Authentication using HTTP basic https://pulsar.apache.org/docs/4.0.x/security-basic-auth/"
+        },
         "token": {
           "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
           "description": "JWT Token auth"
         }
       },
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.PulsarBasicAuth": {
+      "properties": {
+        "password": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector"
+        },
+        "username": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector"
+        }
+      },
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.PulsarSink": {
+      "properties": {
+        "auth": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PulsarAuth",
+          "description": "Auth information"
+        },
+        "producerName": {
+          "type": "string"
+        },
+        "serverAddr": {
+          "type": "string"
+        },
+        "topic": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "serverAddr",
+        "topic",
+        "producerName"
+      ],
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.PulsarSource": {
@@ -22492,6 +22534,10 @@
         "log": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log",
           "description": "Log sink is used to write the data to the log."
+        },
+        "pulsar": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PulsarSink",
+          "description": "Pulsar sink is used to write the data to the Apache Pulsar."
         },
         "retryStrategy": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RetryStrategy",
