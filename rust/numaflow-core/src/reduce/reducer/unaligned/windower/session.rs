@@ -32,7 +32,7 @@ use crate::reduce::reducer::unaligned::windower::{
     SHARED_PNF_SLOT, UnalignedWindowMessage, UnalignedWindowOperation, Window,
 };
 use chrono::{DateTime, Utc};
-use tracing::info;
+use tracing::{info, trace};
 
 /// Active session windows for every key combination (combinedKey -> Sorted window set)
 type ActiveWindowStore = Arc<RwLock<HashMap<String, BTreeSet<Window>>>>;
@@ -144,7 +144,10 @@ impl SessionWindowManager {
     }
 
     /// Closes windows that have been inactive for longer than the timeout and will also merge windows
-    /// that can be closed.
+    /// that can be closed. The reason we have multiple windows that could be merged is because we
+    /// might open multiple sessions for the same key if the messages are out of order and their
+    /// window.end_time might grow overtime and overlap. At the time of close, we merge these windows
+    /// those have overlapping end times.
     pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<UnalignedWindowMessage> {
         let mut active_windows = self.active_windows.write().expect("Poisoned lock");
 
@@ -160,7 +163,9 @@ impl SessionWindowManager {
             .collect()
     }
 
-    /// Extract expired windows from the window set
+    /// Extract expired windows from the window set. These are the windows that have not received any
+    /// messages within the timeout duration (i.e, watermark > window.end_time where window.end_time
+    /// includes the timeout).
     fn extract_expired_windows(
         all_windows: &mut HashMap<String, BTreeSet<Window>>,
         watermark: DateTime<Utc>,
@@ -184,12 +189,13 @@ impl SessionWindowManager {
             }
         }
 
-        // Remove empty keys
+        // Remove the keys that have no active windows left
         all_windows.retain(|_, window_set| !window_set.is_empty());
         closed_windows_by_key
     }
 
-    /// Process closed windows for a specific key
+    /// Process closed windows for a specific key. This function will merge the windows if possible
+    /// and then close the windows that cannot be merged.
     fn process_closed_windows(
         &self,
         active_windows: &mut HashMap<String, BTreeSet<Window>>,
@@ -207,13 +213,15 @@ impl SessionWindowManager {
         &self,
         active_windows: &mut HashMap<String, BTreeSet<Window>>,
         key: &str,
-        group: Vec<Window>,
+        closing_group: Vec<Window>,
     ) -> Option<UnalignedWindowMessage> {
-        if group.is_empty() {
+        if closing_group.is_empty() {
             return None;
         }
 
-        let window_to_close = Self::merge_windows(&group);
+        // merge among the windows in the close group
+        let window_to_close = Self::merge_windows(&closing_group);
+
         // Try to merge with active windows
         match Self::try_merge_with_active(active_windows, key, &window_to_close) {
             Some((old_active, new_merged)) => Some(UnalignedWindowMessage {
@@ -239,7 +247,7 @@ impl SessionWindowManager {
         }
     }
 
-    /// Try to merge a window with active windows
+    /// Try to merge a window with active windows during the close operation.
     fn try_merge_with_active(
         active_windows: &mut HashMap<String, BTreeSet<Window>>,
         key: &str,
@@ -327,7 +335,7 @@ impl SessionWindowManager {
             merged_groups.push(merged_group);
         }
 
-        info!("Merged groups: {:?}", merged_groups);
+        trace!(?merged_groups, "Merged groups");
         merged_groups
     }
 
