@@ -27,16 +27,12 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 use crate::message::Message;
+use crate::reduce::reducer::unaligned::windower;
 use crate::reduce::reducer::unaligned::windower::{
     SHARED_PNF_SLOT, UnalignedWindowMessage, UnalignedWindowOperation, Window,
 };
 use chrono::{DateTime, Utc};
 use tracing::info;
-
-/// Combines keys into a single string for use as a map key
-fn combine_keys(keys: &[String]) -> String {
-    keys.join(":")
-}
 
 /// Active session windows for every key combination (combinedKey -> Sorted window set)
 type ActiveWindowStore = Arc<RwLock<HashMap<String, BTreeSet<Window>>>>;
@@ -50,10 +46,10 @@ type ClosedWindowStore = Arc<RwLock<BTreeSet<Window>>>;
 /// SessionWindowManager manages session windows.
 #[derive(Debug, Clone)]
 pub(crate) struct SessionWindowManager {
-    /// Timeout duration after which inactive windows are closed
+    /// Timeout duration after which inactive windows are closed.
     timeout: Duration,
     /// Active windows mapped by combined key (joined keys)
-    /// Windows are sorted by end time within each key using Window's Ord implementation
+    /// Windows are sorted by end time within each key using Window's Ord implementation.
     active_windows: ActiveWindowStore,
     /// Closed windows sorted by end time. These windows have been closed but not yet garbage collected.
     closed_windows: ClosedWindowStore,
@@ -74,7 +70,7 @@ impl SessionWindowManager {
     /// * If the start and end time can be expanded to accommodate the new window - expand operation
     /// * If the window is not present we will create a new window - open operation
     pub(crate) fn assign_windows(&self, msg: Message) -> Vec<UnalignedWindowMessage> {
-        let combined_key = combine_keys(&msg.keys);
+        let combined_key = windower::combine_keys(&msg.keys);
         let event_time = msg.event_time;
         let keys = Arc::clone(&msg.keys);
 
@@ -122,7 +118,7 @@ impl SessionWindowManager {
         }]
     }
 
-    /// expands the window if the start or end time collides
+    /// expands the window if the start or end time collides.
     fn expand_window_if_needed(new_window: &Window, existing_window: &Window) -> Option<Window> {
         (new_window.start_time < existing_window.start_time
             || new_window.end_time > existing_window.end_time)
@@ -135,7 +131,7 @@ impl SessionWindowManager {
             })
     }
 
-    /// finds a window that can be merged with the given window
+    /// finds a window that can be merged with the given window.
     fn find_window_to_merge(window_set: &BTreeSet<Window>, window: &Window) -> Option<Window> {
         window_set
             .iter()
@@ -147,7 +143,8 @@ impl SessionWindowManager {
             .cloned()
     }
 
-    /// Closes windows that have been inactive for longer than the timeout
+    /// Closes windows that have been inactive for longer than the timeout and will also merge windows
+    /// that can be closed.
     pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<UnalignedWindowMessage> {
         let mut active_windows = self.active_windows.write().expect("Poisoned lock");
 

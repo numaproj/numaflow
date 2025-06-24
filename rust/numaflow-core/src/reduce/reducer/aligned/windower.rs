@@ -146,6 +146,8 @@ pub(crate) enum AlignedWindowOperation {
 #[derive(Debug, Clone)]
 pub(crate) struct AlignedWindowMessage {
     pub(crate) operation: AlignedWindowOperation,
+    /// PNF slot for the window operation. This is stored as a field is to quickly access this in
+    /// different code path without recreating it all the time.
     pub(crate) pnf_slot: Bytes,
 }
 

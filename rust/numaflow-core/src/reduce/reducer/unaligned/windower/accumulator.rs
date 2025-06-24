@@ -1,12 +1,12 @@
 //! # Accumulator Window Manager
 //!
-//! AccumulatorWindowManager manages [Accumulator Windows], is very similar to session windows, the
+//! AccumulatorWindowManager manages [Accumulator Windows], is very similar to [Session Windows], the
 //! windows are tracked at key level and for every key combination we will have a new global window,
 //! The window is created when the first message arrives for the key, the window state is cleared when
 //! there are no messages for a timeout duration. We track the timestamps of the messages in the window
 //! and use that to calculate the lowest watermark. When we get the response from the SDK for a keyed
 //! window, all the messages with event time less than the response watermark will be deleted from the
-//! window, Once the timestamps are empty for a window and if it's idle for a timeout duration, the
+//! window. Once the timestamps are empty for a window and if it's idle for the timeout duration, the
 //! window will be closed. Similar to session windows we use a shared pnf slot because windows are
 //! tracked at the key level. Same pnf slot will be used for all the windows, using different window
 //! operations we decide what operation to be performed on the keyed window. We only have on single
@@ -22,6 +22,7 @@
 //!
 //! [Accumulator Windows]: https://numaflow.numaproj.io/user-guide/user-defined-functions/reduce/windowing/accumulator/
 //! [WAL]: crate::reduce::wal
+//! [Session Windows]: crate::reduce::reducer::unaligned::windower::session
 
 use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, RwLock};
@@ -31,24 +32,24 @@ use chrono::{DateTime, Utc};
 
 use crate::message::Message;
 use crate::reduce::reducer::unaligned::windower::{
-    SHARED_PNF_SLOT, UnalignedWindowMessage, UnalignedWindowOperation, Window,
+    SHARED_PNF_SLOT, UnalignedWindowMessage, UnalignedWindowOperation, Window, combine_keys,
 };
 
-/// Combines keys into a single string for use as a map key
-fn combine_keys(keys: &[String]) -> String {
-    keys.join(":")
-}
-
-/// Represents the state of an accumulator window, tracking message timestamps
+/// Represents the key global state of an accumulator window.
 #[derive(Debug, Clone)]
 struct WindowState {
-    /// The window this state belongs to
+    /// The window this state belongs to and this Window is a per key Global Window from -oo to +oo.
     window: Window,
-    /// Sorted list of message timestamps, used for watermark calculation to find the oldest event
-    /// time.
+    /// Sorted list of all the message timestamps for this particular window till the chunk of data is
+    /// written to ISB (events for a chunk is done because the watermark has progressed as SDK has processed/sorted
+    /// it). We need to store all the timestamps because this is a global state for the keyed window
+    /// and there will be timestamps after the WM which has to be retained. This WindowState is not closed
+    /// but only a part of it is truncated when watermark progresses.
+    /// Watermark is published using this message_timestamps, and the published watermark will be
+    /// <= the oldest timestamp in this list after the truncation.
     message_timestamps: Arc<RwLock<BTreeSet<DateTime<Utc>>>>,
     /// lastSeenEventTime is to see what was latest we have event time ever seen. This cannot be
-    /// messageTimestamps[0] because that list will be cleared due to timeout. Since WM is global (across keys)
+    /// messageTimestamps\[0] because that list will be cleared due to timeout. Since WM is global (across keys)
     /// we need to trigger a close window to the UDF once the timeout has passed (WM > last-seen + timeout).
     last_seen_event_time: Arc<RwLock<DateTime<Utc>>>,
 }
@@ -64,7 +65,7 @@ impl WindowState {
         }
     }
 
-    /// Adds the event time to the message timestamps in sorted order
+    /// Adds the event time to the message timestamps in sorted order.
     fn append_timestamp(&self, event_time: DateTime<Utc>) {
         let mut timestamps = self.message_timestamps.write().expect("Poisoned lock");
         timestamps.insert(event_time);
@@ -76,7 +77,7 @@ impl WindowState {
         }
     }
 
-    /// Deletes event times before the given end time
+    /// Deletes event times before the given end time.
     fn delete_timestamps_before(&self, end_time: DateTime<Utc>) {
         let mut timestamps = self
             .message_timestamps
@@ -96,25 +97,25 @@ impl WindowState {
             .unwrap_or_else(|| DateTime::from_timestamp_millis(-1).expect("Invalid timestamp"));
     }
 
-    /// Gets the oldest timestamp in this window state
+    /// Gets the oldest timestamp in this window state.
     fn oldest_timestamp(&self) -> Option<DateTime<Utc>> {
         let timestamps = self.message_timestamps.read().expect("Poisoned lock");
         timestamps.iter().next().cloned()
     }
 }
 
-/// AccumulatorWindowManager manages accumulator windows, which are similar to global windows
+/// AccumulatorWindowManager manages accumulator [WindowState], which are similar to global windows
 /// but with timeout-based expiration.
 #[derive(Debug, Clone)]
 pub(crate) struct AccumulatorWindowManager {
-    /// Timeout duration after which inactive windows are closed
+    /// Timeout duration after which inactive windows are closed.
     timeout: Duration,
-    /// Active windows mapped by combined key
+    /// Active windows mapped by combined key.
     active_windows: Arc<RwLock<HashMap<String, WindowState>>>,
 }
 
 impl AccumulatorWindowManager {
-    /// Creates a new AccumulatorWindowManager with the specified timeout
+    /// Creates a new AccumulatorWindowManager with the specified timeout.
     pub(crate) fn new(timeout: Duration) -> Self {
         Self {
             timeout,
@@ -164,7 +165,9 @@ impl AccumulatorWindowManager {
         }]
     }
 
-    /// Closes windows that have been inactive for longer than the timeout
+    /// Closes windows that have been inactive for longer than the timeout. This function is called
+    /// when the watermark has progressed, and we need to close the windows that are inactive for
+    /// longer than the timeout.
     pub(crate) fn close_windows(&self, current_time: DateTime<Utc>) -> Vec<UnalignedWindowMessage> {
         let mut result = Vec::new();
 
@@ -204,7 +207,7 @@ impl AccumulatorWindowManager {
         }
     }
 
-    /// Returns the oldest event time across all windows
+    /// Returns the oldest event time across all windows.
     pub(crate) fn oldest_window_end_time(&self) -> Option<DateTime<Utc>> {
         let active_windows = self.active_windows.read().expect("Poisoned lock");
 
