@@ -88,52 +88,7 @@ pub(crate) mod source {
     impl TryFrom<Box<PulsarSource>> for SourceType {
         type Error = Error;
         fn try_from(value: Box<PulsarSource>) -> Result<Self> {
-            let auth: Option<PulsarAuth> = match value.auth {
-                Some(auth) => {
-                    let mut creds = None;
-                    if let Some(token) = auth.token {
-                        let secret = crate::shared::create_components::get_secret_from_volume(
-                            &token.name,
-                            &token.key,
-                        )
-                        .map_err(|e| {
-                            Error::Config(format!("Failed to get token secret from volume: {e:?}"))
-                        })?;
-                        creds = Some(PulsarAuth::JWT(secret));
-                    }
-
-                    if let Some(basic_auth) = auth.basic_auth {
-                        let user_secret_selector = &basic_auth.username.ok_or_else(|| {
-                            Error::Config("Username can not be empty for basic auth".into())
-                        })?;
-                        let username = crate::shared::create_components::get_secret_from_volume(
-                            &user_secret_selector.name,
-                            &user_secret_selector.key,
-                        )
-                        .map_err(|e| {
-                            Error::Config(format!(
-                                "Failed to get username secret from volume: {e:?}"
-                            ))
-                        })?;
-                        let password_secret_selector = &basic_auth.password.ok_or_else(|| {
-                            Error::Config("Password can not be empty for basic auth".into())
-                        })?;
-                        let password = crate::shared::create_components::get_secret_from_volume(
-                            &password_secret_selector.name,
-                            &password_secret_selector.key,
-                        )
-                        .map_err(|e| {
-                            Error::Config(format!(
-                                "Failed to get password secret from volume: {e:?}"
-                            ))
-                        })?;
-                        creds = Some(PulsarAuth::HTTPBasic { username, password });
-                    }
-
-                    creds
-                }
-                None => None,
-            };
+            let auth: Option<PulsarAuth> = super::parse_pulsar_auth_config(value.auth)?;
             let pulsar_config = PulsarSourceConfig {
                 pulsar_server_addr: value.server_addr,
                 topic: value.topic,
@@ -705,50 +660,7 @@ pub(crate) mod sink {
     impl TryFrom<Box<PulsarSink>> for SinkType {
         type Error = Error;
         fn try_from(sink_config: Box<PulsarSink>) -> std::result::Result<Self, Self::Error> {
-            let auth: Option<PulsarAuth> = match sink_config.auth {
-                Some(auth) => 'outer: {
-                    if let Some(token) = auth.token {
-                        let secret = crate::shared::create_components::get_secret_from_volume(
-                            &token.name,
-                            &token.key,
-                        )
-                        .map_err(|e| {
-                            Error::Config(format!("Failed to get token secret from volume: {e:?}"))
-                        })?;
-                        break 'outer Some(PulsarAuth::JWT(secret));
-                    }
-
-                    if let Some(basic_auth) = auth.basic_auth {
-                        let user_secret_selector = &basic_auth.username.ok_or_else(|| {
-                            Error::Config("Username can not be empty for basic auth".into())
-                        })?;
-                        let username = crate::shared::create_components::get_secret_from_volume(
-                            &user_secret_selector.name,
-                            &user_secret_selector.key,
-                        )
-                        .map_err(|e| {
-                            Error::Config(format!(
-                                "Failed to get username secret from volume: {e:?}"
-                            ))
-                        })?;
-                        let password_secret_selector = &basic_auth.password.ok_or_else(|| {
-                            Error::Config("Password can not be empty for basic auth".into())
-                        })?;
-                        let password = crate::shared::create_components::get_secret_from_volume(
-                            &password_secret_selector.name,
-                            &password_secret_selector.key,
-                        )
-                        .map_err(|e| {
-                            Error::Config(format!(
-                                "Failed to get password secret from volume: {e:?}"
-                            ))
-                        })?;
-                        break 'outer Some(PulsarAuth::HTTPBasic { username, password });
-                    }
-                    return Err(Error::Config("Authentication configuration is enabled, however credentials are not provided in the Pulsar sink configuration".to_string()));
-                }
-                None => None,
-            };
+            let auth: Option<PulsarAuth> = super::parse_pulsar_auth_config(sink_config.auth)?;
             let pulsar_sink_config = numaflow_pulsar::sink::Config {
                 addr: sink_config.server_addr,
                 topic: sink_config.topic,
@@ -1415,6 +1327,47 @@ fn parse_kafka_auth_config(
     };
 
     Ok((auth, tls))
+}
+
+fn parse_pulsar_auth_config(
+    auth: Option<Box<numaflow_models::models::PulsarAuth>>,
+) -> crate::Result<Option<numaflow_pulsar::PulsarAuth>> {
+    let Some(auth) = auth else {
+        return Ok(None);
+    };
+
+    if let Some(token) = auth.token {
+        let secret =
+            crate::shared::create_components::get_secret_from_volume(&token.name, &token.key)
+                .map_err(|e| {
+                    Error::Config(format!("Failed to get token secret from volume: {e:?}"))
+                })?;
+        return Ok(Some(numaflow_pulsar::PulsarAuth::JWT(secret)));
+    }
+
+    if let Some(basic_auth) = auth.basic_auth {
+        let user_secret_selector = &basic_auth
+            .username
+            .ok_or_else(|| Error::Config("Username can not be empty for basic auth".into()))?;
+        let username = crate::shared::create_components::get_secret_from_volume(
+            &user_secret_selector.name,
+            &user_secret_selector.key,
+        )
+        .map_err(|e| Error::Config(format!("Failed to get username secret from volume: {e:?}")))?;
+        let password_secret_selector = &basic_auth
+            .password
+            .ok_or_else(|| Error::Config("Password can not be empty for basic auth".into()))?;
+        let password = crate::shared::create_components::get_secret_from_volume(
+            &password_secret_selector.name,
+            &password_secret_selector.key,
+        )
+        .map_err(|e| Error::Config(format!("Failed to get password secret from volume: {e:?}")))?;
+        return Ok(Some(numaflow_pulsar::PulsarAuth::HTTPBasic {
+            username,
+            password,
+        }));
+    }
+    return Err(Error::Config("Authentication configuration is enabled, however credentials are not provided in the Pulsar sink configuration".to_string()));
 }
 
 #[cfg(test)]
