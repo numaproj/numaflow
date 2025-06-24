@@ -2871,7 +2871,6 @@ mod reducer_tests {
     #[test]
     fn test_reducer_type_from_udf_and_group_by() {
         let udf = Box::new(Udf {
-            builtin: None,
             container: Some(Box::new(Container {
                 args: None,
                 command: None,

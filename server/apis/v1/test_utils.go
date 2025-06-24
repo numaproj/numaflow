@@ -97,7 +97,9 @@ func fakePipeline() *dfv1.Pipeline {
 				{
 					Name: "map",
 					UDF: &dfv1.UDF{
-						Builtin: &dfv1.Function{Name: "cat"},
+						Container: &dfv1.Container{
+							Image: "my-image",
+						},
 					},
 				},
 				{

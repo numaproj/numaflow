@@ -20574,24 +20574,6 @@ spec:
                       type: array
                     udf:
                       properties:
-                        builtin:
-                          properties:
-                            args:
-                              items:
-                                type: string
-                              type: array
-                            kwargs:
-                              additionalProperties:
-                                type: string
-                              type: object
-                            name:
-                              enum:
-                              - cat
-                              - filter
-                              type: string
-                          required:
-                          - name
-                          type: object
                         container:
                           properties:
                             args:
@@ -32436,24 +32418,6 @@ spec:
                           type: array
                         udf:
                           properties:
-                            builtin:
-                              properties:
-                                args:
-                                  items:
-                                    type: string
-                                  type: array
-                                kwargs:
-                                  additionalProperties:
-                                    type: string
-                                  type: object
-                                name:
-                                  enum:
-                                  - cat
-                                  - filter
-                                  type: string
-                              required:
-                              - name
-                              type: object
                             container:
                               properties:
                                 args:
@@ -40346,24 +40310,6 @@ spec:
                 type: array
               udf:
                 properties:
-                  builtin:
-                    properties:
-                      args:
-                        items:
-                          type: string
-                        type: array
-                      kwargs:
-                        additionalProperties:
-                          type: string
-                        type: object
-                      name:
-                        enum:
-                        - cat
-                        - filter
-                        type: string
-                    required:
-                    - name
-                    type: object
                   container:
                     properties:
                       args:

@@ -48,7 +48,7 @@ var (
 				{
 					Name: "p1",
 					UDF: &dfv1.UDF{
-						Builtin: &dfv1.Function{Name: "cat"},
+						Container: &dfv1.Container{Image: "test-image"},
 					},
 				},
 				{
@@ -214,13 +214,13 @@ var (
 				{
 					Name: "p1",
 					UDF: &dfv1.UDF{
-						Builtin: &dfv1.Function{Name: "cat"},
+						Container: &dfv1.Container{Image: "test-image-1"},
 					},
 				},
 				{
 					Name: "p2",
 					UDF: &dfv1.UDF{
-						Builtin: &dfv1.Function{Name: "cat"},
+						Container: &dfv1.Container{Image: "test-image-2"},
 					},
 				},
 				{
@@ -334,20 +334,12 @@ func TestValidatePipeline(t *testing.T) {
 		assert.Contains(t, err.Error(), "only one of")
 	})
 
-	t.Run("udf no image and builtin specified", func(t *testing.T) {
+	t.Run("udf no image specified", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
-		testObj.Spec.Vertices[1].UDF.Builtin = nil
+		testObj.Spec.Vertices[1].UDF.Container = nil
 		err := ValidatePipeline(testObj)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "either specify a builtin function, or a customized image")
-	})
-
-	t.Run("udf both image and builtin specified", func(t *testing.T) {
-		testObj := testPipeline.DeepCopy()
-		testObj.Spec.Vertices[1].UDF.Container = &dfv1.Container{Image: "xxxx"}
-		err := ValidatePipeline(testObj)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "can not specify both builtin function, and a customized image")
+		assert.Contains(t, err.Error(), "invalid udf spec, a customized image is required")
 	})
 
 	t.Run("forest - two pipelines with 1 source/sink", func(t *testing.T) {
@@ -438,26 +430,26 @@ func TestValidatePipeline(t *testing.T) {
 
 	t.Run("UDF not connected to pipeline", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
-		testObj.Spec.Vertices = append(testObj.Spec.Vertices, dfv1.AbstractVertex{Name: "input1", UDF: &dfv1.UDF{Builtin: &dfv1.Function{Name: "cat"}}})
+		testObj.Spec.Vertices = append(testObj.Spec.Vertices, dfv1.AbstractVertex{Name: "input1", UDF: &dfv1.UDF{Container: &dfv1.Container{Image: "test-image"}}})
 		err := ValidatePipeline(testObj)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "UDF must have to and from edges")
 	})
 
-	t.Run("pipeline has not source", func(t *testing.T) {
+	t.Run("pipeline has no source", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
 		testObj.Spec.Vertices[0].Source = nil
-		testObj.Spec.Vertices[0].UDF = &dfv1.UDF{Builtin: &dfv1.Function{Name: "cat"}}
+		testObj.Spec.Vertices[0].UDF = &dfv1.UDF{Container: &dfv1.Container{Image: "test-image"}}
 		testObj.Spec.Edges = append(testObj.Spec.Edges, dfv1.Edge{From: "input", To: "input"})
 		err := ValidatePipeline(testObj)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "pipeline has no source")
 	})
 
-	t.Run("pipeline has not sink", func(t *testing.T) {
+	t.Run("pipeline has no sink", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
 		testObj.Spec.Vertices[2].Sink = nil
-		testObj.Spec.Vertices[2].UDF = &dfv1.UDF{Builtin: &dfv1.Function{Name: "cat"}}
+		testObj.Spec.Vertices[2].UDF = &dfv1.UDF{Container: &dfv1.Container{Image: "test-image"}}
 		testObj.Spec.Edges = append(testObj.Spec.Edges, dfv1.Edge{From: "output", To: "output"})
 		err := ValidatePipeline(testObj)
 		assert.Error(t, err)
@@ -474,7 +466,7 @@ func TestValidatePipeline(t *testing.T) {
 
 	t.Run("last vertex is not sink", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
-		testObj.Spec.Vertices = append(testObj.Spec.Vertices, dfv1.AbstractVertex{Name: "bad-output", UDF: &dfv1.UDF{Builtin: &dfv1.Function{Name: "cat"}}})
+		testObj.Spec.Vertices = append(testObj.Spec.Vertices, dfv1.AbstractVertex{Name: "bad-output", UDF: &dfv1.UDF{Container: &dfv1.Container{Image: "test-image"}}})
 		testObj.Spec.Edges[1] = dfv1.Edge{From: "p1", To: "bad-output"}
 		testObj.Spec.Edges = append(testObj.Spec.Edges, dfv1.Edge{From: "bad-output", To: "p1"})
 		err := ValidatePipeline(testObj)
@@ -591,16 +583,6 @@ func TestValidateReducePipeline(t *testing.T) {
 	t.Run("test good reduce pipeline", func(t *testing.T) {
 		err := ValidatePipeline(testReducePipeline)
 		assert.NoError(t, err)
-	})
-
-	t.Run("test builtin and container co-existing", func(t *testing.T) {
-		testObj := testReducePipeline.DeepCopy()
-		testObj.Spec.Vertices[1].UDF.Builtin = &dfv1.Function{
-			Name: "cat",
-		}
-		err := ValidatePipeline(testObj)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "no buildin function support in reduce vertices")
 	})
 
 	t.Run("test no image in container", func(t *testing.T) {
