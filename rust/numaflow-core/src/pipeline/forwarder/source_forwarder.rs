@@ -70,8 +70,8 @@ mod tests {
     use tokio_util::sync::CancellationToken;
 
     use crate::Result;
-    use crate::config::pipeline::ToVertexConfig;
     use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
+    use crate::config::pipeline::{ToVertexConfig, VertexType};
     use crate::pipeline::forwarder::source_forwarder::SourceForwarder;
     use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
     use crate::shared::grpc::create_rpc_channel;
@@ -278,6 +278,7 @@ mod tests {
                 },
                 conditions: None,
                 name: "test-vertex",
+                to_vertex_type: VertexType::MapUDF,
             }],
             js_ctx: context.clone(),
             paf_concurrency: 100,
