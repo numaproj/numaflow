@@ -706,8 +706,7 @@ pub(crate) mod sink {
         type Error = Error;
         fn try_from(sink_config: Box<PulsarSink>) -> std::result::Result<Self, Self::Error> {
             let auth: Option<PulsarAuth> = match sink_config.auth {
-                Some(auth) => {
-                    let mut creds = None;
+                Some(auth) => 'outer: {
                     if let Some(token) = auth.token {
                         let secret = crate::shared::create_components::get_secret_from_volume(
                             &token.name,
@@ -716,7 +715,7 @@ pub(crate) mod sink {
                         .map_err(|e| {
                             Error::Config(format!("Failed to get token secret from volume: {e:?}"))
                         })?;
-                        creds = Some(PulsarAuth::JWT(secret));
+                        break 'outer Some(PulsarAuth::JWT(secret));
                     }
 
                     if let Some(basic_auth) = auth.basic_auth {
@@ -744,10 +743,9 @@ pub(crate) mod sink {
                                 "Failed to get password secret from volume: {e:?}"
                             ))
                         })?;
-                        creds = Some(PulsarAuth::HTTPBasic { username, password });
+                        break 'outer Some(PulsarAuth::HTTPBasic { username, password });
                     }
-
-                    creds
+                    return Err(Error::Config("Authentication configuration is enabled, however credentials are not provided in the Pulsar sink configuration".to_string()));
                 }
                 None => None,
             };
@@ -1869,7 +1867,7 @@ mod sink_tests {
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().to_string(),
-            "Config Error - Authentication configuration is enabled, however JWT token is not provided in the Pulsar sink configuration"
+            "Config Error - Authentication configuration is enabled, however credentials are not provided in the Pulsar sink configuration"
         );
     }
 
@@ -1898,7 +1896,7 @@ mod sink_tests {
         let err = result.unwrap_err();
         assert!(
             err.to_string()
-                .contains("Failed to get JWT token for configuring Pulsar producer")
+                .contains("Failed to get token secret from volume")
         );
     }
 
@@ -2038,7 +2036,7 @@ mod sink_tests {
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().to_string(),
-            "Config Error - Authentication configuration is enabled, however JWT token is not provided in the Pulsar sink configuration"
+            "Config Error - Authentication configuration is enabled, however credentials are not provided in the Pulsar sink configuration"
         );
     }
 
@@ -2085,7 +2083,7 @@ mod sink_tests {
         let err = result.unwrap_err();
         assert!(
             err.to_string()
-                .contains("Failed to get JWT token for configuring Pulsar producer")
+                .contains("Failed to get token secret from volume")
         );
     }
 }
