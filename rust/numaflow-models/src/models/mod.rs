@@ -136,6 +136,8 @@ pub mod probe;
 pub use self::probe::Probe;
 pub mod pulsar_auth;
 pub use self::pulsar_auth::PulsarAuth;
+pub mod pulsar_basic_auth;
+pub use self::pulsar_basic_auth::PulsarBasicAuth;
 pub mod pulsar_sink;
 pub use self::pulsar_sink::PulsarSink;
 pub mod pulsar_source;
