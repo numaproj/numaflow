@@ -11,6 +11,7 @@ use tokio::{
     time,
 };
 use tokio_stream::StreamExt;
+use tracing::info;
 
 use crate::{Error, PulsarAuth, Result};
 
@@ -65,12 +66,22 @@ impl ConsumerReaderActor {
         // Rustls doesn't allow accepting self-signed certs: https://github.com/streamnative/pulsar-rs/blob/715411cb365932c379d4b5d0a8fde2ac46c54055/src/connection.rs#L912
         // The `with_allow_insecure_connection()` option has no effect
         let mut pulsar = Pulsar::builder(&config.pulsar_server_addr, TokioExecutor);
-        if let Some(PulsarAuth::JWT(token)) = config.auth {
-            let auth_token = Authentication {
-                name: "token".into(),
-                data: token.into(),
-            };
-            pulsar = pulsar.with_auth(auth_token);
+        match config.auth {
+            Some(PulsarAuth::JWT(token)) => {
+                let auth_token = Authentication {
+                    name: "token".into(),
+                    data: token.into(),
+                };
+                pulsar = pulsar.with_auth(auth_token);
+            }
+            Some(PulsarAuth::HTTPBasic { username, password }) => {
+                let auth_token = Authentication {
+                    name: "basic".into(),
+                    data: format!("{}:{}", username, password).into(),
+                };
+                pulsar = pulsar.with_auth(auth_token);
+            }
+            None => info!("No authentication mechanism specified for Pulsar"),
         }
 
         let pulsar: Pulsar<_> = pulsar

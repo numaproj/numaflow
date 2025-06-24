@@ -88,21 +88,7 @@ pub(crate) mod source {
     impl TryFrom<Box<PulsarSource>> for SourceType {
         type Error = Error;
         fn try_from(value: Box<PulsarSource>) -> Result<Self> {
-            let auth: Option<PulsarAuth> = match value.auth {
-                Some(auth) => 'out: {
-                    let Some(token) = auth.token else {
-                        warn!("JWT Token authentication is specified, but token is empty");
-                        break 'out None;
-                    };
-                    let secret = crate::shared::create_components::get_secret_from_volume(
-                        &token.name,
-                        &token.key,
-                    )
-                    .unwrap();
-                    Some(PulsarAuth::JWT(secret))
-                }
-                None => None,
-            };
+            let auth: Option<PulsarAuth> = super::parse_pulsar_auth_config(value.auth)?;
             let pulsar_config = PulsarSourceConfig {
                 pulsar_server_addr: value.server_addr,
                 topic: value.topic,
@@ -492,6 +478,7 @@ pub(crate) mod sink {
 
     use numaflow_kafka::sink::KafkaSinkConfig;
     use numaflow_models::models::{Backoff, KafkaSink, PulsarSink, RetryStrategy, Sink, SqsSink};
+    use numaflow_pulsar::PulsarAuth;
     use numaflow_pulsar::sink::Config as PulsarSinkConfig;
     use numaflow_sqs::sink::SqsSinkConfig;
 
@@ -673,25 +660,7 @@ pub(crate) mod sink {
     impl TryFrom<Box<PulsarSink>> for SinkType {
         type Error = Error;
         fn try_from(sink_config: Box<PulsarSink>) -> std::result::Result<Self, Self::Error> {
-            let auth = match sink_config.auth {
-                Some(auth) => {
-                    let Some(auth) = auth.token else {
-                        return Err(Error::Config(
-                            "Authentication configuration is enabled, however JWT token is not provided in the Pulsar sink configuration".to_string(),
-                        ));
-                    };
-                    let token = crate::shared::create_components::get_secret_from_volume(
-                        &auth.name, &auth.key,
-                    )
-                    .map_err(|e| {
-                        Error::Config(format!(
-                            "Failed to get JWT token for configuring Pulsar producer: {e:?}"
-                        ))
-                    })?;
-                    Some(numaflow_pulsar::PulsarAuth::JWT(token))
-                }
-                None => None,
-            };
+            let auth: Option<PulsarAuth> = super::parse_pulsar_auth_config(sink_config.auth)?;
             let pulsar_sink_config = numaflow_pulsar::sink::Config {
                 addr: sink_config.server_addr,
                 topic: sink_config.topic,
@@ -1417,6 +1386,47 @@ fn parse_kafka_auth_config(
     Ok((auth, tls))
 }
 
+fn parse_pulsar_auth_config(
+    auth: Option<Box<numaflow_models::models::PulsarAuth>>,
+) -> crate::Result<Option<numaflow_pulsar::PulsarAuth>> {
+    let Some(auth) = auth else {
+        return Ok(None);
+    };
+
+    if let Some(token) = auth.token {
+        let secret =
+            crate::shared::create_components::get_secret_from_volume(&token.name, &token.key)
+                .map_err(|e| {
+                    Error::Config(format!("Failed to get token secret from volume: {e:?}"))
+                })?;
+        return Ok(Some(numaflow_pulsar::PulsarAuth::JWT(secret)));
+    }
+
+    if let Some(basic_auth) = auth.basic_auth {
+        let user_secret_selector = &basic_auth
+            .username
+            .ok_or_else(|| Error::Config("Username can not be empty for basic auth".into()))?;
+        let username = crate::shared::create_components::get_secret_from_volume(
+            &user_secret_selector.name,
+            &user_secret_selector.key,
+        )
+        .map_err(|e| Error::Config(format!("Failed to get username secret from volume: {e:?}")))?;
+        let password_secret_selector = &basic_auth
+            .password
+            .ok_or_else(|| Error::Config("Password can not be empty for basic auth".into()))?;
+        let password = crate::shared::create_components::get_secret_from_volume(
+            &password_secret_selector.name,
+            &password_secret_selector.key,
+        )
+        .map_err(|e| Error::Config(format!("Failed to get password secret from volume: {e:?}")))?;
+        return Ok(Some(numaflow_pulsar::PulsarAuth::HTTPBasic {
+            username,
+            password,
+        }));
+    }
+    return Err(Error::Config("Authentication configuration is enabled, however credentials are not provided in the Pulsar sink configuration".to_string()));
+}
+
 #[cfg(test)]
 mod source_tests {
     use std::time::Duration;
@@ -1823,6 +1833,7 @@ mod sink_tests {
                     key: token_key.to_string(),
                     ..Default::default()
                 }),
+                basic_auth: None,
             })),
             producer_name: "test-producer".to_string(),
             server_addr: "pulsar://localhost:6650".to_string(),
@@ -1836,7 +1847,9 @@ mod sink_tests {
             assert_eq!(config.topic, "persistent://public/default/test-topic");
             assert_eq!(config.producer_name, "test-producer");
             let auth = config.auth.unwrap();
-            let numaflow_pulsar::PulsarAuth::JWT(token) = auth;
+            let numaflow_pulsar::PulsarAuth::JWT(token) = auth else {
+                panic!("Expected PulsarAuth::JWT");
+            };
             assert_eq!(token, "test-jwt-token");
         } else {
             panic!("Expected SinkType::Pulsar");
@@ -1853,6 +1866,7 @@ mod sink_tests {
         let invalid_pulsar_sink = Box::new(PulsarSink {
             auth: Some(Box::new(numaflow_models::models::PulsarAuth {
                 token: None,
+                basic_auth: None,
             })),
             producer_name: "test-producer".to_string(),
             server_addr: "pulsar://localhost:6650".to_string(),
@@ -1863,7 +1877,7 @@ mod sink_tests {
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().to_string(),
-            "Config Error - Authentication configuration is enabled, however JWT token is not provided in the Pulsar sink configuration"
+            "Config Error - Authentication configuration is enabled, however credentials are not provided in the Pulsar sink configuration"
         );
     }
 
@@ -1880,6 +1894,7 @@ mod sink_tests {
                     key: "token".to_string(),
                     ..Default::default()
                 }),
+                basic_auth: None,
             })),
             producer_name: "test-producer".to_string(),
             server_addr: "pulsar://localhost:6650".to_string(),
@@ -1891,7 +1906,7 @@ mod sink_tests {
         let err = result.unwrap_err();
         assert!(
             err.to_string()
-                .contains("Failed to get JWT token for configuring Pulsar producer")
+                .contains("Failed to get token secret from volume")
         );
     }
 
@@ -1963,6 +1978,7 @@ mod sink_tests {
                             key: token_key.to_string(),
                             ..Default::default()
                         }),
+                        basic_auth: None,
                     })),
                     producer_name: "fallback-producer".to_string(),
                     server_addr: "pulsar://localhost:6650".to_string(),
@@ -1982,7 +1998,9 @@ mod sink_tests {
                 assert_eq!(config.topic, "fallback-topic");
                 assert_eq!(config.producer_name, "fallback-producer");
                 let auth = config.auth.unwrap();
-                let numaflow_pulsar::PulsarAuth::JWT(token) = auth;
+                let numaflow_pulsar::PulsarAuth::JWT(token) = auth else {
+                    panic!("Expected PulsarAuth::JWT");
+                };
                 assert_eq!(token, "fallback-jwt-token");
             }
             _ => panic!("Expected SinkType::Pulsar for fallback sink"),
@@ -2012,6 +2030,7 @@ mod sink_tests {
                 pulsar: Some(Box::new(PulsarSink {
                     auth: Some(Box::new(numaflow_models::models::PulsarAuth {
                         token: None,
+                        basic_auth: None,
                     })),
                     producer_name: "fallback-producer".to_string(),
                     server_addr: "pulsar://localhost:6650".to_string(),
@@ -2027,7 +2046,7 @@ mod sink_tests {
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().to_string(),
-            "Config Error - Authentication configuration is enabled, however JWT token is not provided in the Pulsar sink configuration"
+            "Config Error - Authentication configuration is enabled, however credentials are not provided in the Pulsar sink configuration"
         );
     }
 
@@ -2057,6 +2076,7 @@ mod sink_tests {
                             key: "token".to_string(),
                             ..Default::default()
                         }),
+                        basic_auth: None,
                     })),
                     producer_name: "fallback-producer".to_string(),
                     server_addr: "pulsar://localhost:6650".to_string(),
@@ -2073,7 +2093,7 @@ mod sink_tests {
         let err = result.unwrap_err();
         assert!(
             err.to_string()
-                .contains("Failed to get JWT token for configuring Pulsar producer")
+                .contains("Failed to get token secret from volume")
         );
     }
 }
@@ -3455,5 +3475,286 @@ mod reducer_tests {
             }
             _ => panic!("Expected unaligned reducer config"),
         }
+    }
+}
+
+#[cfg(test)]
+mod pulsar_source_tests {
+    use k8s_openapi::api::core::v1::SecretKeySelector;
+    use numaflow_models::models::{PulsarAuth, PulsarBasicAuth, PulsarSource};
+    use numaflow_pulsar::PulsarAuth as PulsarAuthEnum;
+
+    use super::source::SourceType;
+
+    const SECRET_BASE_PATH: &str = "/tmp/numaflow";
+
+    fn setup_secret(name: &str, key: &str, value: &str) {
+        let path = format!("{SECRET_BASE_PATH}/{name}");
+        std::fs::create_dir_all(&path).unwrap();
+        std::fs::write(format!("{path}/{key}"), value).unwrap();
+    }
+
+    fn cleanup_secret(name: &str) {
+        let path = format!("{SECRET_BASE_PATH}/{name}");
+        if std::path::Path::new(&path).exists() {
+            std::fs::remove_dir_all(&path).unwrap();
+        }
+    }
+
+    #[test]
+    fn test_try_from_pulsar_source_without_auth() {
+        // Test case: Valid configuration without authentication
+        let valid_pulsar_source = Box::new(PulsarSource {
+            auth: None,
+            consumer_name: "test-consumer".to_string(),
+            server_addr: "pulsar://localhost:6650".to_string(),
+            subscription_name: "test-subscription".to_string(),
+            topic: "persistent://public/default/test-topic".to_string(),
+            max_unack: Some(1000),
+        });
+
+        let result = SourceType::try_from(valid_pulsar_source);
+        assert!(result.is_ok());
+        if let Ok(SourceType::Pulsar(config)) = result {
+            assert_eq!(config.pulsar_server_addr, "pulsar://localhost:6650");
+            assert_eq!(config.topic, "persistent://public/default/test-topic");
+            assert_eq!(config.consumer_name, "test-consumer");
+            assert_eq!(config.subscription, "test-subscription");
+            assert_eq!(config.max_unack, 1000);
+            assert!(config.auth.is_none());
+        } else {
+            panic!("Expected SourceType::Pulsar");
+        }
+    }
+
+    #[test]
+    fn test_try_from_pulsar_source_with_jwt_auth() {
+        // Test case: Valid configuration with JWT authentication
+        let secret_name = "test_try_from_pulsar_source_with_jwt_auth_jwt-secret";
+        let token_key = "token";
+        setup_secret(secret_name, token_key, "test-jwt-token");
+
+        let valid_pulsar_source_with_auth = Box::new(PulsarSource {
+            auth: Some(Box::new(PulsarAuth {
+                token: Some(SecretKeySelector {
+                    name: secret_name.to_string(),
+                    key: token_key.to_string(),
+                    ..Default::default()
+                }),
+                basic_auth: None,
+            })),
+            consumer_name: "test-consumer".to_string(),
+            server_addr: "pulsar://localhost:6650".to_string(),
+            subscription_name: "test-subscription".to_string(),
+            topic: "persistent://public/default/test-topic".to_string(),
+            max_unack: Some(1000),
+        });
+
+        let result = SourceType::try_from(valid_pulsar_source_with_auth);
+        assert!(result.is_ok());
+        if let Ok(SourceType::Pulsar(config)) = result {
+            assert_eq!(config.pulsar_server_addr, "pulsar://localhost:6650");
+            assert_eq!(config.topic, "persistent://public/default/test-topic");
+            assert_eq!(config.consumer_name, "test-consumer");
+            assert_eq!(config.subscription, "test-subscription");
+            assert_eq!(config.max_unack, 1000);
+            let auth = config.auth.unwrap();
+            let PulsarAuthEnum::JWT(token) = auth else {
+                panic!("Expected PulsarAuth::JWT");
+            };
+            assert_eq!(token, "test-jwt-token");
+        } else {
+            panic!("Expected SourceType::Pulsar");
+        }
+
+        cleanup_secret(secret_name);
+    }
+
+    #[test]
+    fn test_try_from_pulsar_source_with_basic_auth() {
+        // Test case: Valid configuration with basic authentication
+        let secret_name = "test_try_from_pulsar_source_with_basic_auth_basic-secret";
+        let user_key = "username";
+        let pass_key = "password";
+        setup_secret(secret_name, user_key, "test-user");
+        setup_secret(secret_name, pass_key, "test-pass");
+
+        let valid_pulsar_source_with_basic_auth = Box::new(PulsarSource {
+            auth: Some(Box::new(PulsarAuth {
+                token: None,
+                basic_auth: Some(Box::new(PulsarBasicAuth {
+                    username: Some(SecretKeySelector {
+                        name: secret_name.to_string(),
+                        key: user_key.to_string(),
+                        ..Default::default()
+                    }),
+                    password: Some(SecretKeySelector {
+                        name: secret_name.to_string(),
+                        key: pass_key.to_string(),
+                        ..Default::default()
+                    }),
+                })),
+            })),
+            consumer_name: "test-consumer".to_string(),
+            server_addr: "pulsar://localhost:6650".to_string(),
+            subscription_name: "test-subscription".to_string(),
+            topic: "persistent://public/default/test-topic".to_string(),
+            max_unack: Some(1000),
+        });
+
+        let result = SourceType::try_from(valid_pulsar_source_with_basic_auth);
+        assert!(result.is_ok());
+        if let Ok(SourceType::Pulsar(config)) = result {
+            assert_eq!(config.pulsar_server_addr, "pulsar://localhost:6650");
+            assert_eq!(config.topic, "persistent://public/default/test-topic");
+            assert_eq!(config.consumer_name, "test-consumer");
+            assert_eq!(config.subscription, "test-subscription");
+            assert_eq!(config.max_unack, 1000);
+            let auth = config.auth.unwrap();
+            let PulsarAuthEnum::HTTPBasic { username, password } = auth else {
+                panic!("Expected PulsarAuth::HTTPBasic");
+            };
+            assert_eq!(username, "test-user");
+            assert_eq!(password, "test-pass");
+        } else {
+            panic!("Expected SourceType::Pulsar");
+        }
+
+        cleanup_secret(secret_name);
+    }
+
+    #[test]
+    fn test_try_from_pulsar_source_with_missing_username() {
+        // Test case: Basic auth is specified but username is missing
+        let secret_name = "test_try_from_pulsar_source_with_missing_username_basic-secret";
+        let pass_key = "password";
+        setup_secret(secret_name, pass_key, "test-pass");
+
+        let invalid_pulsar_source = Box::new(PulsarSource {
+            auth: Some(Box::new(PulsarAuth {
+                token: None,
+                basic_auth: Some(Box::new(PulsarBasicAuth {
+                    username: None,
+                    password: Some(SecretKeySelector {
+                        name: secret_name.to_string(),
+                        key: pass_key.to_string(),
+                        ..Default::default()
+                    }),
+                })),
+            })),
+            consumer_name: "test-consumer".to_string(),
+            server_addr: "pulsar://localhost:6650".to_string(),
+            subscription_name: "test-subscription".to_string(),
+            topic: "persistent://public/default/test-topic".to_string(),
+            max_unack: Some(1000),
+        });
+
+        let result = SourceType::try_from(invalid_pulsar_source);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Config Error - Username can not be empty for basic auth"
+        );
+
+        cleanup_secret(secret_name);
+    }
+
+    #[test]
+    fn test_try_from_pulsar_source_with_missing_password() {
+        // Test case: Basic auth is specified but password is missing
+        let secret_name = "test_try_from_pulsar_source_with_missing_password_basic-secret";
+        let user_key = "username";
+        setup_secret(secret_name, user_key, "test-user");
+
+        let invalid_pulsar_source = Box::new(PulsarSource {
+            auth: Some(Box::new(PulsarAuth {
+                token: None,
+                basic_auth: Some(Box::new(PulsarBasicAuth {
+                    username: Some(SecretKeySelector {
+                        name: secret_name.to_string(),
+                        key: user_key.to_string(),
+                        ..Default::default()
+                    }),
+                    password: None,
+                })),
+            })),
+            consumer_name: "test-consumer".to_string(),
+            server_addr: "pulsar://localhost:6650".to_string(),
+            subscription_name: "test-subscription".to_string(),
+            topic: "persistent://public/default/test-topic".to_string(),
+            max_unack: Some(1000),
+        });
+
+        let result = SourceType::try_from(invalid_pulsar_source);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Config Error - Password can not be empty for basic auth"
+        );
+
+        cleanup_secret(secret_name);
+    }
+
+    #[test]
+    fn test_try_from_pulsar_source_with_invalid_jwt_secret() {
+        // Test case: JWT auth is specified but secret file doesn't exist
+        let invalid_pulsar_source = Box::new(PulsarSource {
+            auth: Some(Box::new(PulsarAuth {
+                token: Some(SecretKeySelector {
+                    name: "non-existent-secret".to_string(),
+                    key: "token".to_string(),
+                    ..Default::default()
+                }),
+                basic_auth: None,
+            })),
+            consumer_name: "test-consumer".to_string(),
+            server_addr: "pulsar://localhost:6650".to_string(),
+            subscription_name: "test-subscription".to_string(),
+            topic: "persistent://public/default/test-topic".to_string(),
+            max_unack: Some(1000),
+        });
+
+        let result = SourceType::try_from(invalid_pulsar_source);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Failed to get token secret from volume")
+        );
+    }
+
+    #[test]
+    fn test_try_from_pulsar_source_with_invalid_basic_auth_secret() {
+        // Test case: Basic auth is specified but secret file doesn't exist
+        let invalid_pulsar_source = Box::new(PulsarSource {
+            auth: Some(Box::new(PulsarAuth {
+                token: None,
+                basic_auth: Some(Box::new(PulsarBasicAuth {
+                    username: Some(SecretKeySelector {
+                        name: "non-existent-secret".to_string(),
+                        key: "username".to_string(),
+                        ..Default::default()
+                    }),
+                    password: Some(SecretKeySelector {
+                        name: "non-existent-secret".to_string(),
+                        key: "password".to_string(),
+                        ..Default::default()
+                    }),
+                })),
+            })),
+            consumer_name: "test-consumer".to_string(),
+            server_addr: "pulsar://localhost:6650".to_string(),
+            subscription_name: "test-subscription".to_string(),
+            topic: "persistent://public/default/test-topic".to_string(),
+            max_unack: Some(1000),
+        });
+
+        let result = SourceType::try_from(invalid_pulsar_source);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Failed to get username secret from volume")
+        );
     }
 }

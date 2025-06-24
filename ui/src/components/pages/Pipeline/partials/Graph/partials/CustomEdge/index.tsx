@@ -3,19 +3,20 @@ import { FC, memo, useCallback, useContext, useEffect, useMemo } from "react";
 import { Tooltip } from "@mui/material";
 import {
   BaseEdge,
+  Edge,
   EdgeProps,
   EdgeLabelRenderer,
   getSimpleBezierPath,
-} from "reactflow";
+} from "@xyflow/react";
 import { duration } from "moment";
 import { HighlightContext } from "../../index";
 import { HighlightContextProps } from "../../../../../../../types/declarations/graph";
 import error from "../../../../../../../images/error.svg";
 
-import "reactflow/dist/style.css";
+import "@xyflow/react/dist/style.css";
 import "./style.css";
 
-const CustomEdge: FC<EdgeProps> = ({
+const CustomEdge: FC<EdgeProps<Edge<Record<string, any>>>> = ({
   id,
   sourceX,
   sourceY,
@@ -243,7 +244,6 @@ const CustomEdge: FC<EdgeProps> = ({
           <Tooltip
             title={
               <div className={"edge-tooltip"}>
-                <div>Pending</div>
                 <div
                   style={{
                     display: "flex",
@@ -253,7 +253,10 @@ const CustomEdge: FC<EdgeProps> = ({
                   }}
                 >
                   {data?.isFull && <img src={error} alt={"error"} />}
-                  {data?.backpressureLabel}
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
+                    <span>Pending: {data?.pendingLabel || 0}</span>
+                    <span>AckPending: {data?.ackPendingLabel || 0}</span>
+                  </div>
                 </div>
               </div>
             }
