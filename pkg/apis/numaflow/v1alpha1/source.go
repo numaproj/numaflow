@@ -69,6 +69,7 @@ func (s Source) getUDTransformerContainer(mainContainerReq getContainerReq) core
 		imagePullPolicy(mainContainerReq.imagePullPolicy). // Use the same image pull policy as the main container
 		appendVolumeMounts(mainContainerReq.volumeMounts...).asSidecar()
 	c = c.appendEnv(corev1.EnvVar{Name: EnvUDContainerType, Value: UDContainerTransformer})
+	// At this point, x (the UDTransformer.Container) is guaranteed to be non-nil and x.Image is guaranteed to be a non-empty string due to prior validation.
 	x := s.UDTransformer.Container
 	c = c.image(x.Image)
 	if len(x.Command) > 0 {
