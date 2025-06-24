@@ -737,16 +737,16 @@ mod tests {
 
         // First group should have 1 window (the standalone window4 with end time 120)
         assert_eq!(merged_groups[0].len(), 1);
-        assert_eq!(merged_groups[0][0].end_time, now + chrono::Duration::seconds(120));
+        assert_eq!(
+            merged_groups[0][0].end_time,
+            now + chrono::Duration::seconds(120)
+        );
 
         // Second group should have 3 windows (the overlapping windows)
         assert_eq!(merged_groups[1].len(), 3);
 
         // Verify the windows in the second group are the overlapping ones
-        let second_group_end_times: Vec<_> = merged_groups[1]
-            .iter()
-            .map(|w| w.end_time)
-            .collect();
+        let second_group_end_times: Vec<_> = merged_groups[1].iter().map(|w| w.end_time).collect();
 
         assert!(second_group_end_times.contains(&(now + chrono::Duration::seconds(85))));
         assert!(second_group_end_times.contains(&(now + chrono::Duration::seconds(90))));

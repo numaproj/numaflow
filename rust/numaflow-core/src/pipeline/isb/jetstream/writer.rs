@@ -540,9 +540,9 @@ impl JetstreamWriter {
                 }
             }
 
-            // now the pafs have resolved, lets use the offsets to send watermark
-            for (stream, offset) in offsets {
-                if let Some(watermark_handle) = this.watermark_handle.as_mut() {
+            if let Some(watermark_handle) = this.watermark_handle.as_mut() {
+                // now the pafs have resolved, lets use the offsets to send watermark
+                for (stream, offset) in offsets {
                     JetstreamWriter::publish_watermark(watermark_handle, stream, offset, &message)
                         .await;
                 }
