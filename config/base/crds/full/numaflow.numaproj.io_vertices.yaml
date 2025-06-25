@@ -3163,6 +3163,35 @@ spec:
                         properties:
                           auth:
                             properties:
+                              basicAuth:
+                                properties:
+                                  password:
+                                    properties:
+                                      key:
+                                        type: string
+                                      name:
+                                        default: ""
+                                        type: string
+                                      optional:
+                                        type: boolean
+                                    required:
+                                    - key
+                                    type: object
+                                    x-kubernetes-map-type: atomic
+                                  username:
+                                    properties:
+                                      key:
+                                        type: string
+                                      name:
+                                        default: ""
+                                        type: string
+                                      optional:
+                                        type: boolean
+                                    required:
+                                    - key
+                                    type: object
+                                    x-kubernetes-map-type: atomic
+                                type: object
                               token:
                                 properties:
                                   key:
@@ -3777,6 +3806,35 @@ spec:
                     properties:
                       auth:
                         properties:
+                          basicAuth:
+                            properties:
+                              password:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    default: ""
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                                x-kubernetes-map-type: atomic
+                              username:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    default: ""
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                                x-kubernetes-map-type: atomic
+                            type: object
                           token:
                             properties:
                               key:
@@ -4687,6 +4745,35 @@ spec:
                     properties:
                       auth:
                         properties:
+                          basicAuth:
+                            properties:
+                              password:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    default: ""
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                                x-kubernetes-map-type: atomic
+                              username:
+                                properties:
+                                  key:
+                                    type: string
+                                  name:
+                                    default: ""
+                                    type: string
+                                  optional:
+                                    type: boolean
+                                required:
+                                - key
+                                type: object
+                                x-kubernetes-map-type: atomic
+                            type: object
                           token:
                             properties:
                               key:

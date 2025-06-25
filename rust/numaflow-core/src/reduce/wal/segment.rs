@@ -43,16 +43,6 @@ pub(crate) enum WalType {
 }
 
 impl WalType {
-    /// Some WALs have footers and some does not. It is mostly for optimizations.
-    pub(crate) fn has_footer(&self) -> bool {
-        // TODO: Set footer to true for Segment and Compaction for optimizations if needed.
-        match self {
-            WalType::Data => false,
-            WalType::Gc => false,
-            WalType::Compact => false,
-        }
-    }
-
     /// Prefix of the WAL Segment as stored in the disk.
     pub(crate) fn segment_prefix(&self) -> &'static str {
         match self {

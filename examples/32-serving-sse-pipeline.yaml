@@ -9,7 +9,6 @@ spec:
   pipeline:
     vertices:
       - name: serving-in
-        servingStoreName: default
         scale:
           min: 1
         source:
@@ -23,7 +22,6 @@ spec:
             image: quay.io/numaio/numaflow-go/map-flatmap-stream:latest
 
       - name: serve-sink
-        servingStoreName: default
         scale:
           min: 1
         sink:

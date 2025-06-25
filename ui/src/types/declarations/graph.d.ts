@@ -1,5 +1,5 @@
 import { Dispatch, SetStateAction } from "react";
-import { Edge, Node } from "reactflow";
+import { Edge, Node } from "@xyflow/react";
 import { GraphData, Pipeline } from "./pipeline";
 
 export interface GraphProps {
@@ -15,18 +15,18 @@ export interface SpecProps {
 }
 
 export interface EdgeInfoProps {
-  edge: Edge;
+  edge: Edge<Record<string, any>>;
 }
 
 export interface NodeInfoProps {
-  node: Node;
+  node: Node<Record<string, any>>;
   namespaceId: string | undefined;
   pipelineId: string | undefined;
 }
 
 export interface FlowProps {
-  nodes: Node[];
-  edges: Edge[];
+  nodes: Node<Record<string, any>>[];
+  edges: Edge<Record<string, any>>[];
   onNodesChange: any;
   onEdgesChange: any;
   handleNodeClick: (e: Element | EventType, node: Node) => void;

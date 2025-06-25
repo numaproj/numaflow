@@ -1398,6 +1398,18 @@ message PulsarAuth {
   // JWT Token auth
   // +optional
   optional .k8s.io.api.core.v1.SecretKeySelector token = 1;
+
+  // Authentication using HTTP basic https://pulsar.apache.org/docs/4.0.x/security-basic-auth/
+  // +optional
+  optional PulsarBasicAuth basicAuth = 2;
+}
+
+message PulsarBasicAuth {
+  // +optional
+  optional .k8s.io.api.core.v1.SecretKeySelector username = 1;
+
+  // +optional
+  optional .k8s.io.api.core.v1.SecretKeySelector password = 2;
 }
 
 message PulsarSink {

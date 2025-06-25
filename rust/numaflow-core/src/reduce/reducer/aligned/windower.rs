@@ -17,24 +17,24 @@ pub(crate) mod fixed;
 /// Sliding Window Operations.
 pub(crate) mod sliding;
 
-// Technically we can have a trait for WindowManager and implement it for Fixed and Sliding, but
+// Technically we can have a trait for AlignedWindowManager and implement it for Fixed and Sliding, but
 // the generics are getting in all the way from the bootup code. Also, we do not expect any other
 // window types in the future.
-/// WindowManager enum that can be either a FixedWindowManager or a SlidingWindowManager.
+/// AlignedWindowManager enum that can be either a FixedWindowManager or a SlidingWindowManager.
 #[derive(Debug, Clone)]
-pub(crate) enum WindowManager {
+pub(crate) enum AlignedWindowManager {
     /// Fixed window manager.
     Fixed(FixedWindowManager),
     /// Sliding window manager.
     Sliding(SlidingWindowManager),
 }
 
-impl WindowManager {
+impl AlignedWindowManager {
     /// Assigns windows to a message, dropping messages with event time earlier than the oldest window's start time
     pub(crate) fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage> {
         match self {
-            WindowManager::Fixed(manager) => manager.assign_windows(msg),
-            WindowManager::Sliding(manager) => manager.assign_windows(msg),
+            AlignedWindowManager::Fixed(manager) => manager.assign_windows(msg),
+            AlignedWindowManager::Sliding(manager) => manager.assign_windows(msg),
         }
     }
 
@@ -42,39 +42,37 @@ impl WindowManager {
     /// end time.
     pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage> {
         match self {
-            WindowManager::Fixed(manager) => manager.close_windows(watermark),
-            WindowManager::Sliding(manager) => manager.close_windows(watermark),
+            AlignedWindowManager::Fixed(manager) => manager.close_windows(watermark),
+            AlignedWindowManager::Sliding(manager) => manager.close_windows(watermark),
         }
     }
 
     /// Deletes a window is called after the window is closed and GC is done.
-    pub(crate) fn delete_window(&self, window: Window) {
+    pub(crate) fn gc_window(&self, window: Window) {
         match self {
-            WindowManager::Fixed(manager) => manager.gc_window(window),
-            WindowManager::Sliding(manager) => manager.gc_window(window),
+            AlignedWindowManager::Fixed(manager) => manager.gc_window(window),
+            AlignedWindowManager::Sliding(manager) => manager.gc_window(window),
         }
     }
 
     /// Returns the oldest window yet to be completed. This will be the lowest Watermark in the Vertex.
     pub(crate) fn oldest_window(&self) -> Option<Window> {
         match self {
-            WindowManager::Fixed(manager) => manager.oldest_window(),
-            WindowManager::Sliding(manager) => manager.oldest_window(),
+            AlignedWindowManager::Fixed(manager) => manager.oldest_window(),
+            AlignedWindowManager::Sliding(manager) => manager.oldest_window(),
         }
     }
 }
 
 /// A Window is represented by its start and end time. All the data which event time falls within
-/// this window will be reduced by the Reduce function associated with it. The association is via the
-/// id. The Windows when sorted are sorted by the end time.
+/// this window will be reduced by the Reduce function associated with it. The Windows when sorted
+/// are sorted by the end time.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Window {
     /// Start time of the window.
     pub(crate) start_time: DateTime<Utc>,
     /// End time of the window.
     pub(crate) end_time: DateTime<Utc>,
-    /// Unique id of the reduce function for this window.
-    pub(crate) id: Bytes,
 }
 
 impl Ord for Window {
@@ -127,39 +125,41 @@ impl Window {
         Self {
             start_time,
             end_time,
-            id: format!(
-                "{}-{}",
-                start_time.timestamp_millis(),
-                end_time.timestamp_millis(),
-            )
-            .into(),
         }
-    }
-
-    /// Returns the slot for the PNF.
-    pub(crate) fn pnf_slot(&self) -> Bytes {
-        self.id.clone()
     }
 }
 
 /// Window operations that can be performed on a [Window]. It is derived from the [Message] and the
 /// window kind.
 #[derive(Debug, Clone)]
-pub(crate) enum WindowOperation {
+pub(crate) enum AlignedWindowOperation {
     /// Open is create a new Window (Open the Book).
-    Open(Message),
+    Open { message: Message, window: Window },
     /// Close operation for the [Window] (Close of Book). Only the window on the SDK side will be closed,
     /// other windows for the same partition can be open.
-    Close,
+    Close { window: Window },
     /// Append inserts more data into the opened Window.
-    Append(Message),
+    Append { message: Message, window: Window },
 }
 
 /// Aligned Window Message.
 #[derive(Debug, Clone)]
 pub(crate) struct AlignedWindowMessage {
-    pub(crate) operation: WindowOperation,
-    pub(crate) window: Window,
+    pub(crate) operation: AlignedWindowOperation,
+    /// PNF slot for the window operation. This is stored as a field is to quickly access this in
+    /// different code path without recreating it all the time.
+    pub(crate) pnf_slot: Bytes,
+}
+
+/// Helper function to construct PNF slot from a window.
+/// The PNF slot is used as a unique identifier for the window.
+pub(crate) fn window_pnf_slot(window: &Window) -> Bytes {
+    format!(
+        "{}-{}",
+        window.start_time.timestamp_millis(),
+        window.end_time.timestamp_millis(),
+    )
+    .into()
 }
 
 /// Truncates a timestamp to the nearest multiple of the given duration.
