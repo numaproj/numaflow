@@ -137,7 +137,7 @@ impl KafkaActor {
             .set("enable.auto.commit", "false")
             .set_log_level(RDKafkaLogLevel::Warning);
 
-        crate::update_auth_config(&mut client_config, config.tls, config.auth);
+        crate::update_auth_config(&mut client_config, config.tls, config.auth)?;
 
         let context = KafkaContext;
         let consumer: Arc<NumaflowConsumer> =
