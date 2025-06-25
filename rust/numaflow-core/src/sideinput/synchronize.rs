@@ -177,7 +177,13 @@ mod tests {
     #[test]
     fn test_side_input_synchronizer_new() {
         let temp_dir = TempDir::new().unwrap();
-        let mount_path = Box::leak(temp_dir.path().to_string_lossy().into_owned().into_boxed_str());
+        let mount_path = Box::leak(
+            temp_dir
+                .path()
+                .to_string_lossy()
+                .into_owned()
+                .into_boxed_str(),
+        );
 
         let config = ClientConfig::default();
         let cancellation_token = CancellationToken::new();
@@ -208,7 +214,13 @@ mod tests {
     #[test]
     fn test_side_input_synchronizer_with_custom_config() {
         let temp_dir = TempDir::new().unwrap();
-        let mount_path = Box::leak(temp_dir.path().to_string_lossy().into_owned().into_boxed_str());
+        let mount_path = Box::leak(
+            temp_dir
+                .path()
+                .to_string_lossy()
+                .into_owned()
+                .into_boxed_str(),
+        );
 
         let config = ClientConfig {
             url: "nats://custom-server:4222".to_string(),
@@ -247,7 +259,13 @@ mod tests {
     #[test]
     fn test_side_input_synchronizer_empty_inputs() {
         let temp_dir = TempDir::new().unwrap();
-        let mount_path = Box::leak(temp_dir.path().to_string_lossy().into_owned().into_boxed_str());
+        let mount_path = Box::leak(
+            temp_dir
+                .path()
+                .to_string_lossy()
+                .into_owned()
+                .into_boxed_str(),
+        );
 
         let config = ClientConfig::default();
         let cancellation_token = CancellationToken::new();
@@ -269,7 +287,13 @@ mod tests {
     #[test]
     fn test_side_input_synchronizer_run_once_new() {
         let temp_dir = TempDir::new().unwrap();
-        let mount_path = Box::leak(temp_dir.path().to_string_lossy().into_owned().into_boxed_str());
+        let mount_path = Box::leak(
+            temp_dir
+                .path()
+                .to_string_lossy()
+                .into_owned()
+                .into_boxed_str(),
+        );
 
         let config = ClientConfig::default();
         let cancellation_token = CancellationToken::new();
@@ -324,7 +348,13 @@ mod tests {
 
         // Use a temporary directory for testing
         let temp_dir = TempDir::new().unwrap();
-        let mount_path = Box::leak(temp_dir.path().to_string_lossy().into_owned().into_boxed_str());
+        let mount_path = Box::leak(
+            temp_dir
+                .path()
+                .to_string_lossy()
+                .into_owned()
+                .into_boxed_str(),
+        );
 
         let cancellation_token = CancellationToken::new();
         let synchronizer = SideInputSynchronizer::new(
@@ -362,7 +392,13 @@ mod tests {
     #[tokio::test]
     async fn test_side_input_synchronizer_error_handling() {
         let temp_dir = TempDir::new().unwrap();
-        let mount_path = Box::leak(temp_dir.path().to_string_lossy().into_owned().into_boxed_str());
+        let mount_path = Box::leak(
+            temp_dir
+                .path()
+                .to_string_lossy()
+                .into_owned()
+                .into_boxed_str(),
+        );
 
         let config = ClientConfig {
             url: "localhost:4222".to_string(),
@@ -445,7 +481,13 @@ mod tests {
 
         // Use a temporary directory for testing
         let temp_dir = TempDir::new().unwrap();
-        let mount_path = Box::leak(temp_dir.path().to_string_lossy().into_owned().into_boxed_str());
+        let mount_path = Box::leak(
+            temp_dir
+                .path()
+                .to_string_lossy()
+                .into_owned()
+                .into_boxed_str(),
+        );
 
         // Only include "allowed-input" in side_inputs
         let cancellation_token = CancellationToken::new();
@@ -530,7 +572,13 @@ mod tests {
 
         // Use a temporary directory for testing
         let temp_dir = TempDir::new().unwrap();
-        let mount_path = Box::leak(temp_dir.path().to_string_lossy().into_owned().into_boxed_str());
+        let mount_path = Box::leak(
+            temp_dir
+                .path()
+                .to_string_lossy()
+                .into_owned()
+                .into_boxed_str(),
+        );
 
         let cancellation_token = CancellationToken::new();
         let synchronizer = SideInputSynchronizer::new(
@@ -615,7 +663,13 @@ mod tests {
 
         // Use a temporary directory for testing
         let temp_dir = TempDir::new().unwrap();
-        let mount_path = Box::leak(temp_dir.path().to_string_lossy().into_owned().into_boxed_str());
+        let mount_path = Box::leak(
+            temp_dir
+                .path()
+                .to_string_lossy()
+                .into_owned()
+                .into_boxed_str(),
+        );
 
         let cancellation_token = CancellationToken::new();
         let synchronizer = SideInputSynchronizer::new(
