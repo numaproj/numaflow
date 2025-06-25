@@ -24,8 +24,9 @@ spec:
           duration: 1s
     - name: cat
       udf:
-        builtin:
-          name: cat
+        container:
+          image: quay.io/numaio/numaflow-go/map-cat:stable
+          imagePullPolicy: Always
     - name: out
       sink:
         log: {}

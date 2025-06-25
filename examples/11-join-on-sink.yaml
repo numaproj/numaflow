@@ -16,12 +16,14 @@ spec:
           image: quay.io/numaio/numaflow-go/map-even-odd:stable
     - name: even-cat
       udf:
-        builtin:
-          name: cat
+        container:
+          image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
+          imagePullPolicy: Always
     - name: odd-cat
       udf:
-        builtin:
-          name: cat
+        container:
+          image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
+          imagePullPolicy: Always
     - name: out
       sink:
         # A simple log printing sink

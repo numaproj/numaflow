@@ -776,7 +776,7 @@ impl PipelineConfig {
 
 #[cfg(test)]
 mod tests {
-    use numaflow_models::models::{Container, Function, Udf};
+    use numaflow_models::models::{Container, Udf};
     use numaflow_pulsar::source::PulsarSourceConfig;
 
     use super::*;

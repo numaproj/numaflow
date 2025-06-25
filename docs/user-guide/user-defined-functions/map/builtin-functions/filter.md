@@ -1,4 +1,6 @@
-# Filter
+# Filter [Deprecated]
+
+  > ⚠️ Note: Builtins for UDF are deprecated. An example in Go for `filter` can be found [here.](https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/filter)
 
 A `filter` is a special-purpose built-in function. It is used to evaluate on each message in a pipeline and
 is often used to filter the number of messages that are passed to next vertices.
