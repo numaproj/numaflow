@@ -835,7 +835,7 @@ mod tests {
             vertex_name: Default::default(),
             replica: 0,
             batch_size: DEFAULT_BATCH_SIZE as usize,
-            paf_concurrency: (DEFAULT_BATCH_SIZE * 2) as usize,
+            paf_concurrency: DEFAULT_BATCH_SIZE as usize,
             read_timeout: Duration::from_secs(DEFAULT_TIMEOUT_IN_MS as u64),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig::default(),
@@ -916,7 +916,7 @@ mod tests {
             vertex_name: "out",
             replica: 0,
             batch_size: 500,
-            paf_concurrency: 1000,
+            paf_concurrency: 500,
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig {
@@ -1033,7 +1033,7 @@ mod tests {
             vertex_name: "in",
             replica: 0,
             batch_size: 50,
-            paf_concurrency: 1000,
+            paf_concurrency: 50,
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig {
@@ -1175,7 +1175,7 @@ mod tests {
             vertex_name: "map",
             replica: 0,
             batch_size: 500,
-            paf_concurrency: 1000,
+            paf_concurrency: 500,
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig {
