@@ -186,8 +186,6 @@ If your Numaflow vertex is not using GPU resources as expected:
   Learn how to configure CPU, memory, and other resources for your vertex containers in Numaflow.
 - [Dynamic Resource Allocation](./configuration/dra.md)  
   Advanced: Use resource claims for dynamic GPU allocation in complex scenarios.
-- [Numaflow Production Best Practices](https://numaflow.numaproj.io/docs/production/best-practices/)  
-  Guidance on running Numaflow in production, including performance tuning and resource management.
 - [NVIDIA device plugin for Kubernetes](https://github.com/NVIDIA/k8s-device-plugin)  
   Official documentation for setting up GPU support in your Kubernetes cluster.
 - [Kubernetes: Managing Resources for Containers](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/)
