@@ -17,8 +17,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         error!("{e:?}");
         return Err(e);
     }
-    info!("Exiting...");
 
+    info!("Exited.");
     Ok(())
 }
 

@@ -9009,6 +9009,101 @@ JWT Token auth
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>basicAuth</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.PulsarBasicAuth">
+PulsarBasicAuth </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Authentication using HTTP basic
+<a href="https://pulsar.apache.org/docs/4.0.x/security-basic-auth/">https://pulsar.apache.org/docs/4.0.x/security-basic-auth/</a>
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.PulsarBasicAuth">
+
+PulsarBasicAuth
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.PulsarAuth">PulsarAuth</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>username</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>password</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -12581,88 +12676,6 @@ VertexTemplate is used to customize the vertices of the pipeline.
 
 </table>
 
-<h3 id="numaflow.numaproj.io/v1alpha1.Transformer">
-
-Transformer
-</h3>
-
-<p>
-
-(<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.UDTransformer">UDTransformer</a>)
-</p>
-
-<p>
-
-</p>
-
-<table>
-
-<thead>
-
-<tr>
-
-<th>
-
-Field
-</th>
-
-<th>
-
-Description
-</th>
-
-</tr>
-
-</thead>
-
-<tbody>
-
-<tr>
-
-<td>
-
-<code>name</code></br> <em> string </em>
-</td>
-
-<td>
-
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
-<code>args</code></br> <em> \[\]string </em>
-</td>
-
-<td>
-
-<em>(Optional)</em>
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
-<code>kwargs</code></br> <em> map\[string\]string </em>
-</td>
-
-<td>
-
-<em>(Optional)</em>
-</td>
-
-</tr>
-
-</tbody>
-
-</table>
-
 <h3 id="numaflow.numaproj.io/v1alpha1.UDF">
 
 UDF
@@ -12887,22 +12900,6 @@ Description
 
 <code>container</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Container"> Container </a> </em>
-</td>
-
-<td>
-
-<em>(Optional)</em>
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
-<code>builtin</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.Transformer"> Transformer </a>
-</em>
 </td>
 
 <td>

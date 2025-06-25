@@ -24,9 +24,9 @@ use tokio::sync::mpsc::Receiver;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
 
-use crate::config::pipeline::ToVertexConfig;
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::SourceWatermarkConfig;
+use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::{Error, Result};
 use crate::message::{Message, Offset};
 use crate::watermark::idle::isb::ISBIdleDetector;
@@ -145,8 +145,13 @@ impl SourceWatermarkHandle {
         cln_token: CancellationToken,
     ) -> Result<Self> {
         let (sender, receiver) = tokio::sync::mpsc::channel(100);
-        let processor_manager =
-            ProcessorManager::new(js_context.clone(), &config.source_bucket_config).await?;
+        let processor_manager = ProcessorManager::new(
+            js_context.clone(),
+            &config.source_bucket_config,
+            VertexType::Source,
+            *crate::config::get_vertex_replica(),
+        )
+        .await?;
 
         let fetcher = SourceWatermarkFetcher::new(processor_manager);
         let publisher = SourceWatermarkPublisher::new(
@@ -438,6 +443,7 @@ mod tests {
     use tokio::time::sleep;
 
     use super::*;
+    use crate::config::pipeline::VertexType;
     use crate::config::pipeline::isb::BufferWriterConfig;
     use crate::config::pipeline::watermark::{BucketConfig, IdleConfig};
     use crate::message::{IntOffset, Message};
@@ -566,6 +572,20 @@ mod tests {
         let edge_ot_bucket_name = "test_publish_source_edge_watermark_edge_OT";
         let edge_hb_bucket_name = "test_publish_source_edge_watermark_edge_PROCESSORS";
 
+        // delete the stores
+        let _ = js_context
+            .delete_key_value(source_ot_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(source_hb_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(edge_ot_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(edge_hb_bucket_name.to_string())
+            .await;
+
         let source_config = SourceWatermarkConfig {
             max_delay: Default::default(),
             source_bucket_config: BucketConfig {
@@ -634,6 +654,7 @@ mod tests {
                 },
                 conditions: None,
                 partitions: 1,
+                to_vertex_type: VertexType::MapUDF,
             }],
             &source_config,
             CancellationToken::new(),
@@ -685,8 +706,10 @@ mod tests {
             handle
                 .publish_source_isb_watermark(stream.clone(), offset, 0)
                 .await;
+        }
 
-            // check if the watermark is published
+        // check if the watermark is published
+        for _ in 0..10 {
             let wmb = ot_bucket
                 .get("source_vertex-0")
                 .await
@@ -697,31 +720,13 @@ mod tests {
                 wmb_found = true;
                 break;
             } else {
-                tokio::time::sleep(Duration::from_millis(100)).await;
+                tokio::time::sleep(Duration::from_millis(10)).await;
             }
         }
 
         if !wmb_found {
             panic!("Failed to get watermark");
         }
-
-        // delete the stores
-        js_context
-            .delete_key_value(source_hb_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(source_ot_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(edge_hb_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(edge_ot_bucket_name.to_string())
-            .await
-            .unwrap();
     }
 
     #[cfg(feature = "nats-tests")]
@@ -748,6 +753,7 @@ mod tests {
             },
             conditions: None,
             partitions: 1,
+            to_vertex_type: VertexType::MapUDF,
         }];
 
         // create to vertex stream since we will be writing ctrl message to it
@@ -939,6 +945,7 @@ mod tests {
             },
             conditions: None,
             partitions: 1,
+            to_vertex_type: VertexType::MapUDF,
         }];
 
         // create to vertex stream since we will be writing ctrl message to it

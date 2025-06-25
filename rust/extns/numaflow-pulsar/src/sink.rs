@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use bytes::Bytes;
-use pulsar::{Producer, Pulsar, SerializeMessage, TokioExecutor, producer};
+use pulsar::{Authentication, Producer, Pulsar, SerializeMessage, TokioExecutor, producer};
+use tracing::info;
 
 use crate::{Error, PulsarAuth, Result};
 
@@ -54,10 +55,26 @@ pub struct Response {
 }
 
 pub async fn new_sink(config: Config) -> Result<Sink> {
-    let pulsar = Pulsar::builder(&config.addr, TokioExecutor)
-        .build()
-        .await
-        .map_err(Error::Pulsar)?;
+    let mut pulsar = Pulsar::builder(&config.addr, TokioExecutor);
+    match config.auth {
+        Some(PulsarAuth::JWT(token)) => {
+            let auth_token = Authentication {
+                name: "token".into(),
+                data: token.into(),
+            };
+            pulsar = pulsar.with_auth(auth_token);
+        }
+        Some(PulsarAuth::HTTPBasic { username, password }) => {
+            let auth_token = Authentication {
+                name: "basic".into(),
+                data: format!("{}:{}", username, password).into(),
+            };
+            pulsar = pulsar.with_auth(auth_token);
+        }
+        None => info!("No authentication mechanism specified for Pulsar"),
+    }
+
+    let pulsar = pulsar.build().await.map_err(Error::Pulsar)?;
     let producer = pulsar
         .producer()
         .with_topic(&config.topic)

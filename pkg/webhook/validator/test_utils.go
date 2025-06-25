@@ -66,7 +66,7 @@ func fakePipeline() *dfv1.Pipeline {
 					Name: "input",
 					Source: &dfv1.Source{
 						UDTransformer: &dfv1.UDTransformer{
-							Builtin: &dfv1.Transformer{Name: "filter"},
+							Container: &dfv1.Container{Image: "test-image"},
 						}},
 				},
 				{
@@ -120,7 +120,7 @@ func fakeMonoVertex() *dfv1.MonoVertex {
 		Spec: dfv1.MonoVertexSpec{
 			Source: &dfv1.Source{
 				UDTransformer: &dfv1.UDTransformer{
-					Builtin: &dfv1.Transformer{Name: "filter"},
+					Container: &dfv1.Container{Image: "my-transformer-image"},
 				},
 				UDSource: &dfv1.UDSource{
 					Container: &dfv1.Container{

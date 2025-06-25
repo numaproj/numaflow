@@ -575,15 +575,8 @@ func buildVisitedMap(vtxName string, visited map[string]struct{}, pl *dfv1.Pipel
 
 func validateSource(source dfv1.Source) error {
 	if transformer := source.UDTransformer; transformer != nil {
-		if transformer.Container != nil {
-			if transformer.Container.Image == "" && transformer.Builtin == nil {
-				return fmt.Errorf("invalid source transformer, either specify a builtin transformer, or a customized image")
-			}
-			if transformer.Container.Image != "" && transformer.Builtin != nil {
-				return fmt.Errorf("invalid source transformer, can not specify both builtin transformer, and a customized image")
-			}
-		} else if transformer.Builtin == nil {
-			return fmt.Errorf("invalid source transformer, either specify a builtin transformer, or a customized image")
+		if transformer.Container == nil || transformer.Container.Image == "" {
+			return fmt.Errorf("invalid source transformer, specify a customized image")
 		}
 	}
 	// TODO: add more validations for each source type

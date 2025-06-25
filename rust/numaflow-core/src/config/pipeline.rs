@@ -17,9 +17,7 @@ use crate::Result;
 use crate::config::ENV_NUMAFLOW_SERVING_CALLBACK_STORE;
 use crate::config::ENV_NUMAFLOW_SERVING_SPEC;
 use crate::config::components::metrics::MetricsConfig;
-use crate::config::components::reduce::{
-    ReducerConfig, ReducerType, StorageConfig, UserDefinedConfig,
-};
+use crate::config::components::reduce::{ReducerConfig, StorageConfig};
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::sink::SinkType;
 use crate::config::components::source::SourceConfig;
@@ -69,7 +67,8 @@ pub(crate) struct PipelineConfig {
     pub(crate) js_client_config: isb::jetstream::ClientConfig, // TODO: make it enum, since we can have different ISB implementations
     pub(crate) from_vertex_config: Vec<FromVertexConfig>,
     pub(crate) to_vertex_config: Vec<ToVertexConfig>,
-    pub(crate) vertex_type_config: VertexType,
+    pub(crate) vertex_config: VertexConfig,
+    pub(crate) vertex_type: VertexType,
     pub(crate) metrics_config: MetricsConfig,
     pub(crate) watermark_config: Option<WatermarkConfig>,
     pub(crate) callback_config: Option<ServingCallbackConfig>,
@@ -141,10 +140,11 @@ impl Default for PipelineConfig {
             js_client_config: isb::jetstream::ClientConfig::default(),
             from_vertex_config: vec![],
             to_vertex_config: vec![],
-            vertex_type_config: VertexType::Source(SourceVtxConfig {
+            vertex_config: VertexConfig::Source(SourceVtxConfig {
                 source_config: Default::default(),
                 transformer_config: None,
             }),
+            vertex_type: VertexType::Source,
             metrics_config: Default::default(),
             watermark_config: None,
             callback_config: None,
@@ -198,7 +198,6 @@ pub(crate) mod map {
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) enum MapType {
         UserDefined(UserDefinedConfig),
-        Builtin(BuiltinConfig),
     }
 
     impl TryFrom<Box<Udf>> for MapType {
@@ -222,13 +221,6 @@ pub(crate) mod map {
         pub socket_path: String,
         pub server_info_path: String,
     }
-
-    #[derive(Debug, Clone, PartialEq)]
-    pub(crate) struct BuiltinConfig {
-        pub(crate) name: String,
-        pub(crate) kwargs: Option<HashMap<String, String>>,
-        pub(crate) args: Option<Vec<String>>,
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -239,7 +231,7 @@ pub(crate) struct SinkVtxConfig {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum VertexType {
+pub(crate) enum VertexConfig {
     Source(SourceVtxConfig),
     Sink(SinkVtxConfig),
     Map(MapVtxConfig),
@@ -281,13 +273,13 @@ impl Default for UserDefinedStoreConfig {
     }
 }
 
-impl std::fmt::Display for VertexType {
+impl std::fmt::Display for VertexConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match self {
-            VertexType::Source(_) => write!(f, "{}", VERTEX_TYPE_SOURCE),
-            VertexType::Sink(_) => write!(f, "{}", VERTEX_TYPE_SINK),
-            VertexType::Map(_) => write!(f, "{}", VERTEX_TYPE_MAP_UDF),
-            VertexType::Reduce(_) => write!(f, "{}", VERTEX_TYPE_REDUCE_UDF),
+            VertexConfig::Source(_) => write!(f, "{}", VERTEX_TYPE_SOURCE),
+            VertexConfig::Sink(_) => write!(f, "{}", VERTEX_TYPE_SINK),
+            VertexConfig::Map(_) => write!(f, "{}", VERTEX_TYPE_MAP_UDF),
+            VertexConfig::Reduce(_) => write!(f, "{}", VERTEX_TYPE_REDUCE_UDF),
         }
     }
 }
@@ -299,12 +291,48 @@ pub(crate) struct FromVertexConfig {
     pub(crate) partitions: u16,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum VertexType {
+    Source,
+    Sink,
+    MapUDF,
+    ReduceUDF,
+}
+
+impl VertexType {
+    pub(crate) fn from_str(s: &str) -> Result<Self> {
+        match s {
+            VERTEX_TYPE_SOURCE => Ok(VertexType::Source),
+            VERTEX_TYPE_SINK => Ok(VertexType::Sink),
+            VERTEX_TYPE_MAP_UDF => Ok(VertexType::MapUDF),
+            VERTEX_TYPE_REDUCE_UDF => Ok(VertexType::ReduceUDF),
+            _ => Err(Error::Config(format!("Unknown vertex type: {}", s))),
+        }
+    }
+
+    pub(crate) fn as_str(&self) -> &'static str {
+        match self {
+            VertexType::Source => VERTEX_TYPE_SOURCE,
+            VertexType::Sink => VERTEX_TYPE_SINK,
+            VertexType::MapUDF => VERTEX_TYPE_MAP_UDF,
+            VertexType::ReduceUDF => VERTEX_TYPE_REDUCE_UDF,
+        }
+    }
+}
+
+impl std::fmt::Display for VertexType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "{}", self.as_str())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ToVertexConfig {
     pub(crate) name: &'static str,
     pub(crate) partitions: u16,
     pub(crate) writer_config: BufferWriterConfig,
     pub(crate) conditions: Option<Box<ForwardConditions>>,
+    pub(crate) to_vertex_type: VertexType,
 }
 
 impl PipelineConfig {
@@ -381,13 +409,13 @@ impl PipelineConfig {
 
         let to_edges = vertex_obj.spec.to_edges.unwrap_or_default();
 
-        let vertex: VertexType = if let Some(source) = vertex_obj.spec.source {
+        let vertex: VertexConfig = if let Some(source) = vertex_obj.spec.source {
             let transformer_config = source.transformer.as_ref().map(|_| TransformerConfig {
                 concurrency: batch_size as usize, // FIXME: introduce a separate field in the spec
                 transformer_type: TransformerType::UserDefined(Default::default()),
             });
 
-            VertexType::Source(SourceVtxConfig {
+            VertexConfig::Source(SourceVtxConfig {
                 source_config: SourceConfig {
                     read_ahead: env::var("READ_AHEAD")
                         .unwrap_or("false".to_string())
@@ -442,7 +470,7 @@ impl PipelineConfig {
                 None
             };
 
-            VertexType::Sink(SinkVtxConfig {
+            VertexConfig::Sink(SinkVtxConfig {
                 sink_config: SinkConfig {
                     sink_type: SinkType::primary_sinktype(&sink)?,
                     retry_config: sink.retry_strategy.clone().map(|retry| retry.into()),
@@ -453,11 +481,6 @@ impl PipelineConfig {
         } else if let Some(udf) = vertex_obj.spec.udf {
             if let Some(group_by) = &udf.group_by {
                 // This is a reduce vertex
-                let reducer_config = ReducerConfig {
-                    reducer_type: ReducerType::UserDefined(UserDefinedConfig::default()),
-                    window_config: group_by.try_into()?,
-                };
-
                 let storage_config = group_by.storage.as_ref().and_then(|storage| {
                     if storage.no_store.is_some() {
                         None
@@ -466,13 +489,13 @@ impl PipelineConfig {
                     }
                 });
 
-                VertexType::Reduce(ReduceVtxConfig {
-                    reducer_config,
+                VertexConfig::Reduce(ReduceVtxConfig {
+                    reducer_config: group_by.try_into()?,
                     wal_storage_config: storage_config,
                 })
             } else {
                 // This is a map vertex
-                VertexType::Map(MapVtxConfig {
+                VertexConfig::Map(MapVtxConfig {
                     concurrency: batch_size as usize,
                     map_type: udf.try_into()?,
                     map_mode: MapMode::Unary,
@@ -555,6 +578,7 @@ impl PipelineConfig {
                         .unwrap_or(default_writer_config.buffer_full_strategy),
                 },
                 conditions: edge.conditions,
+                to_vertex_type: VertexType::from_str(&edge.to_vertex_type)?,
             });
         }
 
@@ -652,7 +676,8 @@ impl PipelineConfig {
             js_client_config,
             from_vertex_config,
             to_vertex_config,
-            vertex_type_config: vertex,
+            vertex_config: vertex,
+            vertex_type: VertexType::Source,
             metrics_config: MetricsConfig::with_lookback_window_in_secs(look_back_window),
             watermark_config,
             callback_config,
@@ -665,7 +690,7 @@ impl PipelineConfig {
         namespace: &str,
         pipeline_name: &str,
         vertex_name: &str,
-        vertex: &VertexType,
+        vertex: &VertexConfig,
         from_vertex_config: &[FromVertexConfig],
         to_vertex_config: &[ToVertexConfig],
     ) -> Option<WatermarkConfig> {
@@ -683,8 +708,49 @@ impl PipelineConfig {
                 threshold: idle.threshold.map(Duration::from).unwrap_or_default(),
             });
 
+        // Helper function to create bucket config for to_vertex
+        let create_to_vertex_bucket_config = |to: &ToVertexConfig| BucketConfig {
+            vertex: to.name,
+            partitions: to.partitions,
+            ot_bucket: Box::leak(
+                format!(
+                    "{}-{}-{}-{}_OT",
+                    namespace, pipeline_name, vertex_name, &to.name
+                )
+                .into_boxed_str(),
+            ),
+            hb_bucket: Box::leak(
+                format!(
+                    "{}-{}-{}-{}_PROCESSORS",
+                    namespace, pipeline_name, vertex_name, &to.name
+                )
+                .into_boxed_str(),
+            ),
+        };
+
+        // Helper function to create bucket config for from_vertex
+        let create_from_vertex_bucket_config =
+            |from: &FromVertexConfig, partitions: u16| BucketConfig {
+                vertex: from.name,
+                partitions,
+                ot_bucket: Box::leak(
+                    format!(
+                        "{}-{}-{}-{}_OT",
+                        namespace, pipeline_name, &from.name, vertex_name
+                    )
+                    .into_boxed_str(),
+                ),
+                hb_bucket: Box::leak(
+                    format!(
+                        "{}-{}-{}-{}_PROCESSORS",
+                        namespace, pipeline_name, &from.name, vertex_name
+                    )
+                    .into_boxed_str(),
+                ),
+            };
+
         match vertex {
-            VertexType::Source(_) => Some(WatermarkConfig::Source(SourceWatermarkConfig {
+            VertexConfig::Source(_) => Some(WatermarkConfig::Source(SourceWatermarkConfig {
                 max_delay: Duration::from_millis(max_delay),
                 source_bucket_config: BucketConfig {
                     vertex: Box::leak(vertex_name.to_string().into_boxed_str()),
@@ -703,70 +769,31 @@ impl PipelineConfig {
                 },
                 to_vertex_bucket_config: to_vertex_config
                     .iter()
-                    .map(|to| BucketConfig {
-                        vertex: to.name,
-                        partitions: to.partitions,
-                        ot_bucket: Box::leak(
-                            format!(
-                                "{}-{}-{}-{}_OT",
-                                namespace, pipeline_name, vertex_name, &to.name
-                            )
-                            .into_boxed_str(),
-                        ),
-                        hb_bucket: Box::leak(
-                            format!(
-                                "{}-{}-{}-{}_PROCESSORS",
-                                namespace, pipeline_name, vertex_name, &to.name
-                            )
-                            .into_boxed_str(),
-                        ),
-                    })
+                    .map(create_to_vertex_bucket_config)
                     .collect(),
                 idle_config,
             })),
-            VertexType::Sink(_) | VertexType::Map(_) | VertexType::Reduce(_) => {
+            VertexConfig::Sink(_) | VertexConfig::Map(_) => {
                 Some(WatermarkConfig::Edge(EdgeWatermarkConfig {
                     from_vertex_config: from_vertex_config
                         .iter()
-                        .map(|from| BucketConfig {
-                            vertex: from.name,
-                            partitions: from.partitions,
-                            ot_bucket: Box::leak(
-                                format!(
-                                    "{}-{}-{}-{}_OT",
-                                    namespace, pipeline_name, &from.name, vertex_name
-                                )
-                                .into_boxed_str(),
-                            ),
-                            hb_bucket: Box::leak(
-                                format!(
-                                    "{}-{}-{}-{}_PROCESSORS",
-                                    namespace, pipeline_name, &from.name, vertex_name
-                                )
-                                .into_boxed_str(),
-                            ),
-                        })
+                        .map(|from| create_from_vertex_bucket_config(from, from.partitions))
                         .collect(),
                     to_vertex_config: to_vertex_config
                         .iter()
-                        .map(|to| BucketConfig {
-                            vertex: to.name,
-                            partitions: to.partitions,
-                            ot_bucket: Box::leak(
-                                format!(
-                                    "{}-{}-{}-{}_OT",
-                                    namespace, pipeline_name, vertex_name, &to.name
-                                )
-                                .into_boxed_str(),
-                            ),
-                            hb_bucket: Box::leak(
-                                format!(
-                                    "{}-{}-{}-{}_PROCESSORS",
-                                    namespace, pipeline_name, vertex_name, &to.name
-                                )
-                                .into_boxed_str(),
-                            ),
-                        })
+                        .map(create_to_vertex_bucket_config)
+                        .collect(),
+                }))
+            }
+            VertexConfig::Reduce(_) => {
+                Some(WatermarkConfig::Edge(EdgeWatermarkConfig {
+                    from_vertex_config: from_vertex_config
+                        .iter()
+                        .map(|from| create_from_vertex_bucket_config(from, 1)) // reduce will have only one partition
+                        .collect(),
+                    to_vertex_config: to_vertex_config
+                        .iter()
+                        .map(create_to_vertex_bucket_config)
                         .collect(),
                 }))
             }
@@ -797,7 +824,8 @@ mod tests {
             js_client_config: isb::jetstream::ClientConfig::default(),
             from_vertex_config: vec![],
             to_vertex_config: vec![],
-            vertex_type_config: VertexType::Source(SourceVtxConfig {
+            vertex_type: VertexType::Source,
+            vertex_config: VertexConfig::Source(SourceVtxConfig {
                 source_config: Default::default(),
                 transformer_config: None,
             }),
@@ -813,13 +841,13 @@ mod tests {
 
     #[test]
     fn test_vertex_type_display() {
-        let src_type = VertexType::Source(SourceVtxConfig {
+        let src_type = VertexConfig::Source(SourceVtxConfig {
             source_config: SourceConfig::default(),
             transformer_config: None,
         });
         assert_eq!(src_type.to_string(), "Source");
 
-        let sink_type = VertexType::Sink(SinkVtxConfig {
+        let sink_type = VertexConfig::Sink(SinkVtxConfig {
             sink_config: SinkConfig {
                 sink_type: SinkType::Log(LogConfig {}),
                 retry_config: None,
@@ -828,6 +856,27 @@ mod tests {
             serving_store_config: None,
         });
         assert_eq!(sink_type.to_string(), "Sink");
+    }
+
+    #[test]
+    fn test_to_vertex_type_conversion() {
+        // Test from_str
+        assert_eq!(VertexType::from_str("Source").unwrap(), VertexType::Source);
+        assert_eq!(VertexType::from_str("Sink").unwrap(), VertexType::Sink);
+        assert_eq!(VertexType::from_str("MapUDF").unwrap(), VertexType::MapUDF);
+        assert_eq!(
+            VertexType::from_str("ReduceUDF").unwrap(),
+            VertexType::ReduceUDF
+        );
+
+        // Test invalid string
+        assert!(VertexType::from_str("Invalid").is_err());
+
+        // Test as_str
+        assert_eq!(VertexType::Source.as_str(), "Source");
+        assert_eq!(VertexType::Sink.as_str(), "Sink");
+        assert_eq!(VertexType::MapUDF.as_str(), "MapUDF");
+        assert_eq!(VertexType::ReduceUDF.as_str(), "ReduceUDF");
     }
 
     #[test]
@@ -867,7 +916,7 @@ mod tests {
                 partitions: 1,
             }],
             to_vertex_config: vec![],
-            vertex_type_config: VertexType::Sink(SinkVtxConfig {
+            vertex_config: VertexConfig::Sink(SinkVtxConfig {
                 sink_config: SinkConfig {
                     sink_type: SinkType::Blackhole(BlackholeConfig {}),
                     retry_config: Some(RetryConfig::default()),
@@ -929,8 +978,9 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: VertexType::Sink,
             }],
-            vertex_type_config: VertexType::Source(SourceVtxConfig {
+            vertex_config: VertexConfig::Source(SourceVtxConfig {
                 source_config: SourceConfig {
                     read_ahead: false,
                     source_type: SourceType::Generator(GeneratorConfig {
@@ -985,8 +1035,9 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: VertexType::Sink,
             }],
-            vertex_type_config: VertexType::Source(SourceVtxConfig {
+            vertex_config: VertexConfig::Source(SourceVtxConfig {
                 source_config: SourceConfig {
                     read_ahead: false,
                     source_type: SourceType::Pulsar(PulsarSourceConfig {
@@ -1053,13 +1104,10 @@ mod tests {
         };
 
         assert_eq!(map_vtx_config.concurrency, 10);
-        if let MapType::UserDefined(config) = map_vtx_config.map_type {
-            assert_eq!(config.grpc_max_message_size, DEFAULT_GRPC_MAX_MESSAGE_SIZE);
-            assert_eq!(config.socket_path, DEFAULT_MAP_SOCKET);
-            assert_eq!(config.server_info_path, DEFAULT_MAP_SERVER_INFO_FILE);
-        } else {
-            panic!("Expected UserDefined map type");
-        }
+        let MapType::UserDefined(config) = map_vtx_config.map_type;
+        assert_eq!(config.grpc_max_message_size, DEFAULT_GRPC_MAX_MESSAGE_SIZE);
+        assert_eq!(config.socket_path, DEFAULT_MAP_SOCKET);
+        assert_eq!(config.server_info_path, DEFAULT_MAP_SERVER_INFO_FILE);
     }
 
     #[test]
@@ -1092,7 +1140,7 @@ mod tests {
                 partitions: 1,
             }],
             to_vertex_config: vec![],
-            vertex_type_config: VertexType::Map(MapVtxConfig {
+            vertex_config: VertexConfig::Map(MapVtxConfig {
                 concurrency: 500,
                 map_type: MapType::UserDefined(UserDefinedConfig {
                     grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,

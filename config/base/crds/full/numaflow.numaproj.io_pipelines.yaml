@@ -8374,6 +8374,35 @@ spec:
                               properties:
                                 auth:
                                   properties:
+                                    basicAuth:
+                                      properties:
+                                        password:
+                                          properties:
+                                            key:
+                                              type: string
+                                            name:
+                                              default: ""
+                                              type: string
+                                            optional:
+                                              type: boolean
+                                          required:
+                                          - key
+                                          type: object
+                                          x-kubernetes-map-type: atomic
+                                        username:
+                                          properties:
+                                            key:
+                                              type: string
+                                            name:
+                                              default: ""
+                                              type: string
+                                            optional:
+                                              type: boolean
+                                          required:
+                                          - key
+                                          type: object
+                                          x-kubernetes-map-type: atomic
+                                      type: object
                                     token:
                                       properties:
                                         key:
@@ -8988,6 +9017,35 @@ spec:
                           properties:
                             auth:
                               properties:
+                                basicAuth:
+                                  properties:
+                                    password:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          default: ""
+                                          type: string
+                                        optional:
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                    username:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          default: ""
+                                          type: string
+                                        optional:
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                  type: object
                                 token:
                                   properties:
                                     key:
@@ -9898,6 +9956,35 @@ spec:
                           properties:
                             auth:
                               properties:
+                                basicAuth:
+                                  properties:
+                                    password:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          default: ""
+                                          type: string
+                                        optional:
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                    username:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          default: ""
+                                          type: string
+                                        optional:
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                  type: object
                                 token:
                                   properties:
                                     key:
@@ -9965,25 +10052,6 @@ spec:
                           type: object
                         transformer:
                           properties:
-                            builtin:
-                              properties:
-                                args:
-                                  items:
-                                    type: string
-                                  type: array
-                                kwargs:
-                                  additionalProperties:
-                                    type: string
-                                  type: object
-                                name:
-                                  enum:
-                                  - eventTimeExtractor
-                                  - filter
-                                  - timeExtractionFilter
-                                  type: string
-                              required:
-                              - name
-                              type: object
                             container:
                               properties:
                                 args:
