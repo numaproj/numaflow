@@ -32,7 +32,7 @@ use crate::reduce::reducer::unaligned::windower::{
     SHARED_PNF_SLOT, UnalignedWindowMessage, UnalignedWindowOperation, Window,
 };
 use chrono::{DateTime, Utc};
-use tracing::{info, trace};
+use tracing::trace;
 
 /// Active session windows for every key combination (combinedKey -> Sorted window set)
 type ActiveWindowStore = Arc<RwLock<HashMap<String, BTreeSet<Window>>>>;
