@@ -1424,7 +1424,7 @@ fn parse_pulsar_auth_config(
             password,
         }));
     }
-    return Err(Error::Config("Authentication configuration is enabled, however credentials are not provided in the Pulsar sink configuration".to_string()));
+    Err(Error::Config("Authentication configuration is enabled, however credentials are not provided in the Pulsar sink configuration".to_string()))
 }
 
 #[cfg(test)]
