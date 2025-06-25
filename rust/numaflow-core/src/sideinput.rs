@@ -5,7 +5,9 @@ use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{debug, error};
 
-mod sychronize;
+/// Synchronizes the side input values from the ISB to the local file system of the vertex by watching
+/// the side input store for changes.
+mod synchronize;
 
 /// CheckFileExists checks if a file with the given fileName exists in the file system.
 fn check_file_exists<P: AsRef<Path>>(file_name: P) -> bool {

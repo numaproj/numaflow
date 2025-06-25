@@ -1,5 +1,5 @@
-//! The synchronizer monitors and synchronizes side input values from a key-value store to the local
-//! filesystem, making them available to pipeline vertices.
+//! The synchronizer continually monitors and synchronizes side input values from a key-value store
+//! to the local filesystem, making them available to pipeline vertices.
 
 use crate::config::pipeline::isb;
 use crate::error::{Error, Result};
@@ -8,6 +8,7 @@ use crate::sideinput::update_side_input_file;
 use async_nats::jetstream::kv::{Operation, Watch};
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
+use std::collections::HashSet;
 use std::path;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
@@ -20,6 +21,8 @@ pub(crate) struct SideInputSynchronizer {
     /// The path where the side input files are mounted on the container.
     mount_path: &'static str,
     js_client_config: isb::jetstream::ClientConfig,
+    /// If true, the synchronizer will only process the initial values and then stops.
+    run_once: bool,
     cancellation_token: CancellationToken,
 }
 
@@ -29,6 +32,7 @@ impl SideInputSynchronizer {
         side_inputs: Vec<&'static str>,
         mount_path: &'static str,
         js_client_config: isb::jetstream::ClientConfig,
+        run_once: bool,
         cancellation_token: CancellationToken,
     ) -> Self {
         SideInputSynchronizer {
@@ -36,6 +40,7 @@ impl SideInputSynchronizer {
             side_inputs,
             mount_path,
             js_client_config,
+            run_once,
             cancellation_token,
         }
     }
@@ -59,8 +64,16 @@ impl SideInputSynchronizer {
         Ok(())
     }
 
+    /// Monitors the bucket for changes and updates the side input files accordingly. If
+    /// `SideInputSynchronizer.run_once` is true, it will only process the initial values and then return.
     async fn run(self, bucket: async_nats::jetstream::kv::Store) {
         let mut bucket_watcher = create_watcher(bucket.clone()).await;
+
+        let mut seen_keys: Option<HashSet<String>> = None;
+        if self.run_once {
+            info!("Running side input synchronizer once for initialization");
+            seen_keys = Some(HashSet::new());
+        }
 
         loop {
             tokio::select! {
@@ -90,6 +103,15 @@ impl SideInputSynchronizer {
                             if !self.side_inputs.contains(&kv.key.as_str()) {
                                 continue;
                             }
+
+                            // if run_once is true, we only process the initial values and then return
+                            if let Some(seen_keys) = &mut seen_keys {
+                                let k = kv.key.as_str();
+                                if !seen_keys.insert(k.to_string()) {
+                                    continue;
+                                }
+                            }
+
                             let value = bucket.get(&kv.key).await.unwrap().unwrap();
                             let mount_path = path::Path::new(self.mount_path).join(&kv.key);
                             update_side_input_file(mount_path, &value).unwrap();
@@ -100,7 +122,22 @@ impl SideInputSynchronizer {
                     }
                 }
             }
+
+            // if run_once is true, we only synchronizes once and quit
+            if self.run_once && Self::got_all_sideinputs(&self, seen_keys.as_ref().unwrap()) {
+                info!(side_inputs=?seen_keys, "one time synchronization completed.");
+                return;
+            }
         }
+    }
+
+    fn got_all_sideinputs(&self, seen_keys: &HashSet<String>) -> bool {
+        for side_input in &self.side_inputs {
+            if !seen_keys.contains(&(*side_input).to_string()) {
+                return false;
+            }
+        }
+        true
     }
 }
 
@@ -144,6 +181,7 @@ mod tests {
             vec!["input1", "input2"],
             "/tmp/test",
             config,
+            false,
             cancellation_token,
         );
 
@@ -176,6 +214,7 @@ mod tests {
             vec!["custom-input"],
             "/custom/path",
             config.clone(),
+            false,
             cancellation_token,
         );
 
@@ -206,6 +245,7 @@ mod tests {
             vec![],
             "/tmp/empty",
             config,
+            false,
             cancellation_token,
         );
 
@@ -255,6 +295,7 @@ mod tests {
             vec!["input1", "input2"],
             "/tmp/test-side-input",
             config,
+            false,
             cancellation_token.clone(),
         );
 
@@ -295,6 +336,7 @@ mod tests {
             vec!["input1"],
             "/tmp/test",
             config,
+            false,
             cancellation_token,
         );
 
@@ -368,6 +410,7 @@ mod tests {
             vec!["allowed-input"],
             "/tmp/test-filtering",
             config,
+            false,
             cancellation_token.clone(),
         );
 
