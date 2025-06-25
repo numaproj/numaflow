@@ -169,18 +169,22 @@ mod tests {
     use crate::config::pipeline::isb::jetstream::ClientConfig;
     use async_nats::jetstream;
     use std::time::Duration;
+    use tempfile::TempDir;
     use tokio_util::sync::CancellationToken;
 
     /// Test the basic construction of SideInputSynchronizer
     /// This test doesn't require NATS to be running
     #[test]
     fn test_side_input_synchronizer_new() {
+        let temp_dir = TempDir::new().unwrap();
+        let mount_path = Box::leak(temp_dir.path().to_string_lossy().into_owned().into_boxed_str());
+
         let config = ClientConfig::default();
         let cancellation_token = CancellationToken::new();
         let synchronizer = SideInputSynchronizer::new(
             "test-store",
             vec!["input1", "input2"],
-            "/tmp/test",
+            mount_path,
             config,
             false,
             cancellation_token,
@@ -188,7 +192,7 @@ mod tests {
 
         assert_eq!(synchronizer.side_input_store, "test-store");
         assert_eq!(synchronizer.side_inputs, vec!["input1", "input2"]);
-        assert_eq!(synchronizer.mount_path, "/tmp/test");
+        assert_eq!(synchronizer.mount_path, mount_path);
     }
 
     /// Test that the default ClientConfig has expected values
@@ -203,6 +207,9 @@ mod tests {
     /// Test SideInputSynchronizer with custom ClientConfig
     #[test]
     fn test_side_input_synchronizer_with_custom_config() {
+        let temp_dir = TempDir::new().unwrap();
+        let mount_path = Box::leak(temp_dir.path().to_string_lossy().into_owned().into_boxed_str());
+
         let config = ClientConfig {
             url: "nats://custom-server:4222".to_string(),
             user: Some("testuser".to_string()),
@@ -213,7 +220,7 @@ mod tests {
         let synchronizer = SideInputSynchronizer::new(
             "custom-store",
             vec!["custom-input"],
-            "/custom/path",
+            mount_path,
             config.clone(),
             false,
             cancellation_token,
@@ -221,7 +228,7 @@ mod tests {
 
         assert_eq!(synchronizer.side_input_store, "custom-store");
         assert_eq!(synchronizer.side_inputs, vec!["custom-input"]);
-        assert_eq!(synchronizer.mount_path, "/custom/path");
+        assert_eq!(synchronizer.mount_path, mount_path);
         assert_eq!(
             synchronizer.js_client_config.url,
             "nats://custom-server:4222"
@@ -239,12 +246,15 @@ mod tests {
     /// Test SideInputSynchronizer with empty side inputs list
     #[test]
     fn test_side_input_synchronizer_empty_inputs() {
+        let temp_dir = TempDir::new().unwrap();
+        let mount_path = Box::leak(temp_dir.path().to_string_lossy().into_owned().into_boxed_str());
+
         let config = ClientConfig::default();
         let cancellation_token = CancellationToken::new();
         let synchronizer = SideInputSynchronizer::new(
             "empty-store",
             vec![],
-            "/tmp/empty",
+            mount_path,
             config,
             false,
             cancellation_token,
@@ -252,18 +262,21 @@ mod tests {
 
         assert_eq!(synchronizer.side_input_store, "empty-store");
         assert_eq!(synchronizer.side_inputs, Vec::<&str>::new());
-        assert_eq!(synchronizer.mount_path, "/tmp/empty");
+        assert_eq!(synchronizer.mount_path, mount_path);
     }
 
     /// Test SideInputSynchronizer with run_once=true
     #[test]
     fn test_side_input_synchronizer_run_once_new() {
+        let temp_dir = TempDir::new().unwrap();
+        let mount_path = Box::leak(temp_dir.path().to_string_lossy().into_owned().into_boxed_str());
+
         let config = ClientConfig::default();
         let cancellation_token = CancellationToken::new();
         let synchronizer = SideInputSynchronizer::new(
             "test-store",
             vec!["input1", "input2"],
-            "/tmp/test",
+            mount_path,
             config,
             true, // run_once = true
             cancellation_token,
@@ -271,7 +284,7 @@ mod tests {
 
         assert_eq!(synchronizer.side_input_store, "test-store");
         assert_eq!(synchronizer.side_inputs, vec!["input1", "input2"]);
-        assert_eq!(synchronizer.mount_path, "/tmp/test");
+        assert_eq!(synchronizer.mount_path, mount_path);
         assert!(synchronizer.run_once);
     }
 
@@ -309,12 +322,15 @@ mod tests {
             password: None,
         };
 
-        // Use a static mount path for testing
+        // Use a temporary directory for testing
+        let temp_dir = TempDir::new().unwrap();
+        let mount_path = Box::leak(temp_dir.path().to_string_lossy().into_owned().into_boxed_str());
+
         let cancellation_token = CancellationToken::new();
         let synchronizer = SideInputSynchronizer::new(
             "test-side-input-store",
             vec!["input1", "input2"],
-            "/tmp/test-side-input",
+            mount_path,
             config,
             false,
             cancellation_token.clone(),
@@ -345,6 +361,9 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_side_input_synchronizer_error_handling() {
+        let temp_dir = TempDir::new().unwrap();
+        let mount_path = Box::leak(temp_dir.path().to_string_lossy().into_owned().into_boxed_str());
+
         let config = ClientConfig {
             url: "localhost:4222".to_string(),
             user: None,
@@ -355,7 +374,7 @@ mod tests {
         let synchronizer = SideInputSynchronizer::new(
             "non-existent-store",
             vec!["input1"],
-            "/tmp/test",
+            mount_path,
             config,
             false,
             cancellation_token,
@@ -424,12 +443,16 @@ mod tests {
             password: None,
         };
 
+        // Use a temporary directory for testing
+        let temp_dir = TempDir::new().unwrap();
+        let mount_path = Box::leak(temp_dir.path().to_string_lossy().into_owned().into_boxed_str());
+
         // Only include "allowed-input" in side_inputs
         let cancellation_token = CancellationToken::new();
         let synchronizer = SideInputSynchronizer::new(
             store_name,
             vec!["allowed-input"],
-            "/tmp/test-filtering",
+            mount_path,
             config,
             false,
             cancellation_token.clone(),
@@ -505,11 +528,15 @@ mod tests {
             password: None,
         };
 
+        // Use a temporary directory for testing
+        let temp_dir = TempDir::new().unwrap();
+        let mount_path = Box::leak(temp_dir.path().to_string_lossy().into_owned().into_boxed_str());
+
         let cancellation_token = CancellationToken::new();
         let synchronizer = SideInputSynchronizer::new(
             store_name,
             vec!["input1", "input2"],
-            "/tmp/test-run-once",
+            mount_path,
             config,
             true, // run_once = true
             cancellation_token.clone(),
@@ -586,11 +613,15 @@ mod tests {
             password: None,
         };
 
+        // Use a temporary directory for testing
+        let temp_dir = TempDir::new().unwrap();
+        let mount_path = Box::leak(temp_dir.path().to_string_lossy().into_owned().into_boxed_str());
+
         let cancellation_token = CancellationToken::new();
         let synchronizer = SideInputSynchronizer::new(
             store_name,
             vec!["input1", "input2"],
-            "/tmp/test-run-once-partial",
+            mount_path,
             config,
             true, // run_once = true
             cancellation_token.clone(),
