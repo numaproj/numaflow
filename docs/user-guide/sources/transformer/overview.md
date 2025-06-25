@@ -10,10 +10,6 @@ This functionality offers two primary advantages to users:
 Source Data Transformer runs as a sidecar container in a Source Vertex Pod. Data processing in the transformer is supposed to be idempotent.
 The communication between the main container (platform code) and the sidecar container (user code) is through gRPC over Unix Domain Socket.
 
-## Built-in Transformers
-
-There are some [Built-in Transformers](builtin-transformers/README.md) that can be used directly.
-
 ## Build Your Own Transformer
 
 You can build your own transformer in multiple languages.

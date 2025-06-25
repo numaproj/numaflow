@@ -821,7 +821,7 @@ pub(crate) mod transformer {
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) enum TransformerType {
         #[allow(dead_code)]
-        Noop(NoopConfig), // will add built-in transformers
+        Noop(NoopConfig),
         UserDefined(UserDefinedConfig),
     }
 

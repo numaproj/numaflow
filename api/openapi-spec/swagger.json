@@ -22750,29 +22750,6 @@
         }
       }
     },
-    "io.numaproj.numaflow.v1alpha1.Transformer": {
-      "type": "object",
-      "required": [
-        "name"
-      ],
-      "properties": {
-        "args": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "kwargs": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
-        },
-        "name": {
-          "type": "string"
-        }
-      }
-    },
     "io.numaproj.numaflow.v1alpha1.UDF": {
       "type": "object",
       "properties": {
@@ -22812,9 +22789,6 @@
     "io.numaproj.numaflow.v1alpha1.UDTransformer": {
       "type": "object",
       "properties": {
-        "builtin": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Transformer"
-        },
         "container": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Container"
         }

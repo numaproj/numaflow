@@ -202,8 +202,6 @@ pub mod templates;
 pub use self::templates::Templates;
 pub mod tls;
 pub use self::tls::Tls;
-pub mod transformer;
-pub use self::transformer::Transformer;
 pub mod ud_sink;
 pub use self::ud_sink::UdSink;
 pub mod ud_source;
