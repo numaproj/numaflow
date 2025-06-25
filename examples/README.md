@@ -90,10 +90,9 @@ spec:
           duration: 1s
     - name: filter
       udf:
-        builtin:
-          name: filter
-          kwargs:
-            expression: int(json(payload).id) < 100
+        container:
+          image: quay.io/numaio/numaflow-go/map-filter-id:stable # A filter which pass-through only messages with an id less than 100
+          imagePullPolicy: Always
     - name: out
       sink:
         log: {}

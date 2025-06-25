@@ -17,7 +17,7 @@ spec:
     - name: p1
       udf:
         container:
-          image: quay.io/numaio/numaflow-go/map-cat:stable
+          image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
           imagePullPolicy: Always
       containerTemplate:
         env:
