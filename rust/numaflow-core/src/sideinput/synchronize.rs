@@ -99,6 +99,7 @@ impl SideInputSynchronizer {
 
                     match kv.operation {
                         Operation::Put => {
+                            trace!(operation=?kv.operation, key=?kv.key, "Processing operation");
                             // check if the key is one of the side inputs
                             if !self.side_inputs.contains(&kv.key.as_str()) {
                                 continue;
@@ -107,9 +108,8 @@ impl SideInputSynchronizer {
                             // if run_once is true, we only process the initial values and then return
                             if let Some(seen_keys) = &mut seen_keys {
                                 let k = kv.key.as_str();
-                                if !seen_keys.insert(k.to_string()) {
-                                    continue;
-                                }
+                                seen_keys.insert(k.to_string());
+                                info!(?self.side_inputs, ?seen_keys, "Synchronizing side inputs");
                             }
 
                             let value = bucket.get(&kv.key).await.unwrap().unwrap();
@@ -149,7 +149,8 @@ async fn create_watcher(bucket: async_nats::jetstream::kv::Store) -> Watch {
 
     Retry::retry(
         interval,
-        async || match bucket.watch_all().await {
+        // FIXME: is this fine? watch_all of Rust does not match Golang behavior
+        async || match bucket.watch_all_from_revision(1).await {
             Ok(w) => Ok(w),
             Err(e) => {
                 error!(?e, "Failed to create watcher");
@@ -252,6 +253,26 @@ mod tests {
         assert_eq!(synchronizer.side_input_store, "empty-store");
         assert_eq!(synchronizer.side_inputs, Vec::<&str>::new());
         assert_eq!(synchronizer.mount_path, "/tmp/empty");
+    }
+
+    /// Test SideInputSynchronizer with run_once=true
+    #[test]
+    fn test_side_input_synchronizer_run_once_new() {
+        let config = ClientConfig::default();
+        let cancellation_token = CancellationToken::new();
+        let synchronizer = SideInputSynchronizer::new(
+            "test-store",
+            vec!["input1", "input2"],
+            "/tmp/test",
+            config,
+            true, // run_once = true
+            cancellation_token,
+        );
+
+        assert_eq!(synchronizer.side_input_store, "test-store");
+        assert_eq!(synchronizer.side_inputs, vec!["input1", "input2"]);
+        assert_eq!(synchronizer.mount_path, "/tmp/test");
+        assert!(synchronizer.run_once);
     }
 
     /// Integration test for SideInputSynchronizer
@@ -436,6 +457,189 @@ mod tests {
         // Clean up
         cancellation_token.cancel();
         let _ = sync_task.await;
+        let _ = js_context.delete_key_value(store_name).await;
+    }
+
+    /// Test run_once functionality - synchronizer should process initial values and then stop
+    ///
+    /// This test verifies that when run_once=true:
+    /// 1. The synchronizer processes all initial side input values
+    /// 2. The synchronizer stops after processing all expected side inputs
+    /// 3. The synchronizer does not continue monitoring for new changes
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_side_input_synchronizer_run_once() {
+        // Connect to NATS server
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+
+        // Create a test KV store
+        let store_name = "test-run-once-store";
+        let _ = js_context.delete_key_value(store_name).await; // Clean up if exists
+
+        let kv_store = js_context
+            .create_key_value(jetstream::kv::Config {
+                bucket: store_name.to_string(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        // Put initial test data in the KV store before starting synchronizer
+        kv_store
+            .put("input1", "initial-value-1".into())
+            .await
+            .unwrap();
+        kv_store
+            .put("input2", "initial-value-2".into())
+            .await
+            .unwrap();
+        kv_store
+            .put("other-input", "other-value".into())
+            .await
+            .unwrap(); // Should be ignored
+
+        let config = ClientConfig {
+            url: "localhost:4222".to_string(),
+            user: None,
+            password: None,
+        };
+
+        let cancellation_token = CancellationToken::new();
+        let synchronizer = SideInputSynchronizer::new(
+            store_name,
+            vec!["input1", "input2"],
+            "/tmp/test-run-once",
+            config,
+            true, // run_once = true
+            cancellation_token.clone(),
+        );
+
+        // Start synchronization - this should complete after processing initial values
+        let sync_task = tokio::spawn(async move { synchronizer.synchronize().await });
+
+        // Give some time for synchronization to process initial values and complete
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        // The task should have completed by now since run_once=true
+        // We'll check if it's finished by trying to join with a short timeout
+        let task_result = tokio::time::timeout(Duration::from_millis(100), sync_task).await;
+
+        match task_result {
+            Ok(join_result) => {
+                // Task completed as expected
+                assert!(
+                    join_result.is_ok(),
+                    "Synchronization task should complete successfully"
+                );
+                if let Ok(sync_result) = join_result {
+                    assert!(sync_result.is_ok(), "Synchronization should succeed");
+                }
+            }
+            Err(_) => {
+                // Task is still running, which means run_once didn't work properly
+                panic!(
+                    "Synchronization task should have completed when run_once=true, but it's still running"
+                );
+            }
+        }
+
+        // Clean up
+        let _ = js_context.delete_key_value(store_name).await;
+    }
+
+    /// Test run_once functionality with partial side inputs
+    ///
+    /// This test verifies that when run_once=true and only some side inputs are available:
+    /// 1. The synchronizer processes available side input values
+    /// 2. The synchronizer waits for missing side inputs before stopping
+    /// 3. The synchronizer stops after all expected side inputs are received
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_side_input_synchronizer_run_once_partial() {
+        // Connect to NATS server
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+
+        // Create a test KV store
+        let store_name = "test-run-once-partial-store";
+        let _ = js_context.delete_key_value(store_name).await; // Clean up if exists
+
+        let kv_store = js_context
+            .create_key_value(async_nats::jetstream::kv::Config {
+                bucket: store_name.to_string(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        // Put only one of the expected side inputs initially
+        kv_store
+            .put("input1", "initial-value-1".into())
+            .await
+            .unwrap();
+        // input2 is missing initially
+
+        let config = ClientConfig {
+            url: "localhost:4222".to_string(),
+            user: None,
+            password: None,
+        };
+
+        let cancellation_token = CancellationToken::new();
+        let synchronizer = SideInputSynchronizer::new(
+            store_name,
+            vec!["input1", "input2"],
+            "/tmp/test-run-once-partial",
+            config,
+            true, // run_once = true
+            cancellation_token.clone(),
+        );
+
+        // Start synchronization
+        let sync_task = tokio::spawn(async move { synchronizer.synchronize().await });
+
+        // Give some time for synchronization to process the first input
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        // Task should still be running since input2 is missing
+        assert!(
+            !sync_task.is_finished(),
+            "Task should still be running waiting for input2"
+        );
+
+        // Now add the missing side input
+        kv_store
+            .put("input2", "initial-value-2".into())
+            .await
+            .unwrap();
+
+        // Give some time for synchronization to process the second input and complete
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        // The task should have completed by now
+        let task_result = tokio::time::timeout(Duration::from_millis(100), sync_task).await;
+
+        match task_result {
+            Ok(join_result) => {
+                // Task completed as expected
+                assert!(
+                    join_result.is_ok(),
+                    "Synchronization task should complete successfully"
+                );
+                if let Ok(sync_result) = join_result {
+                    assert!(sync_result.is_ok(), "Synchronization should succeed");
+                }
+            }
+            Err(_) => {
+                // Task is still running, which shouldn't happen
+                panic!(
+                    "Synchronization task should have completed after receiving all side inputs"
+                );
+            }
+        }
+
+        // Clean up
         let _ = js_context.delete_key_value(store_name).await;
     }
 }
