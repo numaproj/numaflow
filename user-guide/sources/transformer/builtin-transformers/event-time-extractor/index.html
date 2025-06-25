@@ -74,7 +74,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#event-time-extractor" class="md-skip">
+        <a href="#event-time-extractor-deprecated" class="md-skip">
           Skip to content
         </a>
       
@@ -2796,7 +2796,10 @@
 
 
 
-<h1 id="event-time-extractor">Event Time Extractor<a class="headerlink" href="#event-time-extractor" title="Permanent link">&para;</a></h1>
+<h1 id="event-time-extractor-deprecated">Event Time Extractor [Deprecated]<a class="headerlink" href="#event-time-extractor-deprecated" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p>⚠️ Note: Builtins for transformer are deprecated. An example in Go for event time extractor can be found <a href="https://github.com/numaproj/numaflow-go/tree/main/pkg/sourcetransformer/examples/event_time_extractor">here.</a> </p>
+</blockquote>
 <p>A <code>eventTimeExtractor</code> built-in transformer extracts event time from the payload of the message, based on a user-provided <code>expression</code> and an optional <code>format</code> specification.</p>
 <p><code>expression</code> is used to compile the payload to a string representation of the event time.</p>
 <p><code>format</code> is used to convert the event time in string format to a <code>time.Time</code> object.</p>
