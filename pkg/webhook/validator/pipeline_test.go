@@ -85,7 +85,9 @@ func TestValidatePipelineUpdate(t *testing.T) {
 		// in our test fake pipeline, the 3nd vertex is a reduce vertex
 		// change it to a map vertex, this ensures that the new pipeline is still valid but the update is not allowed
 		newPipeline.Spec.Vertices[2].UDF = &dfv1.UDF{
-			Builtin: &dfv1.Function{Name: "cat"},
+			Container: &dfv1.Container{
+				Image: "my-image",
+			},
 		}
 		v := NewPipelineValidator(&fk, pipeline, newPipeline)
 		r := v.ValidateUpdate(contextWithLogger(t))

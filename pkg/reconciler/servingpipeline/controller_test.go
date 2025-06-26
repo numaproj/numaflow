@@ -58,7 +58,7 @@ var (
 						Name: "input",
 						Source: &dfv1.Source{
 							UDTransformer: &dfv1.UDTransformer{
-								Builtin: &dfv1.Transformer{Name: "filter"},
+								Container: &dfv1.Container{Image: "test-ud-transformer-image"},
 							},
 						},
 					},

@@ -1,10 +1,9 @@
-import React from "react";
+import React, { act } from "react";
 import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { Cluster } from "./index";
 import { BrowserRouter } from "react-router-dom";
 import { AppContext } from "../../../App";
-import { act } from "react-dom/test-utils";
 import { useClusterSummaryFetch } from "../../../utils/fetchWrappers/clusterSummaryFetch";
 
 jest.mock("../../../utils/fetchWrappers/clusterSummaryFetch");

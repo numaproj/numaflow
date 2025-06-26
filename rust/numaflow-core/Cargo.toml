@@ -36,12 +36,12 @@ async-nats.workspace = true
 tokio-stream.workspace = true
 futures.workspace = true
 rcgen.workspace = true
+chrono.workspace = true
 tonic = { version = "0.13.0" }
 thiserror = "2.0.3"
 tokio-util = "0.7.11"
 prost = "0.13.2"
 prost-types = "0.13.1"
-chrono = "0.4.31"
 base64 = "0.22.1"
 hyper-util = "0.1.6"
 serde_json = "1.0.122"
@@ -59,7 +59,7 @@ lz4 = "1.28.1"
 
 [dev-dependencies]
 tempfile = "3.11.0"
-numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "c6aa3a8d64a189357260f78131ef4692d387ba6c" }
+numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "9a12a1d832d4fece830452044bd7706dc8b2a381" }
 pulsar = { version = "6.3.0", default-features = false, features = ["tokio-rustls-runtime"] }
 hyper = "1.6.0"
 hyper-rustls = "0.27.5"
@@ -68,6 +68,7 @@ aws-sdk-sqs = "1.65.0"
 aws-smithy-mocks-experimental = "0.2.3"
 k8s-openapi = { version = "0.24.0", features = ["v1_32"] }
 numaflow-kafka = { workspace = true, features = ["kafka-tests-utils"] }
+numaflow-pulsar = { workspace = true, features = ["pulsar-tests-utils"] }
 
 
 [build-dependencies]

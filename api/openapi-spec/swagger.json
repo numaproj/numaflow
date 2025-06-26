@@ -19577,6 +19577,10 @@
           "description": "Log sink is used to write the data to the log.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log"
         },
+        "pulsar": {
+          "description": "Pulsar sink is used to write the data to the Apache Pulsar.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PulsarSink"
+        },
         "serve": {
           "description": "Serve sink is used to return results when working with a ServingPipeline.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServeSink"
@@ -20114,29 +20118,6 @@
         "tags": {
           "description": "Tags used to specify tags for conditional forwarding",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.TagConditions"
-        }
-      }
-    },
-    "io.numaproj.numaflow.v1alpha1.Function": {
-      "type": "object",
-      "required": [
-        "name"
-      ],
-      "properties": {
-        "args": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "kwargs": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
-        },
-        "name": {
-          "type": "string"
         }
       }
     },
@@ -21837,9 +21818,47 @@
       "description": "PulsarAuth defines how to authenticate with Pulsar",
       "type": "object",
       "properties": {
+        "basicAuth": {
+          "description": "Authentication using HTTP basic https://pulsar.apache.org/docs/4.0.x/security-basic-auth/",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PulsarBasicAuth"
+        },
         "token": {
           "description": "JWT Token auth",
           "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.PulsarBasicAuth": {
+      "type": "object",
+      "properties": {
+        "password": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector"
+        },
+        "username": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.PulsarSink": {
+      "type": "object",
+      "required": [
+        "serverAddr",
+        "topic",
+        "producerName"
+      ],
+      "properties": {
+        "auth": {
+          "description": "Auth information",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PulsarAuth"
+        },
+        "producerName": {
+          "type": "string"
+        },
+        "serverAddr": {
+          "type": "string"
+        },
+        "topic": {
+          "type": "string"
         }
       }
     },
@@ -22480,6 +22499,10 @@
           "description": "Log sink is used to write the data to the log.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log"
         },
+        "pulsar": {
+          "description": "Pulsar sink is used to write the data to the Apache Pulsar.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PulsarSink"
+        },
         "retryStrategy": {
           "description": "RetryStrategy struct encapsulates the settings for retrying operations in the event of failures.",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RetryStrategy"
@@ -22704,35 +22727,9 @@
         }
       }
     },
-    "io.numaproj.numaflow.v1alpha1.Transformer": {
-      "type": "object",
-      "required": [
-        "name"
-      ],
-      "properties": {
-        "args": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "kwargs": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
-        },
-        "name": {
-          "type": "string"
-        }
-      }
-    },
     "io.numaproj.numaflow.v1alpha1.UDF": {
       "type": "object",
       "properties": {
-        "builtin": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Function"
-        },
         "container": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Container"
         },
@@ -22766,9 +22763,6 @@
     "io.numaproj.numaflow.v1alpha1.UDTransformer": {
       "type": "object",
       "properties": {
-        "builtin": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Transformer"
-        },
         "container": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Container"
         }

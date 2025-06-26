@@ -14,16 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package cat
+package v1alpha1
 
-import (
-	"context"
-
-	mapsdk "github.com/numaproj/numaflow-go/pkg/mapper"
-)
-
-func New() mapsdk.MapperFunc {
-	return func(ctx context.Context, keys []string, datum mapsdk.Datum) mapsdk.Messages {
-		return mapsdk.MessagesBuilder().Append(mapsdk.NewMessage(datum.Value()).WithKeys(keys))
-	}
+type PulsarSink struct {
+	ServerAddr   string `json:"serverAddr" protobuf:"bytes,1,name=server_addr"`
+	Topic        string `json:"topic" protobuf:"bytes,2,name=topic"`
+	ProducerName string `json:"producerName" protobuf:"bytes,3,name=producerName"`
+	// Auth information
+	// +optional
+	Auth *PulsarAuth `json:"auth,omitempty" protobuf:"bytes,6,opt,name=auth"`
 }

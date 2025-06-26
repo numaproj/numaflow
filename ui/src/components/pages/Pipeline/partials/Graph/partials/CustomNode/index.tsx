@@ -2,7 +2,7 @@
 // @ts-nocheck
 import { FC, memo, useCallback, useContext, useMemo } from "react";
 import { Tooltip } from "@mui/material";
-import { Handle, NodeProps, Position } from "reactflow";
+import { Handle, NodeProps, Position } from "@xyflow/react";
 import Box from "@mui/material/Box";
 import { HighlightContext } from "../../index";
 import { GeneratorColorContext } from "../../../../index";
@@ -25,7 +25,7 @@ import generator2 from "../../../../../../../images/generator2.svg";
 import generator3 from "../../../../../../../images/generator3.svg";
 import generator4 from "../../../../../../../images/generator4.svg";
 
-import "reactflow/dist/style.css";
+import "@xyflow/react/dist/style.css";
 import "./style.css";
 
 const getBorderColor = (nodeType: string) => {

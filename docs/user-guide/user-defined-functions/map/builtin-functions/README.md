@@ -1,4 +1,6 @@
-# Built-in Functions
+# Built-in Functions [Deprecated]
+
+ > ⚠️ Note: Builtins for UDF are deprecated and will be removed with 1.6 release.
 
 Numaflow provides some built-in functions that can be used directly.
 

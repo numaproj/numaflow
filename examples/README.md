@@ -22,8 +22,9 @@ spec:
           duration: 1s
     - name: cat
       udf: # A user-defined function
-        builtin: # Use a built-in function as the udf
-          name: cat # cats the message
+        container:
+          image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
+          imagePullPolicy: Always
     - name: out
       sink:
         # Output message to the stdout log
@@ -59,8 +60,9 @@ spec:
     #             key: my-key
     - name: cat
       udf:
-        builtin:
-          name: cat # A built-in UDF which simply cats the message
+        container:
+          image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
+          imagePullPolicy: Always
     - name: out
       sink:
         # A simple log printing sink
@@ -88,10 +90,9 @@ spec:
           duration: 1s
     - name: filter
       udf:
-        builtin:
-          name: filter
-          kwargs:
-            expression: int(json(payload).id) < 100
+        container:
+          image: quay.io/numaio/numaflow-go/map-filter-id:stable # A filter which pass-through only messages with an id less than 100
+          imagePullPolicy: Always
     - name: out
       sink:
         log: {}

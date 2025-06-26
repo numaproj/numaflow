@@ -150,6 +150,10 @@ message AbstractSink {
   // SQS sink is used to write the data to the AWS SQS.
   // +optional
   optional SqsSink sqs = 6;
+
+  // Pulsar sink is used to write the data to the Apache Pulsar.
+  // +optional
+  optional PulsarSink pulsar = 7;
 }
 
 message AbstractVertex {
@@ -435,17 +439,6 @@ message FixedWindow {
 message ForwardConditions {
   // Tags used to specify tags for conditional forwarding
   optional TagConditions tags = 1;
-}
-
-message Function {
-  // +kubebuilder:validation:Enum=cat;filter
-  optional string name = 1;
-
-  // +optional
-  repeated string args = 2;
-
-  // +optional
-  map<string, string> kwargs = 3;
 }
 
 // GSSAPI represents a SASL GSSAPI config
@@ -1394,6 +1387,30 @@ message PulsarAuth {
   // JWT Token auth
   // +optional
   optional .k8s.io.api.core.v1.SecretKeySelector token = 1;
+
+  // Authentication using HTTP basic https://pulsar.apache.org/docs/4.0.x/security-basic-auth/
+  // +optional
+  optional PulsarBasicAuth basicAuth = 2;
+}
+
+message PulsarBasicAuth {
+  // +optional
+  optional .k8s.io.api.core.v1.SecretKeySelector username = 1;
+
+  // +optional
+  optional .k8s.io.api.core.v1.SecretKeySelector password = 2;
+}
+
+message PulsarSink {
+  optional string serverAddr = 1;
+
+  optional string topic = 2;
+
+  optional string producerName = 3;
+
+  // Auth information
+  // +optional
+  optional PulsarAuth auth = 6;
 }
 
 message PulsarSource {
@@ -1920,23 +1937,9 @@ message Templates {
   optional VertexTemplate vertex = 4;
 }
 
-message Transformer {
-  // +kubebuilder:validation:Enum=eventTimeExtractor;filter;timeExtractionFilter
-  optional string name = 1;
-
-  // +optional
-  repeated string args = 2;
-
-  // +optional
-  map<string, string> kwargs = 3;
-}
-
 message UDF {
   // +optional
   optional Container container = 1;
-
-  // +optional
-  optional Function builtin = 2;
 
   // +optional
   optional GroupBy groupBy = 3;
@@ -1953,9 +1956,6 @@ message UDSource {
 message UDTransformer {
   // +optional
   optional Container container = 1;
-
-  // +optional
-  optional Transformer builtin = 2;
 }
 
 // UpdateStrategy indicates the strategy that the

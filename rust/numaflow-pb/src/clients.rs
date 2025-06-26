@@ -26,6 +26,10 @@ pub mod reduce;
 #[rustfmt::skip]
 pub mod sessionreduce;
 
+#[path = "clients/accumulator.v1.rs"]
+#[rustfmt::skip]
+pub mod accumulator;
+
 #[path = "clients/sideinput.v1.rs"]
 #[rustfmt::skip]
 pub mod sideinput;

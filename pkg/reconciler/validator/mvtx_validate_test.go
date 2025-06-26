@@ -49,7 +49,7 @@ var (
 			},
 			Source: &dfv1.Source{
 				UDTransformer: &dfv1.UDTransformer{
-					Builtin: &dfv1.Transformer{Name: "filter"},
+					Container: &dfv1.Container{Image: "my-image"},
 				},
 				UDSource: &dfv1.UDSource{
 					Container: &dfv1.Container{

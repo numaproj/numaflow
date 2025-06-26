@@ -49,8 +49,9 @@ spec:
           duration: 1s
     - name: cat
       udf:
-        builtin:
-          name: cat
+        container:
+          image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
+          imagePullPolicy: Always
       limits:
         readBatchSize: 200 # It overrides the default limit "100"
         bufferMaxLength: 20000 # It overrides the default limit "30000" for the buffers owned by this vertex
