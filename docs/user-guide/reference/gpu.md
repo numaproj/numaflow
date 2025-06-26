@@ -1,15 +1,4 @@
-## Using GPU Resources in a Numaflow Vertex
-
-### What is a Vertex?
-
-A vertex is a processing step in a Numaflow pipeline. See [Vertex documentation](../../core-concepts/vertex.md) for details.
-
-> **Note:**
-> All the guidance in this document (GPU resource requests, annotations, node selectors, etc.) applies to both `Pipeline` and `MonoVertex` specifications in Numaflow.
-
-### GPU Resources
-
-To learn more about GPUs, see [Wikipedia: Graphics Processing Unit](https://en.wikipedia.org/wiki/Graphics_processing_unit).
+GPU resources can be configured on a Pipeline Vertex or a MonoVertex.
 
 ## Prerequisites
 
@@ -65,10 +54,6 @@ vertices:
         resources:
           limits:
             nvidia.com/gpu: 1
-        # securityContext is only needed if your workload or cluster policy requires it
-        # securityContext:
-        #   capabilities:
-        #     add: ["IPC_LOCK"]
 ```
 
 > Adjust the nodeSelector and annotations as required by your cluster setup.
