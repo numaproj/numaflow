@@ -11,8 +11,6 @@ A vertex is a processing step in a Numaflow pipeline. See [Vertex documentation]
 
 To learn more about GPUs, see [Wikipedia: Graphics Processing Unit](https://en.wikipedia.org/wiki/Graphics_processing_unit).
 
-GPU resources can be configured on a Pipeline Vertex or a MonoVertex.
-
 ## Prerequisites
 
 Your cluster must support GPU scheduling and have the appropriate device plugin installed.  
