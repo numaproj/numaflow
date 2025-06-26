@@ -1,3 +1,5 @@
+# Configuring GPU
+
 GPU resources can be configured on a Pipeline Vertex or a MonoVertex.
 
 ## Prerequisites
