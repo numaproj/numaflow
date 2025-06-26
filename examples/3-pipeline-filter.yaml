@@ -6,7 +6,6 @@ spec:
   vertices:
     - name: in
       source:
-        # A self data generating source
         http:
           # Whether to create a ClusterIP Service, defaults to false
           service: true
