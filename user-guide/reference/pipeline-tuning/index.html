@@ -2725,8 +2725,9 @@ processing cycle.</p>
 <span class="w">          </span><span class="nt">duration</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1s</span>
 <span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span>
 <span class="w">      </span><span class="nt">udf</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">builtin</span><span class="p">:</span>
-<span class="w">          </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cat</span>
+<span class="w">        </span><span class="nt">container</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">quay.io/numaio/numaflow-go/map-cat:stable</span><span class="w"> </span><span class="c1"># A UDF which simply cats the message</span>
+<span class="w">          </span><span class="nt">imagePullPolicy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Always</span>
 <span class="w">      </span><span class="nt">limits</span><span class="p">:</span>
 <span class="w">        </span><span class="nt">readBatchSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">200</span><span class="w"> </span><span class="c1"># It overrides the default limit &quot;100&quot;</span>
 <span class="w">        </span><span class="nt">bufferMaxLength</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20000</span><span class="w"> </span><span class="c1"># It overrides the default limit &quot;30000&quot; for the buffers owned by this vertex</span>
