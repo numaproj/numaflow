@@ -62,6 +62,9 @@ pub enum Error {
     #[error("Watermark Error - {0}")]
     Watermark(String),
 
+    #[error("SideInput Error - {0}")]
+    SideInput(String),
+
     #[error("Reduce Error - {0}")]
     Reduce(String),
 
