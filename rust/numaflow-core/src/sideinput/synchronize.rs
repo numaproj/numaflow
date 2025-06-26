@@ -149,7 +149,6 @@ async fn create_watcher(bucket: async_nats::jetstream::kv::Store) -> Watch {
 
     Retry::retry(
         interval,
-        // FIXME: is this fine? watch_all of Rust does not match Golang behavior
         async || match bucket.watch_all_from_revision(1).await {
             Ok(w) => Ok(w),
             Err(e) => {

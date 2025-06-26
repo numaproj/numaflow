@@ -45,19 +45,14 @@ fn update_side_input_file<P: AsRef<Path>>(
         }
     }
 
-    // Write the side input value to the new file
-    // A New file is created with the given name if it doesn't exist
+    // atomically write the new file, this is done by creating a tmp file and then renaming it
     fs::write(&new_file_name, value)
         .map_err(|e| format!("Failed to write Side Input file {}: {}", new_file_name, e))?;
 
-    // Get the old file path
     let old_file_path = fs::read_link(file_symlink).ok();
 
-    // Create a temp symlink to the new file. This is done to have an atomic way of
-    // updating the side input store path.
     let symlink_path_tmp = format!("{}_temp_{}", file_symlink.display(), timestamp);
 
-    // Create a temp symlink to the new file
     std::os::unix::fs::symlink(&new_file_name, &symlink_path_tmp)
         .map_err(|e| format!("Failed to create temp symlink: {}", e))?;
 
