@@ -733,6 +733,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_reduce_udf_partition_filtering() {
         let js_context = setup_nats().await;

@@ -134,7 +134,7 @@ impl Default for PipelineConfig {
             vertex_name: Default::default(),
             replica: 0,
             batch_size: DEFAULT_BATCH_SIZE as usize,
-            paf_concurrency: (DEFAULT_BATCH_SIZE * 2) as usize,
+            paf_concurrency: DEFAULT_BATCH_SIZE as usize,
             read_timeout: Duration::from_secs(DEFAULT_TIMEOUT_IN_MS as u64),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig::default(),
@@ -679,9 +679,12 @@ impl PipelineConfig {
         Ok(PipelineConfig {
             batch_size: batch_size as usize,
             paf_concurrency: get_var(ENV_PAF_BATCH_SIZE)
-                .unwrap_or_else(|_| (DEFAULT_BATCH_SIZE * 2).to_string())
-                .parse()
-                .unwrap(),
+                .and_then(|s| {
+                    s.parse().map_err(|e| {
+                        Error::Config(format!("Parsing value of {ENV_PAF_BATCH_SIZE}: {e:?}"))
+                    })
+                })
+                .unwrap_or(batch_size as usize),
             read_timeout: Duration::from_millis(timeout_in_ms as u64),
             graceful_shutdown_time: Duration::from_secs(graceful_shutdown_time_secs),
             pipeline_name: Box::leak(pipeline_name.into_boxed_str()),
@@ -832,7 +835,7 @@ mod tests {
             vertex_name: Default::default(),
             replica: 0,
             batch_size: DEFAULT_BATCH_SIZE as usize,
-            paf_concurrency: (DEFAULT_BATCH_SIZE * 2) as usize,
+            paf_concurrency: DEFAULT_BATCH_SIZE as usize,
             read_timeout: Duration::from_secs(DEFAULT_TIMEOUT_IN_MS as u64),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig::default(),
@@ -913,7 +916,7 @@ mod tests {
             vertex_name: "out",
             replica: 0,
             batch_size: 500,
-            paf_concurrency: 1000,
+            paf_concurrency: 500,
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig {
@@ -1030,7 +1033,7 @@ mod tests {
             vertex_name: "in",
             replica: 0,
             batch_size: 50,
-            paf_concurrency: 1000,
+            paf_concurrency: 50,
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig {
@@ -1172,7 +1175,7 @@ mod tests {
             vertex_name: "map",
             replica: 0,
             batch_size: 500,
-            paf_concurrency: 1000,
+            paf_concurrency: 500,
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig {
