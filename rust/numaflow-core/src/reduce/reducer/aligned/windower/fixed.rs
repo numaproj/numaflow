@@ -70,14 +70,14 @@ impl FixedWindowManager {
             // Window exists, append message
             AlignedWindowOperation::Append {
                 message: msg,
-                window: window.clone(),
+                window,
             }
         } else {
             // New window, insert it
             active_windows.insert(window.clone());
             AlignedWindowOperation::Open {
                 message: msg,
-                window: window.clone(),
+                window,
             }
         };
 
@@ -142,20 +142,22 @@ impl FixedWindowManager {
         // get the oldest window from closed_windows, if closed_windows is empty, get the oldest
         // from active_windows
         // NOTE: closed windows will always have a lower end time than active_windows
-        self.closed_windows
+
+        // Acquire locks in the same order as close_windows to prevent deadlock
+        let active_windows = self
+            .active_windows
             .read()
-            .expect("Poisoned lock for closed_windows")
+            .expect("Poisoned lock for active_windows");
+        let closed_windows = self
+            .closed_windows
+            .read()
+            .expect("Poisoned lock for closed_windows");
+
+        closed_windows
             .iter()
             .next()
             .cloned()
-            .or_else(|| {
-                self.active_windows
-                    .read()
-                    .expect("Poisoned lock for active_windows")
-                    .iter()
-                    .next()
-                    .cloned()
-            })
+            .or_else(|| active_windows.iter().next().cloned())
     }
 }
 

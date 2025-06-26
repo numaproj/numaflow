@@ -206,20 +206,22 @@ impl SlidingWindowManager {
         // get the oldest window from closed_windows, if closed_windows is empty, get the oldest
         // from active_windows
         // NOTE: closed windows will always have a lower end time than active_windows
-        self.closed_windows
+
+        // Acquire locks in the same order as close_windows to prevent deadlock
+        let active_windows = self
+            .active_windows
             .read()
-            .expect("Poisoned lock for closed_windows")
+            .expect("Poisoned lock for active_windows");
+        let closed_windows = self
+            .closed_windows
+            .read()
+            .expect("Poisoned lock for closed_windows");
+
+        closed_windows
             .iter()
             .next()
             .cloned()
-            .or_else(|| {
-                self.active_windows
-                    .read()
-                    .expect("Poisoned lock for active_windows")
-                    .iter()
-                    .next()
-                    .cloned()
-            })
+            .or_else(|| active_windows.iter().next().cloned())
     }
 
     /// Helper method to format sorted window information for logging.
@@ -722,7 +724,7 @@ mod tests {
     #[test]
     fn test_assign_windows_with_small_slide() {
         // prepopulate active windows
-        let active_windows = vec![
+        let active_windows = [
             Window::new(
                 Utc.timestamp_millis_opt(90000).unwrap(),
                 Utc.timestamp_millis_opt(150000).unwrap(),
@@ -771,7 +773,7 @@ mod tests {
         // Window 4: [70000, 130000) - event falls in this window
         // Window 5: [60000, 120000) - event falls in this window
         // Window 6: [50000, 110000) - event falls in this window
-        let expected_windows = vec![
+        let expected_windows = [
             Window::new(
                 Utc.timestamp_millis_opt(100000).unwrap(),
                 Utc.timestamp_millis_opt(160000).unwrap(),

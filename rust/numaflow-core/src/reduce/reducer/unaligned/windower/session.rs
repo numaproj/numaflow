@@ -353,16 +353,23 @@ impl SessionWindowManager {
         // Get the oldest window from closed_windows first, if closed_windows is empty, get the oldest
         // from active_windows
         // NOTE: closed windows will always have a lower end time than active_windows
-        self.closed_windows
+
+        // Acquire locks in the same order as close_windows to prevent deadlock
+        let active_windows = self
+            .active_windows
             .read()
-            .expect("Poisoned lock")
+            .expect("Poisoned lock");
+        let closed_windows = self
+            .closed_windows
+            .read()
+            .expect("Poisoned lock");
+
+        closed_windows
             .iter()
             .next()
             .map(|window| window.end_time)
             .or_else(|| {
-                self.active_windows
-                    .read()
-                    .expect("Poisoned lock")
+                active_windows
                     .values()
                     .flat_map(|window_set| window_set.iter().map(|window| window.end_time))
                     .min()
