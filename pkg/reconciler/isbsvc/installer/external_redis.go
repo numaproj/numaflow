@@ -53,5 +53,6 @@ func (eri *externalRedisInstaller) Uninstall(ctx context.Context) error {
 }
 
 func (eri *externalRedisInstaller) CheckChildrenResourceStatus(ctx context.Context) error {
+	eri.isbSvc.Status.MarkChildrenResourceHealthy("Healthy", "External redis is assumed healthy")
 	return nil
 }
