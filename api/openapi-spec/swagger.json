@@ -20121,29 +20121,6 @@
         }
       }
     },
-    "io.numaproj.numaflow.v1alpha1.Function": {
-      "type": "object",
-      "required": [
-        "name"
-      ],
-      "properties": {
-        "args": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "kwargs": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
-        },
-        "name": {
-          "type": "string"
-        }
-      }
-    },
     "io.numaproj.numaflow.v1alpha1.GSSAPI": {
       "description": "GSSAPI represents a SASL GSSAPI config",
       "type": "object",
@@ -22753,9 +22730,6 @@
     "io.numaproj.numaflow.v1alpha1.UDF": {
       "type": "object",
       "properties": {
-        "builtin": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Function"
-        },
         "container": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Container"
         },

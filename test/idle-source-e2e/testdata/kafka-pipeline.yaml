@@ -24,7 +24,7 @@ spec:
           consumerGroup: test-idle-source
         transformer:
           container:
-            image: quay.io/numaio/numaflow-go/mapt-event-time-extractor-with-format:stable
+            image: quay.io/numaio/numaflow-go/mapt-event-time-extractor-with-format:stable #expression: json(payload).time   format: 2006-01-02T15:04:05Z07:00
             imagePullPolicy: Always
       scale:
         min: 2

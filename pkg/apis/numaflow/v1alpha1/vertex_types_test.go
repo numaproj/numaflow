@@ -447,8 +447,8 @@ func TestGetPodSpec(t *testing.T) {
 	t.Run("test udf", func(t *testing.T) {
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.UDF = &UDF{
-			Builtin: &Function{
-				Name: "cat",
+			Container: &Container{
+				Image: "test-image",
 			},
 		}
 		s, err := testObj.GetPodSpec(req)
@@ -489,8 +489,8 @@ func TestGetPodSpec(t *testing.T) {
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.SideInputs = []string{"input1", "input2"}
 		testObj.Spec.UDF = &UDF{
-			Builtin: &Function{
-				Name: "cat",
+			Container: &Container{
+				Image: "test-image",
 			},
 		}
 		s, err := testObj.GetPodSpec(req)

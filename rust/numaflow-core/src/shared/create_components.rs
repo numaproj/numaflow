@@ -353,7 +353,6 @@ pub(crate) async fn create_mapper(
                 }
             }
         }
-        MapType::Builtin(_) => Err(Error::Mapper("Builtin mapper is not supported".to_string())),
     }
 }
 
