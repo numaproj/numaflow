@@ -355,14 +355,8 @@ impl SessionWindowManager {
         // NOTE: closed windows will always have a lower end time than active_windows
 
         // Acquire locks in the same order as close_windows to prevent deadlock
-        let active_windows = self
-            .active_windows
-            .read()
-            .expect("Poisoned lock");
-        let closed_windows = self
-            .closed_windows
-            .read()
-            .expect("Poisoned lock");
+        let active_windows = self.active_windows.read().expect("Poisoned lock");
+        let closed_windows = self.closed_windows.read().expect("Poisoned lock");
 
         closed_windows
             .iter()
