@@ -156,33 +156,41 @@ impl SlidingWindowManager {
     pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage> {
         let mut result = Vec::new();
 
-        // Find windows that need to be closed
-        let mut active_windows = self
-            .active_windows
-            .write()
-            .expect("Poisoned lock in active_windows");
-        let mut closed_windows = self
-            .closed_windows
-            .write()
-            .expect("Poisoned lock in active_windows");
+        let windows_to_close = {
+            let mut active_windows = self
+                .active_windows
+                .write()
+                .expect("Poisoned lock for active_windows");
 
-        // get all the windows that have end time less than the watermark
-        let windows_to_close: Vec<_> = active_windows
-            .iter()
-            .filter(|window| window.end_time <= watermark) // window end time is exclusive, hence <=
-            .cloned()
-            .collect();
+            let mut windows_to_close = Vec::new();
+            active_windows.retain(|window| {
+                if window.end_time <= watermark {
+                    windows_to_close.push(window.clone());
+                    false
+                } else {
+                    true
+                }
+            });
 
-        // Move windows from active to closed
+            windows_to_close
+        };
+
+        // add the windows to closed_windows
+        {
+            let mut closed_windows = self
+                .closed_windows
+                .write()
+                .expect("Poisoned lock for closed_windows");
+            for window in &windows_to_close {
+                closed_windows.insert(window.clone());
+            }
+        }
+
         for window in windows_to_close {
             result.push(AlignedWindowMessage {
-                operation: AlignedWindowOperation::Close {
-                    window: window.clone(),
-                },
                 pnf_slot: window_pnf_slot(&window),
+                operation: AlignedWindowOperation::Close { window },
             });
-            active_windows.remove(&window);
-            closed_windows.insert(window);
         }
 
         result
@@ -206,20 +214,22 @@ impl SlidingWindowManager {
         // get the oldest window from closed_windows, if closed_windows is empty, get the oldest
         // from active_windows
         // NOTE: closed windows will always have a lower end time than active_windows
-        self.closed_windows
+        {
+            let closed_windows = self
+                .closed_windows
+                .read()
+                .expect("Poisoned lock for closed_windows");
+            if let Some(window) = closed_windows.iter().next() {
+                return Some(window.clone());
+            }
+        }
+
+        self.active_windows
             .read()
-            .expect("Poisoned lock for closed_windows")
+            .expect("Poisoned lock for active_windows")
             .iter()
             .next()
             .cloned()
-            .or_else(|| {
-                self.active_windows
-                    .read()
-                    .expect("Poisoned lock for active_windows")
-                    .iter()
-                    .next()
-                    .cloned()
-            })
     }
 
     /// Helper method to format sorted window information for logging.
@@ -722,7 +732,7 @@ mod tests {
     #[test]
     fn test_assign_windows_with_small_slide() {
         // prepopulate active windows
-        let active_windows = vec![
+        let active_windows = [
             Window::new(
                 Utc.timestamp_millis_opt(90000).unwrap(),
                 Utc.timestamp_millis_opt(150000).unwrap(),
@@ -771,7 +781,7 @@ mod tests {
         // Window 4: [70000, 130000) - event falls in this window
         // Window 5: [60000, 120000) - event falls in this window
         // Window 6: [50000, 110000) - event falls in this window
-        let expected_windows = vec![
+        let expected_windows = [
             Window::new(
                 Utc.timestamp_millis_opt(100000).unwrap(),
                 Utc.timestamp_millis_opt(160000).unwrap(),
