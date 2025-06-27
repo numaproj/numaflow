@@ -15,11 +15,9 @@ use super::{
 };
 use crate::Result;
 use crate::config::ENV_NUMAFLOW_SERVING_CALLBACK_STORE;
-use crate::config::ENV_NUMAFLOW_SERVING_SOURCE_SETTINGS;
+use crate::config::ENV_NUMAFLOW_SERVING_SPEC;
 use crate::config::components::metrics::MetricsConfig;
-use crate::config::components::reduce::{
-    ReducerConfig, ReducerType, StorageConfig, UserDefinedConfig,
-};
+use crate::config::components::reduce::{ReducerConfig, StorageConfig};
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::sink::SinkType;
 use crate::config::components::source::SourceConfig;
@@ -36,10 +34,12 @@ use crate::error::Error;
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
 const DEFAULT_LOOKBACK_WINDOW_IN_SECS: u16 = 120;
+const DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS: u64 = 20; // time we will wait for UDFs to finish before shutting down
 const ENV_NUMAFLOW_SERVING_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
 const ENV_PAF_BATCH_SIZE: &str = "PAF_BATCH_SIZE";
+const ENV_NUMAFLOW_GRACEFUL_TIMEOUT_SECS: &str = "NUMAFLOW_GRACEFUL_TIMEOUT_SECS";
 const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
 const DEFAULT_MAP_SOCKET: &str = "/var/run/numaflow/map.sock";
 pub(crate) const DEFAULT_BATCH_MAP_SOCKET: &str = "/var/run/numaflow/batchmap.sock";
@@ -61,16 +61,64 @@ pub(crate) struct PipelineConfig {
     pub(crate) vertex_name: &'static str,
     pub(crate) replica: u16,
     pub(crate) batch_size: usize,
-    // FIXME(cr): we cannot leak this as a paf, we need to use a different terminology.
     pub(crate) paf_concurrency: usize,
     pub(crate) read_timeout: Duration,
+    pub(crate) graceful_shutdown_time: Duration,
     pub(crate) js_client_config: isb::jetstream::ClientConfig, // TODO: make it enum, since we can have different ISB implementations
     pub(crate) from_vertex_config: Vec<FromVertexConfig>,
     pub(crate) to_vertex_config: Vec<ToVertexConfig>,
-    pub(crate) vertex_type_config: VertexType,
+    pub(crate) vertex_config: VertexConfig,
+    pub(crate) vertex_type: VertexType,
     pub(crate) metrics_config: MetricsConfig,
     pub(crate) watermark_config: Option<WatermarkConfig>,
     pub(crate) callback_config: Option<ServingCallbackConfig>,
+    pub(crate) isb_config: Option<isb_config::ISBConfig>,
+}
+
+pub(crate) mod isb_config {
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) struct ISBConfig {
+        pub(crate) compression: Compression,
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) struct Compression {
+        pub(crate) compress_type: CompressionType,
+    }
+
+    #[derive(Debug, Copy, Clone, PartialEq)]
+    pub(crate) enum CompressionType {
+        None,
+        Gzip,
+        Zstd,
+        LZ4,
+    }
+
+    impl TryFrom<numaflow_models::models::Compression> for Compression {
+        type Error = String;
+        fn try_from(value: numaflow_models::models::Compression) -> Result<Self, Self::Error> {
+            match value.r#type {
+                None => Ok(Compression {
+                    compress_type: CompressionType::None,
+                }),
+                Some(t) => match t.as_str() {
+                    "gzip" => Ok(Compression {
+                        compress_type: CompressionType::Gzip,
+                    }),
+                    "zstd" => Ok(Compression {
+                        compress_type: CompressionType::Zstd,
+                    }),
+                    "lz4" => Ok(Compression {
+                        compress_type: CompressionType::LZ4,
+                    }),
+                    "none" => Ok(Compression {
+                        compress_type: CompressionType::None,
+                    }),
+                    _ => Err(format!("Invalid compression type: {t}")),
+                },
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -86,18 +134,21 @@ impl Default for PipelineConfig {
             vertex_name: Default::default(),
             replica: 0,
             batch_size: DEFAULT_BATCH_SIZE as usize,
-            paf_concurrency: (DEFAULT_BATCH_SIZE * 2) as usize,
+            paf_concurrency: DEFAULT_BATCH_SIZE as usize,
             read_timeout: Duration::from_secs(DEFAULT_TIMEOUT_IN_MS as u64),
+            graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig::default(),
             from_vertex_config: vec![],
             to_vertex_config: vec![],
-            vertex_type_config: VertexType::Source(SourceVtxConfig {
+            vertex_config: VertexConfig::Source(SourceVtxConfig {
                 source_config: Default::default(),
                 transformer_config: None,
             }),
+            vertex_type: VertexType::Source,
             metrics_config: Default::default(),
             watermark_config: None,
             callback_config: None,
+            isb_config: None,
         }
     }
 }
@@ -147,19 +198,12 @@ pub(crate) mod map {
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) enum MapType {
         UserDefined(UserDefinedConfig),
-        Builtin(BuiltinConfig),
     }
 
     impl TryFrom<Box<Udf>> for MapType {
         type Error = Error;
         fn try_from(udf: Box<Udf>) -> Result<Self, Self::Error> {
-            if let Some(builtin) = udf.builtin {
-                Ok(MapType::Builtin(BuiltinConfig {
-                    name: builtin.name,
-                    kwargs: builtin.kwargs,
-                    args: builtin.args,
-                }))
-            } else if let Some(_container) = udf.container {
+            if let Some(_container) = udf.container {
                 Ok(MapType::UserDefined(UserDefinedConfig {
                     grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
                     socket_path: DEFAULT_MAP_SOCKET.to_string(),
@@ -177,13 +221,6 @@ pub(crate) mod map {
         pub socket_path: String,
         pub server_info_path: String,
     }
-
-    #[derive(Debug, Clone, PartialEq)]
-    pub(crate) struct BuiltinConfig {
-        pub(crate) name: String,
-        pub(crate) kwargs: Option<HashMap<String, String>>,
-        pub(crate) args: Option<Vec<String>>,
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -194,7 +231,7 @@ pub(crate) struct SinkVtxConfig {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum VertexType {
+pub(crate) enum VertexConfig {
     Source(SourceVtxConfig),
     Sink(SinkVtxConfig),
     Map(MapVtxConfig),
@@ -236,13 +273,13 @@ impl Default for UserDefinedStoreConfig {
     }
 }
 
-impl std::fmt::Display for VertexType {
+impl std::fmt::Display for VertexConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match self {
-            VertexType::Source(_) => write!(f, "{}", VERTEX_TYPE_SOURCE),
-            VertexType::Sink(_) => write!(f, "{}", VERTEX_TYPE_SINK),
-            VertexType::Map(_) => write!(f, "{}", VERTEX_TYPE_MAP_UDF),
-            VertexType::Reduce(_) => write!(f, "{}", VERTEX_TYPE_REDUCE_UDF),
+            VertexConfig::Source(_) => write!(f, "{}", VERTEX_TYPE_SOURCE),
+            VertexConfig::Sink(_) => write!(f, "{}", VERTEX_TYPE_SINK),
+            VertexConfig::Map(_) => write!(f, "{}", VERTEX_TYPE_MAP_UDF),
+            VertexConfig::Reduce(_) => write!(f, "{}", VERTEX_TYPE_REDUCE_UDF),
         }
     }
 }
@@ -254,12 +291,48 @@ pub(crate) struct FromVertexConfig {
     pub(crate) partitions: u16,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum VertexType {
+    Source,
+    Sink,
+    MapUDF,
+    ReduceUDF,
+}
+
+impl VertexType {
+    pub(crate) fn from_str(s: &str) -> Result<Self> {
+        match s {
+            VERTEX_TYPE_SOURCE => Ok(VertexType::Source),
+            VERTEX_TYPE_SINK => Ok(VertexType::Sink),
+            VERTEX_TYPE_MAP_UDF => Ok(VertexType::MapUDF),
+            VERTEX_TYPE_REDUCE_UDF => Ok(VertexType::ReduceUDF),
+            _ => Err(Error::Config(format!("Unknown vertex type: {}", s))),
+        }
+    }
+
+    pub(crate) fn as_str(&self) -> &'static str {
+        match self {
+            VertexType::Source => VERTEX_TYPE_SOURCE,
+            VertexType::Sink => VERTEX_TYPE_SINK,
+            VertexType::MapUDF => VERTEX_TYPE_MAP_UDF,
+            VertexType::ReduceUDF => VERTEX_TYPE_REDUCE_UDF,
+        }
+    }
+}
+
+impl std::fmt::Display for VertexType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "{}", self.as_str())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ToVertexConfig {
     pub(crate) name: &'static str,
     pub(crate) partitions: u16,
     pub(crate) writer_config: BufferWriterConfig,
     pub(crate) conditions: Option<Box<ForwardConditions>>,
+    pub(crate) to_vertex_type: VertexType,
 }
 
 impl PipelineConfig {
@@ -278,9 +351,10 @@ impl PipelineConfig {
                     ENV_PAF_BATCH_SIZE,
                     ENV_CALLBACK_ENABLED,
                     ENV_CALLBACK_CONCURRENCY,
-                    ENV_NUMAFLOW_SERVING_SOURCE_SETTINGS,
+                    ENV_NUMAFLOW_SERVING_SPEC,
                     ENV_NUMAFLOW_SERVING_CALLBACK_STORE,
                     ENV_NUMAFLOW_SERVING_RESPONSE_STORE,
+                    ENV_NUMAFLOW_GRACEFUL_TIMEOUT_SECS,
                 ]
                 .contains(&key.as_str())
             })
@@ -335,13 +409,13 @@ impl PipelineConfig {
 
         let to_edges = vertex_obj.spec.to_edges.unwrap_or_default();
 
-        let vertex: VertexType = if let Some(source) = vertex_obj.spec.source {
+        let vertex: VertexConfig = if let Some(source) = vertex_obj.spec.source {
             let transformer_config = source.transformer.as_ref().map(|_| TransformerConfig {
                 concurrency: batch_size as usize, // FIXME: introduce a separate field in the spec
                 transformer_type: TransformerType::UserDefined(Default::default()),
             });
 
-            VertexType::Source(SourceVtxConfig {
+            VertexConfig::Source(SourceVtxConfig {
                 source_config: SourceConfig {
                     read_ahead: env::var("READ_AHEAD")
                         .unwrap_or("false".to_string())
@@ -361,23 +435,23 @@ impl PipelineConfig {
                 None
             };
 
-            let serving_store_config = if let Some(serving_settings) =
-                env_vars.get(ENV_NUMAFLOW_SERVING_SOURCE_SETTINGS)
+            let serving_store_config = if let Some(serving_spec) =
+                env_vars.get(ENV_NUMAFLOW_SERVING_SPEC)
             {
-                let serving_settings_decoded = BASE64_STANDARD
-                    .decode(serving_settings.as_bytes())
+                let serving_spec_decoded = BASE64_STANDARD
+                    .decode(serving_spec.as_bytes())
                     .map_err(|e| {
                         Error::Config(
                             format!(
-                                "Failed to base64 decode value of environment variable '{ENV_NUMAFLOW_SERVING_SOURCE_SETTINGS}'. value='{serving_settings}'. Err={e:?}"
+                                "Failed to base64 decode value of environment variable '{ENV_NUMAFLOW_SERVING_SPEC}'. value='{serving_spec}'. Err={e:?}"
                             )
                         )
                     })?;
                 let serving_spec: numaflow_models::models::ServingSpec =
-                    from_slice(serving_settings_decoded.as_slice()).map_err(|e| {
+                    from_slice(serving_spec_decoded.as_slice()).map_err(|e| {
                         Error::Config(
                             format!(
-                                "Failed to base64 decode value of environment variable '{ENV_NUMAFLOW_SERVING_SOURCE_SETTINGS}'. value='{serving_settings}'. Err={e:?}"
+                                "Failed to base64 decode value of environment variable '{ENV_NUMAFLOW_SERVING_SPEC}'. value='{serving_spec}'. Err={e:?}"
                             )
                         )
                     })?;
@@ -396,7 +470,7 @@ impl PipelineConfig {
                 None
             };
 
-            VertexType::Sink(SinkVtxConfig {
+            VertexConfig::Sink(SinkVtxConfig {
                 sink_config: SinkConfig {
                     sink_type: SinkType::primary_sinktype(&sink)?,
                     retry_config: sink.retry_strategy.clone().map(|retry| retry.into()),
@@ -407,11 +481,6 @@ impl PipelineConfig {
         } else if let Some(udf) = vertex_obj.spec.udf {
             if let Some(group_by) = &udf.group_by {
                 // This is a reduce vertex
-                let reducer_config = ReducerConfig {
-                    reducer_type: ReducerType::UserDefined(UserDefinedConfig::default()),
-                    window_config: group_by.try_into()?,
-                };
-
                 let storage_config = group_by.storage.as_ref().and_then(|storage| {
                     if storage.no_store.is_some() {
                         None
@@ -420,13 +489,13 @@ impl PipelineConfig {
                     }
                 });
 
-                VertexType::Reduce(ReduceVtxConfig {
-                    reducer_config,
+                VertexConfig::Reduce(ReduceVtxConfig {
+                    reducer_config: group_by.try_into()?,
                     wal_storage_config: storage_config,
                 })
             } else {
                 // This is a map vertex
-                VertexType::Map(MapVtxConfig {
+                VertexConfig::Map(MapVtxConfig {
                     concurrency: batch_size as usize,
                     map_type: udf.try_into()?,
                     map_mode: MapMode::Unary,
@@ -509,6 +578,7 @@ impl PipelineConfig {
                         .unwrap_or(default_writer_config.buffer_full_strategy),
                 },
                 conditions: edge.conditions,
+                to_vertex_type: VertexType::from_str(&edge.to_vertex_type)?,
             });
         }
 
@@ -561,23 +631,60 @@ impl PipelineConfig {
             });
         }
 
+        let isb_config: Option<isb_config::ISBConfig> =
+            match vertex_obj.spec.inter_step_buffer.as_ref() {
+                None => None,
+                Some(isb_spec) => {
+                    let compress_type = match isb_spec.compression.as_ref() {
+                        None => isb_config::CompressionType::None,
+                        Some(t) => match &t.r#type {
+                            None => isb_config::CompressionType::None,
+                            Some(t) => match t.as_str() {
+                                "gzip" => isb_config::CompressionType::Gzip,
+                                "zstd" => isb_config::CompressionType::Zstd,
+                                "lz4" => isb_config::CompressionType::LZ4,
+                                _ => {
+                                    return Err(Error::Config(format!(
+                                        "Invalid compression type setting: {t}"
+                                    )));
+                                }
+                            },
+                        },
+                    };
+                    Some(isb_config::ISBConfig {
+                        compression: isb_config::Compression { compress_type },
+                    })
+                }
+            };
+
+        let graceful_shutdown_time_secs = env_vars
+            .get(ENV_NUMAFLOW_GRACEFUL_TIMEOUT_SECS)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS);
+
         Ok(PipelineConfig {
             batch_size: batch_size as usize,
             paf_concurrency: get_var(ENV_PAF_BATCH_SIZE)
-                .unwrap_or_else(|_| (DEFAULT_BATCH_SIZE * 2).to_string())
-                .parse()
-                .unwrap(),
+                .and_then(|s| {
+                    s.parse().map_err(|e| {
+                        Error::Config(format!("Parsing value of {ENV_PAF_BATCH_SIZE}: {e:?}"))
+                    })
+                })
+                .unwrap_or(batch_size as usize),
             read_timeout: Duration::from_millis(timeout_in_ms as u64),
+            graceful_shutdown_time: Duration::from_secs(graceful_shutdown_time_secs),
             pipeline_name: Box::leak(pipeline_name.into_boxed_str()),
             vertex_name: Box::leak(vertex_name.into_boxed_str()),
             replica: *replica,
             js_client_config,
             from_vertex_config,
             to_vertex_config,
-            vertex_type_config: vertex,
+            vertex_config: vertex,
+            vertex_type: VertexType::Source,
             metrics_config: MetricsConfig::with_lookback_window_in_secs(look_back_window),
             watermark_config,
             callback_config,
+            isb_config,
         })
     }
 
@@ -586,7 +693,7 @@ impl PipelineConfig {
         namespace: &str,
         pipeline_name: &str,
         vertex_name: &str,
-        vertex: &VertexType,
+        vertex: &VertexConfig,
         from_vertex_config: &[FromVertexConfig],
         to_vertex_config: &[ToVertexConfig],
     ) -> Option<WatermarkConfig> {
@@ -604,8 +711,49 @@ impl PipelineConfig {
                 threshold: idle.threshold.map(Duration::from).unwrap_or_default(),
             });
 
+        // Helper function to create bucket config for to_vertex
+        let create_to_vertex_bucket_config = |to: &ToVertexConfig| BucketConfig {
+            vertex: to.name,
+            partitions: to.partitions,
+            ot_bucket: Box::leak(
+                format!(
+                    "{}-{}-{}-{}_OT",
+                    namespace, pipeline_name, vertex_name, &to.name
+                )
+                .into_boxed_str(),
+            ),
+            hb_bucket: Box::leak(
+                format!(
+                    "{}-{}-{}-{}_PROCESSORS",
+                    namespace, pipeline_name, vertex_name, &to.name
+                )
+                .into_boxed_str(),
+            ),
+        };
+
+        // Helper function to create bucket config for from_vertex
+        let create_from_vertex_bucket_config =
+            |from: &FromVertexConfig, partitions: u16| BucketConfig {
+                vertex: from.name,
+                partitions,
+                ot_bucket: Box::leak(
+                    format!(
+                        "{}-{}-{}-{}_OT",
+                        namespace, pipeline_name, &from.name, vertex_name
+                    )
+                    .into_boxed_str(),
+                ),
+                hb_bucket: Box::leak(
+                    format!(
+                        "{}-{}-{}-{}_PROCESSORS",
+                        namespace, pipeline_name, &from.name, vertex_name
+                    )
+                    .into_boxed_str(),
+                ),
+            };
+
         match vertex {
-            VertexType::Source(_) => Some(WatermarkConfig::Source(SourceWatermarkConfig {
+            VertexConfig::Source(_) => Some(WatermarkConfig::Source(SourceWatermarkConfig {
                 max_delay: Duration::from_millis(max_delay),
                 source_bucket_config: BucketConfig {
                     vertex: Box::leak(vertex_name.to_string().into_boxed_str()),
@@ -624,70 +772,31 @@ impl PipelineConfig {
                 },
                 to_vertex_bucket_config: to_vertex_config
                     .iter()
-                    .map(|to| BucketConfig {
-                        vertex: to.name,
-                        partitions: to.partitions,
-                        ot_bucket: Box::leak(
-                            format!(
-                                "{}-{}-{}-{}_OT",
-                                namespace, pipeline_name, vertex_name, &to.name
-                            )
-                            .into_boxed_str(),
-                        ),
-                        hb_bucket: Box::leak(
-                            format!(
-                                "{}-{}-{}-{}_PROCESSORS",
-                                namespace, pipeline_name, vertex_name, &to.name
-                            )
-                            .into_boxed_str(),
-                        ),
-                    })
+                    .map(create_to_vertex_bucket_config)
                     .collect(),
                 idle_config,
             })),
-            VertexType::Sink(_) | VertexType::Map(_) | VertexType::Reduce(_) => {
+            VertexConfig::Sink(_) | VertexConfig::Map(_) => {
                 Some(WatermarkConfig::Edge(EdgeWatermarkConfig {
                     from_vertex_config: from_vertex_config
                         .iter()
-                        .map(|from| BucketConfig {
-                            vertex: from.name,
-                            partitions: from.partitions,
-                            ot_bucket: Box::leak(
-                                format!(
-                                    "{}-{}-{}-{}_OT",
-                                    namespace, pipeline_name, &from.name, vertex_name
-                                )
-                                .into_boxed_str(),
-                            ),
-                            hb_bucket: Box::leak(
-                                format!(
-                                    "{}-{}-{}-{}_PROCESSORS",
-                                    namespace, pipeline_name, &from.name, vertex_name
-                                )
-                                .into_boxed_str(),
-                            ),
-                        })
+                        .map(|from| create_from_vertex_bucket_config(from, from.partitions))
                         .collect(),
                     to_vertex_config: to_vertex_config
                         .iter()
-                        .map(|to| BucketConfig {
-                            vertex: to.name,
-                            partitions: to.partitions,
-                            ot_bucket: Box::leak(
-                                format!(
-                                    "{}-{}-{}-{}_OT",
-                                    namespace, pipeline_name, vertex_name, &to.name
-                                )
-                                .into_boxed_str(),
-                            ),
-                            hb_bucket: Box::leak(
-                                format!(
-                                    "{}-{}-{}-{}_PROCESSORS",
-                                    namespace, pipeline_name, vertex_name, &to.name
-                                )
-                                .into_boxed_str(),
-                            ),
-                        })
+                        .map(create_to_vertex_bucket_config)
+                        .collect(),
+                }))
+            }
+            VertexConfig::Reduce(_) => {
+                Some(WatermarkConfig::Edge(EdgeWatermarkConfig {
+                    from_vertex_config: from_vertex_config
+                        .iter()
+                        .map(|from| create_from_vertex_bucket_config(from, 1)) // reduce will have only one partition
+                        .collect(),
+                    to_vertex_config: to_vertex_config
+                        .iter()
+                        .map(create_to_vertex_bucket_config)
                         .collect(),
                 }))
             }
@@ -697,7 +806,7 @@ impl PipelineConfig {
 
 #[cfg(test)]
 mod tests {
-    use numaflow_models::models::{Container, Function, Udf};
+    use numaflow_models::models::{Container, Udf};
     use numaflow_pulsar::source::PulsarSourceConfig;
 
     use super::*;
@@ -712,18 +821,21 @@ mod tests {
             vertex_name: Default::default(),
             replica: 0,
             batch_size: DEFAULT_BATCH_SIZE as usize,
-            paf_concurrency: (DEFAULT_BATCH_SIZE * 2) as usize,
+            paf_concurrency: DEFAULT_BATCH_SIZE as usize,
             read_timeout: Duration::from_secs(DEFAULT_TIMEOUT_IN_MS as u64),
+            graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig::default(),
             from_vertex_config: vec![],
             to_vertex_config: vec![],
-            vertex_type_config: VertexType::Source(SourceVtxConfig {
+            vertex_type: VertexType::Source,
+            vertex_config: VertexConfig::Source(SourceVtxConfig {
                 source_config: Default::default(),
                 transformer_config: None,
             }),
             metrics_config: Default::default(),
             watermark_config: None,
             callback_config: None,
+            isb_config: None,
         };
 
         let config = PipelineConfig::default();
@@ -732,13 +844,13 @@ mod tests {
 
     #[test]
     fn test_vertex_type_display() {
-        let src_type = VertexType::Source(SourceVtxConfig {
+        let src_type = VertexConfig::Source(SourceVtxConfig {
             source_config: SourceConfig::default(),
             transformer_config: None,
         });
         assert_eq!(src_type.to_string(), "Source");
 
-        let sink_type = VertexType::Sink(SinkVtxConfig {
+        let sink_type = VertexConfig::Sink(SinkVtxConfig {
             sink_config: SinkConfig {
                 sink_type: SinkType::Log(LogConfig {}),
                 retry_config: None,
@@ -750,13 +862,34 @@ mod tests {
     }
 
     #[test]
+    fn test_to_vertex_type_conversion() {
+        // Test from_str
+        assert_eq!(VertexType::from_str("Source").unwrap(), VertexType::Source);
+        assert_eq!(VertexType::from_str("Sink").unwrap(), VertexType::Sink);
+        assert_eq!(VertexType::from_str("MapUDF").unwrap(), VertexType::MapUDF);
+        assert_eq!(
+            VertexType::from_str("ReduceUDF").unwrap(),
+            VertexType::ReduceUDF
+        );
+
+        // Test invalid string
+        assert!(VertexType::from_str("Invalid").is_err());
+
+        // Test as_str
+        assert_eq!(VertexType::Source.as_str(), "Source");
+        assert_eq!(VertexType::Sink.as_str(), "Sink");
+        assert_eq!(VertexType::MapUDF.as_str(), "MapUDF");
+        assert_eq!(VertexType::ReduceUDF.as_str(), "ReduceUDF");
+    }
+
+    #[test]
     fn test_pipeline_config_load_sink_vertex() {
         let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLXBpcGVsaW5lLW91dCIsIm5hbWVzcGFjZSI6ImRlZmF1bHQiLCJjcmVhdGlvblRpbWVzdGFtcCI6bnVsbH0sInNwZWMiOnsibmFtZSI6Im91dCIsInNpbmsiOnsiYmxhY2tob2xlIjp7fSwicmV0cnlTdHJhdGVneSI6eyJvbkZhaWx1cmUiOiJyZXRyeSJ9fSwibGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjUwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MzAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjgwfSwic2NhbGUiOnsibWluIjoxfSwidXBkYXRlU3RyYXRlZ3kiOnsidHlwZSI6IlJvbGxpbmdVcGRhdGUiLCJyb2xsaW5nVXBkYXRlIjp7Im1heFVuYXZhaWxhYmxlIjoiMjUlIn19LCJwaXBlbGluZU5hbWUiOiJzaW1wbGUtcGlwZWxpbmUiLCJpbnRlclN0ZXBCdWZmZXJTZXJ2aWNlTmFtZSI6IiIsInJlcGxpY2FzIjowLCJmcm9tRWRnZXMiOlt7ImZyb20iOiJpbiIsInRvIjoib3V0IiwiY29uZGl0aW9ucyI6bnVsbCwiZnJvbVZlcnRleFR5cGUiOiJTb3VyY2UiLCJmcm9tVmVydGV4UGFydGl0aW9uQ291bnQiOjEsImZyb21WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJTaW5rIiwidG9WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwidG9WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9fV0sIndhdGVybWFyayI6eyJtYXhEZWxheSI6IjBzIn19LCJzdGF0dXMiOnsicGhhc2UiOiIiLCJyZXBsaWNhcyI6MCwiZGVzaXJlZFJlcGxpY2FzIjowLCJsYXN0U2NhbGVkQXQiOm51bGx9fQ==".to_string();
 
         let env_vars = [
             ("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222"),
             (
-                "NUMAFLOW_SERVING_SOURCE_SETTINGS",
+                "NUMAFLOW_SERVING_SPEC",
                 "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQifQ==",
             ),
             ("NUMAFLOW_SERVING_CALLBACK_STORE", "test-kv-store"),
@@ -769,8 +902,9 @@ mod tests {
             vertex_name: "out",
             replica: 0,
             batch_size: 500,
-            paf_concurrency: 1000,
+            paf_concurrency: 500,
             read_timeout: Duration::from_secs(1),
+            graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
                 user: None,
@@ -785,7 +919,7 @@ mod tests {
                 partitions: 1,
             }],
             to_vertex_config: vec![],
-            vertex_type_config: VertexType::Sink(SinkVtxConfig {
+            vertex_config: VertexConfig::Sink(SinkVtxConfig {
                 sink_config: SinkConfig {
                     sink_type: SinkType::Blackhole(BlackholeConfig {}),
                     retry_config: Some(RetryConfig::default()),
@@ -830,6 +964,7 @@ mod tests {
             batch_size: 1000,
             paf_concurrency: 1000,
             read_timeout: Duration::from_secs(1),
+            graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
                 user: None,
@@ -846,8 +981,9 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: VertexType::Sink,
             }],
-            vertex_type_config: VertexType::Source(SourceVtxConfig {
+            vertex_config: VertexConfig::Source(SourceVtxConfig {
                 source_config: SourceConfig {
                     read_ahead: false,
                     source_type: SourceType::Generator(GeneratorConfig {
@@ -883,8 +1019,9 @@ mod tests {
             vertex_name: "in",
             replica: 0,
             batch_size: 50,
-            paf_concurrency: 1000,
+            paf_concurrency: 50,
             read_timeout: Duration::from_secs(1),
+            graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
                 user: None,
@@ -901,8 +1038,9 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: VertexType::Sink,
             }],
-            vertex_type_config: VertexType::Source(SourceVtxConfig {
+            vertex_config: VertexConfig::Source(SourceVtxConfig {
                 source_config: SourceConfig {
                     read_ahead: false,
                     source_type: SourceType::Pulsar(PulsarSourceConfig {
@@ -942,7 +1080,6 @@ mod tests {
     #[test]
     fn test_map_vertex_config_user_defined() {
         let udf = Udf {
-            builtin: None,
             container: Some(Box::from(Container {
                 args: None,
                 command: None,
@@ -970,44 +1107,10 @@ mod tests {
         };
 
         assert_eq!(map_vtx_config.concurrency, 10);
-        if let MapType::UserDefined(config) = map_vtx_config.map_type {
-            assert_eq!(config.grpc_max_message_size, DEFAULT_GRPC_MAX_MESSAGE_SIZE);
-            assert_eq!(config.socket_path, DEFAULT_MAP_SOCKET);
-            assert_eq!(config.server_info_path, DEFAULT_MAP_SERVER_INFO_FILE);
-        } else {
-            panic!("Expected UserDefined map type");
-        }
-    }
-
-    #[test]
-    fn test_map_vertex_config_builtin() {
-        let udf = Udf {
-            builtin: Some(Box::from(Function {
-                args: None,
-                kwargs: None,
-                name: "cat".to_string(),
-            })),
-            container: None,
-            group_by: None,
-        };
-
-        let map_type = MapType::try_from(Box::new(udf)).unwrap();
-        assert!(matches!(map_type, MapType::Builtin(_)));
-
-        let map_vtx_config = MapVtxConfig {
-            concurrency: 5,
-            map_type,
-            map_mode: MapMode::Unary,
-        };
-
-        assert_eq!(map_vtx_config.concurrency, 5);
-        if let MapType::Builtin(config) = map_vtx_config.map_type {
-            assert_eq!(config.name, "cat");
-            assert!(config.kwargs.is_none());
-            assert!(config.args.is_none());
-        } else {
-            panic!("Expected Builtin map type");
-        }
+        let MapType::UserDefined(config) = map_vtx_config.map_type;
+        assert_eq!(config.grpc_max_message_size, DEFAULT_GRPC_MAX_MESSAGE_SIZE);
+        assert_eq!(config.socket_path, DEFAULT_MAP_SOCKET);
+        assert_eq!(config.server_info_path, DEFAULT_MAP_SERVER_INFO_FILE);
     }
 
     #[test]
@@ -1023,8 +1126,9 @@ mod tests {
             vertex_name: "map",
             replica: 0,
             batch_size: 500,
-            paf_concurrency: 1000,
+            paf_concurrency: 500,
             read_timeout: Duration::from_secs(1),
+            graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
                 user: None,
@@ -1039,7 +1143,7 @@ mod tests {
                 partitions: 1,
             }],
             to_vertex_config: vec![],
-            vertex_type_config: VertexType::Map(MapVtxConfig {
+            vertex_config: VertexConfig::Map(MapVtxConfig {
                 concurrency: 500,
                 map_type: MapType::UserDefined(UserDefinedConfig {
                     grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
@@ -1062,5 +1166,33 @@ mod tests {
         };
 
         assert_eq!(pipeline_config, expected);
+    }
+
+    #[test]
+    fn test_graceful_timeout_env_var() {
+        let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLXBpcGVsaW5lLW1hcCIsIm5hbWVzcGFjZSI6ImRlZmF1bHQiLCJjcmVhdGlvblRpbWVzdGFtcCI6bnVsbH0sInNwZWMiOnsibmFtZSI6Im1hcCIsInVkZiI6eyJjb250YWluZXIiOnsidGVtcGxhdGUiOiJkZWZhdWx0In19LCJsaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJzY2FsZSI6eyJtaW4iOjF9LCJwaXBlbGluZU5hbWUiOiJzaW1wbGUtcGlwZWxpbmUiLCJpbnRlclN0ZXBCdWZmZXJTZXJ2aWNlTmFtZSI6IiIsInJlcGxpY2FzIjowLCJmcm9tRWRnZXMiOlt7ImZyb20iOiJpbiIsInRvIjoibWFwIiwiY29uZGl0aW9ucyI6bnVsbCwiZnJvbVZlcnRleFR5cGUiOiJTb3VyY2UiLCJmcm9tVmVydGV4UGFydGl0aW9uQ291bnQiOjEsImZyb21WZXJ0ZXhMaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6NTAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjozMDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODB9LCJ0b1ZlcnRleFR5cGUiOiJNYXAiLCJ0b1ZlcnRleFBhcnRpdGlvbkNvdW50IjoxLCJ0b1ZlcnRleExpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjo1MDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjMwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4MH19XSwid2F0ZXJtYXJrIjp7Im1heERlbGF5IjoiMHMifX0sInN0YXR1cyI6eyJwaGFzZSI6IiIsInJlcGxpY2FzIjowLCJkZXNpcmVkUmVwbGljYXMiOjAsImxhc3RTY2FsZWRBdCI6bnVsbH19";
+
+        // Test with custom graceful timeout
+        let env_vars = [
+            ("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222"),
+            ("NUMAFLOW_GRACEFUL_TIMEOUT_SECS", "30"),
+        ];
+        let pipeline_config =
+            PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
+
+        assert_eq!(
+            pipeline_config.graceful_shutdown_time,
+            Duration::from_secs(30)
+        );
+
+        // Test with default graceful timeout (no env var)
+        let env_vars = [("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")];
+        let pipeline_config =
+            PipelineConfig::load(pipeline_cfg_base64.to_string(), env_vars).unwrap();
+
+        assert_eq!(
+            pipeline_config.graceful_shutdown_time,
+            Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS)
+        );
     }
 }

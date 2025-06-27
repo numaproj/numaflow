@@ -19,7 +19,9 @@ limitations under the License.
 package monovertex_e2e
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/suite"
 
@@ -61,6 +63,20 @@ func (s *MonoVertexSuite) TestMonoVertexWithAllContainers() {
 	w.Expect().RedisSinkContains("fallback-sink-key", "1000")
 	w.Expect().RedisSinkContains("fallback-sink-key", "1001")
 
+}
+
+func (s *MonoVertexSuite) TestExponentialBackoffRetryStrategy() {
+	w := s.Given().MonoVertex("@testdata/mono-vertex-exponential-retry-strategy.yaml").When().CreateMonoVertexAndWait()
+	defer w.DeleteMonoVertexAndWait()
+	w.Expect().MonoVertexPodsRunning()
+	firstRetryLog := fmt.Sprintf("retry_attempt=%d", 1)
+	secondRetryLog := fmt.Sprintf("retry_attempt=%d", 2)
+	thirdLog := fmt.Sprintf("retry_attempt=%d", 3)
+	dropLog := "Dropping messages"
+	w.Expect().MonoVertexPodLogContains(firstRetryLog, PodLogCheckOptionWithContainer("numa"))
+	w.Expect().MonoVertexPodLogContains(secondRetryLog, PodLogCheckOptionWithContainer("numa"))
+	w.Expect().MonoVertexPodLogContains(dropLog, PodLogCheckOptionWithContainer("numa"))
+	w.Expect().MonoVertexPodLogNotContains(thirdLog, PodLogCheckOptionWithContainer("numa"), PodLogCheckOptionWithTimeout(time.Second))
 }
 
 func TestMonoVertexSuite(t *testing.T) {

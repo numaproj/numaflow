@@ -278,24 +278,13 @@ func validateUDF(udf dfv1.UDF) error {
 }
 
 func validateMapUDF(udf dfv1.UDF) error {
-	if udf.Container != nil {
-		if udf.Container.Image == "" && udf.Builtin == nil {
-			return fmt.Errorf("invalid udf spec, either specify a builtin function, or a customized image")
-		}
-		if udf.Container.Image != "" && udf.Builtin != nil {
-			return fmt.Errorf("invalid udf, can not specify both builtin function, and a customized image")
-		}
-	} else if udf.Builtin == nil {
-		return fmt.Errorf("invalid udf, either specify a builtin function, or a customized image")
+	if udf.Container == nil || udf.Container.Image == "" {
+		return fmt.Errorf("invalid udf spec, a customized image is required")
 	}
 	return nil
 }
 
 func validateReduceUDF(udf dfv1.UDF) error {
-	if udf.Builtin != nil {
-		// No builtin function supported for reduce vertices.
-		return fmt.Errorf("invalid udf, there's no buildin function support in reduce vertices")
-	}
 	if udf.Container != nil {
 		if udf.Container.Image == "" {
 			return fmt.Errorf("invalid udf spec, a customized image is required")
@@ -586,15 +575,8 @@ func buildVisitedMap(vtxName string, visited map[string]struct{}, pl *dfv1.Pipel
 
 func validateSource(source dfv1.Source) error {
 	if transformer := source.UDTransformer; transformer != nil {
-		if transformer.Container != nil {
-			if transformer.Container.Image == "" && transformer.Builtin == nil {
-				return fmt.Errorf("invalid source transformer, either specify a builtin transformer, or a customized image")
-			}
-			if transformer.Container.Image != "" && transformer.Builtin != nil {
-				return fmt.Errorf("invalid source transformer, can not specify both builtin transformer, and a customized image")
-			}
-		} else if transformer.Builtin == nil {
-			return fmt.Errorf("invalid source transformer, either specify a builtin transformer, or a customized image")
+		if transformer.Container == nil || transformer.Container.Image == "" {
+			return fmt.Errorf("invalid source transformer, specify a customized image")
 		}
 	}
 	// TODO: add more validations for each source type

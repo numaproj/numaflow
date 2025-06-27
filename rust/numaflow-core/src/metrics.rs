@@ -27,7 +27,8 @@ use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica};
 use crate::mapper::map::MapHandle;
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
-use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
+use crate::reduce::reducer::unaligned::user_defined::UserDefinedUnalignedReduce;
+use crate::reduce::reducer::user_defined::UserDefinedReduce;
 use crate::sink::SinkWriter;
 use crate::source::Source;
 
@@ -106,6 +107,9 @@ const PENDING_RAW: &str = "pending_raw";
 const VERTEX_PENDING: &str = "pending_messages";
 const VERTEX_PENDING_RAW: &str = "pending_messages_raw";
 
+// read batch size as gauge
+const READ_BATCH_SIZE: &str = "read_batch_size";
+
 // processing times as timers
 const E2E_TIME: &str = "processing_time";
 const READ_TIME: &str = "read_time";
@@ -113,7 +117,6 @@ const READ_PROCESSING_TIME: &str = "read_processing_time";
 const WRITE_PROCESSING_TIME: &str = "write_processing_time";
 const ACK_PROCESSING_TIME: &str = "ack_processing_time";
 const TRANSFORMER_PROCESSING_TIME: &str = "transformer_processing_time";
-const FORWARD_CHUNK_PROCESSING_TIME: &str = "forward_chunk_processing_time";
 const UDF_PROCESSING_TIME: &str = "udf_processing_time";
 const FALLBACK_SINK_WRITE_PROCESSING_TIME: &str = "fbsink_write_processing_time";
 const TRANSFORM_TIME: &str = "time";
@@ -144,7 +147,7 @@ pub(crate) enum PipelineComponents {
     Source(Source),
     Sink(SinkWriter),
     Map(MapHandle),
-    Reduce(UserDefinedAlignedReduce),
+    Reduce(UserDefinedReduce),
 }
 
 /// The global register of all metrics.
@@ -219,6 +222,7 @@ pub(crate) struct MonoVtxMetrics {
     // deprecate old metric and use only this as well once
     // corresponding changes are completed.
     pub(crate) pending_raw: Family<Vec<(String, String)>, Gauge>,
+    pub(crate) read_batch_size: Family<Vec<(String, String)>, Gauge>,
 
     // timers
     pub(crate) e2e_time: Family<Vec<(String, String)>, Histogram>,
@@ -304,10 +308,13 @@ pub(crate) struct PipelineForwarderMetrics {
     pub(crate) ack_processing_time: Family<Vec<(String, String)>, Histogram>,
 
     // forwarder histograms
-    pub(crate) forward_chunk_processing_time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) e2e_time: Family<Vec<(String, String)>, Histogram>,
 
     // udf histograms
     pub(crate) udf_processing_time: Family<Vec<(String, String)>, Histogram>,
+
+    // batch size as gauge
+    pub(crate) read_batch_size: Family<Vec<(String, String)>, Gauge>,
 }
 
 pub(crate) struct SourceForwarderMetrics {
@@ -370,6 +377,7 @@ impl MonoVtxMetrics {
             // deprecate old metric and use only this as well once
             // corresponding changes are completed.
             pending_raw: Family::<Vec<(String, String)>, Gauge>::default(),
+            read_batch_size: Family::<Vec<(String, String)>, Gauge>::default(),
             // timers
             // exponential buckets in the range 100 microseconds to 15 minutes
             e2e_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
@@ -443,6 +451,11 @@ impl MonoVtxMetrics {
             PENDING_RAW,
             "A Gauge to keep track of the total number of source pending messages for the monovtx",
             metrics.pending_raw.clone(),
+        );
+        registry.register(
+            READ_BATCH_SIZE,
+            "A Gauge to keep track of the read batch size for monovtx",
+            metrics.read_batch_size.clone(),
         );
         // timers
         registry.register(
@@ -531,6 +544,7 @@ impl PipelineMetrics {
                 udf_drop_total: Family::<Vec<(String, String)>, Counter>::default(),
                 udf_error_total: Family::<Vec<(String, String)>, Counter>::default(),
                 udf_write_total: Family::<Vec<(String, String)>, Counter>::default(),
+                read_batch_size: Family::<Vec<(String, String)>, Gauge>::default(),
                 read_processing_time:
                     Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                         Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 10.0, 10))
@@ -547,10 +561,9 @@ impl PipelineMetrics {
                     Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
                         Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
                     }),
-                forward_chunk_processing_time:
-                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10))
-                    }),
+                e2e_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                    Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10))
+                }),
             },
             source_forwarder: SourceForwarderMetrics {
                 transformer_read_total: Family::<Vec<(String, String)>, Counter>::default(),
@@ -663,9 +676,9 @@ impl PipelineMetrics {
             metrics.forwarder.udf_error_total.clone(),
         );
         forwarder_registry.register(
-            FORWARD_CHUNK_PROCESSING_TIME,
-            "Processing times of the entire forward a chunk (100 microseconds to 20 minutes)",
-            metrics.forwarder.forward_chunk_processing_time.clone(),
+            E2E_TIME,
+            "Processing times (100 microseconds to 20 minutes)",
+            metrics.forwarder.e2e_time.clone(),
         );
         forwarder_registry.register(
             UDF_PROCESSING_TIME,
@@ -686,6 +699,11 @@ impl PipelineMetrics {
             UDF_DROP_TOTAL,
             "Total messages dropped by the user",
             metrics.forwarder.udf_drop_total.clone(),
+        );
+        forwarder_registry.register(
+            READ_BATCH_SIZE,
+            "A Gauge to keep track of the read batch size for source vtx",
+            metrics.forwarder.read_batch_size.clone(),
         );
 
         // Pipeline source forwarder sub-registry
@@ -979,12 +997,28 @@ async fn sidecar_livez(State(state): State<ComponentHealthChecks>) -> impl IntoR
                     return StatusCode::INTERNAL_SERVER_ERROR;
                 }
             }
-            PipelineComponents::Reduce(mut reducer) => {
-                if !reducer.ready().await {
-                    error!("Pipeline reduce component is not ready");
-                    return StatusCode::INTERNAL_SERVER_ERROR;
+            PipelineComponents::Reduce(reducer) => match reducer {
+                UserDefinedReduce::Aligned(mut reducer) => {
+                    if !reducer.ready().await {
+                        error!("Pipeline aligned reduce is not ready");
+                        return StatusCode::INTERNAL_SERVER_ERROR;
+                    }
                 }
-            }
+                UserDefinedReduce::Unaligned(reducer) => match reducer {
+                    UserDefinedUnalignedReduce::Accumulator(mut reducer) => {
+                        if !reducer.ready().await {
+                            error!("Pipeline accumulator reduce component is not ready");
+                            return StatusCode::INTERNAL_SERVER_ERROR;
+                        }
+                    }
+                    UserDefinedUnalignedReduce::Session(mut reducer) => {
+                        if !reducer.ready().await {
+                            error!("Pipeline session reduce component is not ready");
+                            return StatusCode::INTERNAL_SERVER_ERROR;
+                        }
+                    }
+                },
+            },
         },
     }
     StatusCode::NO_CONTENT

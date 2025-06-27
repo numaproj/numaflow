@@ -9,7 +9,6 @@ require (
 	github.com/ahmetb/gen-crd-api-reference-docs v0.3.0
 	github.com/antonmedv/expr v1.9.0
 	github.com/aquasecurity/go-pep440-version v0.0.0-20210121094942-22b2f8951d46
-	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/casbin/casbin/v2 v2.77.2
 	github.com/coreos/go-oidc/v3 v3.10.0
 	github.com/fsnotify/fsnotify v1.7.0

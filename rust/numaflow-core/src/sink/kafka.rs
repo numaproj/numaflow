@@ -11,7 +11,7 @@ impl TryFrom<Message> for KafkaSinkMessage {
         let id = msg.id.to_string();
         // Add all message keys to the Kafka headers
         msg.headers
-            .insert(format!("__key_len"), msg.keys.len().to_string());
+            .insert("__key_len".to_string(), msg.keys.len().to_string());
         for (i, key) in msg.keys.iter().enumerate() {
             msg.headers.insert(format!("__key_{i}"), key.to_string());
         }
@@ -85,6 +85,7 @@ mod tests {
             auth: None,
             tls: None,
             set_partition_key: false,
+            kafka_raw_config: HashMap::new(),
         };
         let mut sink = new_sink(config).expect("Failed to create KafkaSink");
         let mut messages = Vec::new();

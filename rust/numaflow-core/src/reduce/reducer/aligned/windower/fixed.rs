@@ -1,10 +1,9 @@
-//! In [Fixed Window] each event belongs to exactly one window and we can assign the message to the window
+//! In [Fixed Window] each event belongs to exactly one window, and we can assign the message to the window
 //! directly using the event time after rounding it to the nearest window [boundary](windower::truncate_to_duration).
 //! The window is defined by the length of the window. The window is aligned to the epoch. For example,
 //! if the window length is 30s, and the event time is 100, then the window this event belongs to will
-//! be `[90, 120)`. There will be a [WAL] for each window. The GC (garbage collection) of WAL is
-//! very simple since each window has its own WAL and the GC can be done by deleting the WAL. During
-//! startup, we will replay the WALs and recreate each per WAL and simply replay the messages to that window.
+//! be `[90, 120)`. We only have a single [WAL] for all the windows (we do not have per window WALs).
+//! The compactor takes care of compacting the WALs based on the deleted windows.
 //!
 //! [Fixed Window]: https://numaflow.numaproj.io/user-guide/user-defined-functions/reduce/windowing/fixed/
 //! [WAL]: crate::reduce::wal
@@ -15,7 +14,9 @@ use std::time::Duration;
 
 use crate::message::Message;
 use crate::reduce::reducer::aligned::windower;
-use crate::reduce::reducer::aligned::windower::{AlignedWindowMessage, Window, WindowOperation};
+use crate::reduce::reducer::aligned::windower::{
+    AlignedWindowMessage, AlignedWindowOperation, Window, window_pnf_slot,
+};
 use chrono::{DateTime, TimeZone, Utc};
 
 #[derive(Debug, Clone)]
@@ -58,6 +59,7 @@ impl FixedWindowManager {
     /// Assigns windows to a message
     pub(crate) fn assign_windows(&self, msg: Message) -> Vec<AlignedWindowMessage> {
         let window = self.create_window(&msg);
+        let pnf_slot = window_pnf_slot(&window);
 
         // Check if window already exists
         let mut active_windows = self
@@ -66,15 +68,24 @@ impl FixedWindowManager {
             .expect("Poisoned lock for active_windows");
         let operation = if active_windows.contains(&window) {
             // Window exists, append message
-            WindowOperation::Append(msg)
+            AlignedWindowOperation::Append {
+                message: msg,
+                window: window.clone(),
+            }
         } else {
             // New window, insert it
             active_windows.insert(window.clone());
-            WindowOperation::Open(msg)
+            AlignedWindowOperation::Open {
+                message: msg,
+                window: window.clone(),
+            }
         };
 
         // Create window message
-        vec![AlignedWindowMessage { operation, window }]
+        vec![AlignedWindowMessage {
+            operation,
+            pnf_slot,
+        }]
     }
 
     /// Closes any windows that can be closed because the Watermark has advanced beyond the window
@@ -97,8 +108,10 @@ impl FixedWindowManager {
             if window.end_time <= watermark {
                 // Create close message
                 let window_msg = AlignedWindowMessage {
-                    operation: WindowOperation::Close,
-                    window: window.clone(),
+                    operation: AlignedWindowOperation::Close {
+                        window: window.clone(),
+                    },
+                    pnf_slot: window_pnf_slot(window),
                 };
 
                 result.push(window_msg);
@@ -167,18 +180,16 @@ mod tests {
 
         // Verify results - first message should create a new window with Open operation
         assert_eq!(window_msgs.len(), 1);
-        // Check window boundaries
-        assert_eq!(window_msgs[0].window.start_time, base_time);
-        assert_eq!(
-            window_msgs[0].window.end_time,
-            base_time + chrono::Duration::seconds(60)
-        );
 
-        // Check operation type
-        match &window_msgs[0].operation {
-            WindowOperation::Open(_) => {}
+        // Check operation type and extract window
+        let window = match &window_msgs[0].operation {
+            AlignedWindowOperation::Open { window, .. } => window,
             _ => panic!("Expected Open operation"),
-        }
+        };
+
+        // Check window boundaries
+        assert_eq!(window.start_time, base_time);
+        assert_eq!(window.end_time, base_time + chrono::Duration::seconds(60));
 
         // Assign another message to the same window (base_time + 1s)
         let msg2 = Message {
@@ -188,15 +199,15 @@ mod tests {
 
         let window_msgs2 = windower.assign_windows(msg2.clone());
 
-        assert_eq!(window_msgs2[0].window.start_time, base_time);
-        assert_eq!(
-            window_msgs2[0].window.end_time,
-            base_time + chrono::Duration::seconds(60)
-        );
-
+        // Check operation type and extract window and message
         match &window_msgs2[0].operation {
-            WindowOperation::Append(append_msg) => {
+            AlignedWindowOperation::Append {
+                message: append_msg,
+                window,
+            } => {
                 assert_eq!(append_msg.event_time, msg2.event_time);
+                assert_eq!(window.start_time, base_time);
+                assert_eq!(window.end_time, base_time + chrono::Duration::seconds(60));
             }
             _ => panic!("Expected Append operation"),
         }
@@ -287,26 +298,19 @@ mod tests {
         // Should close 2 windows (window1 and window2)
         assert_eq!(closed_msgs.len(), 2);
 
-        assert_eq!(closed_msgs[0].window.start_time, base_time);
-        assert_eq!(
-            closed_msgs[0].window.end_time,
-            base_time + chrono::Duration::seconds(60)
-        );
         match &closed_msgs[0].operation {
-            WindowOperation::Close => {}
+            AlignedWindowOperation::Close { window } => {
+                assert_eq!(window.start_time, base_time);
+                assert_eq!(window.end_time, base_time + chrono::Duration::seconds(60));
+            }
             _ => panic!("Expected Close operation"),
         }
 
-        assert_eq!(
-            closed_msgs[1].window.start_time,
-            base_time + chrono::Duration::seconds(60)
-        );
-        assert_eq!(
-            closed_msgs[1].window.end_time,
-            base_time + chrono::Duration::seconds(120)
-        );
         match &closed_msgs[1].operation {
-            WindowOperation::Close => {}
+            AlignedWindowOperation::Close { window } => {
+                assert_eq!(window.start_time, base_time + chrono::Duration::seconds(60));
+                assert_eq!(window.end_time, base_time + chrono::Duration::seconds(120));
+            }
             _ => panic!("Expected Close operation"),
         }
 

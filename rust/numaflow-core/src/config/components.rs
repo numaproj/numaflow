@@ -8,20 +8,21 @@ pub(crate) mod source {
     const DEFAULT_SOURCE_SOCKET: &str = "/var/run/numaflow/source.sock";
     const DEFAULT_SOURCE_SERVER_INFO_FILE: &str = "/var/run/numaflow/sourcer-server-info";
 
+    use std::collections::HashMap;
     use std::{fmt::Debug, time::Duration};
 
+    use super::parse_kafka_auth_config;
+    use crate::Result;
+    use crate::config::get_vertex_name;
+    use crate::error::Error;
     use bytes::Bytes;
     use numaflow_jetstream::{JetstreamSourceConfig, NatsAuth, TlsClientAuthCerts, TlsConfig};
     use numaflow_kafka::source::KafkaSourceConfig;
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source, SqsSource};
-    use numaflow_pulsar::source::{PulsarAuth, PulsarSourceConfig};
+    use numaflow_pulsar::{PulsarAuth, source::PulsarSourceConfig};
     use numaflow_sqs::source::SqsSourceConfig;
+    use serde::{Deserialize, Serialize};
     use tracing::warn;
-
-    use crate::Result;
-    use crate::error::Error;
-
-    use super::parse_kafka_auth_config;
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct SourceConfig {
@@ -47,7 +48,8 @@ pub(crate) mod source {
         Pulsar(PulsarSourceConfig),
         Jetstream(JetstreamSourceConfig),
         Sqs(SqsSourceConfig),
-        Kafka(KafkaSourceConfig),
+        Kafka(Box<KafkaSourceConfig>),
+        Http(numaflow_http::HttpSourceConfig),
     }
 
     impl From<Box<GeneratorSource>> for SourceType {
@@ -86,21 +88,7 @@ pub(crate) mod source {
     impl TryFrom<Box<PulsarSource>> for SourceType {
         type Error = Error;
         fn try_from(value: Box<PulsarSource>) -> Result<Self> {
-            let auth: Option<PulsarAuth> = match value.auth {
-                Some(auth) => 'out: {
-                    let Some(token) = auth.token else {
-                        warn!("JWT Token authentication is specified, but token is empty");
-                        break 'out None;
-                    };
-                    let secret = crate::shared::create_components::get_secret_from_volume(
-                        &token.name,
-                        &token.key,
-                    )
-                    .unwrap();
-                    Some(PulsarAuth::JWT(secret))
-                }
-                None => None,
-            };
+            let auth: Option<PulsarAuth> = super::parse_pulsar_auth_config(value.auth)?;
             let pulsar_config = PulsarSourceConfig {
                 pulsar_server_addr: value.server_addr,
                 topic: value.topic,
@@ -330,8 +318,22 @@ pub(crate) mod source {
                 consumer_group: value.consumer_group.unwrap_or_default(),
                 auth,
                 tls,
+                // config is multiline string with key: value pairs.
+                // Eg:
+                //  max.poll.interval.ms: 100
+                //  socket.timeout.ms: 10000
+                //  queue.buffering.max.ms: 10000
+                kafka_raw_config: value
+                    .config
+                    .unwrap_or_default()
+                    .trim()
+                    .split('\n')
+                    .map(|s| s.split(':').collect::<Vec<&str>>())
+                    .filter(|parts| parts.len() == 2)
+                    .map(|parts| (parts[0].trim().to_string(), parts[1].trim().to_string()))
+                    .collect::<HashMap<String, String>>(),
             };
-            Ok(SourceType::Kafka(kafka_config))
+            Ok(SourceType::Kafka(Box::new(kafka_config)))
         }
     }
 
@@ -367,6 +369,10 @@ pub(crate) mod source {
                 return kafka.try_into();
             }
 
+            if let Some(http) = source.http.take() {
+                return http.try_into();
+            }
+
             Err(Error::Config(format!("Invalid source type: {source:?}")))
         }
     }
@@ -393,6 +399,46 @@ pub(crate) mod source {
                 msg_size_bytes: 8,
                 jitter: Duration::from_secs(0),
             }
+        }
+    }
+
+    // Retrieve value from mounted secret volume
+    // "/var/numaflow/secrets/${secretRef.name}/${secretRef.key}" is expected to be the file path
+    pub(crate) fn get_secret_from_volume(name: &str, key: &str) -> String {
+        let path = format!("/var/numaflow/secrets/{name}/{key}");
+        let val = std::fs::read_to_string(path.clone())
+            .map_err(|e| format!("Reading secret from file {path}: {e:?}"))
+            .expect("Failed to read secret");
+        val.trim().into()
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    struct AuthToken {
+        /// Name of the configmap
+        name: String,
+        /// Key within the configmap
+        key: String,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone)]
+    struct Auth {
+        token: AuthToken,
+    }
+
+    impl TryFrom<Box<numaflow_models::models::HttpSource>> for SourceType {
+        type Error = Error;
+        fn try_from(
+            value: Box<numaflow_models::models::HttpSource>,
+        ) -> std::result::Result<Self, Self::Error> {
+            let mut http_config = numaflow_http::HttpSourceConfigBuilder::new(get_vertex_name());
+
+            if let Some(auth) = value.auth {
+                let auth = auth.token.unwrap();
+                let token = get_secret_from_volume(&auth.name, &auth.key);
+                http_config = http_config.token(Box::leak(token.into_boxed_str()));
+            }
+
+            Ok(SourceType::Http(http_config.build()))
         }
     }
 
@@ -427,10 +473,13 @@ pub(crate) mod sink {
     const DEFAULT_SINK_RETRY_FACTOR: f64 = 1.0;
     const DEFAULT_SINK_RETRY_JITTER: f64 = 0.0;
 
+    use std::collections::HashMap;
     use std::fmt::Display;
 
     use numaflow_kafka::sink::KafkaSinkConfig;
-    use numaflow_models::models::{Backoff, KafkaSink, RetryStrategy, Sink, SqsSink};
+    use numaflow_models::models::{Backoff, KafkaSink, PulsarSink, RetryStrategy, Sink, SqsSink};
+    use numaflow_pulsar::PulsarAuth;
+    use numaflow_pulsar::sink::Config as PulsarSinkConfig;
     use numaflow_sqs::sink::SqsSinkConfig;
 
     use crate::Result;
@@ -451,7 +500,8 @@ pub(crate) mod sink {
         Serve,
         UserDefined(UserDefinedConfig),
         Sqs(SqsSinkConfig),
-        Kafka(KafkaSinkConfig),
+        Kafka(Box<KafkaSinkConfig>),
+        Pulsar(Box<PulsarSinkConfig>),
     }
 
     impl SinkType {
@@ -476,6 +526,7 @@ pub(crate) mod sink {
                 .or_else(|| sink.serve.as_ref().map(|_| Ok(SinkType::Serve)))
                 .or_else(|| sink.sqs.as_ref().map(|sqs| sqs.clone().try_into()))
                 .or_else(|| sink.kafka.as_ref().map(|kafka| kafka.clone().try_into()))
+                .or_else(|| sink.pulsar.as_ref().map(|pulsar| pulsar.clone().try_into()))
                 .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
         }
 
@@ -497,8 +548,20 @@ pub(crate) mod sink {
                             .as_ref()
                             .map(|_| Ok(SinkType::Blackhole(BlackholeConfig::default())))
                     })
-                    .or_else(|| sink.serve.as_ref().map(|_| Ok(SinkType::Serve)))
+                    .or_else(|| fallback.serve.as_ref().map(|_| Ok(SinkType::Serve)))
                     .or_else(|| fallback.sqs.as_ref().map(|sqs| sqs.clone().try_into()))
+                    .or_else(|| {
+                        fallback
+                            .kafka
+                            .as_ref()
+                            .map(|kafka| kafka.clone().try_into())
+                    })
+                    .or_else(|| {
+                        fallback
+                            .pulsar
+                            .as_ref()
+                            .map(|pulsar| pulsar.clone().try_into())
+                    })
                     .ok_or_else(|| Error::Config("Sink type not found".to_string()))?
             } else {
                 Err(Error::Config("Fallback sink not found".to_string()))
@@ -570,13 +633,41 @@ pub(crate) mod sink {
             let (auth, tls) =
                 parse_kafka_auth_config(kafka_config.sasl.clone(), kafka_config.tls.clone())?;
 
-            Ok(SinkType::Kafka(KafkaSinkConfig {
+            Ok(SinkType::Kafka(Box::new(KafkaSinkConfig {
                 brokers,
                 topic: kafka_config.topic,
                 auth,
                 tls,
                 set_partition_key: kafka_config.set_key.unwrap_or(false),
-            }))
+                // config is multiline string with key: value pairs.
+                // Eg:
+                //  max.poll.interval.ms: 100
+                //  socket.timeout.ms: 10000
+                //  queue.buffering.max.ms: 10000
+                kafka_raw_config: kafka_config
+                    .config
+                    .unwrap_or_default()
+                    .trim()
+                    .split('\n')
+                    .map(|s| s.split(':').collect::<Vec<&str>>())
+                    .filter(|parts| parts.len() == 2)
+                    .map(|parts| (parts[0].trim().to_string(), parts[1].trim().to_string()))
+                    .collect::<HashMap<String, String>>(),
+            })))
+        }
+    }
+
+    impl TryFrom<Box<PulsarSink>> for SinkType {
+        type Error = Error;
+        fn try_from(sink_config: Box<PulsarSink>) -> std::result::Result<Self, Self::Error> {
+            let auth: Option<PulsarAuth> = super::parse_pulsar_auth_config(sink_config.auth)?;
+            let pulsar_sink_config = numaflow_pulsar::sink::Config {
+                addr: sink_config.server_addr,
+                topic: sink_config.topic,
+                producer_name: sink_config.producer_name,
+                auth,
+            };
+            Ok(SinkType::Pulsar(Box::new(pulsar_sink_config)))
         }
     }
 
@@ -730,7 +821,7 @@ pub(crate) mod transformer {
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) enum TransformerType {
         #[allow(dead_code)]
-        Noop(NoopConfig), // will add built-in transformers
+        Noop(NoopConfig),
         UserDefined(UserDefinedConfig),
     }
 
@@ -797,37 +888,38 @@ pub(crate) mod reduce {
     const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
     const DEFAULT_REDUCER_SOCKET: &str = "/var/run/numaflow/reduce.sock";
     const DEFAULT_REDUCER_SERVER_INFO_FILE: &str = "/var/run/numaflow/reducer-server-info";
+    const DEFAULT_ACCUMULATOR_REDUCER_SOCKET: &str = "/var/run/numaflow/accumulator.sock";
+    const DEFAULT_ACCUMULATOR_REDUCER_SERVER_INFO_FILE: &str =
+        "/var/run/numaflow/accumulator-server-info";
+    const DEFAULT_SESSION_REDUCER_SOCKET: &str = "/var/run/numaflow/sessionreduce.sock";
+    const DEFAULT_SESSION_REDUCER_SERVER_INFO_FILE: &str =
+        "/var/run/numaflow/sessionreducer-server-info";
 
     use std::time::Duration;
 
     use numaflow_models::models::{
-        AccumulatorWindow, FixedWindow, GroupBy, PbqStorage, SessionWindow, SlidingWindow, Udf,
+        AccumulatorWindow, FixedWindow, GroupBy, PbqStorage, SessionWindow, SlidingWindow,
     };
 
     use crate::Result;
     use crate::error::Error;
 
     #[derive(Debug, Clone, PartialEq)]
-    pub(crate) struct ReducerConfig {
-        pub(crate) reducer_type: ReducerType,
-        pub(crate) window_config: WindowConfig,
+    pub(crate) enum ReducerConfig {
+        Aligned(AlignedReducerConfig),
+        Unaligned(UnalignedReducerConfig),
     }
 
     #[derive(Debug, Clone, PartialEq)]
-    pub(crate) enum ReducerType {
-        UserDefined(UserDefinedConfig),
+    pub(crate) struct AlignedReducerConfig {
+        pub(crate) user_defined_config: UserDefinedConfig,
+        pub(crate) window_config: AlignedWindowConfig,
     }
 
-    impl TryFrom<(&Box<Udf>, &Box<GroupBy>)> for ReducerType {
-        type Error = Error;
-        fn try_from(value: (&Box<Udf>, &Box<GroupBy>)) -> Result<Self> {
-            let (udf, _group_by) = value;
-            if udf.container.is_some() {
-                Ok(ReducerType::UserDefined(UserDefinedConfig::default()))
-            } else {
-                Err(Error::Config("Invalid UDF for reducer".to_string()))
-            }
-        }
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) struct UnalignedReducerConfig {
+        pub(crate) user_defined_config: UserDefinedConfig,
+        pub(crate) window_config: UnalignedWindowConfig,
     }
 
     #[derive(Debug, Clone, PartialEq)]
@@ -847,19 +939,48 @@ pub(crate) mod reduce {
         }
     }
 
+    impl UserDefinedConfig {
+        pub(crate) fn session_config() -> Self {
+            Self {
+                grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                socket_path: DEFAULT_SESSION_REDUCER_SOCKET,
+                server_info_path: DEFAULT_SESSION_REDUCER_SERVER_INFO_FILE,
+            }
+        }
+
+        pub(crate) fn accumulator_config() -> Self {
+            Self {
+                grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                socket_path: DEFAULT_ACCUMULATOR_REDUCER_SOCKET,
+                server_info_path: DEFAULT_ACCUMULATOR_REDUCER_SERVER_INFO_FILE,
+            }
+        }
+    }
+
     #[derive(Debug, Clone, PartialEq)]
-    pub(crate) struct WindowConfig {
-        pub(crate) window_type: WindowType,
+    pub(crate) struct AlignedWindowConfig {
+        pub(crate) window_type: AlignedWindowType,
         pub(crate) allowed_lateness: Duration,
         pub(crate) is_keyed: bool,
     }
 
     #[derive(Debug, Clone, PartialEq)]
-    pub(crate) enum WindowType {
+    pub(crate) struct UnalignedWindowConfig {
+        pub(crate) window_type: UnalignedWindowType,
+        pub(crate) allowed_lateness: Duration,
+        pub(crate) is_keyed: bool,
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) enum UnalignedWindowType {
+        Accumulator(AccumulatorWindowConfig),
+        Session(SessionWindowConfig),
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) enum AlignedWindowType {
         Fixed(FixedWindowConfig),
         Sliding(SlidingWindowConfig),
-        Session(SessionWindowConfig),
-        Accumulator(AccumulatorWindowConfig),
     }
 
     #[derive(Debug, Clone, PartialEq)]
@@ -916,33 +1037,60 @@ pub(crate) mod reduce {
         }
     }
 
-    impl TryFrom<&Box<GroupBy>> for WindowConfig {
+    impl TryFrom<&Box<GroupBy>> for ReducerConfig {
         type Error = Error;
         fn try_from(group_by: &Box<GroupBy>) -> Result<Self> {
             let window = group_by.window.as_ref();
+            let allowed_lateness = group_by
+                .allowed_lateness
+                .map_or(Duration::from_secs(0), Duration::from);
+            let is_keyed = group_by.keyed.unwrap_or(false);
 
-            let window_type = if let Some(fixed) = &window.fixed {
-                WindowType::Fixed(fixed.clone().into())
+            if let Some(fixed) = &window.fixed {
+                let window_config = AlignedWindowConfig {
+                    window_type: AlignedWindowType::Fixed(fixed.clone().into()),
+                    allowed_lateness,
+                    is_keyed,
+                };
+                Ok(ReducerConfig::Aligned(AlignedReducerConfig {
+                    user_defined_config: UserDefinedConfig::default(),
+                    window_config,
+                }))
             } else if let Some(sliding) = &window.sliding {
-                WindowType::Sliding(sliding.clone().into())
+                let window_config = AlignedWindowConfig {
+                    window_type: AlignedWindowType::Sliding(sliding.clone().into()),
+                    allowed_lateness,
+                    is_keyed,
+                };
+                Ok(ReducerConfig::Aligned(AlignedReducerConfig {
+                    user_defined_config: UserDefinedConfig::default(),
+                    window_config,
+                }))
             } else if let Some(session) = &window.session {
-                WindowType::Session(session.clone().into())
+                let window_config = UnalignedWindowConfig {
+                    window_type: UnalignedWindowType::Session(session.clone().into()),
+                    allowed_lateness,
+                    is_keyed,
+                };
+                Ok(ReducerConfig::Unaligned(UnalignedReducerConfig {
+                    user_defined_config: UserDefinedConfig::session_config(),
+                    window_config,
+                }))
             } else if let Some(accumulator) = &window.accumulator {
-                WindowType::Accumulator(accumulator.clone().into())
+                let window_config = UnalignedWindowConfig {
+                    window_type: UnalignedWindowType::Accumulator(accumulator.clone().into()),
+                    allowed_lateness,
+                    is_keyed,
+                };
+                Ok(ReducerConfig::Unaligned(UnalignedReducerConfig {
+                    user_defined_config: UserDefinedConfig::accumulator_config(),
+                    window_config,
+                }))
             } else {
-                return Err(Error::Config("No window type specified".to_string()));
-            };
-
-            Ok(WindowConfig {
-                window_type,
-                allowed_lateness: group_by
-                    .allowed_lateness
-                    .map_or(Duration::from_secs(0), Duration::from),
-                is_keyed: group_by.keyed.unwrap_or(false),
-            })
+                Err(Error::Config("No window type specified".to_string()))
+            }
         }
     }
-
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct StorageConfig {
         pub(crate) path: std::path::PathBuf,
@@ -955,7 +1103,7 @@ pub(crate) mod reduce {
     impl Default for StorageConfig {
         fn default() -> Self {
             Self {
-                path: std::path::PathBuf::from("/var/numaflow/pbq/wals"),
+                path: std::path::PathBuf::from("/var/numaflow/pbq"),
                 max_file_size_mb: 10,
                 flush_interval_ms: 100,
                 channel_buffer_size: 500,
@@ -1238,6 +1386,47 @@ fn parse_kafka_auth_config(
     Ok((auth, tls))
 }
 
+fn parse_pulsar_auth_config(
+    auth: Option<Box<numaflow_models::models::PulsarAuth>>,
+) -> crate::Result<Option<numaflow_pulsar::PulsarAuth>> {
+    let Some(auth) = auth else {
+        return Ok(None);
+    };
+
+    if let Some(token) = auth.token {
+        let secret =
+            crate::shared::create_components::get_secret_from_volume(&token.name, &token.key)
+                .map_err(|e| {
+                    Error::Config(format!("Failed to get token secret from volume: {e:?}"))
+                })?;
+        return Ok(Some(numaflow_pulsar::PulsarAuth::JWT(secret)));
+    }
+
+    if let Some(basic_auth) = auth.basic_auth {
+        let user_secret_selector = &basic_auth
+            .username
+            .ok_or_else(|| Error::Config("Username can not be empty for basic auth".into()))?;
+        let username = crate::shared::create_components::get_secret_from_volume(
+            &user_secret_selector.name,
+            &user_secret_selector.key,
+        )
+        .map_err(|e| Error::Config(format!("Failed to get username secret from volume: {e:?}")))?;
+        let password_secret_selector = &basic_auth
+            .password
+            .ok_or_else(|| Error::Config("Password can not be empty for basic auth".into()))?;
+        let password = crate::shared::create_components::get_secret_from_volume(
+            &password_secret_selector.name,
+            &password_secret_selector.key,
+        )
+        .map_err(|e| Error::Config(format!("Failed to get password secret from volume: {e:?}")))?;
+        return Ok(Some(numaflow_pulsar::PulsarAuth::HTTPBasic {
+            username,
+            password,
+        }));
+    }
+    Err(Error::Config("Authentication configuration is enabled, however credentials are not provided in the Pulsar sink configuration".to_string()))
+}
+
 #[cfg(test)]
 mod source_tests {
     use std::time::Duration;
@@ -1306,6 +1495,21 @@ mod sink_tests {
     };
     use numaflow_models::models::{Backoff, RetryStrategy};
     use numaflow_sqs::sink::SqsSinkConfig;
+
+    const SECRET_BASE_PATH: &str = "/tmp/numaflow";
+
+    fn setup_secret(name: &str, key: &str, value: &str) {
+        let path = format!("{SECRET_BASE_PATH}/{name}");
+        std::fs::create_dir_all(&path).unwrap();
+        std::fs::write(format!("{path}/{key}"), value).unwrap();
+    }
+
+    fn cleanup_secret(name: &str) {
+        let path = format!("{SECRET_BASE_PATH}/{name}");
+        if std::path::Path::new(&path).exists() {
+            std::fs::remove_dir_all(&path).unwrap();
+        }
+    }
 
     #[test]
     fn test_default_log_config() {
@@ -1497,9 +1701,11 @@ mod sink_tests {
                     queue_owner_aws_account_id: "123456789012".to_string(),
                 })),
                 kafka: None,
+                pulsar: None,
             })),
             retry_strategy: None,
             kafka: None,
+            pulsar: None,
         };
 
         let result = SinkType::fallback_sinktype(&sink);
@@ -1523,6 +1729,7 @@ mod sink_tests {
             fallback: None,
             retry_strategy: None,
             kafka: None,
+            pulsar: None,
         };
         let result = SinkType::fallback_sinktype(&sink_without_fallback);
         assert!(result.is_err());
@@ -1549,9 +1756,11 @@ mod sink_tests {
                     queue_owner_aws_account_id: "123456789012".to_string(),
                 })),
                 kafka: None,
+                pulsar: None,
             })),
             retry_strategy: None,
             kafka: None,
+            pulsar: None,
         };
         let result = SinkType::fallback_sinktype(&sink_missing_region);
         assert!(result.is_err());
@@ -1574,15 +1783,317 @@ mod sink_tests {
                 serve: None,
                 sqs: None,
                 kafka: None,
+                pulsar: None,
             })),
             retry_strategy: None,
             kafka: None,
+            pulsar: None,
         };
         let result = SinkType::fallback_sinktype(&sink_empty_fallback);
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().to_string(),
             "Config Error - Sink type not found"
+        );
+    }
+
+    #[test]
+    fn test_pulsar_sink_type_conversion() {
+        use k8s_openapi::api::core::v1::SecretKeySelector;
+        use numaflow_models::models::PulsarSink;
+
+        // Test case 1: Valid configuration without authentication
+        let valid_pulsar_sink = Box::new(PulsarSink {
+            auth: None,
+            producer_name: "test-producer".to_string(),
+            server_addr: "pulsar://localhost:6650".to_string(),
+            topic: "persistent://public/default/test-topic".to_string(),
+        });
+
+        let result = SinkType::try_from(valid_pulsar_sink);
+        assert!(result.is_ok());
+        if let Ok(SinkType::Pulsar(config)) = result {
+            assert_eq!(config.addr, "pulsar://localhost:6650");
+            assert_eq!(config.topic, "persistent://public/default/test-topic");
+            assert_eq!(config.producer_name, "test-producer");
+            assert!(config.auth.is_none());
+        } else {
+            panic!("Expected SinkType::Pulsar");
+        }
+
+        // Test case 2: Valid configuration with JWT authentication
+        let secret_name = "test_pulsar_sink_type_conversion_jwt-secret";
+        let token_key = "token";
+        setup_secret(secret_name, token_key, "test-jwt-token");
+
+        let valid_pulsar_sink_with_auth = Box::new(PulsarSink {
+            auth: Some(Box::new(numaflow_models::models::PulsarAuth {
+                token: Some(SecretKeySelector {
+                    name: secret_name.to_string(),
+                    key: token_key.to_string(),
+                    ..Default::default()
+                }),
+                basic_auth: None,
+            })),
+            producer_name: "test-producer".to_string(),
+            server_addr: "pulsar://localhost:6650".to_string(),
+            topic: "persistent://public/default/test-topic".to_string(),
+        });
+
+        let result = SinkType::try_from(valid_pulsar_sink_with_auth);
+        assert!(result.is_ok());
+        if let Ok(SinkType::Pulsar(config)) = result {
+            assert_eq!(config.addr, "pulsar://localhost:6650");
+            assert_eq!(config.topic, "persistent://public/default/test-topic");
+            assert_eq!(config.producer_name, "test-producer");
+            let auth = config.auth.unwrap();
+            let numaflow_pulsar::PulsarAuth::JWT(token) = auth else {
+                panic!("Expected PulsarAuth::JWT");
+            };
+            assert_eq!(token, "test-jwt-token");
+        } else {
+            panic!("Expected SinkType::Pulsar");
+        }
+
+        cleanup_secret(secret_name);
+    }
+
+    #[test]
+    fn test_pulsar_sink_type_conversion_with_missing_token() {
+        use numaflow_models::models::PulsarSink;
+
+        // Test case: Authentication is specified but token is missing
+        let invalid_pulsar_sink = Box::new(PulsarSink {
+            auth: Some(Box::new(numaflow_models::models::PulsarAuth {
+                token: None,
+                basic_auth: None,
+            })),
+            producer_name: "test-producer".to_string(),
+            server_addr: "pulsar://localhost:6650".to_string(),
+            topic: "test-topic".to_string(),
+        });
+
+        let result = SinkType::try_from(invalid_pulsar_sink);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Config Error - Authentication configuration is enabled, however credentials are not provided in the Pulsar sink configuration"
+        );
+    }
+
+    #[test]
+    fn test_pulsar_sink_type_conversion_with_invalid_secret() {
+        use k8s_openapi::api::core::v1::SecretKeySelector;
+        use numaflow_models::models::PulsarSink;
+
+        // Test case: Authentication is specified but secret file doesn't exist
+        let invalid_pulsar_sink = Box::new(PulsarSink {
+            auth: Some(Box::new(numaflow_models::models::PulsarAuth {
+                token: Some(SecretKeySelector {
+                    name: "non-existent-secret".to_string(),
+                    key: "token".to_string(),
+                    ..Default::default()
+                }),
+                basic_auth: None,
+            })),
+            producer_name: "test-producer".to_string(),
+            server_addr: "pulsar://localhost:6650".to_string(),
+            topic: "test-topic".to_string(),
+        });
+
+        let result = SinkType::try_from(invalid_pulsar_sink);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Failed to get token secret from volume")
+        );
+    }
+
+    #[test]
+    fn test_pulsar_fallback_sink_type() {
+        use k8s_openapi::api::core::v1::SecretKeySelector;
+        use numaflow_models::models::{AbstractSink, PulsarSink, Sink};
+
+        // Test case 1: Valid Pulsar fallback configuration without auth
+        let sink = Sink {
+            udsink: None,
+            log: None,
+            blackhole: None,
+            serve: None,
+            sqs: None,
+            fallback: Some(Box::new(AbstractSink {
+                udsink: None,
+                log: None,
+                blackhole: None,
+                serve: None,
+                sqs: None,
+                kafka: None,
+                pulsar: Some(Box::new(PulsarSink {
+                    auth: None,
+                    producer_name: "fallback-producer".to_string(),
+                    server_addr: "pulsar://localhost:6650".to_string(),
+                    topic: "fallback-topic".to_string(),
+                })),
+            })),
+            retry_strategy: None,
+            kafka: None,
+            pulsar: None,
+        };
+
+        let result = SinkType::fallback_sinktype(&sink);
+        assert!(result.is_ok());
+        match result {
+            Ok(SinkType::Pulsar(config)) => {
+                assert_eq!(config.addr, "pulsar://localhost:6650");
+                assert_eq!(config.topic, "fallback-topic");
+                assert_eq!(config.producer_name, "fallback-producer");
+                assert!(config.auth.is_none());
+            }
+            _ => panic!("Expected SinkType::Pulsar for fallback sink"),
+        }
+
+        // Test case 2: Valid Pulsar fallback configuration with JWT auth
+        let secret_name = "test_pulsar_fallback_sink_type_jwt-secret";
+        let token_key = "token";
+        setup_secret(secret_name, token_key, "fallback-jwt-token");
+
+        let sink_with_auth = Sink {
+            udsink: None,
+            log: None,
+            blackhole: None,
+            serve: None,
+            sqs: None,
+            fallback: Some(Box::new(AbstractSink {
+                udsink: None,
+                log: None,
+                blackhole: None,
+                serve: None,
+                sqs: None,
+                kafka: None,
+                pulsar: Some(Box::new(PulsarSink {
+                    auth: Some(Box::new(numaflow_models::models::PulsarAuth {
+                        token: Some(SecretKeySelector {
+                            name: secret_name.to_string(),
+                            key: token_key.to_string(),
+                            ..Default::default()
+                        }),
+                        basic_auth: None,
+                    })),
+                    producer_name: "fallback-producer".to_string(),
+                    server_addr: "pulsar://localhost:6650".to_string(),
+                    topic: "fallback-topic".to_string(),
+                })),
+            })),
+            retry_strategy: None,
+            kafka: None,
+            pulsar: None,
+        };
+
+        let result = SinkType::fallback_sinktype(&sink_with_auth);
+        assert!(result.is_ok());
+        match result {
+            Ok(SinkType::Pulsar(config)) => {
+                assert_eq!(config.addr, "pulsar://localhost:6650");
+                assert_eq!(config.topic, "fallback-topic");
+                assert_eq!(config.producer_name, "fallback-producer");
+                let auth = config.auth.unwrap();
+                let numaflow_pulsar::PulsarAuth::JWT(token) = auth else {
+                    panic!("Expected PulsarAuth::JWT");
+                };
+                assert_eq!(token, "fallback-jwt-token");
+            }
+            _ => panic!("Expected SinkType::Pulsar for fallback sink"),
+        }
+
+        cleanup_secret(secret_name);
+    }
+
+    #[test]
+    fn test_pulsar_fallback_sink_type_with_missing_token() {
+        use numaflow_models::models::{AbstractSink, PulsarSink, Sink};
+
+        // Test case: Fallback Pulsar sink with authentication but missing token
+        let sink = Sink {
+            udsink: None,
+            log: None,
+            blackhole: None,
+            serve: None,
+            sqs: None,
+            fallback: Some(Box::new(AbstractSink {
+                udsink: None,
+                log: None,
+                blackhole: None,
+                serve: None,
+                sqs: None,
+                kafka: None,
+                pulsar: Some(Box::new(PulsarSink {
+                    auth: Some(Box::new(numaflow_models::models::PulsarAuth {
+                        token: None,
+                        basic_auth: None,
+                    })),
+                    producer_name: "fallback-producer".to_string(),
+                    server_addr: "pulsar://localhost:6650".to_string(),
+                    topic: "fallback-topic".to_string(),
+                })),
+            })),
+            retry_strategy: None,
+            kafka: None,
+            pulsar: None,
+        };
+
+        let result = SinkType::fallback_sinktype(&sink);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Config Error - Authentication configuration is enabled, however credentials are not provided in the Pulsar sink configuration"
+        );
+    }
+
+    #[test]
+    fn test_pulsar_fallback_sink_type_with_invalid_secret() {
+        use k8s_openapi::api::core::v1::SecretKeySelector;
+        use numaflow_models::models::{AbstractSink, PulsarSink, Sink};
+
+        // Test case: Fallback Pulsar sink with authentication but invalid secret
+        let sink = Sink {
+            udsink: None,
+            log: None,
+            blackhole: None,
+            serve: None,
+            sqs: None,
+            fallback: Some(Box::new(AbstractSink {
+                udsink: None,
+                log: None,
+                blackhole: None,
+                serve: None,
+                sqs: None,
+                kafka: None,
+                pulsar: Some(Box::new(PulsarSink {
+                    auth: Some(Box::new(numaflow_models::models::PulsarAuth {
+                        token: Some(SecretKeySelector {
+                            name: "non-existent-secret".to_string(),
+                            key: "token".to_string(),
+                            ..Default::default()
+                        }),
+                        basic_auth: None,
+                    })),
+                    producer_name: "fallback-producer".to_string(),
+                    server_addr: "pulsar://localhost:6650".to_string(),
+                    topic: "fallback-topic".to_string(),
+                })),
+            })),
+            retry_strategy: None,
+            kafka: None,
+            pulsar: None,
+        };
+
+        let result = SinkType::fallback_sinktype(&sink);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Failed to get token secret from volume")
         );
     }
 }
@@ -1769,10 +2280,12 @@ mod jetstream_tests {
 
 #[cfg(test)]
 mod kafka_tests {
+    use super::sink::SinkType;
     use super::source::SourceType;
     use k8s_openapi::api::core::v1::SecretKeySelector;
     use numaflow_models::models::gssapi::AuthType;
     use numaflow_models::models::{Gssapi, KafkaSource, Sasl, SaslPlain, SasloAuth, Tls};
+    use std::collections::HashMap;
     use std::fs;
     use std::path::Path;
 
@@ -1789,6 +2302,67 @@ mod kafka_tests {
         if Path::new(&path).exists() {
             fs::remove_dir_all(&path).unwrap();
         }
+    }
+
+    #[test]
+    fn test_try_from_kafka_source_with_kafka_raw_config() {
+        let kafka_user_config: &str = r#"
+            max.poll.interval.ms: 100
+            socket.timeout.ms: 10000
+            queue.buffering.max.ms: 10000
+            "#;
+
+        let kafka_source = KafkaSource {
+            brokers: Some(vec!["localhost:9092".to_string()]),
+            topic: "test-topic".to_string(),
+            consumer_group: Some("test-group".to_string()),
+            sasl: None,
+            tls: None,
+            config: Some(kafka_user_config.to_string()),
+            kafka_version: None,
+        };
+
+        let source_type = SourceType::try_from(Box::new(kafka_source)).unwrap();
+        let SourceType::Kafka(config) = source_type else {
+            panic!("Expected SourceType::Kafka");
+        };
+
+        let expected_config = HashMap::from([
+            ("max.poll.interval.ms".to_string(), "100".to_string()),
+            ("socket.timeout.ms".to_string(), "10000".to_string()),
+            ("queue.buffering.max.ms".to_string(), "10000".to_string()),
+        ]);
+        assert_eq!(config.kafka_raw_config, expected_config);
+    }
+
+    #[test]
+    fn test_try_from_kafka_sink_with_kafka_raw_config() {
+        let kafka_user_config: &str = r#"
+            max.poll.interval.ms: 100
+            socket.timeout.ms: 10000
+            queue.buffering.max.ms: 10000
+            "#;
+
+        let kafka_sink = numaflow_models::models::KafkaSink {
+            brokers: Some(vec!["localhost:9092".to_string()]),
+            topic: "test-topic".to_string(),
+            config: Some(kafka_user_config.to_string()),
+            sasl: None,
+            set_key: Some(true),
+            tls: None,
+        };
+
+        let sink_type = SinkType::try_from(Box::new(kafka_sink)).unwrap();
+        let SinkType::Kafka(config) = sink_type else {
+            panic!("Expected SinkType::Kafka");
+        };
+
+        let expected_config = HashMap::from([
+            ("max.poll.interval.ms".to_string(), "100".to_string()),
+            ("socket.timeout.ms".to_string(), "10000".to_string()),
+            ("queue.buffering.max.ms".to_string(), "10000".to_string()),
+        ]);
+        assert_eq!(config.kafka_raw_config, expected_config);
     }
 
     #[test]
@@ -2354,11 +2928,10 @@ mod reducer_tests {
     use std::time::Duration;
 
     use numaflow_models::models::{
-        AccumulatorWindow, Container, FixedWindow, GroupBy, SessionWindow, SlidingWindow, Udf,
-        Window,
+        AccumulatorWindow, FixedWindow, GroupBy, SessionWindow, SlidingWindow, Window,
     };
 
-    use super::reduce::{ReducerType, UserDefinedConfig, WindowConfig, WindowType};
+    use super::reduce::{AlignedWindowType, ReducerConfig, UnalignedWindowType, UserDefinedConfig};
 
     #[test]
     fn test_default_user_defined_config() {
@@ -2369,52 +2942,6 @@ mod reducer_tests {
             default_config.server_info_path,
             "/var/run/numaflow/reducer-server-info"
         );
-    }
-
-    #[test]
-    fn test_reducer_type_from_udf_and_group_by() {
-        let udf = Box::new(Udf {
-            builtin: None,
-            container: Some(Box::new(Container {
-                args: None,
-                command: None,
-                env: None,
-                env_from: None,
-                image: Some("reducer-image".to_string()),
-                image_pull_policy: None,
-                liveness_probe: None,
-                ports: None,
-                readiness_probe: None,
-                resources: None,
-                security_context: None,
-                volume_mounts: None,
-            })),
-            group_by: None,
-        });
-
-        let window = Window {
-            fixed: Some(Box::new(FixedWindow {
-                length: Some(kube::core::Duration::from(Duration::from_secs(60))),
-                streaming: None,
-            })),
-            sliding: None,
-            session: None,
-            accumulator: None,
-        };
-
-        let group_by = Box::new(GroupBy {
-            allowed_lateness: Some(kube::core::Duration::from(Duration::from_secs(10))),
-            keyed: Some(true),
-            storage: None,
-            window: Box::new(window),
-        });
-
-        let reducer_type = ReducerType::try_from((&udf, &group_by)).unwrap();
-        match reducer_type {
-            ReducerType::UserDefined(config) => {
-                assert_eq!(config, UserDefinedConfig::default());
-            }
-        }
     }
 
     #[test]
@@ -2436,15 +2963,23 @@ mod reducer_tests {
             window: Box::new(window),
         });
 
-        let window_config = WindowConfig::try_from(&group_by).unwrap();
-        assert_eq!(window_config.allowed_lateness, Duration::from_secs(10));
-        assert!(window_config.is_keyed);
+        let reducer_config = ReducerConfig::try_from(&group_by).unwrap();
+        match reducer_config {
+            ReducerConfig::Aligned(aligned_config) => {
+                assert_eq!(
+                    aligned_config.window_config.allowed_lateness,
+                    Duration::from_secs(10)
+                );
+                assert!(aligned_config.window_config.is_keyed);
 
-        match window_config.window_type {
-            WindowType::Fixed(config) => {
-                assert_eq!(config.length, Duration::from_secs(60));
+                match aligned_config.window_config.window_type {
+                    AlignedWindowType::Fixed(config) => {
+                        assert_eq!(config.length, Duration::from_secs(60));
+                    }
+                    _ => panic!("Expected fixed window type"),
+                }
             }
-            _ => panic!("Expected fixed window type"),
+            _ => panic!("Expected aligned reducer config"),
         }
     }
 
@@ -2468,16 +3003,24 @@ mod reducer_tests {
             window: Box::new(window),
         });
 
-        let window_config = WindowConfig::try_from(&group_by).unwrap();
-        assert_eq!(window_config.allowed_lateness, Duration::from_secs(0));
-        assert!(!window_config.is_keyed);
+        let reducer_config = ReducerConfig::try_from(&group_by).unwrap();
+        match reducer_config {
+            ReducerConfig::Aligned(aligned_config) => {
+                assert_eq!(
+                    aligned_config.window_config.allowed_lateness,
+                    Duration::from_secs(0)
+                );
+                assert!(!aligned_config.window_config.is_keyed);
 
-        match window_config.window_type {
-            WindowType::Sliding(config) => {
-                assert_eq!(config.length, Duration::from_secs(60));
-                assert_eq!(config.slide, Duration::from_secs(30));
+                match aligned_config.window_config.window_type {
+                    AlignedWindowType::Sliding(config) => {
+                        assert_eq!(config.length, Duration::from_secs(60));
+                        assert_eq!(config.slide, Duration::from_secs(30));
+                    }
+                    _ => panic!("Expected sliding window type"),
+                }
             }
-            _ => panic!("Expected sliding window type"),
+            _ => panic!("Expected aligned reducer config"),
         }
     }
 
@@ -2499,15 +3042,23 @@ mod reducer_tests {
             window: Box::new(window),
         });
 
-        let window_config = WindowConfig::try_from(&group_by).unwrap();
-        assert_eq!(window_config.allowed_lateness, Duration::from_secs(0));
-        assert!(window_config.is_keyed);
+        let reducer_config = ReducerConfig::try_from(&group_by).unwrap();
+        match reducer_config {
+            ReducerConfig::Unaligned(unaligned_config) => {
+                assert_eq!(
+                    unaligned_config.window_config.allowed_lateness,
+                    Duration::from_secs(0)
+                );
+                assert!(unaligned_config.window_config.is_keyed);
 
-        match window_config.window_type {
-            WindowType::Session(config) => {
-                assert_eq!(config.timeout, Duration::from_secs(300));
+                match unaligned_config.window_config.window_type {
+                    UnalignedWindowType::Session(config) => {
+                        assert_eq!(config.timeout, Duration::from_secs(300));
+                    }
+                    _ => panic!("Expected session window type"),
+                }
             }
-            _ => panic!("Expected session window type"),
+            _ => panic!("Expected unaligned reducer config"),
         }
     }
 
@@ -2529,15 +3080,23 @@ mod reducer_tests {
             window: Box::new(window),
         });
 
-        let window_config = WindowConfig::try_from(&group_by).unwrap();
-        assert_eq!(window_config.allowed_lateness, Duration::from_secs(0));
-        assert!(window_config.is_keyed);
+        let reducer_config = ReducerConfig::try_from(&group_by).unwrap();
+        match reducer_config {
+            ReducerConfig::Unaligned(unaligned_config) => {
+                assert_eq!(
+                    unaligned_config.window_config.allowed_lateness,
+                    Duration::from_secs(0)
+                );
+                assert!(unaligned_config.window_config.is_keyed);
 
-        match window_config.window_type {
-            WindowType::Accumulator(config) => {
-                assert_eq!(config.timeout, Duration::from_secs(600));
+                match unaligned_config.window_config.window_type {
+                    UnalignedWindowType::Accumulator(config) => {
+                        assert_eq!(config.timeout, Duration::from_secs(600));
+                    }
+                    _ => panic!("Expected accumulator window type"),
+                }
             }
-            _ => panic!("Expected accumulator window type"),
+            _ => panic!("Expected unaligned reducer config"),
         }
     }
 
@@ -2557,11 +3116,645 @@ mod reducer_tests {
             window: Box::new(window),
         });
 
-        let result = WindowConfig::try_from(&group_by);
+        let result = ReducerConfig::try_from(&group_by);
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().to_string(),
             "Config Error - No window type specified"
+        );
+    }
+
+    #[test]
+    fn test_session_user_defined_config() {
+        let session_config = UserDefinedConfig::session_config();
+        assert_eq!(session_config.grpc_max_message_size, 64 * 1024 * 1024);
+        assert_eq!(
+            session_config.socket_path,
+            "/var/run/numaflow/sessionreduce.sock"
+        );
+        assert_eq!(
+            session_config.server_info_path,
+            "/var/run/numaflow/sessionreducer-server-info"
+        );
+    }
+
+    #[test]
+    fn test_accumulator_user_defined_config() {
+        let accumulator_config = UserDefinedConfig::accumulator_config();
+        assert_eq!(accumulator_config.grpc_max_message_size, 64 * 1024 * 1024);
+        assert_eq!(
+            accumulator_config.socket_path,
+            "/var/run/numaflow/accumulator.sock"
+        );
+        assert_eq!(
+            accumulator_config.server_info_path,
+            "/var/run/numaflow/accumulator-server-info"
+        );
+    }
+
+    #[test]
+    fn test_fixed_window_config_from_fixed_window() {
+        use super::reduce::FixedWindowConfig;
+
+        let fixed_window = Box::new(FixedWindow {
+            length: Some(kube::core::Duration::from(Duration::from_secs(120))),
+            streaming: None,
+        });
+
+        let config = FixedWindowConfig::from(fixed_window);
+        assert_eq!(config.length, Duration::from_secs(120));
+    }
+
+    #[test]
+    fn test_fixed_window_config_from_fixed_window_default() {
+        use super::reduce::FixedWindowConfig;
+
+        let fixed_window = Box::new(FixedWindow {
+            length: None,
+            streaming: None,
+        });
+
+        let config = FixedWindowConfig::from(fixed_window);
+        assert_eq!(config.length, Duration::default());
+    }
+
+    #[test]
+    fn test_sliding_window_config_from_sliding_window() {
+        use super::reduce::SlidingWindowConfig;
+
+        let sliding_window = Box::new(SlidingWindow {
+            length: Some(kube::core::Duration::from(Duration::from_secs(180))),
+            slide: Some(kube::core::Duration::from(Duration::from_secs(60))),
+            streaming: None,
+        });
+
+        let config = SlidingWindowConfig::from(sliding_window);
+        assert_eq!(config.length, Duration::from_secs(180));
+        assert_eq!(config.slide, Duration::from_secs(60));
+    }
+
+    #[test]
+    fn test_sliding_window_config_from_sliding_window_defaults() {
+        use super::reduce::SlidingWindowConfig;
+
+        let sliding_window = Box::new(SlidingWindow {
+            length: None,
+            slide: None,
+            streaming: None,
+        });
+
+        let config = SlidingWindowConfig::from(sliding_window);
+        assert_eq!(config.length, Duration::default());
+        assert_eq!(config.slide, Duration::default());
+    }
+
+    #[test]
+    fn test_session_window_config_from_session_window() {
+        use super::reduce::SessionWindowConfig;
+
+        let session_window = Box::new(SessionWindow {
+            timeout: Some(kube::core::Duration::from(Duration::from_secs(900))),
+        });
+
+        let config = SessionWindowConfig::from(session_window);
+        assert_eq!(config.timeout, Duration::from_secs(900));
+    }
+
+    #[test]
+    fn test_session_window_config_from_session_window_default() {
+        use super::reduce::SessionWindowConfig;
+
+        let session_window = Box::new(SessionWindow { timeout: None });
+
+        let config = SessionWindowConfig::from(session_window);
+        assert_eq!(config.timeout, Duration::default());
+    }
+
+    #[test]
+    fn test_accumulator_window_config_from_accumulator_window() {
+        use super::reduce::AccumulatorWindowConfig;
+
+        let accumulator_window = Box::new(AccumulatorWindow {
+            timeout: Some(kube::core::Duration::from(Duration::from_secs(1200))),
+        });
+
+        let config = AccumulatorWindowConfig::from(accumulator_window);
+        assert_eq!(config.timeout, Duration::from_secs(1200));
+    }
+
+    #[test]
+    fn test_accumulator_window_config_from_accumulator_window_default() {
+        use super::reduce::AccumulatorWindowConfig;
+
+        let accumulator_window = Box::new(AccumulatorWindow { timeout: None });
+
+        let config = AccumulatorWindowConfig::from(accumulator_window);
+        assert_eq!(config.timeout, Duration::default());
+    }
+
+    #[test]
+    fn test_storage_config_default() {
+        use super::reduce::StorageConfig;
+
+        let default_config = StorageConfig::default();
+        assert_eq!(
+            default_config.path,
+            std::path::PathBuf::from("/var/numaflow/pbq")
+        );
+        assert_eq!(default_config.max_file_size_mb, 10);
+        assert_eq!(default_config.flush_interval_ms, 100);
+        assert_eq!(default_config.channel_buffer_size, 500);
+        assert_eq!(default_config.max_segment_age_secs, 120);
+    }
+
+    #[test]
+    fn test_storage_config_from_pbq_storage_success() {
+        use super::reduce::StorageConfig;
+        use numaflow_models::models::PbqStorage;
+
+        let pbq_storage = PbqStorage {
+            persistent_volume_claim: None,
+            empty_dir: None,
+            no_store: None,
+        };
+
+        let result = StorageConfig::try_from(pbq_storage);
+        assert!(result.is_ok());
+        let config = result.unwrap();
+        assert_eq!(config.path, std::path::PathBuf::from("/var/numaflow/pbq"));
+        assert_eq!(config.max_file_size_mb, 10);
+        assert_eq!(config.flush_interval_ms, 100);
+        assert_eq!(config.channel_buffer_size, 500);
+        assert_eq!(config.max_segment_age_secs, 120);
+    }
+
+    #[test]
+    fn test_storage_config_from_pbq_storage_with_pvc_error() {
+        use super::reduce::StorageConfig;
+        use numaflow_models::models::{PbqStorage, PersistenceStrategy};
+
+        let pbq_storage = PbqStorage {
+            persistent_volume_claim: Some(Box::new(PersistenceStrategy {
+                access_mode: Some("ReadWriteOnce".to_string()),
+                storage_class_name: Some("standard".to_string()),
+                volume_size: None,
+            })),
+            empty_dir: None,
+            no_store: None,
+        };
+
+        let result = StorageConfig::try_from(pbq_storage);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Config Error - Persistent volume claim is not supported"
+        );
+    }
+
+    #[test]
+    fn test_fixed_window_with_large_duration() {
+        let window = Window {
+            fixed: Some(Box::new(FixedWindow {
+                length: Some(kube::core::Duration::from(Duration::from_secs(86400))), // 1 day
+                streaming: None,
+            })),
+            sliding: None,
+            session: None,
+            accumulator: None,
+        };
+
+        let group_by = Box::new(GroupBy {
+            allowed_lateness: Some(kube::core::Duration::from(Duration::from_secs(3600))), // 1 hour
+            keyed: Some(false),
+            storage: None,
+            window: Box::new(window),
+        });
+
+        let reducer_config = ReducerConfig::try_from(&group_by).unwrap();
+        match reducer_config {
+            ReducerConfig::Aligned(aligned_config) => {
+                assert_eq!(
+                    aligned_config.window_config.allowed_lateness,
+                    Duration::from_secs(3600)
+                );
+                assert!(!aligned_config.window_config.is_keyed);
+
+                match aligned_config.window_config.window_type {
+                    AlignedWindowType::Fixed(config) => {
+                        assert_eq!(config.length, Duration::from_secs(86400));
+                    }
+                    _ => panic!("Expected fixed window type"),
+                }
+            }
+            _ => panic!("Expected aligned reducer config"),
+        }
+    }
+
+    #[test]
+    fn test_sliding_window_with_zero_slide() {
+        let window = Window {
+            fixed: None,
+            sliding: Some(Box::new(SlidingWindow {
+                length: Some(kube::core::Duration::from(Duration::from_secs(60))),
+                slide: Some(kube::core::Duration::from(Duration::from_secs(0))),
+                streaming: None,
+            })),
+            session: None,
+            accumulator: None,
+        };
+
+        let group_by = Box::new(GroupBy {
+            allowed_lateness: None,
+            keyed: None,
+            storage: None,
+            window: Box::new(window),
+        });
+
+        let reducer_config = ReducerConfig::try_from(&group_by).unwrap();
+        match reducer_config {
+            ReducerConfig::Aligned(aligned_config) => {
+                match aligned_config.window_config.window_type {
+                    AlignedWindowType::Sliding(config) => {
+                        assert_eq!(config.length, Duration::from_secs(60));
+                        assert_eq!(config.slide, Duration::from_secs(0));
+                    }
+                    _ => panic!("Expected sliding window type"),
+                }
+            }
+            _ => panic!("Expected aligned reducer config"),
+        }
+    }
+
+    #[test]
+    fn test_session_window_with_very_long_timeout() {
+        let window = Window {
+            fixed: None,
+            sliding: None,
+            session: Some(Box::new(SessionWindow {
+                timeout: Some(kube::core::Duration::from(Duration::from_secs(7200))), // 2 hours
+            })),
+            accumulator: None,
+        };
+
+        let group_by = Box::new(GroupBy {
+            allowed_lateness: Some(kube::core::Duration::from(Duration::from_secs(600))), // 10 minutes
+            keyed: Some(true),
+            storage: None,
+            window: Box::new(window),
+        });
+
+        let reducer_config = ReducerConfig::try_from(&group_by).unwrap();
+        match reducer_config {
+            ReducerConfig::Unaligned(unaligned_config) => {
+                assert_eq!(
+                    unaligned_config.window_config.allowed_lateness,
+                    Duration::from_secs(600)
+                );
+                assert!(unaligned_config.window_config.is_keyed);
+
+                match unaligned_config.window_config.window_type {
+                    UnalignedWindowType::Session(config) => {
+                        assert_eq!(config.timeout, Duration::from_secs(7200));
+                    }
+                    _ => panic!("Expected session window type"),
+                }
+
+                // Verify session-specific user defined config
+                assert_eq!(
+                    unaligned_config.user_defined_config.socket_path,
+                    "/var/run/numaflow/sessionreduce.sock"
+                );
+            }
+            _ => panic!("Expected unaligned reducer config"),
+        }
+    }
+
+    #[test]
+    fn test_accumulator_window_with_specific_config() {
+        let window = Window {
+            fixed: None,
+            sliding: None,
+            session: None,
+            accumulator: Some(Box::new(AccumulatorWindow {
+                timeout: Some(kube::core::Duration::from(Duration::from_secs(1800))), // 30 minutes
+            })),
+        };
+
+        let group_by = Box::new(GroupBy {
+            allowed_lateness: Some(kube::core::Duration::from(Duration::from_secs(300))), // 5 minutes
+            keyed: Some(false),
+            storage: None,
+            window: Box::new(window),
+        });
+
+        let reducer_config = ReducerConfig::try_from(&group_by).unwrap();
+        match reducer_config {
+            ReducerConfig::Unaligned(unaligned_config) => {
+                assert_eq!(
+                    unaligned_config.window_config.allowed_lateness,
+                    Duration::from_secs(300)
+                );
+                assert!(!unaligned_config.window_config.is_keyed);
+
+                match unaligned_config.window_config.window_type {
+                    UnalignedWindowType::Accumulator(config) => {
+                        assert_eq!(config.timeout, Duration::from_secs(1800));
+                    }
+                    _ => panic!("Expected accumulator window type"),
+                }
+
+                // Verify accumulator-specific user defined config
+                assert_eq!(
+                    unaligned_config.user_defined_config.socket_path,
+                    "/var/run/numaflow/accumulator.sock"
+                );
+                assert_eq!(
+                    unaligned_config.user_defined_config.server_info_path,
+                    "/var/run/numaflow/accumulator-server-info"
+                );
+            }
+            _ => panic!("Expected unaligned reducer config"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod pulsar_source_tests {
+    use k8s_openapi::api::core::v1::SecretKeySelector;
+    use numaflow_models::models::{PulsarAuth, PulsarBasicAuth, PulsarSource};
+    use numaflow_pulsar::PulsarAuth as PulsarAuthEnum;
+
+    use super::source::SourceType;
+
+    const SECRET_BASE_PATH: &str = "/tmp/numaflow";
+
+    fn setup_secret(name: &str, key: &str, value: &str) {
+        let path = format!("{SECRET_BASE_PATH}/{name}");
+        std::fs::create_dir_all(&path).unwrap();
+        std::fs::write(format!("{path}/{key}"), value).unwrap();
+    }
+
+    fn cleanup_secret(name: &str) {
+        let path = format!("{SECRET_BASE_PATH}/{name}");
+        if std::path::Path::new(&path).exists() {
+            std::fs::remove_dir_all(&path).unwrap();
+        }
+    }
+
+    #[test]
+    fn test_try_from_pulsar_source_without_auth() {
+        // Test case: Valid configuration without authentication
+        let valid_pulsar_source = Box::new(PulsarSource {
+            auth: None,
+            consumer_name: "test-consumer".to_string(),
+            server_addr: "pulsar://localhost:6650".to_string(),
+            subscription_name: "test-subscription".to_string(),
+            topic: "persistent://public/default/test-topic".to_string(),
+            max_unack: Some(1000),
+        });
+
+        let result = SourceType::try_from(valid_pulsar_source);
+        assert!(result.is_ok());
+        if let Ok(SourceType::Pulsar(config)) = result {
+            assert_eq!(config.pulsar_server_addr, "pulsar://localhost:6650");
+            assert_eq!(config.topic, "persistent://public/default/test-topic");
+            assert_eq!(config.consumer_name, "test-consumer");
+            assert_eq!(config.subscription, "test-subscription");
+            assert_eq!(config.max_unack, 1000);
+            assert!(config.auth.is_none());
+        } else {
+            panic!("Expected SourceType::Pulsar");
+        }
+    }
+
+    #[test]
+    fn test_try_from_pulsar_source_with_jwt_auth() {
+        // Test case: Valid configuration with JWT authentication
+        let secret_name = "test_try_from_pulsar_source_with_jwt_auth_jwt-secret";
+        let token_key = "token";
+        setup_secret(secret_name, token_key, "test-jwt-token");
+
+        let valid_pulsar_source_with_auth = Box::new(PulsarSource {
+            auth: Some(Box::new(PulsarAuth {
+                token: Some(SecretKeySelector {
+                    name: secret_name.to_string(),
+                    key: token_key.to_string(),
+                    ..Default::default()
+                }),
+                basic_auth: None,
+            })),
+            consumer_name: "test-consumer".to_string(),
+            server_addr: "pulsar://localhost:6650".to_string(),
+            subscription_name: "test-subscription".to_string(),
+            topic: "persistent://public/default/test-topic".to_string(),
+            max_unack: Some(1000),
+        });
+
+        let result = SourceType::try_from(valid_pulsar_source_with_auth);
+        assert!(result.is_ok());
+        if let Ok(SourceType::Pulsar(config)) = result {
+            assert_eq!(config.pulsar_server_addr, "pulsar://localhost:6650");
+            assert_eq!(config.topic, "persistent://public/default/test-topic");
+            assert_eq!(config.consumer_name, "test-consumer");
+            assert_eq!(config.subscription, "test-subscription");
+            assert_eq!(config.max_unack, 1000);
+            let auth = config.auth.unwrap();
+            let PulsarAuthEnum::JWT(token) = auth else {
+                panic!("Expected PulsarAuth::JWT");
+            };
+            assert_eq!(token, "test-jwt-token");
+        } else {
+            panic!("Expected SourceType::Pulsar");
+        }
+
+        cleanup_secret(secret_name);
+    }
+
+    #[test]
+    fn test_try_from_pulsar_source_with_basic_auth() {
+        // Test case: Valid configuration with basic authentication
+        let secret_name = "test_try_from_pulsar_source_with_basic_auth_basic-secret";
+        let user_key = "username";
+        let pass_key = "password";
+        setup_secret(secret_name, user_key, "test-user");
+        setup_secret(secret_name, pass_key, "test-pass");
+
+        let valid_pulsar_source_with_basic_auth = Box::new(PulsarSource {
+            auth: Some(Box::new(PulsarAuth {
+                token: None,
+                basic_auth: Some(Box::new(PulsarBasicAuth {
+                    username: Some(SecretKeySelector {
+                        name: secret_name.to_string(),
+                        key: user_key.to_string(),
+                        ..Default::default()
+                    }),
+                    password: Some(SecretKeySelector {
+                        name: secret_name.to_string(),
+                        key: pass_key.to_string(),
+                        ..Default::default()
+                    }),
+                })),
+            })),
+            consumer_name: "test-consumer".to_string(),
+            server_addr: "pulsar://localhost:6650".to_string(),
+            subscription_name: "test-subscription".to_string(),
+            topic: "persistent://public/default/test-topic".to_string(),
+            max_unack: Some(1000),
+        });
+
+        let result = SourceType::try_from(valid_pulsar_source_with_basic_auth);
+        assert!(result.is_ok());
+        if let Ok(SourceType::Pulsar(config)) = result {
+            assert_eq!(config.pulsar_server_addr, "pulsar://localhost:6650");
+            assert_eq!(config.topic, "persistent://public/default/test-topic");
+            assert_eq!(config.consumer_name, "test-consumer");
+            assert_eq!(config.subscription, "test-subscription");
+            assert_eq!(config.max_unack, 1000);
+            let auth = config.auth.unwrap();
+            let PulsarAuthEnum::HTTPBasic { username, password } = auth else {
+                panic!("Expected PulsarAuth::HTTPBasic");
+            };
+            assert_eq!(username, "test-user");
+            assert_eq!(password, "test-pass");
+        } else {
+            panic!("Expected SourceType::Pulsar");
+        }
+
+        cleanup_secret(secret_name);
+    }
+
+    #[test]
+    fn test_try_from_pulsar_source_with_missing_username() {
+        // Test case: Basic auth is specified but username is missing
+        let secret_name = "test_try_from_pulsar_source_with_missing_username_basic-secret";
+        let pass_key = "password";
+        setup_secret(secret_name, pass_key, "test-pass");
+
+        let invalid_pulsar_source = Box::new(PulsarSource {
+            auth: Some(Box::new(PulsarAuth {
+                token: None,
+                basic_auth: Some(Box::new(PulsarBasicAuth {
+                    username: None,
+                    password: Some(SecretKeySelector {
+                        name: secret_name.to_string(),
+                        key: pass_key.to_string(),
+                        ..Default::default()
+                    }),
+                })),
+            })),
+            consumer_name: "test-consumer".to_string(),
+            server_addr: "pulsar://localhost:6650".to_string(),
+            subscription_name: "test-subscription".to_string(),
+            topic: "persistent://public/default/test-topic".to_string(),
+            max_unack: Some(1000),
+        });
+
+        let result = SourceType::try_from(invalid_pulsar_source);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Config Error - Username can not be empty for basic auth"
+        );
+
+        cleanup_secret(secret_name);
+    }
+
+    #[test]
+    fn test_try_from_pulsar_source_with_missing_password() {
+        // Test case: Basic auth is specified but password is missing
+        let secret_name = "test_try_from_pulsar_source_with_missing_password_basic-secret";
+        let user_key = "username";
+        setup_secret(secret_name, user_key, "test-user");
+
+        let invalid_pulsar_source = Box::new(PulsarSource {
+            auth: Some(Box::new(PulsarAuth {
+                token: None,
+                basic_auth: Some(Box::new(PulsarBasicAuth {
+                    username: Some(SecretKeySelector {
+                        name: secret_name.to_string(),
+                        key: user_key.to_string(),
+                        ..Default::default()
+                    }),
+                    password: None,
+                })),
+            })),
+            consumer_name: "test-consumer".to_string(),
+            server_addr: "pulsar://localhost:6650".to_string(),
+            subscription_name: "test-subscription".to_string(),
+            topic: "persistent://public/default/test-topic".to_string(),
+            max_unack: Some(1000),
+        });
+
+        let result = SourceType::try_from(invalid_pulsar_source);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Config Error - Password can not be empty for basic auth"
+        );
+
+        cleanup_secret(secret_name);
+    }
+
+    #[test]
+    fn test_try_from_pulsar_source_with_invalid_jwt_secret() {
+        // Test case: JWT auth is specified but secret file doesn't exist
+        let invalid_pulsar_source = Box::new(PulsarSource {
+            auth: Some(Box::new(PulsarAuth {
+                token: Some(SecretKeySelector {
+                    name: "non-existent-secret".to_string(),
+                    key: "token".to_string(),
+                    ..Default::default()
+                }),
+                basic_auth: None,
+            })),
+            consumer_name: "test-consumer".to_string(),
+            server_addr: "pulsar://localhost:6650".to_string(),
+            subscription_name: "test-subscription".to_string(),
+            topic: "persistent://public/default/test-topic".to_string(),
+            max_unack: Some(1000),
+        });
+
+        let result = SourceType::try_from(invalid_pulsar_source);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Failed to get token secret from volume")
+        );
+    }
+
+    #[test]
+    fn test_try_from_pulsar_source_with_invalid_basic_auth_secret() {
+        // Test case: Basic auth is specified but secret file doesn't exist
+        let invalid_pulsar_source = Box::new(PulsarSource {
+            auth: Some(Box::new(PulsarAuth {
+                token: None,
+                basic_auth: Some(Box::new(PulsarBasicAuth {
+                    username: Some(SecretKeySelector {
+                        name: "non-existent-secret".to_string(),
+                        key: "username".to_string(),
+                        ..Default::default()
+                    }),
+                    password: Some(SecretKeySelector {
+                        name: "non-existent-secret".to_string(),
+                        key: "password".to_string(),
+                        ..Default::default()
+                    }),
+                })),
+            })),
+            consumer_name: "test-consumer".to_string(),
+            server_addr: "pulsar://localhost:6650".to_string(),
+            subscription_name: "test-subscription".to_string(),
+            topic: "persistent://public/default/test-topic".to_string(),
+            max_unack: Some(1000),
+        });
+
+        let result = SourceType::try_from(invalid_pulsar_source);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Failed to get username secret from volume")
         );
     }
 }

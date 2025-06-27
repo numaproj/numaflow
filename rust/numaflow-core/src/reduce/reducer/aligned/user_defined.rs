@@ -1,8 +1,7 @@
 use crate::Result;
 use crate::config::get_vertex_name;
 use crate::message::{IntOffset, Message, MessageID, Offset};
-use crate::reduce::reducer::aligned::windower::AlignedWindowMessage;
-use crate::reduce::reducer::aligned::windower::WindowOperation;
+use crate::reduce::reducer::aligned::windower::{AlignedWindowMessage, AlignedWindowOperation};
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 use numaflow_pb::clients::reduce::reduce_client::ReduceClient;
 use numaflow_pb::clients::reduce::{ReduceRequest, ReduceResponse, reduce_request};
@@ -39,29 +38,32 @@ impl From<&Message> for reduce_request::Payload {
 
 impl From<AlignedWindowMessage> for ReduceRequest {
     fn from(value: AlignedWindowMessage) -> Self {
-        let window = &value.window;
-        let operation = &value.operation;
+        // Process the operation and extract window and message
+        match value.operation {
+            AlignedWindowOperation::Open { message, window } => {
+                let window_obj = numaflow_pb::clients::reduce::Window {
+                    start: Some(prost_timestamp_from_utc(window.start_time)),
+                    end: Some(prost_timestamp_from_utc(window.end_time)),
+                    slot: "0".to_string(),
+                };
 
-        let window_obj = numaflow_pb::clients::reduce::Window {
-            start: Some(prost_timestamp_from_utc(window.start_time)),
-            end: Some(prost_timestamp_from_utc(window.end_time)),
-            slot: "0".to_string(),
-        };
-
-        // Process the operation
-        match operation {
-            WindowOperation::Open(msg) => {
                 let operation = Some(reduce_request::WindowOperation {
                     event: reduce_request::window_operation::Event::Open as i32,
                     windows: vec![window_obj],
                 });
 
                 ReduceRequest {
-                    payload: Some(msg.into()),
+                    payload: Some(message.into()),
                     operation,
                 }
             }
-            WindowOperation::Close => {
+            AlignedWindowOperation::Close { window } => {
+                let window_obj = numaflow_pb::clients::reduce::Window {
+                    start: Some(prost_timestamp_from_utc(window.start_time)),
+                    end: Some(prost_timestamp_from_utc(window.end_time)),
+                    slot: "0".to_string(),
+                };
+
                 let operation = Some(reduce_request::WindowOperation {
                     event: reduce_request::window_operation::Event::Close as i32,
                     windows: vec![window_obj],
@@ -80,14 +82,20 @@ impl From<AlignedWindowMessage> for ReduceRequest {
                     operation,
                 }
             }
-            WindowOperation::Append(msg) => {
+            AlignedWindowOperation::Append { message, window } => {
+                let window_obj = numaflow_pb::clients::reduce::Window {
+                    start: Some(prost_timestamp_from_utc(window.start_time)),
+                    end: Some(prost_timestamp_from_utc(window.end_time)),
+                    slot: "0".to_string(),
+                };
+
                 let operation = Some(reduce_request::WindowOperation {
                     event: reduce_request::window_operation::Event::Append as i32,
                     windows: vec![window_obj],
                 });
 
                 ReduceRequest {
-                    payload: Some(msg.into()),
+                    payload: Some(message.into()),
                     operation,
                 }
             }
@@ -264,7 +272,9 @@ mod tests {
 
     use super::*;
     use crate::message::{MessageID, StringOffset};
-    use crate::reduce::reducer::aligned::windower::{Window, WindowOperation};
+    use crate::reduce::reducer::aligned::windower::{
+        AlignedWindowOperation, Window, window_pnf_slot,
+    };
     use crate::shared::grpc::create_rpc_channel;
 
     struct Counter {}
@@ -330,11 +340,7 @@ mod tests {
         // Create a window
         let window_start = Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap();
         let window_end = Utc.with_ymd_and_hms(2023, 1, 1, 0, 1, 0).unwrap();
-        let window = Window {
-            start_time: window_start,
-            end_time: window_end,
-            id: "2".into(),
-        };
+        let window = Window::new(window_start, window_end);
 
         // Create messages
         let messages = vec![
@@ -389,17 +395,26 @@ mod tests {
         let window_messages = vec![
             // Open window
             AlignedWindowMessage {
-                window: window.clone(),
-                operation: WindowOperation::Open(messages[0].clone()),
+                operation: AlignedWindowOperation::Open {
+                    message: messages[0].clone(),
+                    window: window.clone(),
+                },
+                pnf_slot: window_pnf_slot(&window),
             },
             // Append messages
             AlignedWindowMessage {
-                window: window.clone(),
-                operation: WindowOperation::Append(messages[1].clone()),
+                operation: AlignedWindowOperation::Append {
+                    message: messages[1].clone(),
+                    window: window.clone(),
+                },
+                pnf_slot: window_pnf_slot(&window),
             },
             AlignedWindowMessage {
-                window: window.clone(),
-                operation: WindowOperation::Append(messages[2].clone()),
+                operation: AlignedWindowOperation::Append {
+                    message: messages[2].clone(),
+                    window: window.clone(),
+                },
+                pnf_slot: window_pnf_slot(&window),
             },
         ];
 
@@ -480,11 +495,7 @@ mod tests {
         // Create two windows for different keys
         let window_start = Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap();
         let window_end = Utc.with_ymd_and_hms(2023, 1, 1, 0, 1, 0).unwrap();
-        let window = Window {
-            start_time: window_start,
-            end_time: window_end,
-            id: "0".to_string().into(),
-        };
+        let window = Window::new(window_start, window_end);
 
         // Create messages for key1
         let key1_messages = vec![
@@ -573,27 +584,42 @@ mod tests {
         let window_messages = vec![
             // Open window for key1
             AlignedWindowMessage {
-                window: window.clone(),
-                operation: WindowOperation::Open(key1_messages[0].clone()),
+                operation: AlignedWindowOperation::Open {
+                    message: key1_messages[0].clone(),
+                    window: window.clone(),
+                },
+                pnf_slot: window_pnf_slot(&window),
             },
             // Append message for key1
             AlignedWindowMessage {
-                window: window.clone(),
-                operation: WindowOperation::Append(key1_messages[1].clone()),
+                operation: AlignedWindowOperation::Append {
+                    message: key1_messages[1].clone(),
+                    window: window.clone(),
+                },
+                pnf_slot: window_pnf_slot(&window),
             },
             // Open window for key2
             AlignedWindowMessage {
-                window: window.clone(),
-                operation: WindowOperation::Open(key2_messages[0].clone()),
+                operation: AlignedWindowOperation::Open {
+                    message: key2_messages[0].clone(),
+                    window: window.clone(),
+                },
+                pnf_slot: window_pnf_slot(&window),
             },
             // Append messages for key2
             AlignedWindowMessage {
-                window: window.clone(),
-                operation: WindowOperation::Append(key2_messages[1].clone()),
+                operation: AlignedWindowOperation::Append {
+                    message: key2_messages[1].clone(),
+                    window: window.clone(),
+                },
+                pnf_slot: window_pnf_slot(&window),
             },
             AlignedWindowMessage {
-                window: window.clone(),
-                operation: WindowOperation::Append(key2_messages[2].clone()),
+                operation: AlignedWindowOperation::Append {
+                    message: key2_messages[2].clone(),
+                    window: window.clone(),
+                },
+                pnf_slot: window_pnf_slot(&window),
             },
         ];
 
@@ -687,11 +713,7 @@ mod tests {
         // Create a sliding window
         let window_start = Utc.with_ymd_and_hms(2023, 1, 1, 0, 0, 0).unwrap();
         let window_end = Utc.with_ymd_and_hms(2023, 1, 1, 0, 1, 0).unwrap();
-        let window = Window {
-            start_time: window_start,
-            end_time: window_end,
-            id: "1".into(),
-        };
+        let window = Window::new(window_start, window_end);
 
         // Create messages
         let messages = vec![
@@ -746,17 +768,26 @@ mod tests {
         let window_messages = vec![
             // Open window
             AlignedWindowMessage {
-                window: window.clone(),
-                operation: WindowOperation::Open(messages[0].clone()),
+                operation: AlignedWindowOperation::Open {
+                    message: messages[0].clone(),
+                    window: window.clone(),
+                },
+                pnf_slot: window_pnf_slot(&window),
             },
             // Append messages
             AlignedWindowMessage {
-                window: window.clone(),
-                operation: WindowOperation::Append(messages[1].clone()),
+                operation: AlignedWindowOperation::Append {
+                    message: messages[1].clone(),
+                    window: window.clone(),
+                },
+                pnf_slot: window_pnf_slot(&window),
             },
             AlignedWindowMessage {
-                window: window.clone(),
-                operation: WindowOperation::Append(messages[2].clone()),
+                operation: AlignedWindowOperation::Append {
+                    message: messages[2].clone(),
+                    window: window.clone(),
+                },
+                pnf_slot: window_pnf_slot(&window),
             },
         ];
 
@@ -795,6 +826,7 @@ mod tests {
         shutdown_tx
             .send(())
             .expect("failed to send shutdown signal");
+
         tokio::time::sleep(Duration::from_millis(50)).await;
 
         // Wait for the reduce handle to complete

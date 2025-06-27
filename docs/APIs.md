@@ -556,6 +556,27 @@ SQS sink is used to write the data to the AWS SQS.
 
 </tr>
 
+<tr>
+
+<td>
+
+<code>pulsar</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.PulsarSink"> PulsarSink </a>
+</em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Pulsar sink is used to write the data to the Apache Pulsar.
+</p>
+
+</td>
+
+</tr>
+
 </tbody>
 
 </table>
@@ -1573,6 +1594,97 @@ value is set to “1”.
 
 </table>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.Compression">
+
+Compression
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.InterStepBuffer">InterStepBuffer</a>)
+</p>
+
+<p>
+
+<p>
+
+Compression is the compression settings for the messages in the
+InterStepBuffer
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>type</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.CompressionType">
+CompressionType </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Type is the type of compression to be used
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.CompressionType">
+
+CompressionType (<code>string</code> alias)
+</p>
+
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.Compression">Compression</a>)
+</p>
+
+<p>
+
+<p>
+
+CompressionType is a string enumeration type that enumerates all
+possible compression types.
+</p>
+
+</p>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.ConditionType">
 
 ConditionType (<code>string</code> alias)
@@ -2358,88 +2470,6 @@ Description
 Tags used to specify tags for conditional forwarding
 </p>
 
-</td>
-
-</tr>
-
-</tbody>
-
-</table>
-
-<h3 id="numaflow.numaproj.io/v1alpha1.Function">
-
-Function
-</h3>
-
-<p>
-
-(<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.UDF">UDF</a>)
-</p>
-
-<p>
-
-</p>
-
-<table>
-
-<thead>
-
-<tr>
-
-<th>
-
-Field
-</th>
-
-<th>
-
-Description
-</th>
-
-</tr>
-
-</thead>
-
-<tbody>
-
-<tr>
-
-<td>
-
-<code>name</code></br> <em> string </em>
-</td>
-
-<td>
-
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
-<code>args</code></br> <em> \[\]string </em>
-</td>
-
-<td>
-
-<em>(Optional)</em>
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
-<code>kwargs</code></br> <em> map\[string\]string </em>
-</td>
-
-<td>
-
-<em>(Optional)</em>
 </td>
 
 </tr>
@@ -4443,6 +4473,74 @@ Kubernetes meta/v1.Duration </a> </em>
 
 IncrementBy is the duration to be added to the current watermark to
 progress the watermark when source is idling.
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.InterStepBuffer">
+
+InterStepBuffer
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.PipelineSpec">PipelineSpec</a>,
+<a href="#numaflow.numaproj.io/v1alpha1.VertexSpec">VertexSpec</a>)
+</p>
+
+<p>
+
+<p>
+
+InterStepBuffer configuration specifically for the pipeline.
+</p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>compression</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Compression"> Compression </a>
+</em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Compression is the compression settings for the InterStepBufferService
 </p>
 
 </td>
@@ -7836,6 +7934,12 @@ Refer to the Kubernetes API documentation for the fields of the
 <td>
 
 <em>(Optional)</em>
+<p>
+
+InterStepBufferServiceName is the name of the InterStepBufferService to
+be used by the pipeline
+</p>
+
 </td>
 
 </tr>
@@ -7973,6 +8077,27 @@ for the Pipeline
 <p>
 
 SideInputs defines the Side Inputs of a pipeline.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>interStepBuffer</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.InterStepBuffer">
+InterStepBuffer </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+InterStepBuffer configuration specific to this pipeline.
 </p>
 
 </td>
@@ -8198,6 +8323,12 @@ Description
 <td>
 
 <em>(Optional)</em>
+<p>
+
+InterStepBufferServiceName is the name of the InterStepBufferService to
+be used by the pipeline
+</p>
+
 </td>
 
 </tr>
@@ -8335,6 +8466,27 @@ for the Pipeline
 <p>
 
 SideInputs defines the Side Inputs of a pipeline.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>interStepBuffer</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.InterStepBuffer">
+InterStepBuffer </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+InterStepBuffer configuration specific to this pipeline.
 </p>
 
 </td>
@@ -8575,6 +8727,75 @@ successfully drained.
 
 </table>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.Ports">
+
+Ports
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.ServingSpec">ServingSpec</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>https</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>http</code></br> <em> int32 </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.Probe">
 
 Probe
@@ -8732,6 +8953,7 @@ PulsarAuth
 <p>
 
 (<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.PulsarSink">PulsarSink</a>,
 <a href="#numaflow.numaproj.io/v1alpha1.PulsarSource">PulsarSource</a>)
 </p>
 
@@ -8781,6 +9003,202 @@ Kubernetes core/v1.SecretKeySelector </a> </em>
 <p>
 
 JWT Token auth
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>basicAuth</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.PulsarBasicAuth">
+PulsarBasicAuth </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Authentication using HTTP basic
+<a href="https://pulsar.apache.org/docs/4.0.x/security-basic-auth/">https://pulsar.apache.org/docs/4.0.x/security-basic-auth/</a>
+</p>
+
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.PulsarBasicAuth">
+
+PulsarBasicAuth
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.PulsarAuth">PulsarAuth</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>username</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>password</code></br> <em>
+<a href="https://v1-18.docs.kubernetes.io/docs/reference/generated/kubernetes-api/v1.18/#secretkeyselector-v1-core">
+Kubernetes core/v1.SecretKeySelector </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+</td>
+
+</tr>
+
+</tbody>
+
+</table>
+
+<h3 id="numaflow.numaproj.io/v1alpha1.PulsarSink">
+
+PulsarSink
+</h3>
+
+<p>
+
+(<em>Appears on:</em>
+<a href="#numaflow.numaproj.io/v1alpha1.AbstractSink">AbstractSink</a>)
+</p>
+
+<p>
+
+</p>
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>
+
+Field
+</th>
+
+<th>
+
+Description
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+<tr>
+
+<td>
+
+<code>serverAddr</code></br> <em> string </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>topic</code></br> <em> string </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>producerName</code></br> <em> string </em>
+</td>
+
+<td>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>auth</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.PulsarAuth"> PulsarAuth </a>
+</em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Auth information
 </p>
 
 </td>
@@ -10573,6 +10991,27 @@ Whether to create a ClusterIP Service
 
 <td>
 
+<code>ports</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.Ports"> Ports </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+Ports to listen on, default we will use 8443 for HTTPS. To start http
+server the http port should be explicitly set.
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>msgIDHeaderKey</code></br> <em> string </em>
 </td>
 
@@ -12237,88 +12676,6 @@ VertexTemplate is used to customize the vertices of the pipeline.
 
 </table>
 
-<h3 id="numaflow.numaproj.io/v1alpha1.Transformer">
-
-Transformer
-</h3>
-
-<p>
-
-(<em>Appears on:</em>
-<a href="#numaflow.numaproj.io/v1alpha1.UDTransformer">UDTransformer</a>)
-</p>
-
-<p>
-
-</p>
-
-<table>
-
-<thead>
-
-<tr>
-
-<th>
-
-Field
-</th>
-
-<th>
-
-Description
-</th>
-
-</tr>
-
-</thead>
-
-<tbody>
-
-<tr>
-
-<td>
-
-<code>name</code></br> <em> string </em>
-</td>
-
-<td>
-
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
-<code>args</code></br> <em> \[\]string </em>
-</td>
-
-<td>
-
-<em>(Optional)</em>
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
-<code>kwargs</code></br> <em> map\[string\]string </em>
-</td>
-
-<td>
-
-<em>(Optional)</em>
-</td>
-
-</tr>
-
-</tbody>
-
-</table>
-
 <h3 id="numaflow.numaproj.io/v1alpha1.UDF">
 
 UDF
@@ -12362,21 +12719,6 @@ Description
 
 <code>container</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Container"> Container </a> </em>
-</td>
-
-<td>
-
-<em>(Optional)</em>
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
-<code>builtin</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.Function"> Function </a> </em>
 </td>
 
 <td>
@@ -12558,22 +12900,6 @@ Description
 
 <code>container</code></br> <em>
 <a href="#numaflow.numaproj.io/v1alpha1.Container"> Container </a> </em>
-</td>
-
-<td>
-
-<em>(Optional)</em>
-</td>
-
-</tr>
-
-<tr>
-
-<td>
-
-<code>builtin</code></br> <em>
-<a href="#numaflow.numaproj.io/v1alpha1.Transformer"> Transformer </a>
-</em>
 </td>
 
 <td>
@@ -12899,6 +13225,27 @@ VertexLifecycle </a> </em>
 <p>
 
 Lifecycle defines the Lifecycle properties of a vertex
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>interStepBuffer</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.InterStepBuffer">
+InterStepBuffer </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+InterStepBuffer configuration specific to this pipeline.
 </p>
 
 </td>
@@ -13385,6 +13732,27 @@ VertexLifecycle </a> </em>
 <p>
 
 Lifecycle defines the Lifecycle properties of a vertex
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>interStepBuffer</code></br> <em>
+<a href="#numaflow.numaproj.io/v1alpha1.InterStepBuffer">
+InterStepBuffer </a> </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+InterStepBuffer configuration specific to this pipeline.
 </p>
 
 </td>

@@ -6,15 +6,15 @@ The `RetryStrategy` is used to configure the behavior for a sink after encounter
 This structure allows the user to specify how Numaflow should respond to different fail-over scenarios for Sinks, ensuring that the writing can be resilient and handle
 unexpected issues efficiently.
 
-`RetryStrategy` ONLY gets applied to failed messages. To return a failed messages, use the methods provided by the SDKs.
+`RetryStrategy` ONLY gets applied to failed messages. To return a failed message, use the methods provided by the SDKs.
 
-- `ResponseFailure`for [Golang](https://github.com/numaproj/numaflow-go/blob/main/pkg/sinker/types.go)
-- `responseFailure` for [Java](https://github.com/numaproj/numaflow-java/blob/main/src/main/java/io/numaproj/numaflow/sinker/Response.java#L40)
-- `as_fallback` for [Python](https://github.com/numaproj/numaflow-python/blob/main/pynumaflow/sinker/_dtypes.py)
+- `ResponseFailure`for [Golang](https://github.com/numaproj/numaflow-go/blob/47460a1854b8f58a0e918056ef4d169949193ebe/pkg/sinker/types.go#L45)
+- `responseFailure` for [Java](https://github.com/numaproj/numaflow-java/blob/25fe5e2eb1926c938a15e68ade82f0654bf66c97/src/main/java/io/numaproj/numaflow/sinker/Response.java#L37)
+- `as_failure` for [Python](https://github.com/numaproj/numaflow-python/blob/0d87b8f7603401a646d3ee5a1204077d4207ed27/pynumaflow/sinker/_dtypes.py#L41)
 
 ### Retry Strategy Configuration
 
-The `retryStrategy` section allows you to define custom retry behavior for sink operations. If no custom fields are defined, the **default** values are applied.
+The `retryStrategy` section allows you to define custom retry behavior for sink operations. If no custom fields are defined, the Default values are applied.
 
 #### Example Configuration
 
@@ -38,27 +38,27 @@ The `BackOff` configuration defines the timing and limits for retries. Below are
 
 - **`interval`**: The time interval to wait before retry attempts.
 
-  - **Type**: String with a timestamp suffix.
-  - **Default**: `1ms`.
+    - Type: String with a timestamp suffix.
+    - Default: `1ms`.
 
 - **`steps`**: The maximum number of retry attempts, including the initial attempt.
 
-  - **Type**: Unsigned integer, must be greater than 0.
-  - **Default**: Infinite.
+    - Type: Unsigned integer, must be greater than 0.
+    - Default: Infinite.
 
 - **`factor`**: A multiplier applied to the interval after each retry attempt.
 
-  - **Type**: Float, must be greater than or equal to 1.
-  - **Default**: `1.0`.
+    - Type: Float, must be greater than or equal to 1.
+    - Default: `1.0`.
 
 - **`cap`**: The maximum value for the interval, limiting exponential backoff growth.
 
-  - **Type**: String with a timestamp suffix.
-  - **Default**: `indefinite` (no upper limit).
+    - Type: String with a timestamp suffix.
+    - Default: `indefinite` (no upper limit).
 
 - **`jitter`**: Adds randomness to the interval to avoid retry collisions.
-  - **Type**: Float, must be greater than or equal to 0 and less than 1.
-  - **Default**: `0`.
+    - Type: Float, must be greater than or equal to 0 and less than 1.
+    - Default: `0`.
 
 #### OnFailure Actions
 
@@ -68,7 +68,7 @@ The `onFailure` field specifies the action to take when retries are exhausted. A
 - **`fallback`**: Route the remaining messages to a [fallback sink](https://numaflow.numaproj.io/user-guide/sinks/fallback/).
 - **`drop`**: Discard any unprocessed messages.
 
-- **Default**: `retry`.
+  > Default: `retry`
 
 ### Sink Example with Retry Strategy
 

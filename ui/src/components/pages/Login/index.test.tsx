@@ -1,9 +1,8 @@
-import React from "react";
+import React, { act } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { BrowserRouter, useLocation } from "react-router-dom";
 import fetchMock from "jest-fetch-mock";
-import { act } from "react-dom/test-utils";
 
 import { AppContext } from "../../../App";
 import { Login } from "./index";

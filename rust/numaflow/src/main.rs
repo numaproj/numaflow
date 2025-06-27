@@ -2,24 +2,11 @@ use std::collections::HashMap;
 use std::env;
 use std::error::Error;
 use tracing::{error, info};
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
+mod setup_tracing;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    info!("Starting numaflow");
-    // Set up the tracing subscriber. RUST_LOG can be used to set the log level.
-    // The default log level is `info`. The `axum::rejection=trace` enables showing
-    // rejections from built-in extractors at `TRACE` level.
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                // TODO: add a better default based on entry point invocation
-                //  e.g., serving/monovertex might need a different default
-                .unwrap_or_else(|_| "info".into()),
-        )
-        .with(tracing_subscriber::fmt::layer().with_ansi(false))
-        .init();
+    setup_tracing::register();
 
     // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
     rustls::crypto::aws_lc_rs::default_provider()
@@ -30,8 +17,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         error!("{e:?}");
         return Err(e);
     }
-    info!("Exiting...");
 
+    info!("Exited.");
     Ok(())
 }
 

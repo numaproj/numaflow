@@ -45,7 +45,7 @@ pub(crate) struct Message {
 }
 
 /// Type of the [Message].
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) enum MessageType {
     /// the payload is Data
     #[default]
@@ -202,6 +202,7 @@ pub(crate) enum ReadAck {
 pub(crate) struct MessageID {
     pub(crate) vertex_name: Bytes,
     pub(crate) offset: Bytes,
+    /// Index is used to identify the index of the message in case of flatmap.
     pub(crate) index: i32,
 }
 

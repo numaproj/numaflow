@@ -2,16 +2,19 @@
 resolver = "2"
 members = [
     "backoff",
-    "numaflow-models",
     "serving",
     "numaflow-core",
-    "numaflow-pb",
+    "numaflow",
+    "numaflow-monitor",
+    # extensions
     "extns/numaflow-pulsar",
     "extns/numaflow-sqs",
     "extns/numaflow-jetstream",
-    "numaflow",
-    "numaflow-monitor",
     "extns/numaflow-kafka",
+    "extns/numaflow-http",
+    # generated
+    "numaflow-pb",
+    "numaflow-models",
 ]
 
 [workspace.lints.rust]
@@ -65,7 +68,9 @@ numaflow-pulsar = { path = "extns/numaflow-pulsar" }
 numaflow-jetstream = { path = "extns/numaflow-jetstream" }
 numaflow-kafka = { path = "extns/numaflow-kafka" }
 numaflow-sqs = { path = "extns/numaflow-sqs" }
+numaflow-http = { path = "extns/numaflow-http" }
 tokio = { version = "1.44.2", features = ["macros", "rt-multi-thread"] }
+tokio-stream = "0.1.17"
 bytes = "1.9.0"
 tracing = "0.1.41"
 async-nats = "0.40.0"
@@ -90,3 +95,5 @@ reqwest = { version = "0.12.12", default-features = false, features = [
 ] }
 uuid = "1.16.0"
 futures = "0.3.31"
+rcgen = "0.13.1"
+chrono = "0.4.41"

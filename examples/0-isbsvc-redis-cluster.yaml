@@ -6,7 +6,6 @@ spec:
   redis:
     external:
       # deploy the redis cluster on k8s:
-      #     helm repo add bitnami https://charts.bitnami.com/bitnami
       #     helm install numaflow-redis-cluster --set image.tag=6.2 --set usePassword=false bitnami/redis-cluster --version 8.1.1
       # note:
       #     Need to provide at least 2 addresses because we use the universal client in the shared redis client code.

@@ -29,12 +29,12 @@ use tokio::sync::mpsc::Receiver;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
 
-use crate::config::pipeline::ToVertexConfig;
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::EdgeWatermarkConfig;
+use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::{Error, Result};
 use crate::message::{IntOffset, Offset};
-use crate::reduce::reducer::aligned::windower::WindowManager;
+use crate::reduce::reducer::WindowManager;
 use crate::watermark::idle::isb::ISBIdleDetector;
 use crate::watermark::isb::wm_fetcher::ISBWatermarkFetcher;
 use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
@@ -193,6 +193,7 @@ impl ISBWatermarkHandle {
     pub(crate) async fn new(
         vertex_name: &'static str,
         vertex_replica: u16,
+        vertex_type: VertexType,
         idle_timeout: Duration,
         js_context: async_nats::jetstream::Context,
         config: &EdgeWatermarkConfig,
@@ -205,8 +206,13 @@ impl ISBWatermarkHandle {
         // create a processor manager map (from_vertex -> ProcessorManager)
         let mut processor_managers = HashMap::new();
         for from_bucket_config in &config.from_vertex_config {
-            let processor_manager =
-                ProcessorManager::new(js_context.clone(), from_bucket_config).await?;
+            let processor_manager = ProcessorManager::new(
+                js_context.clone(),
+                from_bucket_config,
+                vertex_type,
+                vertex_replica,
+            )
+            .await?;
             processor_managers.insert(from_bucket_config.vertex, processor_manager);
         }
         let fetcher =
@@ -423,7 +429,16 @@ impl ISBWatermarkHandle {
         // If window manager is configured, we can use the oldest window's end time - 1ms as the
         // watermark.
         if let Some(window_manager) = &self.window_manager {
-            if let Some(oldest_window) = window_manager.oldest_window() {
+            let oldest_window_end_time = match window_manager {
+                WindowManager::Aligned(aligned_manager) => {
+                    aligned_manager.oldest_window().map(|w| w.end_time)
+                }
+                WindowManager::Unaligned(unaligned_manager) => {
+                    unaligned_manager.oldest_window_end_time()
+                }
+            };
+
+            if let Some(oldest_window_et) = oldest_window_end_time {
                 // we should also compare it with the latest fetched watermark because sometimes
                 // the window end time can be greater than the watermark of the messages in the window.
                 // in that case we should use the latest fetched watermark.
@@ -433,7 +448,7 @@ impl ISBWatermarkHandle {
                     .expect("failed to acquire lock");
                 return std::cmp::min(
                     *latest_fetched_wm,
-                    Watermark::from_timestamp_millis(oldest_window.end_time.timestamp_millis() - 1)
+                    Watermark::from_timestamp_millis(oldest_window_et.timestamp_millis() - 1)
                         .expect("failed to parse time"),
                 );
             }
@@ -540,6 +555,7 @@ mod tests {
         let mut handle = ISBWatermarkHandle::new(
             vertex_name,
             0,
+            VertexType::MapUDF,
             Duration::from_millis(100),
             js_context.clone(),
             &edge_config,
@@ -551,6 +567,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: VertexType::Sink,
             }],
             CancellationToken::new(),
             None,
@@ -721,6 +738,7 @@ mod tests {
         let mut handle = ISBWatermarkHandle::new(
             vertex_name,
             0,
+            VertexType::MapUDF,
             Duration::from_millis(100),
             js_context.clone(),
             &edge_config,
@@ -732,6 +750,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: VertexType::Sink,
             }],
             CancellationToken::new(),
             None,
@@ -868,6 +887,7 @@ mod tests {
         let mut handle = ISBWatermarkHandle::new(
             vertex_name,
             0,
+            VertexType::MapUDF,
             Duration::from_millis(10), // Set idle timeout to a very short duration
             js_context.clone(),
             &edge_config,
@@ -879,6 +899,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: VertexType::Sink,
             }],
             CancellationToken::new(),
             None,

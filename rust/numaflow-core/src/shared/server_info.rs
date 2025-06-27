@@ -93,7 +93,9 @@ pub(crate) struct ServerInfo {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub(crate) enum Protocol {
+    #[allow(clippy::upper_case_acronyms)]
     TCP,
+    #[allow(clippy::upper_case_acronyms)]
     UDS,
 }
 

@@ -11,11 +11,14 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use aws_sdk_sqs::Client;
-use aws_sdk_sqs::types::{MessageSystemAttributeName, QueueAttributeName};
+use aws_sdk_sqs::types::{
+    DeleteMessageBatchRequestEntry, MessageSystemAttributeName, QueueAttributeName,
+};
 use bytes::Bytes;
 use chrono::{DateTime, TimeZone, Utc};
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
+use tracing::error;
 
 use crate::Error::ActorTaskTerminated;
 use crate::{Error, SqsConfig, SqsSourceError};
@@ -272,33 +275,45 @@ impl SqsActor {
         Ok(messages)
     }
 
-    /// delete message from SQS, serves as Numaflow source ack.
+    /// deletes batch of messages from SQS, serves as Numaflow source ack.
     async fn delete_messages(&mut self, offsets: Vec<Bytes>) -> Result<()> {
-        for offset in offsets {
-            let offset = match std::str::from_utf8(&offset) {
+        let mut batch_builder = self
+            .client
+            .delete_message_batch()
+            .queue_url(&self.queue_url);
+        for (id, offset) in offsets.iter().enumerate() {
+            let offset = match std::str::from_utf8(offset) {
                 Ok(offset) => offset,
                 Err(err) => {
-                    tracing::error!(?err, "failed to parse offset");
+                    error!(?err, ?offset, "failed to parse offset");
                     return Err(SqsSourceError::from(Error::Other(
                         "failed to parse offset".to_string(),
                     )));
                 }
             };
-            if let Err(err) = self
-                .client
-                .delete_message()
-                .queue_url(self.queue_url.clone())
-                .receipt_handle(offset)
-                .send()
-                .await
-            {
-                tracing::error!(
-                    ?err,
-                    queue_url = ?self.queue_url,
-                    "Error while deleting message from SQS"
-                );
-                return Err(SqsSourceError::from(Error::Sqs(err.into())));
-            }
+            // id is just used to track request to response (it should be unique in the batch, index
+            // is used as id (since it will be unique per batch).
+            // receipt handle(message offset that needs to be deleted) and id are mandatory fields in
+            // the batch builder.
+            batch_builder = batch_builder.entries(
+                DeleteMessageBatchRequestEntry::builder()
+                    .receipt_handle(offset)
+                    .id(id.to_string())
+                    .build()
+                    .map_err(|err| {
+                        error!(?err, "Failed to build DeleteMessageBatchRequestEntry",);
+                        Error::Sqs(err.into())
+                    })?,
+            );
+        }
+
+        if let Err(e) = batch_builder.send().await {
+            error!(
+                ?e,
+                queue_url = self.queue_url,
+                "Failed to delete messages from SQS"
+            );
+            return Err(SqsSourceError::from(Error::Sqs(e.into())));
         }
         Ok(())
     }
@@ -974,13 +989,29 @@ mod tests {
     }
 
     fn get_delete_message_output() -> Rule {
-        let delete_message_output = mock!(aws_sdk_sqs::Client::delete_message)
+        let delete_message_output = mock!(aws_sdk_sqs::Client::delete_message_batch)
             .match_requests(|inp| {
-                inp.queue_url().unwrap() == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
-                    && inp.receipt_handle().unwrap() == "AQEBaZ+j5qUoOAoxlmrCQPkBm9njMWXqemmIG6shMHCO6fV20JrQYg/AiZ8JELwLwOu5U61W+aIX5Qzu7GGofxJuvzymr4Ph53RiR0mudj4InLSgpSspYeTRDteBye5tV/txbZDdNZxsi+qqZA9xPnmMscKQqF6pGhnGIKrnkYGl45Nl6GPIZv62LrIRb6mSqOn1fn0yqrvmWuuY3w2UzQbaYunJWGxpzZze21EOBtywknU3Je/g7G9is+c6K9hGniddzhLkK1tHzZKjejOU4jokaiB4nmi0dF3JqLzDsQuPF0Gi8qffhEvw56nl8QCbluSJScFhJYvoagGnDbwOnd9z50L239qtFIgETdpKyirlWwl/NGjWJ45dqWpiW3d2Ws7q"
+                inp.queue_url().unwrap()
+                    == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
+                    && inp.entries.clone().unwrap().len() == 1
             })
             .then_output(|| {
-                aws_sdk_sqs::operation::delete_message::DeleteMessageOutput::builder().build()
+                aws_sdk_sqs::operation::delete_message_batch::DeleteMessageBatchOutput::builder()
+                    .successful(
+                        aws_sdk_sqs::types::DeleteMessageBatchResultEntry::builder()
+                            .id("1")
+                            .build()
+                            .unwrap(),
+                    )
+                    .failed(
+                        aws_sdk_sqs::types::BatchResultErrorEntry::builder()
+                            .id("") // Empty string ID (minimal valid value)
+                            .code("") // Empty string code (minimal valid value)
+                            .build()
+                            .unwrap(),
+                    )
+                    .build()
+                    .unwrap()
             });
         delete_message_output
     }
@@ -1013,11 +1044,11 @@ mod tests {
                             .receipt_handle("AQEBaZ+j5qUoOAoxlmrCQPkBm9njMWXqemmIG6shMHCO6fV20JrQYg/AiZ8JELwLwOu5U61W+aIX5Qzu7GGofxJuvzymr4Ph53RiR0mudj4InLSgpSspYeTRDteBye5tV/txbZDdNZxsi+qqZA9xPnmMscKQqF6pGhnGIKrnkYGl45Nl6GPIZv62LrIRb6mSqOn1fn0yqrvmWuuY3w2UzQbaYunJWGxpzZze21EOBtywknU3Je/g7G9is+c6K9hGniddzhLkK1tHzZKjejOU4jokaiB4nmi0dF3JqLzDsQuPF0Gi8qffhEvw56nl8QCbluSJScFhJYvoagGnDbwOnd9z50L239qtFIgETdpKyirlWwl/NGjWJ45dqWpiW3d2Ws7q")
                             .attributes(MessageSystemAttributeName::SentTimestamp, "1677112427387")
                             .message_attributes(
-                               "AwsTraceHeader",
-                               MessageAttributeValue::builder()
-                                   .set_data_type(Some("String".to_string()))
-                                   .set_string_value(Some("Root=1-5e4f8a2c-0b2d3e4f8a2c0b2d3e4f8a2c".to_string()))
-                                   .build().unwrap()
+                                "AwsTraceHeader",
+                                MessageAttributeValue::builder()
+                                    .set_data_type(Some("String".to_string()))
+                                    .set_string_value(Some("Root=1-5e4f8a2c-0b2d3e4f8a2c0b2d3e4f8a2c".to_string()))
+                                    .build().unwrap()
                             )
                             .build()
                     )

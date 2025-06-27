@@ -19,15 +19,4 @@ package v1alpha1
 type UDTransformer struct {
 	// +optional
 	Container *Container `json:"container" protobuf:"bytes,1,opt,name=container"`
-	// +optional
-	Builtin *Transformer `json:"builtin" protobuf:"bytes,2,opt,name=builtin"`
-}
-
-type Transformer struct {
-	// +kubebuilder:validation:Enum=eventTimeExtractor;filter;timeExtractionFilter
-	Name string `json:"name" protobuf:"bytes,1,opt,name=name"`
-	// +optional
-	Args []string `json:"args,omitempty" protobuf:"bytes,2,rep,name=args"`
-	// +optional
-	KWArgs map[string]string `json:"kwargs,omitempty" protobuf:"bytes,3,rep,name=kwargs"`
 }

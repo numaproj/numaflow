@@ -277,7 +277,10 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		},
 	}
 
-	volumeMounts := []corev1.VolumeMount{{Name: varVolumeName, MountPath: PathVarRun}}
+	volumeMounts := []corev1.VolumeMount{
+		{Name: varVolumeName, MountPath: PathVarRun},
+		{Name: RuntimeDirVolume, MountPath: RuntimeDirMountPath},
+	}
 	containerRequest := getContainerReq{
 		isbSvcType:      req.ISBSvcType,
 		env:             envVars,
@@ -528,6 +531,9 @@ type VertexSpec struct {
 	// +kubebuilder:default={"desiredPhase": Running}
 	// +optional
 	Lifecycle VertexLifecycle `json:"lifecycle,omitempty" protobuf:"bytes,8,opt,name=lifecycle"`
+	// InterStepBuffer configuration specific to this pipeline.
+	// +optional
+	InterStepBuffer *InterStepBuffer `json:"interStepBuffer,omitempty" protobuf:"bytes,9,opt,name=interStepBuffer"`
 }
 
 type AbstractVertex struct {

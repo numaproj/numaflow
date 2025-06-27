@@ -10,13 +10,16 @@ use crate::error::{Error, Result};
 use crate::message::ReadAck;
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
-    pipeline_isb_metric_labels, pipeline_metric_labels, pipeline_metrics,
+    pipeline_metric_labels, pipeline_metrics,
 };
+use crate::source::http::CoreHttpSource;
 use crate::tracker::TrackerHandle;
 use crate::{
     message::{Message, Offset},
     reader::LagReader,
 };
+use backoff::retry::Retry;
+use backoff::strategy::fixed;
 use chrono::Utc;
 use numaflow_jetstream::JetstreamSource;
 use numaflow_kafka::source::KafkaSource;
@@ -54,12 +57,15 @@ pub(crate) mod jetstream;
 
 pub(crate) mod sqs;
 
+pub(crate) mod http;
 pub(crate) mod kafka;
 
 use crate::transformer::Transformer;
 use crate::watermark::source::SourceWatermarkHandle;
 
 const MAX_ACK_PENDING: usize = 10000;
+const ACK_RETRY_INTERVAL: u64 = 100;
+const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
 
 /// Set of Read related items that has to be implemented to become a Source.
 pub(crate) trait SourceReader {
@@ -94,6 +100,7 @@ pub(crate) enum SourceType {
     Sqs(SqsSource),
     Jetstream(JetstreamSource),
     Kafka(KafkaSource),
+    Http(CoreHttpSource),
 }
 
 enum ActorMessage {
@@ -251,6 +258,17 @@ impl Source {
             SourceType::Kafka(kafka) => {
                 tokio::spawn(async move {
                     let actor = SourceActor::new(receiver, kafka.clone(), kafka.clone(), kafka);
+                    actor.run().await;
+                });
+            }
+            SourceType::Http(http_source) => {
+                tokio::spawn(async move {
+                    let actor = SourceActor::new(
+                        receiver,
+                        http_source.clone(),
+                        http_source.clone(),
+                        http_source,
+                    );
                     actor.run().await;
                 });
             }
@@ -418,6 +436,7 @@ impl Source {
                     self.sender.clone(),
                     ack_batch,
                     _permit,
+                    cln_token.clone(),
                 ));
 
                 // transform the batch if the transformer is present, this need not
@@ -497,6 +516,7 @@ impl Source {
         source_handle: mpsc::Sender<ActorMessage>,
         ack_rx_batch: Vec<(Offset, oneshot::Receiver<ReadAck>)>,
         _permit: OwnedSemaphorePermit, // permit to release after acking the offsets.
+        cancel_token: CancellationToken,
     ) -> Result<()> {
         let n = ack_rx_batch.len();
         let mut offsets_to_ack = Vec::with_capacity(n);
@@ -517,11 +537,39 @@ impl Source {
 
         let start = Instant::now();
         if !offsets_to_ack.is_empty() {
-            Self::ack(source_handle, offsets_to_ack).await?;
+            Self::ack_with_retry(source_handle, offsets_to_ack, &cancel_token).await;
         }
         Self::send_ack_metrics(e2e_start_time, n, start);
 
         Ok(())
+    }
+
+    /// Invokes ack with infinite retries until the cancellation token is cancelled.
+    async fn ack_with_retry(
+        source_handle: mpsc::Sender<ActorMessage>,
+        offsets: Vec<Offset>,
+        cancel_token: &CancellationToken,
+    ) {
+        let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
+        let _ = Retry::retry(
+            interval,
+            async || {
+                let result = Self::ack(source_handle.clone(), offsets.clone()).await;
+                if result.is_err() {
+                    error!(?result, "Failed to send ack to source, retrying...");
+                    if cancel_token.is_cancelled() {
+                        error!(
+                            ?result,
+                            "Cancellation token received, stopping the ack retry loop"
+                        );
+                        return Ok(());
+                    }
+                }
+                result
+            },
+            |_: &Error| !cancel_token.is_cancelled(),
+        )
+        .await;
     }
 
     fn send_read_metrics(
@@ -540,7 +588,16 @@ impl Source {
                 .read_time
                 .get_or_create(mvtx_labels)
                 .observe(read_start_time.elapsed().as_micros() as f64);
+            monovertex_metrics()
+                .read_batch_size
+                .get_or_create(mvtx_labels)
+                .set(n as i64);
         } else {
+            pipeline_metrics()
+                .forwarder
+                .read_batch_size
+                .get_or_create(pipeline_labels)
+                .set(n as i64);
             pipeline_metrics()
                 .forwarder
                 .read_total
@@ -571,37 +628,42 @@ impl Source {
 
     fn send_ack_metrics(e2e_start_time: Instant, n: usize, start: Instant) {
         if is_mono_vertex() {
+            let mvtx_labels = mvtx_forward_metric_labels();
             monovertex_metrics()
                 .ack_time
-                .get_or_create(mvtx_forward_metric_labels())
+                .get_or_create(mvtx_labels)
                 .observe(start.elapsed().as_micros() as f64);
 
             monovertex_metrics()
                 .ack_total
-                .get_or_create(mvtx_forward_metric_labels())
+                .get_or_create(mvtx_labels)
                 .inc_by(n as u64);
 
             monovertex_metrics()
                 .e2e_time
-                .get_or_create(mvtx_forward_metric_labels())
+                .get_or_create(mvtx_labels)
                 .observe(e2e_start_time.elapsed().as_micros() as f64);
         } else {
+            let mut pipeline_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
+            pipeline_labels.push((
+                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                get_vertex_name().to_string(),
+            ));
             pipeline_metrics()
                 .forwarder
                 .ack_processing_time
-                .get_or_create(pipeline_isb_metric_labels())
+                .get_or_create(&pipeline_labels)
                 .observe(start.elapsed().as_micros() as f64);
 
             pipeline_metrics()
                 .forwarder
                 .ack_total
-                .get_or_create(pipeline_isb_metric_labels())
+                .get_or_create(&pipeline_labels)
                 .inc_by(n as u64);
-
             pipeline_metrics()
                 .forwarder
-                .forward_chunk_processing_time
-                .get_or_create(pipeline_isb_metric_labels())
+                .e2e_time
+                .get_or_create(&pipeline_labels)
                 .observe(e2e_start_time.elapsed().as_micros() as f64);
         }
     }

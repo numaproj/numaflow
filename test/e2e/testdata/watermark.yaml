@@ -19,16 +19,18 @@ spec:
     - name: cat1
       partitions: 2
       udf:
-        builtin:
-          name: cat # A builtin UDF which simply cats the message
+        container:
+          image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
+          imagePullPolicy: Always
       containerTemplate:
         env:
           - name: NUMAFLOW_DEBUG
             value: !!str "true"
     - name: cat2
       udf:
-        builtin:
-          name: cat # A builtin UDF which simply cats the message
+        container:
+          image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
+          imagePullPolicy: Always
       containerTemplate:
         env:
           - name: NUMAFLOW_DEBUG
@@ -36,8 +38,9 @@ spec:
     - name: cat3
       partitions: 3
       udf:
-        builtin:
-          name: cat # A builtin UDF which simply cats the message
+        container:
+          image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
+          imagePullPolicy: Always
       containerTemplate:
         env:
           - name: NUMAFLOW_DEBUG
