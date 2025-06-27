@@ -1458,6 +1458,52 @@ mod source_tests {
     }
 
     #[test]
+    fn test_generator_config_from_value_blob() {
+        let source: SourceType =
+            SourceType::try_from(Box::new(numaflow_models::models::GeneratorSource {
+                value_blob: Some("aGVsbG8gd29ybGQK".to_string()),
+                duration: Some(kube::core::Duration::from(Duration::from_secs(1))),
+                jitter: Some(kube::core::Duration::from(Duration::from_secs(0))),
+                key_count: Some(0),
+                msg_size: Some(8),
+                rpu: Some(1),
+                value: None,
+            }))
+            .unwrap();
+        assert_eq!(
+            source,
+            SourceType::Generator(GeneratorConfig {
+                content: Bytes::from("hello world\n"),
+                duration: Duration::from(Duration::from_secs(1)),
+                jitter: Duration::from(Duration::from_secs(0)),
+                key_count: 0,
+                rpu: 1,
+                value: None,
+                msg_size_bytes: 8,
+            })
+        );
+    }
+
+    #[test]
+    fn test_generator_config_from_invalid_value_blob() {
+        let source = SourceType::try_from(Box::new(numaflow_models::models::GeneratorSource {
+            value_blob: Some("abcdef".to_string()),
+            duration: Some(kube::core::Duration::from(Duration::from_secs(1))),
+            jitter: Some(kube::core::Duration::from(Duration::from_secs(0))),
+            key_count: Some(0),
+            msg_size: Some(8),
+            rpu: Some(1),
+            value: None,
+        }));
+        assert!(
+            source
+                .unwrap_err()
+                .to_string()
+                .contains("Failed to base64 decode generator value blob")
+        );
+    }
+
+    #[test]
     fn test_default_user_defined_config() {
         let default_config = UserDefinedConfig::default();
         assert_eq!(default_config.grpc_max_message_size, 64 * 1024 * 1024);
