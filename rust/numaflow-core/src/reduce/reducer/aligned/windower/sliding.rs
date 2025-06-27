@@ -156,33 +156,41 @@ impl SlidingWindowManager {
     pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage> {
         let mut result = Vec::new();
 
-        // Find windows that need to be closed
-        let mut active_windows = self
-            .active_windows
-            .write()
-            .expect("Poisoned lock in active_windows");
-        let mut closed_windows = self
-            .closed_windows
-            .write()
-            .expect("Poisoned lock in active_windows");
+        let windows_to_close = {
+            let mut active_windows = self
+                .active_windows
+                .write()
+                .expect("Poisoned lock for active_windows");
 
-        // get all the windows that have end time less than the watermark
-        let windows_to_close: Vec<_> = active_windows
-            .iter()
-            .filter(|window| window.end_time <= watermark) // window end time is exclusive, hence <=
-            .cloned()
-            .collect();
+            let mut windows_to_close = Vec::new();
+            active_windows.retain(|window| {
+                if window.end_time <= watermark {
+                    windows_to_close.push(window.clone());
+                    false
+                } else {
+                    true
+                }
+            });
 
-        // Move windows from active to closed
+            windows_to_close
+        };
+
+        // add the windows to closed_windows
+        {
+            let mut closed_windows = self
+                .closed_windows
+                .write()
+                .expect("Poisoned lock for closed_windows");
+            for window in &windows_to_close {
+                closed_windows.insert(window.clone());
+            }
+        }
+
         for window in windows_to_close {
             result.push(AlignedWindowMessage {
-                operation: AlignedWindowOperation::Close {
-                    window: window.clone(),
-                },
                 pnf_slot: window_pnf_slot(&window),
+                operation: AlignedWindowOperation::Close { window },
             });
-            active_windows.remove(&window);
-            closed_windows.insert(window);
         }
 
         result
@@ -206,22 +214,22 @@ impl SlidingWindowManager {
         // get the oldest window from closed_windows, if closed_windows is empty, get the oldest
         // from active_windows
         // NOTE: closed windows will always have a lower end time than active_windows
+        {
+            let closed_windows = self
+                .closed_windows
+                .read()
+                .expect("Poisoned lock for closed_windows");
+            if let Some(window) = closed_windows.iter().next() {
+                return Some(window.clone());
+            }
+        }
 
-        // Acquire locks in the same order as close_windows to prevent deadlock
-        let active_windows = self
-            .active_windows
+        self.active_windows
             .read()
-            .expect("Poisoned lock for active_windows");
-        let closed_windows = self
-            .closed_windows
-            .read()
-            .expect("Poisoned lock for closed_windows");
-
-        closed_windows
+            .expect("Poisoned lock for active_windows")
             .iter()
             .next()
             .cloned()
-            .or_else(|| active_windows.iter().next().cloned())
     }
 
     /// Helper method to format sorted window information for logging.
