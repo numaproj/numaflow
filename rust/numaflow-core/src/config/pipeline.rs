@@ -160,8 +160,6 @@ pub(crate) struct SourceVtxConfig {
 }
 
 pub(crate) mod map {
-    use std::collections::HashMap;
-
     use numaflow_models::models::Udf;
 
     use crate::config::pipeline::{
