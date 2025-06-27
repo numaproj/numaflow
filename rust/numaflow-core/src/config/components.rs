@@ -15,6 +15,8 @@ pub(crate) mod source {
     use crate::Result;
     use crate::config::get_vertex_name;
     use crate::error::Error;
+    use base64::Engine;
+    use base64::prelude::BASE64_STANDARD;
     use bytes::Bytes;
     use numaflow_jetstream::{JetstreamSourceConfig, NatsAuth, TlsClientAuthCerts, TlsConfig};
     use numaflow_kafka::source::KafkaSourceConfig;
@@ -52,12 +54,20 @@ pub(crate) mod source {
         Http(numaflow_http::HttpSourceConfig),
     }
 
-    impl From<Box<GeneratorSource>> for SourceType {
-        fn from(generator: Box<GeneratorSource>) -> Self {
+    impl TryFrom<Box<GeneratorSource>> for SourceType {
+        type Error = Error;
+
+        fn try_from(generator: Box<GeneratorSource>) -> Result<Self> {
             let mut generator_config = GeneratorConfig::default();
 
             if let Some(value_blob) = &generator.value_blob {
-                generator_config.content = Bytes::from(value_blob.clone());
+                let value_blob = BASE64_STANDARD.decode(value_blob.as_bytes()).map_err(|e| {
+                    Error::Config(format!(
+                        "Failed to base64 decode generator value blob: {:?}",
+                        e
+                    ))
+                })?;
+                generator_config.content = Bytes::from(value_blob);
             }
 
             if let Some(msg_size) = generator.msg_size {
@@ -81,7 +91,7 @@ pub(crate) mod source {
                 .jitter
                 .map_or(Duration::from_secs(0), std::time::Duration::from);
 
-            SourceType::Generator(generator_config)
+            Ok(SourceType::Generator(generator_config))
         }
     }
 
@@ -342,7 +352,7 @@ pub(crate) mod source {
 
         fn try_from(mut source: Box<Source>) -> Result<Self> {
             if let Some(generator) = source.generator.take() {
-                return Ok(generator.into());
+                return Ok(generator.try_into()?);
             }
 
             if source.udsource.is_some() {
