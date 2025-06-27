@@ -17,7 +17,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -174,13 +173,4 @@ func Test_getTransformerContainer(t *testing.T) {
 		}
 		assert.Equal(t, envs[EnvUDContainerType], UDContainerTransformer)
 	})
-}
-
-func getKWArgs(container corev1.Container) string {
-	for _, a := range container.Args {
-		if strings.HasPrefix(a, "--kwargs=") {
-			return a
-		}
-	}
-	return ""
 }

@@ -278,24 +278,13 @@ func validateUDF(udf dfv1.UDF) error {
 }
 
 func validateMapUDF(udf dfv1.UDF) error {
-	if udf.Container != nil {
-		if udf.Container.Image == "" && udf.Builtin == nil {
-			return fmt.Errorf("invalid udf spec, either specify a builtin function, or a customized image")
-		}
-		if udf.Container.Image != "" && udf.Builtin != nil {
-			return fmt.Errorf("invalid udf, can not specify both builtin function, and a customized image")
-		}
-	} else if udf.Builtin == nil {
-		return fmt.Errorf("invalid udf, either specify a builtin function, or a customized image")
+	if udf.Container == nil || udf.Container.Image == "" {
+		return fmt.Errorf("invalid udf spec, a customized image is required")
 	}
 	return nil
 }
 
 func validateReduceUDF(udf dfv1.UDF) error {
-	if udf.Builtin != nil {
-		// No builtin function supported for reduce vertices.
-		return fmt.Errorf("invalid udf, there's no buildin function support in reduce vertices")
-	}
 	if udf.Container != nil {
 		if udf.Container.Image == "" {
 			return fmt.Errorf("invalid udf spec, a customized image is required")

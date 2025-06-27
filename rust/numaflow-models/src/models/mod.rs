@@ -34,8 +34,6 @@ pub mod fixed_window;
 pub use self::fixed_window::FixedWindow;
 pub mod forward_conditions;
 pub use self::forward_conditions::ForwardConditions;
-pub mod function;
-pub use self::function::Function;
 pub mod generator_source;
 pub use self::generator_source::GeneratorSource;
 pub mod get_container_req;

@@ -365,8 +365,8 @@ func Test_BuildPodSpec(t *testing.T) {
 		r := fakeReconciler(t, cl)
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.UDF = &dfv1.UDF{
-			Builtin: &dfv1.Function{
-				Name: "cat",
+			Container: &dfv1.Container{
+				Image: "my-test-image",
 			},
 		}
 		spec, err := r.buildPodSpec(testObj, testPipeline, fakeIsbSvcConfig, 0)
@@ -562,8 +562,8 @@ func Test_reconcile(t *testing.T) {
 		r := fakeReconciler(t, cl)
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.UDF = &dfv1.UDF{
-			Builtin: &dfv1.Function{
-				Name: "cat",
+			Container: &dfv1.Container{
+				Image: "my-image",
 			},
 		}
 		_, err = r.reconcile(ctx, testObj)
@@ -705,8 +705,8 @@ func Test_reconcile(t *testing.T) {
 		r := fakeReconciler(t, cl)
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.UDF = &dfv1.UDF{
-			Builtin: &dfv1.Function{
-				Name: "cat",
+			Container: &dfv1.Container{
+				Image: "my-image",
 			},
 		}
 		testObj.Spec.SideInputs = []string{"s1"}
@@ -736,8 +736,8 @@ func Test_reconcile(t *testing.T) {
 		r := fakeReconciler(t, cl)
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.UDF = &dfv1.UDF{
-			Builtin: &dfv1.Function{
-				Name: "cat",
+			Container: &dfv1.Container{
+				Image: "my-image",
 			},
 		}
 		testObj.Spec.Replicas = ptr.To[int32](3)
@@ -812,8 +812,8 @@ func Test_reconcileEvents(t *testing.T) {
 		r := fakeReconciler(t, cl)
 		testObj := testVertex.DeepCopy()
 		testObj.Spec.UDF = &dfv1.UDF{
-			Builtin: &dfv1.Function{
-				Name: "cat",
+			Container: &dfv1.Container{
+				Image: "my-image",
 			},
 		}
 		_, err = r.reconcile(ctx, testObj)
