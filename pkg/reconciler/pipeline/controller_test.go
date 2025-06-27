@@ -116,7 +116,7 @@ var (
 				{
 					Name: "p1",
 					UDF: &dfv1.UDF{
-						Builtin: &dfv1.Function{Name: "cat"},
+						Container: &dfv1.Container{Image: "test-image"},
 					},
 				},
 				{
@@ -152,7 +152,7 @@ var (
 				{
 					Name: "p1",
 					UDF: &dfv1.UDF{
-						Builtin: &dfv1.Function{Name: "cat"},
+						Container: &dfv1.Container{Image: "test-image"},
 					},
 					SideInputs: []string{"my-sideinput"},
 				},

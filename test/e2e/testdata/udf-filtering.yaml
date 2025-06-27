@@ -9,10 +9,9 @@ spec:
         http: {}
     - name: p1
       udf:
-        builtin:
-          name: filter
-          kwargs:
-            expression: int(json(payload).id) < 100 && json(payload).msg == 'hello' && sprig.contains('good', string(json(payload).desc))
+        container:
+          image: quay.io/numaio/numaflow-go/map-filter:stable # A UDF which filters payloads with `id` < 100, `msg` is "hello", and `desc` contains "good"
+          imagePullPolicy: Always
     - name: out
       sink:
         udsink:

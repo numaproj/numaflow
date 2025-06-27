@@ -441,17 +441,6 @@ message ForwardConditions {
   optional TagConditions tags = 1;
 }
 
-message Function {
-  // +kubebuilder:validation:Enum=cat;filter
-  optional string name = 1;
-
-  // +optional
-  repeated string args = 2;
-
-  // +optional
-  map<string, string> kwargs = 3;
-}
-
 // GSSAPI represents a SASL GSSAPI config
 message GSSAPI {
   optional string serviceName = 1;
@@ -1951,9 +1940,6 @@ message Templates {
 message UDF {
   // +optional
   optional Container container = 1;
-
-  // +optional
-  optional Function builtin = 2;
 
   // +optional
   optional GroupBy groupBy = 3;

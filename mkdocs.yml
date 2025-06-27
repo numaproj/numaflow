@@ -100,6 +100,7 @@ nav:
           - user-guide/reference/autoscaling.md
           - user-guide/reference/conditional-forwarding.md
           - user-guide/reference/pipeline-operations.md
+          - user-guide/reference/gpu.md
           - user-guide/reference/join-vertex.md
           - user-guide/reference/multi-partition.md
           - user-guide/reference/side-inputs.md

@@ -198,19 +198,12 @@ pub(crate) mod map {
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) enum MapType {
         UserDefined(UserDefinedConfig),
-        Builtin(BuiltinConfig),
     }
 
     impl TryFrom<Box<Udf>> for MapType {
         type Error = Error;
         fn try_from(udf: Box<Udf>) -> Result<Self, Self::Error> {
-            if let Some(builtin) = udf.builtin {
-                Ok(MapType::Builtin(BuiltinConfig {
-                    name: builtin.name,
-                    kwargs: builtin.kwargs,
-                    args: builtin.args,
-                }))
-            } else if let Some(_container) = udf.container {
+            if let Some(_container) = udf.container {
                 Ok(MapType::UserDefined(UserDefinedConfig {
                     grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
                     socket_path: DEFAULT_MAP_SOCKET.to_string(),
@@ -227,13 +220,6 @@ pub(crate) mod map {
         pub grpc_max_message_size: usize,
         pub socket_path: String,
         pub server_info_path: String,
-    }
-
-    #[derive(Debug, Clone, PartialEq)]
-    pub(crate) struct BuiltinConfig {
-        pub(crate) name: String,
-        pub(crate) kwargs: Option<HashMap<String, String>>,
-        pub(crate) args: Option<Vec<String>>,
     }
 }
 
@@ -820,7 +806,7 @@ impl PipelineConfig {
 
 #[cfg(test)]
 mod tests {
-    use numaflow_models::models::{Container, Function, Udf};
+    use numaflow_models::models::{Container, Udf};
     use numaflow_pulsar::source::PulsarSourceConfig;
 
     use super::*;
@@ -1094,7 +1080,6 @@ mod tests {
     #[test]
     fn test_map_vertex_config_user_defined() {
         let udf = Udf {
-            builtin: None,
             container: Some(Box::from(Container {
                 args: None,
                 command: None,
@@ -1122,44 +1107,10 @@ mod tests {
         };
 
         assert_eq!(map_vtx_config.concurrency, 10);
-        if let MapType::UserDefined(config) = map_vtx_config.map_type {
-            assert_eq!(config.grpc_max_message_size, DEFAULT_GRPC_MAX_MESSAGE_SIZE);
-            assert_eq!(config.socket_path, DEFAULT_MAP_SOCKET);
-            assert_eq!(config.server_info_path, DEFAULT_MAP_SERVER_INFO_FILE);
-        } else {
-            panic!("Expected UserDefined map type");
-        }
-    }
-
-    #[test]
-    fn test_map_vertex_config_builtin() {
-        let udf = Udf {
-            builtin: Some(Box::from(Function {
-                args: None,
-                kwargs: None,
-                name: "cat".to_string(),
-            })),
-            container: None,
-            group_by: None,
-        };
-
-        let map_type = MapType::try_from(Box::new(udf)).unwrap();
-        assert!(matches!(map_type, MapType::Builtin(_)));
-
-        let map_vtx_config = MapVtxConfig {
-            concurrency: 5,
-            map_type,
-            map_mode: MapMode::Unary,
-        };
-
-        assert_eq!(map_vtx_config.concurrency, 5);
-        if let MapType::Builtin(config) = map_vtx_config.map_type {
-            assert_eq!(config.name, "cat");
-            assert!(config.kwargs.is_none());
-            assert!(config.args.is_none());
-        } else {
-            panic!("Expected Builtin map type");
-        }
+        let MapType::UserDefined(config) = map_vtx_config.map_type;
+        assert_eq!(config.grpc_max_message_size, DEFAULT_GRPC_MAX_MESSAGE_SIZE);
+        assert_eq!(config.socket_path, DEFAULT_MAP_SOCKET);
+        assert_eq!(config.server_info_path, DEFAULT_MAP_SERVER_INFO_FILE);
     }
 
     #[test]
