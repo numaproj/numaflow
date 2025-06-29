@@ -4,11 +4,11 @@ import { getBaseHref } from "../index";
 import { PipelineHealthFetchResult } from "../../types/declarations/pipeline";
 import { AppContextProps } from "../../types/declarations/app";
 import { AppContext } from "../../App";
-import { error } from "console";
 
 const DATA_REFRESH_INTERVAL = 15000; // ms
 
-// fetch pipeline health status
+// fetch pipeline health status hook
+// this will help in refreshing health status at Pipeline page
 export const usePipelineHealthFetch = ({
   namespaceId,
   pipelineId,
@@ -122,6 +122,8 @@ export const usePipelineHealthFetch = ({
 };
 
 
+// utility function for fetching health
+// this will help in creating pipeline health map at Pipeline Listing page
 export async function fetchPipelineHealth({ host, namespaceId, pipelineId }: any) {
   try {
     const response = await fetch(
