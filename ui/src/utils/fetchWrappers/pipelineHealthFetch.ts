@@ -4,6 +4,7 @@ import { getBaseHref } from "../index";
 import { PipelineHealthFetchResult } from "../../types/declarations/pipeline";
 import { AppContextProps } from "../../types/declarations/app";
 import { AppContext } from "../../App";
+import { error } from "console";
 
 const DATA_REFRESH_INTERVAL = 15000; // ms
 
@@ -119,3 +120,19 @@ export const usePipelineHealthFetch = ({
 
   return results;
 };
+
+
+export async function fetchPipelineHealth({ host, namespaceId, pipelineId }: any) {
+  try {
+    const response = await fetch(
+      `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/health`
+    );
+    if (!response.ok) {
+      return {data: null, error: "Failed to fetch health!"}
+    }
+    const data = await response.json();
+    return { data, error: null };
+  } catch (e) {
+    return { data: null, error: e instanceof Error ? e.message : String(e) };
+  }
+}
