@@ -56,7 +56,7 @@ export function PipelineListing({
     []
   );
 
-    // Fetch health for all pipelines
+  // Fetch health for all pipelines/mono-vertices in the namespace
   useEffect(() => {
     let isMounted = true;
     async function fetchAllHealth() {
@@ -72,6 +72,7 @@ export function PipelineListing({
             host,
             namespaceId: namespace,
             pipelineId: p.name,
+            isMonoVertex: !!p?.monoVertex,
           });
           if (healthError) {
             healths[p.name] = UNKNOWN;
@@ -273,6 +274,7 @@ export function PipelineListing({
                 data={p}
                 statusData={monoVertexData ? monoVertexData[p.name] : {}}
                 refresh={refresh}
+                health={pipelineHealthMap[p.name] || UNKNOWN}
               />
             </Grid>
           );

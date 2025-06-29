@@ -124,11 +124,14 @@ export const usePipelineHealthFetch = ({
 
 // utility function for fetching health
 // this will help in creating pipeline health map at Pipeline Listing page
-export async function fetchPipelineHealth({ host, namespaceId, pipelineId }: any) {
+export async function fetchPipelineHealth({ host, namespaceId, pipelineId, isMonoVertex }: any) {
   try {
-    const response = await fetch(
-      `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/health`
-    );
+    let url = `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/health`;
+    if (isMonoVertex) {
+      url = `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/mono-vertices/${pipelineId}/health`;
+    }
+    const response = await fetch(url);
+
     if (!response.ok) {
       return {data: null, error: "Failed to fetch health!"}
     }
