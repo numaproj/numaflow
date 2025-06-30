@@ -407,22 +407,27 @@ impl PipelineConfig {
 
         let to_edges = vertex_obj.spec.to_edges.unwrap_or_default();
 
-        let vertex: VertexConfig = if let Some(source) = vertex_obj.spec.source {
+        let (vertex, vertex_type): (VertexConfig, VertexType) = if let Some(source) =
+            vertex_obj.spec.source
+        {
             let transformer_config = source.transformer.as_ref().map(|_| TransformerConfig {
                 concurrency: batch_size as usize, // FIXME: introduce a separate field in the spec
                 transformer_type: TransformerType::UserDefined(Default::default()),
             });
 
-            VertexConfig::Source(SourceVtxConfig {
-                source_config: SourceConfig {
-                    read_ahead: env::var("READ_AHEAD")
-                        .unwrap_or("false".to_string())
-                        .parse()
-                        .unwrap(),
-                    source_type: source.try_into()?,
-                },
-                transformer_config,
-            })
+            (
+                VertexConfig::Source(SourceVtxConfig {
+                    source_config: SourceConfig {
+                        read_ahead: env::var("READ_AHEAD")
+                            .unwrap_or("false".to_string())
+                            .parse()
+                            .unwrap(),
+                        source_type: source.try_into()?,
+                    },
+                    transformer_config,
+                }),
+                VertexType::Source,
+            )
         } else if let Some(sink) = vertex_obj.spec.sink {
             let fb_sink_config = if sink.fallback.as_ref().is_some() {
                 Some(SinkConfig {
@@ -468,14 +473,17 @@ impl PipelineConfig {
                 None
             };
 
-            VertexConfig::Sink(SinkVtxConfig {
-                sink_config: SinkConfig {
-                    sink_type: SinkType::primary_sinktype(&sink)?,
-                    retry_config: sink.retry_strategy.clone().map(|retry| retry.into()),
-                },
-                fb_sink_config,
-                serving_store_config,
-            })
+            (
+                VertexConfig::Sink(SinkVtxConfig {
+                    sink_config: SinkConfig {
+                        sink_type: SinkType::primary_sinktype(&sink)?,
+                        retry_config: sink.retry_strategy.clone().map(|retry| retry.into()),
+                    },
+                    fb_sink_config,
+                    serving_store_config,
+                }),
+                VertexType::Sink,
+            )
         } else if let Some(udf) = vertex_obj.spec.udf {
             if let Some(group_by) = &udf.group_by {
                 // This is a reduce vertex
@@ -487,17 +495,23 @@ impl PipelineConfig {
                     }
                 });
 
-                VertexConfig::Reduce(ReduceVtxConfig {
-                    reducer_config: group_by.try_into()?,
-                    wal_storage_config: storage_config,
-                })
+                (
+                    VertexConfig::Reduce(ReduceVtxConfig {
+                        reducer_config: group_by.try_into()?,
+                        wal_storage_config: storage_config,
+                    }),
+                    VertexType::ReduceUDF,
+                )
             } else {
                 // This is a map vertex
-                VertexConfig::Map(MapVtxConfig {
-                    concurrency: batch_size as usize,
-                    map_type: udf.try_into()?,
-                    map_mode: MapMode::Unary,
-                })
+                (
+                    VertexConfig::Map(MapVtxConfig {
+                        concurrency: batch_size as usize,
+                        map_type: udf.try_into()?,
+                        map_mode: MapMode::Unary,
+                    }),
+                    VertexType::MapUDF,
+                )
             }
         } else {
             return Err(Error::Config(
@@ -621,8 +635,8 @@ impl PipelineConfig {
                 })?;
 
             let kv_store = env::var(ENV_NUMAFLOW_SERVING_CALLBACK_STORE).map_err(|_| {
-                    Error::Config("Serving store is default, but environment variable NUMAFLOW_SERVING_CALLBACK_STORE is not set".into())
-                })?;
+                Error::Config("Serving store is default, but environment variable NUMAFLOW_SERVING_CALLBACK_STORE is not set".into())
+            })?;
             callback_config = Some(ServingCallbackConfig {
                 callback_store: Box::leak(kv_store.into_boxed_str()),
                 callback_concurrency,
@@ -677,8 +691,8 @@ impl PipelineConfig {
             js_client_config,
             from_vertex_config,
             to_vertex_config,
+            vertex_type,
             vertex_config: vertex,
-            vertex_type: VertexType::Source,
             metrics_config: MetricsConfig::with_lookback_window_in_secs(look_back_window),
             watermark_config,
             callback_config,
@@ -927,6 +941,7 @@ mod tests {
                     rs_store_name: "test-kv-store".into(),
                 })),
             }),
+            vertex_type: VertexType::Sink,
             metrics_config: MetricsConfig {
                 metrics_server_listen_port: 2469,
                 lag_check_interval_in_secs: 5,
@@ -1141,6 +1156,7 @@ mod tests {
                 partitions: 1,
             }],
             to_vertex_config: vec![],
+            vertex_type: VertexType::MapUDF,
             vertex_config: VertexConfig::Map(MapVtxConfig {
                 concurrency: 500,
                 map_type: MapType::UserDefined(UserDefinedConfig {
