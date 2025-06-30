@@ -354,7 +354,7 @@ impl PipelineConfig {
                     ENV_NUMAFLOW_SERVING_RESPONSE_STORE,
                     ENV_NUMAFLOW_GRACEFUL_TIMEOUT_SECS,
                 ]
-                    .contains(&key.as_str())
+                .contains(&key.as_str())
             })
             .collect();
 
@@ -732,14 +732,14 @@ impl PipelineConfig {
                     "{}-{}-{}-{}_OT",
                     namespace, pipeline_name, vertex_name, &to.name
                 )
-                    .into_boxed_str(),
+                .into_boxed_str(),
             ),
             hb_bucket: Box::leak(
                 format!(
                     "{}-{}-{}-{}_PROCESSORS",
                     namespace, pipeline_name, vertex_name, &to.name
                 )
-                    .into_boxed_str(),
+                .into_boxed_str(),
             ),
         };
 
@@ -753,14 +753,14 @@ impl PipelineConfig {
                         "{}-{}-{}-{}_OT",
                         namespace, pipeline_name, &from.name, vertex_name
                     )
-                        .into_boxed_str(),
+                    .into_boxed_str(),
                 ),
                 hb_bucket: Box::leak(
                     format!(
                         "{}-{}-{}-{}_PROCESSORS",
                         namespace, pipeline_name, &from.name, vertex_name
                     )
-                        .into_boxed_str(),
+                    .into_boxed_str(),
                 ),
             };
 
@@ -779,7 +779,7 @@ impl PipelineConfig {
                             "{}-{}-{}_SOURCE_PROCESSORS",
                             namespace, pipeline_name, vertex_name
                         )
-                            .into_boxed_str(),
+                        .into_boxed_str(),
                     ),
                 },
                 to_vertex_bucket_config: to_vertex_config
@@ -941,6 +941,7 @@ mod tests {
                     rs_store_name: "test-kv-store".into(),
                 })),
             }),
+            vertex_type: VertexType::Sink,
             metrics_config: MetricsConfig {
                 metrics_server_listen_port: 2469,
                 lag_check_interval_in_secs: 5,
@@ -1155,6 +1156,7 @@ mod tests {
                 partitions: 1,
             }],
             to_vertex_config: vec![],
+            vertex_type: VertexType::MapUDF,
             vertex_config: VertexConfig::Map(MapVtxConfig {
                 concurrency: 500,
                 map_type: MapType::UserDefined(UserDefinedConfig {
