@@ -149,17 +149,16 @@ impl SessionWindowManager {
     /// window.end_time might grow overtime and overlap. At the time of close, we merge these windows
     /// those have overlapping end times.
     pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<UnalignedWindowMessage> {
-        let mut active_windows = self.active_windows.write().expect("Poisoned lock");
-
         // Extract and remove expired windows from active windows
-        let closed_windows_by_key = Self::extract_expired_windows(&mut active_windows, watermark);
+        let closed_windows_by_key = {
+            let mut active_windows = self.active_windows.write().expect("Poisoned lock");
+            Self::extract_expired_windows(&mut active_windows, watermark)
+        };
 
         // Process each key's closed windows
         closed_windows_by_key
             .into_iter()
-            .flat_map(|(key, windows)| {
-                self.process_closed_windows(&mut active_windows, &key, windows)
-            })
+            .flat_map(|(key, windows)| self.process_closed_windows(&key, windows))
             .collect()
     }
 
@@ -198,20 +197,18 @@ impl SessionWindowManager {
     /// and then close the windows that cannot be merged.
     fn process_closed_windows(
         &self,
-        active_windows: &mut HashMap<String, BTreeSet<Window>>,
         key: &str,
         closed_windows: Vec<Window>,
     ) -> Vec<UnalignedWindowMessage> {
         Self::windows_that_can_be_merged(&closed_windows)
             .into_iter()
-            .filter_map(|group| self.process_closing_window_group(active_windows, key, group))
+            .filter_map(|group| self.process_closing_window_group(key, group))
             .collect()
     }
 
     /// Process a group of windows that can be merged
     fn process_closing_window_group(
         &self,
-        active_windows: &mut HashMap<String, BTreeSet<Window>>,
         key: &str,
         closing_group: Vec<Window>,
     ) -> Option<UnalignedWindowMessage> {
@@ -223,7 +220,12 @@ impl SessionWindowManager {
         let window_to_close = Self::merge_windows(&closing_group);
 
         // Try to merge with active windows
-        match Self::try_merge_with_active(active_windows, key, &window_to_close) {
+        let merge_result = {
+            let mut active_windows = self.active_windows.write().expect("Poisoned lock");
+            Self::try_merge_with_active(&mut active_windows, key, &window_to_close)
+        };
+
+        match merge_result {
             Some((old_active, new_merged)) => Some(UnalignedWindowMessage {
                 operation: UnalignedWindowOperation::Merge {
                     windows: vec![window_to_close, old_active, new_merged],
@@ -232,10 +234,10 @@ impl SessionWindowManager {
             }),
             None => {
                 // Move window to closed_windows
-                self.closed_windows
-                    .write()
-                    .expect("Poisoned lock")
-                    .insert(window_to_close.clone());
+                {
+                    let mut closed_windows = self.closed_windows.write().expect("Poisoned lock");
+                    closed_windows.insert(window_to_close.clone());
+                }
 
                 Some(UnalignedWindowMessage {
                     operation: UnalignedWindowOperation::Close {
@@ -353,20 +355,20 @@ impl SessionWindowManager {
         // Get the oldest window from closed_windows first, if closed_windows is empty, get the oldest
         // from active_windows
         // NOTE: closed windows will always have a lower end time than active_windows
-        self.closed_windows
-            .read()
-            .expect("Poisoned lock")
-            .iter()
-            .next()
+
+        {
+            let closed_windows = self.closed_windows.read().expect("Poisoned lock");
+            if let Some(window) = closed_windows.iter().next() {
+                return Some(window.end_time);
+            }
+        }
+
+        let active_windows = self.active_windows.read().expect("Poisoned lock");
+        active_windows
+            .values()
+            .filter_map(|windows| windows.iter().next())
             .map(|window| window.end_time)
-            .or_else(|| {
-                self.active_windows
-                    .read()
-                    .expect("Poisoned lock")
-                    .values()
-                    .flat_map(|window_set| window_set.iter().map(|window| window.end_time))
-                    .min()
-            })
+            .min()
     }
 }
 

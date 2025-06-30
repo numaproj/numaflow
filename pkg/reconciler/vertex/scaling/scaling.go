@@ -317,12 +317,12 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 	max := vertex.Spec.Scale.GetMaxReplicas()
 	min := vertex.Spec.Scale.GetMinReplicas()
 	if desired > max {
-		desired = max
 		log.Infof("Calculated desired replica number %d of vertex %q is greater than max, using max %d.", desired, vertex.Name, max)
+		desired = max
 	}
 	if desired < min {
-		desired = min
 		log.Infof("Calculated desired replica number %d of vertex %q is smaller than min, using min %d.", desired, vertex.Name, min)
+		desired = min
 	}
 	if current > max || current < min { // Someone might have manually scaled up/down the vertex
 		return s.patchVertexReplicas(ctx, vertex, desired)

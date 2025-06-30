@@ -70,14 +70,14 @@ impl FixedWindowManager {
             // Window exists, append message
             AlignedWindowOperation::Append {
                 message: msg,
-                window: window.clone(),
+                window,
             }
         } else {
             // New window, insert it
             active_windows.insert(window.clone());
             AlignedWindowOperation::Open {
                 message: msg,
-                window: window.clone(),
+                window,
             }
         };
 
@@ -93,36 +93,41 @@ impl FixedWindowManager {
     pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<AlignedWindowMessage> {
         let mut result = Vec::new();
 
-        let mut active_windows = self
-            .active_windows
-            .write()
-            .expect("Poisoned lock for active_windows");
-        let mut closed_windows = self
-            .closed_windows
-            .write()
-            .expect("Poisoned lock for closed_windows");
+        let windows_to_close = {
+            let mut active_windows = self
+                .active_windows
+                .write()
+                .expect("Poisoned lock for active_windows");
 
-        let mut windows_to_close = Vec::new();
+            let mut windows_to_close = Vec::new();
+            active_windows.retain(|window| {
+                if window.end_time <= watermark {
+                    windows_to_close.push(window.clone());
+                    false
+                } else {
+                    true
+                }
+            });
 
-        for window in active_windows.iter() {
-            if window.end_time <= watermark {
-                // Create close message
-                let window_msg = AlignedWindowMessage {
-                    operation: AlignedWindowOperation::Close {
-                        window: window.clone(),
-                    },
-                    pnf_slot: window_pnf_slot(window),
-                };
+            windows_to_close
+        };
 
-                result.push(window_msg);
-                windows_to_close.push(window.clone());
+        // add the windows to closed_windows
+        {
+            let mut closed_windows = self
+                .closed_windows
+                .write()
+                .expect("Poisoned lock for closed_windows");
+            for window in &windows_to_close {
+                closed_windows.insert(window.clone());
             }
         }
 
-        // Move windows from active to closed
         for window in windows_to_close {
-            active_windows.remove(&window);
-            closed_windows.insert(window);
+            result.push(AlignedWindowMessage {
+                pnf_slot: window_pnf_slot(&window),
+                operation: AlignedWindowOperation::Close { window },
+            });
         }
 
         result
@@ -142,20 +147,22 @@ impl FixedWindowManager {
         // get the oldest window from closed_windows, if closed_windows is empty, get the oldest
         // from active_windows
         // NOTE: closed windows will always have a lower end time than active_windows
-        self.closed_windows
+        {
+            let closed_windows = self
+                .closed_windows
+                .read()
+                .expect("Poisoned lock for closed_windows");
+            if let Some(window) = closed_windows.iter().next() {
+                return Some(window.clone());
+            }
+        }
+
+        self.active_windows
             .read()
-            .expect("Poisoned lock for closed_windows")
+            .expect("Poisoned lock for active_windows")
             .iter()
             .next()
             .cloned()
-            .or_else(|| {
-                self.active_windows
-                    .read()
-                    .expect("Poisoned lock for active_windows")
-                    .iter()
-                    .next()
-                    .cloned()
-            })
     }
 }
 
