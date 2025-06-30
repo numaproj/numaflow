@@ -559,6 +559,33 @@ pub(crate) fn get_secret_from_volume(name: &str, key: &str) -> Result<String, St
     Ok(val.trim().into())
 }
 
+/// Creates an ISBWatermarkHandle if watermark is enabled in the configuration
+pub async fn create_edge_watermark_handle(
+    config: &PipelineConfig,
+    js_context: &Context,
+    cln_token: &CancellationToken,
+    window_manager: Option<WindowManager>,
+) -> error::Result<Option<ISBWatermarkHandle>> {
+    match &config.watermark_config {
+        Some(WatermarkConfig::Edge(edge_config)) => {
+            let handle = ISBWatermarkHandle::new(
+                config.vertex_name,
+                config.replica,
+                config.vertex_type,
+                config.read_timeout,
+                js_context.clone(),
+                edge_config,
+                &config.to_vertex_config,
+                cln_token.clone(),
+                window_manager,
+            )
+            .await?;
+            Ok(Some(handle))
+        }
+        _ => Ok(None),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
@@ -701,32 +728,5 @@ mod tests {
         source_server_handle.await.unwrap();
         sink_server_handle.await.unwrap();
         transformer_server_handle.await.unwrap();
-    }
-}
-
-/// Creates an ISBWatermarkHandle if watermark is enabled in the configuration
-pub async fn create_edge_watermark_handle(
-    config: &PipelineConfig,
-    js_context: &Context,
-    cln_token: &CancellationToken,
-    window_manager: Option<WindowManager>,
-) -> error::Result<Option<ISBWatermarkHandle>> {
-    match &config.watermark_config {
-        Some(WatermarkConfig::Edge(edge_config)) => {
-            let handle = ISBWatermarkHandle::new(
-                config.vertex_name,
-                config.replica,
-                config.vertex_type,
-                config.read_timeout,
-                js_context.clone(),
-                edge_config,
-                &config.to_vertex_config,
-                cln_token.clone(),
-                window_manager,
-            )
-            .await?;
-            Ok(Some(handle))
-        }
-        _ => Ok(None),
     }
 }
