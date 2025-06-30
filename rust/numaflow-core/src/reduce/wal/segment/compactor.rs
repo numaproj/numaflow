@@ -703,7 +703,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_gc_wal_and_compaction_with_multiple_files() {
-        let test_path = tempdir().unwrap().into_path();
+        let test_path = tempdir().unwrap().keep();
 
         // Create GC WAL
         let gc_wal = AppendOnlyWal::new(

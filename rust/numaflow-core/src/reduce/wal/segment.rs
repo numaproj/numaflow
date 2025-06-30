@@ -130,7 +130,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_gc_wal_and_aligned_compaction() {
-        let test_path = tempfile::tempdir().unwrap().into_path();
+        let test_path = tempfile::tempdir().unwrap().keep();
 
         // Create GC WAL
         let gc_wal = AppendOnlyWal::new(
@@ -266,7 +266,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_gc_wal_and_unaligned_compaction() {
-        let test_path = tempfile::tempdir().unwrap().into_path();
+        let test_path = tempfile::tempdir().unwrap().keep();
 
         // Create GC WAL
         let gc_wal = AppendOnlyWal::new(
