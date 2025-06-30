@@ -1,3 +1,8 @@
+//! [SideInput] is a feature that allows users to access slow updated data or configuration without
+//! needing to retrieve it during each message processing.
+//!
+//! [SideInput]: https://numaflow.numaproj.io/user-guide/reference/side-inputs/
+
 #![allow(dead_code)]
 use std::fs;
 use std::io;
@@ -5,9 +10,31 @@ use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{debug, error};
 
+mod error;
+
 /// Synchronizes the side input values from the ISB to the local file system of the vertex by watching
 /// the side input store for changes.
 mod synchronize;
+
+pub(crate) mod isb {
+    const DEFAULT_URL: &str = "localhost:4222";
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) struct ClientConfig {
+        pub url: String,
+        pub user: Option<String>,
+        pub password: Option<String>,
+    }
+
+    impl Default for ClientConfig {
+        fn default() -> Self {
+            ClientConfig {
+                url: DEFAULT_URL.to_string(),
+                user: None,
+                password: None,
+            }
+        }
+    }
+}
 
 /// CheckFileExists checks if a file with the given fileName exists in the file system.
 fn check_file_exists<P: AsRef<Path>>(file_name: P) -> bool {

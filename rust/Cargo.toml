@@ -14,7 +14,7 @@ members = [
     "extns/numaflow-http",
     # generated
     "numaflow-pb",
-    "numaflow-models",
+    "numaflow-models", "numaflow-sideinput",
 ]
 
 [workspace.lints.rust]
@@ -71,6 +71,7 @@ numaflow-sqs = { path = "extns/numaflow-sqs" }
 numaflow-http = { path = "extns/numaflow-http" }
 tokio = { version = "1.44.2", features = ["macros", "rt-multi-thread"] }
 tokio-stream = "0.1.17"
+tokio-util = "0.7.11"
 bytes = "1.9.0"
 tracing = "0.1.41"
 async-nats = "0.40.0"

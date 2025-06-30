@@ -73,12 +73,6 @@ mod watermark;
 /// [Reduce]:https://numaflow.numaproj.io/user-guide/user-defined-functions/reduce/reduce/
 mod reduce;
 
-/// [SideInput] is a feature that allows users to access slow updated data or configuration without
-/// needing to retrieve it during each message processing.
-///
-/// [SideInput]: https://numaflow.numaproj.io/user-guide/reference/side-inputs/
-mod sideinput;
-
 pub async fn run() -> Result<()> {
     let cln_token = CancellationToken::new();
     let shutdown_cln_token = cln_token.clone();
