@@ -44,6 +44,7 @@ export function MonoVertexCard({
   data,
   statusData,
   refresh,
+  health,
 }: PipelineCardProps) {
   const { setSidebarProps, host, isReadOnly } =
     useContext<AppContextProps>(AppContext);
@@ -455,7 +456,7 @@ export function MonoVertexCard({
                 className={"pipeline-logo"}
               />
               <img
-                src={IconsStatusMap["healthy"]}
+                src={IconsStatusMap[health || UNKNOWN]}
                 alt="Health"
                 className={"pipeline-logo"}
               />
@@ -471,7 +472,7 @@ export function MonoVertexCard({
               }}
             >
               <span>{StatusString[pipelineStatus]}</span>
-              <span>{StatusString["healthy"]}</span>
+              <span>{StatusString[health || UNKNOWN]}</span>
             </Box>
           </Grid>
 

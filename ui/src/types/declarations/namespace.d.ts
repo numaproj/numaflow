@@ -45,6 +45,7 @@ export interface PipelineCardProps {
   statusData?: any;
   isbData?: any;
   refresh: () => void;
+  health?: string;
 }
 export interface NamespacePipelineListingProps {
   namespace: string;
