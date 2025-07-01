@@ -26,6 +26,7 @@ import {
   PAUSING,
   DELETING,
   getBaseHref,
+  GetConsolidatedHealthStatus,
 } from "../../../../../utils";
 import { usePipelineUpdateFetch } from "../../../../../utils/fetchWrappers/pipelineUpdateFetch";
 import { AppContextProps } from "../../../../../types/declarations/app";
@@ -35,6 +36,7 @@ import { ViewType } from "../../../../common/SpecEditor";
 import pipelineIcon from "../../../../../images/pipeline.png";
 
 import "./style.css";
+import { usePipelineHealthFetch } from "../../../../../utils/fetchWrappers/pipelineHealthFetch";
 
 export interface DeleteProps {
   type: "pipeline" | "isb";
@@ -49,8 +51,9 @@ export function PipelineCard({
   isbData,
   refresh,
   health,
-}: PipelineCardProps) {
-  const { setSidebarProps, host, isReadOnly } =
+  setPipelineHealthMap,
+}: PipelineCardProps & {setPipelineHealthMap?: React.Dispatch<React.SetStateAction<Record<string, string>>>}) {
+  const { addError, setSidebarProps, host, isReadOnly } =
     useContext<AppContextProps>(AppContext);
   const [viewOption] = useState("view");
   const [editOption] = useState("edit");
@@ -172,6 +175,42 @@ export function PipelineCard({
   const handeDeleteCancel = useCallback(() => {
     setDeleteProps(undefined);
   }, []);
+
+  const {
+    data: healthData,
+    loading: healthLoading,
+    error: healthError,
+  } = usePipelineHealthFetch({
+    namespaceId: namespace,
+    pipelineId: data?.name,
+    addError,
+    pipelineAbleToLoad,
+  });
+
+  useEffect(() => {
+    if (setPipelineHealthMap){
+      if (healthData){
+        const pipelineStatus = statusData?.pipeline?.status?.phase || UNKNOWN;
+        const consolidated = GetConsolidatedHealthStatus(
+          pipelineStatus,
+          healthData?.resourceHealthStatus,
+          healthData?.dataHealthStatus
+        )
+        setPipelineHealthMap((prev) => ({
+          ...prev,
+          [data.name]: consolidated,
+        }));
+      } else if (healthError){
+        setPipelineHealthMap(prev => ({
+          ...prev,
+          [data.name]: UNKNOWN,
+        }))
+      }
+    }
+    if (healthError) {
+      addError(healthError);
+    }
+  },[healthData, healthError, data.name, setPipelineHealthMap, statusData, addError]);
 
   const isbType = GetISBType(isbData?.isbService?.spec) || UNKNOWN;
   const isbSize =

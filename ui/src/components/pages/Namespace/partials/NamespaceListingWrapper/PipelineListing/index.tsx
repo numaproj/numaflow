@@ -1,7 +1,7 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck
 import { Box, Grid, Pagination } from "@mui/material";
-import React, { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { MAX_PAGE_SIZE } from "../index";
 import {
   ALL,
@@ -15,10 +15,6 @@ import { ListingProps } from "../ISBListing";
 import { MonoVertexData, PipelineData } from "../PipelinesTypes";
 import { PipelineCard } from "../../PipelineCard";
 import { MonoVertexCard } from "../../MonoVertexCard";
-import { GetConsolidatedHealthStatus } from "../../../../../../utils";
-import { AppContextProps } from "../../../../../../types/declarations/app";
-import { AppContext } from "../../../../../../App";
-import { fetchPipelineHealth } from "../../../../../../utils/fetchWrappers/pipelineHealthFetch";
 
 interface PipelineListingProps extends ListingProps {
   pipelineData: Map<string, PipelineData> | undefined;
@@ -39,7 +35,6 @@ export function PipelineListing({
   isbData,
   monoVertexData,
 }: PipelineListingProps) {
-  const { host} = useContext<AppContextProps>(AppContext);
   const [filteredPipelines, setFilteredPipelines] = useState<
     (PipelineData | MonoVertexData)[]
   >([]);
@@ -47,7 +42,8 @@ export function PipelineListing({
   const [totalPages, setTotalPages] = useState(
     Math.ceil(totalCount / MAX_PAGE_SIZE)
   );
-  const [pipelineHealthMap, setPipelineHealthMap] = useState<{ [name: string]: string }>({});
+  const [pipelineHealthMap, setPipelineHealthMap] = useState<Record<string, string>>({});
+  const [monoVertexHealthMap, setMonoVertexHealthMap] = useState<Record<string, string>>({});
 
   const handlePageChange = useCallback(
     (_: React.ChangeEvent<unknown>, value: number) => {
@@ -55,46 +51,6 @@ export function PipelineListing({
     },
     []
   );
-
-  // Fetch health for all pipelines/mono-vertices in the namespace
-  useEffect(() => {
-    let isMounted = true;
-    async function fetchAllHealth() {
-      const healths: { [name: string]: string } = {};
-      const pipelines = [
-        ...Object.values(pipelineData || {}),
-        ...Object.values(monoVertexData || {}),
-      ];
-      await Promise.all(
-        pipelines.map(async (p: PipelineData | MonoVertexData) => {
-          if (!p?.name) return;
-          const { data: healthData, error: healthError } = await fetchPipelineHealth({
-            host,
-            namespaceId: namespace,
-            pipelineId: p.name,
-            isMonoVertex: !!p?.monoVertex,
-          });
-          if (healthError) {
-            healths[p.name] = UNKNOWN;
-          } else {
-            const pipelineStatus = p?.pipeline?.status?.phase || UNKNOWN;
-            healths[p.name] = GetConsolidatedHealthStatus(
-              pipelineStatus,
-              healthData?.data?.resourceHealthStatus,
-              healthData?.data?.dataHealthStatus
-            );
-          }
-        })
-      );
-      if (isMounted) {
-        setPipelineHealthMap(healths)
-      }
-    }
-    fetchAllHealth();
-    return () => {
-      isMounted = false;
-    };
-  }, [pipelineData, monoVertexData, isbData ,namespace]);
 
   useEffect(() => {
     let filtered: (PipelineData | MonoVertexData)[] = Object.values(
@@ -170,7 +126,12 @@ export function PipelineListing({
     //Filter by health
     if (healthFilter !== ALL) {
       filtered = filtered.filter((p) => {
-        const healthStatus = pipelineHealthMap[p?.name] || UNKNOWN;
+        let healthStatus = UNKNOWN;
+        if (p?.pipeline){
+          healthStatus = pipelineHealthMap[p?.name] || UNKNOWN;
+        } else {
+          healthStatus = monoVertexHealthMap[p?.name] || UNKNOWN;
+        }
         if (healthStatus.toLowerCase() === healthFilter.toLowerCase()) {
           return true;
         } else {
@@ -263,6 +224,7 @@ export function PipelineListing({
                   isbData={isbData ? isbData[isbName] : {}}
                   refresh={refresh}
                   health={pipelineHealthMap[p.name] || UNKNOWN}
+                  setPipelineHealthMap={setPipelineHealthMap} 
                 />
               </Grid>
             );
@@ -274,7 +236,8 @@ export function PipelineListing({
                 data={p}
                 statusData={monoVertexData ? monoVertexData[p.name] : {}}
                 refresh={refresh}
-                health={pipelineHealthMap[p.name] || UNKNOWN}
+                health={monoVertexHealthMap[p.name] || UNKNOWN}
+                setMonoVertexHealthMap={setMonoVertexHealthMap}
               />
             </Grid>
           );
@@ -288,7 +251,10 @@ export function PipelineListing({
     isbData,
     monoVertexData,
     refresh,
-    pipelineHealthMap
+    pipelineHealthMap,
+    setPipelineHealthMap,
+    setMonoVertexHealthMap,
+    monoVertexHealthMap,
   ]);
 
   return (

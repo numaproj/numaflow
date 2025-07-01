@@ -24,6 +24,7 @@ import {
   // PAUSING,
   DELETING,
   getBaseHref,
+  GetConsolidatedHealthStatus,
 } from "../../../../../utils";
 import { useMonoVertexUpdateFetch } from "../../../../../utils/fetchWrappers/monoVertexUpdateFetch";
 import { AppContextProps } from "../../../../../types/declarations/app";
@@ -33,6 +34,7 @@ import { ViewType } from "../../../../common/SpecEditor";
 import pipelineIcon from "../../../../../images/pipeline.png";
 
 import "./style.css";
+import { useMonoVertexHealthFetch } from "../../../../../utils/fetchWrappers/monoVertexHealthFetch";
 
 export interface DeleteProps {
   type: "pipeline";
@@ -45,8 +47,9 @@ export function MonoVertexCard({
   statusData,
   refresh,
   health,
-}: PipelineCardProps) {
-  const { setSidebarProps, host, isReadOnly } =
+  setMonoVertexHealthMap,
+}: PipelineCardProps & {setMonoVertexHealthMap?: React.Dispatch<React.SetStateAction<Record<string, string>>>}) {
+  const { addError, setSidebarProps, host, isReadOnly } =
     useContext<AppContextProps>(AppContext);
   const [viewOption] = useState("view");
   const [editOption] = useState("edit");
@@ -222,6 +225,41 @@ export function MonoVertexCard({
       setStatusPayload(undefined);
     }
   }, [statusData]);
+
+  const {
+    data: healthData,
+    loading: healthLoading,
+    error: healthError,
+  } = useMonoVertexHealthFetch({
+    namespaceId: namespace,
+    monoVertexId: data?.name,
+    addError,
+    pipelineAbleToLoad,
+  });
+  
+  useEffect(() => {
+    if (setMonoVertexHealthMap){
+      if (healthData){
+        const consolidated = GetConsolidatedHealthStatus(
+          pipelineStatus,
+          healthData?.resourceHealthStatus,
+          healthData?.dataHealthStatus
+        )
+        setMonoVertexHealthMap((prev) => ({
+          ...prev,
+          [data.name]: consolidated,
+        }));
+      } else if (healthError){
+        setMonoVertexHealthMap(prev => ({
+          ...prev,
+          [data.name]: UNKNOWN,
+        }))
+      }
+    }
+    if (healthError) {
+      addError(healthError);
+    }
+  },[healthData, healthError, data.name, setMonoVertexHealthMap, statusData, addError]);
 
   return (
     <>
