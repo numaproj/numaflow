@@ -1,15 +1,17 @@
 //! The synchronizer continually monitors and synchronizes side input values from a key-value store
 //! to the local filesystem, making them available to pipeline vertices.
 
-use crate::config::pipeline::isb;
 use crate::error::{Error, Result};
-use crate::pipeline::create_js_context;
-use crate::sideinput::update_side_input_file;
+use crate::isb;
+use crate::update_side_input_file;
+use async_nats::jetstream::Context;
 use async_nats::jetstream::kv::{Operation, Watch};
+use async_nats::{ConnectOptions, jetstream};
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use std::collections::HashSet;
 use std::path;
+use std::time::Duration;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, trace, warn};
@@ -20,7 +22,7 @@ pub(crate) struct SideInputSynchronizer {
     side_inputs: Vec<&'static str>,
     /// The path where the side input files are mounted on the container.
     mount_path: &'static str,
-    js_client_config: isb::jetstream::ClientConfig,
+    js_client_config: isb::ClientConfig,
     /// If true, the synchronizer will only process the initial values and then stops.
     run_once: bool,
     cancellation_token: CancellationToken,
@@ -31,7 +33,7 @@ impl SideInputSynchronizer {
         side_input_store: &'static str,
         side_inputs: Vec<&'static str>,
         mount_path: &'static str,
-        js_client_config: isb::jetstream::ClientConfig,
+        js_client_config: isb::ClientConfig,
         run_once: bool,
         cancellation_token: CancellationToken,
     ) -> Self {
@@ -141,6 +143,24 @@ impl SideInputSynchronizer {
     }
 }
 
+async fn create_js_context(config: isb::ClientConfig) -> Result<Context> {
+    // TODO: make these configurable. today this is hardcoded on Golang code too.
+    let mut opts = ConnectOptions::new()
+        .max_reconnects(None) // unlimited reconnects
+        .ping_interval(Duration::from_secs(3))
+        .retry_on_initial_connect();
+
+    if let (Some(user), Some(password)) = (config.user, config.password) {
+        opts = opts.user_and_password(user, password);
+    }
+
+    let js_client = async_nats::connect_with_options(&config.url, opts)
+        .await
+        .map_err(|e| Error::Connection(e.to_string()))?;
+
+    Ok(jetstream::new(js_client))
+}
+
 /// creates a watcher for the given bucket, will retry infinitely until it succeeds
 async fn create_watcher(bucket: async_nats::jetstream::kv::Store) -> Watch {
     const RECONNECT_INTERVAL: u64 = 1000;
@@ -165,7 +185,7 @@ async fn create_watcher(bucket: async_nats::jetstream::kv::Store) -> Watch {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::pipeline::isb::jetstream::ClientConfig;
+    use crate::isb::ClientConfig;
     use async_nats::jetstream;
     use std::time::Duration;
     use tempfile::TempDir;
