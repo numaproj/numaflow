@@ -38,7 +38,7 @@ async-nats.workspace = true
 futures.workspace = true
 rcgen.workspace = true
 chrono.workspace = true
-tonic = { version = "0.13.0" }
+tonic.workspace = true
 thiserror = "2.0.3"
 prost = "0.13.2"
 prost-types = "0.13.1"

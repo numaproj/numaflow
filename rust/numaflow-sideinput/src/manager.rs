@@ -49,6 +49,7 @@ impl SideInputTrigger {
 /// Manager creates the side-input content by running the user-defined code.
 pub(crate) struct SideInputManager {
     side_input_store: &'static str,
+    key: &'static str,
     user_defined_side_input_client: UserDefinedSideInputClient,
     cancellation_token: CancellationToken,
 }
@@ -56,11 +57,13 @@ pub(crate) struct SideInputManager {
 impl SideInputManager {
     pub(crate) fn new(
         side_input_store: &'static str,
+        key: &'static str,
         user_defined_side_input_client: UserDefinedSideInputClient,
         cancellation_token: CancellationToken,
     ) -> Self {
         SideInputManager {
             side_input_store,
+            key,
             user_defined_side_input_client,
             cancellation_token,
         }
@@ -156,16 +159,123 @@ impl SideInputManager {
         if !side_input_response.no_broadcast {
             // store the side-input data in the bucket
             bucket
-                .put(
-                    self.side_input_store,
-                    Bytes::from(side_input_response.value),
-                )
+                .put(self.key, Bytes::from(side_input_response.value))
                 .await
                 .map_err(|e| Error::SideInput(format!("Failed to store side input: {:?}", e)))?;
             debug!("Side input stored in the bucket");
         } else {
             info!("Side input is not broadcasted since no_broadcast is set to true");
         }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use numaflow::sideinput;
+
+    use numaflow::sideinput::SideInputer;
+    use tempfile::TempDir;
+    use tokio::sync::oneshot;
+
+    struct SideInputHandler {}
+
+    impl SideInputHandler {
+        fn new() -> Self {
+            Self {}
+        }
+    }
+
+    #[tonic::async_trait]
+    impl SideInputer for SideInputHandler {
+        async fn retrieve_sideinput(&self) -> Option<Vec<u8>> {
+            Some(b"test".to_vec())
+        }
+    }
+
+    #[tokio::test]
+    async fn side_input_operations() -> Result<()> {
+        let (shutdown_tx, shutdown_rx) = oneshot::channel();
+        let tmp_dir = TempDir::new().unwrap();
+        let sock_file = tmp_dir.path().join("sideinput.sock");
+        let server_info_file = tmp_dir.path().join("sideinput-server-info");
+
+        let server_info = server_info_file.clone();
+        let server_socket = sock_file.clone();
+
+        // start the server on a different thread
+        let handle = tokio::spawn(async move {
+            sideinput::Server::new(SideInputHandler::new())
+                .with_socket_file(server_socket)
+                .with_server_info_file(server_info)
+                .start_with_shutdown(shutdown_rx)
+                .await
+                .expect("server failed");
+        });
+
+        let cancel = CancellationToken::new();
+
+        // wait for the server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let client = UserDefinedSideInputClient::new(sock_file).await?;
+
+        // create trigger
+        let side_input_trigger = SideInputTrigger::new("* * * * * *", None)?;
+
+        // create manager
+        let manager = SideInputManager::new(
+            "test-side-input-manager-store",
+            "input-1",
+            client,
+            cancel.clone(),
+        );
+
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+
+        // Create a test KV store
+        let store_name = "test-side-input-manager-store";
+        let _ = js_context.delete_key_value(store_name).await; // Clean up if exists
+
+        let kv_store = js_context
+            .create_key_value(async_nats::jetstream::kv::Config {
+                bucket: store_name.to_string(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let manager_handle = tokio::spawn(async move {
+            manager
+                .run(
+                    isb::ClientConfig {
+                        url: "localhost:4222".to_string(),
+                        user: None,
+                        password: None,
+                    },
+                    side_input_trigger,
+                )
+                .await
+                .unwrap();
+        });
+
+        // sleep for 100ms and make sure the side-input is generated
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let entries = kv_store.get("input-1").await.unwrap();
+        assert!(entries.is_some());
+        let entries = entries.unwrap();
+        assert_eq!(entries, Bytes::from("test"));
+
+        cancel.cancel();
+
+        manager_handle.await.unwrap();
+
+        shutdown_tx.send(()).unwrap();
+        handle.await.unwrap();
 
         Ok(())
     }
