@@ -550,10 +550,10 @@ impl DataStore for JetStreamDataStore {
             loop {
                 {
                     let mut response_map = self.responses_map.lock().await;
-                    if let Some(ResponseMode::Stream { rx, .. }) = response_map.get_mut(id) {
-                        if let Some(receiver_stream) = rx.take() {
-                            return Ok(receiver_stream);
-                        }
+                    if let Some(ResponseMode::Stream { rx, .. }) = response_map.get_mut(id)
+                        && let Some(receiver_stream) = rx.take()
+                    {
+                        return Ok(receiver_stream);
                     }
                 }
                 sleep(Duration::from_millis(5)).await;

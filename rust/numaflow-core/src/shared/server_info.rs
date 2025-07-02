@@ -101,10 +101,10 @@ pub(crate) enum Protocol {
 
 impl ServerInfo {
     pub(crate) fn get_map_mode(&self) -> Option<MapMode> {
-        if let Some(metadata) = &self.metadata {
-            if let Some(map_mode) = metadata.get(MAP_MODE_KEY) {
-                return MapMode::from_str(map_mode);
-            }
+        if let Some(metadata) = &self.metadata
+            && let Some(map_mode) = metadata.get(MAP_MODE_KEY)
+        {
+            return MapMode::from_str(map_mode);
         }
         None
     }
@@ -112,10 +112,10 @@ impl ServerInfo {
     // get_http_endpoints returns the list of http endpoints for multi proc mode
     // from the metadata.
     pub(crate) fn get_http_endpoints(&self) -> Vec<String> {
-        if let Some(metadata) = &self.metadata {
-            if let Some(endpoints) = metadata.get(HTTP_ENDPOINTS_KEY) {
-                return endpoints.split(',').map(|s| s.to_string()).collect();
-            }
+        if let Some(metadata) = &self.metadata
+            && let Some(endpoints) = metadata.get(HTTP_ENDPOINTS_KEY)
+        {
+            return endpoints.split(',').map(|s| s.to_string()).collect();
         }
         vec![]
     }

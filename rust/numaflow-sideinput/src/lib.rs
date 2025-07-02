@@ -92,16 +92,15 @@ fn update_side_input_file<P: AsRef<Path>>(
     })?;
 
     // Remove the old file
-    if let Some(old_path) = old_file_path {
-        if check_file_exists(&old_path) {
-            if let Err(e) = fs::remove_file(&old_path) {
-                error!(
-                    old_file_path = %old_path.display(),
-                    error = %e,
-                    "Failed to remove old Side Input file"
-                );
-            }
-        }
+    if let Some(old_path) = old_file_path
+        && check_file_exists(&old_path)
+        && let Err(e) = fs::remove_file(&old_path)
+    {
+        error!(
+            old_file_path = %old_path.display(),
+            error = %e,
+            "Failed to remove old Side Input file"
+        );
     }
 
     Ok(())
