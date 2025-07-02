@@ -62,14 +62,14 @@ fn update_side_input_file<P: AsRef<Path>>(
 
     // Check if the current value is same as the new value
     // If true then don't update file again and return
-    if let Ok(current) = current_value {
-        if current == value {
-            debug!(
-                side_input = %file_symlink.display(),
-                "Side Input value is same as current value, skipping update"
-            );
-            return Ok(());
-        }
+    if let Ok(current) = current_value
+        && current == value
+    {
+        debug!(
+            side_input = %file_symlink.display(),
+            "Side Input value is same as current value, skipping update"
+        );
+        return Ok(());
     }
 
     // atomically write the new file, this is done by creating a tmp file and then renaming it

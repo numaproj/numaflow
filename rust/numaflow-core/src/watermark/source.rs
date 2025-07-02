@@ -378,10 +378,10 @@ impl SourceWatermarkHandle {
     pub(crate) async fn publish_isb_idle_watermark(&mut self) {
         // if source is idling, we can avoid publishing the idle watermark since we publish
         // the idle watermark for all the downstream partitions in the source idling control flow
-        if let Some(source_idle_manager) = &self.source_idle_manager {
-            if source_idle_manager.is_source_idling() {
-                return;
-            }
+        if let Some(source_idle_manager) = &self.source_idle_manager
+            && source_idle_manager.is_source_idling()
+        {
+            return;
         }
 
         // fetch the source watermark, identify the idle partitions and publish the idle watermark

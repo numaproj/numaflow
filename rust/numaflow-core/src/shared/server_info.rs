@@ -387,11 +387,11 @@ async fn read_server_info(
         }
 
         // Check if the file exists and has content
-        if let Ok(metadata) = fs::metadata(file_path.as_path()) {
-            if metadata.len() > 0 {
-                // Break out of the loop if the file is ready (has content)
-                break;
-            }
+        if let Ok(metadata) = fs::metadata(file_path.as_path())
+            && metadata.len() > 0
+        {
+            // Break out of the loop if the file is ready (has content)
+            break;
         }
         // Log message indicating the file is not ready and sleep for 1 second before checking again
         info!("Server info file {:?} is not ready, waiting...", file_path);
@@ -585,13 +585,13 @@ mod tests {
         let serialized = serde_json::to_string(svr_info).unwrap();
 
         // Remove the existing file if it exists
-        if let Err(e) = fs::remove_file(svr_info_file_path) {
-            if e.kind() != std::io::ErrorKind::NotFound {
-                return Err(Error::ServerInfo(format!(
-                    "Failed to remove server-info file: {}",
-                    e
-                )));
-            }
+        if let Err(e) = fs::remove_file(svr_info_file_path)
+            && e.kind() != std::io::ErrorKind::NotFound
+        {
+            return Err(Error::ServerInfo(format!(
+                "Failed to remove server-info file: {}",
+                e
+            )));
         }
 
         // Create a new file
