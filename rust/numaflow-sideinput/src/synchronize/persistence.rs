@@ -1,6 +1,6 @@
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
-use std::{fs, io, result};
+use std::{fs, io};
 use tracing::{debug, error};
 
 /// CheckFileExists checks if a file with the given fileName exists in the file system.
@@ -19,7 +19,7 @@ pub(super) fn update_side_input_file<P: AsRef<Path>>(
     // Generate a new file name using timestamp
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|e| format!("Failed to get timestamp: {}", e))?
+        .map_err(|e| format!("Failed to get timestamp: {e}"))?
         .as_nanos();
 
     let new_file_name = format!("{}_{}", file_symlink.display(), timestamp);
@@ -29,53 +29,49 @@ pub(super) fn update_side_input_file<P: AsRef<Path>>(
 
     // Check if the current value is same as the new value
     // If true then don't update file again and return
-    if let Ok(current) = current_value {
-        if current == value {
-            debug!(
-                side_input = %file_symlink.display(),
-                "Side Input value is same as current value, skipping update"
-            );
-            return Ok(());
-        }
+    if let Ok(current) = current_value
+        && current == value
+    {
+        debug!(
+            side_input = %file_symlink.display(),
+            "Side Input value is same as current value, skipping update"
+        );
+        return Ok(());
     }
 
     // atomically write the new file, this is done by creating a tmp file and then renaming it
     fs::write(&new_file_name, value)
-        .map_err(|e| format!("Failed to write Side Input file {}: {}", new_file_name, e))?;
+        .map_err(|e| format!("Failed to write Side Input file {new_file_name}: {e}"))?;
 
     let old_file_path = fs::read_link(file_symlink).ok();
 
     let symlink_path_tmp = format!("{}_temp_{}", file_symlink.display(), timestamp);
 
     std::os::unix::fs::symlink(&new_file_name, &symlink_path_tmp)
-        .map_err(|e| format!("Failed to create temp symlink: {}", e))?;
+        .map_err(|e| format!("Failed to create temp symlink: {e}"))?;
 
     // Update the symlink to point to the new file
     fs::rename(&symlink_path_tmp, file_symlink).map_err(|e| {
-        format!(
-            "Failed to update symlink for Side Input file {}: {}",
-            new_file_name, e
-        )
+        format!("Failed to update symlink for Side Input file {new_file_name}: {e}",)
     })?;
 
     // Remove the old file
-    if let Some(old_path) = old_file_path {
-        if check_file_exists(&old_path) {
-            if let Err(e) = fs::remove_file(&old_path) {
-                error!(
-                    old_file_path = %old_path.display(),
-                    error = %e,
-                    "Failed to remove old Side Input file"
-                );
-            }
-        }
+    if let Some(old_path) = old_file_path
+        && check_file_exists(&old_path)
+        && let Err(e) = fs::remove_file(&old_path)
+    {
+        error!(
+            old_file_path = %old_path.display(),
+            error = %e,
+            "Failed to remove old Side Input file"
+        );
     }
 
     Ok(())
 }
 
 /// FetchSideInputFileValue reads a given file and returns the value in bytes
-fn fetch_side_input_file_value<P: AsRef<Path>>(file_path: P) -> result::Result<Vec<u8>, io::Error> {
+fn fetch_side_input_file_value<P: AsRef<Path>>(file_path: P) -> Result<Vec<u8>, io::Error> {
     let file_path = file_path.as_ref();
     fs::read(file_path).map_err(|e| {
         io::Error::new(
