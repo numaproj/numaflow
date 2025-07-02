@@ -71,7 +71,7 @@ impl SideInputSynchronizer {
 
     /// Monitors the bucket for changes and updates the side input files accordingly. If
     /// `SideInputSynchronizer.run_once` is true, it will only process the initial values and then return.
-    async fn run(self, bucket: async_nats::jetstream::kv::Store) {
+    async fn run(self, bucket: jetstream::kv::Store) {
         let mut bucket_watcher = create_watcher(bucket.clone()).await;
 
         let mut seen_keys: Option<HashSet<String>> = None;

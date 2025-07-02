@@ -12,6 +12,9 @@ use std::time::Duration;
 
 mod error;
 
+/// Runs the user-defined side-input generator at specified intervals to create the side-input values.
+mod manager;
+
 /// Synchronizes the side input values from the ISB to the local file system of the vertex by watching
 /// the side input store for changes.
 mod synchronize;

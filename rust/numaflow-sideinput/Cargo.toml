@@ -12,6 +12,7 @@ async-nats.workspace = true
 backoff.workspace = true
 thiserror.workspace = true
 chrono.workspace = true
+bytes.workspace = true
 tower.workspace = true
 numaflow-pb.workspace = true
 tonic = { version = "0.13.0" }
