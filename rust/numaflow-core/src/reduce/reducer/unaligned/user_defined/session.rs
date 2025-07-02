@@ -326,11 +326,11 @@ mod tests {
 
         async fn merge_accumulator(&self, accumulator: Vec<u8>) {
             // Parse the accumulator value and add it to our count
-            if let Ok(accumulator_str) = String::from_utf8(accumulator) {
-                if let Ok(accumulator_count) = accumulator_str.parse::<u32>() {
-                    self.count
-                        .fetch_add(accumulator_count, std::sync::atomic::Ordering::Relaxed);
-                }
+            if let Ok(accumulator_str) = String::from_utf8(accumulator)
+                && let Ok(accumulator_count) = accumulator_str.parse::<u32>()
+            {
+                self.count
+                    .fetch_add(accumulator_count, std::sync::atomic::Ordering::Relaxed);
             }
         }
     }

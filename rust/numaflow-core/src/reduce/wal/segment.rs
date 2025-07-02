@@ -242,14 +242,14 @@ mod tests {
             if let SegmentEntry::DataEntry { data, .. } = entry {
                 let msg: numaflow_pb::objects::isb::ReadMessage =
                     prost::Message::decode(data).unwrap();
-                if let Some(header) = msg.message.unwrap().header {
-                    if let Some(message_info) = header.message_info {
-                        let event_time = message_info.event_time.map(utc_from_timestamp).unwrap();
-                        assert!(
-                            event_time >= gc_end,
-                            "Found message with event_time < gc_end"
-                        );
-                    }
+                if let Some(header) = msg.message.unwrap().header
+                    && let Some(message_info) = header.message_info
+                {
+                    let event_time = message_info.event_time.map(utc_from_timestamp).unwrap();
+                    assert!(
+                        event_time >= gc_end,
+                        "Found message with event_time < gc_end"
+                    );
                 }
                 remaining_message_count += 1
             }
@@ -408,24 +408,23 @@ mod tests {
             if let SegmentEntry::DataEntry { data, .. } = entry {
                 let msg: numaflow_pb::objects::isb::ReadMessage =
                     prost::Message::decode(data).unwrap();
-                if let Some(header) = msg.message.unwrap().header {
-                    // Check event time based on key
-                    if let (Some(message_info), keys) = (header.message_info.as_ref(), header.keys)
-                    {
-                        let event_time = message_info.event_time.map(utc_from_timestamp).unwrap();
-                        if keys.contains(&"key1".to_string()) {
-                            key1_count += 1;
-                            assert!(
-                                event_time >= gc_end_key1,
-                                "Found key1 message with event_time < gc_end_key1"
-                            );
-                        } else if keys.contains(&"key2".to_string()) {
-                            key2_count += 1;
-                            assert!(
-                                event_time >= gc_end_key2,
-                                "Found key2 message with event_time < gc_end_key2"
-                            );
-                        }
+                // Check event time based on key
+                if let Some(header) = msg.message.unwrap().header
+                    && let (Some(message_info), keys) = (header.message_info.as_ref(), header.keys)
+                {
+                    let event_time = message_info.event_time.map(utc_from_timestamp).unwrap();
+                    if keys.contains(&"key1".to_string()) {
+                        key1_count += 1;
+                        assert!(
+                            event_time >= gc_end_key1,
+                            "Found key1 message with event_time < gc_end_key1"
+                        );
+                    } else if keys.contains(&"key2".to_string()) {
+                        key2_count += 1;
+                        assert!(
+                            event_time >= gc_end_key2,
+                            "Found key2 message with event_time < gc_end_key2"
+                        );
                     }
                 }
                 remaining_message_count += 1

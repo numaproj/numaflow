@@ -846,18 +846,18 @@ mod tests {
         while let Some(entry) = rx.next().await {
             if let SegmentEntry::DataEntry { data, .. } = entry {
                 let msg: isb::ReadMessage = prost::Message::decode(data).unwrap();
-                if let Some(header) = msg.message.unwrap().header {
-                    if let Some(message_info) = header.message_info {
-                        let event_time = message_info
-                            .event_time
-                            .map(utc_from_timestamp)
-                            .expect("event time should not be empty");
-                        assert!(
-                            event_time >= gc_end_2,
-                            "Found message with event_time < gc_end_2"
-                        );
-                        replayed_event_times.push(event_time);
-                    }
+                if let Some(header) = msg.message.unwrap().header
+                    && let Some(message_info) = header.message_info
+                {
+                    let event_time = message_info
+                        .event_time
+                        .map(utc_from_timestamp)
+                        .expect("event time should not be empty");
+                    assert!(
+                        event_time >= gc_end_2,
+                        "Found message with event_time < gc_end_2"
+                    );
+                    replayed_event_times.push(event_time);
                 }
                 remaining_message_count += 1;
             }
@@ -1047,17 +1047,17 @@ mod tests {
                 .map_err(|e| format!("Failed to decode message: {e}"))?;
 
             // Verify that the message has an event time after the GC end time
-            if let Some(header) = msg.message.unwrap().header {
-                if let Some(message_info) = header.message_info {
-                    let event_time = message_info.event_time.map(utc_from_timestamp).unwrap();
-                    assert!(
-                        event_time > gc_end,
-                        "Found message with event_time <= gc_end"
-                    );
+            if let Some(header) = msg.message.unwrap().header
+                && let Some(message_info) = header.message_info
+            {
+                let event_time = message_info.event_time.map(utc_from_timestamp).unwrap();
+                assert!(
+                    event_time > gc_end,
+                    "Found message with event_time <= gc_end"
+                );
 
-                    // Store the event time for later verification
-                    replayed_event_times.push(event_time);
-                }
+                // Store the event time for later verification
+                replayed_event_times.push(event_time);
             }
             replayed_count += 1;
         }

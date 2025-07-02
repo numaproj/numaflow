@@ -220,44 +220,43 @@ pub(crate) async fn create_transformer(
     tracker_handle: TrackerHandle,
     cln_token: CancellationToken,
 ) -> error::Result<Option<Transformer>> {
-    if let Some(transformer_config) = transformer_config {
-        if let config::components::transformer::TransformerType::UserDefined(ud_transformer) =
+    if let Some(transformer_config) = transformer_config
+        && let config::components::transformer::TransformerType::UserDefined(ud_transformer) =
             &transformer_config.transformer_type
-        {
-            let server_info = sdk_server_info(
-                ud_transformer.server_info_path.clone().into(),
-                cln_token.clone(),
-            )
-            .await?;
-            let metric_labels = metrics::sdk_info_labels(
-                config::get_component_type().to_string(),
-                config::get_vertex_name().to_string(),
-                server_info.language,
-                server_info.version,
-                ContainerType::SourceTransformer.to_string(),
-            );
-            metrics::global_metrics()
-                .sdk_info
-                .get_or_create(&metric_labels)
-                .set(1);
+    {
+        let server_info = sdk_server_info(
+            ud_transformer.server_info_path.clone().into(),
+            cln_token.clone(),
+        )
+        .await?;
+        let metric_labels = metrics::sdk_info_labels(
+            config::get_component_type().to_string(),
+            config::get_vertex_name().to_string(),
+            server_info.language,
+            server_info.version,
+            ContainerType::SourceTransformer.to_string(),
+        );
+        metrics::global_metrics()
+            .sdk_info
+            .get_or_create(&metric_labels)
+            .set(1);
 
-            let mut transformer_grpc_client = SourceTransformClient::new(
-                grpc::create_rpc_channel(ud_transformer.socket_path.clone().into()).await?,
+        let mut transformer_grpc_client = SourceTransformClient::new(
+            grpc::create_rpc_channel(ud_transformer.socket_path.clone().into()).await?,
+        )
+        .max_encoding_message_size(ud_transformer.grpc_max_message_size)
+        .max_decoding_message_size(ud_transformer.grpc_max_message_size);
+        grpc::wait_until_transformer_ready(&cln_token, &mut transformer_grpc_client).await?;
+        return Ok(Some(
+            Transformer::new(
+                batch_size,
+                transformer_config.concurrency,
+                graceful_timeout,
+                transformer_grpc_client.clone(),
+                tracker_handle,
             )
-            .max_encoding_message_size(ud_transformer.grpc_max_message_size)
-            .max_decoding_message_size(ud_transformer.grpc_max_message_size);
-            grpc::wait_until_transformer_ready(&cln_token, &mut transformer_grpc_client).await?;
-            return Ok(Some(
-                Transformer::new(
-                    batch_size,
-                    transformer_config.concurrency,
-                    graceful_timeout,
-                    transformer_grpc_client.clone(),
-                    tracker_handle,
-                )
-                .await?,
-            ));
-        }
+            .await?,
+        ));
     }
     Ok(None)
 }

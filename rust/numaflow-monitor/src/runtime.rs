@@ -276,10 +276,10 @@ impl Runtime {
 
 ///  Extracts the container name from error message.
 fn extract_container_name(error_message: &str) -> String {
-    if let Some(start) = error_message.find('(') {
-        if let Some(end) = error_message[start + 1..].find(')') {
-            return error_message[start + 1..start + 1 + end].to_string();
-        }
+    if let Some(start) = error_message.find('(')
+        && let Some(end) = error_message[start + 1..].find(')')
+    {
+        return error_message[start + 1..start + 1 + end].to_string();
     }
     // Setting container to "numa" as the default container name to ensure that the error is
     // persisted in a consistent manner. This can happen in following cases:
