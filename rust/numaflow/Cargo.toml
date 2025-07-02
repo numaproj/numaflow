@@ -19,4 +19,4 @@ backoff.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 rustls.workspace = true
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }

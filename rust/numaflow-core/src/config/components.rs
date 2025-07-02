@@ -133,31 +133,31 @@ pub(crate) mod source {
                 ));
             }
 
-            if let Some(timeout) = value.visibility_timeout {
-                if !(0..=43200).contains(&timeout) {
-                    return Err(Error::Config(format!(
-                        "visibility_timeout must be between 0 and 43200 for SQS source, got {}",
-                        timeout
-                    )));
-                }
+            if let Some(timeout) = value.visibility_timeout
+                && !(0..=43200).contains(&timeout)
+            {
+                return Err(Error::Config(format!(
+                    "visibility_timeout must be between 0 and 43200 for SQS source, got {}",
+                    timeout
+                )));
             }
 
-            if let Some(wait_time) = value.wait_time_seconds {
-                if !(0..=20).contains(&wait_time) {
-                    return Err(Error::Config(format!(
-                        "wait_time_seconds must be between 0 and 20 for SQS source, got {}",
-                        wait_time
-                    )));
-                }
+            if let Some(wait_time) = value.wait_time_seconds
+                && !(0..=20).contains(&wait_time)
+            {
+                return Err(Error::Config(format!(
+                    "wait_time_seconds must be between 0 and 20 for SQS source, got {}",
+                    wait_time
+                )));
             }
 
-            if let Some(max_number_of_messages) = value.max_number_of_messages {
-                if !(1..=10).contains(&max_number_of_messages) {
-                    return Err(Error::Config(format!(
-                        "max_number_of_messages must be between 1 and 10 for SQS source, got {}",
-                        max_number_of_messages
-                    )));
-                }
+            if let Some(max_number_of_messages) = value.max_number_of_messages
+                && !(1..=10).contains(&max_number_of_messages)
+            {
+                return Err(Error::Config(format!(
+                    "max_number_of_messages must be between 1 and 10 for SQS source, got {}",
+                    max_number_of_messages
+                )));
             }
 
             let sqs_source_config = SqsSourceConfig {

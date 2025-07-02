@@ -107,10 +107,10 @@ impl SlidingWindowManager {
         };
 
         // If state file path is provided, try to load state from file
-        if let Some(path) = &manager.active_window_state_file {
-            if let Err(e) = manager.load_state(path) {
-                error!("Failed to load window state from file: {}", e);
-            }
+        if let Some(path) = &manager.active_window_state_file
+            && let Err(e) = manager.load_state(path)
+        {
+            error!("Failed to load window state from file: {}", e);
         }
 
         manager
