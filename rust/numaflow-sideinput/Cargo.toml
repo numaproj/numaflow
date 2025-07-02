@@ -11,6 +11,13 @@ tokio.workspace = true
 async-nats.workspace = true
 backoff.workspace = true
 thiserror.workspace = true
+chrono.workspace = true
+tower.workspace = true
+numaflow-pb.workspace = true
+tonic = { version = "0.13.0" }
+cron = "0.15.0"
+chrono-tz = "0.10.3"
+hyper-util = "0.1.14"
 
 [dev-dependencies]
 tempfile = "3.20.0"
