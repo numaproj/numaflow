@@ -4,22 +4,28 @@ use std::error::Error;
 use tracing::{error, info};
 mod setup_tracing;
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    setup_tracing::register();
+fn main() {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .unwrap();
 
-    // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
-    rustls::crypto::aws_lc_rs::default_provider()
-        .install_default()
-        .expect("Installing default CryptoProvider");
+    rt.block_on(async {
+        setup_tracing::register();
 
-    if let Err(e) = run().await {
-        error!("{e:?}");
-        return Err(e);
-    }
+        // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
+        rustls::crypto::aws_lc_rs::default_provider()
+            .install_default()
+            .expect("Installing default CryptoProvider");
 
-    info!("Exited.");
-    Ok(())
+        if let Err(e) = run().await {
+            error!("{e:?}");
+            std::process::exit(1);
+        }
+
+        info!("Exited.");
+    })
 }
 
 async fn run() -> Result<(), Box<dyn Error>> {
