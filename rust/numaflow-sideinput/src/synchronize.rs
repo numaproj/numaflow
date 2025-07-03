@@ -3,22 +3,25 @@
 
 use crate::error::{Error, Result};
 use crate::isb;
-use crate::update_side_input_file;
-use async_nats::jetstream::Context;
+use crate::synchronize::persistence::update_side_input_file;
+use async_nats::jetstream;
 use async_nats::jetstream::kv::{Operation, Watch};
-use async_nats::{ConnectOptions, jetstream};
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use std::collections::HashSet;
 use std::path;
-use std::time::Duration;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, trace, warn};
 
+/// Persistence to Local File Store related functions.
+mod persistence;
+
 /// Synchronizes the side input values from the ISB to the local file system.
 pub(crate) struct SideInputSynchronizer {
+    /// The name of the side input store. The bucket where each side-input is stored.
     side_input_store: &'static str,
+    /// The list of side inputs to synchronize.
     side_inputs: Vec<&'static str>,
     /// The path where the side input files are mounted on the container.
     mount_path: &'static str,
@@ -49,7 +52,7 @@ impl SideInputSynchronizer {
 
     pub(crate) async fn synchronize(self) -> Result<()> {
         // TODO: move create_js_context outside of pipeline
-        let js_context = create_js_context(self.js_client_config.clone()).await?;
+        let js_context = crate::create_js_context(self.js_client_config.clone()).await?;
 
         let bucket = js_context
             .get_key_value(self.side_input_store)
@@ -68,7 +71,7 @@ impl SideInputSynchronizer {
 
     /// Monitors the bucket for changes and updates the side input files accordingly. If
     /// `SideInputSynchronizer.run_once` is true, it will only process the initial values and then return.
-    async fn run(self, bucket: async_nats::jetstream::kv::Store) {
+    async fn run(self, bucket: jetstream::kv::Store) {
         let mut bucket_watcher = create_watcher(bucket.clone()).await;
 
         let mut seen_keys: Option<HashSet<String>> = None;
@@ -143,26 +146,8 @@ impl SideInputSynchronizer {
     }
 }
 
-async fn create_js_context(config: isb::ClientConfig) -> Result<Context> {
-    // TODO: make these configurable. today this is hardcoded on Golang code too.
-    let mut opts = ConnectOptions::new()
-        .max_reconnects(None) // unlimited reconnects
-        .ping_interval(Duration::from_secs(3))
-        .retry_on_initial_connect();
-
-    if let (Some(user), Some(password)) = (config.user, config.password) {
-        opts = opts.user_and_password(user, password);
-    }
-
-    let js_client = async_nats::connect_with_options(&config.url, opts)
-        .await
-        .map_err(|e| Error::Connection(e.to_string()))?;
-
-    Ok(jetstream::new(js_client))
-}
-
 /// creates a watcher for the given bucket, will retry infinitely until it succeeds
-async fn create_watcher(bucket: async_nats::jetstream::kv::Store) -> Watch {
+async fn create_watcher(bucket: jetstream::kv::Store) -> Watch {
     const RECONNECT_INTERVAL: u64 = 1000;
     // infinite retry
     let interval = fixed::Interval::from_millis(RECONNECT_INTERVAL).take(usize::MAX);
@@ -186,7 +171,6 @@ async fn create_watcher(bucket: async_nats::jetstream::kv::Store) -> Watch {
 mod tests {
     use super::*;
     use crate::isb::ClientConfig;
-    use async_nats::jetstream;
     use std::time::Duration;
     use tempfile::TempDir;
     use tokio_util::sync::CancellationToken;
