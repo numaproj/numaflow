@@ -424,10 +424,10 @@ pub fn create_router(
 
 /// Generate self-signed TLS certificate
 fn generate_certs() -> Result<(Certificate, rcgen::KeyPair)> {
-    let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
-        .map_err(|e| Error::Server(format!("Generating self-signed certificate: {}", e)))?;
+    let CertifiedKey { cert, signing_key } = generate_simple_self_signed(vec!["localhost".into()])
+        .map_err(|e| Error::Server(format!("Generating self-signed certificate: {e}")))?;
 
-    Ok((cert, key_pair))
+    Ok((cert, signing_key))
 }
 
 /// Start the HTTPS server on the specified address
