@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=scratch
+ARG BASE_IMAGE=ubuntu:22.04
 ARG ARCH=$TARGETARCH
 ####################################################################################################
 # base
@@ -64,10 +64,23 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 ####################################################################################################
 # numaflow
 ####################################################################################################
-ARG BASE_IMAGE
+ARG BASE_IMAGE=ubuntu:22.04
 FROM ${BASE_IMAGE} AS numaflow
 ARG ARCH
 
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    sudo \
+    strace \
+    procps \
+    net-tools \
+    curl \
+    wget \
+    git \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# If using Ubuntu base, we already have these, but copy them for compatibility with other base images
 COPY --from=base /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=base /bin/numaflow /bin/numaflow

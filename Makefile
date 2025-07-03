@@ -15,8 +15,8 @@ endif
 DIST_DIR=${CURRENT_DIR}/dist
 BINARY_NAME:=numaflow
 DOCKERFILE:=Dockerfile
-DEV_BASE_IMAGE:=debian:bookworm
-RELEASE_BASE_IMAGE:=scratch
+DEV_BASE_IMAGE:=ubuntu:22.04
+RELEASE_BASE_IMAGE:=ubuntu:22.04
 
 BUILD_DATE=$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 GIT_COMMIT=$(shell git rev-parse HEAD)
