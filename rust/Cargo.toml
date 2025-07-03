@@ -69,9 +69,9 @@ numaflow-jetstream = { path = "extns/numaflow-jetstream" }
 numaflow-kafka = { path = "extns/numaflow-kafka" }
 numaflow-sqs = { path = "extns/numaflow-sqs" }
 numaflow-http = { path = "extns/numaflow-http" }
-tokio = { version = "1.45.1", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.46.0", features = ["macros", "rt-multi-thread"] }
 tokio-stream = "0.1.17"
-tokio-util = "0.7.11"
+tokio-util = "0.7.15"
 bytes = "1.9.0"
 tracing = "0.1.41"
 async-nats = "0.42.0"
