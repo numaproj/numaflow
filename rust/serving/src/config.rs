@@ -29,9 +29,9 @@ const ENV_NUMAFLOW_SERVING_SPEC: &str = "NUMAFLOW_SERVING_SPEC";
 const ENV_NUMAFLOW_POD: &str = "NUMAFLOW_POD";
 
 pub fn generate_certs() -> Result<(Certificate, KeyPair), String> {
-    let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
-        .map_err(|e| format!("Failed to generate cert {:?}", e))?;
-    Ok((cert, key_pair))
+    let CertifiedKey { cert, signing_key } = generate_simple_self_signed(vec!["localhost".into()])
+        .map_err(|e| format!("Failed to generate cert {e:?}"))?;
+    Ok((cert, signing_key))
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
