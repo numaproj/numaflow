@@ -18,3 +18,4 @@ tokio.workspace = true
 tracing.workspace = true
 rustls.workspace = true
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+clap = "4.5.40"
