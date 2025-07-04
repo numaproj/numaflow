@@ -132,7 +132,13 @@ impl JetstreamActor {
         read_timeout: Duration,
         handler_rx: mpsc::Receiver<JetstreamActorMessage>,
     ) -> Result<()> {
-        let mut conn_opts = ConnectOptions::new();
+        let mut conn_opts = ConnectOptions::new()
+            .max_reconnects(None) // unlimited reconnects
+            .reconnect_delay_callback(|attempts| {
+                std::time::Duration::from_millis(std::cmp::min((attempts * 10) as u64, 1000))
+            })
+            .ping_interval(Duration::from_secs(3))
+            .retry_on_initial_connect();
         if let Some(auth) = config.auth {
             conn_opts = match auth {
                 NatsAuth::Basic { username, password } => {
