@@ -51,7 +51,7 @@ func TestBuildMonitorContainer(t *testing.T) {
 	assert.Equal(t, CtrMonitor, container.Name, "Container name mismatch")
 	assert.Equal(t, "test-image", container.Image, "Container image mismatch")
 	assert.Equal(t, corev1.PullIfNotPresent, container.ImagePullPolicy, "Image pull policy mismatch")
-	assert.Equal(t, "--monitor", container.Args[0], "Container args mismatch")
+	assert.Equal(t, "monitor", container.Args[0], "Container args mismatch")
 	assert.Equal(t, NumaflowRustBinary, container.Command[0], "Container command mismatch")
 
 	// Verify environment variables

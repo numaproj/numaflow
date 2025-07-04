@@ -25,14 +25,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
 async fn run() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = env::args().collect();
     // Based on the argument, run the appropriate component.
-    if args.contains(&"--monitor".to_string()) {
+    if args.contains(&"monitor".to_string()) {
         numaflow_monitor::run()
             .await
             .map_err(|e| format!("Error running monitor binary: {e:?}"))?;
         return Ok(());
     }
 
-    if args.contains(&"--serving".to_string()) {
+    if args.contains(&"serving".to_string()) {
         if env::var(serving::ENV_MIN_PIPELINE_SPEC).is_ok() {
             let vars: HashMap<String, String> = env::vars().collect();
             let cfg: serving::Settings = vars.try_into().unwrap();

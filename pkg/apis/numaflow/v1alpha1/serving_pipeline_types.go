@@ -269,7 +269,7 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 		Resources:       req.DefaultResources,
 		Env:             envVars,
 		Command:         []string{NumaflowRustBinary},
-		Args:            []string{"--serving"},
+		Args:            []string{"serving"},
 		VolumeMounts:    volumeMounts,
 	}
 	if ct := sp.Spec.Serving.ContainerTemplate; ct != nil {

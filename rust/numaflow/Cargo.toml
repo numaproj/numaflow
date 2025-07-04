@@ -13,9 +13,7 @@ workspace = true
 [dependencies]
 serving.workspace = true
 numaflow-core.workspace = true
-numaflow-models.workspace = true
 numaflow-monitor.workspace = true
-backoff.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 rustls.workspace = true
