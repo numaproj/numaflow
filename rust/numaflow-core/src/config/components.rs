@@ -3247,8 +3247,6 @@ mod reducer_tests {
 
     #[test]
     fn test_fixed_window_streaming_on() {
-        use super::reduce::{AlignedWindowType, ReducerConfig, UserDefinedConfig};
-        use numaflow_models::models::{FixedWindow, GroupBy, Window};
         use std::time::Duration;
 
         let window = Window {
@@ -3290,8 +3288,6 @@ mod reducer_tests {
 
     #[test]
     fn test_fixed_window_streaming_off() {
-        use super::reduce::{AlignedWindowType, ReducerConfig, UserDefinedConfig};
-        use numaflow_models::models::{FixedWindow, GroupBy, Window};
         use std::time::Duration;
 
         let window = Window {
@@ -3332,9 +3328,20 @@ mod reducer_tests {
     }
 
     #[test]
+    fn test_fixed_window_config_from_fixed_window_default() {
+        use super::reduce::FixedWindowConfig;
+
+        let fixed_window = Box::new(FixedWindow {
+            length: None,
+            streaming: None,
+        });
+
+        let config = FixedWindowConfig::from(fixed_window);
+        assert_eq!(config.length, Duration::default());
+    }
+
+    #[test]
     fn test_sliding_window_streaming_on() {
-        use super::reduce::{AlignedWindowType, ReducerConfig, UserDefinedConfig};
-        use numaflow_models::models::{GroupBy, SlidingWindow, Window};
         use std::time::Duration;
 
         let window = Window {
@@ -3378,8 +3385,6 @@ mod reducer_tests {
 
     #[test]
     fn test_sliding_window_streaming_off() {
-        use super::reduce::{AlignedWindowType, ReducerConfig, UserDefinedConfig};
-        use numaflow_models::models::{GroupBy, SlidingWindow, Window};
         use std::time::Duration;
 
         let window = Window {
@@ -3419,19 +3424,6 @@ mod reducer_tests {
             }
             _ => panic!("Expected aligned reducer config"),
         }
-    }
-
-    #[test]
-    fn test_fixed_window_config_from_fixed_window_default() {
-        use super::reduce::FixedWindowConfig;
-
-        let fixed_window = Box::new(FixedWindow {
-            length: None,
-            streaming: None,
-        });
-
-        let config = FixedWindowConfig::from(fixed_window);
-        assert_eq!(config.length, Duration::default());
     }
 
     #[test]
