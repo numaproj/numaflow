@@ -42,6 +42,6 @@ func buildMonitorContainer(req getContainerReq) corev1.Container {
 		name(CtrMonitor).
 		asSidecar().
 		command(NumaflowRustBinary).
-		args("--monitor").
+		args("monitor").
 		build()
 }
