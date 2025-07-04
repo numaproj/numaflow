@@ -5,39 +5,42 @@ use tracing::{error, info};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-fn main() {
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(1)
-        .enable_all()
-        .build()
-        .unwrap();
+use tikv_jemallocator::Jemalloc;
 
-    rt.block_on(async {
-        // Set up the tracing subscriber. RUST_LOG can be used to set the log level.
-        // The default log level is `info`. The `axum::rejection=trace` enables showing
-        // rejections from built-in extractors at `TRACE` level.
-        tracing_subscriber::registry()
-            .with(
-                tracing_subscriber::EnvFilter::try_from_default_env()
-                    // TODO: add a better default based on entry point invocation
-                    //  e.g., serving/monovertex might need a different default
-                    .unwrap_or_else(|_| "info".into()),
-            )
-            .with(tracing_subscriber::fmt::layer().with_ansi(false))
-            .init();
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
 
-        // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
-        rustls::crypto::aws_lc_rs::default_provider()
-            .install_default()
-            .expect("Installing default CryptoProvider");
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    // Set up the tracing subscriber. RUST_LOG can be used to set the log level.
+    // The default log level is `info`. The `axum::rejection=trace` enables showing
+    // rejections from built-in extractors at `TRACE` level.
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                // TODO: add a better default based on entry point invocation
+                //  e.g., serving/monovertex might need a different default
+                .unwrap_or_else(|_| "info".into()),
+        )
+        .with(tracing_subscriber::fmt::layer().with_ansi(false))
+        .init();
 
-        if let Err(e) = run().await {
-            error!("{e:?}");
-            std::process::exit(1);
-        }
+    // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
+    rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .expect("Installing default CryptoProvider");
 
-        info!("Exited.");
-    })
+    let handle = tokio::runtime::Handle::current();
+    let runtime_metrics = handle.metrics();
+    info!("Number of Tokio workers: {}", runtime_metrics.num_workers());
+
+    if let Err(e) = run().await {
+        error!("{e:?}");
+        return Err(e);
+    }
+
+    info!("Exited.");
+    Ok(())
 }
 
 async fn run() -> Result<(), Box<dyn Error>> {

@@ -20,3 +20,4 @@ tokio.workspace = true
 tracing.workspace = true
 rustls.workspace = true
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tikv-jemallocator = "0.6.0"
