@@ -898,6 +898,9 @@ pub(crate) mod reduce {
     const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
     const DEFAULT_REDUCER_SOCKET: &str = "/var/run/numaflow/reduce.sock";
     const DEFAULT_REDUCER_SERVER_INFO_FILE: &str = "/var/run/numaflow/reducer-server-info";
+    const DEFAULT_REDUCE_STREAMER_SERVER_INFO_FILE: &str =
+        "/var/run/numaflow/reducestreamer-server-info";
+    const DEFAULT_REDUCE_STREAMER_SOCKET: &str = "/var/run/numaflow/reducestream.sock";
     const DEFAULT_ACCUMULATOR_REDUCER_SOCKET: &str = "/var/run/numaflow/accumulator.sock";
     const DEFAULT_ACCUMULATOR_REDUCER_SERVER_INFO_FILE: &str =
         "/var/run/numaflow/accumulator-server-info";
@@ -934,9 +937,9 @@ pub(crate) mod reduce {
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct UserDefinedConfig {
-        pub grpc_max_message_size: usize,
-        pub socket_path: &'static str,
-        pub server_info_path: &'static str,
+        pub(crate) grpc_max_message_size: usize,
+        pub(crate) socket_path: &'static str,
+        pub(crate) server_info_path: &'static str,
     }
 
     impl Default for UserDefinedConfig {
@@ -950,6 +953,13 @@ pub(crate) mod reduce {
     }
 
     impl UserDefinedConfig {
+        pub(crate) fn streamer_config() -> Self {
+            Self {
+                grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
+                socket_path: DEFAULT_REDUCE_STREAMER_SOCKET,
+                server_info_path: DEFAULT_REDUCE_STREAMER_SERVER_INFO_FILE,
+            }
+        }
         pub(crate) fn session_config() -> Self {
             Self {
                 grpc_max_message_size: DEFAULT_GRPC_MAX_MESSAGE_SIZE,
@@ -996,12 +1006,14 @@ pub(crate) mod reduce {
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct FixedWindowConfig {
         pub(crate) length: Duration,
+        pub(crate) streaming: bool,
     }
 
     impl From<Box<FixedWindow>> for FixedWindowConfig {
         fn from(value: Box<FixedWindow>) -> Self {
             Self {
                 length: value.length.map(Duration::from).unwrap_or_default(),
+                streaming: value.streaming.unwrap_or_default(),
             }
         }
     }
@@ -1010,6 +1022,7 @@ pub(crate) mod reduce {
     pub(crate) struct SlidingWindowConfig {
         pub(crate) length: Duration,
         pub(crate) slide: Duration,
+        pub(crate) streaming: bool,
     }
 
     impl From<Box<SlidingWindow>> for SlidingWindowConfig {
@@ -1017,6 +1030,7 @@ pub(crate) mod reduce {
             Self {
                 length: value.length.map(Duration::from).unwrap_or_default(),
                 slide: value.slide.map(Duration::from).unwrap_or_default(),
+                streaming: value.streaming.unwrap_or_default(),
             }
         }
     }
@@ -1062,8 +1076,13 @@ pub(crate) mod reduce {
                     allowed_lateness,
                     is_keyed,
                 };
+                let user_defined_config = if fixed.streaming.unwrap_or(false) {
+                    UserDefinedConfig::streamer_config()
+                } else {
+                    UserDefinedConfig::default()
+                };
                 Ok(ReducerConfig::Aligned(AlignedReducerConfig {
-                    user_defined_config: UserDefinedConfig::default(),
+                    user_defined_config,
                     window_config,
                 }))
             } else if let Some(sliding) = &window.sliding {
@@ -1072,8 +1091,13 @@ pub(crate) mod reduce {
                     allowed_lateness,
                     is_keyed,
                 };
+                let user_defined_config = if sliding.streaming.unwrap_or(false) {
+                    UserDefinedConfig::streamer_config()
+                } else {
+                    UserDefinedConfig::default()
+                };
                 Ok(ReducerConfig::Aligned(AlignedReducerConfig {
-                    user_defined_config: UserDefinedConfig::default(),
+                    user_defined_config,
                     window_config,
                 }))
             } else if let Some(session) = &window.session {
