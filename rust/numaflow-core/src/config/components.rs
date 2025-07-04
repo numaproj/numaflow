@@ -937,9 +937,9 @@ pub(crate) mod reduce {
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct UserDefinedConfig {
-        pub(crate) grpc_max_message_size: usize,
-        pub(crate) socket_path: &'static str,
-        pub(crate) server_info_path: &'static str,
+        pub grpc_max_message_size: usize,
+        pub socket_path: &'static str,
+        pub server_info_path: &'static str,
     }
 
     impl Default for UserDefinedConfig {
@@ -3243,6 +3243,182 @@ mod reducer_tests {
 
         let config = FixedWindowConfig::from(fixed_window);
         assert_eq!(config.length, Duration::from_secs(120));
+    }
+
+    #[test]
+    fn test_fixed_window_streaming_on() {
+        use super::reduce::{AlignedWindowType, ReducerConfig, UserDefinedConfig};
+        use numaflow_models::models::{FixedWindow, GroupBy, Window};
+        use std::time::Duration;
+
+        let window = Window {
+            fixed: Some(Box::new(FixedWindow {
+                length: Some(kube::core::Duration::from(Duration::from_secs(42))),
+                streaming: Some(true),
+            })),
+            sliding: None,
+            session: None,
+            accumulator: None,
+        };
+
+        let group_by = Box::new(GroupBy {
+            allowed_lateness: None,
+            keyed: None,
+            storage: None,
+            window: Box::new(window),
+        });
+
+        let reducer_config = ReducerConfig::try_from(&group_by).unwrap();
+        match reducer_config {
+            ReducerConfig::Aligned(aligned_config) => {
+                match aligned_config.window_config.window_type {
+                    AlignedWindowType::Fixed(config) => {
+                        assert_eq!(config.length, Duration::from_secs(42));
+                        assert!(config.streaming);
+                    }
+                    _ => panic!("Expected fixed window type"),
+                }
+                // Should use streamer_config
+                assert_eq!(
+                    aligned_config.user_defined_config.socket_path,
+                    "/var/run/numaflow/reducestream.sock"
+                );
+            }
+            _ => panic!("Expected aligned reducer config"),
+        }
+    }
+
+    #[test]
+    fn test_fixed_window_streaming_off() {
+        use super::reduce::{AlignedWindowType, ReducerConfig, UserDefinedConfig};
+        use numaflow_models::models::{FixedWindow, GroupBy, Window};
+        use std::time::Duration;
+
+        let window = Window {
+            fixed: Some(Box::new(FixedWindow {
+                length: Some(kube::core::Duration::from(Duration::from_secs(42))),
+                streaming: Some(false),
+            })),
+            sliding: None,
+            session: None,
+            accumulator: None,
+        };
+
+        let group_by = Box::new(GroupBy {
+            allowed_lateness: None,
+            keyed: None,
+            storage: None,
+            window: Box::new(window),
+        });
+
+        let reducer_config = ReducerConfig::try_from(&group_by).unwrap();
+        match reducer_config {
+            ReducerConfig::Aligned(aligned_config) => {
+                match aligned_config.window_config.window_type {
+                    AlignedWindowType::Fixed(config) => {
+                        assert_eq!(config.length, Duration::from_secs(42));
+                        assert!(!config.streaming);
+                    }
+                    _ => panic!("Expected fixed window type"),
+                }
+                // Should use default config
+                assert_eq!(
+                    aligned_config.user_defined_config.socket_path,
+                    "/var/run/numaflow/reduce.sock"
+                );
+            }
+            _ => panic!("Expected aligned reducer config"),
+        }
+    }
+
+    #[test]
+    fn test_sliding_window_streaming_on() {
+        use super::reduce::{AlignedWindowType, ReducerConfig, UserDefinedConfig};
+        use numaflow_models::models::{GroupBy, SlidingWindow, Window};
+        use std::time::Duration;
+
+        let window = Window {
+            fixed: None,
+            sliding: Some(Box::new(SlidingWindow {
+                length: Some(kube::core::Duration::from(Duration::from_secs(100))),
+                slide: Some(kube::core::Duration::from(Duration::from_secs(10))),
+                streaming: Some(true),
+            })),
+            session: None,
+            accumulator: None,
+        };
+
+        let group_by = Box::new(GroupBy {
+            allowed_lateness: None,
+            keyed: None,
+            storage: None,
+            window: Box::new(window),
+        });
+
+        let reducer_config = ReducerConfig::try_from(&group_by).unwrap();
+        match reducer_config {
+            ReducerConfig::Aligned(aligned_config) => {
+                match aligned_config.window_config.window_type {
+                    AlignedWindowType::Sliding(config) => {
+                        assert_eq!(config.length, Duration::from_secs(100));
+                        assert_eq!(config.slide, Duration::from_secs(10));
+                        assert!(config.streaming);
+                    }
+                    _ => panic!("Expected sliding window type"),
+                }
+                // Should use streamer_config
+                assert_eq!(
+                    aligned_config.user_defined_config.socket_path,
+                    "/var/run/numaflow/reducestream.sock"
+                );
+            }
+            _ => panic!("Expected aligned reducer config"),
+        }
+    }
+
+    #[test]
+    fn test_sliding_window_streaming_off() {
+        use super::reduce::{AlignedWindowType, ReducerConfig, UserDefinedConfig};
+        use numaflow_models::models::{GroupBy, SlidingWindow, Window};
+        use std::time::Duration;
+
+        let window = Window {
+            fixed: None,
+            sliding: Some(Box::new(SlidingWindow {
+                length: Some(kube::core::Duration::from(Duration::from_secs(100))),
+                slide: Some(kube::core::Duration::from(Duration::from_secs(10))),
+                streaming: Some(false),
+            })),
+            session: None,
+            accumulator: None,
+        };
+
+        let group_by = Box::new(GroupBy {
+            allowed_lateness: None,
+            keyed: None,
+            storage: None,
+            window: Box::new(window),
+        });
+
+        let reducer_config = ReducerConfig::try_from(&group_by).unwrap();
+        match reducer_config {
+            ReducerConfig::Aligned(aligned_config) => {
+                match aligned_config.window_config.window_type {
+                    AlignedWindowType::Sliding(config) => {
+                        assert_eq!(config.length, Duration::from_secs(100));
+                        assert_eq!(config.slide, Duration::from_secs(10));
+                        assert!(!config.streaming);
+                    }
+                    _ => panic!("Expected sliding window type"),
+                }
+                // Should use default config
+                assert_eq!(
+                    aligned_config.user_defined_config.socket_path,
+                    "/var/run/numaflow/reduce.sock"
+                );
+            }
+            _ => panic!("Expected aligned reducer config"),
+        }
     }
 
     #[test]
