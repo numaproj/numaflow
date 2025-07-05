@@ -29,7 +29,6 @@ import {
   GetConsolidatedHealthStatus,
 } from "../../../../../utils";
 import { usePipelineUpdateFetch } from "../../../../../utils/fetchWrappers/pipelineUpdateFetch";
-import { usePipelineHealthFetch } from "../../../../../utils/fetchWrappers/pipelineHealthFetch";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import { AppContext } from "../../../../../App";
 import { SidebarType } from "../../../../common/SlidingSidebar";
@@ -37,6 +36,7 @@ import { ViewType } from "../../../../common/SpecEditor";
 import pipelineIcon from "../../../../../images/pipeline.png";
 
 import "./style.css";
+import { usePipelineHealthFetch } from "../../../../../utils/fetchWrappers/pipelineHealthFetch";
 
 export interface DeleteProps {
   type: "pipeline" | "isb";
@@ -50,7 +50,9 @@ export function PipelineCard({
   statusData,
   isbData,
   refresh,
-}: PipelineCardProps) {
+  health,
+  setPipelineHealthMap,
+}: PipelineCardProps & {setPipelineHealthMap?: React.Dispatch<React.SetStateAction<Record<string, string>>>}) {
   const { addError, setSidebarProps, host, isReadOnly } =
     useContext<AppContextProps>(AppContext);
   const [viewOption] = useState("view");
@@ -186,25 +188,29 @@ export function PipelineCard({
   });
 
   useEffect(() => {
+    if (setPipelineHealthMap){
+      if (healthData){
+        const pipelineStatus = statusData?.pipeline?.status?.phase || UNKNOWN;
+        const consolidated = GetConsolidatedHealthStatus(
+          pipelineStatus,
+          healthData?.resourceHealthStatus,
+          healthData?.dataHealthStatus
+        )
+        setPipelineHealthMap((prev) => ({
+          ...prev,
+          [data.name]: consolidated,
+        }));
+      } else if (healthError){
+        setPipelineHealthMap(prev => ({
+          ...prev,
+          [data.name]: UNKNOWN,
+        }))
+      }
+    }
     if (healthError) {
       addError(healthError);
     }
-  }, [healthError]);
-
-  const getHealth = useCallback(
-    (pipelineStatus: string) => {
-      if (healthData) {
-        const { resourceHealthStatus, dataHealthStatus } = healthData;
-        return GetConsolidatedHealthStatus(
-          pipelineStatus,
-          resourceHealthStatus,
-          dataHealthStatus
-        );
-      }
-      return UNKNOWN;
-    },
-    [healthData]
-  );
+  },[healthData, healthError, data.name, setPipelineHealthMap, statusData, addError]);
 
   const isbType = GetISBType(isbData?.isbService?.spec) || UNKNOWN;
   const isbSize =
@@ -529,9 +535,7 @@ export function PipelineCard({
               />
               <img
                 src={
-                  IconsStatusMap[
-                    healthLoading ? UNKNOWN : getHealth(pipelineStatus)
-                  ]
+                  IconsStatusMap[health || UNKNOWN]
                 }
                 alt="Health"
                 className={"pipeline-logo"}
@@ -550,9 +554,7 @@ export function PipelineCard({
               <span>{StatusString[pipelineStatus]}</span>
               <span>
                 {
-                  StatusString[
-                    healthLoading ? UNKNOWN : getHealth(pipelineStatus)
-                  ]
+                  StatusString[health || UNKNOWN]
                 }
               </span>
             </Box>
