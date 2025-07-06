@@ -13,6 +13,8 @@ pub(super) fn root_cli() -> Command {
         .subcommand(add_monitor_subcommand())
         .subcommand(add_serving_subcommand())
         .subcommand(sideinput::add_sideinput_subcommand())
+        // TODO: remove after moving e2e to Rust, this is a hack
+        .allow_external_subcommands(true)
 }
 
 fn add_monitor_subcommand() -> Command {
