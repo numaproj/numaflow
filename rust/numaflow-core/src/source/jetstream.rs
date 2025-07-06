@@ -23,7 +23,7 @@ impl From<numaflow_jetstream::Message> for Message {
             tags: None,
             value: message.value,
             offset: offset.clone(),
-            event_time: Default::default(),
+            event_time: message.published_timestamp,
             watermark: None,
             id: MessageID {
                 vertex_name: get_vertex_name().to_string().into(),
@@ -100,11 +100,16 @@ mod tests {
 
     use super::*;
     use bytes::Bytes;
+    use chrono::DateTime;
     use numaflow_jetstream::Message as JetstreamMessage;
     use std::collections::HashMap;
 
     #[tokio::test]
     async fn test_try_from_jetstream_message_success() {
+        let test_timestamp = chrono::DateTime::parse_from_rfc3339("2023-01-01T12:30:45.123456789Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+
         let jetstream_message = JetstreamMessage {
             value: Bytes::from("test_value"),
             stream_sequence: 42,
@@ -113,6 +118,7 @@ mod tests {
                 headers.insert("key".to_string(), "value".to_string());
                 headers
             },
+            published_timestamp: test_timestamp,
         };
 
         let message: Message = jetstream_message.into();
@@ -121,6 +127,11 @@ mod tests {
         assert_eq!(message.offset.to_string(), "42-0");
         assert_eq!(message.headers.get("key"), Some(&"value".to_string()));
         assert_eq!(message.metadata.unwrap().previous_vertex, get_vertex_name());
+
+        // Verify that the published timestamp is correctly used as event_time
+        assert_eq!(message.event_time, test_timestamp);
+        assert_eq!(message.event_time.timestamp(), 1672576245);
+        assert_eq!(message.event_time.timestamp_subsec_nanos(), 123456789);
     }
 
     #[cfg(feature = "nats-tests")]
@@ -182,6 +193,15 @@ mod tests {
         assert_eq!(messages.len(), 20, "Should read 20 messages in a batch");
         assert_eq!(messages[0].value, Bytes::from("message 0"));
         assert_eq!(messages[19].value, Bytes::from("message 19"));
+
+        // Verify that event_time is set to the published timestamp, not default
+        for message in &messages {
+            assert_ne!(
+                message.event_time.timestamp(),
+                0,
+                "Event time should not be default value, should be set to published timestamp"
+            );
+        }
 
         // Test SourceAcker::ack
         let offsets: Vec<Offset> = messages.iter().map(|msg| msg.offset.clone()).collect();
