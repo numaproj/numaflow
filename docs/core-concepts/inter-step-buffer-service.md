@@ -42,7 +42,7 @@ kubectl get isbsvc
 a JetStream cluster will be created in the namespace.
 
 **For Production Setup**, please make sure you configure [replicas](#replicas), [persistence](#persistence),
-and [replicas](#replicas).
+[anti-affinity](#anti-affinity), and [PDB](#pdb).
 
 ### Version
 
@@ -76,11 +76,11 @@ spec:
       volumeSize: 10Gi # Optional, defaults to 20Gi
 ```
 
-### PDB
+### Anti-Affinity
 
-PDB (Pod Disruption Budget) is essential for running ISB in production to ensure availability.
+Anti-affinity is used to spread the ISB pods across different nodes.
 
-#### Example ISB with PDB
+#### Example Anti-Affinity
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
@@ -101,6 +101,10 @@ spec:
               topologyKey: topology.kubernetes.io/zone
             weight: 100
 ```
+
+### PDB
+
+PDB (Pod Disruption Budget) is essential for running ISB in production to ensure availability.
 
 #### Example PDB Configuration
 
