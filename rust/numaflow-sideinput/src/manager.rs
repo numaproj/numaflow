@@ -1,8 +1,9 @@
 //! Runs the user-defined side-input generator at specified intervals (cron expr).
 
+use crate::config::isb;
+use crate::create_js_context;
 use crate::error::{Error, Result};
 use crate::manager::client::UserDefinedSideInputClient;
-use crate::{create_js_context, isb};
 use async_nats::jetstream;
 use bytes::Bytes;
 use chrono_tz::{Tz, UTC};
