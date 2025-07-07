@@ -613,6 +613,46 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#anti-affinity" class="md-nav__link">
+    Anti-Affinity
+  </a>
+  
+    <nav class="md-nav" aria-label="Anti-Affinity">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-anti-affinity" class="md-nav__link">
+    Example Anti-Affinity
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pdb" class="md-nav__link">
+    PDB
+  </a>
+  
+    <nav class="md-nav" aria-label="PDB">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-pdb-configuration" class="md-nav__link">
+    Example PDB Configuration
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#jetstream-settings" class="md-nav__link">
     JetStream Settings
   </a>
@@ -2771,6 +2811,46 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#anti-affinity" class="md-nav__link">
+    Anti-Affinity
+  </a>
+  
+    <nav class="md-nav" aria-label="Anti-Affinity">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-anti-affinity" class="md-nav__link">
+    Example Anti-Affinity
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pdb" class="md-nav__link">
+    PDB
+  </a>
+  
+    <nav class="md-nav" aria-label="PDB">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-pdb-configuration" class="md-nav__link">
+    Example PDB Configuration
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#jetstream-settings" class="md-nav__link">
     JetStream Settings
   </a>
@@ -2920,6 +3000,8 @@ same name in the Pipeline spec.</p>
 <h2 id="jetstream">JetStream<a class="headerlink" href="#jetstream" title="Permanent link">&para;</a></h2>
 <p><code>JetStream</code> is one of the supported <code>Inter-Step Buffer Service</code> implementations. A keyword <code>jetstream</code> under <code>spec</code> means 
 a JetStream cluster will be created in the namespace.</p>
+<p><strong>For Production Setup</strong>, please make sure you configure <a href="#replicas">replicas</a>, <a href="#persistence">persistence</a>,
+<a href="#anti-affinity">anti-affinity</a>, and <a href="#pdb">PDB</a>.</p>
 <h3 id="version">Version<a class="headerlink" href="#version" title="Permanent link">&para;</a></h3>
 <p>Property <code>spec.jetstream.version</code> is required for a JetStream <code>InterStepBufferService</code>. Supported versions can be found 
 from the ConfigMap <a href="https://github.com/numaproj/numaflow/blob/main/config/base/controller-manager/numaflow-controller-config.yaml"><code>numaflow-controller-config</code></a> in the control plane namespace.</p>
@@ -2941,6 +3023,41 @@ fixed version in your real workload.</p>
 <span class="w">      </span><span class="nt">storageClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">standard</span><span class="w"> </span><span class="c1"># Optional, will use K8s cluster default storage class if not specified</span>
 <span class="w">      </span><span class="nt">accessMode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ReadWriteOnce</span><span class="w"> </span><span class="c1"># Optional, defaults to ReadWriteOnce</span>
 <span class="w">      </span><span class="nt">volumeSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10Gi</span><span class="w"> </span><span class="c1"># Optional, defaults to 20Gi</span>
+</code></pre></div>
+<h3 id="anti-affinity">Anti-Affinity<a class="headerlink" href="#anti-affinity" title="Permanent link">&para;</a></h3>
+<p>Anti-affinity is used to spread the ISB pods across different nodes.</p>
+<h4 id="example-anti-affinity">Example Anti-Affinity<a class="headerlink" href="#example-anti-affinity" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">InterStepBufferService</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">jetstream</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">latest</span>
+<span class="w">    </span><span class="nt">affinity</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">podAntiAffinity</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">preferredDuringSchedulingIgnoredDuringExecution</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">podAffinityTerm</span><span class="p">:</span>
+<span class="w">              </span><span class="nt">labelSelector</span><span class="p">:</span>
+<span class="w">                </span><span class="nt">matchLabels</span><span class="p">:</span>
+<span class="w">                  </span><span class="nt">app.kubernetes.io/component</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">isbsvc</span>
+<span class="w">                  </span><span class="nt">numaflow.numaproj.io/isbsvc-name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span>
+<span class="w">              </span><span class="nt">topologyKey</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">topology.kubernetes.io/zone</span>
+<span class="w">            </span><span class="nt">weight</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100</span>
+</code></pre></div>
+<h3 id="pdb">PDB<a class="headerlink" href="#pdb" title="Permanent link">&para;</a></h3>
+<p>PDB (Pod Disruption Budget) is essential for running ISB in production to ensure availability.</p>
+<h4 id="example-pdb-configuration">Example PDB Configuration<a class="headerlink" href="#example-pdb-configuration" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">policy/v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PodDisruptionBudget</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">maxUnavailable</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+<span class="w">  </span><span class="nt">selector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">matchLabels</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">app.kubernetes.io/component</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">isbsvc</span>
+<span class="w">      </span><span class="nt">numaflow.numaproj.io/isbsvc-name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span>
 </code></pre></div>
 <h3 id="jetstream-settings">JetStream Settings<a class="headerlink" href="#jetstream-settings" title="Permanent link">&para;</a></h3>
 <p>There are 2 places to configure JetStream settings:</p>
