@@ -8,9 +8,14 @@
 use crate::error::Error;
 use async_nats::jetstream::Context;
 use async_nats::{ConnectOptions, jetstream};
+use config::isb;
 use std::time::Duration;
 
 mod error;
+
+/// Configurations for side-input from the environment. Only side-input manager needs this, most of
+/// the configurations for side-input are from command line.
+mod config;
 
 /// Runs the user-defined side-input generator at specified intervals to create the side-input values.
 mod manager;
@@ -18,26 +23,6 @@ mod manager;
 /// Synchronizes the side input values from the ISB to the local file system of the vertex by watching
 /// the side input store for changes.
 mod synchronize;
-
-pub(crate) mod isb {
-    const DEFAULT_URL: &str = "localhost:4222";
-    #[derive(Debug, Clone, PartialEq)]
-    pub(crate) struct ClientConfig {
-        pub url: String,
-        pub user: Option<String>,
-        pub password: Option<String>,
-    }
-
-    impl Default for ClientConfig {
-        fn default() -> Self {
-            ClientConfig {
-                url: DEFAULT_URL.to_string(),
-                user: None,
-                password: None,
-            }
-        }
-    }
-}
 
 async fn create_js_context(config: isb::ClientConfig) -> error::Result<Context> {
     // TODO: make these configurable. today this is hardcoded on Golang code too.

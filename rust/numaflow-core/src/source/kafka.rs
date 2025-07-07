@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use chrono::{DateTime, Utc};
 use numaflow_kafka::source::{KafkaMessage, KafkaSource, KafkaSourceConfig};
 
 use crate::config::{get_vertex_name, get_vertex_replica};
@@ -17,13 +18,29 @@ impl TryFrom<KafkaMessage> for Message {
             *get_vertex_replica(),
         ));
 
+        // Use Kafka timestamp if available, otherwise fall back to current time
+        let event_time = match message.timestamp {
+            Some(timestamp_millis) => DateTime::from_timestamp_millis(timestamp_millis)
+                .unwrap_or_else(|| {
+                    tracing::warn!(
+                        timestamp_millis = timestamp_millis,
+                        "Invalid Kafka timestamp, falling back to current time"
+                    );
+                    Utc::now()
+                }),
+            None => {
+                tracing::debug!("Kafka message has no timestamp, using current time");
+                Utc::now()
+            }
+        };
+
         Ok(Message {
             typ: Default::default(),
             keys: Arc::from(vec![]),
             tags: None,
             value: message.value,
             offset: offset.clone(),
-            event_time: Default::default(),
+            event_time,
             watermark: None,
             id: MessageID {
                 vertex_name: get_vertex_name().to_string().into(),
@@ -140,6 +157,7 @@ mod tests {
                 headers.insert("key".to_string(), "value".to_string());
                 headers
             },
+            timestamp: Some(1640995200000), // 2022-01-01 00:00:00 UTC in milliseconds
         };
 
         let message: Message = kafka_message.try_into().unwrap();
@@ -147,6 +165,52 @@ mod tests {
         assert_eq!(message.value, Bytes::from("test_value"));
         assert_eq!(message.offset.to_string(), "test_topic:1:42-0");
         assert_eq!(message.headers.get("key"), Some(&"value".to_string()));
+        // Verify that the event time is set from the Kafka timestamp
+        assert_eq!(message.event_time.timestamp_millis(), 1640995200000);
+    }
+
+    #[tokio::test]
+    async fn test_try_from_kafka_message_no_timestamp() {
+        let kafka_message = KafkaMessage {
+            topic: "test_topic".to_string(),
+            value: Bytes::from("test_value"),
+            partition: 1,
+            offset: 42,
+            headers: HashMap::new(),
+            timestamp: None, // No timestamp available
+        };
+
+        let before_conversion = Utc::now();
+        let message: Message = kafka_message.try_into().unwrap();
+        let after_conversion = Utc::now();
+
+        assert_eq!(message.value, Bytes::from("test_value"));
+        assert_eq!(message.offset.to_string(), "test_topic:1:42-0");
+        // Verify that the event time falls back to current time when no timestamp is available
+        assert!(message.event_time >= before_conversion);
+        assert!(message.event_time <= after_conversion);
+    }
+
+    #[tokio::test]
+    async fn test_try_from_kafka_message_invalid_timestamp() {
+        let kafka_message = KafkaMessage {
+            topic: "test_topic".to_string(),
+            value: Bytes::from("test_value"),
+            partition: 1,
+            offset: 42,
+            headers: HashMap::new(),
+            timestamp: Some(i64::MAX), // Invalid timestamp that will cause overflow
+        };
+
+        let before_conversion = Utc::now();
+        let message: Message = kafka_message.try_into().unwrap();
+        let after_conversion = Utc::now();
+
+        assert_eq!(message.value, Bytes::from("test_value"));
+        assert_eq!(message.offset.to_string(), "test_topic:1:42-0");
+        // Verify that the event time falls back to current time when timestamp is invalid
+        assert!(message.event_time >= before_conversion);
+        assert!(message.event_time <= after_conversion);
     }
 
     #[cfg(feature = "kafka-tests")]
