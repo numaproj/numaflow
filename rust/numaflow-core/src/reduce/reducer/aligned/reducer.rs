@@ -281,8 +281,7 @@ impl AlignedReduceActor {
             if !self.cln_token.is_cancelled() {
                 self.error_tx
                     .send(Error::Reduce(format!(
-                        "Failed to send message to reduce task: {}",
-                        e
+                        "Failed to send message to reduce task: {e}"
                     )))
                     .await
                     .expect("Failed to send error");
@@ -310,8 +309,7 @@ impl AlignedReduceActor {
             if !self.cln_token.is_cancelled() {
                 self.error_tx
                     .send(Error::Reduce(format!(
-                        "Failed to send message to reduce task: {}",
-                        e
+                        "Failed to send message to reduce task: {e}"
                     )))
                     .await
                     .expect("Failed to send error");

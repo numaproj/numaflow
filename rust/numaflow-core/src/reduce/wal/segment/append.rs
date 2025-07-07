@@ -269,7 +269,7 @@ impl SegmentWriteActor {
             let to_file_name = self
                 .current_file_name
                 .trim_end_matches(&self.wal_type.segment_suffix());
-            format!("{}.frozen", to_file_name)
+            format!("{to_file_name}.frozen")
         };
 
         tokio::fs::rename(&self.current_file_name, &to_file_name).await?;

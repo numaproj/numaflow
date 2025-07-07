@@ -73,7 +73,7 @@ impl UserDefinedTransformer {
         read_tx
             .send(handshake_request)
             .await
-            .map_err(|e| Error::Transformer(format!("failed to send handshake request: {}", e)))?;
+            .map_err(|e| Error::Transformer(format!("failed to send handshake request: {e}")))?;
 
         let mut resp_stream = client
             .source_transform_fn(Request::new(read_stream))

@@ -126,7 +126,7 @@ impl ReduceTask {
                     // wait for the writer to finish writing the current batch
                     if let Err(e) = writer_handle.await {
                         error!(?e, "Error while writing results to JetStream");
-                        return Err(Error::Reduce(format!("Writer task failed: {}", e)));
+                        return Err(Error::Reduce(format!("Writer task failed: {e}")));
                     }
 
                     // Create a new channel for the next batch
@@ -177,7 +177,7 @@ impl ReduceTask {
         // wait for writer to complete
         if let Err(e) = writer_handle.await {
             error!(?e, "Error while writing final results to JetStream");
-            return Err(Error::Reduce(format!("Writer task failed: {}", e)));
+            return Err(Error::Reduce(format!("Writer task failed: {e}")));
         }
 
         // Write final GC events
@@ -246,7 +246,7 @@ impl ReduceTask {
                     // Wait for the writer to finish writing the current batch and start a new one
                     if let Err(e) = writer_handle.await {
                         error!(?e, "Error while writing results to JetStream");
-                        return Err(Error::Reduce(format!("Writer task failed: {}", e)));
+                        return Err(Error::Reduce(format!("Writer task failed: {e}")));
                     }
 
                     let (new_writer_tx, new_writer_rx) = mpsc::channel(100);
@@ -289,7 +289,7 @@ impl ReduceTask {
         // Final cleanup: wait for writer to complete
         if let Err(e) = writer_handle.await {
             error!(?e, "Error while writing final results to JetStream");
-            return Err(Error::Reduce(format!("Writer task failed: {}", e)));
+            return Err(Error::Reduce(format!("Writer task failed: {e}")));
         }
 
         // Write final GC events

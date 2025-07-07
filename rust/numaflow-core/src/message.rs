@@ -118,8 +118,8 @@ pub(crate) enum Offset {
 impl fmt::Display for Offset {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Offset::Int(offset) => write!(f, "{}", offset),
-            Offset::String(offset) => write!(f, "{}", offset),
+            Offset::Int(offset) => write!(f, "{offset}"),
+            Offset::String(offset) => write!(f, "{offset}"),
         }
     }
 }

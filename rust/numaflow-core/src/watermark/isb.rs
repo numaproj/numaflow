@@ -218,7 +218,7 @@ impl ISBWatermarkHandle {
         let fetcher =
             ISBWatermarkFetcher::new(processor_managers, &config.from_vertex_config).await?;
 
-        let processor_name = format!("{}-{}", vertex_name, vertex_replica);
+        let processor_name = format!("{vertex_name}-{vertex_replica}");
         let publisher = ISBWatermarkPublisher::new(
             processor_name,
             js_context.clone(),

@@ -239,7 +239,7 @@ impl SlidingWindowManager {
             .map(|window| {
                 let start_time = utc_from_timestamp(window.start_time.unwrap()).timestamp_millis();
                 let end_time = utc_from_timestamp(window.end_time.unwrap()).timestamp_millis();
-                format!("[{} - {}]", start_time, end_time)
+                format!("[{start_time} - {end_time}]")
             })
             .collect::<Vec<_>>()
             .join(", ");

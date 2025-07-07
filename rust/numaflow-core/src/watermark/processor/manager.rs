@@ -53,7 +53,7 @@ impl Debug for Processor {
             self.name, self.status
         )?;
         for timeline in &self.timelines {
-            writeln!(f, "{:?}", timeline)?;
+            writeln!(f, "{timeline:?}")?;
         }
         Ok(())
     }
@@ -469,7 +469,7 @@ impl ProcessorManager {
                 Ok(w) => Ok(w),
                 Err(e) => {
                     error!(?e, "Failed to create watcher");
-                    Err(Error::Watermark(format!("Failed to create watcher: {}", e)))
+                    Err(Error::Watermark(format!("Failed to create watcher: {e}")))
                 }
             },
             |_: &Error| true,

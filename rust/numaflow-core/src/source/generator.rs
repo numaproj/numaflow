@@ -96,7 +96,7 @@ mod stream_generator {
             }
 
             // Generate all possible keys
-            let keys = (0..key_count).map(|i| format!("key-{}", i)).collect();
+            let keys = (0..key_count).map(|i| format!("key-{i}")).collect();
 
             Self {
                 content: cfg.content,

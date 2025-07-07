@@ -771,7 +771,7 @@ impl PipelineConfig {
                     vertex: Box::leak(vertex_name.to_string().into_boxed_str()),
                     partitions: 1, // source will have only one partition
                     ot_bucket: Box::leak(
-                        format!("{}-{}-{}_SOURCE_OT", namespace, pipeline_name, vertex_name)
+                        format!("{namespace}-{pipeline_name}-{vertex_name}_SOURCE_OT")
                             .into_boxed_str(),
                     ),
                     hb_bucket: Box::leak(

@@ -318,7 +318,7 @@ impl FenceGuard {
         // Create the fence file
         fs::write(&fence_file_path, "")
             .await
-            .map_err(|e| error::Error::Config(format!("Failed to create fence file: {}", e)))?;
+            .map_err(|e| error::Error::Config(format!("Failed to create fence file: {e}")))?;
         Ok(FenceGuard { fence_file_path })
     }
 }
@@ -361,8 +361,7 @@ async fn wait_for_fence_availability(
                 Err(e) => {
                     // Other error occurred
                     return Err(error::Error::Config(format!(
-                        "Error checking fence file {:?}: {}",
-                        fence_file_path, e
+                        "Error checking fence file {fence_file_path:?}: {e}"
                     )));
                 }
             }
@@ -370,7 +369,7 @@ async fn wait_for_fence_availability(
     })
     .await;
 
-    result.map_err(|e| error::Error::Config(format!("Fence wait timed out: {}", e)))?
+    result.map_err(|e| error::Error::Config(format!("Fence wait timed out: {e}")))?
 }
 
 async fn start_reduce_forwarder(

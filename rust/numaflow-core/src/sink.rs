@@ -924,9 +924,8 @@ impl SinkWriter {
         }
         if !messages_to_send.is_empty() {
             return Err(Error::FbSink(format!(
-                "Failed to write messages to fallback sink after {} retry attempts. \
-                Max Attempts configured: {} Errors: {:?}",
-                retry_attempts, max_retry_attempts, fallback_error_map
+                "Failed to write messages to fallback sink after {retry_attempts} retry attempts. \
+                Max Attempts configured: {max_retry_attempts} Errors: {fallback_error_map:?}"
             )));
         }
         Ok(())

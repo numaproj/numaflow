@@ -107,12 +107,10 @@ impl JSWrappedMessage {
             .message_info
             .ok_or(Error::Proto("Missing message_info".to_string()))?;
 
-        let msg_info = self.message.info().map_err(|e| {
-            Error::ISB(format!(
-                "Failed to get message info from JetStream: {:?}",
-                e
-            ))
-        })?;
+        let msg_info = self
+            .message
+            .info()
+            .map_err(|e| Error::ISB(format!("Failed to get message info from JetStream: {e}")))?;
 
         let offset = Offset::Int(IntOffset::new(
             msg_info.stream_sequence as i64,
@@ -154,7 +152,7 @@ impl JSWrappedMessage {
                 let mut decompressed = vec![];
                 decoder
                     .read_to_end(&mut decompressed)
-                    .map_err(|e| Error::ISB(format!("Failed to decompress message: {}", e)))?;
+                    .map_err(|e| Error::ISB(format!("Failed to decompress message: {e}")))?;
                 decompressed
             }
             Some(CompressionType::Zstd) => {
@@ -164,7 +162,7 @@ impl JSWrappedMessage {
                 let mut decompressed = vec![];
                 decoder
                     .read_to_end(&mut decompressed)
-                    .map_err(|e| Error::ISB(format!("Failed to decompress message: {}", e)))?;
+                    .map_err(|e| Error::ISB(format!("Failed to decompress message: {e}")))?;
                 decompressed
             }
             Some(CompressionType::LZ4) => {
@@ -173,7 +171,7 @@ impl JSWrappedMessage {
                 let mut decompressed = vec![];
                 decoder
                     .read_to_end(&mut decompressed)
-                    .map_err(|e| Error::ISB(format!("Failed to decompress message: {}", e)))?;
+                    .map_err(|e| Error::ISB(format!("Failed to decompress message: {e}")))?;
                 decompressed
             }
             None | Some(CompressionType::None) => body.payload,
@@ -190,12 +188,12 @@ impl JetStreamReader {
             .js_ctx
             .get_consumer_from_stream(&reader_config.stream.name, &reader_config.stream.name)
             .await
-            .map_err(|e| Error::ISB(format!("Failed to get consumer for stream {}", e)))?;
+            .map_err(|e| Error::ISB(format!("Failed to get consumer for stream {e}")))?;
 
         let consumer_info = consumer
             .info()
             .await
-            .map_err(|e| Error::ISB(format!("Failed to get consumer info {}", e)))?;
+            .map_err(|e| Error::ISB(format!("Failed to get consumer info {e}")))?;
 
         // Calculate inProgressTickSeconds based on the ack_wait_seconds.
         let ack_wait_seconds = consumer_info.config.ack_wait.as_secs();
@@ -547,7 +545,7 @@ impl JetStreamReader {
                 }
 
                 result.map_err(|e| {
-                    Error::Connection(format!("Failed to send {:?} to Jetstream: {}", ack_kind, e))
+                    Error::Connection(format!("Failed to send {ack_kind:?} to Jetstream: {e}"))
                 })
             },
             |_: &Error| true,

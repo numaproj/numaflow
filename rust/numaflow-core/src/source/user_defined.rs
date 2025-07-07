@@ -85,7 +85,7 @@ impl UserDefinedSourceRead {
         read_tx
             .send(handshake_request)
             .await
-            .map_err(|e| Error::Source(format!("failed to send handshake request: {}", e)))?;
+            .map_err(|e| Error::Source(format!("failed to send handshake request: {e}")))?;
 
         let mut resp_stream = client
             .read_fn(Request::new(read_stream))
@@ -261,7 +261,7 @@ impl UserDefinedSourceAck {
         ack_tx
             .send(ack_handshake_request)
             .await
-            .map_err(|e| Error::Source(format!("failed to send ack handshake request: {}", e)))?;
+            .map_err(|e| Error::Source(format!("failed to send ack handshake request: {e}")))?;
 
         let mut ack_resp_stream = client
             .ack_fn(Request::new(ack_stream))

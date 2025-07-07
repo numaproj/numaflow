@@ -320,7 +320,7 @@ async fn create_response_stream(
     read_tx
         .send(handshake_request)
         .await
-        .map_err(|e| Error::Mapper(format!("failed to send handshake request: {}", e)))?;
+        .map_err(|e| Error::Mapper(format!("failed to send handshake request: {e}")))?;
 
     let mut resp_stream = client
         .map_fn(Request::new(ReceiverStream::new(read_rx)))
