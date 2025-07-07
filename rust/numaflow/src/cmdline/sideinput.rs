@@ -20,6 +20,7 @@ fn initializer_subcmd() -> Command {
                 .required(true)
                 .num_args(1..)
                 .action(ArgAction::Append)
+                .value_delimiter(',')
                 .value_parser(clap::value_parser!(String)),
         )
         .arg(
@@ -69,6 +70,7 @@ fn synchronizer_subcmd() -> Command {
                 .required(true)
                 .num_args(1..)
                 .action(ArgAction::Append)
+                .value_delimiter(',')
                 .value_parser(clap::value_parser!(String)),
         )
         .arg(
@@ -100,11 +102,27 @@ mod tests {
             "--side-inputs",
             "input1",
             "--side-inputs",
-            "input2",
+            "input2,input3",
             "--side-inputs-store",
             "store1",
         ]);
 
         assert!(match1.is_ok());
+        let matches = match1.unwrap();
+        assert_eq!(
+            matches
+                .get_many::<String>("side-inputs")
+                .unwrap()
+                .collect::<Vec<_>>(),
+            vec!["input1", "input2", "input3"]
+        );
+        assert_eq!(
+            matches.get_one::<String>("side-inputs-store").unwrap(),
+            "store1"
+        );
+        assert_eq!(
+            matches.get_one::<String>("isbsvc-type").unwrap(),
+            "jetstream"
+        );
     }
 }
