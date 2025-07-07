@@ -41,8 +41,8 @@ kubectl get isbsvc
 `JetStream` is one of the supported `Inter-Step Buffer Service` implementations. A keyword `jetstream` under `spec` means 
 a JetStream cluster will be created in the namespace.
 
-**For Production Setup**, please make sure you have [replicas](#replicas), [persistence](#persistence),
-and [replicas](#replicas) are configured.
+**For Production Setup**, please make sure you configure [replicas](#replicas), [persistence](#persistence),
+and [replicas](#replicas).
 
 ### Version
 
