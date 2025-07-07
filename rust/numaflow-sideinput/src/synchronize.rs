@@ -1,8 +1,8 @@
 //! The synchronizer continually monitors and synchronizes side input values from a key-value store
 //! to the local filesystem, making them available to pipeline vertices.
 
+use crate::config::isb;
 use crate::error::{Error, Result};
-use crate::isb;
 use crate::synchronize::persistence::update_side_input_file;
 use async_nats::jetstream;
 use async_nats::jetstream::kv::{Operation, Watch};
@@ -170,7 +170,7 @@ async fn create_watcher(bucket: jetstream::kv::Store) -> Watch {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::isb::ClientConfig;
+    use crate::config::isb::ClientConfig;
     use std::time::Duration;
     use tempfile::TempDir;
     use tokio_util::sync::CancellationToken;
