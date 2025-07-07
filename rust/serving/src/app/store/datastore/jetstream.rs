@@ -305,9 +305,8 @@ impl JetStreamDataStore {
                     // we use rs.{pod_hash}.{request_id}.final.result.processed as the key for the final result
                     // and the value will be the merged response.
                     let merged_response = merge_bytes_list(&responses);
-                    let final_result_key = format!(
-                        "{RESPONSE_KEY_PREFIX}.{request_id}.{FINAL_RESULT_KEY_SUFFIX}"
-                    );
+                    let final_result_key =
+                        format!("{RESPONSE_KEY_PREFIX}.{request_id}.{FINAL_RESULT_KEY_SUFFIX}");
 
                     if let Err(e) = kv_store.put(final_result_key, merged_response).await {
                         error!(error = ?e, "Failed to put final result");
@@ -337,8 +336,7 @@ impl JetStreamDataStore {
     /// Retrieves the final result from the KV store for a given request ID using the final key, it
     /// keeps retrying until the final result is available.
     async fn get_data_from_response_store(&self, id: &str) -> StoreResult<Vec<Vec<u8>>> {
-        let final_result_key =
-            format!("{RESPONSE_KEY_PREFIX}.{id}.{FINAL_RESULT_KEY_SUFFIX}");
+        let final_result_key = format!("{RESPONSE_KEY_PREFIX}.{id}.{FINAL_RESULT_KEY_SUFFIX}");
 
         loop {
             match self.kv_store.get(&final_result_key).await {

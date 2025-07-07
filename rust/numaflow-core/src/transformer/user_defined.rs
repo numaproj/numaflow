@@ -81,14 +81,13 @@ impl UserDefinedTransformer {
             .map_err(|e| Error::Grpc(Box::new(e)))?
             .into_inner();
 
-        let handshake_response =
-            resp_stream
-                .message()
-                .await
-                .map_err(|e| Error::Grpc(Box::new(e)))?
-                .ok_or(Error::Transformer(
-                    "failed to receive handshake response".to_string(),
-                ))?;
+        let handshake_response = resp_stream
+            .message()
+            .await
+            .map_err(|e| Error::Grpc(Box::new(e)))?
+            .ok_or(Error::Transformer(
+                "failed to receive handshake response".to_string(),
+            ))?;
 
         if handshake_response.handshake.is_none_or(|h| !h.sot) {
             return Err(Error::Transformer("invalid handshake response".to_string()));

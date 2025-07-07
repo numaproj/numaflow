@@ -64,14 +64,13 @@ impl UserDefinedSink {
 
         // First response from the server will be the handshake response. We need to check if the
         // server has accepted the handshake.
-        let handshake_response =
-            resp_stream
-                .message()
-                .await
-                .map_err(|e| Error::Grpc(Box::new(e)))?
-                .ok_or(Error::Sink(
-                    "failed to receive handshake response".to_string(),
-                ))?;
+        let handshake_response = resp_stream
+            .message()
+            .await
+            .map_err(|e| Error::Grpc(Box::new(e)))?
+            .ok_or(Error::Sink(
+                "failed to receive handshake response".to_string(),
+            ))?;
 
         // Handshake cannot be None during the initial phase, and it has to set `sot` to true.
         if handshake_response.handshake.is_none_or(|h| !h.sot) {

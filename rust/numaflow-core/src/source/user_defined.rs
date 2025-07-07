@@ -95,14 +95,13 @@ impl UserDefinedSourceRead {
 
         // first response from the server will be the handshake response. We need to check if the
         // server has accepted the handshake.
-        let handshake_response =
-            resp_stream
-                .message()
-                .await
-                .map_err(|e| Error::Grpc(Box::new(e)))?
-                .ok_or(Error::Source(
-                    "failed to receive handshake response".to_string(),
-                ))?;
+        let handshake_response = resp_stream
+            .message()
+            .await
+            .map_err(|e| Error::Grpc(Box::new(e)))?
+            .ok_or(Error::Source(
+                "failed to receive handshake response".to_string(),
+            ))?;
         // handshake cannot to None during the initial phase, and it has to set `sot` to true.
         if handshake_response.handshake.is_none_or(|h| !h.sot) {
             return Err(Error::Source("invalid handshake response".to_string()));
@@ -207,7 +206,12 @@ impl SourceReader for UserDefinedSourceRead {
 
         let mut messages = Vec::with_capacity(self.num_records);
 
-        while let Some(response) = self.resp_stream.message().await.map_err(|e| Error::Grpc(Box::new(e)))? {
+        while let Some(response) = self
+            .resp_stream
+            .message()
+            .await
+            .map_err(|e| Error::Grpc(Box::new(e)))?
+        {
             if response.status.is_some_and(|status| status.eot) {
                 break;
             }

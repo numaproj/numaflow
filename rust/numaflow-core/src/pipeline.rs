@@ -170,7 +170,9 @@ async fn start_source_forwarder(
 
     start_metrics_server(
         config.metrics_config.clone(),
-        ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Source(Box::new(source.clone())))),
+        ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Source(Box::new(
+            source.clone(),
+        )))),
     )
     .await;
 
@@ -274,7 +276,9 @@ async fn start_map_forwarder(
 
     let metrics_server_handle = start_metrics_server(
         config.metrics_config.clone(),
-        ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Map(mapper_handle.unwrap().clone()))),
+        ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Map(
+            mapper_handle.unwrap().clone(),
+        ))),
     )
     .await;
 
@@ -569,9 +573,9 @@ async fn start_aligned_reduce_forwarder(
     // Start the metrics server with one of the clients
     start_metrics_server(
         config.metrics_config.clone(),
-        ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(UserDefinedReduce::Aligned(
-            reducer_client.clone(),
-        )))),
+        ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
+            UserDefinedReduce::Aligned(reducer_client.clone()),
+        ))),
     )
     .await;
 
@@ -729,9 +733,9 @@ async fn start_unaligned_reduce_forwarder(
 
     start_metrics_server(
         config.metrics_config.clone(),
-        ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(UserDefinedReduce::Unaligned(
-            reducer_client.clone(),
-        )))),
+        ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
+            UserDefinedReduce::Unaligned(reducer_client.clone()),
+        ))),
     )
     .await;
 
@@ -848,7 +852,9 @@ async fn start_sink_forwarder(
     if let Some(sink_handle) = sink_writers.first() {
         start_metrics_server(
             config.metrics_config.clone(),
-            ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Sink(Box::new(sink_handle.clone())))),
+            ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Sink(Box::new(
+                sink_handle.clone(),
+            )))),
         )
         .await;
     }

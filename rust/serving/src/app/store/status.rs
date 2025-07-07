@@ -298,9 +298,7 @@ impl StatusTracker {
         // if nats is used, we need to write the done processing marker to the response kv store to
         // let the response watcher know that the processing is done. Since only tracker knows the
         // lifecycle of the request, we need to do it here.
-        let done_key = format!(
-            "{RESPONSE_KEY_PREFIX}.{pod_hash}.{id}.{DONE_PROCESSING_MARKER}"
-        );
+        let done_key = format!("{RESPONSE_KEY_PREFIX}.{pod_hash}.{id}.{DONE_PROCESSING_MARKER}");
         response_kv
             .put(done_key.clone(), Bytes::new())
             .await

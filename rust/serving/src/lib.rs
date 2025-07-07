@@ -137,9 +137,7 @@ async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
 
     // Create the message graph from the pipeline spec and the redis store
     let msg_graph = MessageGraph::from_pipeline(&settings.pipeline_spec).map_err(|e| {
-        Error::InitError(format!(
-            "Creating message graph from pipeline spec: {e:?}"
-        ))
+        Error::InitError(format!("Creating message graph from pipeline spec: {e:?}"))
     })?;
 
     // Create a store (builtin or user-defined) to store the callbacks and the custom responses

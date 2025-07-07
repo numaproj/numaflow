@@ -776,7 +776,7 @@ impl PipelineConfig {
                     ),
                     hb_bucket: Box::leak(
                         format!("{namespace}-{pipeline_name}-{vertex_name}_SOURCE_PROCESSORS")
-                        .into_boxed_str(),
+                            .into_boxed_str(),
                     ),
                 },
                 to_vertex_bucket_config: to_vertex_config
