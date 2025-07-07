@@ -60,7 +60,7 @@ where
 
     let tls_config = RustlsConfig::from_pem(cert.pem().into(), key.serialize_pem().into())
         .await
-        .map_err(|e| format!("Failed to create tls config {:?}", e))?;
+        .map_err(|e| format!("Failed to create tls config {e:?}"))?;
 
     info!(config = ?app.settings, "Starting server with config and pipeline spec");
 
@@ -138,8 +138,7 @@ async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
     // Create the message graph from the pipeline spec and the redis store
     let msg_graph = MessageGraph::from_pipeline(&settings.pipeline_spec).map_err(|e| {
         Error::InitError(format!(
-            "Creating message graph from pipeline spec: {:?}",
-            e
+            "Creating message graph from pipeline spec: {e:?}"
         ))
     })?;
 

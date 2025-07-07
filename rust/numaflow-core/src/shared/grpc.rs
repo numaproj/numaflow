@@ -114,7 +114,7 @@ pub(crate) async fn create_rpc_channel(socket_path: PathBuf) -> error::Result<Ch
     const MAX_RECONNECT_ATTEMPTS: usize = usize::MAX;
 
     let interval = fixed::Interval::from_millis(RECONNECT_INTERVAL).take(MAX_RECONNECT_ATTEMPTS);
-    let channel = Retry::retry(
+    let channel = Retry::new(
         interval,
         async || match connect_with_uds(socket_path.clone()).await {
             Ok(channel) => Ok(channel),

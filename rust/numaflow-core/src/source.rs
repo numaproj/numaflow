@@ -551,7 +551,7 @@ impl Source {
         cancel_token: &CancellationToken,
     ) {
         let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
-        let _ = Retry::retry(
+        let _ = Retry::new(
             interval,
             async || {
                 let result = Self::ack(source_handle.clone(), offsets.clone()).await;

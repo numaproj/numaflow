@@ -463,7 +463,7 @@ impl MessageProcessingTracker {
             Ok(())
         };
 
-        let ack_with_retry = Retry::retry(ack_retry_interval, ack_msg, |_: &String| true);
+        let ack_with_retry = Retry::new(ack_retry_interval, ack_msg, |_: &String| true);
 
         let ack_in_progress = async || {
             let ack_result = msg.ack_with(AckKind::Progress).await;
@@ -483,7 +483,7 @@ impl MessageProcessingTracker {
             Ok(())
         };
 
-        let nack_with_retry = Retry::retry(nack_retry_interval, nack_msg, |_: &String| true);
+        let nack_with_retry = Retry::new(nack_retry_interval, nack_msg, |_: &String| true);
 
         tokio::pin!(ack_signal_rx);
 

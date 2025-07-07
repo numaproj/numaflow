@@ -126,7 +126,7 @@ impl JetStreamDataStore {
         cln_token: CancellationToken,
     ) -> JoinHandle<()> {
         // watch for all the responses with prefix rs.{pod_hash}.* (ie, this pod)
-        let watch_pattern = format!("{}.{}.*.*.*", RESPONSE_KEY_PREFIX, pod_hash);
+        let watch_pattern = format!("{RESPONSE_KEY_PREFIX}.{pod_hash}.*.*.*");
         // monotonic revision which is reset when pod is restarted
         let mut latest_revision = 0;
 
@@ -278,8 +278,7 @@ impl JetStreamDataStore {
                     "Start processing marker already exists for this request ID"
                 );
                 return Err(format!(
-                    "Start processing marker already exists for request ID: {}",
-                    request_id
+                    "Start processing marker already exists for request ID: {request_id}"
                 ));
             }
         } else if key_suffix == DONE_PROCESSING_MARKER {
@@ -307,8 +306,7 @@ impl JetStreamDataStore {
                     // and the value will be the merged response.
                     let merged_response = merge_bytes_list(&responses);
                     let final_result_key = format!(
-                        "{}.{}.{}",
-                        RESPONSE_KEY_PREFIX, request_id, FINAL_RESULT_KEY_SUFFIX
+                        "{RESPONSE_KEY_PREFIX}.{request_id}.{FINAL_RESULT_KEY_SUFFIX}"
                     );
 
                     if let Err(e) = kv_store.put(final_result_key, merged_response).await {
@@ -325,7 +323,7 @@ impl JetStreamDataStore {
                     ResponseMode::Stream { tx, .. } => {
                         tx.send(Arc::new(entry.value.clone()))
                             .await
-                            .map_err(|e| format!("Failed to send SSE response: {:?}", e))?;
+                            .map_err(|e| format!("Failed to send SSE response: {e:?}"))?;
                     }
                     ResponseMode::Unary(responses) => {
                         responses.push(entry.value.clone());
@@ -340,7 +338,7 @@ impl JetStreamDataStore {
     /// keeps retrying until the final result is available.
     async fn get_data_from_response_store(&self, id: &str) -> StoreResult<Vec<Vec<u8>>> {
         let final_result_key =
-            format!("{}.{}.{}", RESPONSE_KEY_PREFIX, id, FINAL_RESULT_KEY_SUFFIX);
+            format!("{RESPONSE_KEY_PREFIX}.{id}.{FINAL_RESULT_KEY_SUFFIX}");
 
         loop {
             match self.kv_store.get(&final_result_key).await {

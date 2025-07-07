@@ -463,7 +463,7 @@ impl ProcessorManager {
         // infinite retry
         let interval = fixed::Interval::from_millis(RECONNECT_INTERVAL).take(usize::MAX);
 
-        Retry::retry(
+        Retry::new(
             interval,
             async || match bucket.watch_all().await {
                 Ok(w) => Ok(w),

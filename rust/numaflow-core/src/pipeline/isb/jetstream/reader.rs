@@ -526,7 +526,7 @@ impl JetStreamReader {
         offset: Offset,
     ) {
         let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
-        let _ = Retry::retry(
+        let _ = Retry::new(
             interval,
             async || {
                 let result = match ack_kind {
