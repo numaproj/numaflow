@@ -162,7 +162,7 @@ jobs:
         id: version
         run: |
           tag=$(date +"%Y%m%d")
-          echo "VERSION=nightly-$tag" >> $GITHUB_OUTPUT
+          echo "VERSION=nightly-${tag}-go23" >> $GITHUB_OUTPUT
 
       - name: Container build and push with arm64/amd64
         run: |
