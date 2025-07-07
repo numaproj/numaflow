@@ -345,7 +345,6 @@ mod tests {
             &self,
             input: sourcetransform::SourceTransformRequest,
         ) -> Vec<sourcetransform::Message> {
-            println!("transforming message: {:?}", input.eventtime);
             let message =
                 sourcetransform::Message::new(input.value, Utc::now()).with_keys(input.keys);
             vec![message]
@@ -390,7 +389,7 @@ mod tests {
             tags: None,
             value: "hello".into(),
             offset: Offset::String(StringOffset::new("0".to_string(), 0)),
-            event_time: Default::default(),
+            event_time: Utc::now(),
             watermark: None,
             id: MessageID {
                 vertex_name: "vertex_name".to_string().into(),
