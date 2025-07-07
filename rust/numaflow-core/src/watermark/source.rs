@@ -265,6 +265,10 @@ impl SourceWatermarkHandle {
         // Fetch the source watermark
         let watermark = self.fetch_source_watermark().await;
 
+        if watermark.timestamp_millis() == -1 {
+            return;
+        }
+
         // Send the publish watermark message to the actor
         self.sender
             .send(SourceActorMessage::PublishISBWatermark {
@@ -326,6 +330,10 @@ impl SourceWatermarkHandle {
         } else {
             return;
         };
+
+        if idle_wm == -1 {
+            return;
+        }
 
         // publish the idle watermark for the given partitions
         for partition in partitions.iter() {

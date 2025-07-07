@@ -898,8 +898,7 @@ mod tests {
                 .expect("Timeline should have default WMB");
             assert_eq!(
                 head_wmb.watermark, -1,
-                "Timeline {} should only have default WMB (watermark -1) for reduce UDF",
-                i
+                "Timeline {i} should only have default WMB (watermark -1) for reduce UDF"
             );
         }
 

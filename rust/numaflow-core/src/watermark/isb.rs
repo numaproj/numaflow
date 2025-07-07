@@ -315,6 +315,10 @@ impl ISBWatermarkHandle {
         // Compute the minimum watermark
         let min_wm = self.compute_min_watermark().await;
 
+        if min_wm.timestamp_millis() == -1 {
+            return;
+        }
+
         // Send the publish watermark message to the actor
         self.sender
             .send(ISBWaterMarkActorMessage::Publish {
@@ -399,6 +403,10 @@ impl ISBWatermarkHandle {
                     Watermark::from_timestamp_millis(-1).expect("failed to parse time")
                 }
             };
+        }
+
+        if min_wm.timestamp_millis() == -1 {
+            return;
         }
 
         // Identify the streams that are idle and publish the idle watermark
