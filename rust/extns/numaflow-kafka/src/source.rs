@@ -45,6 +45,9 @@ pub struct KafkaMessage {
     pub offset: i64,
     /// The headers of the message.
     pub headers: HashMap<String, String>,
+    /// The timestamp of the message in milliseconds since epoch.
+    /// None if timestamp is not available.
+    pub timestamp: Option<i64>,
 }
 
 // A context can be used to change the behavior of consumers by adding callbacks
@@ -303,12 +306,15 @@ impl KafkaActor {
                         None => Bytes::new(),
                     };
 
+                    let timestamp = message.timestamp().to_millis();
+
                     let message = KafkaMessage {
                         topic: message.topic().to_string(),
                         value,
                         partition: message.partition(),
                         offset: message.offset(),
                         headers,
+                        timestamp,
                     };
 
                     messages.push(message);
@@ -829,5 +835,7 @@ mod tests {
         let message = &messages[0];
         assert_eq!(message.headers.get("header1"), Some(&"value1".to_string()));
         assert_eq!(message.headers.get("header2"), Some(&"value2".to_string()));
+        // Verify that timestamp is present (should be Some since Kafka sets timestamps)
+        assert!(message.timestamp.is_some());
     }
 }
