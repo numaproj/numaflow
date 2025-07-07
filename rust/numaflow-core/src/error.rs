@@ -29,7 +29,7 @@ pub enum Error {
     Connection(String),
 
     #[error("gRPC Error - {0}")]
-    Grpc(tonic::Status),
+    Grpc(Box<tonic::Status>),
 
     #[error("Config Error - {0}")]
     Config(String),

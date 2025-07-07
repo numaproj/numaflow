@@ -116,7 +116,7 @@ pub(crate) enum SinkClientType {
     UserDefined(SinkClient<Channel>),
     Sqs(SqsSink),
     Kafka(KafkaSink),
-    Pulsar(PulsarSink),
+    Pulsar(Box<PulsarSink>),
 }
 
 /// User defined clients which will be used for doing sidecar health checks.
@@ -323,7 +323,7 @@ impl SinkWriterBuilder {
             }
             SinkClientType::Pulsar(pulsar_sink) => {
                 tokio::spawn(async {
-                    let actor = SinkActor::new(receiver, pulsar_sink);
+                    let actor = SinkActor::new(receiver, *pulsar_sink);
                     actor.run().await;
                 });
             }
@@ -376,7 +376,7 @@ impl SinkWriterBuilder {
                 }
                 SinkClientType::Pulsar(pulsar_sink) => {
                     tokio::spawn(async {
-                        let actor = SinkActor::new(fb_receiver, pulsar_sink);
+                        let actor = SinkActor::new(fb_receiver, *pulsar_sink);
                         actor.run().await;
                     });
                 }
@@ -1414,7 +1414,7 @@ mod tests {
             .unwrap();
 
         let tracker_handle = TrackerHandle::new(None, None);
-        let serving_store = ServingStore::Nats(
+        let serving_store = ServingStore::Nats(Box::new(
             NatsServingStore::new(
                 context.clone(),
                 NatsStoreConfig {
@@ -1423,7 +1423,7 @@ mod tests {
             )
             .await
             .unwrap(),
-        );
+        ));
 
         // start the server
         let (_shutdown_tx, shutdown_rx) = oneshot::channel();

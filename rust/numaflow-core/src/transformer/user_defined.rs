@@ -78,14 +78,14 @@ impl UserDefinedTransformer {
         let mut resp_stream = client
             .source_transform_fn(Request::new(read_stream))
             .await
-            .map_err(Error::Grpc)?
+            .map_err(|e| Error::Grpc(Box::new(e)))?
             .into_inner();
 
         let handshake_response =
             resp_stream
                 .message()
                 .await
-                .map_err(Error::Grpc)?
+                .map_err(|e| Error::Grpc(Box::new(e)))?
                 .ok_or(Error::Transformer(
                     "failed to receive handshake response".to_string(),
                 ))?;
@@ -124,7 +124,7 @@ impl UserDefinedTransformer {
             Err(e) => {
                 let mut senders = sender_map.lock().await;
                 for (_, (_, sender)) in senders.drain() {
-                    let _ = sender.send(Err(Error::Grpc(e.clone())));
+                    let _ = sender.send(Err(Error::Grpc(Box::new(e.clone()))));
                 }
                 None
             }

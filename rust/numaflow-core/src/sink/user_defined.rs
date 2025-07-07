@@ -59,7 +59,7 @@ impl UserDefinedSink {
         let mut resp_stream = client
             .sink_fn(Request::new(sink_stream))
             .await
-            .map_err(Error::Grpc)?
+            .map_err(|e| Error::Grpc(Box::new(e)))?
             .into_inner();
 
         // First response from the server will be the handshake response. We need to check if the
@@ -68,7 +68,7 @@ impl UserDefinedSink {
             resp_stream
                 .message()
                 .await
-                .map_err(Error::Grpc)?
+                .map_err(|e| Error::Grpc(Box::new(e)))?
                 .ok_or(Error::Sink(
                     "failed to receive handshake response".to_string(),
                 ))?;
@@ -121,7 +121,7 @@ impl Sink for UserDefinedSink {
                 .resp_stream
                 .message()
                 .await
-                .map_err(Error::Grpc)?
+                .map_err(|e| Error::Grpc(Box::new(e)))?
                 .ok_or(Error::Sink("failed to receive response".to_string()))?;
 
             if response.status.is_some_and(|s| s.eot) {

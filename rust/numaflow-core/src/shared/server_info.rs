@@ -218,8 +218,7 @@ fn check_sdk_compatibility(
     // Check if the SDK language is present in the minimum supported SDK versions
     if !min_supported_sdk_versions.contains_key(sdk_language) {
         return Err(Error::ServerInfo(format!(
-            "SDK version constraint not found for language: {}, container type: {}",
-            sdk_language, container_type
+            "SDK version constraint not found for language: {sdk_language}, container type: {container_type}"
         )));
     }
     let empty_map = HashMap::new();
@@ -307,7 +306,7 @@ fn check_constraint(version: &Version, constraint: &str) -> error::Result<()> {
             ))
         })?;
     let mmp_ver_str_constraint = trim_after_dash(constraint.trim_start_matches(">="));
-    let mmp_ver_constraint = format!(">={}", mmp_ver_str_constraint);
+    let mmp_ver_constraint = format!(">={mmp_ver_str_constraint}");
 
     // "-z" is used to indicate the minimum supported version is a stable version
     // the reason why we choose the letter z is that it can represent the largest pre-release version.

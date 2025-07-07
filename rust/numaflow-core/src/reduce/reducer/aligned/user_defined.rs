@@ -189,7 +189,7 @@ impl UserDefinedAlignedReduce {
             // Wait for the gRPC call to complete
             result = self.client.reduce_fn(ReceiverStream::new(req_rx)) => {
                 result
-                    .map_err(crate::Error::Grpc)?
+                    .map_err(|e| crate::Error::Grpc(Box::new(e)))?
                     .into_inner()
             }
 

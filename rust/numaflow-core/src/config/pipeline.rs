@@ -274,10 +274,10 @@ impl Default for UserDefinedStoreConfig {
 impl std::fmt::Display for VertexConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match self {
-            VertexConfig::Source(_) => write!(f, "{}", VERTEX_TYPE_SOURCE),
-            VertexConfig::Sink(_) => write!(f, "{}", VERTEX_TYPE_SINK),
-            VertexConfig::Map(_) => write!(f, "{}", VERTEX_TYPE_MAP_UDF),
-            VertexConfig::Reduce(_) => write!(f, "{}", VERTEX_TYPE_REDUCE_UDF),
+            VertexConfig::Source(_) => write!(f, "{VERTEX_TYPE_SOURCE}"),
+            VertexConfig::Sink(_) => write!(f, "{VERTEX_TYPE_SINK}"),
+            VertexConfig::Map(_) => write!(f, "{VERTEX_TYPE_MAP_UDF}"),
+            VertexConfig::Reduce(_) => write!(f, "{VERTEX_TYPE_REDUCE_UDF}"),
         }
     }
 }
@@ -304,7 +304,7 @@ impl VertexType {
             VERTEX_TYPE_SINK => Ok(VertexType::Sink),
             VERTEX_TYPE_MAP_UDF => Ok(VertexType::MapUDF),
             VERTEX_TYPE_REDUCE_UDF => Ok(VertexType::ReduceUDF),
-            _ => Err(Error::Config(format!("Unknown vertex type: {}", s))),
+            _ => Err(Error::Config(format!("Unknown vertex type: {s}"))),
         }
     }
 
@@ -368,10 +368,10 @@ impl PipelineConfig {
         // controller sets this env var.
         let decoded_spec = BASE64_STANDARD
             .decode(pipeline_spec_obj.as_bytes())
-            .map_err(|e| Error::Config(format!("Failed to decode pipeline spec: {:?}", e)))?;
+            .map_err(|e| Error::Config(format!("Failed to decode pipeline spec: {e:?}")))?;
 
         let vertex_obj: Vertex = from_slice(&decoded_spec)
-            .map_err(|e| Error::Config(format!("Failed to parse pipeline spec: {:?}", e)))?;
+            .map_err(|e| Error::Config(format!("Failed to parse pipeline spec: {e:?}")))?;
 
         info!("Loaded pipeline spec: {:?}", vertex_obj);
 
@@ -535,7 +535,7 @@ impl PipelineConfig {
                     let pl: &'static str = Box::leak(pipeline_name.clone().into_boxed_str());
                     let to: &'static str = Box::leak(edge.to.clone().into_boxed_str());
                     let name: &'static str =
-                        Box::leak(format!("{}-{}-{}-{}", ns, pl, to, i).into_boxed_str());
+                        Box::leak(format!("{ns}-{pl}-{to}-{i}").into_boxed_str());
                     Stream::new(name, to, i)
                 })
                 .collect();
@@ -560,7 +560,7 @@ impl PipelineConfig {
                     let pl: &'static str = Box::leak(pipeline_name.clone().into_boxed_str());
                     let to: &'static str = Box::leak(edge.to.clone().into_boxed_str());
                     let name: &'static str =
-                        Box::leak(format!("{}-{}-{}-{}", ns, pl, to, i).into_boxed_str());
+                        Box::leak(format!("{ns}-{pl}-{to}-{i}").into_boxed_str());
                     Stream::new(name, to, i)
                 })
                 .collect();
@@ -775,10 +775,7 @@ impl PipelineConfig {
                             .into_boxed_str(),
                     ),
                     hb_bucket: Box::leak(
-                        format!(
-                            "{}-{}-{}_SOURCE_PROCESSORS",
-                            namespace, pipeline_name, vertex_name
-                        )
+                        format!("{namespace}-{pipeline_name}-{vertex_name}_SOURCE_PROCESSORS")
                         .into_boxed_str(),
                     ),
                 },
