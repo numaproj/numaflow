@@ -94,7 +94,11 @@ impl SourceIdleDetector {
         let step_interval_ms = self.config.step_interval.as_millis() as i64;
 
         let is_first_time = last_published == -1;
-        let time_since_last_publish = if is_first_time { 0 } else { now - last_published };
+        let time_since_last_publish = if is_first_time {
+            0
+        } else {
+            now - last_published
+        };
         let step_interval_passed = is_first_time || time_since_last_publish > step_interval_ms;
 
         info!(
