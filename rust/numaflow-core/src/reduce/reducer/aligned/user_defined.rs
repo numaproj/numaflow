@@ -216,7 +216,7 @@ impl UserDefinedAlignedReduce {
 
                 // Process next response
                 response = response_stream.message() => {
-                    let response = response.map_err(|e| crate::Error::Reduce(format!("failed to receive response: {e}")))?;
+                    let response = response.map_err(|e| crate::Error::Grpc(Box::new(e)))?;
                     let Some(response) = response else {
                         break;
                     };
