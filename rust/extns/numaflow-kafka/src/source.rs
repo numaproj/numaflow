@@ -156,7 +156,7 @@ impl KafkaActor {
         let topics: Vec<&str> = config.topics.iter().map(|s| s.as_str()).collect();
         consumer
             .subscribe(&topics)
-            .map_err(|err| Error::Kafka(format!("Failed to subscribe to topic: {}", err)))?;
+            .map_err(|err| Error::Kafka(format!("Failed to subscribe to topic: {err}")))?;
 
         // The consumer.subscribe() will not fail even if the credentials are invalid.
         // To ensure creds/certificates are valid, we make a call to pending_messages() before starting the actor.
@@ -273,8 +273,7 @@ impl KafkaActor {
                             continuous_failure_count += 1;
                             if continuous_failure_count > MAX_FAILURE_COUNT {
                                 return Err(Error::Kafka(format!(
-                                    "Failed to read messages after {} retries: {e:?}",
-                                    MAX_FAILURE_COUNT
+                                    "Failed to read messages after {MAX_FAILURE_COUNT} retries: {e:?}"
                                 )));
                             }
                             error!(?e, "Failed to read messages, will retry after 100 milliseconds");
@@ -361,7 +360,7 @@ impl KafkaActor {
             let task = tokio::task::spawn_blocking(move || {
                 consumer
                     .commit(&tpl, CommitMode::Sync)
-                    .map_err(|e| Error::Kafka(format!("Failed to commit offsets: {}", e)))
+                    .map_err(|e| Error::Kafka(format!("Failed to commit offsets: {e}")))
             });
             ack_tasks.push(task);
         }
@@ -388,7 +387,7 @@ impl KafkaActor {
             handles.push(tokio::task::spawn_blocking(move || {
                 let metadata = consumer
                     .fetch_metadata(Some(&topic), timeout)
-                    .map_err(|e| Error::Kafka(format!("Failed to fetch metadata: {}", e)))?;
+                    .map_err(|e| Error::Kafka(format!("Failed to fetch metadata: {e}")))?;
                 let Some(topic_metadata) = metadata.topics().first() else {
                     warn!(topic = topic, "No topic metadata found");
                     return Ok(0);
@@ -398,11 +397,11 @@ impl KafkaActor {
                     let mut tpl = TopicPartitionList::new();
                     tpl.add_partition(&topic, partition as i32);
                     let committed = consumer.committed_offsets(tpl, timeout).map_err(|e| {
-                        Error::Kafka(format!("Failed to get committed offsets: {}", e))
+                        Error::Kafka(format!("Failed to get committed offsets: {e}"))
                     })?;
                     let (low, high) = consumer
                         .fetch_watermarks(&topic, partition as i32, timeout)
-                        .map_err(|e| Error::Kafka(format!("Failed to fetch watermarks: {}", e)))?;
+                        .map_err(|e| Error::Kafka(format!("Failed to fetch watermarks: {e}")))?;
                     let committed_offset = match committed.elements_for_topic(&topic).first() {
                         Some(element) => match element.offset() {
                             Offset::Offset(offset) => offset,
@@ -447,7 +446,7 @@ impl KafkaActor {
             handles.push(tokio::task::spawn_blocking(move || {
                 let metadata = consumer
                     .fetch_metadata(Some(&topic), timeout)
-                    .map_err(|e| Error::Kafka(format!("Failed to fetch metadata: {}", e)))?;
+                    .map_err(|e| Error::Kafka(format!("Failed to fetch metadata: {e}")))?;
                 let Some(topic_metadata) = metadata.topics().first() else {
                     warn!(topic = topic, "No topic metadata found");
                     return Ok(Vec::new());

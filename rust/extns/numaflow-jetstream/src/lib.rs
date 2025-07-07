@@ -335,7 +335,7 @@ impl JetstreamActor {
 
         for task in tasks {
             if let Err(err) = task.await {
-                return Err(Error::Other(format!("Error in ack task: {:?}", err)));
+                return Err(Error::Other(format!("Error in ack task: {err:?}")));
             }
         }
         Ok(())
@@ -458,7 +458,7 @@ impl MessageProcessingTracker {
         let ack_msg = async || {
             if let Err(err) = msg.ack().await {
                 tracing::error!(?err, "Failed to Ack message");
-                return Err(format!("Acknowledging Jetstream message: {:?}", err));
+                return Err(format!("Acknowledging Jetstream message: {err:?}"));
             }
             Ok(())
         };

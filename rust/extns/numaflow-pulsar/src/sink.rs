@@ -67,7 +67,7 @@ pub async fn new_sink(config: Config) -> Result<Sink> {
         Some(PulsarAuth::HTTPBasic { username, password }) => {
             let auth_token = Authentication {
                 name: "basic".into(),
-                data: format!("{}:{}", username, password).into(),
+                data: format!("{username}:{password}").into(),
             };
             pulsar = pulsar.with_auth(auth_token);
         }
@@ -94,7 +94,7 @@ impl Sink {
         for message in messages {
             let id = message.id.clone();
             // this function returns a SendFuture because the receipt may come long after this function was called
-            let confirm_status = self.producer.send_non_blocking(message).await.unwrap();
+            let confirm_status = self.producer.send_non_blocking(message).await?;
             server_confirmation.push((id, confirm_status));
         }
         for (id, confirm_status) in server_confirmation {
@@ -164,7 +164,7 @@ pub mod test_utils {
             .await
             .expect("Failed to create consumer");
 
-        println!("Fetching messages from topic: {}", topic);
+        println!("Fetching messages from topic: {topic}");
 
         let mut messages = Vec::with_capacity(count);
         let mut received = 0;
