@@ -20,16 +20,14 @@ impl TryFrom<KafkaMessage> for Message {
 
         // Use Kafka timestamp if available, otherwise fall back to current time
         let event_time = match message.timestamp {
-            Some(timestamp_millis) => {
-                DateTime::from_timestamp_millis(timestamp_millis)
-                    .unwrap_or_else(|| {
-                        tracing::warn!(
-                            timestamp_millis = timestamp_millis,
-                            "Invalid Kafka timestamp, falling back to current time"
-                        );
-                        Utc::now()
-                    })
-            }
+            Some(timestamp_millis) => DateTime::from_timestamp_millis(timestamp_millis)
+                .unwrap_or_else(|| {
+                    tracing::warn!(
+                        timestamp_millis = timestamp_millis,
+                        "Invalid Kafka timestamp, falling back to current time"
+                    );
+                    Utc::now()
+                }),
             None => {
                 tracing::debug!("Kafka message has no timestamp, using current time");
                 Utc::now()
