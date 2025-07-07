@@ -73,6 +73,47 @@ spec:
       volumeSize: 10Gi # Optional, defaults to 20Gi
 ```
 
+### PDB
+
+PDB (Pod Disruption Budget) is essential for running ISB in production to ensure availability.
+
+#### Example ISB with PDB
+
+```yaml
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: InterStepBufferService
+metadata:
+  name: default
+spec:
+  jetstream:
+    version: latest
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/component: isbsvc
+                  numaflow.numaproj.io/isbsvc-name: default
+              topologyKey: topology.kubernetes.io/zone
+            weight: 100
+```
+
+#### Example PDB Configuration
+
+```yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: default
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: isbsvc
+      numaflow.numaproj.io/isbsvc-name: default
+```
+
 ### JetStream Settings
 
 There are 2 places to configure JetStream settings:
