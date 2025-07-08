@@ -185,14 +185,15 @@ export function ContainerInfo({
             </Box>
           )}
 
-          {containerInfo?.lastTerminationExitCode && (
-            <Box className={"outer-box"}>
-              <Box className={"inner-box-title"}>Exit Code</Box>
-              <Box className={"inner-box-value"}>
-                {containerInfo?.lastTerminationExitCode}
+          {containerInfo?.lastTerminationExitCode !== null &&
+            containerInfo?.lastTerminationExitCode != undefined && (
+              <Box className={"outer-box"}>
+                <Box className={"inner-box-title"}>Exit Code</Box>
+                <Box className={"inner-box-value"}>
+                  {containerInfo?.lastTerminationExitCode}
+                </Box>
               </Box>
-            </Box>
-          )}
+            )}
 
           {containerInfo?.waitingReason && (
             <Box className={"outer-box"}>

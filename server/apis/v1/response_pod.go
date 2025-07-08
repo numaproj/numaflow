@@ -11,20 +11,20 @@ type PodDetails struct {
 }
 
 type ContainerDetails struct {
-	Name                    string `json:"name"`
-	ID                      string `json:"id"`
-	State                   string `json:"state"`
-	LastStartedAt           string `json:"lastStartedAt"`
-	RestartCount            int32  `json:"restartCount"`
-	LastTerminationReason   string `json:"lastTerminationReason"`
-	LastTerminationMessage  string `json:"lastTerminationMessage"`
-	LastTerminationExitCode int32  `json:"lastTerminationExitCode"`
-	WaitingReason           string `json:"waitingReason"`
-	WaitingMessage          string `json:"waitingMessage"`
-	TotalCPU                string `json:"totalCPU"`
-	TotalMemory             string `json:"totalMemory"`
-	RequestedCPU            string `json:"requestedCPU"`
-	RequestedMemory         string `json:"requestedMemory"`
-	LimitCPU                string `json:"limitCPU"`
-	LimitMemory             string `json:"limitMemory"`
+	Name                    string  `json:"name"`
+	ID                      string  `json:"id"`
+	State                   string  `json:"state"`
+	LastStartedAt           string  `json:"lastStartedAt"`
+	RestartCount            int32   `json:"restartCount"`
+	LastTerminationReason   string  `json:"lastTerminationReason"`
+	LastTerminationMessage  string  `json:"lastTerminationMessage"`
+	LastTerminationExitCode *int32  `json:"lastTerminationExitCode"`
+	WaitingReason           string  `json:"waitingReason"`
+	WaitingMessage          string  `json:"waitingMessage"`
+	TotalCPU                string  `json:"totalCPU"`
+	TotalMemory             string  `json:"totalMemory"`
+	RequestedCPU            string  `json:"requestedCPU"`
+	RequestedMemory         string  `json:"requestedMemory"`
+	LimitCPU                string  `json:"limitCPU"`
+	LimitMemory             string  `json:"limitMemory"`
 }
