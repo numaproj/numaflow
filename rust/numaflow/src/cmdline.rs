@@ -1,4 +1,4 @@
-use clap::Command;
+use clap::{Arg, Command, arg};
 
 pub(super) fn root_cli() -> Command {
     Command::new("numaflow")
@@ -12,7 +12,18 @@ pub(super) fn root_cli() -> Command {
 }
 
 fn add_processor_subcommand() -> Command {
-    Command::new("processor").about("Processor for Numaflow (Pipeline/MonoVertex)")
+    Command::new("processor")
+        .about("Processor for Numaflow (Pipeline/MonoVertex)")
+        .arg(
+            arg!(--"type" <TYPE> "Type of the vertex")
+                .value_parser(["Sink", "Source", "MapUDF", "ReduceUDF"])
+                .required(false),
+        )
+        .arg(
+            arg!(--"isbsvc-type" <ISBSVC_TYPE> "Type of the ISB service")
+                .value_parser(["jetstream", "redis", ""])
+                .required(false),
+        )
 }
 
 fn add_monitor_subcommand() -> Command {
