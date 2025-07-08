@@ -26,7 +26,7 @@ Welcome to Numaflow! A Kubernetes-native, serverless platform for running scalab
 
 ## Roadmap
 
-- Inbuilt Debugging Experience (1.5)
+- Make Rust code the primary for data-plane (1.6)
 
 ## Demo
 
