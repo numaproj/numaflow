@@ -319,7 +319,7 @@ const LineChartComponent = ({
           ) {
             switch (type) {
               case "monoVertex":
-                return `${pipelineId}-.*`;
+                return `${pipelineId}-mv-.*`;
               default:
                 return `${pipelineId}-${vertexId}-.*`;
             }
