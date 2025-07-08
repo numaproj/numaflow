@@ -311,7 +311,7 @@ docs-serve: docs
 
 .PHONY: docs-linkcheck
 docs-linkcheck: /usr/local/bin/lychee
-	lychee --exclude-path=CHANGELOG.md --exclude-path=./docs/APIs.md --exclude "https://localhost:*" --exclude "https://www.intuit.com/" --exclude "http://localhost:*" --exclude "http://127.0.0.1*" *.md $(shell find ./docs -name '*.md') $(shell find ./examples -name '*.yaml')
+	lychee --exclude-path=CHANGELOG.md --exclude-path=./docs/APIs.md --exclude "https://localhost:*" --exclude "http://localhost:*" --exclude "http://127.0.0.1*" *.md $(shell find ./docs -name '*.md') $(shell find ./examples -name '*.yaml') --accept 200,429
 
 # pre-push checks
 
