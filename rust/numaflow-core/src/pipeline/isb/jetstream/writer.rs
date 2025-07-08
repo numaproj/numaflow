@@ -308,7 +308,7 @@ impl JetstreamWriter {
                     Error::ISB(format!("Failed to compress message (write_all): {}", e))
                 })?;
                 Ok(Bytes::from(encoder.finish().map_err(|e| {
-                    Error::ISB(format!("Failed to compress message (finish): {}", e))
+                    Error::ISB(format!("Failed to compress message (finish): {e}"))
                 })?))
             }
             Some(CompressionType::Zstd) => {
@@ -316,12 +316,11 @@ impl JetstreamWriter {
                 let mut encoder = zstd::Encoder::new(vec![], 3)
                     .map_err(|e| Error::ISB(format!("Failed to create zstd encoder: {e:?}")))?;
                 encoder.write_all(message.as_ref()).map_err(|e| {
-                    Error::ISB(format!("Failed to compress message (write_all): {:?}", e))
+                    Error::ISB(format!("Failed to compress message (write_all): {e:?}"))
                 })?;
                 Ok(Bytes::from(encoder.finish().map_err(|e| {
                     Error::ISB(format!(
-                        "Failed to flush compressed message (encoder_shutdown): {:?}",
-                        e
+                        "Failed to flush compressed message (encoder_shutdown): {e:?}"
                     ))
                 })?))
             }
