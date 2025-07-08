@@ -1725,7 +1725,7 @@ func (h *handler) getContainerDetails(pod corev1.Pod) map[string]ContainerDetail
 		if status.LastTerminationState.Terminated != nil {
 			details.LastTerminationReason = status.LastTerminationState.Terminated.Reason
 			details.LastTerminationMessage = status.LastTerminationState.Terminated.Message
-			details.LastTerminationExitCode = status.LastTerminationState.Terminated.ExitCode
+			details.LastTerminationExitCode = &status.LastTerminationState.Terminated.ExitCode
 		}
 		// Time at which the container last (re-)started
 		if status.State.Running != nil {
