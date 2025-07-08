@@ -161,6 +161,7 @@ pub(crate) struct SourceVtxConfig {
 
 pub(crate) mod map {
     use numaflow_models::models::Udf;
+    use std::collections::HashMap;
 
     use crate::config::pipeline::{
         DEFAULT_GRPC_MAX_MESSAGE_SIZE, DEFAULT_MAP_SERVER_INFO_FILE, DEFAULT_MAP_SOCKET,

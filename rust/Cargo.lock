@@ -2351,6 +2351,7 @@ dependencies = [
  "async-nats",
  "backoff",
  "bytes",
+ "chrono",
  "rustls 0.23.25",
  "rustls-native-certs 0.8.1",
  "rustls-pki-types",
