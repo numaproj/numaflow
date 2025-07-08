@@ -18,7 +18,7 @@ type ContainerDetails struct {
 	RestartCount            int32  `json:"restartCount"`
 	LastTerminationReason   string `json:"lastTerminationReason"`
 	LastTerminationMessage  string `json:"lastTerminationMessage"`
-	LastTerminationExitCode int32  `json:"lastTerminationExitCode"`
+	LastTerminationExitCode *int32 `json:"lastTerminationExitCode"`
 	WaitingReason           string `json:"waitingReason"`
 	WaitingMessage          string `json:"waitingMessage"`
 	TotalCPU                string `json:"totalCPU"`
