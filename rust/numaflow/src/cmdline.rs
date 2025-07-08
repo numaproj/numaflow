@@ -1,4 +1,4 @@
-use clap::{Arg, Command, arg};
+use clap::{Command, arg};
 
 pub(super) fn root_cli() -> Command {
     Command::new("numaflow")
