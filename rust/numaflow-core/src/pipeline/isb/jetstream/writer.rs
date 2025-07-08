@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::hash::DefaultHasher;
 use std::io::Write;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -19,7 +18,7 @@ use tokio::time::{Instant, sleep};
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 
 use crate::Result;
 use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
@@ -212,7 +211,6 @@ impl JetstreamWriter {
     ) -> Result<JoinHandle<Result<()>>> {
         let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
             let mut messages_stream = messages_stream;
-            let mut hash = DefaultHasher::new();
 
             while let Some(message) = messages_stream.next().await {
                 let write_processing_start = Instant::now();
@@ -251,8 +249,7 @@ impl JetstreamWriter {
                     };
 
                     // check to which partition the message should be written
-                    let partition =
-                        forward::determine_partition(shuffle_key, vertex.partitions, &mut hash);
+                    let partition = forward::determine_partition(shuffle_key, vertex.partitions);
 
                     // write the message to the corresponding stream
                     let stream = vertex
