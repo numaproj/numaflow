@@ -43,10 +43,7 @@ impl ReduceForwarder {
         let (pbq_result, processor_result) = tokio::try_join!(pbq_handle, processor_handle)
             .map_err(|e| {
                 error!(?e, "Error while joining PBQ reader and reducer");
-                Error::Forwarder(format!(
-                    "Error while joining PBQ reader and reducer: {:?}",
-                    e
-                ))
+                Error::Forwarder(format!("Error while joining PBQ reader and reducer: {e}"))
             })?;
 
         processor_result.inspect_err(|e| {

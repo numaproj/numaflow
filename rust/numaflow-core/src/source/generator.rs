@@ -96,7 +96,7 @@ mod stream_generator {
             }
 
             // Generate all possible keys
-            let keys = (0..key_count).map(|i| format!("key-{}", i)).collect();
+            let keys = (0..key_count).map(|i| format!("key-{i}")).collect();
 
             Self {
                 content: cfg.content,
@@ -125,14 +125,14 @@ mod stream_generator {
                 padding: Vec<u8>,
             }
 
-            let padding: Vec<u8> = (self.msg_size_bytes > 8)
-                .then(|| {
-                    let size = self.msg_size_bytes - 8;
-                    let mut bytes = vec![0; size as usize];
-                    rand::thread_rng().fill(&mut bytes[..]);
-                    bytes
-                })
-                .unwrap_or_default();
+            let padding: Vec<u8> = if self.msg_size_bytes > 8 {
+                let size = self.msg_size_bytes - 8;
+                let mut bytes = vec![0; size as usize];
+                rand::thread_rng().fill(&mut bytes[..]);
+                bytes
+            } else {
+                Default::default()
+            };
 
             let id = chrono::Utc::now()
                 .timestamp_nanos_opt()

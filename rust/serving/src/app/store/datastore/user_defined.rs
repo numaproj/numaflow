@@ -70,29 +70,28 @@ pub(crate) async fn create_rpc_channel(socket_path: PathBuf) -> StoreResult<Chan
     const MAX_RECONNECT_ATTEMPTS: usize = usize::MAX;
 
     let interval = fixed::Interval::from_millis(RECONNECT_INTERVAL).take(MAX_RECONNECT_ATTEMPTS);
-    let channel = Retry::retry(
+    let channel = Retry::new(
         interval,
         async || match connect_with_uds(socket_path.clone()).await {
             Ok(channel) => Ok(channel),
             Err(e) => {
                 warn!(error = ?e, ?socket_path, "Failed to connect to UDS socket");
                 Err(StoreError::Connection(format!(
-                    "Failed to connect to uds socket {socket_path:?}: {:?}",
-                    e
+                    "Failed to connect to uds socket {socket_path:?}: {e:?}"
                 )))
             }
         },
         |_: &StoreError| true,
     )
     .await
-    .map_err(|e| StoreError::Connection(format!("Failed to connect: {:?}", e)))?;
+    .map_err(|e| StoreError::Connection(format!("Failed to connect: {e:?}")))?;
     Ok(channel)
 }
 
 /// Connects to the UDS socket and returns a channel
 pub(crate) async fn connect_with_uds(uds_path: PathBuf) -> StoreResult<Channel> {
     let channel = Endpoint::try_from("http://[::]:50051")
-        .map_err(|e| StoreError::Connection(format!("Failed to create endpoint: {:?}", e)))?
+        .map_err(|e| StoreError::Connection(format!("Failed to create endpoint: {e:?}")))?
         .connect_with_connector(service_fn(move |_: Uri| {
             let uds_socket = uds_path.clone();
             async move {
@@ -102,7 +101,7 @@ pub(crate) async fn connect_with_uds(uds_path: PathBuf) -> StoreResult<Channel> 
             }
         }))
         .await
-        .map_err(|e| StoreError::Connection(format!("Failed to connect: {:?}", e)))?;
+        .map_err(|e| StoreError::Connection(format!("Failed to connect: {e:?}")))?;
     Ok(channel)
 }
 

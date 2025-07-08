@@ -91,7 +91,7 @@ pub fn new_sink(config: KafkaSinkConfig) -> crate::Result<KafkaSink> {
 
     let producer: FutureProducer = client_config
         .create()
-        .map_err(|e| crate::Error::Kafka(format!("Failed to create producer: {}", e)))?;
+        .map_err(|e| crate::Error::Kafka(format!("Failed to create producer: {e}")))?;
 
     Ok(KafkaSink {
         producer,

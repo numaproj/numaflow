@@ -160,7 +160,7 @@ async fn start_source_forwarder(
     let _pending_reader_handle: Option<PendingReaderTasks> = if config.replica == 0 {
         let pending_reader = shared::metrics::create_pending_reader(
             &config.metrics_config,
-            LagReader::Source(source.clone()),
+            LagReader::Source(Box::new(source.clone())),
         )
         .await;
         Some(pending_reader.start(is_mono_vertex()).await)
@@ -170,7 +170,9 @@ async fn start_source_forwarder(
 
     start_metrics_server(
         config.metrics_config.clone(),
-        ComponentHealthChecks::Pipeline(PipelineComponents::Source(source.clone())),
+        ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Source(Box::new(
+            source.clone(),
+        )))),
     )
     .await;
 
@@ -274,7 +276,9 @@ async fn start_map_forwarder(
 
     let metrics_server_handle = start_metrics_server(
         config.metrics_config.clone(),
-        ComponentHealthChecks::Pipeline(PipelineComponents::Map(mapper_handle.unwrap().clone())),
+        ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Map(
+            mapper_handle.unwrap().clone(),
+        ))),
     )
     .await;
 
@@ -318,7 +322,7 @@ impl FenceGuard {
         // Create the fence file
         fs::write(&fence_file_path, "")
             .await
-            .map_err(|e| error::Error::Config(format!("Failed to create fence file: {}", e)))?;
+            .map_err(|e| error::Error::Config(format!("Failed to create fence file: {e}")))?;
         Ok(FenceGuard { fence_file_path })
     }
 }
@@ -361,8 +365,7 @@ async fn wait_for_fence_availability(
                 Err(e) => {
                     // Other error occurred
                     return Err(error::Error::Config(format!(
-                        "Error checking fence file {:?}: {}",
-                        fence_file_path, e
+                        "Error checking fence file {fence_file_path:?}: {e}"
                     )));
                 }
             }
@@ -370,7 +373,7 @@ async fn wait_for_fence_availability(
     })
     .await;
 
-    result.map_err(|e| error::Error::Config(format!("Fence wait timed out: {}", e)))?
+    result.map_err(|e| error::Error::Config(format!("Fence wait timed out: {e}")))?
 }
 
 async fn start_reduce_forwarder(
@@ -570,8 +573,8 @@ async fn start_aligned_reduce_forwarder(
     // Start the metrics server with one of the clients
     start_metrics_server(
         config.metrics_config.clone(),
-        ComponentHealthChecks::Pipeline(PipelineComponents::Reduce(UserDefinedReduce::Aligned(
-            reducer_client.clone(),
+        ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
+            UserDefinedReduce::Aligned(reducer_client.clone()),
         ))),
     )
     .await;
@@ -730,8 +733,8 @@ async fn start_unaligned_reduce_forwarder(
 
     start_metrics_server(
         config.metrics_config.clone(),
-        ComponentHealthChecks::Pipeline(PipelineComponents::Reduce(UserDefinedReduce::Unaligned(
-            reducer_client.clone(),
+        ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
+            UserDefinedReduce::Unaligned(reducer_client.clone()),
         ))),
     )
     .await;
@@ -797,7 +800,7 @@ async fn start_sink_forwarder(
             ServingStoreType::Nats(config) => {
                 let serving_store =
                     NatsServingStore::new(js_context.clone(), config.clone()).await?;
-                Some(ServingStore::Nats(serving_store))
+                Some(ServingStore::Nats(Box::new(serving_store)))
             }
         },
         None => None,
@@ -849,7 +852,9 @@ async fn start_sink_forwarder(
     if let Some(sink_handle) = sink_writers.first() {
         start_metrics_server(
             config.metrics_config.clone(),
-            ComponentHealthChecks::Pipeline(PipelineComponents::Sink(sink_handle.clone())),
+            ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Sink(Box::new(
+                sink_handle.clone(),
+            )))),
         )
         .await;
     }

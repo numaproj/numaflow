@@ -24,10 +24,11 @@ fn report_panic(panic_info: &PanicHookInfo<'_>) {
     let backtrace_captured = backtrace.status() == BacktraceStatus::Captured;
     let payload = if let Some(s) = panic_info.payload().downcast_ref::<&str>() {
         Some(*s)
-    } else if let Some(s) = panic_info.payload().downcast_ref::<String>() {
-        Some(s.as_str())
     } else {
-        None
+        panic_info
+            .payload()
+            .downcast_ref::<String>()
+            .map(|s| s.as_str())
     };
 
     // https://doc.rust-lang.org/std/panic/struct.PanicHookInfo.html#method.location

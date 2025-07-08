@@ -77,10 +77,10 @@ impl MonovertexConfig {
             .ok_or_else(|| Error::Config(format!("{ENV_MONO_VERTEX_OBJ} is not set")))?;
         let decoded_spec = BASE64_STANDARD
             .decode(mono_vertex_spec.as_bytes())
-            .map_err(|e| Error::Config(format!("Failed to decode mono vertex spec: {:?}", e)))?;
+            .map_err(|e| Error::Config(format!("Failed to decode mono vertex spec: {e:?}")))?;
 
         let mono_vertex_obj: MonoVertex = from_slice(&decoded_spec)
-            .map_err(|e| Error::Config(format!("Failed to parse mono vertex spec: {:?}", e)))?;
+            .map_err(|e| Error::Config(format!("Failed to parse mono vertex spec: {e:?}")))?;
 
         let batch_size = mono_vertex_obj
             .spec

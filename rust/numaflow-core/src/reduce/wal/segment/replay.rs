@@ -91,7 +91,7 @@ impl ReplayWal {
             let data_len = match data_len_result {
                 Ok(len) => len,
                 Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => break,
-                Err(e) => return Err(format!("expected to read_u64 but couldn't {}", e).into()),
+                Err(e) => return Err(format!("expected to read_u64 but couldn't {e}").into()),
             };
 
             // make sure we have data for that len
@@ -99,11 +99,9 @@ impl ReplayWal {
 
             // this is a critical error, we should be able to read data of len data_len
             if let Err(e) = reader.read_exact(&mut buffer).await {
-                return Err(format!(
-                    "expected to read {}, but couldn't read_exact {}",
-                    data_len, e
-                )
-                .into());
+                return Err(
+                    format!("expected to read {data_len}, but couldn't read_exact {e}").into(),
+                );
             }
 
             // send each line
