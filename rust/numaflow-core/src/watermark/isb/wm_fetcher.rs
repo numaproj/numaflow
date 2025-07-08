@@ -91,7 +91,7 @@ impl ISBWatermarkFetcher {
             if epoch != i64::MAX {
                 self.last_processed_wm
                     .get_mut(edge)
-                    .unwrap_or_else(|| panic!("invalid vertex {}", edge))
+                    .unwrap_or_else(|| panic!("invalid vertex {edge}"))
                     [partition_idx as usize] = epoch;
             }
         }
@@ -136,7 +136,7 @@ impl ISBWatermarkFetcher {
                 // update the last processed watermark for this particular edge and all the partitions
                 self.last_processed_wm
                     .get_mut(edge)
-                    .unwrap_or_else(|| panic!("invalid vertex {}", edge))
+                    .unwrap_or_else(|| panic!("invalid vertex {edge}"))
                     .iter_mut()
                     .for_each(|partition| *partition = epoch);
             }

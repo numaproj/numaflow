@@ -63,8 +63,7 @@ pub(crate) mod source {
             if let Some(value_blob) = &generator.value_blob {
                 let value_blob = BASE64_STANDARD.decode(value_blob.as_bytes()).map_err(|e| {
                     Error::Config(format!(
-                        "Failed to base64 decode generator value blob: {:?}",
-                        e
+                        "Failed to base64 decode generator value blob: {e:?}"
                     ))
                 })?;
                 generator_config.content = Bytes::from(value_blob);
@@ -137,8 +136,7 @@ pub(crate) mod source {
                 && !(0..=43200).contains(&timeout)
             {
                 return Err(Error::Config(format!(
-                    "visibility_timeout must be between 0 and 43200 for SQS source, got {}",
-                    timeout
+                    "visibility_timeout must be between 0 and 43200 for SQS source, got {timeout}"
                 )));
             }
 
@@ -146,8 +144,7 @@ pub(crate) mod source {
                 && !(0..=20).contains(&wait_time)
             {
                 return Err(Error::Config(format!(
-                    "wait_time_seconds must be between 0 and 20 for SQS source, got {}",
-                    wait_time
+                    "wait_time_seconds must be between 0 and 20 for SQS source, got {wait_time}"
                 )));
             }
 
@@ -155,8 +152,7 @@ pub(crate) mod source {
                 && !(1..=10).contains(&max_number_of_messages)
             {
                 return Err(Error::Config(format!(
-                    "max_number_of_messages must be between 1 and 10 for SQS source, got {}",
-                    max_number_of_messages
+                    "max_number_of_messages must be between 1 and 10 for SQS source, got {max_number_of_messages}"
                 )));
             }
 
@@ -352,7 +348,7 @@ pub(crate) mod source {
 
         fn try_from(mut source: Box<Source>) -> Result<Self> {
             if let Some(generator) = source.generator.take() {
-                return Ok(generator.try_into()?);
+                return generator.try_into();
             }
 
             if source.udsource.is_some() {
@@ -1342,8 +1338,7 @@ fn parse_kafka_auth_config(
                 }
                 _ => {
                     return Err(Error::Config(format!(
-                        "Unsupported SASL mechanism: {}",
-                        mechanism
+                        "Unsupported SASL mechanism: {mechanism}"
                     )));
                 }
             }

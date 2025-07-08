@@ -52,8 +52,7 @@ impl MapForwarder {
             tokio::try_join!(reader_handle, mapper_handle, writer_handle).map_err(|e| {
                 error!(?e, "Error while joining reader, mapper, and writer");
                 Error::Forwarder(format!(
-                    "Error while joining reader, mapper, and writer: {:?}",
-                    e
+                    "Error while joining reader, mapper, and writer: {e}"
                 ))
             })?;
 

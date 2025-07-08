@@ -53,7 +53,7 @@ impl Debug for Processor {
             self.name, self.status
         )?;
         for timeline in &self.timelines {
-            writeln!(f, "{:?}", timeline)?;
+            writeln!(f, "{timeline:?}")?;
         }
         Ok(())
     }
@@ -463,13 +463,13 @@ impl ProcessorManager {
         // infinite retry
         let interval = fixed::Interval::from_millis(RECONNECT_INTERVAL).take(usize::MAX);
 
-        Retry::retry(
+        Retry::new(
             interval,
             async || match bucket.watch_all().await {
                 Ok(w) => Ok(w),
                 Err(e) => {
                     error!(?e, "Failed to create watcher");
-                    Err(Error::Watermark(format!("Failed to create watcher: {}", e)))
+                    Err(Error::Watermark(format!("Failed to create watcher: {e}")))
                 }
             },
             |_: &Error| true,

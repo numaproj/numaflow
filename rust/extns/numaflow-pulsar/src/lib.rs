@@ -50,7 +50,7 @@ impl std::fmt::Debug for PulsarAuth {
                 } else {
                     &token[token.len() - 3..]
                 };
-                write!(f, "****{}", last_part)
+                write!(f, "****{last_part}")
             }
             PulsarAuth::HTTPBasic { username, password } => {
                 let last_part = if password.len() <= 3 {
@@ -58,7 +58,7 @@ impl std::fmt::Debug for PulsarAuth {
                 } else {
                     &password[password.len() - 3..]
                 };
-                write!(f, "username={}, password=****{}", username, last_part)
+                write!(f, "username={username}, password=****{last_part}")
             }
         }
     }

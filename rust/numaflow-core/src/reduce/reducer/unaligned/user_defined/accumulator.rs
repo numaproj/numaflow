@@ -141,8 +141,7 @@ impl UserDefinedAccumulator {
                 Ok(response) => response.into_inner(),
                 Err(e) => {
                     return Err(crate::Error::Reduce(format!(
-                        "failed to call reduce_fn: {}",
-                        e
+                        "failed to call reduce_fn: {e}"
                     )));
                 }
             };
@@ -159,7 +158,7 @@ impl UserDefinedAccumulator {
                     response = response_stream.message() => {
                         let response = match response {
                             Ok(r) => r,
-                            Err(e) => return Err(crate::Error::Reduce(format!("failed to receive response: {}", e))),
+                            Err(e) => return Err(crate::Error::Reduce(format!("failed to receive response: {e}"))),
                         };
 
                         let Some(response) = response else {

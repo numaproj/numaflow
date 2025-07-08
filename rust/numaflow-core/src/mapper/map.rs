@@ -270,7 +270,7 @@ impl MapHandle {
                                 self.tracker.discard(read_msg.offset).await.expect("failed to discard message");
                             } else {
                                 let permit = Arc::clone(&semaphore).acquire_owned()
-                                    .await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {}", e)))?;
+                                    .await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {e}" )))?;
                                 Self::unary(
                                     map_handle.clone(),
                                     permit,
@@ -348,7 +348,7 @@ impl MapHandle {
                                 warn!(offset = ?read_msg.offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
                                 self.tracker.discard(read_msg.offset).await.expect("failed to discard message");
                             } else {
-                                let permit = Arc::clone(&semaphore).acquire_owned().await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {}", e)))?;
+                                let permit = Arc::clone(&semaphore).acquire_owned().await.map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {e}")))?;
                                 let error_tx = error_tx.clone();
                                 Self::stream(
                                     map_handle.clone(),
@@ -370,7 +370,7 @@ impl MapHandle {
             let _permit = Arc::clone(&semaphore)
                 .acquire_many_owned(self.concurrency as u32)
                 .await
-                .map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {}", e)))?;
+                .map_err(|e| Error::Mapper(format!("failed to acquire semaphore: {e}")))?;
             info!(status=?self.final_result, "Map component is completed with status");
 
             // abort the shutdown handle since we are done processing, no need to wait for the
@@ -422,7 +422,7 @@ impl MapHandle {
                     .await
                     .expect("failed to discard message");
                 let _ = error_tx
-                    .send(Error::Mapper(format!("failed to send message: {}", e)))
+                    .send(Error::Mapper(format!("failed to send message: {e}")))
                     .await;
                 return;
             }
@@ -467,7 +467,7 @@ impl MapHandle {
                                 .await
                                 .expect("failed to discard message");
                             let _ = error_tx
-                                .send(Error::Mapper(format!("failed to receive message: {}", err)))
+                                .send(Error::Mapper(format!("failed to receive message: {err}")))
                                 .await;
                         }
                     }
@@ -502,7 +502,7 @@ impl MapHandle {
         map_handle
             .send(msg)
             .await
-            .map_err(|e| Error::Mapper(format!("failed to send message: {}", e)))?;
+            .map_err(|e| Error::Mapper(format!("failed to send message: {e}")))?;
 
         for receiver in receivers {
             match receiver.await {
@@ -536,7 +536,7 @@ impl MapHandle {
                 }
                 Err(e) => {
                     error!(?e, "failed to receive message");
-                    return Err(Error::Mapper(format!("failed to receive message: {}", e)));
+                    return Err(Error::Mapper(format!("failed to receive message: {e}")));
                 }
             }
         }
@@ -577,7 +577,7 @@ impl MapHandle {
                     .await
                     .expect("failed to discard message");
                 let _ = error_tx
-                    .send(Error::Mapper(format!("failed to send message: {}", e)))
+                    .send(Error::Mapper(format!("failed to send message: {e}")))
                     .await;
                 return;
             }

@@ -181,17 +181,17 @@ impl JetstreamWriter {
         let stream_info = stream
             .info()
             .await
-            .map_err(|e| Error::ISB(format!("Failed to get the stream info {:?}", e)))?;
+            .map_err(|e| Error::ISB(format!("Failed to get the stream info {e}")))?;
 
         let mut consumer: PullConsumer = js_ctx
             .get_consumer_from_stream(stream_name, stream_name)
             .await
-            .map_err(|e| Error::ISB(format!("Failed to get the consumer {:?}", e)))?;
+            .map_err(|e| Error::ISB(format!("Failed to get the consumer {e}")))?;
 
         let consumer_info = consumer
             .info()
             .await
-            .map_err(|e| Error::ISB(format!("Failed to get the consumer info {:?}", e)))?;
+            .map_err(|e| Error::ISB(format!("Failed to get the consumer info {e}")))?;
 
         let soft_usage = (consumer_info.num_pending as f64 + consumer_info.num_ack_pending as f64)
             / max_length as f64;
@@ -305,7 +305,7 @@ impl JetstreamWriter {
             Some(CompressionType::Gzip) => {
                 let mut encoder = GzEncoder::new(vec![], Compression::default());
                 encoder.write_all(message.as_ref()).map_err(|e| {
-                    Error::ISB(format!("Failed to compress message (write_all): {}", e))
+                    Error::ISB(format!("Failed to compress message (write_all): {e}"))
                 })?;
                 Ok(Bytes::from(encoder.finish().map_err(|e| {
                     Error::ISB(format!("Failed to compress message (finish): {e}"))
@@ -316,11 +316,11 @@ impl JetstreamWriter {
                 let mut encoder = zstd::Encoder::new(vec![], 3)
                     .map_err(|e| Error::ISB(format!("Failed to create zstd encoder: {e:?}")))?;
                 encoder.write_all(message.as_ref()).map_err(|e| {
-                    Error::ISB(format!("Failed to compress message (write_all): {e:?}"))
+                    Error::ISB(format!("Failed to compress message (write_all): {e}"))
                 })?;
                 Ok(Bytes::from(encoder.finish().map_err(|e| {
                     Error::ISB(format!(
-                        "Failed to flush compressed message (encoder_shutdown): {e:?}"
+                        "Failed to flush compressed message (encoder_shutdown): {e}"
                     ))
                 })?))
             }
@@ -329,13 +329,12 @@ impl JetstreamWriter {
                     .build(vec![])
                     .map_err(|e| Error::ISB(format!("Failed to create lz4 encoder: {e:?}")))?;
                 encoder.write_all(message.as_ref()).map_err(|e| {
-                    Error::ISB(format!("Failed to compress message (write_all): {}", e))
+                    Error::ISB(format!("Failed to compress message (write_all): {e}"))
                 })?;
                 let (compressed, result) = encoder.finish();
                 if let Err(e) = result {
                     return Err(Error::ISB(format!(
-                        "Failed to flush compressed message (encoder_shutdown): {:?}",
-                        e
+                        "Failed to flush compressed message (encoder_shutdown): {e}"
                     )));
                 };
                 Ok(Bytes::from(compressed))

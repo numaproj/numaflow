@@ -77,7 +77,7 @@ impl ConsumerReaderActor {
             Some(PulsarAuth::HTTPBasic { username, password }) => {
                 let auth_token = Authentication {
                     name: "basic".into(),
-                    data: format!("{}:{}", username, password).into(),
+                    data: format!("{username}:{password}").into(),
                 };
                 pulsar = pulsar.with_auth(auth_token);
             }

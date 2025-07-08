@@ -119,8 +119,7 @@ async fn fetch<
         Err(e) => {
             error!(?e, "Encoding response array length");
             return ApiError::InternalServerError(format!(
-                "Encoding response array len failed: {}",
-                e
+                "Encoding response array len failed: {e}"
             ))
             .into_response();
         }
@@ -373,7 +372,7 @@ async fn sync_publish<
     header_map.insert(
         NUMAFLOW_RESP_ARRAY_IDX_LEN,
         HeaderValue::from_str(response_arr_len.as_str()).map_err(|e| {
-            ApiError::InternalServerError(format!("Encoding response array len failed: {}", e))
+            ApiError::InternalServerError(format!("Encoding response array len failed: {e}"))
         })?,
     );
 
