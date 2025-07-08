@@ -119,7 +119,7 @@ impl Transformer {
         transform_handle
             .send(msg)
             .await
-            .map_err(|e| Error::Transformer(format!("failed to send message to server: {}", e)))?;
+            .map_err(|e| Error::Transformer(format!("failed to send message to server: {e}")))?;
 
         // wait for the response
         let response = tokio::select! {
@@ -127,7 +127,7 @@ impl Transformer {
                 return Err(Error::Transformer("Operation cancelled".to_string()));
             }
             response = receiver => {
-                response.map_err(|e| Error::Transformer(format!("failed to receive response from server: {}", e)))??
+                response.map_err(|e| Error::Transformer(format!("failed to receive response from server: {e}")))??
             }
         };
 
@@ -204,7 +204,7 @@ impl Transformer {
 
                 tokio::spawn(async move {
                     let permit = permit_fut.await.map_err(|e| {
-                        Error::Transformer(format!("failed to acquire semaphore: {}", e))
+                        Error::Transformer(format!("failed to acquire semaphore: {e}"))
                     })?;
                     let _permit = permit;
 
@@ -248,7 +248,7 @@ impl Transformer {
                     }
                     return Err(e);
                 }
-                Err(e) => return Err(Error::Transformer(format!("task join failed: {}", e))),
+                Err(e) => return Err(Error::Transformer(format!("task join failed: {e}"))),
             }
         }
         // batch transformation was successful

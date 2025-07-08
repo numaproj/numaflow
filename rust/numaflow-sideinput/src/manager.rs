@@ -155,14 +155,14 @@ impl SideInputManager {
             .user_defined_side_input_client
             .retrieve_side_input()
             .await
-            .map_err(|e| Error::SideInput(format!("Failed to retrieve side input: {:?}", e)))?;
+            .map_err(|e| Error::SideInput(format!("Failed to retrieve side input: {e:?}")))?;
 
         if !side_input_response.no_broadcast {
             // store the side-input data in the bucket
             bucket
                 .put(self.key, Bytes::from(side_input_response.value))
                 .await
-                .map_err(|e| Error::SideInput(format!("Failed to store side input: {:?}", e)))?;
+                .map_err(|e| Error::SideInput(format!("Failed to store side input: {e:?}")))?;
             debug!("Side input stored in the bucket");
         } else {
             info!("Side input is not broadcasted since no_broadcast is set to true");

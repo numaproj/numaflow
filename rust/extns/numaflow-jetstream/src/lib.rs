@@ -349,7 +349,7 @@ impl JetstreamActor {
 
         for task in tasks {
             if let Err(err) = task.await {
-                return Err(Error::Other(format!("Error in ack task: {:?}", err)));
+                return Err(Error::Other(format!("Error in ack task: {err:?}")));
             }
         }
         Ok(())
@@ -472,12 +472,12 @@ impl MessageProcessingTracker {
         let ack_msg = async || {
             if let Err(err) = msg.ack().await {
                 tracing::error!(?err, "Failed to Ack message");
-                return Err(format!("Acknowledging Jetstream message: {:?}", err));
+                return Err(format!("Acknowledging Jetstream message: {err:?}"));
             }
             Ok(())
         };
 
-        let ack_with_retry = Retry::retry(ack_retry_interval, ack_msg, |_: &String| true);
+        let ack_with_retry = Retry::new(ack_retry_interval, ack_msg, |_: &String| true);
 
         let ack_in_progress = async || {
             let ack_result = msg.ack_with(AckKind::Progress).await;
@@ -497,7 +497,7 @@ impl MessageProcessingTracker {
             Ok(())
         };
 
-        let nack_with_retry = Retry::retry(nack_retry_interval, nack_msg, |_: &String| true);
+        let nack_with_retry = Retry::new(nack_retry_interval, nack_msg, |_: &String| true);
 
         tokio::pin!(ack_signal_rx);
 

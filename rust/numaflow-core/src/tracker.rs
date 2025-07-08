@@ -396,7 +396,7 @@ impl TrackerHandle {
         self.sender
             .send(message)
             .await
-            .map_err(|e| Error::Tracker(format!("{:?}", e)))?;
+            .map_err(|e| Error::Tracker(format!("{e:?}")))?;
         Ok(())
     }
 
@@ -415,7 +415,7 @@ impl TrackerHandle {
         self.sender
             .send(message)
             .await
-            .map_err(|e| Error::Tracker(format!("{:?}", e)))?;
+            .map_err(|e| Error::Tracker(format!("{e:?}")))?;
         Ok(())
     }
 
@@ -425,7 +425,7 @@ impl TrackerHandle {
         self.sender
             .send(message)
             .await
-            .map_err(|e| Error::Tracker(format!("{:?}", e)))?;
+            .map_err(|e| Error::Tracker(format!("{e:?}")))?;
         Ok(())
     }
 
@@ -442,7 +442,7 @@ impl TrackerHandle {
         self.sender
             .send(message)
             .await
-            .map_err(|e| Error::Tracker(format!("{:?}", e)))?;
+            .map_err(|e| Error::Tracker(format!("{e:?}",)))?;
         Ok(())
     }
 
@@ -452,7 +452,7 @@ impl TrackerHandle {
         self.sender
             .send(message)
             .await
-            .map_err(|e| Error::Tracker(format!("{:?}", e)))?;
+            .map_err(|e| Error::Tracker(format!("{e:?}",)))?;
         Ok(())
     }
 
@@ -462,7 +462,7 @@ impl TrackerHandle {
         self.sender
             .send(message)
             .await
-            .map_err(|e| Error::Tracker(format!("{:?}", e)))?;
+            .map_err(|e| Error::Tracker(format!("{e:?}",)))?;
         Ok(())
     }
 
@@ -472,7 +472,7 @@ impl TrackerHandle {
         self.sender
             .send(message)
             .await
-            .map_err(|e| Error::Tracker(format!("{:?}", e)))?;
+            .map_err(|e| Error::Tracker(format!("{e:?}",)))?;
         Ok(())
     }
 

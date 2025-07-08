@@ -37,7 +37,7 @@ impl TryFrom<&[u8]> for RuntimeErrorEntry {
 
     fn try_from(value: &[u8]) -> std::result::Result<Self, Self::Error> {
         serde_json::from_slice::<RuntimeErrorEntry>(value)
-            .map_err(|e| Error::Deserialize(format!("{:?}", e)))
+            .map_err(|e| Error::Deserialize(format!("{e:?}")))
     }
 }
 
@@ -163,7 +163,7 @@ pub(crate) fn persist_application_error_to_file(
     // this is to ensure that while reading we skip this file to avoid race condition
     let current_file_path = dir_path.join(CURRENT_FILE);
     // append numa to the file name to denote files created by numa container
-    let file_name = format!("{}-numa.json", timestamp);
+    let file_name = format!("{timestamp}-numa.json");
     let final_file_path = dir_path.join(&file_name);
 
     let mut current_file =
@@ -224,7 +224,7 @@ impl Runtime {
         }
 
         let paths = fs::read_dir(app_err_path)
-            .map_err(|e| Error::File(format!("Failed to read directory: {:?}", e)))?;
+            .map_err(|e| Error::File(format!("Failed to read directory: {e:?}")))?;
 
         // iterate over all subdirectories and its files
         for entry in paths.flatten() {
@@ -239,7 +239,7 @@ impl Runtime {
                 Err(e) => {
                     error!(
                         "{}",
-                        Error::File(format!("Failed to read subdirectory: {:?}", e))
+                        Error::File(format!("Failed to read subdirectory: {e:?}"))
                     );
                     continue;
                 }
@@ -302,7 +302,7 @@ fn process_file_entry(
 
     fs::read(file_entry.path())
         .map_err(|e| {
-            let err = Error::File(format!("Failed to read file content: {:?}", e));
+            let err = Error::File(format!("Failed to read file content: {e:?}"));
             error!("{}", err);
             err
         })

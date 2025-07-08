@@ -119,7 +119,7 @@ impl StatusTracker {
 
     /// register a request id in the status kv store.
     pub(crate) async fn register(&self, id: &str, request_type: RequestType) -> Result<()> {
-        let status_key = format!("{}.{}", STATUS_KEY_PREFIX, id);
+        let status_key = format!("{STATUS_KEY_PREFIX}.{id}");
         let initial_status = ProcessingStatus::InProgress {
             pod_hash: self.pod_hash.to_string(),
         };
@@ -239,7 +239,7 @@ impl StatusTracker {
 
     /// returns the status of the request by checking the status kv store.
     pub(crate) async fn status(&mut self, id: &str) -> Result<ProcessingStatus> {
-        let key = format!("{}.{}", STATUS_KEY_PREFIX, id);
+        let key = format!("{STATUS_KEY_PREFIX}.{id}");
         let entry = self.status_kv.get(&key).await.map_err(|e| {
             Error::Other(format!("Failed to get status for request id {id}: {e:?}"))
         })?;
@@ -262,7 +262,7 @@ impl StatusTracker {
 
     /// Update the status of a request in the status kv store.
     async fn update_status(&self, id: &str, status: ProcessingStatus) -> Result<()> {
-        let key = format!("{}.{}", STATUS_KEY_PREFIX, id);
+        let key = format!("{STATUS_KEY_PREFIX}.{id}");
 
         let status_bytes: Bytes = status.try_into().expect("Failed to convert into bytes");
 
@@ -298,10 +298,7 @@ impl StatusTracker {
         // if nats is used, we need to write the done processing marker to the response kv store to
         // let the response watcher know that the processing is done. Since only tracker knows the
         // lifecycle of the request, we need to do it here.
-        let done_key = format!(
-            "{}.{}.{}.{}",
-            RESPONSE_KEY_PREFIX, pod_hash, id, DONE_PROCESSING_MARKER
-        );
+        let done_key = format!("{RESPONSE_KEY_PREFIX}.{pod_hash}.{id}.{DONE_PROCESSING_MARKER}");
         response_kv
             .put(done_key.clone(), Bytes::new())
             .await
@@ -319,7 +316,7 @@ impl StatusTracker {
     /// sends a done processing marker to the response kv store (if nats is used) to signal the end.
     /// This is because we just start processing marker in the register before inserting into the pipeline.
     pub(crate) async fn discard(&self, id: &str) -> Result<()> {
-        let key = format!("{}.{}", STATUS_KEY_PREFIX, id);
+        let key = format!("{STATUS_KEY_PREFIX}.{id}");
         self.status_kv
             .delete(&key)
             .await

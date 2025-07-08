@@ -87,8 +87,8 @@ pub(crate) trait SourceAcker {
 
 pub(crate) enum SourceType {
     UserDefinedSource(
-        user_defined::UserDefinedSourceRead,
-        user_defined::UserDefinedSourceAck,
+        Box<user_defined::UserDefinedSourceRead>,
+        Box<user_defined::UserDefinedSourceAck>,
         user_defined::UserDefinedSourceLagReader,
     ),
     Generator(
@@ -216,7 +216,7 @@ impl Source {
             SourceType::UserDefinedSource(reader, acker, lag_reader) => {
                 health_checker = Some(reader.get_source_client());
                 tokio::spawn(async move {
-                    let actor = SourceActor::new(receiver, reader, acker, lag_reader);
+                    let actor = SourceActor::new(receiver, *reader, *acker, lag_reader);
                     actor.run().await;
                 });
             }
@@ -551,7 +551,7 @@ impl Source {
         cancel_token: &CancellationToken,
     ) {
         let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
-        let _ = Retry::retry(
+        let _ = Retry::new(
             interval,
             async || {
                 let result = Self::ack(source_handle.clone(), offsets.clone()).await;
@@ -809,7 +809,7 @@ mod tests {
         let tracker = TrackerHandle::new(None, None);
         let source = Source::new(
             5,
-            SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
+            SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
             tracker.clone(),
             true,
             None,

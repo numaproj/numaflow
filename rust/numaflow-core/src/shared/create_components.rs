@@ -130,7 +130,7 @@ pub(crate) async fn create_sink_writer(
             SinkWriterBuilder::new(
                 batch_size,
                 read_timeout,
-                SinkClientType::Pulsar(pulsar_sink),
+                SinkClientType::Pulsar(Box::new(pulsar_sink)),
                 tracker_handle,
             )
         }
@@ -198,7 +198,7 @@ pub(crate) async fn create_sink_writer(
             SinkType::Pulsar(pulsar_sink_config) => {
                 let pulsar_sink = numaflow_pulsar::sink::new_sink(*pulsar_sink_config).await?;
                 Ok(sink_writer_builder
-                    .fb_sink_client(SinkClientType::Pulsar(pulsar_sink))
+                    .fb_sink_client(SinkClientType::Pulsar(Box::new(pulsar_sink)))
                     .build()
                     .await?)
             }
@@ -409,7 +409,7 @@ pub async fn create_source(
                 new_source(source_grpc_client.clone(), batch_size, read_timeout).await?;
             Ok(Source::new(
                 batch_size,
-                source::SourceType::UserDefinedSource(ud_read, ud_ack, ud_lag),
+                source::SourceType::UserDefinedSource(Box::new(ud_read), Box::new(ud_ack), ud_lag),
                 tracker_handle,
                 source_config.read_ahead,
                 transformer,

@@ -16,7 +16,7 @@
 //! #[tokio::main]
 //! async fn main() {
 //!     let interval = fixed::Interval::from_millis(1);
-//!     let fut = Retry::retry(interval, some_work, |_: &()| true);
+//!     let fut = Retry::new(interval, some_work, |_: &()| true);
 //!     let result = fut.await;
 //!     assert!(result.is_ok());
 //!     assert_eq!(result.unwrap(), 42);

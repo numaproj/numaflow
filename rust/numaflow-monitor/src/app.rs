@@ -45,7 +45,7 @@ pub(crate) async fn start_main_server(
         .handle(handle)
         .serve(router.into_make_service())
         .await
-        .map_err(|e| Error::Router(format!("Monitor Server: {}", e)))?;
+        .map_err(|e| Error::Router(format!("Monitor Server: {e}")))?;
 
     Ok(())
 }

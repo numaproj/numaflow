@@ -16,7 +16,7 @@ pub async fn run() -> std::result::Result<(), Box<dyn std::error::Error + Send +
 
     let tls_config = RustlsConfig::from_pem(cert.pem().into(), key.serialize_pem().into())
         .await
-        .map_err(|e| format!("Failed to create tls config {:?}", e))?;
+        .map_err(|e| format!("Failed to create tls config {e:?}"))?;
 
     let server_config = MonitorServerConfig::default();
 

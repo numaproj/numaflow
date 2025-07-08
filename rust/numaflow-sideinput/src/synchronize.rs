@@ -152,13 +152,13 @@ async fn create_watcher(bucket: jetstream::kv::Store) -> Watch {
     // infinite retry
     let interval = fixed::Interval::from_millis(RECONNECT_INTERVAL).take(usize::MAX);
 
-    Retry::retry(
+    Retry::new(
         interval,
         async || match bucket.watch_all_from_revision(1).await {
             Ok(w) => Ok(w),
             Err(e) => {
                 error!(?e, "Failed to create watcher");
-                Err(Error::SideInput(format!("Failed to create watcher: {}", e)))
+                Err(Error::SideInput(format!("Failed to create watcher: {e}")))
             }
         },
         |_: &Error| true,

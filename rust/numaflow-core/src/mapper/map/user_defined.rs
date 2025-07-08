@@ -105,7 +105,7 @@ impl UserDefinedUnaryMap {
             Err(e) => {
                 let mut senders = sender_map.lock().await;
                 for (_, (_, sender)) in senders.drain() {
-                    let _ = sender.send(Err(Error::Grpc(e.clone())));
+                    let _ = sender.send(Err(Error::Grpc(Box::new(e.clone()))));
                     pipeline_metrics()
                         .forwarder
                         .udf_error_total
@@ -204,7 +204,7 @@ impl UserDefinedBatchMap {
                 let mut senders = sender_map.lock().await;
                 for (_, (_, sender)) in senders.drain() {
                     sender
-                        .send(Err(Error::Grpc(e.clone())))
+                        .send(Err(Error::Grpc(Box::new(e.clone()))))
                         .expect("failed to send error response");
                     pipeline_metrics()
                         .forwarder
@@ -320,22 +320,21 @@ async fn create_response_stream(
     read_tx
         .send(handshake_request)
         .await
-        .map_err(|e| Error::Mapper(format!("failed to send handshake request: {}", e)))?;
+        .map_err(|e| Error::Mapper(format!("failed to send handshake request: {e}")))?;
 
     let mut resp_stream = client
         .map_fn(Request::new(ReceiverStream::new(read_rx)))
         .await
-        .map_err(Error::Grpc)?
+        .map_err(|e| Error::Grpc(Box::new(e)))?
         .into_inner();
 
-    let handshake_response =
-        resp_stream
-            .message()
-            .await
-            .map_err(Error::Grpc)?
-            .ok_or(Error::Mapper(
-                "failed to receive handshake response".to_string(),
-            ))?;
+    let handshake_response = resp_stream
+        .message()
+        .await
+        .map_err(|e| Error::Grpc(Box::new(e)))?
+        .ok_or(Error::Mapper(
+            "failed to receive handshake response".to_string(),
+        ))?;
 
     if handshake_response.handshake.is_none_or(|h| !h.sot) {
         return Err(Error::Mapper("invalid handshake response".to_string()));
@@ -396,7 +395,7 @@ impl UserDefinedStreamMap {
             Err(e) => {
                 let mut senders = sender_map.lock().await;
                 for (_, (_, sender)) in senders.drain() {
-                    let _ = sender.send(Err(Error::Grpc(e.clone()))).await;
+                    let _ = sender.send(Err(Error::Grpc(Box::new(e.clone())))).await;
                     pipeline_metrics()
                         .forwarder
                         .udf_error_total
