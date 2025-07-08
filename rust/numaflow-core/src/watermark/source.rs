@@ -634,6 +634,7 @@ mod tests {
                 },
                 conditions: None,
                 partitions: 1,
+                to_vertex_type: "MapUDF",
             }],
             &source_config,
             CancellationToken::new(),
@@ -748,6 +749,7 @@ mod tests {
             },
             conditions: None,
             partitions: 1,
+            to_vertex_type: "MapUDF",
         }];
 
         // create to vertex stream since we will be writing ctrl message to it
@@ -939,6 +941,7 @@ mod tests {
             },
             conditions: None,
             partitions: 1,
+            to_vertex_type: "MapUDF",
         }];
 
         // create to vertex stream since we will be writing ctrl message to it

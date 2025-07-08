@@ -715,6 +715,7 @@ mod tests {
                     buffer_full_strategy: RetryUntilSuccess,
                 },
                 conditions: None,
+                to_vertex_type: "MapUDF",
             }],
             vertex_type_config: VertexType::Source(SourceVtxConfig {
                 source_config: SourceConfig {
@@ -1107,6 +1108,7 @@ mod tests {
                     buffer_full_strategy: RetryUntilSuccess,
                 },
                 conditions: None,
+                to_vertex_type: "MapUDF",
             }],
             from_vertex_config: vec![FromVertexConfig {
                 name: "map-in",

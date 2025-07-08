@@ -19,12 +19,12 @@ use tokio::time::{Instant, sleep};
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::Result;
-use crate::config::pipeline::ToVertexConfig;
 use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
 use crate::config::pipeline::isb_config::{CompressionType, ISBConfig};
+use crate::config::pipeline::{ToVertexConfig, VERTEX_TYPE_REDUCE_UDF};
 use crate::error::Error;
 
 use crate::message::{IntOffset, Message, Offset};
@@ -243,12 +243,16 @@ impl JetstreamWriter {
                         continue;
                     }
 
+                    // if the to_vertex is a reduce vertex, we should use the keys as the shuffle key
+                    let shuffle_key = if vertex.to_vertex_type == VERTEX_TYPE_REDUCE_UDF {
+                        message.keys.join(",")
+                    } else {
+                        String::from_utf8_lossy(&message.id.offset).to_string()
+                    };
+
                     // check to which partition the message should be written
-                    let partition = forward::determine_partition(
-                        String::from_utf8_lossy(&message.id.offset).to_string(),
-                        vertex.partitions,
-                        &mut hash,
-                    );
+                    let partition =
+                        forward::determine_partition(shuffle_key, vertex.partitions, &mut hash);
 
                     // write the message to the corresponding stream
                     let stream = vertex
@@ -688,6 +692,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: "MapUDF",
             }],
             js_ctx: context.clone(),
             paf_concurrency: 100,
@@ -785,6 +790,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: "MapUDF",
             }],
             js_ctx: context.clone(),
             paf_concurrency: 100,
@@ -851,6 +857,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: "MapUDF",
             }],
             js_ctx: context.clone(),
             paf_concurrency: 100,
@@ -1061,6 +1068,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: "MapUDF",
             }],
             js_ctx: context.clone(),
             paf_concurrency: 100,
@@ -1155,6 +1163,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: "MapUDF",
             }],
             js_ctx: context.clone(),
             paf_concurrency: 100,
@@ -1249,6 +1258,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: "MapUDF",
             }],
             js_ctx: context.clone(),
             paf_concurrency: 100,
@@ -1369,6 +1379,7 @@ mod tests {
                         operator: Some("and".to_string()),
                         values: vec!["tag1".to_string(), "tag2".to_string()],
                     }))),
+                    to_vertex_type: "MapUDF",
                 },
                 ToVertexConfig {
                     name: "vertex2",
@@ -1381,6 +1392,7 @@ mod tests {
                         operator: Some("or".to_string()),
                         values: vec!["tag2".to_string()],
                     }))),
+                    to_vertex_type: "MapUDF",
                 },
                 ToVertexConfig {
                     name: "vertex3",
@@ -1393,6 +1405,7 @@ mod tests {
                         operator: Some("not".to_string()),
                         values: vec!["tag1".to_string()],
                     }))),
+                    to_vertex_type: "MapUDF",
                 },
             ],
             js_ctx: context.clone(),

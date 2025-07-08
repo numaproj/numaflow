@@ -551,6 +551,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: "MapUDF",
             }],
             CancellationToken::new(),
             None,
@@ -732,6 +733,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: "MapUDF",
             }],
             CancellationToken::new(),
             None,
@@ -879,6 +881,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: "MapUDF",
             }],
             CancellationToken::new(),
             None,

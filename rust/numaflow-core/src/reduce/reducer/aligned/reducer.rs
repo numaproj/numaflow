@@ -631,6 +631,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: "MapUDF",
             }],
             js_ctx: js_context.clone(),
             paf_concurrency: 100,
@@ -875,6 +876,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: "MapUDF",
             }],
             js_ctx: js_context.clone(),
             paf_concurrency: 100,
@@ -1122,6 +1124,7 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: "MapUDF",
             }],
             js_ctx: js_context.clone(),
             paf_concurrency: 100,

@@ -219,6 +219,7 @@ mod tests {
                 ..Default::default()
             },
             conditions: None,
+            to_vertex_type: "MapUDF",
         };
 
         let mut manager =
@@ -261,6 +262,7 @@ mod tests {
                 ..Default::default()
             },
             conditions: None,
+            to_vertex_type: "MapUDF",
         };
 
         let manager =
@@ -299,6 +301,7 @@ mod tests {
                 ..Default::default()
             },
             conditions: None,
+            to_vertex_type: "MapUDF",
         };
 
         let mut manager =
@@ -333,6 +336,7 @@ mod tests {
                 ..Default::default()
             },
             conditions: None,
+            to_vertex_type: "MapUDF",
         };
 
         let mut manager =
