@@ -299,6 +299,18 @@ impl MapHandle {
                     // we don't need to tokio spawn here because, unlike unary and stream, batch is
                     // a blocking operation, and we process one batch at a time.
                     while let Some(batch) = chunked_stream.next().await {
+                        // if there are errors then we need to drain the stream and nack
+                        if self.shutting_down_on_err {
+                            for msg in batch {
+                                warn!(offset = ?msg.offset, error = ?self.final_result, "Map component is shutting down because of an error, not accepting the message");
+                                self.tracker
+                                    .discard(msg.offset)
+                                    .await
+                                    .expect("failed to discard message");
+                            }
+                            continue;
+                        }
+
                         let offsets: Vec<Offset> =
                             batch.iter().map(|msg| msg.offset.clone()).collect();
                         if !batch.is_empty() {
@@ -322,7 +334,6 @@ impl MapHandle {
                                 cln_token.cancel();
                                 self.shutting_down_on_err = true;
                                 self.final_result = Err(e);
-                                break;
                             }
                         }
                     }
