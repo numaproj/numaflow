@@ -148,8 +148,10 @@ impl ISBWatermarkPublisher {
         // we can avoid publishing the watermark if the offset is smaller than the last published offset
         // since we do unordered writes to ISB, the offsets can be out of order even though the watermark
         // is monotonically increasing.
+        // NOTE: in idling case since we reuse the control message offset, we can have the same offset
+        // with larger watermark (we should publish it).
         let last_state = &mut last_published_wm_state[stream.partition as usize];
-        if offset <= last_state.offset || watermark < last_state.watermark {
+        if offset < last_state.offset || watermark < last_state.watermark {
             return;
         }
 
