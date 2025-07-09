@@ -21,7 +21,7 @@ spec:
         min: 1
       udf:
         container:
-          # Split input message into an array with comma, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/flatmap
+          # Split input message into an array with comma, see https://github.com/numaproj/numaflow-go/tree/main/pkg/batchmapper/examples/batchmap_flatmap
           image: quay.io/numaio/numaflow-go/batch-map-flatmap:stable
           imagePullPolicy: Always
     - name: go-udsink
