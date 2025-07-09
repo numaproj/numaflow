@@ -20,7 +20,6 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::{self, Instant};
 use tokio_stream::StreamExt;
-use tracing::info;
 
 pub type Result<T> = core::result::Result<T, Error>;
 
@@ -173,7 +172,6 @@ impl JetstreamActor {
                 error: err.to_string(),
             })?;
 
-        info!("nats client: {:?}", client);
         let js_ctx = async_nats::jetstream::new(client);
         let consumer: PullConsumer = js_ctx
             .get_consumer_from_stream(&config.consumer, &config.stream)

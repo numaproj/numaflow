@@ -144,80 +144,116 @@ func (s *APISuite) TestISBSVCReplica1() {
 func (s *APISuite) TestAPIsForIsbAndPipelineAndMonoVertex() {
 	defer s.Given().When().UXServerPodPortForward(8145, 8443).TerminateAllPodPortForwards()
 
+	s.T().Log("Calling /api/v1/namespaces ...")
 	namespaceBody := HTTPExpect(s.T(), "https://localhost:8145").GET("/api/v1/namespaces").
 		Expect().
 		Status(200).Body().Raw()
+	s.T().Logf("/api/v1/namespaces response: %s", namespaceBody)
 	var namespaceExpect = `numaflow-system`
 	assert.Contains(s.T(), namespaceBody, namespaceExpect)
 
+	s.T().Log("Unmarshalling testPipeline1 ...")
 	var pl1 v1alpha1.Pipeline
 	err := json.Unmarshal(testPipeline1, &pl1)
+	if err != nil {
+		s.T().Logf("Failed to unmarshal testPipeline1: %v", err)
+	}
 	assert.NoError(s.T(), err)
+	s.T().Log("Creating pipeline1 ...")
 	createPipeline1 := HTTPExpect(s.T(), "https://localhost:8145").POST(fmt.Sprintf("/api/v1/namespaces/%s/pipelines", Namespace)).WithJSON(pl1).
 		Expect().
 		Status(200).Body().Raw()
+	s.T().Logf("Create pipeline1 response: %s", createPipeline1)
+	s.T().Log("Unmarshalling testPipeline2 ...")
 	var pl2 v1alpha1.Pipeline
 	err = json.Unmarshal(testPipeline2, &pl2)
+	if err != nil {
+		s.T().Logf("Failed to unmarshal testPipeline2: %v", err)
+	}
 	assert.NoError(s.T(), err)
+	s.T().Log("Creating pipeline2 ...")
 	createPipeline2 := HTTPExpect(s.T(), "https://localhost:8145").POST(fmt.Sprintf("/api/v1/namespaces/%s/pipelines", Namespace)).WithJSON(pl2).
 		Expect().
 		Status(200).Body().Raw()
+	s.T().Logf("Create pipeline2 response: %s", createPipeline2)
 	var createPipelineSuccessExpect = `"data":null`
 	assert.Contains(s.T(), createPipeline1, createPipelineSuccessExpect)
 	assert.Contains(s.T(), createPipeline2, createPipelineSuccessExpect)
 
 	var patchPipelineSuccessExpect = `"data":null`
+	s.T().Log("Pausing pipeline1 ...")
 	pausePipeline1 := HTTPExpect(s.T(), "https://localhost:8145").PATCH(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s", Namespace, testPipeline1Name)).WithBytes(testPipeline1Pause).
 		Expect().
 		Status(200).Body().Raw()
+	s.T().Logf("Pause pipeline1 response: %s", pausePipeline1)
 	assert.Contains(s.T(), pausePipeline1, patchPipelineSuccessExpect)
 
+	s.T().Log("Resuming pipeline1 ...")
 	resumePipeline1 := HTTPExpect(s.T(), "https://localhost:8145").PATCH(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s", Namespace, testPipeline1Name)).WithBytes(testPipeline1Resume).
 		Expect().
 		Status(200).Body().Raw()
+	s.T().Logf("Resume pipeline1 response: %s", resumePipeline1)
 	assert.Contains(s.T(), resumePipeline1, patchPipelineSuccessExpect)
 
 	// create a mono vertex
+	s.T().Log("Unmarshalling testMonoVertex1 ...")
 	var mv1 v1alpha1.MonoVertex
 	err = json.Unmarshal(testMonoVertex1, &mv1)
+	if err != nil {
+		s.T().Logf("Failed to unmarshal testMonoVertex1: %v", err)
+	}
 	assert.NoError(s.T(), err)
+	s.T().Log("Creating mono vertex ...")
 	createMonoVertex := HTTPExpect(s.T(), "https://localhost:8145").POST(fmt.Sprintf("/api/v1/namespaces/%s/mono-vertices", Namespace)).WithJSON(mv1).
 		Expect().
 		Status(200).Body().Raw()
+	s.T().Logf("Create mono vertex response: %s", createMonoVertex)
 	var createMonoVertexSuccessExpect = `"data":null`
 	assert.Contains(s.T(), createMonoVertex, createMonoVertexSuccessExpect)
 
+	s.T().Log("Getting cluster summary ...")
 	clusterSummaryBody := HTTPExpect(s.T(), "https://localhost:8145").GET("/api/v1/cluster-summary").
 		Expect().
 		Status(200).Body().Raw()
+	s.T().Logf("Cluster summary response: %s", clusterSummaryBody)
 	var clusterSummaryExpect = `{"isEmpty":false,"namespace":"numaflow-system","pipelineSummary":{"active":{"Healthy":2,"Warning":0,"Critical":0},"inactive":0},"isbServiceSummary":{"active":{"Healthy":1,"Warning":0,"Critical":0},"inactive":0},"monoVertexSummary":{"active":{"Healthy":1,"Warning":0,"Critical":0},"inactive":0}}`
 	assert.Contains(s.T(), clusterSummaryBody, clusterSummaryExpect)
 
+	s.T().Log("Listing pipelines ...")
 	listPipelineBody := HTTPExpect(s.T(), "https://localhost:8145").GET(fmt.Sprintf("/api/v1/namespaces/%s/pipelines", Namespace)).
 		Expect().
 		Status(200).Body().Raw()
+	s.T().Logf("List pipelines response: %s", listPipelineBody)
 	assert.Contains(s.T(), listPipelineBody, testPipeline1Name)
 	assert.Contains(s.T(), listPipelineBody, testPipeline2Name)
 
+	s.T().Log("Deleting pipeline1 ...")
 	deletePipeline1 := HTTPExpect(s.T(), "https://localhost:8145").DELETE(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s", Namespace, testPipeline1Name)).
 		Expect().
 		Status(200).Body().Raw()
+	s.T().Logf("Delete pipeline1 response: %s", deletePipeline1)
+	s.T().Log("Deleting pipeline2 ...")
 	deletePipeline2 := HTTPExpect(s.T(), "https://localhost:8145").DELETE(fmt.Sprintf("/api/v1/namespaces/%s/pipelines/%s", Namespace, testPipeline2Name)).
 		Expect().
 		Status(200).Body().Raw()
+	s.T().Logf("Delete pipeline2 response: %s", deletePipeline2)
 	var deletePipelineSuccessExpect = `"data":null`
 	assert.Contains(s.T(), deletePipeline1, deletePipelineSuccessExpect)
 	assert.Contains(s.T(), deletePipeline2, deletePipelineSuccessExpect)
 
+	s.T().Log("Listing mono vertices ...")
 	listMonoVertexBody := HTTPExpect(s.T(), "https://localhost:8145").GET(fmt.Sprintf("/api/v1/namespaces/%s/mono-vertices", Namespace)).
 		Expect().
 		Status(200).Body().Raw()
+	s.T().Logf("List mono vertices response: %s", listMonoVertexBody)
 	assert.Contains(s.T(), listMonoVertexBody, testMonoVertex1Name)
 
+	s.T().Log("Deleting mono vertex ...")
 	// deletes a mono-vertex
 	deleteMonoVertex := HTTPExpect(s.T(), "https://localhost:8145").DELETE(fmt.Sprintf("/api/v1/namespaces/%s/mono-vertices/%s", Namespace, testMonoVertex1Name)).
 		Expect().
 		Status(200).Body().Raw()
+	s.T().Logf("Delete mono vertex response: %s", deleteMonoVertex)
 	var deleteMonoVertexSuccessExpect = `"data":null`
 	assert.Contains(s.T(), deleteMonoVertex, deleteMonoVertexSuccessExpect)
 
