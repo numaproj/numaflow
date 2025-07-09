@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	errors2 "github.com/numaproj/numaflow/pkg/sources/errors"
 	"os"
 	"sync/atomic"
 	"time"
@@ -339,7 +340,7 @@ func (ns *jsSource) registerConsumerHandler(ctx context.Context) (jetstreamlib.C
 			ns.logger.Warnw("Ignoring the error", zap.Error(err))
 			return
 		}
-		ns.latestErr.Store(err)
+		ns.latestErr.Store(&errors2.SourceReadErr{Message: err.Error(), Retryable: true})
 		ns.logger.Errorw("Consuming messages", zap.Error(err))
 	}
 
