@@ -152,18 +152,12 @@ func (s *APISuite) TestAPIsForIsbAndPipelineAndMonoVertex() {
 
 	var pl1 v1alpha1.Pipeline
 	err := json.Unmarshal(testPipeline1, &pl1)
-	if err != nil {
-		s.T().Logf("Failed to unmarshal testPipeline1: %v", err)
-	}
 	assert.NoError(s.T(), err)
 	createPipeline1 := HTTPExpect(s.T(), "https://localhost:8145").POST(fmt.Sprintf("/api/v1/namespaces/%s/pipelines", Namespace)).WithJSON(pl1).
 		Expect().
 		Status(200).Body().Raw()
 	var pl2 v1alpha1.Pipeline
 	err = json.Unmarshal(testPipeline2, &pl2)
-	if err != nil {
-		s.T().Logf("Failed to unmarshal testPipeline2: %v", err)
-	}
 	assert.NoError(s.T(), err)
 	createPipeline2 := HTTPExpect(s.T(), "https://localhost:8145").POST(fmt.Sprintf("/api/v1/namespaces/%s/pipelines", Namespace)).WithJSON(pl2).
 		Expect().
@@ -186,9 +180,6 @@ func (s *APISuite) TestAPIsForIsbAndPipelineAndMonoVertex() {
 	// create a mono vertex
 	var mv1 v1alpha1.MonoVertex
 	err = json.Unmarshal(testMonoVertex1, &mv1)
-	if err != nil {
-		s.T().Logf("Failed to unmarshal testMonoVertex1: %v", err)
-	}
 	assert.NoError(s.T(), err)
 	createMonoVertex := HTTPExpect(s.T(), "https://localhost:8145").POST(fmt.Sprintf("/api/v1/namespaces/%s/mono-vertices", Namespace)).WithJSON(mv1).
 		Expect().
@@ -248,7 +239,7 @@ func (s *APISuite) TestAPIsForMetricsAndWatermarkAndPodsForPipeline() {
 		VertexPodLogContains("p1", LogMapVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
 		VertexPodLogContains("output", LogSinkVertexStartedRustRuntime).
 		DaemonPodLogContains(pipelineName, LogDaemonStarted).
-		VertexPodLogContains("output", `"Data":.*,"Createdts":.*`)
+		VertexPodLogContains("output", `"value":.*EventTime - \d+`)
 
 	defer w.UXServerPodPortForward(8146, 8443).TerminateAllPodPortForwards()
 

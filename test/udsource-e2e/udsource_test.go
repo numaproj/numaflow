@@ -54,7 +54,6 @@ func (s *UserDefinedSourceSuite) testSimpleSourceRust() {
 	s.testSimpleSource("rust", false)
 }
 
-// rust-done
 func (s *UserDefinedSourceSuite) TestUDSource() {
 	var wg sync.WaitGroup
 	wg.Add(4)

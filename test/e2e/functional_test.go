@@ -37,7 +37,6 @@ type FunctionalSuite struct {
 	E2ESuite
 }
 
-// rust-done
 func (s *FunctionalSuite) TestCreateSimplePipeline() {
 	w := s.Given().Pipeline("@testdata/simple-pipeline.yaml").
 		When().
@@ -149,7 +148,6 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 	timer.Stop()
 }
 
-// rust-done
 func (s *FunctionalSuite) TestUDFFiltering() {
 	w := s.Given().Pipeline("@testdata/udf-filtering.yaml").
 		When().
@@ -179,7 +177,6 @@ func (s *FunctionalSuite) TestUDFFiltering() {
 	w.Expect().RedisSinkNotContains("udf-filtering-out", expect2)
 }
 
-// rust-done
 func (s *FunctionalSuite) TestDropOnFull() {
 
 	// the drop on full feature is not supported with redis ISBSVC
@@ -230,7 +227,6 @@ func (s *FunctionalSuite) TestDropOnFull() {
 	}
 }
 
-// rust-done
 func (s *FunctionalSuite) TestWatermarkEnabled() {
 
 	// the watermark feature is not supported with redis ISBSVC
@@ -312,7 +308,6 @@ func isWatermarkProgressing(ctx context.Context, client daemonclient.DaemonClien
 	return true, nil
 }
 
-// rust-done
 func (s *FunctionalSuite) TestFallbackSink() {
 
 	w := s.Given().Pipeline("@testdata/simple-fallback.yaml").
@@ -330,7 +325,6 @@ func (s *FunctionalSuite) TestFallbackSink() {
 	w.Expect().RedisSinkContains("simple-fallback-output", "fallback-message")
 }
 
-// rust-done
 func (s *FunctionalSuite) TestExponentialBackoffRetryStrategyForPipeline() {
 	w := s.Given().Pipeline("@testdata/simple-pipeline-with-retry-strategy.yaml").
 		When().
