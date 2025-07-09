@@ -28,13 +28,10 @@ pub(crate) fn should_forward(
 }
 
 /// Determine the partition to write the message to by hashing the message id.
-pub(crate) fn determine_partition(
-    shuffle_key: String,
-    partitions_count: u16,
-    hash: &mut DefaultHasher,
-) -> u16 {
-    hash.write(shuffle_key.as_bytes());
-    let hash_value = hash.finish();
+pub(crate) fn determine_partition(shuffle_key: String, partitions_count: u16) -> u16 {
+    let mut hasher = DefaultHasher::new();
+    hasher.write(shuffle_key.as_bytes());
+    let hash_value = hasher.finish();
     (hash_value % partitions_count as u64) as u16
 }
 
