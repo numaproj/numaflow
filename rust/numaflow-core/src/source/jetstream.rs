@@ -100,7 +100,6 @@ mod tests {
 
     use super::*;
     use bytes::Bytes;
-    use chrono::DateTime;
     use numaflow_jetstream::Message as JetstreamMessage;
     use std::collections::HashMap;
 
