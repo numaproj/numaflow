@@ -212,7 +212,6 @@ impl JetstreamWriter {
     ) -> Result<JoinHandle<Result<()>>> {
         let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
             let mut messages_stream = messages_stream;
-            let mut hash = DefaultHasher::new();
 
             while let Some(message) = messages_stream.next().await {
                 let write_processing_start = Instant::now();
@@ -252,8 +251,7 @@ impl JetstreamWriter {
                     };
 
                     // check to which partition the message should be written
-                    let partition =
-                        forward::determine_partition(shuffle_key, vertex.partitions, &mut hash);
+                    let partition = forward::determine_partition(shuffle_key, vertex.partitions);
 
                     // write the message to the corresponding stream
                     let stream = vertex
