@@ -7,19 +7,11 @@ spec:
     readBatchSize: 50
   vertices:
     - name: in
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       scale:
         min: 1
       source:
         http: {}
     - name: atoi-0
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       scale:
         min: 1
       udf:
@@ -28,10 +20,6 @@ spec:
           image: quay.io/numaio/numaflow-go/map-even-odd:stable
           imagePullPolicy: Always
     - name: atoi-1
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       partitions: 2
       scale:
         min: 1
@@ -41,10 +29,6 @@ spec:
           image: quay.io/numaio/numaflow-go/map-even-odd:stable
           imagePullPolicy: Always
     - name: compute-sum
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       partitions: 2
       udf:
         container:

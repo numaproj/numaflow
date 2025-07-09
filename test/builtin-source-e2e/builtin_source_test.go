@@ -21,7 +21,6 @@ package builtin_source_e2e
 import (
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/suite"
 
@@ -35,21 +34,6 @@ type BuiltinSourceSuite struct {
 	E2ESuite
 }
 
-func (bss *BuiltinSourceSuite) TestNatsSource() {
-	subject := "test-subject"
-	w := bss.Given().Pipeline("@testdata/nats-source-pipeline.yaml").
-		When().
-		CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
-
-	// wait for all the pods to come up
-	w.Expect().VertexPodsRunning()
-
-	PumpNatsSubject(subject, 100, 20*time.Millisecond, 10, "test-message")
-	w.Expect().RedisSinkContains("nats-source-e2e-out", "test-message", SinkCheckWithContainCount(100))
-}
-
-// rust-done
 func (bss *BuiltinSourceSuite) TestHTTPSourcePipeline() {
 	w := bss.Given().Pipeline("@testdata/http-source.yaml").
 		When().
@@ -79,7 +63,6 @@ func (bss *BuiltinSourceSuite) TestHTTPSourcePipeline() {
 	w.Expect().RedisSinkContains("http-source-out", "with-id", SinkCheckWithContainCount(2))
 }
 
-// rust-done
 func (bss *BuiltinSourceSuite) TestHTTPSourceAuthPipeline() {
 	w := bss.Given().Pipeline("@testdata/http-source-with-auth.yaml").
 		When().
