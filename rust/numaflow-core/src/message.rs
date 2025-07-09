@@ -45,7 +45,7 @@ pub(crate) struct Message {
 }
 
 /// Type of the [Message].
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) enum MessageType {
     /// the payload is Data
     #[default]
@@ -118,8 +118,8 @@ pub(crate) enum Offset {
 impl fmt::Display for Offset {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Offset::Int(offset) => write!(f, "{}", offset),
-            Offset::String(offset) => write!(f, "{}", offset),
+            Offset::Int(offset) => write!(f, "{offset}"),
+            Offset::String(offset) => write!(f, "{offset}"),
         }
     }
 }

@@ -9,7 +9,7 @@ use std::time::{Duration, SystemTime};
 
 use bytes::BytesMut;
 use prost::Message;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::BucketConfig;
@@ -145,9 +145,19 @@ impl ISBWatermarkPublisher {
             .get_mut(stream.vertex)
             .expect("Invalid vertex, no last published watermark state found");
 
-        // we can avoid publishing the watermark if it is <= the last published watermark (optimization)
+        // we can avoid publishing the watermark if the offset is smaller than the last published offset
+        // since we do unordered writes to ISB, the offsets can be out of order even though the watermark
+        // is monotonically increasing.
+        // If the watermark is same as the last published watermark we can publish the watermark only if
+        // the offset is greater than the last published offset otherwise the watermark will regress
+        // between the offsets.
+        // Example of the bug:
+        // Supposed publish watermark offset=3605646 watermark=1750758997480 last_published_offset=3605147 last_published_watermark=1750758997480
+        // Supposed publish watermark offset=3605637 watermark=1750758998480 last_published_offset=3605147 last_published_watermark=1750758997480
+        // Actual published watermark offset=3605637 watermark=1750758998480
+        // We should've published watermark for offset 3605646 and skipped publishing for offset 3605637
         let last_state = &last_published_wm_state[stream.partition as usize];
-        if offset < last_state.offset || watermark <= last_state.watermark {
+        if offset <= last_state.offset || watermark < last_state.watermark {
             return;
         }
 
@@ -162,12 +172,12 @@ impl ISBWatermarkPublisher {
         .try_into()
         .expect("Failed to convert WMB to bytes");
 
-        // ot writes can fail when isb is not healthy, we can ignore since subsequent writes will
-        // go through
+        // ot writes can fail when isb is not healthy, we can ignore failures
+        // since subsequent writes will go through
         ot_bucket
             .put(self.processor_name.clone(), wmb_bytes.freeze())
             .await
-            .map_err(|e| error!("Failed to write wmb to ot bucket: {}", e))
+            .map_err(|e| warn!(?e, "Failed to write wmb to ot bucket (ignoring)"))
             .ok();
 
         // update the last published watermark state

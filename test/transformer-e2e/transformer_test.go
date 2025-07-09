@@ -19,9 +19,6 @@ limitations under the License.
 package e2e
 
 import (
-	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -30,11 +27,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 
-	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
 	. "github.com/numaproj/numaflow/test/fixtures"
 )
 
@@ -42,135 +36,6 @@ type TransformerSuite struct {
 	E2ESuite
 }
 
-// rust-done
-func (s *TransformerSuite) TestSourceFiltering() {
-	w := s.Given().Pipeline("@testdata/source-filtering.yaml").
-		When().
-		CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
-	pipelineName := "source-filtering"
-
-	// wait for all the pods to come up
-	w.Expect().VertexPodsRunning()
-
-	expect0 := `{"id": 180, "msg": "hello", "expect0": "fail", "desc": "A bad example"}`
-	expect1 := `{"id": 80, "msg": "hello1", "expect1": "fail", "desc": "A bad example"}`
-	expect2 := `{"id": 80, "msg": "hello", "expect2": "fail", "desc": "A bad example"}`
-	expect3 := `{"id": 80, "msg": "hello", "expect3": "succeed", "desc": "A good example"}`
-	expect4 := `{"id": 80, "msg": "hello", "expect4": "succeed", "desc": "A good example"}`
-
-	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect0))).
-		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect1))).
-		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect2))).
-		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect3))).
-		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(expect4)))
-
-	w.Expect().RedisSinkContains("source-filtering-out", expect3)
-	w.Expect().RedisSinkContains("source-filtering-out", expect4)
-	w.Expect().RedisSinkNotContains("source-filtering-out", expect0)
-	w.Expect().RedisSinkNotContains("source-filtering-out", expect1)
-	w.Expect().RedisSinkNotContains("source-filtering-out", expect2)
-}
-
-// rust-done
-func (s *TransformerSuite) TestTimeExtractionFilter() {
-	w := s.Given().Pipeline("@testdata/time-extraction-filter.yaml").
-		When().
-		CreatePipelineAndWait()
-	defer w.DeletePipelineAndWait()
-	pipelineName := "time-extraction-filter"
-
-	// wait for all the pods to come up
-	w.Expect().VertexPodsRunning()
-
-	testMsgOne := `{"id": 80, "msg": "hello", "time": "2021-01-18T21:54:42.123Z", "desc": "A good ID."}`
-	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgOne)))
-	w.Expect().VertexPodLogContains("out", fmt.Sprintf("EventTime - %d", time.Date(2021, 1, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli()), PodLogCheckOptionWithCount(1), PodLogCheckOptionWithContainer("numa"))
-
-	testMsgTwo := `{"id": 101, "msg": "test", "time": "2021-01-18T21:54:42.123Z", "desc": "A bad ID."}`
-	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsgTwo)))
-	w.Expect().RedisSinkNotContains("time-extraction-filter-out", testMsgTwo)
-}
-
-// rust-done
-func (s *TransformerSuite) TestBuiltinEventTimeExtractor() {
-	// this test is skipped for redis as watermark is not supported with this ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		s.T().SkipNow()
-	}
-
-	w := s.Given().Pipeline("@testdata/extract-event-time-from-payload.yaml").
-		When().
-		CreatePipelineAndWait()
-	currentTime := time.Now().UnixMilli()
-	defer w.DeletePipelineAndWait()
-	pipelineName := "extract-event-time"
-
-	// wait for all the pods to come up
-	w.Expect().VertexPodsRunning().DaemonPodsRunning()
-
-	defer w.DaemonPodPortForward(pipelineName, 1234, dfv1.DaemonServicePort).
-		TerminateAllPodPortForwards()
-
-	// Use the daemon client to verify watermark propagation.
-	client, err := daemonclient.NewGRPCDaemonServiceClient("localhost:1234")
-	assert.NoError(s.T(), err)
-	defer func() {
-		_ = client.Close()
-	}()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	done := make(chan struct{})
-	go func() {
-		startTime := time.Date(2021, 1, 18, 21, 54, 42, 123000000, time.UTC)
-		for {
-			select {
-			case <-done:
-				return
-			case <-ctx.Done():
-				return
-			default:
-				testMsg := generateTestMsg("numa", startTime)
-				w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte(testMsg)))
-				startTime = startTime.Add(1 * time.Minute)
-				time.Sleep(100 * time.Millisecond)
-			}
-		}
-	}()
-	// In this test, we send a message with event time being now, apply event time extractor and verify from log that the message event time gets updated.
-	w.Expect().VertexPodLogContains("out", fmt.Sprintf("EventTime -  %d", time.Date(2021, 1, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli()), PodLogCheckOptionWithCount(1))
-
-wmLoop:
-	for {
-		select {
-		case <-ctx.Done():
-			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				s.T().Log("test timed out")
-				assert.Fail(s.T(), "timed out")
-				break wmLoop
-			}
-		default:
-			wm, err := client.GetPipelineWatermarks(ctx, pipelineName)
-			edgeWM := wm[0].Watermarks[0]
-			if wm[0].Watermarks[0].GetValue() != -1 {
-				assert.NoError(s.T(), err)
-				if err != nil {
-					assert.Fail(s.T(), err.Error())
-				}
-				// Watermark propagation can delay, we consider the test as passed as long as the retrieved watermark is greater than the event time of the first message
-				// and less than the current time.
-				assert.True(s.T(), edgeWM.GetValue() >= time.Date(2021, 1, 18, 21, 54, 42, 123000000, time.UTC).UnixMilli() && edgeWM.GetValue() < currentTime)
-				break wmLoop
-			}
-			time.Sleep(time.Second)
-		}
-	}
-	done <- struct{}{}
-}
-
-// rust-done
 func (s *TransformerSuite) TestSourceTransformer() {
 	// the transformer feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
@@ -251,14 +116,4 @@ type Item struct {
 type TestMsg struct {
 	Test int    `json:"test"`
 	Item []Item `json:"item"`
-}
-
-func generateTestMsg(msg string, t time.Time) string {
-	items := []Item{
-		{ID: 1, Name: msg, Time: t},
-		{ID: 2, Name: msg, Time: t},
-	}
-	testMsg := TestMsg{Test: 21, Item: items}
-	jsonBytes, _ := json.Marshal(testMsg)
-	return string(jsonBytes)
 }

@@ -18,7 +18,7 @@ spec:
             value: "rust"
       udf:
         container:
-          image: quay.io/numaio/numaflow-go/map-filter:stable 
+          image: quay.io/numaio/numaflow-go/map-filter:stable # A UDF which filters payloads with `id` < 100, `msg` is "hello", and `desc` contains "good"
           imagePullPolicy: Always
     - name: out
       containerTemplate:

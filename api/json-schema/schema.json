@@ -19572,6 +19572,10 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log",
           "description": "Log sink is used to write the data to the log."
         },
+        "pulsar": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PulsarSink",
+          "description": "Pulsar sink is used to write the data to the Apache Pulsar."
+        },
         "serve": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.ServeSink",
           "description": "Serve sink is used to return results when working with a ServingPipeline."
@@ -19865,6 +19869,16 @@
       ],
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.Compression": {
+      "description": "Compression is the compression settings for the messages in the InterStepBuffer",
+      "properties": {
+        "type": {
+          "description": "Type is the type of compression to be used",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.Container": {
       "description": "Container is used to define the container properties for user-defined functions, sinks, etc.",
       "properties": {
@@ -20100,29 +20114,6 @@
       },
       "required": [
         "tags"
-      ],
-      "type": "object"
-    },
-    "io.numaproj.numaflow.v1alpha1.Function": {
-      "properties": {
-        "args": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "kwargs": {
-          "additionalProperties": {
-            "type": "string"
-          },
-          "type": "object"
-        },
-        "name": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "name"
       ],
       "type": "object"
     },
@@ -20645,6 +20636,16 @@
         "threshold": {
           "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration",
           "description": "Threshold is the duration after which a source is marked as Idle due to lack of data. Ex: If watermark found to be idle after the Threshold duration then the watermark is progressed by `IncrementBy`."
+        }
+      },
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.InterStepBuffer": {
+      "description": "InterStepBuffer configuration specifically for the pipeline.",
+      "properties": {
+        "compression": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Compression",
+          "description": "Compression is the compression settings for the InterStepBufferService"
         }
       },
       "type": "object"
@@ -21685,7 +21686,12 @@
           },
           "type": "array"
         },
+        "interStepBuffer": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.InterStepBuffer",
+          "description": "InterStepBuffer configuration specific to this pipeline."
+        },
         "interStepBufferServiceName": {
+          "description": "InterStepBufferServiceName is the name of the InterStepBufferService to be used by the pipeline",
           "type": "string"
         },
         "lifecycle": {
@@ -21778,6 +21784,19 @@
       },
       "type": "object"
     },
+    "io.numaproj.numaflow.v1alpha1.Ports": {
+      "properties": {
+        "http": {
+          "format": "int32",
+          "type": "integer"
+        },
+        "https": {
+          "format": "int32",
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
     "io.numaproj.numaflow.v1alpha1.Probe": {
       "description": "Probe is used to customize the configuration for Readiness and Liveness probes.",
       "properties": {
@@ -21812,11 +21831,49 @@
     "io.numaproj.numaflow.v1alpha1.PulsarAuth": {
       "description": "PulsarAuth defines how to authenticate with Pulsar",
       "properties": {
+        "basicAuth": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PulsarBasicAuth",
+          "description": "Authentication using HTTP basic https://pulsar.apache.org/docs/4.0.x/security-basic-auth/"
+        },
         "token": {
           "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector",
           "description": "JWT Token auth"
         }
       },
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.PulsarBasicAuth": {
+      "properties": {
+        "password": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector"
+        },
+        "username": {
+          "$ref": "#/definitions/io.k8s.api.core.v1.SecretKeySelector"
+        }
+      },
+      "type": "object"
+    },
+    "io.numaproj.numaflow.v1alpha1.PulsarSink": {
+      "properties": {
+        "auth": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PulsarAuth",
+          "description": "Auth information"
+        },
+        "producerName": {
+          "type": "string"
+        },
+        "serverAddr": {
+          "type": "string"
+        },
+        "topic": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "serverAddr",
+        "topic",
+        "producerName"
+      ],
       "type": "object"
     },
     "io.numaproj.numaflow.v1alpha1.PulsarSource": {
@@ -22222,6 +22279,10 @@
           "description": "NodeSelector is a selector which must be true for the pod to fit on a node. Selector which must match a node's labels for the pod to be scheduled on that node. More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/",
           "type": "object"
         },
+        "ports": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Ports",
+          "description": "Ports to listen on, default we will use 8443 for HTTPS. To start http server the http port should be explicitly set."
+        },
         "priority": {
           "description": "The priority value. Various system components use this field to find the priority of the Redis pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
           "format": "int32",
@@ -22451,6 +22512,10 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Log",
           "description": "Log sink is used to write the data to the log."
         },
+        "pulsar": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.PulsarSink",
+          "description": "Pulsar sink is used to write the data to the Apache Pulsar."
+        },
         "retryStrategy": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RetryStrategy",
           "description": "RetryStrategy struct encapsulates the settings for retrying operations in the event of failures."
@@ -22676,34 +22741,8 @@
       },
       "type": "object"
     },
-    "io.numaproj.numaflow.v1alpha1.Transformer": {
-      "properties": {
-        "args": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "kwargs": {
-          "additionalProperties": {
-            "type": "string"
-          },
-          "type": "object"
-        },
-        "name": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "name"
-      ],
-      "type": "object"
-    },
     "io.numaproj.numaflow.v1alpha1.UDF": {
       "properties": {
-        "builtin": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Function"
-        },
         "container": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Container"
         },
@@ -22737,9 +22776,6 @@
     },
     "io.numaproj.numaflow.v1alpha1.UDTransformer": {
       "properties": {
-        "builtin": {
-          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Transformer"
-        },
         "container": {
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Container"
         }
@@ -22918,6 +22954,10 @@
             "$ref": "#/definitions/io.k8s.api.core.v1.Container"
           },
           "type": "array"
+        },
+        "interStepBuffer": {
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.InterStepBuffer",
+          "description": "InterStepBuffer configuration specific to this pipeline."
         },
         "interStepBufferServiceName": {
           "type": "string"

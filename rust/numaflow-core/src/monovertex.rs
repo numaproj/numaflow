@@ -27,6 +27,7 @@ pub(crate) async fn start_forwarder(
 
     let transformer = create_components::create_transformer(
         config.batch_size,
+        config.graceful_shutdown_time,
         config.transformer_config.clone(),
         tracker_handle.clone(),
         cln_token.clone(),
@@ -58,10 +59,11 @@ pub(crate) async fn start_forwarder(
     // Start the metrics server in a separate background async spawn,
     // This should be running throughout the lifetime of the application, hence the handle is not
     // joined.
-    let metrics_state = metrics::ComponentHealthChecks::Monovertex(metrics::MonovertexComponents {
-        source: source.clone(),
-        sink: sink_writer.clone(),
-    });
+    let metrics_state =
+        metrics::ComponentHealthChecks::Monovertex(Box::new(metrics::MonovertexComponents {
+            source: source.clone(),
+            sink: sink_writer.clone(),
+        }));
 
     // start the metrics server
     // FIXME: what to do with the handle
@@ -88,7 +90,7 @@ async fn start(
         // start the pending reader to publish pending metrics
         let pending_reader = shared::metrics::create_pending_reader(
             &mvtx_config.metrics_config,
-            LagReader::Source(source.clone()),
+            LagReader::Source(Box::new(source.clone())),
         )
         .await;
         // TODO(lookback) - using new implementation for monovertex right now,

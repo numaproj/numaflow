@@ -104,18 +104,6 @@ func Test_Commands(t *testing.T) {
 		assert.Equal(t, "bool", cmd.Flag("namespaced").Value.Type())
 	})
 
-	t.Run("BuiltinUDF", func(t *testing.T) {
-		cmd := NewBuiltinUDFCommand()
-		assert.True(t, cmd.HasLocalFlags())
-		assert.Equal(t, "builtin-udf", cmd.Use)
-		assert.Equal(t, "string", cmd.Flag("name").Value.Type())
-		assert.Equal(t, "stringSlice", cmd.Flag("args").Value.Type())
-		cmd.SetArgs([]string{"--name="})
-		err := cmd.Execute()
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "function name missing")
-	})
-
 	t.Run("processor", func(t *testing.T) {
 		cmd := NewProcessorCommand()
 		assert.True(t, cmd.HasLocalFlags())

@@ -18,17 +18,12 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct UdTransformer {
-    #[serde(rename = "builtin", skip_serializing_if = "Option::is_none")]
-    pub builtin: Option<Box<crate::models::Transformer>>,
     #[serde(rename = "container", skip_serializing_if = "Option::is_none")]
     pub container: Option<Box<crate::models::Container>>,
 }
 
 impl UdTransformer {
     pub fn new() -> UdTransformer {
-        UdTransformer {
-            builtin: None,
-            container: None,
-        }
+        UdTransformer { container: None }
     }
 }

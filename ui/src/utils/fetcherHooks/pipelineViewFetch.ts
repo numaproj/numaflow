@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { Edge, MarkerType, Node } from "reactflow";
+import { Edge, MarkerType, Node } from "@xyflow/react";
 import { isEqual } from "lodash";
 import { getBaseHref } from "../index";
 import { AppContextProps } from "../../types/declarations/app";
@@ -458,7 +458,7 @@ export const usePipelineViewFetch = (
     const newVertices: Node[] = [];
     if (spec?.vertices && buffers && vertexPods && vertexMetrics) {
       spec.vertices.forEach((vertex: any) => {
-        const newNode = {} as Node;
+        const newNode = {} as Node<Record<string, any>>;
         newNode.id = vertex?.name;
         newNode.data = { name: vertex?.name };
         newNode.data.podnum = vertexPods.has(vertex?.name)
@@ -540,23 +540,34 @@ export const usePipelineViewFetch = (
   const edges = useMemo(() => {
     const newEdges: Edge[] = [];
     if (spec?.edges && buffers && edgeWatermark) {
-      // backpressure for a buffer is the count of total pending message
-      // map from edge-id( from-Vertex - to-Vertex ) to sum of backpressure
-      const edgeBackpressureLabel = new Map();
+      // backpressure for a buffer is the count of pending messages
+      // map from edge-id( from-Vertex - to-Vertex ) to sum of pending and ackPending counts
+      const edgePendingLabel = new Map();
+      const edgeAckPendingLabel = new Map();
       const edgeIsFull = new Map();
 
       buffers.forEach((buffer) => {
         const sidx = ns_pl.length;
         const eidx = buffer?.bufferName?.lastIndexOf("-");
         const id = buffer?.bufferName?.substring(sidx, eidx);
-        // condition check is similar for isFull so combining into one
-        if (edgeBackpressureLabel.get(id) === undefined) {
-          edgeBackpressureLabel.set(id, Number(buffer?.totalMessages));
+        
+        // Initialize or accumulate pending count
+        if (edgePendingLabel.get(id) === undefined) {
+          const pendingCount = Number(buffer?.pendingCount);
+          const ackPendingCount = Number(buffer?.ackPendingCount);
+          edgePendingLabel.set(id, isNaN(pendingCount) ? 0 : pendingCount);
+          edgeAckPendingLabel.set(id, isNaN(ackPendingCount) ? 0 : ackPendingCount);
           edgeIsFull.set(id, buffer?.isFull);
         } else {
-          edgeBackpressureLabel.set(
+          const pendingCount = Number(buffer?.pendingCount);
+          const ackPendingCount = Number(buffer?.ackPendingCount);
+          edgePendingLabel.set(
             id,
-            edgeBackpressureLabel.get(id) + Number(buffer?.totalMessages)
+            edgePendingLabel.get(id) + (isNaN(pendingCount) ? 0 : pendingCount)
+          );
+          edgeAckPendingLabel.set(
+            id,
+            edgeAckPendingLabel.get(id) + (isNaN(ackPendingCount) ? 0 : ackPendingCount)
           );
           if (buffer?.isFull === true && buffer?.isFull !== edgeIsFull.get(id))
             edgeIsFull.set(id, buffer.isFull);
@@ -577,7 +588,8 @@ export const usePipelineViewFetch = (
           target: edge?.to,
           data: {
             conditions: edge?.conditions,
-            backpressureLabel: edgeBackpressureLabel.get(edge?.to),
+            pendingLabel: edgePendingLabel.get(edge?.to),
+            ackPendingLabel: edgeAckPendingLabel.get(edge?.to),
             isFull: edgeIsFull.get(edge?.to),
             source: edge?.from,
             target: edge?.to,
@@ -586,11 +598,11 @@ export const usePipelineViewFetch = (
             selfEdge: selfEdges.has(id),
             backEdgeHeight: backEdgesHeight.get(id) || 0,
             fromNodeOutDegree: nodeOutDegree.get(edge?.from) || 0,
+            edgeWatermark: edgeWatermark.has(id)
+              ? edgeWatermark.get(id)
+              : null,
           },
         } as Edge;
-        pipelineEdge.data.edgeWatermark = edgeWatermark.has(pipelineEdge.id)
-          ? edgeWatermark.get(pipelineEdge.id)
-          : null;
         pipelineEdge.animated = true;
         pipelineEdge.type = "custom";
         if (backEdges.has(id)) {

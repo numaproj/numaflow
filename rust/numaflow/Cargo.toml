@@ -13,10 +13,9 @@ workspace = true
 [dependencies]
 serving.workspace = true
 numaflow-core.workspace = true
-numaflow-models.workspace = true
 numaflow-monitor.workspace = true
-backoff.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 rustls.workspace = true
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+clap = "4.5.40"

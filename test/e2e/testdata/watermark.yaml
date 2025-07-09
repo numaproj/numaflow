@@ -22,7 +22,7 @@ spec:
       partitions: 2
       udf:
         container:
-          image: quay.io/numaio/numaflow-go/map-cat:stable 
+          image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
           imagePullPolicy: Always
       containerTemplate:
         env:
@@ -33,7 +33,7 @@ spec:
     - name: cat2
       udf:
         container:
-          image: quay.io/numaio/numaflow-go/map-cat:stable 
+          image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
           imagePullPolicy: Always
       containerTemplate:
         env:
@@ -45,7 +45,7 @@ spec:
       partitions: 3
       udf:
         container:
-          image: quay.io/numaio/numaflow-go/map-cat:stable 
+          image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
           imagePullPolicy: Always
       containerTemplate:
         env:

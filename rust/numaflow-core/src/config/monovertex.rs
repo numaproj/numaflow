@@ -26,12 +26,15 @@ use crate::error::Error;
 const DEFAULT_BATCH_SIZE: u64 = 500;
 const DEFAULT_TIMEOUT_IN_MS: u32 = 1000;
 const DEFAULT_LOOKBACK_WINDOW_IN_SECS: u16 = 120;
+const DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS: u64 = 20; // time we will wait for UDFs to finish before shutting down
+const ENV_NUMAFLOW_GRACEFUL_TIMEOUT_SECS: &str = "NUMAFLOW_GRACEFUL_TIMEOUT_SECS";
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct MonovertexConfig {
     pub(crate) name: String,
     pub(crate) batch_size: usize,
     pub(crate) read_timeout: Duration,
+    pub(crate) graceful_shutdown_time: Duration,
     pub(crate) replica: u16,
     pub(crate) source_config: SourceConfig,
     pub(crate) sink_config: SinkConfig,
@@ -47,6 +50,7 @@ impl Default for MonovertexConfig {
             name: "".to_string(),
             batch_size: DEFAULT_BATCH_SIZE as usize,
             read_timeout: Duration::from_millis(DEFAULT_TIMEOUT_IN_MS as u64),
+            graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             replica: 0,
             source_config: SourceConfig {
                 read_ahead: false,
@@ -73,10 +77,10 @@ impl MonovertexConfig {
             .ok_or_else(|| Error::Config(format!("{ENV_MONO_VERTEX_OBJ} is not set")))?;
         let decoded_spec = BASE64_STANDARD
             .decode(mono_vertex_spec.as_bytes())
-            .map_err(|e| Error::Config(format!("Failed to decode mono vertex spec: {:?}", e)))?;
+            .map_err(|e| Error::Config(format!("Failed to decode mono vertex spec: {e:?}")))?;
 
         let mono_vertex_obj: MonoVertex = from_slice(&decoded_spec)
-            .map_err(|e| Error::Config(format!("Failed to parse mono vertex spec: {:?}", e)))?;
+            .map_err(|e| Error::Config(format!("Failed to parse mono vertex spec: {e:?}")))?;
 
         let batch_size = mono_vertex_obj
             .spec
@@ -155,6 +159,11 @@ impl MonovertexConfig {
             .and_then(|scale| scale.lookback_seconds.map(|x| x as u16))
             .unwrap_or(DEFAULT_LOOKBACK_WINDOW_IN_SECS);
 
+        let graceful_shutdown_time_secs = env_vars
+            .get(ENV_NUMAFLOW_GRACEFUL_TIMEOUT_SECS)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS);
+
         let mut callback_config = None;
         if env_vars.contains_key(ENV_CALLBACK_ENABLED) {
             let callback_concurrency: usize = env_vars
@@ -182,6 +191,7 @@ impl MonovertexConfig {
             replica: *get_vertex_replica(),
             batch_size: batch_size as usize,
             read_timeout: Duration::from_millis(timeout_in_ms as u64),
+            graceful_shutdown_time: Duration::from_secs(graceful_shutdown_time_secs),
             metrics_config: MetricsConfig::with_lookback_window_in_secs(look_back_window),
             source_config,
             sink_config,

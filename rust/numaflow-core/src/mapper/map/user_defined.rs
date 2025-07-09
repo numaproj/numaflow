@@ -29,6 +29,9 @@ struct ParentMessageInfo {
     is_late: bool,
     headers: HashMap<String, String>,
     start_time: Instant,
+    /// this remains 0 for all except map-streaming because in map-streaming there could be more than
+    /// one response for a single request.
+    current_index: i32,
 }
 
 impl From<Message> for MapRequest {
@@ -102,7 +105,7 @@ impl UserDefinedUnaryMap {
             Err(e) => {
                 let mut senders = sender_map.lock().await;
                 for (_, (_, sender)) in senders.drain() {
-                    let _ = sender.send(Err(Error::Grpc(e.clone())));
+                    let _ = sender.send(Err(Error::Grpc(Box::new(e.clone()))));
                     pipeline_metrics()
                         .forwarder
                         .udf_error_total
@@ -129,6 +132,7 @@ impl UserDefinedUnaryMap {
             headers: message.headers.clone(),
             is_late: message.is_late,
             start_time: Instant::now(),
+            current_index: 0,
         };
 
         pipeline_metrics()
@@ -200,7 +204,7 @@ impl UserDefinedBatchMap {
                 let mut senders = sender_map.lock().await;
                 for (_, (_, sender)) in senders.drain() {
                     sender
-                        .send(Err(Error::Grpc(e.clone())))
+                        .send(Err(Error::Grpc(Box::new(e.clone()))))
                         .expect("failed to send error response");
                     pipeline_metrics()
                         .forwarder
@@ -240,6 +244,7 @@ impl UserDefinedBatchMap {
                 headers: message.headers.clone(),
                 is_late: message.is_late,
                 start_time: Instant::now(),
+                current_index: 0,
             };
 
             pipeline_metrics()
@@ -315,22 +320,21 @@ async fn create_response_stream(
     read_tx
         .send(handshake_request)
         .await
-        .map_err(|e| Error::Mapper(format!("failed to send handshake request: {}", e)))?;
+        .map_err(|e| Error::Mapper(format!("failed to send handshake request: {e}")))?;
 
     let mut resp_stream = client
         .map_fn(Request::new(ReceiverStream::new(read_rx)))
         .await
-        .map_err(Error::Grpc)?
+        .map_err(|e| Error::Grpc(Box::new(e)))?
         .into_inner();
 
-    let handshake_response =
-        resp_stream
-            .message()
-            .await
-            .map_err(Error::Grpc)?
-            .ok_or(Error::Mapper(
-                "failed to receive handshake response".to_string(),
-            ))?;
+    let handshake_response = resp_stream
+        .message()
+        .await
+        .map_err(|e| Error::Grpc(Box::new(e)))?
+        .ok_or(Error::Mapper(
+            "failed to receive handshake response".to_string(),
+        ))?;
 
     if handshake_response.handshake.is_none_or(|h| !h.sot) {
         return Err(Error::Mapper("invalid handshake response".to_string()));
@@ -391,7 +395,7 @@ impl UserDefinedStreamMap {
             Err(e) => {
                 let mut senders = sender_map.lock().await;
                 for (_, (_, sender)) in senders.drain() {
-                    let _ = sender.send(Err(Error::Grpc(e.clone()))).await;
+                    let _ = sender.send(Err(Error::Grpc(Box::new(e.clone())))).await;
                     pipeline_metrics()
                         .forwarder
                         .udf_error_total
@@ -401,7 +405,7 @@ impl UserDefinedStreamMap {
                 None
             }
         } {
-            let (message_info, response_sender) = sender_map
+            let (mut message_info, response_sender) = sender_map
                 .lock()
                 .await
                 .remove(&resp.id)
@@ -424,13 +428,17 @@ impl UserDefinedStreamMap {
                 continue;
             }
 
-            for (i, result) in resp.results.into_iter().enumerate() {
+            for result in resp.results.into_iter() {
                 response_sender
-                    .send(Ok(
-                        UserDefinedMessage(result, &message_info, i as i32).into()
-                    ))
+                    .send(Ok(UserDefinedMessage(
+                        result,
+                        &message_info,
+                        message_info.current_index,
+                    )
+                    .into()))
                     .await
                     .expect("failed to send response");
+                message_info.current_index += 1;
             }
 
             // Write the sender back to the map, because we need to send
@@ -455,6 +463,7 @@ impl UserDefinedStreamMap {
             headers: message.headers.clone(),
             start_time: Instant::now(),
             is_late: message.is_late,
+            current_index: 0,
         };
 
         pipeline_metrics()
@@ -790,6 +799,10 @@ mod tests {
             .map(|r| String::from_utf8(Vec::from(r.value.clone())).unwrap())
             .collect();
         assert_eq!(values, vec!["test", "map", "stream"]);
+
+        // Verify that message indices are properly incremented
+        let indices: Vec<i32> = responses.iter().map(|r| r.id.index).collect();
+        assert_eq!(indices, vec![0, 1, 2]);
 
         // we need to drop the client, because if there are any in-flight requests
         // server fails to shut down. https://github.com/numaproj/numaflow-rs/issues/85

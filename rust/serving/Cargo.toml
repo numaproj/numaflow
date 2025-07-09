@@ -22,27 +22,27 @@ bytes.workspace = true
 rustls.workspace = true
 tower.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 rcgen.workspace = true
-axum-macros = "0.5.0"
-hyper-util = { version = "0.1.6", features = ["client-legacy"] }
-serde_json = "1.0.120"
-tower-http = { version = "0.6.2", features = ["trace", "timeout"] }
+async-nats.workspace = true
+base64.workspace = true
+tonic.workspace = true
+http.workspace = true
+thiserror.workspace = true
+chrono = { workspace = true, features = ["serde"] }
 uuid = { workspace = true, features = ["std", "v7"] }
-trait-variant = "0.1.2"
-chrono = { version = "0.4", features = ["serde"] }
-base64 = "0.22.1"
-parking_lot = "0.12.3"
-prometheus-client = "0.23.1"
-thiserror = "2.0.12"
 reqwest = { workspace = true, features = ["rustls-tls", "json", "stream"] }
-http = "1.2.0"
-async-nats = "0.40.0"
-tokio-stream = "0.1.17"
-tonic = "0.13.0"
-tokio-util = "0.7.14"
+tokio-stream.workspace = true
+tokio-util.workspace = true
+axum-macros = "0.5.0"
+hyper-util = { version = "0.1.14", features = ["client-legacy"] }
+tower-http = { version = "0.6.6", features = ["trace", "timeout"] }
+trait-variant.workspace = true
+parking_lot.workspace = true
+prometheus-client.workspace = true
 
 [dev-dependencies]
 reqwest = { workspace = true, features = ["json"] }
 rustls.workspace = true
-numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "c6aa3a8d64a189357260f78131ef4692d387ba6c" }
-tempfile = "3.14.0"
+numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "9a12a1d832d4fece830452044bd7706dc8b2a381" }
+tempfile = "3.20.0"

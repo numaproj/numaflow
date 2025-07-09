@@ -110,13 +110,13 @@ var (
 					Name: "input",
 					Source: &dfv1.Source{
 						UDTransformer: &dfv1.UDTransformer{
-							Builtin: &dfv1.Transformer{Name: "filter"},
+							Container: &dfv1.Container{Image: "my-image"},
 						}},
 				},
 				{
 					Name: "p1",
 					UDF: &dfv1.UDF{
-						Builtin: &dfv1.Function{Name: "cat"},
+						Container: &dfv1.Container{Image: "test-image"},
 					},
 				},
 				{
@@ -146,13 +146,13 @@ var (
 					Name: "input",
 					Source: &dfv1.Source{
 						UDTransformer: &dfv1.UDTransformer{
-							Builtin: &dfv1.Transformer{Name: "filter"},
+							Container: &dfv1.Container{Image: "my-image"},
 						}},
 				},
 				{
 					Name: "p1",
 					UDF: &dfv1.UDF{
-						Builtin: &dfv1.Function{Name: "cat"},
+						Container: &dfv1.Container{Image: "test-image"},
 					},
 					SideInputs: []string{"my-sideinput"},
 				},

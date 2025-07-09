@@ -235,15 +235,18 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
         };
         let tracker = TrackerHandle::new(None, None);
-        let js_reader = JetStreamReader::new(
-            "test".to_string(),
-            stream.clone(),
-            context.clone(),
-            buf_reader_config,
-            tracker.clone(),
-            500,
-            None,
-        )
+        use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;
+        let js_reader = JetStreamReader::new(ISBReaderConfig {
+            vertex_type: "test".to_string(),
+            stream: stream.clone(),
+            js_ctx: context.clone(),
+            config: buf_reader_config,
+            tracker_handle: tracker.clone(),
+            batch_size: 500,
+            read_timeout: Duration::from_millis(100),
+            watermark_handle: None,
+            isb_config: None,
+        })
         .await
         .unwrap();
 
@@ -346,15 +349,18 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
         };
         let tracker = TrackerHandle::new(None, None);
-        let js_reader = JetStreamReader::new(
-            "test".to_string(),
-            stream.clone(),
-            context.clone(),
-            buf_reader_config,
-            tracker.clone(),
-            500,
-            None,
-        )
+        use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;
+        let js_reader = JetStreamReader::new(ISBReaderConfig {
+            vertex_type: "test".to_string(),
+            stream: stream.clone(),
+            js_ctx: context.clone(),
+            config: buf_reader_config,
+            tracker_handle: tracker.clone(),
+            batch_size: 500,
+            read_timeout: Duration::from_millis(100),
+            watermark_handle: None,
+            isb_config: None,
+        })
         .await
         .unwrap();
 
@@ -578,15 +584,18 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
         };
         let tracker = TrackerHandle::new(None, None);
-        let js_reader = JetStreamReader::new(
-            "test".to_string(),
-            stream.clone(),
-            context.clone(),
-            buf_reader_config,
-            tracker.clone(),
-            500,
-            None,
-        )
+        use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;
+        let js_reader = JetStreamReader::new(ISBReaderConfig {
+            vertex_type: "test".to_string(),
+            stream: stream.clone(),
+            js_ctx: context.clone(),
+            config: buf_reader_config,
+            tracker_handle: tracker.clone(),
+            batch_size: 500,
+            read_timeout: Duration::from_millis(100),
+            watermark_handle: None,
+            isb_config: None,
+        })
         .await
         .unwrap();
 

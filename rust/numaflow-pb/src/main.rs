@@ -22,6 +22,7 @@ fn build_client() {
                 "proto/sessionreduce/v1/sessionreduce.proto",
                 "proto/sideinput/v1/sideinput.proto",
                 "proto/serving/v1/store.proto",
+                "proto/accumulator/v1/accumulator.proto",
             ],
             &["proto"],
         )

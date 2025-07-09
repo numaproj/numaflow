@@ -18,8 +18,6 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Udf {
-    #[serde(rename = "builtin", skip_serializing_if = "Option::is_none")]
-    pub builtin: Option<Box<crate::models::Function>>,
     #[serde(rename = "container", skip_serializing_if = "Option::is_none")]
     pub container: Option<Box<crate::models::Container>>,
     #[serde(rename = "groupBy", skip_serializing_if = "Option::is_none")]
@@ -29,7 +27,6 @@ pub struct Udf {
 impl Udf {
     pub fn new() -> Udf {
         Udf {
-            builtin: None,
             container: None,
             group_by: None,
         }

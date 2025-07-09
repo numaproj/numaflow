@@ -1,13 +1,12 @@
 // Tests the ISBServiceCard component
 
-import React from "react";
+import React, { act } from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import userEvent from "@testing-library/user-event";
 import { ISBServiceCard } from "./ISBServiceCard";
 import { AppContext } from "../../../../../../App";
 import { BrowserRouter } from "react-router-dom";
-import { act } from "react-dom/test-utils";
 
 const mockSetSidebarProps = jest.fn();
 

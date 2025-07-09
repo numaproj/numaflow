@@ -11,7 +11,8 @@ tracing.workspace = true
 thiserror.workspace = true
 bytes.workspace = true
 rustls.workspace = true
-tokio-stream = "0.1.15"
+chrono.workspace = true
+tokio-stream.workspace = true
 rustls-pki-types = "1.11.0"
 rustls-native-certs = "0.8.1"
 

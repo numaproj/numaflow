@@ -10,7 +10,7 @@ use crate::error::{Error, Result};
 use crate::message::ReadAck;
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
-    pipeline_isb_metric_labels, pipeline_metric_labels, pipeline_metrics,
+    pipeline_metric_labels, pipeline_metrics,
 };
 use crate::source::http::CoreHttpSource;
 use crate::tracker::TrackerHandle;
@@ -87,8 +87,8 @@ pub(crate) trait SourceAcker {
 
 pub(crate) enum SourceType {
     UserDefinedSource(
-        user_defined::UserDefinedSourceRead,
-        user_defined::UserDefinedSourceAck,
+        Box<user_defined::UserDefinedSourceRead>,
+        Box<user_defined::UserDefinedSourceAck>,
         user_defined::UserDefinedSourceLagReader,
     ),
     Generator(
@@ -216,7 +216,7 @@ impl Source {
             SourceType::UserDefinedSource(reader, acker, lag_reader) => {
                 health_checker = Some(reader.get_source_client());
                 tokio::spawn(async move {
-                    let actor = SourceActor::new(receiver, reader, acker, lag_reader);
+                    let actor = SourceActor::new(receiver, *reader, *acker, lag_reader);
                     actor.run().await;
                 });
             }
@@ -551,7 +551,7 @@ impl Source {
         cancel_token: &CancellationToken,
     ) {
         let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
-        let _ = Retry::retry(
+        let _ = Retry::new(
             interval,
             async || {
                 let result = Self::ack(source_handle.clone(), offsets.clone()).await;
@@ -588,7 +588,16 @@ impl Source {
                 .read_time
                 .get_or_create(mvtx_labels)
                 .observe(read_start_time.elapsed().as_micros() as f64);
+            monovertex_metrics()
+                .read_batch_size
+                .get_or_create(mvtx_labels)
+                .set(n as i64);
         } else {
+            pipeline_metrics()
+                .forwarder
+                .read_batch_size
+                .get_or_create(pipeline_labels)
+                .set(n as i64);
             pipeline_metrics()
                 .forwarder
                 .read_total
@@ -619,37 +628,42 @@ impl Source {
 
     fn send_ack_metrics(e2e_start_time: Instant, n: usize, start: Instant) {
         if is_mono_vertex() {
+            let mvtx_labels = mvtx_forward_metric_labels();
             monovertex_metrics()
                 .ack_time
-                .get_or_create(mvtx_forward_metric_labels())
+                .get_or_create(mvtx_labels)
                 .observe(start.elapsed().as_micros() as f64);
 
             monovertex_metrics()
                 .ack_total
-                .get_or_create(mvtx_forward_metric_labels())
+                .get_or_create(mvtx_labels)
                 .inc_by(n as u64);
 
             monovertex_metrics()
                 .e2e_time
-                .get_or_create(mvtx_forward_metric_labels())
+                .get_or_create(mvtx_labels)
                 .observe(e2e_start_time.elapsed().as_micros() as f64);
         } else {
+            let mut pipeline_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
+            pipeline_labels.push((
+                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                get_vertex_name().to_string(),
+            ));
             pipeline_metrics()
                 .forwarder
                 .ack_processing_time
-                .get_or_create(pipeline_isb_metric_labels())
+                .get_or_create(&pipeline_labels)
                 .observe(start.elapsed().as_micros() as f64);
 
             pipeline_metrics()
                 .forwarder
                 .ack_total
-                .get_or_create(pipeline_isb_metric_labels())
+                .get_or_create(&pipeline_labels)
                 .inc_by(n as u64);
-
             pipeline_metrics()
                 .forwarder
-                .forward_chunk_processing_time
-                .get_or_create(pipeline_isb_metric_labels())
+                .e2e_time
+                .get_or_create(&pipeline_labels)
                 .observe(e2e_start_time.elapsed().as_micros() as f64);
         }
     }
@@ -795,7 +809,7 @@ mod tests {
         let tracker = TrackerHandle::new(None, None);
         let source = Source::new(
             5,
-            SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
+            SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
             tracker.clone(),
             true,
             None,

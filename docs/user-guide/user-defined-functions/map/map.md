@@ -2,10 +2,6 @@
 
 Map in a Map vertex takes an input and returns 0, 1, or more outputs (also known as flat-map operation). Map is an element wise operator.
 
-## Builtin UDF
-
-There are some [Built-in Functions](builtin-functions/README.md) that can be used directly.
-
 ## Build Your Own UDF
 
 You can build your own UDF in multiple languages.

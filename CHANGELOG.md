@@ -1,5 +1,69 @@
 # Changelog
 
+## v1.5.0 (2025-06-18)
+
+ * [96790b95](https://github.com/numaproj/numaflow/commit/96790b95a604da675133b4432dc14240ead7ec9a) Update manifests to v1.5.0
+ * [7dc6b95b](https://github.com/numaproj/numaflow/commit/7dc6b95b50e5bfcfb1bdb3bae1b96f0e8290b1c6) feat: insert id into generator payload (#2735)
+ * [cbcfe7a1](https://github.com/numaproj/numaflow/commit/cbcfe7a1e7d3e50396cc61743b0763f17eefc25c) feat: http source should honor response status codes sent to clients (#2732)
+ * [8c104a56](https://github.com/numaproj/numaflow/commit/8c104a56c9e655a616fa407973466109b12dbfd0) feat(ci): enable lychee link checking for examples directory (#2729)
+ * [06c011cb](https://github.com/numaproj/numaflow/commit/06c011cb22072dcbe3d81ae9a75ba23d840ca9f2) fix: wait for inflight messages to be processed in transformer (#2731)
+ * [2abd9d3d](https://github.com/numaproj/numaflow/commit/2abd9d3d193647e2bbdf61efa094aeba84acc1ae) fix: revisit some metrics in rust (#2692)
+ * [7b634dd9](https://github.com/numaproj/numaflow/commit/7b634dd955202afb7525fa1d2c328e202328d7f4) feat: add serving http server (#2633)
+ * [b85f6d33](https://github.com/numaproj/numaflow/commit/b85f6d33fbac2a3bbf827b0b918ac7bfa8351559) fix: Wrong usage of get_consumer_from_stream (#2724)
+ * [5dbf2fac](https://github.com/numaproj/numaflow/commit/5dbf2fac8be1a44358cac347cbbef7f0b02f863d) fix: map udf metrics (#2588)
+ * [74335a29](https://github.com/numaproj/numaflow/commit/74335a291f09b46bcc3bb118c0236d2bf39cb5b8) feat: Kafka Rust implementation - Oauth authentication (#2718)
+ * [565293ce](https://github.com/numaproj/numaflow/commit/565293ce1401f16a63acfafac2bd159971559ab9) fix: mount runtime path for pipeline/vertex (#2716)
+ * [0f8a461e](https://github.com/numaproj/numaflow/commit/0f8a461e14c73a4fb5a1a3d5868d2e4618cdb0a5) chore(ci): lychee only for md files (#2713)
+ * [3961e47e](https://github.com/numaproj/numaflow/commit/3961e47e88e1176e68987596f57f4142f2b349ee) chore(ci): with more tests being added it is timing out (#2710)
+ * [ca9ad694](https://github.com/numaproj/numaflow/commit/ca9ad694333920e7c18857ff07fa5a4aab6b9f49) fix: source watermark publisher in async data movement (#2707)
+ * [8c2b564f](https://github.com/numaproj/numaflow/commit/8c2b564f3a1f69d60d4058bce4aa4a819fdc85e7) feat: optionally enable Wire compression to optimize network and ISB stability (#2709)
+ * [435ea827](https://github.com/numaproj/numaflow/commit/435ea82718604be3084ea1c4cfcd46d3d0a48a63) fix: flaky unit test (#2702)
+ * [aee84310](https://github.com/numaproj/numaflow/commit/aee84310a65d8bd98defe7243f2d2d216830f3d5) fix: Rust HTTP source - More validations on HTTP headers (#2700)
+ * [652d4547](https://github.com/numaproj/numaflow/commit/652d454740b46ca57befc78593dc8af68ef2f3ff) fix: http port (#2697)
+ * [c3e45031](https://github.com/numaproj/numaflow/commit/c3e45031cf8ff7c2532b539135cfa73fadb907c5) feat: Allow specifying JVM Kafka opts directly (#2689)
+ * [10c041c8](https://github.com/numaproj/numaflow/commit/10c041c86d8de3793abdde1c5ad52b0b7d230af1) feat: http integration (#2691)
+ * [6b84334e](https://github.com/numaproj/numaflow/commit/6b84334e52a66bead10663a6be27fd187aa71f49) fix: reduce UDF metrics (#2624)
+ * [34a2c9a8](https://github.com/numaproj/numaflow/commit/34a2c9a81721c8639da549cb05c2751f1837795b) fix: typo in transformer config (#2688)
+ * [11a5b6cd](https://github.com/numaproj/numaflow/commit/11a5b6cde0f3d49aebdbca1e3b390cc0fa751882) feat: extension for http source (#2687)
+ * [046d1f7d](https://github.com/numaproj/numaflow/commit/046d1f7d3b25903b17f49f0697470a29d457fab3) feat: Kafka sink implementation in Rust (#2672)
+ * [770a7a29](https://github.com/numaproj/numaflow/commit/770a7a29af821a2a7472705474e4ce6c33e74ac4) fix: retry attempts calculation and logs in retry strategy (#2653)
+
+### Contributors
+
+ * Adarsh Jain
+ * Derek Wang
+ * Sreekanth
+ * Takashi Menjo
+ * Vigith Maurice
+ * Yashash H L
+ * shrivardhan
+ * yogesh
+
+## v1.5.0-rc5 (2025-05-24)
+
+ * [7a8d496a](https://github.com/numaproj/numaflow/commit/7a8d496a3acd375180ffe2023e373e418528441e) Update manifests to v1.5.0-rc5
+ * [4389a6f6](https://github.com/numaproj/numaflow/commit/4389a6f6fed4a31bec5802d2411a1e08ab95ac45) fix: return 400 if serving ID header contains '.' (#2669)
+ * [690ea0dd](https://github.com/numaproj/numaflow/commit/690ea0dd68da068b20fc53febccf6c62c67b387a) fix: conditional forwarding in Async Dataplane (#2668)
+ * [954cc5bb](https://github.com/numaproj/numaflow/commit/954cc5bb037dd354d698fdd1c59f4eb9385e5ce5) feat: Rust pipeline metrics (#2666)
+ * [e053a5ce](https://github.com/numaproj/numaflow/commit/e053a5cec6004cc9afee928fa5f752a0d889a1d5) feat: Aligned Window for Reduce Async Data Movement  (#2618)
+ * [5a3d3201](https://github.com/numaproj/numaflow/commit/5a3d320147ed84bcd30251cd15de6692e298d736) feat: Kafka source - Rust implementation (#2636)
+
+### Contributors
+
+ * Adarsh Jain
+ * Derek Wang
+ * Sreekanth
+ * Vigith Maurice
+ * Yashash H L
+
+## v1.5.0-rc4 (2025-05-20)
+
+ * [9f52ffc6](https://github.com/numaproj/numaflow/commit/9f52ffc6a4bba38f077fcaeb04b4e3080006935c) Update manifests to v1.5.0-rc4
+
+### Contributors
+
+ * Derek Wang
+
 ## v1.5.0-rc3 (2025-05-18)
 
  * [40839123](https://github.com/numaproj/numaflow/commit/408391237923536f482099a1040f02b104832375) Update manifests to v1.5.0-rc3

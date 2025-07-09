@@ -1,10 +1,9 @@
-import React from "react";
+import React, { act } from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { BrowserRouter } from "react-router-dom";
 
 import { DeleteModal } from "./index";
-import { act } from "react-dom/test-utils";
 
 const onDeleteCompleted = jest.fn();
 const onCancel = jest.fn();
