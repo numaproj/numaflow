@@ -139,7 +139,7 @@ endif
 	$(MAKE) restart-control-plane-components
 	cat test/manifests/e2e-api-pod.yaml | sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:latest/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
 	go generate $(shell find ./test/$* -name '*.go')
-	-go test -v -timeout 15m -count 1 --tags test -p 1 ./test/$*
+	go test -v -timeout 15m -count 1 --tags test -p 1 ./test/$*
 	$(MAKE) cleanup-e2e
 
 image-restart:
@@ -311,7 +311,7 @@ docs-serve: docs
 
 .PHONY: docs-linkcheck
 docs-linkcheck: /usr/local/bin/lychee
-	lychee --exclude-path=CHANGELOG.md --exclude-path=./docs/APIs.md --exclude "https://localhost:*" --exclude "http://localhost:*" --exclude "http://127.0.0.1*" *.md $(shell find ./docs -name '*.md') $(shell find ./examples -name '*.yaml')
+	lychee --exclude-path=CHANGELOG.md --exclude-path=./docs/APIs.md --exclude "https://localhost:*" --exclude "http://localhost:*" --exclude "http://127.0.0.1*" *.md $(shell find ./docs -name '*.md') $(shell find ./examples -name '*.yaml') --accept 200,429
 
 # pre-push checks
 

@@ -513,7 +513,7 @@ func (mvspec MonoVertexSpec) DeepCopyWithoutReplicas() MonoVertexSpec {
 
 func (mvspec MonoVertexSpec) getMainContainer(req getContainerReq) corev1.Container {
 	return containerBuilder{}.
-		init(req).command(NumaflowRustBinary).args("--rust").build()
+		init(req).command(NumaflowRustBinary).args("processor").build()
 }
 
 // buildContainers builds the sidecar containers and main containers for the mono vertex.

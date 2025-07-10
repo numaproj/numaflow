@@ -36,7 +36,7 @@ Numaflow, created by the Intuit Argo team to address community needs for continu
 
 ## Roadmap
 
-- Inbuilt Debugging Experience (1.5) 
+- Make Rust code the primary for data-plane (1.6) 
 
 ## Demo
 

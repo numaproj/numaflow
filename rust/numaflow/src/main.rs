@@ -65,6 +65,12 @@ async fn run(cli: clap::Command) -> Result<(), Box<dyn Error>> {
             let cfg: serving::Settings = vars.try_into().unwrap();
             serving::run(cfg).await?;
         }
+        Some(("processor", _)) => {
+            info!("Starting processing pipeline");
+            numaflow_core::run()
+                .await
+                .map_err(|e| format!("Error running core binary: {e:?}"))?;
+        }
         Some(("sideinput", args)) => match args.subcommand() {
             Some(("initializer", args)) => {
                 info!("Starting sideinput initializer");
@@ -119,11 +125,8 @@ async fn run(cli: clap::Command) -> Result<(), Box<dyn Error>> {
                 return Err("Unknown sideinput subcommand".into());
             }
         },
-        _ => {
-            info!("Starting processing pipeline");
-            numaflow_core::run()
-                .await
-                .map_err(|e| format!("Error running core binary: {e:?}"))?;
+        others => {
+            return Err(format!("Invalid subcommand {others:?}").into());
         }
     }
 

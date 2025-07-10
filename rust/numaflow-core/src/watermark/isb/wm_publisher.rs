@@ -148,21 +148,27 @@ impl ISBWatermarkPublisher {
         // we can avoid publishing the watermark if the offset is smaller than the last published offset
         // since we do unordered writes to ISB, the offsets can be out of order even though the watermark
         // is monotonically increasing.
-        // If the watermark is same as the last published watermark we can publish the watermark only if
-        // the offset is greater than the last published offset otherwise the watermark will regress
-        // between the offsets.
+        // NOTE: in idling case since we reuse the control message offset, we can have the same offset
+        // with larger watermark (we should publish it).
+        let last_state = &mut last_published_wm_state[stream.partition as usize];
+        if offset < last_state.offset || watermark < last_state.watermark {
+            return;
+        }
+
+        // If the watermark is same as the last published watermark update the last published offset
+        // to the largest offset otherwise the watermark will regress between the offsets.
+        //
         // Example of the bug:
         // Supposed publish watermark offset=3605646 watermark=1750758997480 last_published_offset=3605147 last_published_watermark=1750758997480
         // Supposed publish watermark offset=3605637 watermark=1750758998480 last_published_offset=3605147 last_published_watermark=1750758997480
         // Actual published watermark offset=3605637 watermark=1750758998480
         // We should've published watermark for offset 3605646 and skipped publishing for offset 3605637
-        let last_state = &last_published_wm_state[stream.partition as usize];
-        if offset <= last_state.offset || watermark < last_state.watermark {
+        if watermark == last_state.watermark {
+            last_state.offset = offset;
             return;
         }
 
         let ot_bucket = self.ot_buckets.get(stream.vertex).expect("Invalid vertex");
-
         let wmb_bytes: BytesMut = WMB {
             idle,
             offset,
