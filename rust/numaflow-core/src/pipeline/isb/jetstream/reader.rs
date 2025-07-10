@@ -19,7 +19,7 @@ use async_nats::jetstream::{
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use bytes::Bytes;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use flate2::read::GzDecoder;
 use prost::Message as ProtoMessage;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
@@ -230,6 +230,7 @@ impl JetStreamReader {
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let batch_size = self.batch_size;
         let read_timeout = self.read_timeout;
+        let mut latest_watermark = DateTime::from_timestamp_millis(-1).unwrap();
 
         let (messages_tx, messages_rx) = mpsc::channel(batch_size);
         let handle: JoinHandle<Result<()>> = tokio::spawn({
@@ -264,6 +265,11 @@ impl JetStreamReader {
                         continue;
                     }
 
+                    latest_watermark = read_messages
+                        .last()
+                        .map(|m| m.watermark.unwrap_or_default())
+                        .unwrap_or(latest_watermark);
+
                     let mut batch_count = 0;
                     for message in read_messages {
                         Self::update_metrics(&labels, &message);
@@ -277,9 +283,13 @@ impl JetStreamReader {
                     processed_msgs_count += batch_count;
                     if last_logged_at.elapsed().as_secs() >= 1 {
                         info!(
-                            "Processed {} messages in {:?}",
+                            "Processed {} messages in {:?} latest watermark {:?} delay {:?}",
                             processed_msgs_count,
+                            Utc::now(),
+                            latest_watermark,
                             Utc::now()
+                                .signed_duration_since(latest_watermark)
+                                .num_milliseconds()
                         );
                         processed_msgs_count = 0;
                         last_logged_at = Instant::now();

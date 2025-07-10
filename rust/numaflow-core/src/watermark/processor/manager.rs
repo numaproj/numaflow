@@ -6,8 +6,8 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use std::sync::RwLock;
-use std::time::SystemTime;
 use std::time::{Duration, UNIX_EPOCH};
+use std::time::{Instant, SystemTime};
 
 use crate::config::pipeline::VertexType;
 use crate::config::pipeline::watermark::BucketConfig;
@@ -321,6 +321,7 @@ impl ProcessorManager {
         vertex_replica: u16,
     ) {
         let mut ot_watcher = Self::create_watcher(ot_bucket.clone()).await;
+        let mut last_logged = Instant::now();
 
         loop {
             let Some(val) = ot_watcher.next().await else {
@@ -366,6 +367,11 @@ impl ProcessorManager {
                 | async_nats::jetstream::kv::Operation::Purge => {
                     // we don't care about delete or purge operations
                 }
+            }
+
+            if last_logged.elapsed().as_secs() >= 1 {
+                info!(?processors, "Updated processors");
+                last_logged = Instant::now();
             }
         }
     }

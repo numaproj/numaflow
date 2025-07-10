@@ -178,6 +178,8 @@ impl ISBWatermarkPublisher {
         .try_into()
         .expect("Failed to convert WMB to bytes");
 
+        info!(processor = ?self.processor_name, watermark = ?watermark, offset = ?offset, "Publishing watermark");
+
         // ot writes can fail when isb is not healthy, we can ignore failures
         // since subsequent writes will go through
         ot_bucket
