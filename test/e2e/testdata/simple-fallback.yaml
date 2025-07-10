@@ -5,9 +5,17 @@ metadata:
 spec:
   vertices:
     - name: in
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       source:
         http: {}
-    - name: cat
+    - name: udf
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       scale:
         min: 1
       udf:
@@ -15,6 +23,10 @@ spec:
           image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
           imagePullPolicy: Always
     - name: output
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       scale:
         min: 1
       sink:
@@ -34,6 +46,6 @@ spec:
                   value: "simple-fallback-output"
   edges:
     - from: in
-      to: cat
-    - from: cat
+      to: udf
+    - from: udf
       to: output

@@ -42,8 +42,8 @@ var (
             {
                 "name": "cat",
                 "udf": {
-                    "builtin": {
-                        "name": "cat"
+                    "container": {
+                        "image": "quay.io/numaio/numaflow-go/map-cat:stable"
                     }
                 }
             },
@@ -94,8 +94,8 @@ var (
             {
                 "name": "cat",
                 "udf": {
-                    "builtin": {
-                        "name": "cat"
+                    "container": {
+                        "image": "quay.io/numaio/numaflow-go/map-cat:stable"
                     }
                 }
             },

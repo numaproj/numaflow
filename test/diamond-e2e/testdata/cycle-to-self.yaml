@@ -5,9 +5,17 @@ metadata:
 spec:
   vertices:
     - name: in
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       source:
         http: {}
     - name: retry
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       scale:
         disabled: true # don't scale this beyond one Pod since it doesn't make sense for this container
       udf:
@@ -16,6 +24,10 @@ spec:
           image: quay.io/numaio/numaflow-go/map-retry:stable
           imagePullPolicy: Always
     - name: out
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       sink:
         udsink:
           container:
