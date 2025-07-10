@@ -5,11 +5,12 @@
 
 #![allow(dead_code)]
 
-use crate::error::Error;
+use crate::error::{Error, Result};
 use async_nats::jetstream::Context;
 use async_nats::{ConnectOptions, jetstream};
 use config::isb;
 use std::time::Duration;
+use tokio_util::sync::CancellationToken;
 
 mod error;
 
@@ -24,7 +25,45 @@ mod manager;
 /// the side input store for changes.
 mod synchronize;
 
-async fn create_js_context(config: isb::ClientConfig) -> error::Result<Context> {
+pub enum SideInputMode {
+    Manager {
+        /// The ISB bucket where the side-input values are stored.
+        side_input_store: &'static str,
+        /// The name of the side input.
+        side_input: &'static str,
+    },
+    Synchronizer {
+        /// The list of side input names to synchronize.
+        side_inputs: Vec<&'static str>,
+        /// The ISB bucket where the side-input values are stored.
+        side_input_store: &'static str,
+    },
+    Initializer {
+        /// The list of side input names to initialize.
+        side_inputs: Vec<&'static str>,
+        /// The ISB bucket where the side-input values are stored.
+        side_input_store: &'static str,
+    },
+}
+
+pub async fn run(mode: SideInputMode, cancellation_token: CancellationToken) -> Result<()> {
+    unimplemented!()
+}
+
+async fn start_initializer(
+    side_inputs: Vec<&'static str>,
+    side_input_store: &'static str,
+    cancellation_token: CancellationToken,
+) -> Result<()> {
+    unimplemented!()
+}
+
+async fn build_js_context() -> Result<Context> {
+    let client = isb::ClientConfig::load(std::env::vars())?;
+    create_js_context(client).await
+}
+
+async fn create_js_context(config: isb::ClientConfig) -> Result<Context> {
     // TODO: make these configurable. today this is hardcoded on Golang code too.
     let mut opts = ConnectOptions::new()
         .max_reconnects(None) // unlimited reconnects
