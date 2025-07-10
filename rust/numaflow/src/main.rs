@@ -1,4 +1,4 @@
-use numaflow_sideinput::SideInputMode;
+use cmdline::sideinput;
 use std::collections::HashMap;
 use std::env;
 use std::error::Error;
@@ -71,60 +71,9 @@ async fn run(cli: clap::Command) -> Result<(), Box<dyn Error>> {
                 .await
                 .map_err(|e| format!("Error running core binary: {e:?}"))?;
         }
-        Some(("sideinput", args)) => match args.subcommand() {
-            Some(("initializer", args)) => {
-                info!("Starting sideinput initializer");
-                let side_inputs: Vec<&'static str> = args
-                    .get_many::<String>("side-inputs")
-                    .unwrap()
-                    .map(|s| &*Box::leak(s.clone().into_boxed_str()))
-                    .collect();
-                let side_input_store = args.get_one::<String>("side-inputs-store").unwrap();
-                let side_input_store = Box::leak(side_input_store.clone().into_boxed_str());
-
-                let mode = SideInputMode::Initializer {
-                    side_inputs,
-                    side_input_store,
-                };
-                numaflow_sideinput::run(mode, cln_token).await?;
-            }
-            Some(("synchronizer", args)) => {
-                info!("Starting sideinput synchronizer");
-                let side_inputs: Vec<&str> = args
-                    .get_many::<String>("side-inputs")
-                    .expect("side-inputs is required")
-                    .map(|s| &*Box::leak(s.clone().into_boxed_str()))
-                    .collect();
-                let side_input_store = args.get_one::<String>("side-inputs-store").unwrap();
-                let side_input_store = Box::leak(side_input_store.clone().into_boxed_str());
-
-                let mode = SideInputMode::Synchronizer {
-                    side_inputs,
-                    side_input_store,
-                };
-                numaflow_sideinput::run(mode, cln_token).await?;
-            }
-            Some(("manager", args)) => {
-                info!("Starting sideinput manager");
-                let side_input_store = args
-                    .get_one::<String>("side-inputs-store")
-                    .expect("side-inputs-store is required");
-                let side_input_store = Box::leak(side_input_store.clone().into_boxed_str());
-                let side_input = args
-                    .get_one::<String>("side-input")
-                    .expect("side-input is required");
-                let side_input = Box::leak(side_input.clone().into_boxed_str());
-
-                let mode = SideInputMode::Manager {
-                    side_input_store,
-                    side_input,
-                };
-                numaflow_sideinput::run(mode, cln_token).await?;
-            }
-            _ => {
-                return Err("Unknown sideinput subcommand".into());
-            }
-        },
+        Some(("sideinput", args)) => {
+            sideinput::run_sideinput(args, cln_token).await?;
+        }
         others => {
             return Err(format!("Invalid subcommand {others:?}").into());
         }

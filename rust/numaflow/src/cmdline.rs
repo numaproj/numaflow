@@ -1,7 +1,7 @@
 use clap::{Command, arg};
 
 /// SideInput Command Line Interface
-mod sideinput;
+pub(crate) mod sideinput;
 
 pub(super) fn root_cli() -> Command {
     Command::new("numaflow")
