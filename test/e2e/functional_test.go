@@ -202,8 +202,8 @@ func (s *FunctionalSuite) TestDropOnFull() {
 
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")))
 	// give buffer writer some time to update the isFull attribute.
-	// 10s is a carefully chosen number to create a stable buffer full scenario.
-	time.Sleep(time.Second * 10)
+	// 20s is a carefully chosen number to create a stable buffer full scenario.
+	time.Sleep(time.Second * 20)
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")))
 
 	expectedDropMetricOne := `forwarder_drop_total{vertex="in",pipeline="drop-on-full",vertex_type="Source",replica="0",partition_name="numaflow-system-drop-on-full-out-0",reason="Buffer full"} 1`
