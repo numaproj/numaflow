@@ -14,15 +14,15 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 /// gRPC client to interact with the user-defined side-input generator.
-mod client;
+pub(super) mod client;
 
 /// Cron expression for the side-input trigger.
 #[derive(Debug, Clone)]
 pub(crate) struct SideInputTrigger {
     /// The schedule to trigger the creation of the side input data.
-    schedule: Schedule,
+    pub(crate) schedule: Schedule,
     /// Timezone for the schedule, defaults to [UTC].
-    timezone: Tz,
+    pub(crate) timezone: Tz,
 }
 
 impl SideInputTrigger {

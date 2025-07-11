@@ -99,7 +99,7 @@ pub(crate) async fn run_sideinput(
 ) -> Result<(), Box<dyn Error>> {
     match args.subcommand() {
         Some(("initializer", args)) => {
-            info!("Starting sideinput initializer");
+            info!("Starting side-input initializer");
             let side_inputs: Vec<&'static str> = args
                 .get_many::<String>("side-inputs")
                 .unwrap()
@@ -108,9 +108,10 @@ pub(crate) async fn run_sideinput(
             let side_input_store = args.get_one::<String>("side-inputs-store").unwrap();
             let side_input_store = Box::leak(side_input_store.clone().into_boxed_str());
 
-            let mode = SideInputMode::Initializer {
+            let mode = SideInputMode::Synchronizer {
                 side_inputs,
                 side_input_store,
+                run_once: true,
             };
             Ok(numaflow_sideinput::run(mode, cln_token).await?)
         }
@@ -129,6 +130,7 @@ pub(crate) async fn run_sideinput(
             let mode = SideInputMode::Synchronizer {
                 side_inputs,
                 side_input_store,
+                run_once: false,
             };
             Ok(numaflow_sideinput::run(mode, cln_token).await?)
         }

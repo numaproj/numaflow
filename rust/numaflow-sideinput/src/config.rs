@@ -5,9 +5,9 @@ const ENV_SIDE_INPUT_OBJECT: &str = "NUMAFLOW_SIDE_INPUT_OBJECT";
 
 /// Configurations for the side-input trigger from the pipeline spec.
 pub(crate) struct SideInputTriggerConfig {
-    pub(crate) name: String,
-    pub(crate) schedule: String,
-    pub(crate) timezone: Option<String>,
+    pub(crate) name: &'static str,
+    pub(crate) schedule: &'static str,
+    pub(crate) timezone: Option<&'static str>,
 }
 
 impl SideInputTriggerConfig {
@@ -25,11 +25,14 @@ impl SideInputTriggerConfig {
 
         let name = side_input_obj.name.clone();
         let schedule = side_input_obj.trigger.schedule.clone();
-        let timezone = side_input_obj.trigger.timezone.clone();
+        let timezone: Option<&'static str> = side_input_obj
+            .trigger
+            .timezone
+            .map(|tz| Box::leak(tz.into_boxed_str()) as &str);
 
         SideInputTriggerConfig {
-            name,
-            schedule,
+            name: Box::leak(name.into_boxed_str()),
+            schedule: Box::leak(schedule.into_boxed_str()),
             timezone,
         }
     }
