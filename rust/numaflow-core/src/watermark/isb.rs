@@ -501,6 +501,7 @@ mod tests {
             partitions: 1,
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
+            delay: None,
         };
 
         let to_bucket_config = BucketConfig {
@@ -508,7 +509,21 @@ mod tests {
             partitions: 1,
             ot_bucket: to_ot_bucket_name,
             hb_bucket: to_hb_bucket_name,
+            delay: None,
         };
+
+        let _ = js_context
+            .delete_key_value(ot_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(hb_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(to_ot_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(to_hb_bucket_name.to_string())
+            .await;
 
         // create key value stores
         js_context
@@ -673,24 +688,6 @@ mod tests {
         if !wmb_found {
             panic!("WMB not found");
         }
-
-        // delete the stores
-        js_context
-            .delete_key_value(ot_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(hb_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(to_ot_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(to_hb_bucket_name.to_string())
-            .await
-            .unwrap();
     }
 
     #[cfg(feature = "nats-tests")]
@@ -709,7 +706,15 @@ mod tests {
             partitions: 1,
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
+            delay: None,
         };
+
+        let _ = js_context
+            .delete_key_value(ot_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(hb_bucket_name.to_string())
+            .await;
 
         // create key value stores
         js_context
@@ -803,16 +808,6 @@ mod tests {
         }
 
         assert_ne!(fetched_watermark, -1);
-
-        // delete the stores
-        js_context
-            .delete_key_value(ot_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(hb_bucket_name.to_string())
-            .await
-            .unwrap();
     }
 
     #[cfg(feature = "nats-tests")]
@@ -833,6 +828,7 @@ mod tests {
             partitions: 1,
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
+            delay: None,
         };
 
         let to_bucket_config = BucketConfig {
@@ -840,7 +836,21 @@ mod tests {
             partitions: 1,
             ot_bucket: to_ot_bucket_name,
             hb_bucket: to_hb_bucket_name,
+            delay: None,
         };
+
+        let _ = js_context
+            .delete_key_value(ot_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(hb_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(to_ot_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(to_hb_bucket_name.to_string())
+            .await;
 
         // create key value stores
         js_context
@@ -946,23 +956,5 @@ mod tests {
         }
 
         assert!(wmb_found, "Idle watermark not found");
-
-        // delete the stores
-        js_context
-            .delete_key_value(ot_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(hb_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(to_ot_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(to_hb_bucket_name.to_string())
-            .await
-            .unwrap();
     }
 }

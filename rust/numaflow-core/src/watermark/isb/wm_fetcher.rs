@@ -240,6 +240,7 @@ mod tests {
             ot_bucket: "ot_bucket",
             hb_bucket: "hb_bucket",
             partitions: 1,
+            delay: None,
         };
 
         let mut fetcher =
@@ -379,6 +380,7 @@ mod tests {
             ot_bucket: "ot_bucket",
             hb_bucket: "hb_bucket",
             partitions: 1,
+            delay: None,
         };
 
         let mut fetcher =
@@ -611,6 +613,7 @@ mod tests {
             ot_bucket: "ot_bucket",
             hb_bucket: "hb_bucket",
             partitions: 2,
+            delay: None,
         };
 
         let mut fetcher =
@@ -833,12 +836,14 @@ mod tests {
             ot_bucket: "ot_bucket1",
             hb_bucket: "hb_bucket1",
             partitions: 2,
+            delay: None,
         };
         let bucket_config2 = BucketConfig {
             vertex: "edge2",
             ot_bucket: "ot_bucket2",
             hb_bucket: "hb_bucket2",
             partitions: 2,
+            delay: None,
         };
 
         let mut fetcher = ISBWatermarkFetcher::new(
@@ -900,6 +905,7 @@ mod tests {
             ot_bucket: "ot_bucket",
             hb_bucket: "hb_bucket",
             partitions: 1,
+            delay: None,
         };
 
         let mut fetcher =
@@ -981,6 +987,7 @@ mod tests {
             ot_bucket: "ot_bucket",
             hb_bucket: "hb_bucket",
             partitions: 1,
+            delay: None,
         };
 
         let mut fetcher =
@@ -1100,6 +1107,7 @@ mod tests {
             ot_bucket: "ot_bucket",
             hb_bucket: "hb_bucket",
             partitions: 2,
+            delay: None,
         };
 
         let mut fetcher =
@@ -1317,12 +1325,14 @@ mod tests {
             ot_bucket: "ot_bucket1",
             hb_bucket: "hb_bucket1",
             partitions: 2,
+            delay: None,
         };
         let bucket_config2 = BucketConfig {
             vertex: "edge2",
             ot_bucket: "ot_bucket2",
             hb_bucket: "hb_bucket2",
             partitions: 2,
+            delay: None,
         };
 
         let mut fetcher = ISBWatermarkFetcher::new(
@@ -1380,6 +1390,7 @@ mod tests {
             ot_bucket: "ot_bucket",
             hb_bucket: "hb_bucket",
             partitions: 1,
+            delay: None,
         };
 
         let mut fetcher =
