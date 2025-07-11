@@ -13,8 +13,6 @@ use config::isb;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
-const PATH_SIDE_INPUTS_MOUNT: &str = "/var/numaflow/side-inputs";
-
 mod error;
 
 /// Configurations for side-input from the environment. Only side-input manager needs this, most of
@@ -40,6 +38,8 @@ pub enum SideInputMode {
         side_inputs: Vec<&'static str>,
         /// The ISB bucket where the side-input values are stored.
         side_input_store: &'static str,
+        /// The path where the side input files are mounted on the container.
+        mount_path: &'static str,
         /// If true, the synchronizer will only process the initial values and then stops, making
         /// it behavior similar to the old side-input initializer.
         run_once: bool,
@@ -56,8 +56,18 @@ pub async fn run(mode: SideInputMode, cancellation_token: CancellationToken) -> 
         SideInputMode::Synchronizer {
             side_inputs,
             side_input_store,
+            mount_path,
             run_once,
-        } => start_synchronizer(side_inputs, side_input_store, cancellation_token, run_once).await,
+        } => {
+            start_synchronizer(
+                side_inputs,
+                side_input_store,
+                mount_path,
+                cancellation_token,
+                run_once,
+            )
+            .await
+        }
     }
 }
 
@@ -88,6 +98,7 @@ async fn start_manager(
 async fn start_synchronizer(
     side_inputs: Vec<&'static str>,
     side_input_store: &'static str,
+    mount_path: &'static str,
     cancellation_token: CancellationToken,
     run_once: bool,
 ) -> Result<()> {
@@ -96,7 +107,7 @@ async fn start_synchronizer(
     let synchronizer = synchronize::SideInputSynchronizer::new(
         side_input_store,
         side_inputs,
-        PATH_SIDE_INPUTS_MOUNT,
+        mount_path,
         js_ctx,
         run_once,
         cancellation_token,
@@ -126,4 +137,48 @@ async fn create_js_context(config: isb::ClientConfig) -> Result<Context> {
         .map_err(|e| Error::Connection(e.to_string()))?;
 
     Ok(jetstream::new(js_client))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Integration Tests - These test the run function behavior and error handling
+
+    /// Integration test for the run function with cancellation
+    /// This test verifies that the run function properly handles cancellation tokens
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_run_function_cancellation() {
+        // Test Manager mode cancellation
+        let cancellation_token = CancellationToken::new();
+        cancellation_token.cancel(); // Cancel immediately
+
+        let manager_result = run(
+            SideInputMode::Manager {
+                side_input_store: "test-store",
+                side_input: "test-input",
+            },
+            cancellation_token.clone(),
+        )
+        .await;
+
+        // Should fail due to missing environment variables or cancellation
+        assert!(manager_result.is_err());
+
+        // Test Synchronizer mode cancellation
+        let sync_result = run(
+            SideInputMode::Synchronizer {
+                side_inputs: vec!["input1"],
+                side_input_store: "test-store",
+                mount_path: "/tmp/test",
+                run_once: true,
+            },
+            cancellation_token,
+        )
+        .await;
+
+        // Should fail due to missing environment variables or cancellation
+        assert!(sync_result.is_err());
+    }
 }

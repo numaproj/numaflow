@@ -4,6 +4,8 @@ use std::error::Error;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
+const PATH_SIDE_INPUTS_MOUNT: &str = "/var/numaflow/side-inputs";
+
 pub(super) fn add_sideinput_subcommand() -> Command {
     Command::new("sideinput")
         .about("SideInput System for Numaflow")
@@ -111,6 +113,7 @@ pub(crate) async fn run_sideinput(
             let mode = SideInputMode::Synchronizer {
                 side_inputs,
                 side_input_store,
+                mount_path: PATH_SIDE_INPUTS_MOUNT,
                 run_once: true,
             };
             Ok(numaflow_sideinput::run(mode, cln_token).await?)
@@ -130,6 +133,7 @@ pub(crate) async fn run_sideinput(
             let mode = SideInputMode::Synchronizer {
                 side_inputs,
                 side_input_store,
+                mount_path: PATH_SIDE_INPUTS_MOUNT,
                 run_once: false,
             };
             Ok(numaflow_sideinput::run(mode, cln_token).await?)

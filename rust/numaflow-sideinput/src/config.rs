@@ -43,6 +43,7 @@ pub(crate) mod isb {
     use std::collections::HashMap;
 
     const DEFAULT_URL: &str = "localhost:4222";
+
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct ClientConfig {
         pub url: String,
