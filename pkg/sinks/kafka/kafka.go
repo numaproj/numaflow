@@ -180,7 +180,8 @@ func (tk *ToKafka) Write(_ context.Context, messages []isb.Message) ([]isb.Offse
 			}
 		}
 
-		var kafkaKey sarama.StringEncoder
+		// all that ends well with `'er` are not interfaces :-)
+		var kafkaKey sarama.Encoder
 		// set Kafka Key if SetKey is set.
 		if tk.setKey {
 			kafkaKey = sarama.StringEncoder(keys)
