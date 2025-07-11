@@ -12,11 +12,18 @@ use tracing::{debug, error};
 
 use crate::watermark::wmb::WMB;
 
-/// OffsetTimeline is to store the watermark to the offset records.
-/// Our list is sorted by event time from highest to lowest.
+/// OffsetTimeline is to store the watermark to the offset records. Our list is sorted by event time
+/// from highest to lowest.
 #[derive(Clone)]
 pub(crate) struct OffsetTimeline {
-    watermarks: Arc<RwLock<VecDeque<WMB>>>,
+    /// A fixed-len queue of [WMB]s stored from highest to lowest for fetching the appropriate WM based
+    /// on the input offset. This queue is fixed-len because the consumer should be able to keep up
+    /// with the producer, otherwise the auto-scaler will bring in a new pod. In extreme cases, we can
+    /// see "offset jumping out of the timeline" problem, but we still need not require dynamic length.
+    /// The only other place where we would see the above problem is when we have stopped auto-scaling
+    /// for benchmarking. During benchmarking, we might have const amount of data buffered in the queue
+    /// causing watermark to slow down indefinitely.
+    watermarks: Arc<RwLock<VecDeque<WMB>>>, // no need to use BTreeSet since it is already sorted
     capacity: usize,
 }
 

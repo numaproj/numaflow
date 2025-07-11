@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::hash::DefaultHasher;
 use std::io::Write;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};

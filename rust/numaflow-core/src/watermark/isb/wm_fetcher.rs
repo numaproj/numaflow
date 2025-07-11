@@ -6,6 +6,7 @@
 //! last fetched watermark per partition and returns the smallest watermark among all the last fetched
 //! watermarks across the partitions this is to make sure the watermark is min across all the incoming
 //! partitions.
+use crate::config::pipeline::VertexType;
 use crate::config::pipeline::watermark::BucketConfig;
 use crate::error::Result;
 use crate::watermark::processor::manager::ProcessorManager;
@@ -20,6 +21,8 @@ pub(crate) struct ISBWatermarkFetcher {
     /// A map of vertex to its last processed watermark for each partition. Index[0] will be 0th
     /// partition, and so forth.
     last_processed_wm: HashMap<&'static str, Vec<i64>>,
+    /// Vertex type of the current vertex.
+    vertex_type: VertexType,
 }
 
 impl ISBWatermarkFetcher {
@@ -27,6 +30,7 @@ impl ISBWatermarkFetcher {
     pub(crate) async fn new(
         processor_managers: HashMap<&'static str, ProcessorManager>,
         bucket_configs: &[BucketConfig],
+        vertex_type: VertexType,
     ) -> Result<Self> {
         let mut last_processed_wm = HashMap::new();
 
@@ -37,13 +41,20 @@ impl ISBWatermarkFetcher {
         }
 
         Ok(ISBWatermarkFetcher {
+            vertex_type,
             processor_managers,
             last_processed_wm,
         })
     }
 
     /// Fetches the watermark for the given offset and partition.
-    pub(crate) fn fetch_watermark(&mut self, offset: i64, partition_idx: u16) -> Watermark {
+    pub(crate) fn fetch_watermark(&mut self, offset: i64, mut partition_idx: u16) -> Watermark {
+        // In reduce, a pod always reads from a single partition so we will only have one timeline
+        // for each processor, so we should always consider timeline[0].
+        if self.vertex_type == VertexType::ReduceUDF {
+            partition_idx = 0;
+        }
+
         // Iterate over all the processor managers and get the smallest watermark. (join case)
         for (edge, processor_manager) in self.processor_managers.iter() {
             let mut epoch = i64::MAX;
@@ -229,11 +240,13 @@ mod tests {
             ot_bucket: "ot_bucket",
             hb_bucket: "hb_bucket",
             partitions: 1,
+            delay: None,
         };
 
-        let mut fetcher = ISBWatermarkFetcher::new(processor_managers, &[bucket_config])
-            .await
-            .unwrap();
+        let mut fetcher =
+            ISBWatermarkFetcher::new(processor_managers, &[bucket_config], VertexType::MapUDF)
+                .await
+                .unwrap();
 
         // Invoke fetch_watermark and verify the result
         let watermark = fetcher.fetch_watermark(2, 0);
@@ -367,11 +380,13 @@ mod tests {
             ot_bucket: "ot_bucket",
             hb_bucket: "hb_bucket",
             partitions: 1,
+            delay: None,
         };
 
-        let mut fetcher = ISBWatermarkFetcher::new(processor_managers, &[bucket_config])
-            .await
-            .unwrap();
+        let mut fetcher =
+            ISBWatermarkFetcher::new(processor_managers, &[bucket_config], VertexType::MapUDF)
+                .await
+                .unwrap();
 
         // Invoke fetch_watermark and verify the result
         let watermark = fetcher.fetch_watermark(12, 0);
@@ -598,11 +613,13 @@ mod tests {
             ot_bucket: "ot_bucket",
             hb_bucket: "hb_bucket",
             partitions: 2,
+            delay: None,
         };
 
-        let mut fetcher = ISBWatermarkFetcher::new(processor_managers, &[bucket_config])
-            .await
-            .unwrap();
+        let mut fetcher =
+            ISBWatermarkFetcher::new(processor_managers, &[bucket_config], VertexType::MapUDF)
+                .await
+                .unwrap();
 
         // Invoke fetch_watermark and verify the result for partition 0, first fetch will be -1 because we have not fetched for other
         // partition (we consider min across the last fetched watermark)
@@ -819,18 +836,23 @@ mod tests {
             ot_bucket: "ot_bucket1",
             hb_bucket: "hb_bucket1",
             partitions: 2,
+            delay: None,
         };
         let bucket_config2 = BucketConfig {
             vertex: "edge2",
             ot_bucket: "ot_bucket2",
             hb_bucket: "hb_bucket2",
             partitions: 2,
+            delay: None,
         };
 
-        let mut fetcher =
-            ISBWatermarkFetcher::new(processor_managers, &[bucket_config1, bucket_config2])
-                .await
-                .unwrap();
+        let mut fetcher = ISBWatermarkFetcher::new(
+            processor_managers,
+            &[bucket_config1, bucket_config2],
+            VertexType::MapUDF,
+        )
+        .await
+        .unwrap();
 
         // Invoke fetch_watermark and verify the result for partition 0
         let watermark_p0 = fetcher.fetch_watermark(12, 0);
@@ -883,11 +905,13 @@ mod tests {
             ot_bucket: "ot_bucket",
             hb_bucket: "hb_bucket",
             partitions: 1,
+            delay: None,
         };
 
-        let mut fetcher = ISBWatermarkFetcher::new(processor_managers, &[bucket_config])
-            .await
-            .unwrap();
+        let mut fetcher =
+            ISBWatermarkFetcher::new(processor_managers, &[bucket_config], VertexType::MapUDF)
+                .await
+                .unwrap();
 
         // Invoke fetch_head_idle_watermark and verify the result
         let watermark = fetcher.fetch_head_idle_watermark();
@@ -963,11 +987,13 @@ mod tests {
             ot_bucket: "ot_bucket",
             hb_bucket: "hb_bucket",
             partitions: 1,
+            delay: None,
         };
 
-        let mut fetcher = ISBWatermarkFetcher::new(processor_managers, &[bucket_config])
-            .await
-            .unwrap();
+        let mut fetcher =
+            ISBWatermarkFetcher::new(processor_managers, &[bucket_config], VertexType::MapUDF)
+                .await
+                .unwrap();
 
         // Invoke fetch_head_idle_watermark and verify the result
         let watermark = fetcher.fetch_head_idle_watermark();
@@ -1081,11 +1107,13 @@ mod tests {
             ot_bucket: "ot_bucket",
             hb_bucket: "hb_bucket",
             partitions: 2,
+            delay: None,
         };
 
-        let mut fetcher = ISBWatermarkFetcher::new(processor_managers, &[bucket_config])
-            .await
-            .unwrap();
+        let mut fetcher =
+            ISBWatermarkFetcher::new(processor_managers, &[bucket_config], VertexType::MapUDF)
+                .await
+                .unwrap();
 
         // Invoke fetch_head_idle_watermark and verify the result
         let watermark = fetcher.fetch_head_idle_watermark();
@@ -1297,18 +1325,23 @@ mod tests {
             ot_bucket: "ot_bucket1",
             hb_bucket: "hb_bucket1",
             partitions: 2,
+            delay: None,
         };
         let bucket_config2 = BucketConfig {
             vertex: "edge2",
             ot_bucket: "ot_bucket2",
             hb_bucket: "hb_bucket2",
             partitions: 2,
+            delay: None,
         };
 
-        let mut fetcher =
-            ISBWatermarkFetcher::new(processor_managers, &[bucket_config1, bucket_config2])
-                .await
-                .unwrap();
+        let mut fetcher = ISBWatermarkFetcher::new(
+            processor_managers,
+            &[bucket_config1, bucket_config2],
+            VertexType::MapUDF,
+        )
+        .await
+        .unwrap();
 
         // Invoke fetch_head_idle_watermark and verify the result
         let watermark = fetcher.fetch_head_idle_watermark();
@@ -1357,11 +1390,13 @@ mod tests {
             ot_bucket: "ot_bucket",
             hb_bucket: "hb_bucket",
             partitions: 1,
+            delay: None,
         };
 
-        let mut fetcher = ISBWatermarkFetcher::new(processor_managers, &[bucket_config])
-            .await
-            .unwrap();
+        let mut fetcher =
+            ISBWatermarkFetcher::new(processor_managers, &[bucket_config], VertexType::MapUDF)
+                .await
+                .unwrap();
 
         // Invoke fetch_head_idle_watermark and verify the result
         let watermark = fetcher.fetch_head_idle_watermark();

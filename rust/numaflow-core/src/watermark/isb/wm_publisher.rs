@@ -4,8 +4,8 @@
 //! appropriate OT bucket based on stream information provided. It makes sure we always publish m
 //! increasing watermark.
 use std::collections::HashMap;
-use std::time::UNIX_EPOCH;
 use std::time::{Duration, SystemTime};
+use std::time::{Instant, UNIX_EPOCH};
 
 use bytes::BytesMut;
 use prost::Message;
@@ -25,6 +25,8 @@ const DEFAULT_POD_HEARTBEAT_INTERVAL: u16 = 5;
 struct LastPublishedState {
     offset: i64,
     watermark: i64,
+    last_published_time: Instant,
+    delay: Option<Duration>,
 }
 
 impl Default for LastPublishedState {
@@ -32,7 +34,20 @@ impl Default for LastPublishedState {
         LastPublishedState {
             offset: -1,
             watermark: -1,
+            last_published_time: Instant::now(),
+            delay: None,
         }
+    }
+}
+
+impl LastPublishedState {
+    fn should_publish(&self) -> bool {
+        if let Some(delay) = self.delay
+            && self.last_published_time.elapsed() < delay
+        {
+            return false;
+        }
+        true
     }
 }
 
@@ -82,7 +97,13 @@ impl ISBWatermarkPublisher {
             hb_buckets.push(hb_bucket);
             last_published_wm.insert(
                 config.vertex,
-                vec![LastPublishedState::default(); config.partitions as usize],
+                vec![
+                    LastPublishedState {
+                        delay: config.delay,
+                        ..Default::default()
+                    };
+                    config.partitions as usize
+                ],
             );
         }
 
@@ -168,6 +189,12 @@ impl ISBWatermarkPublisher {
             return;
         }
 
+        // if delay is configured, check if the delay has passed, users can configure it to reduce the
+        // number of writes to the ot bucket.
+        if !last_state.should_publish() {
+            return;
+        }
+
         let ot_bucket = self.ot_buckets.get(stream.vertex).expect("Invalid vertex");
         let wmb_bytes: BytesMut = WMB {
             idle,
@@ -187,8 +214,12 @@ impl ISBWatermarkPublisher {
             .ok();
 
         // update the last published watermark state
-        last_published_wm_state[stream.partition as usize] =
-            LastPublishedState { offset, watermark };
+        last_published_wm_state[stream.partition as usize] = LastPublishedState {
+            offset,
+            watermark,
+            last_published_time: Instant::now(),
+            delay: None,
+        };
     }
 }
 
@@ -216,6 +247,7 @@ mod tests {
             partitions: 2,
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
+            delay: None,
         }];
 
         // create key value stores
@@ -334,12 +366,14 @@ mod tests {
                 partitions: 1,
                 ot_bucket: ot_bucket_name_v1,
                 hb_bucket: hb_bucket_name_v1,
+                delay: None,
             },
             BucketConfig {
                 vertex: "v2",
                 partitions: 1,
                 ot_bucket: ot_bucket_name_v2,
                 hb_bucket: hb_bucket_name_v2,
+                delay: None,
             },
         ];
 
@@ -466,6 +500,7 @@ mod tests {
             partitions: 1,
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
+            delay: None,
         }];
 
         // create key value stores

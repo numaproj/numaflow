@@ -148,6 +148,7 @@ mod tests {
             partitions: 2,
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
+            delay: None,
         };
 
         // create key value stores
@@ -224,6 +225,7 @@ mod tests {
             partitions: 2,
             ot_bucket: source_ot_bucket_name,
             hb_bucket: source_hb_bucket_name,
+            delay: None,
         };
 
         let edge_config = BucketConfig {
@@ -231,6 +233,7 @@ mod tests {
             partitions: 2,
             ot_bucket: edge_ot_bucket_name,
             hb_bucket: edge_hb_bucket_name,
+            delay: None,
         };
 
         // create key value stores for source
@@ -337,6 +340,7 @@ mod tests {
             partitions: 2,
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
+            delay: None,
         };
 
         // create key value stores
@@ -414,6 +418,7 @@ mod tests {
             partitions: 2,
             ot_bucket: source_ot_bucket_name,
             hb_bucket: source_hb_bucket_name,
+            delay: None,
         };
 
         let edge_config = BucketConfig {
@@ -421,6 +426,7 @@ mod tests {
             partitions: 2,
             ot_bucket: edge_ot_bucket_name,
             hb_bucket: edge_hb_bucket_name,
+            delay: None,
         };
 
         // create key value stores for source
