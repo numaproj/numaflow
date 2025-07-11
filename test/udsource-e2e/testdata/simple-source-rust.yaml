@@ -5,6 +5,10 @@ metadata:
 spec:
   vertices:
     - name: in
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       source:
         udsource:
           container:
@@ -16,6 +20,10 @@ spec:
       scale:
         min: 1
     - name: out
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       sink:
         log: {}
       scale:

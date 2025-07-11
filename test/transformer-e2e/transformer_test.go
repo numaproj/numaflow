@@ -92,12 +92,12 @@ func (s *TransformerSuite) testSourceTransformer(lang string) {
 	janFirst2022 := time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC)
 	janFirst2023 := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 
-	w.Expect().VertexPodLogContains("sink-within-2022", fmt.Sprintf("EventTime -  %d", janFirst2022.UnixMilli()), PodLogCheckOptionWithCount(1)).
-		VertexPodLogContains("sink-after-2022", fmt.Sprintf("EventTime -  %d", janFirst2023.UnixMilli()), PodLogCheckOptionWithCount(2)).
-		VertexPodLogContains("sink-all", fmt.Sprintf("EventTime -  %d", janFirst2022.UnixMilli()), PodLogCheckOptionWithCount(1)).
-		VertexPodLogContains("sink-all", fmt.Sprintf("EventTime -  %d", janFirst2023.UnixMilli()), PodLogCheckOptionWithCount(2)).
-		VertexPodLogNotContains("sink-within-2022", fmt.Sprintf("EventTime -  %d", janFirst2023.UnixMilli()), PodLogCheckOptionWithTimeout(1*time.Second)).
-		VertexPodLogNotContains("sink-after-2022", fmt.Sprintf("EventTime -  %d", janFirst2022.UnixMilli()), PodLogCheckOptionWithTimeout(1*time.Second)).
+	w.Expect().VertexPodLogContains("sink-within-2022", fmt.Sprintf("EventTime - %d", janFirst2022.UnixMilli()), PodLogCheckOptionWithCount(1)).
+		VertexPodLogContains("sink-after-2022", fmt.Sprintf("EventTime - %d", janFirst2023.UnixMilli()), PodLogCheckOptionWithCount(2)).
+		VertexPodLogContains("sink-all", fmt.Sprintf("EventTime - %d", janFirst2022.UnixMilli()), PodLogCheckOptionWithCount(1)).
+		VertexPodLogContains("sink-all", fmt.Sprintf("EventTime - %d", janFirst2023.UnixMilli()), PodLogCheckOptionWithCount(2)).
+		VertexPodLogNotContains("sink-within-2022", fmt.Sprintf("EventTime - %d", janFirst2023.UnixMilli()), PodLogCheckOptionWithTimeout(1*time.Second)).
+		VertexPodLogNotContains("sink-after-2022", fmt.Sprintf("EventTime - %d", janFirst2022.UnixMilli()), PodLogCheckOptionWithTimeout(1*time.Second)).
 		VertexPodLogNotContains("sink-all", "Before2022", PodLogCheckOptionWithTimeout(1*time.Second)).
 		VertexPodLogNotContains("sink-within-2022", "Before2022", PodLogCheckOptionWithTimeout(1*time.Second)).
 		VertexPodLogNotContains("sink-after-2022", "Before2022", PodLogCheckOptionWithTimeout(1*time.Second))

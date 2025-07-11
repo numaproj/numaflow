@@ -216,13 +216,6 @@ jobs:
             builtin-source-e2e,
             serving-e2e,
           ]
-        include:
-          - driver: redis
-            case: e2e
-          - driver: redis
-            case: kafka-e2e
-          - driver: redis
-            case: api-e2e
 
     steps:
       - name: Checkout code

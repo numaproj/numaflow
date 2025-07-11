@@ -46,11 +46,11 @@ func (s *FunctionalSuite) TestCreateSimplePipeline() {
 
 	w.Expect().
 		VertexPodsRunning().DaemonPodsRunning().
-		VertexPodLogContains("input", LogSourceVertexStarted).
-		VertexPodLogContains("p1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("output", SinkVertexStarted).
+		VertexPodLogContains("input", LogSourceVertexStartedRustRuntime).
+		VertexPodLogContains("p1", LogMapVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("output", LogSinkVertexStartedRustRuntime).
 		DaemonPodLogContains(pipelineName, LogDaemonStarted).
-		VertexPodLogContains("output", `"Data":.*,"Createdts":.*`)
+		VertexPodLogContains("output", `"value":.*EventTime - \d+`)
 
 	defer w.VertexPodPortForward("input", 8001, dfv1.VertexMetricsPort).
 		VertexPodPortForward("p1", 8002, dfv1.VertexMetricsPort).
@@ -196,18 +196,18 @@ func (s *FunctionalSuite) TestDropOnFull() {
 		TerminateAllPodPortForwards()
 
 	// scale the sinks down to 0 pod to create a buffer full scenario.
-	scaleDownArgs := "kubectl scale vtx drop-on-full-sink --replicas=0 -n numaflow-system"
+	scaleDownArgs := "kubectl scale vtx drop-on-full-out --replicas=0 -n numaflow-system"
 	w.Exec("/bin/sh", []string{"-c", scaleDownArgs}, CheckVertexScaled)
-	w.Expect().VertexSizeScaledTo("sink", 0)
+	w.Expect().VertexSizeScaledTo("out", 0)
 
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")))
 	// give buffer writer some time to update the isFull attribute.
-	// 5s is a carefully chosen number to create a stable buffer full scenario.
-	time.Sleep(time.Second * 5)
+	// 20s is a carefully chosen number to create a stable buffer full scenario.
+	time.Sleep(time.Second * 20)
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")))
 
-	expectedDropMetricOne := `forwarder_drop_total{partition_name="numaflow-system-drop-on-full-sink-0",pipeline="drop-on-full",reason="Buffer full!",replica="0",vertex="in",vertex_type="Source"} 1`
-	expectedDropMetricTwo := `forwarder_drop_total{partition_name="numaflow-system-drop-on-full-sink-1",pipeline="drop-on-full",reason="Buffer full!",replica="0",vertex="in",vertex_type="Source"} 1`
+	expectedDropMetricOne := `forwarder_drop_total{vertex="in",pipeline="drop-on-full",vertex_type="Source",replica="0",partition_name="numaflow-system-drop-on-full-out-0",reason="Buffer full"} 1`
+	expectedDropMetricTwo := `forwarder_drop_total{vertex="in",pipeline="drop-on-full",vertex_type="Source",replica="0",partition_name="numaflow-system-drop-on-full-out-1",reason="Buffer full"} 1`
 	// wait for the drop metric to be updated, time out after 10s.
 	timeoutChan := time.After(time.Second * 10)
 	ticker := time.NewTicker(time.Second * 2)

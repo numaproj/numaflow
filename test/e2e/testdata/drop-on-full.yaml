@@ -12,13 +12,21 @@ spec:
     bufferUsageLimit: 100
   vertices:
     - name: in
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       source:
         http: {}
-    - name: sink
+    - name: out
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       partitions: 2
       sink:
         log: {}
   edges:
     - from: in
-      to: sink
+      to: out
       onFull: discardLatest
