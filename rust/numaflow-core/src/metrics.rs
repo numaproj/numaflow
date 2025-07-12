@@ -17,6 +17,7 @@ use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::metrics::histogram::Histogram;
 use prometheus_client::registry::Registry;
 use rcgen::{CertifiedKey, generate_simple_self_signed};
+use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time;
@@ -31,6 +32,7 @@ use crate::reduce::reducer::unaligned::user_defined::UserDefinedUnalignedReduce;
 use crate::reduce::reducer::user_defined::UserDefinedReduce;
 use crate::sink::SinkWriter;
 use crate::source::Source;
+use crate::watermark::WatermarkHandle;
 
 // SDK information
 const SDK_INFO: &str = "sdk_info";
@@ -148,6 +150,29 @@ pub(crate) enum PipelineComponents {
     Sink(Box<SinkWriter>),
     Map(MapHandle),
     Reduce(UserDefinedReduce),
+}
+
+/// WatermarkFetcherState holds watermark handle and partition count for fetching watermarks
+#[derive(Clone)]
+pub(crate) struct WatermarkFetcherState {
+    pub(crate) watermark_handle: WatermarkHandle,
+    pub(crate) partition_count: u16,
+}
+
+/// MetricsState holds both component health checks and optional watermark fetcher state
+/// for serving metrics and watermark endpoints
+#[derive(Clone)]
+pub(crate) struct MetricsState {
+    pub(crate) health_checks: ComponentHealthChecks,
+    pub(crate) watermark_fetcher_state: Option<WatermarkFetcherState>,
+}
+
+/// WatermarkResponse represents the response structure for the /watermark endpoint
+/// Simple map of partition -> watermark value
+#[derive(Serialize, Deserialize, Debug)]
+pub(crate) struct WatermarkResponse {
+    #[serde(flatten)]
+    pub(crate) partitions: HashMap<String, i64>,
 }
 
 /// The global register of all metrics.
@@ -918,9 +943,57 @@ pub async fn metrics_handler() -> impl IntoResponse {
         .unwrap()
 }
 
+// watermark_handler is used to fetch and return watermark information
+// for all partitions based on available watermark handles
+pub async fn watermark_handler(State(state): State<MetricsState>) -> impl IntoResponse {
+    let Some(watermark_fetcher_state) = &state.watermark_fetcher_state else {
+        return Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .header(axum::http::header::CONTENT_TYPE, "application/json")
+            .body(Body::from(
+                r#"{"error": "Watermark not available for this vertex type"}"#,
+            ))
+            .unwrap();
+    };
+
+    let mut partitions = HashMap::new();
+    match &watermark_fetcher_state.watermark_handle {
+        // For source watermark handle, always fetch only partition 0
+        WatermarkHandle::Source(source_handle) => {
+            let mut handle_clone = source_handle.clone();
+            let watermark = handle_clone.fetch_head_watermark().await;
+            partitions.insert("0".to_string(), watermark.timestamp_millis());
+        }
+
+        // For ISB watermark handle, fetch watermarks for all partitions (0 to partition_count-1)
+        WatermarkHandle::ISB(isb_handle) => {
+            let mut handle_clone = isb_handle.clone();
+
+            // For reduce vertices, only return partition 0 since they read from single partition
+            // For other vertex types, fetch watermarks for all partitions
+            for partition_idx in 0..watermark_fetcher_state.partition_count {
+                let watermark = handle_clone.fetch_head_watermark().await;
+                partitions.insert(partition_idx.to_string(), watermark.timestamp_millis());
+            }
+        }
+    }
+
+    let response = WatermarkResponse { partitions };
+
+    let json_response = serde_json::to_string(&response)
+        .unwrap_or_else(|_| r#"{"error": "Failed to serialize watermark response"}"#.to_string());
+
+    debug!("Exposing watermark: {:?}", json_response);
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(axum::http::header::CONTENT_TYPE, "application/json")
+        .body(Body::from(json_response))
+        .unwrap()
+}
+
 pub(crate) async fn start_metrics_https_server(
     addr: SocketAddr,
-    metrics_state: ComponentHealthChecks,
+    metrics_state: MetricsState,
 ) -> crate::Result<()> {
     // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
@@ -944,9 +1017,10 @@ pub(crate) async fn start_metrics_https_server(
 }
 
 /// router for metrics and k8s health endpoints
-fn metrics_router(metrics_state: ComponentHealthChecks) -> Router {
+fn metrics_router(metrics_state: MetricsState) -> Router {
     Router::new()
         .route("/metrics", get(metrics_handler))
+        .route("/watermark", get(watermark_handler))
         .route("/livez", get(livez))
         .route("/readyz", get(sidecar_livez))
         .route("/sidecar-livez", get(sidecar_livez))
@@ -957,7 +1031,7 @@ async fn livez() -> impl IntoResponse {
     StatusCode::NO_CONTENT
 }
 
-async fn sidecar_livez(State(state): State<ComponentHealthChecks>) -> impl IntoResponse {
+async fn sidecar_livez(State(state): State<MetricsState>) -> impl IntoResponse {
     // Check if health checks are disabled via the environment variable
     if env::var("NUMAFLOW_HEALTH_CHECK_DISABLED")
         .map(|v| v.eq_ignore_ascii_case("true"))
@@ -965,7 +1039,7 @@ async fn sidecar_livez(State(state): State<ComponentHealthChecks>) -> impl IntoR
     {
         return StatusCode::NO_CONTENT;
     }
-    match state {
+    match state.health_checks {
         ComponentHealthChecks::Monovertex(mut monovertex_state) => {
             // this call also check the health of transformer if it is configured in the Source.
             if !monovertex_state.source.ready().await {
@@ -1605,10 +1679,13 @@ mod tests {
         .await
         .expect("failed to create sink writer");
 
-        let metrics_state = ComponentHealthChecks::Monovertex(Box::new(MonovertexComponents {
-            source,
-            sink: sink_writer,
-        }));
+        let metrics_state = MetricsState {
+            health_checks: ComponentHealthChecks::Monovertex(Box::new(MonovertexComponents {
+                source,
+                sink: sink_writer,
+            })),
+            watermark_fetcher_state: None,
+        };
 
         let addr: SocketAddr = "127.0.0.1:9091".parse().unwrap();
         let metrics_state_clone = metrics_state.clone();
