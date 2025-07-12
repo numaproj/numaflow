@@ -60,6 +60,9 @@ enum SourceActorMessage {
     FetchSourceWatermark {
         oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
     },
+    FetchHeadWatermark {
+        oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
+    },
 }
 
 /// SourceWatermarkActor comprises SourcePublisher and SourceFetcher.
@@ -114,6 +117,14 @@ impl SourceWatermarkActor {
             // fetch the source watermark
             SourceActorMessage::FetchSourceWatermark { oneshot_tx } => {
                 let watermark = self.fetcher.fetch_source_watermark();
+                oneshot_tx
+                    .send(Ok(watermark))
+                    .map_err(|_| Error::Watermark("failed to send response".to_string()))?;
+            }
+
+            // fetch the head watermark
+            SourceActorMessage::FetchHeadWatermark { oneshot_tx } => {
+                let watermark = self.fetcher.fetch_head_watermark();
                 oneshot_tx
                     .send(Ok(watermark))
                     .map_err(|_| Error::Watermark("failed to send response".to_string()))?;
@@ -296,6 +307,31 @@ impl SourceWatermarkHandle {
         match oneshot_rx.await {
             Ok(watermark) => watermark.unwrap_or_else(|e| {
                 error!(?e, "Failed to fetch watermark");
+                Watermark::from_timestamp_millis(-1).expect("failed to parse time")
+            }),
+            Err(e) => {
+                error!(?e, "Failed to receive response");
+                Watermark::from_timestamp_millis(-1).expect("failed to parse time")
+            }
+        }
+    }
+
+    /// Fetches the head watermark using the source watermark fetcher. This returns the minimum
+    /// of the head watermarks across all active processors.
+    pub(crate) async fn fetch_head_watermark(&mut self) -> Watermark {
+        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
+        if let Err(e) = self
+            .sender
+            .send(SourceActorMessage::FetchHeadWatermark { oneshot_tx })
+            .await
+        {
+            error!(?e, "Failed to send message");
+            return Watermark::from_timestamp_millis(-1).expect("failed to parse time");
+        }
+
+        match oneshot_rx.await {
+            Ok(watermark) => watermark.unwrap_or_else(|e| {
+                error!(?e, "Failed to fetch head watermark");
                 Watermark::from_timestamp_millis(-1).expect("failed to parse time")
             }),
             Err(e) => {
@@ -1117,6 +1153,99 @@ mod tests {
             .unwrap();
         js_context
             .delete_key_value(to_vertex_hb_bucket_name.to_string())
+            .await
+            .unwrap();
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_fetch_head_watermark() {
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+
+        let ot_bucket_name = "test_fetch_head_watermark_source_OT";
+        let hb_bucket_name = "test_fetch_head_watermark_source_PROCESSORS";
+
+        let source_config = SourceWatermarkConfig {
+            max_delay: Default::default(),
+            source_bucket_config: BucketConfig {
+                vertex: "source_vertex",
+                partitions: 1,
+                ot_bucket: ot_bucket_name,
+                hb_bucket: hb_bucket_name,
+            },
+            to_vertex_bucket_config: vec![],
+            idle_config: None,
+        };
+
+        // create key value stores
+        js_context
+            .create_key_value(Config {
+                bucket: ot_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        js_context
+            .create_key_value(Config {
+                bucket: hb_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let mut handle = SourceWatermarkHandle::new(
+            Duration::from_millis(100),
+            js_context.clone(),
+            Default::default(),
+            &source_config,
+            CancellationToken::new(),
+        )
+        .await
+        .expect("Failed to create source watermark handle");
+
+        let messages = vec![
+            Message {
+                offset: Offset::Int(IntOffset {
+                    offset: 1,
+                    partition_idx: 0,
+                }),
+                event_time: DateTime::from_timestamp_millis(60000).unwrap(),
+                ..Default::default()
+            },
+            Message {
+                offset: Offset::Int(IntOffset {
+                    offset: 2,
+                    partition_idx: 0,
+                }),
+                event_time: DateTime::from_timestamp_millis(70000).unwrap(),
+                ..Default::default()
+            },
+        ];
+
+        handle
+            .generate_and_publish_source_watermark(&messages)
+            .await;
+
+        // Wait a bit for the watermarks to be published
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        // Now test fetch_head_watermark
+        let head_watermark = handle.fetch_head_watermark().await;
+
+        // The head watermark should be a valid timestamp (not -1)
+        assert_ne!(head_watermark.timestamp_millis(), -1);
+
+        // delete the stores
+        js_context
+            .delete_key_value(hb_bucket_name.to_string())
+            .await
+            .unwrap();
+        js_context
+            .delete_key_value(ot_bucket_name.to_string())
             .await
             .unwrap();
     }

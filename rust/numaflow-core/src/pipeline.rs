@@ -21,7 +21,10 @@ use crate::config::pipeline::{
     PipelineConfig, ReduceVtxConfig, ServingStoreType, SinkVtxConfig, SourceVtxConfig,
 };
 use crate::config::{get_vertex_replica, is_mono_vertex};
-use crate::metrics::{ComponentHealthChecks, LagReader, PendingReaderTasks, PipelineComponents};
+use crate::metrics::{
+    ComponentHealthChecks, LagReader, MetricsState, PendingReaderTasks, PipelineComponents,
+    WatermarkFetcherState,
+};
 use crate::pipeline::forwarder::reduce_forwarder::ReduceForwarder;
 use crate::pipeline::forwarder::source_forwarder;
 use crate::pipeline::isb::jetstream::reader::{ISBReaderConfig, JetStreamReader};
@@ -151,7 +154,7 @@ async fn start_source_forwarder(
         &source_config.source_config,
         tracker_handle,
         transformer,
-        source_watermark_handle,
+        source_watermark_handle.clone(),
         cln_token.clone(),
     )
     .await?;
@@ -170,9 +173,15 @@ async fn start_source_forwarder(
 
     start_metrics_server(
         config.metrics_config.clone(),
-        ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Source(Box::new(
-            source.clone(),
-        )))),
+        MetricsState {
+            health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Source(
+                Box::new(source.clone()),
+            ))),
+            watermark_fetcher_state: source_watermark_handle.map(|handle| WatermarkFetcherState {
+                watermark_handle: WatermarkHandle::Source(handle),
+                partition_count: 1, // Source vertices always have partition count = 1
+            }),
+        },
     )
     .await;
 
@@ -276,9 +285,15 @@ async fn start_map_forwarder(
 
     let metrics_server_handle = start_metrics_server(
         config.metrics_config.clone(),
-        ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Map(
-            mapper_handle.unwrap().clone(),
-        ))),
+        MetricsState {
+            health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Map(
+                mapper_handle.unwrap().clone(),
+            ))),
+            watermark_fetcher_state: watermark_handle.map(|handle| WatermarkFetcherState {
+                watermark_handle: WatermarkHandle::ISB(handle),
+                partition_count: reader_config.streams.len() as u16, // Number of partitions = number of streams
+            }),
+        },
     )
     .await;
 
@@ -573,9 +588,15 @@ async fn start_aligned_reduce_forwarder(
     // Start the metrics server with one of the clients
     start_metrics_server(
         config.metrics_config.clone(),
-        ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
-            UserDefinedReduce::Aligned(reducer_client.clone()),
-        ))),
+        MetricsState {
+            health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
+                UserDefinedReduce::Aligned(reducer_client.clone()),
+            ))),
+            watermark_fetcher_state: watermark_handle.map(|handle| WatermarkFetcherState {
+                watermark_handle: WatermarkHandle::ISB(handle),
+                partition_count: 1, // Reduce vertices always read from single partition (partition 0)
+            }),
+        },
     )
     .await;
 
@@ -733,9 +754,15 @@ async fn start_unaligned_reduce_forwarder(
 
     start_metrics_server(
         config.metrics_config.clone(),
-        ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
-            UserDefinedReduce::Unaligned(reducer_client.clone()),
-        ))),
+        MetricsState {
+            health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
+                UserDefinedReduce::Unaligned(reducer_client.clone()),
+            ))),
+            watermark_fetcher_state: watermark_handle.map(|handle| WatermarkFetcherState {
+                watermark_handle: WatermarkHandle::ISB(handle),
+                partition_count: 1, // Reduce vertices always read from single partition (partition 0)
+            }),
+        },
     )
     .await;
 
@@ -852,9 +879,15 @@ async fn start_sink_forwarder(
     if let Some(sink_handle) = sink_writers.first() {
         start_metrics_server(
             config.metrics_config.clone(),
-            ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Sink(Box::new(
-                sink_handle.clone(),
-            )))),
+            MetricsState {
+                health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Sink(
+                    Box::new(sink_handle.clone()),
+                ))),
+                watermark_fetcher_state: watermark_handle.map(|handle| WatermarkFetcherState {
+                    watermark_handle: WatermarkHandle::ISB(handle),
+                    partition_count: reader_config.streams.len() as u16, // Number of partitions = number of streams
+                }),
+            },
         )
         .await;
     }

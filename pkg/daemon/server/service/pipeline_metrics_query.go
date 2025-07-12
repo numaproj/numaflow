@@ -34,10 +34,10 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
 	rater "github.com/numaproj/numaflow/pkg/daemon/server/service/rater"
 	runtimeinfo "github.com/numaproj/numaflow/pkg/daemon/server/service/runtime"
+	"github.com/numaproj/numaflow/pkg/daemon/server/service/watermark"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 )
 
 // metricsHttpClient interface for the GET call to metrics endpoint.
@@ -52,7 +52,7 @@ type PipelineMetadataQuery struct {
 	isbSvcClient         isbsvc.ISBService
 	pipeline             *v1alpha1.Pipeline
 	httpClient           metricsHttpClient
-	watermarkFetchers    map[v1alpha1.Edge][]fetch.HeadFetcher
+	watermarkService     *watermark.HTTPWatermarkService
 	rater                rater.Ratable
 	pipelineRuntimeCache runtimeinfo.PipelineRuntimeCache
 	healthChecker        *HealthChecker
@@ -60,11 +60,15 @@ type PipelineMetadataQuery struct {
 
 // NewPipelineMetadataQuery returns a new instance of pipelineMetadataQuery
 func NewPipelineMetadataQuery(
+	ctx context.Context,
 	isbSvcClient isbsvc.ISBService,
 	pipeline *v1alpha1.Pipeline,
-	wmFetchers map[v1alpha1.Edge][]fetch.HeadFetcher,
 	rater rater.Ratable,
 	pipelineRuntimeCache runtimeinfo.PipelineRuntimeCache) (*PipelineMetadataQuery, error) {
+
+	// Create HTTP watermark service
+	watermarkService := watermark.NewHTTPWatermarkService(ctx, pipeline)
+
 	ps := PipelineMetadataQuery{
 		isbSvcClient: isbSvcClient,
 		pipeline:     pipeline,
@@ -74,12 +78,24 @@ func NewPipelineMetadataQuery(
 			},
 			Timeout: time.Second * 3,
 		},
-		watermarkFetchers:    wmFetchers,
+		watermarkService:     watermarkService,
 		rater:                rater,
 		healthChecker:        NewHealthChecker(pipeline, isbSvcClient),
 		pipelineRuntimeCache: pipelineRuntimeCache,
 	}
 	return &ps, nil
+}
+
+// Stop stops the pipeline metadata query and cleans up resources
+func (ps *PipelineMetadataQuery) Stop() {
+	if ps.watermarkService != nil {
+		ps.watermarkService.Stop()
+	}
+}
+
+// GetPipelineWatermarks is used to return the head watermarks for a given pipeline.
+func (ps *PipelineMetadataQuery) GetPipelineWatermarks(ctx context.Context, request *daemon.GetPipelineWatermarksRequest) (*daemon.GetPipelineWatermarksResponse, error) {
+	return ps.watermarkService.GetPipelineWatermarks(ctx, request)
 }
 
 // ListBuffers is used to obtain the all the edge buffers information of a pipeline
