@@ -1,17 +1,16 @@
 import { useEffect, useState, useCallback, useContext } from "react";
 import { Options, useFetch } from "./fetch";
 import { getBaseHref } from "../index";
-import { PipelineHealthFetchResult } from "../../types/declarations/pipeline";
+import { MonoVertexHealthFetchResult } from "../../types/declarations/pipeline";
 import { AppContextProps } from "../../types/declarations/app";
 import { AppContext } from "../../App";
 
 const DATA_REFRESH_INTERVAL = 15000; // ms
 
-// fetch pipeline health status hook
-// this will help in refreshing health status at Pipeline page
-export const usePipelineHealthFetch = ({
+// fetch mono-vertex health status hook
+export const useMonoVertexHealthFetch = ({
   namespaceId,
-  pipelineId,
+  monoVertexId,
   addError,
   pipelineAbleToLoad = true,
 }: any) => {
@@ -27,7 +26,7 @@ export const usePipelineHealthFetch = ({
     });
   }, []);
 
-  const [results, setResults] = useState<PipelineHealthFetchResult>({
+  const [results, setResults] = useState<MonoVertexHealthFetchResult>({
     data: undefined,
     loading: true,
     error: undefined,
@@ -37,11 +36,11 @@ export const usePipelineHealthFetch = ({
   const { host } = useContext<AppContextProps>(AppContext);
 
   const {
-    data: pipelineHealthData,
-    loading: pipelineHealthLoading,
-    error: pipelineHealthError,
+    data: monoVertexHealthData,
+    loading: monoVertexHealthLoading,
+    error: monoVertexHealthError,
   } = useFetch(
-    `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/pipelines/${pipelineId}/health`,
+    `${host}${getBaseHref()}/api/v1/namespaces/${namespaceId}/mono-vertices/${monoVertexId}/health`,
     undefined,
     options
   );
@@ -57,7 +56,7 @@ export const usePipelineHealthFetch = ({
 
   useEffect(() => {
     if (pipelineAbleToLoad) {
-      if (pipelineHealthLoading) {
+      if (monoVertexHealthLoading) {
         if (options?.requestKey === "") {
           setResults({
             data: undefined,
@@ -68,39 +67,39 @@ export const usePipelineHealthFetch = ({
         }
         return;
       }
-      if (pipelineHealthError) {
+      if (monoVertexHealthError) {
         if (options?.requestKey === "") {
           // Failed on first load, return error
           setResults({
             data: undefined,
             loading: false,
-            error: pipelineHealthError,
+            error: monoVertexHealthError,
             refresh,
           });
         } else {
           // Failed on refresh, add error to app context
-          addError(pipelineHealthError);
+          addError(monoVertexHealthError);
         }
         return;
       }
-      if (pipelineHealthData?.errMsg) {
+      if (monoVertexHealthData?.errMsg) {
         if (options?.requestKey === "") {
           // Failed on first load, return error
           setResults({
             data: undefined,
             loading: false,
-            error: pipelineHealthData?.errMsg,
+            error: monoVertexHealthData?.errMsg,
             refresh,
           });
         } else {
           // Failed on refresh, add error to app context
-          addError(pipelineHealthData?.errMsg);
+          addError(monoVertexHealthData?.errMsg);
         }
         return;
       }
-      if (pipelineHealthData?.data) {
+      if (monoVertexHealthData?.data) {
         setResults({
-          data: pipelineHealthData.data,
+          data: monoVertexHealthData.data,
           loading: false,
           error: undefined,
           refresh,
@@ -109,9 +108,9 @@ export const usePipelineHealthFetch = ({
       }
     }
   }, [
-    pipelineHealthData,
-    pipelineHealthLoading,
-    pipelineHealthError,
+    monoVertexHealthData,
+    monoVertexHealthLoading,
+    monoVertexHealthError,
     pipelineAbleToLoad,
     options,
     refresh,

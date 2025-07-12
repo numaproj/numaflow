@@ -22,6 +22,7 @@ import {
   DESC,
   FAILED,
   HEALTHY,
+  UNHEALTHY,
   INACTIVE_STATUS,
   LAST_CREATED_SORT,
   LAST_UPDATED_SORT,
@@ -42,10 +43,12 @@ export const MAX_PAGE_SIZE = 4;
 export const HEALTH = [
   ALL,
   HEALTHY,
+  UNHEALTHY,
   WARNING,
   CRITICAL,
   INACTIVE_STATUS,
   UNKNOWN,
+  DELETING,
 ];
 export const STATUS = [
   ALL,
