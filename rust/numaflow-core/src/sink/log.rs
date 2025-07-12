@@ -9,7 +9,7 @@ impl Sink for LogSink {
         for msg in messages {
             let mut headers = String::new();
             msg.headers.iter().for_each(|(k, v)| {
-                headers.push_str(&format!("{}: {}, ", k, v));
+                headers.push_str(&format!("{k}: {v}, "));
             });
 
             let log_line = format!(

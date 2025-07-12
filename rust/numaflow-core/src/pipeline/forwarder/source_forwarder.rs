@@ -30,10 +30,7 @@ impl SourceForwarder {
         let (reader_result, sink_writer_result) = tokio::try_join!(reader_handle, writer_handle)
             .map_err(|e| {
                 error!(?e, "Error while joining reader and sink writer");
-                Error::Forwarder(format!(
-                    "Error while joining reader and sink writer: {:?}",
-                    e
-                ))
+                Error::Forwarder(format!("Error while joining reader and sink writer: {e}"))
             })?;
 
         sink_writer_result.inspect_err(|e| {
@@ -230,7 +227,7 @@ mod tests {
 
         let source = Source::new(
             5,
-            SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
+            SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
             tracker_handle.clone(),
             true,
             Some(transformer),

@@ -126,7 +126,7 @@ impl ReduceTask {
                     // wait for the writer to finish writing the current batch
                     if let Err(e) = writer_handle.await {
                         error!(?e, "Error while writing results to JetStream");
-                        return Err(Error::Reduce(format!("Writer task failed: {}", e)));
+                        return Err(Error::Reduce(format!("Writer task failed: {e}")));
                     }
 
                     // Create a new channel for the next batch
@@ -177,7 +177,7 @@ impl ReduceTask {
         // wait for writer to complete
         if let Err(e) = writer_handle.await {
             error!(?e, "Error while writing final results to JetStream");
-            return Err(Error::Reduce(format!("Writer task failed: {}", e)));
+            return Err(Error::Reduce(format!("Writer task failed: {e}")));
         }
 
         // Write final GC events
@@ -246,7 +246,7 @@ impl ReduceTask {
                     // Wait for the writer to finish writing the current batch and start a new one
                     if let Err(e) = writer_handle.await {
                         error!(?e, "Error while writing results to JetStream");
-                        return Err(Error::Reduce(format!("Writer task failed: {}", e)));
+                        return Err(Error::Reduce(format!("Writer task failed: {e}")));
                     }
 
                     let (new_writer_tx, new_writer_rx) = mpsc::channel(100);
@@ -289,7 +289,7 @@ impl ReduceTask {
         // Final cleanup: wait for writer to complete
         if let Err(e) = writer_handle.await {
             error!(?e, "Error while writing final results to JetStream");
-            return Err(Error::Reduce(format!("Writer task failed: {}", e)));
+            return Err(Error::Reduce(format!("Writer task failed: {e}")));
         }
 
         // Write final GC events
@@ -762,11 +762,11 @@ mod tests {
 
         async fn merge_accumulator(&self, accumulator: Vec<u8>) {
             // Parse the accumulator value and add it to our count
-            if let Ok(accumulator_str) = String::from_utf8(accumulator) {
-                if let Ok(accumulator_count) = accumulator_str.parse::<u32>() {
-                    self.count
-                        .fetch_add(accumulator_count, std::sync::atomic::Ordering::Relaxed);
-                }
+            if let Ok(accumulator_str) = String::from_utf8(accumulator)
+                && let Ok(accumulator_count) = accumulator_str.parse::<u32>()
+            {
+                self.count
+                    .fetch_add(accumulator_count, std::sync::atomic::Ordering::Relaxed);
             }
         }
     }

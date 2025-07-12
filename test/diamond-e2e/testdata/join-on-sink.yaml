@@ -5,25 +5,45 @@ metadata:
 spec:
   vertices:
     - name: in
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       source:
         http: {}
     - name: even-or-odd
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
           image: quay.io/numaio/numaflow-go/map-even-odd:stable
           imagePullPolicy: Always
     - name: even-cat
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       udf:
         container:
           image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
           imagePullPolicy: Always
     - name: odd-cat
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       udf:
         container:
           image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
           imagePullPolicy: Always
     - name: out
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       sink:
         udsink:
           container:

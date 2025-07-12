@@ -235,11 +235,11 @@ func (s *APISuite) TestAPIsForMetricsAndWatermarkAndPodsForPipeline() {
 
 	w.Expect().
 		VertexPodsRunning().DaemonPodsRunning().
-		VertexPodLogContains("input", LogSourceVertexStarted).
-		VertexPodLogContains("p1", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("output", SinkVertexStarted).
+		VertexPodLogContains("input", LogSourceVertexStartedRustRuntime).
+		VertexPodLogContains("p1", LogMapVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("output", LogSinkVertexStartedRustRuntime).
 		DaemonPodLogContains(pipelineName, LogDaemonStarted).
-		VertexPodLogContains("output", `"Data":.*,"Createdts":.*`)
+		VertexPodLogContains("output", `"value":.*EventTime - \d+`)
 
 	defer w.UXServerPodPortForward(8146, 8443).TerminateAllPodPortForwards()
 

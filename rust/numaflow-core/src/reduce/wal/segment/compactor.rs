@@ -241,7 +241,7 @@ impl Compactor {
                 SegmentEntry::DataEntry { data, .. } => {
                     // Deserialize the message
                     let msg: isb::ReadMessage = prost::Message::decode(data.clone())
-                        .map_err(|e| format!("Failed to decode message: {}", e))?;
+                        .map_err(|e| format!("Failed to decode message: {e}"))?;
 
                     if should_retain
                         .should_retain_message(&msg.message.expect("Message should be present"))?
@@ -254,14 +254,14 @@ impl Compactor {
                             })
                             .await
                             .map_err(|e| {
-                                format!("Failed to send message to compaction WAL: {}", e)
+                                format!("Failed to send message to compaction WAL: {e}")
                             })?;
 
                         // if replay_tx is provided, send the message to it.
                         // This is used to replay the compacted data during boot up
                         if let Some(tx) = &replay_tx {
                             tx.send(data).await.map_err(|e| {
-                                format!("Failed to send message to replay channel: {}", e)
+                                format!("Failed to send message to replay channel: {e}")
                             })?;
                         }
                     }
@@ -276,7 +276,7 @@ impl Compactor {
                     wal_tx
                         .send(SegmentWriteMessage::Rotate { on_size: false })
                         .await
-                        .map_err(|e| format!("Failed to send rotate command: {}", e))?;
+                        .map_err(|e| format!("Failed to send rotate command: {e}"))?;
 
                     // Delete the processed segment file
                     tokio::fs::remove_file(&filename).await.map_err(|e| {
@@ -295,7 +295,7 @@ impl Compactor {
         // Wait for the WAL reader to complete
         handle
             .await
-            .map_err(|e| format!("WAL reader failed: {}", e))??;
+            .map_err(|e| format!("WAL reader failed: {e}"))??;
 
         // Drop the sender to close the channel
         drop(wal_tx);
@@ -846,18 +846,18 @@ mod tests {
         while let Some(entry) = rx.next().await {
             if let SegmentEntry::DataEntry { data, .. } = entry {
                 let msg: isb::ReadMessage = prost::Message::decode(data).unwrap();
-                if let Some(header) = msg.message.unwrap().header {
-                    if let Some(message_info) = header.message_info {
-                        let event_time = message_info
-                            .event_time
-                            .map(utc_from_timestamp)
-                            .expect("event time should not be empty");
-                        assert!(
-                            event_time >= gc_end_2,
-                            "Found message with event_time < gc_end_2"
-                        );
-                        replayed_event_times.push(event_time);
-                    }
+                if let Some(header) = msg.message.unwrap().header
+                    && let Some(message_info) = header.message_info
+                {
+                    let event_time = message_info
+                        .event_time
+                        .map(utc_from_timestamp)
+                        .expect("event time should not be empty");
+                    assert!(
+                        event_time >= gc_end_2,
+                        "Found message with event_time < gc_end_2"
+                    );
+                    replayed_event_times.push(event_time);
                 }
                 remaining_message_count += 1;
             }
@@ -1047,17 +1047,17 @@ mod tests {
                 .map_err(|e| format!("Failed to decode message: {e}"))?;
 
             // Verify that the message has an event time after the GC end time
-            if let Some(header) = msg.message.unwrap().header {
-                if let Some(message_info) = header.message_info {
-                    let event_time = message_info.event_time.map(utc_from_timestamp).unwrap();
-                    assert!(
-                        event_time > gc_end,
-                        "Found message with event_time <= gc_end"
-                    );
+            if let Some(header) = msg.message.unwrap().header
+                && let Some(message_info) = header.message_info
+            {
+                let event_time = message_info.event_time.map(utc_from_timestamp).unwrap();
+                assert!(
+                    event_time > gc_end,
+                    "Found message with event_time <= gc_end"
+                );
 
-                    // Store the event time for later verification
-                    replayed_event_times.push(event_time);
-                }
+                // Store the event time for later verification
+                replayed_event_times.push(event_time);
             }
             replayed_count += 1;
         }

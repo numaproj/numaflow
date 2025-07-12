@@ -39,15 +39,15 @@ func (s *MapSuite) TestBatchMapUDFunctionAndSink() {
 
 	w.Expect().
 		VertexPodsRunning().
-		VertexPodLogContains("in", LogSourceVertexStarted).
-		VertexPodLogContains("go-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("go-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("python-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("python-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("rust-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("rust-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("java-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("java-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
+		VertexPodLogContains("in", LogSourceVertexStartedRustRuntime).
+		VertexPodLogContains("go-split", LogMapVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("go-udsink", LogSinkVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("python-split", LogMapVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("python-udsink", LogSinkVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("rust-split", LogMapVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("rust-udsink", LogSinkVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("java-split", LogMapVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("java-udsink", LogSinkVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa"))
 
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("hello,hello"))).
 		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("hello")))
@@ -68,13 +68,13 @@ func (s *MapSuite) TestUDFunctionAndSink() {
 
 	w.Expect().
 		VertexPodsRunning().
-		VertexPodLogContains("in", LogSourceVertexStarted).
-		VertexPodLogContains("go-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("go-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("python-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("python-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("java-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("java-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
+		VertexPodLogContains("in", LogSourceVertexStartedRustRuntime).
+		VertexPodLogContains("go-split", LogMapVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("go-udsink", LogSinkVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("python-split", LogMapVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("python-udsink", LogSinkVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("java-split", LogMapVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("java-udsink", LogSinkVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa"))
 
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("hello,hello"))).
 		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("hello")))
@@ -95,13 +95,13 @@ func (s *MapSuite) TestMapStreamUDFunctionAndSink() {
 
 	w.Expect().
 		VertexPodsRunning().
-		VertexPodLogContains("in", LogSourceVertexStarted).
-		VertexPodLogContains("go-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("go-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("python-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("python-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("java-split", LogUDFVertexStarted, PodLogCheckOptionWithContainer("numa")).
-		VertexPodLogContains("java-udsink", SinkVertexStarted, PodLogCheckOptionWithContainer("numa"))
+		VertexPodLogContains("in", LogSourceVertexStartedRustRuntime).
+		VertexPodLogContains("go-split", LogMapVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("go-udsink", LogSinkVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("python-split", LogMapVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("python-udsink", LogSinkVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("java-split", LogMapVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa")).
+		VertexPodLogContains("java-udsink", LogSinkVertexStartedRustRuntime, PodLogCheckOptionWithContainer("numa"))
 
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("hello,hello,hello"))).
 		SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("hello")))

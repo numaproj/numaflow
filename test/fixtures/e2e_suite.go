@@ -52,6 +52,10 @@ const (
 	LogUDFVertexStarted       = "Start processing udf messages"
 	LogReduceUDFVertexStarted = "Start processing reduce udf messages"
 	LogDaemonStarted          = "Daemon server started successfully"
+
+	LogSourceVertexStartedRustRuntime = "Starting source forwarder"
+	LogSinkVertexStartedRustRuntime   = "Starting sink forwarder"
+	LogMapVertexStartedRustRuntime    = "Starting map forwarder"
 )
 
 var (

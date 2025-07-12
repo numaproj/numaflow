@@ -61,12 +61,6 @@ func (ks *KafkaSuite) TestKafkaSourceSink() {
 					},
 				},
 				{
-					Name: "p1",
-					UDF: &dfv1.UDF{
-						Builtin: &dfv1.Function{Name: "cat"},
-					},
-				},
-				{
 					Name: "output",
 					Sink: &dfv1.Sink{
 						AbstractSink: dfv1.AbstractSink{
@@ -81,10 +75,6 @@ func (ks *KafkaSuite) TestKafkaSourceSink() {
 			Edges: []dfv1.Edge{
 				{
 					From: "input",
-					To:   "p1",
-				},
-				{
-					From: "p1",
 					To:   "output",
 				},
 			},

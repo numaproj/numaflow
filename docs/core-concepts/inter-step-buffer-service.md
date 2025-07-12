@@ -41,6 +41,9 @@ kubectl get isbsvc
 `JetStream` is one of the supported `Inter-Step Buffer Service` implementations. A keyword `jetstream` under `spec` means 
 a JetStream cluster will be created in the namespace.
 
+**For Production Setup**, please make sure you configure [replicas](#replicas), [persistence](#persistence),
+[anti-affinity](#anti-affinity), and [PDB](#pdb).
+
 ### Version
 
 Property `spec.jetstream.version` is required for a JetStream `InterStepBufferService`. Supported versions can be found 
@@ -71,6 +74,51 @@ spec:
       storageClassName: standard # Optional, will use K8s cluster default storage class if not specified
       accessMode: ReadWriteOnce # Optional, defaults to ReadWriteOnce
       volumeSize: 10Gi # Optional, defaults to 20Gi
+```
+
+### Anti-Affinity
+
+Anti-affinity is used to spread the ISB pods across different nodes.
+
+#### Example Anti-Affinity
+
+```yaml
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: InterStepBufferService
+metadata:
+  name: default
+spec:
+  jetstream:
+    version: latest
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/component: isbsvc
+                  numaflow.numaproj.io/isbsvc-name: default
+              topologyKey: topology.kubernetes.io/zone
+            weight: 100
+```
+
+### PDB
+
+PDB (Pod Disruption Budget) is essential for running ISB in production to ensure availability.
+
+#### Example PDB Configuration
+
+```yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: default
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: isbsvc
+      numaflow.numaproj.io/isbsvc-name: default
 ```
 
 ### JetStream Settings

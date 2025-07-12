@@ -218,7 +218,7 @@ impl ISBWatermarkHandle {
         let fetcher =
             ISBWatermarkFetcher::new(processor_managers, &config.from_vertex_config).await?;
 
-        let processor_name = format!("{}-{}", vertex_name, vertex_replica);
+        let processor_name = format!("{vertex_name}-{vertex_replica}");
         let publisher = ISBWatermarkPublisher::new(
             processor_name,
             js_context.clone(),
@@ -341,15 +341,14 @@ impl ISBWatermarkHandle {
 
         // Remove the offset from the tracked offsets
         let mut offset_set = self.offset_set.lock().expect("failed to acquire lock");
-        if let Some(set) = offset_set.get_mut(&offset.partition_idx) {
-            if let Some(&OffsetWatermark { watermark, .. }) =
+        if let Some(set) = offset_set.get_mut(&offset.partition_idx)
+            && let Some(&OffsetWatermark { watermark, .. }) =
                 set.iter().find(|ow| ow.offset == offset.offset)
-            {
-                set.remove(&OffsetWatermark {
-                    offset: offset.offset,
-                    watermark,
-                });
-            }
+        {
+            set.remove(&OffsetWatermark {
+                offset: offset.offset,
+                watermark,
+            });
         }
     }
 

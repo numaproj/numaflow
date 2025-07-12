@@ -101,10 +101,10 @@ pub(crate) enum Protocol {
 
 impl ServerInfo {
     pub(crate) fn get_map_mode(&self) -> Option<MapMode> {
-        if let Some(metadata) = &self.metadata {
-            if let Some(map_mode) = metadata.get(MAP_MODE_KEY) {
-                return MapMode::from_str(map_mode);
-            }
+        if let Some(metadata) = &self.metadata
+            && let Some(map_mode) = metadata.get(MAP_MODE_KEY)
+        {
+            return MapMode::from_str(map_mode);
         }
         None
     }
@@ -112,10 +112,10 @@ impl ServerInfo {
     // get_http_endpoints returns the list of http endpoints for multi proc mode
     // from the metadata.
     pub(crate) fn get_http_endpoints(&self) -> Vec<String> {
-        if let Some(metadata) = &self.metadata {
-            if let Some(endpoints) = metadata.get(HTTP_ENDPOINTS_KEY) {
-                return endpoints.split(',').map(|s| s.to_string()).collect();
-            }
+        if let Some(metadata) = &self.metadata
+            && let Some(endpoints) = metadata.get(HTTP_ENDPOINTS_KEY)
+        {
+            return endpoints.split(',').map(|s| s.to_string()).collect();
         }
         vec![]
     }
@@ -196,10 +196,10 @@ fn check_numaflow_compatibility(
 
     // Parse the provided numaflow version as a semantic version
     let numaflow_version_semver = Version::parse(numaflow_version_stripped)
-        .map_err(|e| Error::ServerInfo(format!("Error parsing Numaflow version: {}", e)))?;
+        .map_err(|e| Error::ServerInfo(format!("Error parsing Numaflow version: {e}")))?;
 
     // Create a version constraint based on the minimum numaflow version
-    let numaflow_constraint = format!(">={}", min_numaflow_version);
+    let numaflow_constraint = format!(">={min_numaflow_version}");
     check_constraint(&numaflow_version_semver, &numaflow_constraint).map_err(|e| {
         Error::ServerInfo(format!(
             "numaflow version {} must be upgraded to at least {}, in order to work with current SDK version {}",
@@ -218,8 +218,7 @@ fn check_sdk_compatibility(
     // Check if the SDK language is present in the minimum supported SDK versions
     if !min_supported_sdk_versions.contains_key(sdk_language) {
         return Err(Error::ServerInfo(format!(
-            "SDK version constraint not found for language: {}, container type: {}",
-            sdk_language, container_type
+            "SDK version constraint not found for language: {sdk_language}, container type: {container_type}"
         )));
     }
     let empty_map = HashMap::new();
@@ -227,15 +226,15 @@ fn check_sdk_compatibility(
         .get(sdk_language)
         .unwrap_or(&empty_map);
     if let Some(sdk_required_version) = lang_constraints.get(container_type) {
-        let sdk_constraint = format!(">={}", sdk_required_version);
+        let sdk_constraint = format!(">={sdk_required_version}");
 
         // For Python, use Pep440 versioning
         if sdk_language.to_lowercase() == "python" {
             let sdk_version_pep440 = PepVersion::from_str(sdk_version)
-                .map_err(|e| Error::ServerInfo(format!("Error parsing SDK version: {}", e)))?;
+                .map_err(|e| Error::ServerInfo(format!("Error parsing SDK version: {e}")))?;
 
             let specifiers = VersionSpecifier::from_str(&sdk_constraint)
-                .map_err(|e| Error::ServerInfo(format!("Error parsing SDK constraint: {}", e)))?;
+                .map_err(|e| Error::ServerInfo(format!("Error parsing SDK constraint: {e}")))?;
 
             if !specifiers.contains(&sdk_version_pep440) {
                 return Err(Error::ServerInfo(format!(
@@ -250,7 +249,7 @@ fn check_sdk_compatibility(
 
             // Parse the SDK version using semver
             let sdk_version_semver = Version::parse(sdk_version_stripped)
-                .map_err(|e| Error::ServerInfo(format!("Error parsing SDK version: {}", e)))?;
+                .map_err(|e| Error::ServerInfo(format!("Error parsing SDK version: {e}")))?;
 
             // Check if the SDK version satisfies the constraint
             check_constraint(&sdk_version_semver, &sdk_constraint).map_err(|_| {
@@ -269,8 +268,7 @@ fn check_sdk_compatibility(
 
         // Return error indicating the language
         return Err(Error::ServerInfo(format!(
-            "SDK version constraint not found for language: {}, container type: {}",
-            sdk_language, container_type
+            "SDK version constraint not found for language: {sdk_language}, container type: {container_type}"
         )));
     }
     Ok(())
@@ -304,12 +302,11 @@ fn check_constraint(version: &Version, constraint: &str) -> error::Result<()> {
     let mmp_version =
         Version::parse(binding.split('-').next().unwrap_or_default()).map_err(|e| {
             Error::ServerInfo(format!(
-                "Error parsing version: {}, version string: {}",
-                e, binding
+                "Error parsing version: {e}, version string: {binding}"
             ))
         })?;
     let mmp_ver_str_constraint = trim_after_dash(constraint.trim_start_matches(">="));
-    let mmp_ver_constraint = format!(">={}", mmp_ver_str_constraint);
+    let mmp_ver_constraint = format!(">={mmp_ver_str_constraint}");
 
     // "-z" is used to indicate the minimum supported version is a stable version
     // the reason why we choose the letter z is that it can represent the largest pre-release version.
@@ -339,8 +336,7 @@ fn check_constraint(version: &Version, constraint: &str) -> error::Result<()> {
     // Parse the given constraint as a semantic version requirement
     let version_req = VersionReq::parse(constraint).map_err(|e| {
         Error::ServerInfo(format!(
-            "Error parsing constraint: {}, constraint string: {}",
-            e, constraint
+            "Error parsing constraint: {e}, constraint string: {constraint}"
         ))
     })?;
 
@@ -379,19 +375,18 @@ async fn read_server_info(
     loop {
         if cln_token.is_cancelled() {
             return Err(Error::ServerInfo(format!(
-                "Server info file {:?} is not ready. \
+                "Server info file {file_path:?} is not ready. \
                 This indicates that the server has not started. \
-                For more details https://numaflow.numaproj.io/user-guide/FAQ/#4-i-see-server-info-file-not-ready-log-in-the-numa-container-what-does-this-mean",
-                file_path
+                For more details https://numaflow.numaproj.io/user-guide/FAQ/#4-i-see-server-info-file-not-ready-log-in-the-numa-container-what-does-this-mean"
             )));
         }
 
         // Check if the file exists and has content
-        if let Ok(metadata) = fs::metadata(file_path.as_path()) {
-            if metadata.len() > 0 {
-                // Break out of the loop if the file is ready (has content)
-                break;
-            }
+        if let Ok(metadata) = fs::metadata(file_path.as_path())
+            && metadata.len() > 0
+        {
+            // Break out of the loop if the file is ready (has content)
+            break;
         }
         // Log message indicating the file is not ready and sleep for 1 second before checking again
         info!("Server info file {:?} is not ready, waiting...", file_path);
@@ -422,8 +417,7 @@ async fn read_server_info(
         if retry >= 10 {
             // Return an error if the retry limit is reached
             return Err(Error::ServerInfo(format!(
-                "server-info reading retry exceeded for file: {:?}",
-                file_path
+                "server-info reading retry exceeded for file: {file_path:?}"
             )));
         }
 
@@ -433,8 +427,7 @@ async fn read_server_info(
     // Parse the JSON; if there is an error, return the error
     let server_info: ServerInfo = serde_json::from_str(&contents).map_err(|e| {
         Error::ServerInfo(format!(
-            "Failed to parse server-info file: {}, contents: {}",
-            e, contents
+            "Failed to parse server-info file: {e}, contents: {contents}"
         ))
     })?;
 
@@ -585,13 +578,13 @@ mod tests {
         let serialized = serde_json::to_string(svr_info).unwrap();
 
         // Remove the existing file if it exists
-        if let Err(e) = fs::remove_file(svr_info_file_path) {
-            if e.kind() != std::io::ErrorKind::NotFound {
-                return Err(Error::ServerInfo(format!(
-                    "Failed to remove server-info file: {}",
-                    e
-                )));
-            }
+        if let Err(e) = fs::remove_file(svr_info_file_path)
+            && e.kind() != std::io::ErrorKind::NotFound
+        {
+            return Err(Error::ServerInfo(format!(
+                "Failed to remove server-info file: {}",
+                e
+            )));
         }
 
         // Create a new file

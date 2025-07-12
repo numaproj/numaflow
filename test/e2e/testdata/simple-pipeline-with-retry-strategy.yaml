@@ -5,15 +5,14 @@ metadata:
 spec:
   vertices:
     - name: input
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       source:
         generator:
           rpu: 1
           duration: 1s
-    - name: p1
-      udf:
-        container:
-          image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
-          imagePullPolicy: Always
     - name: output
       containerTemplate:
         env:
@@ -30,10 +29,8 @@ spec:
           onFailure: 'drop'
         udsink:
           container:
-            image: quay.io/numaio/numaflow-go/sink-retry-e2e:stable
+            image: quay.io/numaio/numaflow-go/sink-failure:stable
             imagePullPolicy: Always
   edges:
     - from: input
-      to: p1
-    - from: p1
       to: output

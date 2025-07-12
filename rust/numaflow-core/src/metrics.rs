@@ -128,8 +128,8 @@ const FALLBACK_SINK_TIME: &str = "time";
 /// user-defined containers.
 #[derive(Clone)]
 pub(crate) enum ComponentHealthChecks {
-    Monovertex(MonovertexComponents),
-    Pipeline(PipelineComponents),
+    Monovertex(Box<MonovertexComponents>),
+    Pipeline(Box<PipelineComponents>),
 }
 
 /// MonovertexComponents is used to store all the components required for running mvtx. Transformer
@@ -144,8 +144,8 @@ pub(crate) struct MonovertexComponents {
 /// and Fallback Sink is missing because they are internally referenced by Source and Sink.
 #[derive(Clone)]
 pub(crate) enum PipelineComponents {
-    Source(Source),
-    Sink(SinkWriter),
+    Source(Box<Source>),
+    Sink(Box<SinkWriter>),
     Map(MapHandle),
     Reduce(UserDefinedReduce),
 }
@@ -926,19 +926,19 @@ pub(crate) async fn start_metrics_https_server(
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     // Generate a self-signed certificate
-    let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
-        .map_err(|e| Error::Metrics(format!("Generating self-signed certificate: {}", e)))?;
+    let CertifiedKey { cert, signing_key } = generate_simple_self_signed(vec!["localhost".into()])
+        .map_err(|e| Error::Metrics(format!("Generating self-signed certificate: {e}")))?;
 
-    let tls_config = RustlsConfig::from_pem(cert.pem().into(), key_pair.serialize_pem().into())
+    let tls_config = RustlsConfig::from_pem(cert.pem().into(), signing_key.serialize_pem().into())
         .await
-        .map_err(|e| Error::Metrics(format!("Creating tlsConfig from pem: {}", e)))?;
+        .map_err(|e| Error::Metrics(format!("Creating tlsConfig from pem: {e}")))?;
 
     let metrics_app = metrics_router(metrics_state);
 
     axum_server::bind_rustls(addr, tls_config)
         .serve(metrics_app.into_make_service())
         .await
-        .map_err(|e| Error::Metrics(format!("Starting web server for metrics: {}", e)))?;
+        .map_err(|e| Error::Metrics(format!("Starting web server for metrics: {e}")))?;
 
     Ok(())
 }
@@ -977,7 +977,7 @@ async fn sidecar_livez(State(state): State<ComponentHealthChecks>) -> impl IntoR
                 return StatusCode::INTERNAL_SERVER_ERROR;
             }
         }
-        ComponentHealthChecks::Pipeline(pipeline_state) => match pipeline_state {
+        ComponentHealthChecks::Pipeline(pipeline_state) => match *pipeline_state {
             PipelineComponents::Source(mut source) => {
                 if !source.ready().await {
                     error!("Pipeline source component is not ready");
@@ -1034,7 +1034,7 @@ struct TimestampedPending {
 
 #[derive(Clone)]
 pub(crate) enum LagReader {
-    Source(Source),
+    Source(Box<Source>),
     #[allow(clippy::upper_case_acronyms)]
     ISB(Vec<JetStreamReader>), // multiple partitions
 }
@@ -1583,7 +1583,7 @@ mod tests {
         let tracker = TrackerHandle::new(None, None);
         let source = Source::new(
             5,
-            SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
+            SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
             tracker.clone(),
             true,
             None,
@@ -1605,10 +1605,10 @@ mod tests {
         .await
         .expect("failed to create sink writer");
 
-        let metrics_state = ComponentHealthChecks::Monovertex(MonovertexComponents {
+        let metrics_state = ComponentHealthChecks::Monovertex(Box::new(MonovertexComponents {
             source,
             sink: sink_writer,
-        });
+        }));
 
         let addr: SocketAddr = "127.0.0.1:9091".parse().unwrap();
         let metrics_state_clone = metrics_state.clone();

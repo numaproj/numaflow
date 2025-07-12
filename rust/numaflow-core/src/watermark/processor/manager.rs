@@ -53,7 +53,7 @@ impl Debug for Processor {
             self.name, self.status
         )?;
         for timeline in &self.timelines {
-            writeln!(f, "{:?}", timeline)?;
+            writeln!(f, "{timeline:?}")?;
         }
         Ok(())
     }
@@ -463,13 +463,13 @@ impl ProcessorManager {
         // infinite retry
         let interval = fixed::Interval::from_millis(RECONNECT_INTERVAL).take(usize::MAX);
 
-        Retry::retry(
+        Retry::new(
             interval,
             async || match bucket.watch_all().await {
                 Ok(w) => Ok(w),
                 Err(e) => {
                     error!(?e, "Failed to create watcher");
-                    Err(Error::Watermark(format!("Failed to create watcher: {}", e)))
+                    Err(Error::Watermark(format!("Failed to create watcher: {e}")))
                 }
             },
             |_: &Error| true,
@@ -578,14 +578,15 @@ mod tests {
                 .processors
                 .read()
                 .expect("failed to acquire lock");
-            if let Some(processor) = processors.get(&processor_name) {
-                if processor.status == Status::Active {
-                    let timeline = &processor.timelines[0];
-                    if let Some(head_wmb) = timeline.get_head_wmb() {
-                        if head_wmb.watermark == 200 && head_wmb.offset == 1 {
-                            break;
-                        }
-                    }
+            if let Some(processor) = processors.get(&processor_name)
+                && processor.status == Status::Active
+            {
+                let timeline = &processor.timelines[0];
+                if let Some(head_wmb) = timeline.get_head_wmb()
+                    && head_wmb.watermark == 200
+                    && head_wmb.offset == 1
+                {
+                    break;
                 }
             }
             if start_time.elapsed() > Duration::from_secs(1) {
@@ -699,12 +700,11 @@ mod tests {
                 .map(|processor_name| {
                     let processor = processors.get(processor_name).cloned();
                     async move {
-                        if let Some(processor) = processor {
-                            if processor.status == Status::Active {
-                                if let Some(head_wmb) = processor.timelines[0].get_head_wmb() {
-                                    return head_wmb.watermark == 200 && head_wmb.offset == 1;
-                                }
-                            }
+                        if let Some(processor) = processor
+                            && processor.status == Status::Active
+                            && let Some(head_wmb) = processor.timelines[0].get_head_wmb()
+                        {
+                            return head_wmb.watermark == 200 && head_wmb.offset == 1;
                         }
                         false
                     }
@@ -841,27 +841,27 @@ mod tests {
                 .read()
                 .expect("failed to acquire lock");
 
-            if let Some(processor) = processors.get(&processor_name) {
-                if let Some(head_wmb) = processor.timelines[0].get_head_wmb() {
-                    if head_wmb.watermark == 200 && head_wmb.partition == 1 {
-                        // Also check that other timelines don't have the filtered WMBs
-                        let timeline_1_wmb = processor.timelines[1]
-                            .get_head_wmb()
-                            .expect("Timeline should have default WMB");
-                        let timeline_2_wmb = processor.timelines[2]
-                            .get_head_wmb()
-                            .expect("Timeline should have default WMB");
+            if let Some(processor) = processors.get(&processor_name)
+                && let Some(head_wmb) = processor.timelines[0].get_head_wmb()
+                && head_wmb.watermark == 200
+                && head_wmb.partition == 1
+            {
+                // Also check that other timelines don't have the filtered WMBs
+                let timeline_1_wmb = processor.timelines[1]
+                    .get_head_wmb()
+                    .expect("Timeline should have default WMB");
+                let timeline_2_wmb = processor.timelines[2]
+                    .get_head_wmb()
+                    .expect("Timeline should have default WMB");
 
-                        // These should still be default WMBs (watermark -1) since the WMBs with partitions 0 and 2 should be filtered out
-                        if timeline_1_wmb.watermark == -1 && timeline_2_wmb.watermark == -1 {
-                            break;
-                        } else {
-                            panic!(
-                                "Filtered WMBs found in timelines: timeline_1 watermark={}, timeline_2 watermark={}",
-                                timeline_1_wmb.watermark, timeline_2_wmb.watermark
-                            );
-                        }
-                    }
+                // These should still be default WMBs (watermark -1) since the WMBs with partitions 0 and 2 should be filtered out
+                if timeline_1_wmb.watermark == -1 && timeline_2_wmb.watermark == -1 {
+                    break;
+                } else {
+                    panic!(
+                        "Filtered WMBs found in timelines: timeline_1 watermark={}, timeline_2 watermark={}",
+                        timeline_1_wmb.watermark, timeline_2_wmb.watermark
+                    );
                 }
             }
 

@@ -189,7 +189,7 @@ impl UserDefinedAlignedReduce {
             // Wait for the gRPC call to complete
             result = self.client.reduce_fn(ReceiverStream::new(req_rx)) => {
                 result
-                    .map_err(|e| crate::Error::Grpc(e))?
+                    .map_err(|e| crate::Error::Grpc(Box::new(e)))?
                     .into_inner()
             }
 
@@ -216,7 +216,7 @@ impl UserDefinedAlignedReduce {
 
                 // Process next response
                 response = response_stream.message() => {
-                    let response = response.map_err(|e| crate::Error::Reduce(format!("failed to receive response: {}", e)))?;
+                    let response = response.map_err(|e| crate::Error::Grpc(Box::new(e)))?;
                     let Some(response) = response else {
                         break;
                     };
@@ -246,7 +246,7 @@ impl UserDefinedAlignedReduce {
         // wait for the tokio task to complete
         request_handle
             .await
-            .map_err(|e| crate::Error::Reduce(format!("conversion task failed: {}", e)))
+            .map_err(|e| crate::Error::Reduce(format!("conversion task failed: {e}")))
     }
 
     pub(crate) async fn ready(&mut self) -> bool {

@@ -104,7 +104,7 @@ export interface ContainerInfoProps {
   lastStartedAt: string;
   lastTerminationReason?: string;
   lastTerminationMessage?: string;
-  lastTerminationExitCode?: number;
+  lastTerminationExitCode?: number | null;
   waitingReason?: string;
   waitingMessage?: string;
   requestedCPU?: string;
@@ -156,7 +156,7 @@ export interface ContainerError {
   details: string;
 }
 
-export interface  ReplicaErrors {
+export interface ReplicaErrors {
   replica: string;
   containerErrors: ContainerError[];
 }

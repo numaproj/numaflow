@@ -5,9 +5,17 @@ metadata:
 spec:
   vertices:
     - name: in
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       source:
         http: {}
     - name: go-split
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       scale:
         min: 1
       udf:
@@ -16,6 +24,10 @@ spec:
           image: quay.io/numaio/numaflow-go/map-flatmap:stable
           imagePullPolicy: Always
     - name: go-udsink
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       scale:
         min: 1
       sink:
@@ -25,6 +37,10 @@ spec:
             image: quay.io/numaio/numaflow-go/sink-log:stable
             imagePullPolicy: Always
     - name: python-split
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       scale:
         min: 1
       udf:
@@ -36,6 +52,10 @@ spec:
           image: quay.io/numaio/numaflow-python/map-flatmap:stable
           imagePullPolicy: Always
     - name: python-udsink
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       scale:
         min: 1
       sink:
@@ -48,6 +68,10 @@ spec:
             image: quay.io/numaio/numaflow-python/sink-log:stable
             imagePullPolicy: Always
     - name: java-split
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       scale:
         min: 1
       udf:
@@ -56,6 +80,10 @@ spec:
           image: quay.io/numaio/numaflow-java/map-flatmap:stable
           imagePullPolicy: Always
     - name: java-udsink
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       scale:
         min: 1
       sink:

@@ -242,7 +242,7 @@ pub mod tests {
         (
             Source::new(
                 5,
-                SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
+                SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
                 tracker_handle.clone(),
                 true,
                 None,

@@ -29,7 +29,7 @@ impl TryInto<Bytes> for Callback {
 
     fn try_into(self) -> Result<Bytes, Self::Error> {
         let value = serde_json::to_string(&self)
-            .map_err(|e| Error::Other(format!("Failed to serialize callback: {}", e)))?;
+            .map_err(|e| Error::Other(format!("Failed to serialize callback: {e}")))?;
         Ok(Bytes::from(value))
     }
 }
@@ -39,7 +39,7 @@ impl TryFrom<Bytes> for Callback {
 
     fn try_from(value: Bytes) -> Result<Self, Self::Error> {
         serde_json::from_slice(&value)
-            .map_err(|e| Error::Other(format!("Failed to deserialize callback: {}", e)))
+            .map_err(|e| Error::Other(format!("Failed to deserialize callback: {e}")))
     }
 }
 
@@ -111,15 +111,14 @@ impl CallbackHandler {
 
             let _permit = permit;
             let value = serde_json::to_string(&callback_payload).expect("Failed to serialize");
-            let result = Retry::retry(
+            let result = Retry::new(
                 interval,
                 async || match store.put(&callbacks_key, Bytes::from(value.clone())).await {
                     Ok(resp) => Ok(resp),
                     Err(e) => {
                         warn!(error = ?e, "Failed to write callback to store, retrying..");
                         Err(Error::Other(format!(
-                            "Failed to write callback to store: {}",
-                            e
+                            "Failed to write callback to store: {e}"
                         )))
                     }
                 },

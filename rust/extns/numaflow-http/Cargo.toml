@@ -9,13 +9,13 @@ rcgen.workspace = true
 tokio.workspace = true
 axum.workspace = true
 bytes.workspace = true
-thiserror = "2.0.12"
+thiserror.workspace = true
 serde.workspace = true
 tracing.workspace = true
 uuid = { workspace = true, features = ["v7"] }
 chrono = { workspace = true, features = ["serde"] }
-serde_json = "1.0"
-rustls = "0.23.25"
+serde_json.workspace = true
+rustls.workspace = true
 
 [dev-dependencies]
 hyper = { version = "1.6.0", features = ["client", "http1"] }

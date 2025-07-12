@@ -391,7 +391,7 @@ pub fn create_router(
     Router::new()
         .route("/health", get(health_handler))
         .route(
-            format!("/vertices/{}", vertex_name).as_str(),
+            format!("/vertices/{vertex_name}").as_str(),
             post(data_handler),
         )
         .route_layer(middleware::from_fn(
@@ -404,7 +404,7 @@ pub fn create_router(
                 match request.headers().get("Authorization") {
                     Some(t) => {
                         let t = t.to_str().expect("token should be a string");
-                        if t == format!("Bearer {}", token) {
+                        if t == format!("Bearer {token}") {
                             return next.run(request).await;
                         }
                     }
@@ -424,10 +424,10 @@ pub fn create_router(
 
 /// Generate self-signed TLS certificate
 fn generate_certs() -> Result<(Certificate, rcgen::KeyPair)> {
-    let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
-        .map_err(|e| Error::Server(format!("Generating self-signed certificate: {}", e)))?;
+    let CertifiedKey { cert, signing_key } = generate_simple_self_signed(vec!["localhost".into()])
+        .map_err(|e| Error::Server(format!("Generating self-signed certificate: {e}")))?;
 
-    Ok((cert, key_pair))
+    Ok((cert, signing_key))
 }
 
 /// Start the HTTPS server on the specified address
@@ -447,12 +447,12 @@ pub async fn start_server(
 
     let tls_config = RustlsConfig::from_pem(cert.pem().into(), key_pair.serialize_pem().into())
         .await
-        .map_err(|e| Error::Server(format!("Creating TLS config from PEM: {}", e)))?;
+        .map_err(|e| Error::Server(format!("Creating TLS config from PEM: {e}")))?;
 
     axum_server::bind_rustls(addr, tls_config)
         .serve(router.into_make_service())
         .await
-        .map_err(|e| Error::Server(format!("HTTPS server error: {}", e)))?;
+        .map_err(|e| Error::Server(format!("HTTPS server error: {e}")))?;
 
     Ok(())
 }
