@@ -48,7 +48,6 @@ import (
 	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
-	"github.com/numaproj/numaflow/pkg/watermark/fetch"
 )
 
 type daemonServer struct {
@@ -91,23 +90,8 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	default:
 		return fmt.Errorf("unsupported isbsvc buffer type %q", ds.isbSvcType)
 	}
-	wmStores, err := service.BuildWatermarkStores(ctx, ds.pipeline, isbSvcClient)
-	if err != nil {
-		return fmt.Errorf("failed to get watermark stores, %w", err)
-	}
-	wmFetchers, err := service.BuildUXEdgeWatermarkFetchers(ctx, ds.pipeline, wmStores)
-	if err != nil {
-		return fmt.Errorf("failed to get watermark fetchers, %w", err)
-	}
-
-	// Close all the watermark stores when the daemon server exits
-	defer func() {
-		for _, edgeStores := range wmStores {
-			for _, store := range edgeStores {
-				_ = store.Close()
-			}
-		}
-	}()
+	// HTTP watermark service will be created inside PipelineMetadataQuery
+	// No need for watermark stores and fetchers anymore
 
 	// rater is used to calculate the processing rate for each of the vertices
 	rater := server.NewRater(ctx, ds.pipeline)
@@ -129,10 +113,17 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	}
 
 	tlsConfig := &tls.Config{Certificates: []tls.Certificate{*cer}, MinVersion: tls.VersionTLS12, NextProtos: []string{"http/1.1", "h2"}}
-	grpcServer, err := ds.newGRPCServer(isbSvcClient, wmFetchers, rater, pipelineRuntimeCache)
+	grpcServer, err := ds.newGRPCServer(ctx, isbSvcClient, rater, pipelineRuntimeCache)
 	if err != nil {
 		return fmt.Errorf("failed to create grpc server: %w", err)
 	}
+
+	// Clean up watermark service when daemon server exits
+	defer func() {
+		if ds.metaDataQuery != nil {
+			ds.metaDataQuery.Stop()
+		}
+	}()
 	httpServer := ds.newHTTPServer(ctx, v1alpha1.DaemonServicePort, tlsConfig)
 
 	conn = tls.NewListener(conn, tlsConfig)
@@ -177,8 +168,8 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 }
 
 func (ds *daemonServer) newGRPCServer(
+	ctx context.Context,
 	isbSvcClient isbsvc.ISBService,
-	wmFetchers map[v1alpha1.Edge][]fetch.HeadFetcher,
 	rater server.Ratable,
 	pipelineRuntimeCache runtimeinfo.PipelineRuntimeCache) (*grpc.Server, error) {
 	// "Prometheus histograms are a great way to measure latency distributions of your RPCs.
@@ -194,7 +185,7 @@ func (ds *daemonServer) newGRPCServer(
 	}
 	grpcServer := grpc.NewServer(sOpts...)
 	grpc_prometheus.Register(grpcServer)
-	pipelineMetadataQuery, err := service.NewPipelineMetadataQuery(isbSvcClient, ds.pipeline, wmFetchers, rater, pipelineRuntimeCache)
+	pipelineMetadataQuery, err := service.NewPipelineMetadataQuery(ctx, isbSvcClient, ds.pipeline, rater, pipelineRuntimeCache)
 	if err != nil {
 		return nil, err
 	}

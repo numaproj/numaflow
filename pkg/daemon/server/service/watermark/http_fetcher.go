@@ -61,8 +61,8 @@ type HTTPWatermarkFetcher struct {
 	cacheMutex     sync.RWMutex
 
 	// Background fetching control
-	ctx        context.Context
-	cancel     context.CancelFunc
+	ctx         context.Context
+	cancel      context.CancelFunc
 	fetchTicker *time.Ticker
 }
 
@@ -146,10 +146,10 @@ func (h *HTTPWatermarkFetcher) fetchAndUpdateCache() {
 		h.edge.GetEdgeName(), isReduce, partitionCount)
 
 	if isReduce {
-		// For reduce vertices: hit all pods (x partitions = x pods)
+		// For reduce vertices: hit all pods (x partitions = x pods), 1:1 pod to partition mapping
 		h.fetchFromAllPods(partitionCount)
 	} else {
-		// For non-reduce vertices: hit only 0th pod to get all partition watermarks
+		// For non-reduce vertices: hit only 0th pod to get all partition watermarks, 1:n pod to partition mapping
 		h.fetchFromSinglePod(partitionCount)
 	}
 }
@@ -189,8 +189,6 @@ func (h *HTTPWatermarkFetcher) fetchFromSinglePod(partitionCount int) {
 	}
 }
 
-
-
 // fetchFromAllPods fetches watermarks from all pods for reduce vertices
 func (h *HTTPWatermarkFetcher) fetchFromAllPods(partitionCount int) {
 	fromVertex := h.pipeline.GetVertex(h.edge.From)
@@ -226,8 +224,6 @@ func (h *HTTPWatermarkFetcher) fetchFromAllPods(partitionCount int) {
 		// If watermark is -1 or missing, keep existing cache value
 	}
 }
-
-
 
 // fetchFromURL makes HTTP request to fetch watermark from a specific URL
 func (h *HTTPWatermarkFetcher) fetchFromURL(ctx context.Context, url string) (map[string]int64, error) {
