@@ -12,4 +12,7 @@ pub enum Error {
 
     #[error("Connection Error - {0}")]
     Connection(String),
+
+    #[error("Config Error - {0}")]
+    Config(String),
 }

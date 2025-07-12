@@ -62,6 +62,7 @@ serving = { path = "serving" }
 numaflow-core = { path = "numaflow-core" }
 numaflow-models = { path = "numaflow-models" }
 numaflow-monitor = { path = "numaflow-monitor" }
+numaflow-sideinput = { path = "numaflow-sideinput" }
 backoff = { path = "backoff" }
 numaflow-pb = { path = "numaflow-pb" }
 numaflow-pulsar = { path = "extns/numaflow-pulsar" }

@@ -14,7 +14,9 @@ workspace = true
 serving.workspace = true
 numaflow-core.workspace = true
 numaflow-monitor.workspace = true
+numaflow-sideinput.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
 tracing.workspace = true
 rustls.workspace = true
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
