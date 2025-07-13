@@ -6,6 +6,8 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 const PATH_SIDE_INPUTS_MOUNT: &str = "/var/numaflow/side-inputs";
+const SIDE_INPUT_SERVER_INFO_FILE: &str = "/var/run/numaflow/sideinput-server-info";
+const SIDE_INPUT_SOCKET_FILE: &str = "/var/run/numaflow/sideinput.sock";
 
 pub(super) fn add_sideinput_subcommand() -> Command {
     Command::new("side-input")
@@ -119,7 +121,10 @@ pub(crate) async fn run_sideinput(
                 mount_path: PATH_SIDE_INPUTS_MOUNT,
                 run_once: true,
             };
-            Ok(numaflow_sideinput::run(mode, env_vars, cln_token).await?)
+            Ok(
+                numaflow_sideinput::run(mode, SIDE_INPUT_SOCKET_FILE.into(), env_vars, cln_token)
+                    .await?,
+            )
         }
         Some(("side-inputs-synchronizer", args)) => {
             info!("Starting side-input synchronizer");
@@ -139,7 +144,10 @@ pub(crate) async fn run_sideinput(
                 mount_path: PATH_SIDE_INPUTS_MOUNT,
                 run_once: false,
             };
-            Ok(numaflow_sideinput::run(mode, env_vars, cln_token).await?)
+            Ok(
+                numaflow_sideinput::run(mode, SIDE_INPUT_SOCKET_FILE.into(), env_vars, cln_token)
+                    .await?,
+            )
         }
         Some(("side-inputs-manager", args)) => {
             info!("Starting side-input manager");
@@ -149,7 +157,10 @@ pub(crate) async fn run_sideinput(
             let side_input_store = Box::leak(side_input_store.clone().into_boxed_str());
 
             let mode = SideInputMode::Manager { side_input_store };
-            Ok(numaflow_sideinput::run(mode, env_vars, cln_token).await?)
+            Ok(
+                numaflow_sideinput::run(mode, SIDE_INPUT_SOCKET_FILE.into(), env_vars, cln_token)
+                    .await?,
+            )
         }
         other => Err(format!("Unknown side-input {other:?} subcommand").into()),
     }

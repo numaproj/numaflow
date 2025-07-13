@@ -70,7 +70,6 @@ pub(crate) mod isb {
         pub(crate) fn load(env_vars: HashMap<String, String>) -> Result<Self> {
             let env_vars: HashMap<String, String> = env_vars
                 .into_iter()
-                .map(|(key, val)| (key.into(), val.into()))
                 .filter(|(key, _val): &(String, String)| {
                     [
                         ENV_NUMAFLOW_JETSTREAM_URL,
