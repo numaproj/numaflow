@@ -67,13 +67,11 @@ pub(crate) mod isb {
     const ENV_NUMAFLOW_JETSTREAM_TLS_ENABLED: &str = "NUMAFLOW_ISBSVC_JETSTREAM_TLS_ENABLED";
 
     impl ClientConfig {
-        pub(crate) fn load(
-            env_vars: impl IntoIterator<Item = (impl Into<String>, impl Into<String>)>,
-        ) -> Result<Self> {
+        pub(crate) fn load(env_vars: HashMap<String, String>) -> Result<Self> {
             let env_vars: HashMap<String, String> = env_vars
                 .into_iter()
                 .map(|(key, val)| (key.into(), val.into()))
-                .filter(|(key, _val)| {
+                .filter(|(key, _val): &(String, String)| {
                     [
                         ENV_NUMAFLOW_JETSTREAM_URL,
                         ENV_NUMAFLOW_JETSTREAM_PASSWORD,

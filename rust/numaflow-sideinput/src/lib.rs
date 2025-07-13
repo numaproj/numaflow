@@ -10,6 +10,7 @@ use crate::manager::SideInputTrigger;
 use async_nats::jetstream::Context;
 use async_nats::{ConnectOptions, jetstream};
 use config::isb;
+use std::collections::HashMap;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
@@ -50,10 +51,19 @@ fn get_bucket_name(side_input_store: &str) -> &'static str {
 }
 
 /// Runs the side-input system in the specified mode.
-pub async fn run(mode: SideInputMode, cancellation_token: CancellationToken) -> Result<()> {
+pub async fn run(
+    mode: SideInputMode,
+    env_vars: HashMap<String, String>,
+    cancellation_token: CancellationToken,
+) -> Result<()> {
     match mode {
         SideInputMode::Manager { side_input_store } => {
-            start_manager(get_bucket_name(side_input_store), cancellation_token).await
+            start_manager(
+                get_bucket_name(side_input_store),
+                env_vars,
+                cancellation_token,
+            )
+            .await
         }
         SideInputMode::Synchronizer {
             side_inputs,
@@ -65,8 +75,9 @@ pub async fn run(mode: SideInputMode, cancellation_token: CancellationToken) -> 
                 side_inputs,
                 get_bucket_name(side_input_store),
                 mount_path,
-                cancellation_token,
                 run_once,
+                env_vars,
+                cancellation_token,
             )
             .await
         }
@@ -78,9 +89,10 @@ const SIDE_INPUT_SOCKET_FILE: &str = "/var/run/numaflow/sideinput.sock";
 
 async fn start_manager(
     side_input_store: &'static str,
+    env_vars: HashMap<String, String>,
     cancellation_token: CancellationToken,
 ) -> Result<()> {
-    let trigger = config::SideInputTriggerConfig::load(std::env::vars().collect());
+    let trigger = config::SideInputTriggerConfig::load(env_vars);
 
     let client =
         manager::client::UserDefinedSideInputClient::new(SIDE_INPUT_SOCKET_FILE.into()).await?;
@@ -89,7 +101,7 @@ async fn start_manager(
 
     manager::SideInputManager::new(side_input_store, trigger.name, client, cancellation_token)
         .run(
-            isb::ClientConfig::load(std::env::vars())?,
+            isb::ClientConfig::load(std::env::vars().collect())?,
             side_input_trigger,
         )
         .await
@@ -99,10 +111,11 @@ async fn start_synchronizer(
     side_inputs: Vec<&'static str>,
     side_input_store: &'static str,
     mount_path: &'static str,
-    cancellation_token: CancellationToken,
     run_once: bool,
+    env_vars: HashMap<String, String>,
+    cancellation_token: CancellationToken,
 ) -> Result<()> {
-    let js_ctx = build_js_context().await?;
+    let js_ctx = build_js_context(env_vars).await?;
 
     let synchronizer = synchronize::SideInputSynchronizer::new(
         side_input_store,
@@ -116,8 +129,8 @@ async fn start_synchronizer(
     synchronizer.synchronize().await
 }
 
-async fn build_js_context() -> Result<Context> {
-    let client = isb::ClientConfig::load(std::env::vars())?;
+async fn build_js_context(env_vars: HashMap<String, String>) -> Result<Context> {
+    let client = isb::ClientConfig::load(env_vars)?;
     create_js_context(client).await
 }
 
