@@ -181,10 +181,22 @@ mod tests {
         #[test]
         fn test_client_config_load_success_all_vars() {
             let mut env_vars = HashMap::new();
-            env_vars.insert("NUMAFLOW_ISBSVC_JETSTREAM_URL".to_string(), "nats://localhost:4222".to_string());
-            env_vars.insert("NUMAFLOW_ISBSVC_JETSTREAM_USER".to_string(), "testuser".to_string());
-            env_vars.insert("NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD".to_string(), "testpass".to_string());
-            env_vars.insert("NUMAFLOW_ISBSVC_JETSTREAM_TLS_ENABLED".to_string(), "true".to_string());
+            env_vars.insert(
+                "NUMAFLOW_ISBSVC_JETSTREAM_URL".to_string(),
+                "nats://localhost:4222".to_string(),
+            );
+            env_vars.insert(
+                "NUMAFLOW_ISBSVC_JETSTREAM_USER".to_string(),
+                "testuser".to_string(),
+            );
+            env_vars.insert(
+                "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD".to_string(),
+                "testpass".to_string(),
+            );
+            env_vars.insert(
+                "NUMAFLOW_ISBSVC_JETSTREAM_TLS_ENABLED".to_string(),
+                "true".to_string(),
+            );
 
             let config = ClientConfig::load(env_vars).unwrap();
             assert_eq!(config.url, "nats://localhost:4222");
@@ -195,7 +207,10 @@ mod tests {
         #[test]
         fn test_client_config_load_success_only_url() {
             let mut env_vars = HashMap::new();
-            env_vars.insert("NUMAFLOW_ISBSVC_JETSTREAM_URL".to_string(), "nats://localhost:4222".to_string());
+            env_vars.insert(
+                "NUMAFLOW_ISBSVC_JETSTREAM_URL".to_string(),
+                "nats://localhost:4222".to_string(),
+            );
 
             let config = ClientConfig::load(env_vars).unwrap();
             assert_eq!(config.url, "nats://localhost:4222");
@@ -206,18 +221,32 @@ mod tests {
         #[test]
         fn test_client_config_load_missing_url() {
             let mut env_vars = HashMap::new();
-            env_vars.insert("NUMAFLOW_ISBSVC_JETSTREAM_USER".to_string(), "testuser".to_string());
+            env_vars.insert(
+                "NUMAFLOW_ISBSVC_JETSTREAM_USER".to_string(),
+                "testuser".to_string(),
+            );
 
             let result = ClientConfig::load(env_vars);
             assert!(result.is_err());
-            assert!(result.unwrap_err().to_string().contains("NUMAFLOW_ISBSVC_JETSTREAM_URL is not set"));
+            assert!(
+                result
+                    .unwrap_err()
+                    .to_string()
+                    .contains("NUMAFLOW_ISBSVC_JETSTREAM_URL is not set")
+            );
         }
 
         #[test]
         fn test_client_config_load_filters_irrelevant_vars() {
             let mut env_vars = HashMap::new();
-            env_vars.insert("NUMAFLOW_ISBSVC_JETSTREAM_URL".to_string(), "nats://localhost:4222".to_string());
-            env_vars.insert("IRRELEVANT_VAR".to_string(), "should_be_ignored".to_string());
+            env_vars.insert(
+                "NUMAFLOW_ISBSVC_JETSTREAM_URL".to_string(),
+                "nats://localhost:4222".to_string(),
+            );
+            env_vars.insert(
+                "IRRELEVANT_VAR".to_string(),
+                "should_be_ignored".to_string(),
+            );
             env_vars.insert("ANOTHER_VAR".to_string(), "also_ignored".to_string());
 
             let config = ClientConfig::load(env_vars).unwrap();
