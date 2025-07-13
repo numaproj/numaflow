@@ -61,7 +61,7 @@ pub(crate) async fn wait_until_sideinput_ready(
     Ok(())
 }
 
-pub(super) async fn create_rpc_channel(socket_path: PathBuf) -> Result<Channel> {
+async fn create_rpc_channel(socket_path: PathBuf) -> Result<Channel> {
     const RECONNECT_INTERVAL: u64 = 1000;
     const MAX_RECONNECT_ATTEMPTS: usize = usize::MAX;
 

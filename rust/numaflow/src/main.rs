@@ -1,7 +1,12 @@
+use cmdline::sideinput;
 use std::collections::HashMap;
 use std::env;
 use std::error::Error;
+use tokio::signal;
+use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
+
 mod setup_tracing;
 
 /// Build the command line interface.
@@ -31,6 +36,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
 async fn run(cli: clap::Command) -> Result<(), Box<dyn Error>> {
     let cli_matches = cli.get_matches();
 
+    let cln_token = CancellationToken::new();
+    let shutdown_cln_token = cln_token.clone();
+
+    // wait for SIG{INT,TERM} and invoke cancellation token.
+    let shutdown_handle: JoinHandle<Result<(), Box<dyn Send + Sync + Error>>> =
+        tokio::spawn(async move {
+            shutdown_signal().await;
+            shutdown_cln_token.cancel();
+            Ok(())
+        });
+
     match cli_matches.subcommand() {
         Some(("monitor", _)) => {
             info!("Starting monitor");
@@ -55,10 +71,40 @@ async fn run(cli: clap::Command) -> Result<(), Box<dyn Error>> {
                 .await
                 .map_err(|e| format!("Error running core binary: {e:?}"))?;
         }
+        Some(("side-input", args)) => {
+            sideinput::run_sideinput(args, cln_token).await?;
+        }
         others => {
             return Err(format!("Invalid subcommand {others:?}").into());
         }
     }
 
+    // abort the shutdown handle since we are done processing
+    if !shutdown_handle.is_finished() {
+        shutdown_handle.abort();
+    }
+
     Ok(())
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+        info!("Received Ctrl+C signal");
+    };
+
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+        info!("Received terminate signal");
+    };
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
 }
