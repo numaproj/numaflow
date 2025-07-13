@@ -231,12 +231,13 @@ mod tests {
         Ok(())
     }
 
-    /// Test Manager mode with the run function
-    /// This test verifies that the Manager mode can generate side-input data
-    /// and store it in the KV store using the public run function
+    /// Test both Manager and Synchronizer modes with the run function
+    /// This test verifies that:
+    /// 1. The Manager mode can generate side-input data and store it in the KV store
+    /// 2. The Synchronizer mode can read from the KV store and write to local files
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
-    async fn test_manager_mode_with_run_function() -> Result<()> {
+    async fn test_manager_and_synchronizer_modes_with_run_function() -> Result<()> {
         // Setup temporary directories and files
         let tmp_dir = TempDir::new().unwrap();
         let sock_file = tmp_dir.path().join("sideinput.sock");
@@ -319,8 +320,10 @@ mod tests {
 
         // Start the manager in a background task
         let manager_cancel = cancel_token.clone();
+        let sock_file_clone = sock_file.clone();
+        let env_vars_clone = env_vars.clone();
         let manager_handle = tokio::spawn(async move {
-            run(mode, sock_file.clone(), env_vars, manager_cancel)
+            run(mode, sock_file_clone, env_vars_clone, manager_cancel)
                 .await
                 .unwrap();
         });
@@ -340,6 +343,55 @@ mod tests {
         assert!(
             value_str.starts_with("test-data-"),
             "Stored value should contain test data, got: {value_str}",
+        );
+
+        // Test Synchronizer mode - read from KV store and write to files
+        let sync_tmp_dir = TempDir::new().unwrap();
+        let mount_path = Box::leak(
+            sync_tmp_dir
+                .path()
+                .to_string_lossy()
+                .into_owned()
+                .into_boxed_str(),
+        );
+
+        let sync_cancel_token = CancellationToken::new();
+        let sync_mode = SideInputMode::Synchronizer {
+            side_inputs: vec!["test-side-input-run-once"],
+            side_input_store: store_name,
+            mount_path,
+            run_once: true, // Run once to process initial values and stop
+        };
+
+        // Start the synchronizer in a background task
+        let sync_handle = tokio::spawn(async move {
+            run(sync_mode, sock_file, env_vars, sync_cancel_token)
+                .await
+                .unwrap();
+        });
+
+        // Give synchronizer time to process and complete (run_once=true should make it finish)
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        // Verify that the synchronizer task completed (since run_once=true)
+        let sync_result = tokio::time::timeout(Duration::from_millis(100), sync_handle).await;
+        assert!(
+            sync_result.is_ok(),
+            "Synchronizer should complete when run_once=true"
+        );
+
+        // Verify that the side input file was created in the mount path
+        let side_input_file_path = sync_tmp_dir.path().join("test-side-input-run-once");
+        assert!(
+            side_input_file_path.exists(),
+            "Side input file should be created at mount path"
+        );
+
+        // Verify the content of the side input file matches what was stored in KV
+        let file_content = std::fs::read_to_string(&side_input_file_path).unwrap();
+        assert!(
+            file_content.starts_with("test-data-"),
+            "File content should match KV store content, got: {file_content}",
         );
 
         // Cleanup
