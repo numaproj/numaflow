@@ -2490,6 +2490,7 @@ dependencies = [
  "backoff",
  "base64 0.22.1",
  "bytes",
+ "chrono",
  "chrono-tz",
  "cron",
  "hyper-util",

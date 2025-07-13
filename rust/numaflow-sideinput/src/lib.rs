@@ -30,8 +30,6 @@ pub enum SideInputMode {
     Manager {
         /// The ISB bucket where the side-input values are stored.
         side_input_store: &'static str,
-        /// The name of the side input.
-        side_input: &'static str,
     },
     Synchronizer {
         /// The list of side input names to synchronize.
@@ -46,13 +44,17 @@ pub enum SideInputMode {
     },
 }
 
+/// build the side-input bucket name from the store name.
+fn get_bucket_name(side_input_store: &str) -> &'static str {
+    Box::leak(format!("{side_input_store}_SIDE_INPUTS").into_boxed_str())
+}
+
 /// Runs the side-input system in the specified mode.
 pub async fn run(mode: SideInputMode, cancellation_token: CancellationToken) -> Result<()> {
     match mode {
-        SideInputMode::Manager {
-            side_input_store,
-            side_input,
-        } => start_manager(side_input_store, side_input, cancellation_token).await,
+        SideInputMode::Manager { side_input_store } => {
+            start_manager(get_bucket_name(side_input_store), cancellation_token).await
+        }
         SideInputMode::Synchronizer {
             side_inputs,
             side_input_store,
@@ -61,7 +63,7 @@ pub async fn run(mode: SideInputMode, cancellation_token: CancellationToken) -> 
         } => {
             start_synchronizer(
                 side_inputs,
-                side_input_store,
+                get_bucket_name(side_input_store),
                 mount_path,
                 cancellation_token,
                 run_once,
@@ -71,23 +73,21 @@ pub async fn run(mode: SideInputMode, cancellation_token: CancellationToken) -> 
     }
 }
 
+const SIDE_INPUT_SERVER_INFO_FILE: &str = "/var/run/numaflow/sideinput-server-info";
+const SIDE_INPUT_SOCKET_FILE: &str = "/var/run/numaflow/sideinput.sock";
+
 async fn start_manager(
     side_input_store: &'static str,
-    side_input: &'static str,
     cancellation_token: CancellationToken,
 ) -> Result<()> {
     let trigger = config::SideInputTriggerConfig::load(std::env::vars().collect());
 
-    let client = manager::client::UserDefinedSideInputClient::new(
-        std::env::var("NUMAFLOW_UDS_PATH")
-            .expect("NUMAFLOW_UDS_PATH is not set")
-            .into(),
-    )
-    .await?;
+    let client =
+        manager::client::UserDefinedSideInputClient::new(SIDE_INPUT_SOCKET_FILE.into()).await?;
 
     let side_input_trigger = SideInputTrigger::new(trigger.schedule, trigger.timezone)?;
 
-    manager::SideInputManager::new(side_input_store, side_input, client, cancellation_token)
+    manager::SideInputManager::new(side_input_store, trigger.name, client, cancellation_token)
         .run(
             isb::ClientConfig::load(std::env::vars())?,
             side_input_trigger,

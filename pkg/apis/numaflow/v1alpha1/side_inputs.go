@@ -136,8 +136,12 @@ func (si SideInput) getInitContainer(pipeline Pipeline, req GetSideInputDeployme
 
 func (si SideInput) getNumaContainer(pipeline Pipeline, req GetSideInputDeploymentReq) (*corev1.Container, error) {
 	sideInputCopy := &SideInput{
-		Name:    si.Name,
+		Name: si.Name,
+		Container: &Container{
+			Image: si.Container.Image,
+		},
 		Trigger: si.Trigger,
+		Volumes: si.Volumes,
 	}
 	siBytes, err := json.Marshal(sideInputCopy)
 	if err != nil {
@@ -146,6 +150,7 @@ func (si SideInput) getNumaContainer(pipeline Pipeline, req GetSideInputDeployme
 	encodedSideInput := base64.StdEncoding.EncodeToString(siBytes)
 	envVars := []corev1.EnvVar{
 		{Name: EnvSideInputObject, Value: encodedSideInput},
+		{Name: EnvNumaflowRuntime, Value: "rust"},
 	}
 	envVars = append(envVars, req.Env...)
 	c := &corev1.Container{
@@ -154,7 +159,7 @@ func (si SideInput) getNumaContainer(pipeline Pipeline, req GetSideInputDeployme
 		Image:           req.Image,
 		ImagePullPolicy: req.PullPolicy,
 		Resources:       req.DefaultResources,
-		Args:            []string{"side-inputs-manager", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + pipeline.GetSideInputsStoreName()},
+		Args:            []string{"side-input", "side-inputs-manager", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + pipeline.GetSideInputsStoreName()},
 	}
 	if x := pipeline.Spec.Templates; x != nil && x.SideInputsManagerTemplate != nil && x.SideInputsManagerTemplate.ContainerTemplate != nil {
 		x.SideInputsManagerTemplate.ContainerTemplate.ApplyToContainer(c)

@@ -108,12 +108,8 @@ impl SideInputManager {
         bucket: jetstream::kv::Store,
         side_input_trigger: SideInputTrigger,
     ) {
-        // do the first run before running the schedule
-        info!("Running first side-input generation");
-        if let Err(e) = self.generate_side_input(&bucket).await {
-            error!(?e, "Failed to generate the first, initial side input");
-        }
-
+        // since we have an init container to synchronize the side-input for the first time
+        // we can skip the first run and run according to the schedule.
         loop {
             let datetime = side_input_trigger
                 .schedule
@@ -121,15 +117,21 @@ impl SideInputManager {
                 .next()
                 .expect("cron schedule should have at least one next time");
 
+            info!(scheduled=?datetime, "Next side-input generation scheduled");
+
+            let duration_until = (datetime.with_timezone(&chrono::Utc) - chrono::Utc::now())
+                .to_std()
+                .unwrap_or(Duration::from_secs(0));
+
             // sleep until the next run time
             let sleep_util = tokio::time::sleep_until(tokio::time::Instant::from_std(
-                Instant::now() + Duration::from_micros(datetime.timestamp_micros() as u64),
+                Instant::now() + duration_until,
             ));
 
             // check if we have been cancelled
             tokio::select! {
                 _ = sleep_util => {
-                    info!(?datetime, "running schedule for side-input generation");
+                    debug!(scheduled=?datetime, "running schedule for side-input generation");
                 }
                 _ = self.cancellation_token.cancelled() => {
                     info!("Cancellation token received, exiting side-input manager");
@@ -163,7 +165,7 @@ impl SideInputManager {
                 .put(self.key, Bytes::from(side_input_response.value))
                 .await
                 .map_err(|e| Error::SideInput(format!("Failed to store side input: {e:?}")))?;
-            debug!("Side input stored in the bucket");
+            info!("Side input stored in the bucket");
         } else {
             info!("Side input is not broadcasted since no_broadcast is set to true");
         }
@@ -242,7 +244,7 @@ mod tests {
         let _ = js_context.delete_key_value(store_name).await; // Clean up if exists
 
         let kv_store = js_context
-            .create_key_value(async_nats::jetstream::kv::Config {
+            .create_key_value(jetstream::kv::Config {
                 bucket: store_name.to_string(),
                 ..Default::default()
             })

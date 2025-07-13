@@ -7,7 +7,7 @@ use tracing::info;
 const PATH_SIDE_INPUTS_MOUNT: &str = "/var/numaflow/side-inputs";
 
 pub(super) fn add_sideinput_subcommand() -> Command {
-    Command::new("sideinput")
+    Command::new("side-input")
         .about("SideInput System for Numaflow")
         .subcommand_required(true)
         .subcommand(manager_subcmd())
@@ -16,7 +16,7 @@ pub(super) fn add_sideinput_subcommand() -> Command {
 }
 
 fn initializer_subcmd() -> Command {
-    Command::new("initializer")
+    Command::new("side-inputs-init")
         .about("SideInput Initializer")
         .arg_required_else_help(true)
         .arg(
@@ -46,7 +46,7 @@ fn initializer_subcmd() -> Command {
 }
 
 fn manager_subcmd() -> Command {
-    Command::new("manager")
+    Command::new("side-inputs-manager")
         .about("SideInput Manager")
         .arg_required_else_help(true)
         .arg(
@@ -66,7 +66,7 @@ fn manager_subcmd() -> Command {
 }
 
 fn synchronizer_subcmd() -> Command {
-    Command::new("synchronize")
+    Command::new("side-inputs-synchronizer")
         .about("SideInput Synchronizer")
         .arg_required_else_help(true)
         .arg(
@@ -100,7 +100,7 @@ pub(crate) async fn run_sideinput(
     cln_token: CancellationToken,
 ) -> Result<(), Box<dyn Error>> {
     match args.subcommand() {
-        Some(("initializer", args)) => {
+        Some(("side-inputs-init", args)) => {
             info!("Starting side-input initializer");
             let side_inputs: Vec<&'static str> = args
                 .get_many::<String>("side-inputs")
@@ -118,7 +118,7 @@ pub(crate) async fn run_sideinput(
             };
             Ok(numaflow_sideinput::run(mode, cln_token).await?)
         }
-        Some(("synchronizer", args)) => {
+        Some(("side-inputs-synchronizer", args)) => {
             info!("Starting side-input synchronizer");
             let side_inputs: Vec<&str> = args
                 .get_many::<String>("side-inputs")
@@ -138,21 +138,14 @@ pub(crate) async fn run_sideinput(
             };
             Ok(numaflow_sideinput::run(mode, cln_token).await?)
         }
-        Some(("manager", args)) => {
+        Some(("side-inputs-manager", args)) => {
             info!("Starting side-input manager");
             let side_input_store = args
                 .get_one::<String>("side-inputs-store")
                 .expect("side-inputs-store is required");
             let side_input_store = Box::leak(side_input_store.clone().into_boxed_str());
-            let side_input = args
-                .get_one::<String>("side-input")
-                .expect("side-input is required");
-            let side_input = Box::leak(side_input.clone().into_boxed_str());
 
-            let mode = SideInputMode::Manager {
-                side_input_store,
-                side_input,
-            };
+            let mode = SideInputMode::Manager { side_input_store };
             Ok(numaflow_sideinput::run(mode, cln_token).await?)
         }
         other => Err(format!("Unknown side-input {other:?} subcommand").into()),
@@ -168,7 +161,7 @@ mod tests {
         add_sideinput_subcommand().debug_assert();
 
         let match1 = synchronizer_subcmd().try_get_matches_from(vec![
-            "synchronizer",
+            "side-inputs-synchronizer",
             "--side-inputs",
             "input1",
             "--side-inputs",

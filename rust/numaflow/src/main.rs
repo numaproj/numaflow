@@ -71,7 +71,7 @@ async fn run(cli: clap::Command) -> Result<(), Box<dyn Error>> {
                 .await
                 .map_err(|e| format!("Error running core binary: {e:?}"))?;
         }
-        Some(("sideinput", args)) => {
+        Some(("side-input", args)) => {
             sideinput::run_sideinput(args, cln_token).await?;
         }
         others => {

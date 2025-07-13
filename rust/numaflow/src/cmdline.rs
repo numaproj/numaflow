@@ -13,6 +13,7 @@ pub(super) fn root_cli() -> Command {
         .subcommand(add_monitor_subcommand())
         .subcommand(add_serving_subcommand())
         .subcommand(add_processor_subcommand())
+        .subcommand(sideinput::add_sideinput_subcommand())
 }
 
 fn add_processor_subcommand() -> Command {

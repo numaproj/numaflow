@@ -18,9 +18,11 @@ numaflow-pb.workspace = true
 numaflow-models.workspace = true
 serde_json.workspace = true
 tonic.workspace = true
+chrono.workspace = true
 cron = "0.15.0"
 chrono-tz = "0.10.3"
 hyper-util = "0.1.14"
+
 
 
 [dev-dependencies]
