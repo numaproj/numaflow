@@ -108,8 +108,12 @@ impl SideInputManager {
         bucket: jetstream::kv::Store,
         side_input_trigger: SideInputTrigger,
     ) {
-        // since we have an init container to synchronize the side-input for the first time
-        // we can skip the first run and run according to the schedule.
+        // do the first run before running the schedule
+        info!("Running first side-input generation");
+        if let Err(e) = self.generate_side_input(&bucket).await {
+            error!(?e, "Failed to generate the first, initial side input");
+        }
+
         loop {
             let datetime = side_input_trigger
                 .schedule
