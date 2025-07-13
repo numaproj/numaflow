@@ -90,8 +90,6 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	default:
 		return fmt.Errorf("unsupported isbsvc buffer type %q", ds.isbSvcType)
 	}
-	// HTTP watermark service will be created inside PipelineMetadataQuery
-	// No need for watermark stores and fetchers anymore
 
 	// rater is used to calculate the processing rate for each of the vertices
 	rater := server.NewRater(ctx, ds.pipeline)
