@@ -265,7 +265,10 @@ func (ns *jsSource) createOrUpdateConsumer(ctx context.Context) (jetstreamlib.Co
 		return nil, fmt.Errorf("creating jetstream instance for the NATS server: %w", err)
 	}
 
-	consumerName := fmt.Sprintf("numaflow-%s-%s-%s", ns.pipelineName, ns.vertexName, streamName)
+	consumerName := ns.jsSpec.Consumer
+	if consumerName == "" {
+		consumerName = fmt.Sprintf("numaflow-%s-%s-%s", ns.pipelineName, ns.vertexName, streamName)
+	}
 	consumer, err := stream.CreateOrUpdateConsumer(ctx, streamName, jetstreamlib.ConsumerConfig{
 		Durable:       consumerName,
 		Description:   "Numaflow JetStream consumer",

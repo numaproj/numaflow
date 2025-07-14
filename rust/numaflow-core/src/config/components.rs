@@ -298,7 +298,7 @@ pub(crate) mod source {
 
             let js_config = JetstreamSourceConfig {
                 addr: value.url,
-                consumer: value.stream.clone(),
+                consumer: value.consumer,
                 stream: value.stream,
                 auth,
                 tls,

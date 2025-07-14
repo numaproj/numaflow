@@ -1,7 +1,8 @@
 use std::sync::Arc;
 use std::{collections::HashMap, time::Duration};
 
-use async_nats::jetstream::{AckKind, Message as JetstreamMessage};
+use async_nats::jetstream::consumer::{AckPolicy, DeliverPolicy};
+use async_nats::jetstream::{AckKind, Message as JetstreamMessage, consumer};
 use async_nats::{
     ConnectOptions,
     jetstream::consumer::{
@@ -174,11 +175,20 @@ impl JetstreamActor {
 
         let js_ctx = async_nats::jetstream::new(client);
         let consumer: PullConsumer = js_ctx
-            .get_consumer_from_stream(&config.consumer, &config.stream)
+            .create_consumer_on_stream(
+                consumer::pull::Config {
+                    durable_name: Some(config.consumer.clone()),
+                    description: Some("Numaflow Jetstream Consumer".into()),
+                    deliver_policy: DeliverPolicy::All,
+                    ack_policy: AckPolicy::Explicit,
+                    ..Default::default()
+                },
+                &config.stream,
+            )
             .await
-            .map_err(|err| {
+            .map_err(|e| {
                 Error::Jetstream(format!(
-                    "Getting consumer {} from stream {}: {err:?}",
+                    "Creating consumer {} on stream {}: {e:?}",
                     config.consumer, config.stream
                 ))
             })?;
