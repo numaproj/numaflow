@@ -171,6 +171,9 @@ pub(crate) struct MetricsState {
 /// Simple map of partition -> watermark value
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct WatermarkResponse {
+    /// The flatten attribute merges the HashMap's key-value pairs directly into the parent JSON object.
+    /// Without flatten: {"partitions": {"0": 123, "1": 456}}
+    /// With flatten: {"0": 123, "1": 456}
     #[serde(flatten)]
     pub(crate) partitions: HashMap<String, i64>,
 }
@@ -983,7 +986,7 @@ pub async fn watermark_handler(State(state): State<MetricsState>) -> impl IntoRe
     let json_response = serde_json::to_string(&response)
         .unwrap_or_else(|_| r#"{"error": "Failed to serialize watermark response"}"#.to_string());
 
-    debug!("Exposing watermark: {:?}", json_response);
+    debug!(?json_response, "Watermark response");
     Response::builder()
         .status(StatusCode::OK)
         .header(axum::http::header::CONTENT_TYPE, "application/json")

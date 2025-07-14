@@ -131,6 +131,7 @@ impl ISBWatermarkFetcher {
                 }
             }
 
+            // only update the last processed watermark if it's a valid one.
             if epoch < i64::MAX {
                 min_wm = min_wm.min(epoch);
                 // update the last processed watermark for this particular edge and all the partitions
