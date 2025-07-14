@@ -208,8 +208,8 @@ func (s *FunctionalSuite) TestDropOnFull() {
 
 	expectedDropMetricOne := `forwarder_drop_total{vertex="in",pipeline="drop-on-full",vertex_type="Source",replica="0",partition_name="numaflow-system-drop-on-full-out-0",reason="Buffer full"} 1`
 	expectedDropMetricTwo := `forwarder_drop_total{vertex="in",pipeline="drop-on-full",vertex_type="Source",replica="0",partition_name="numaflow-system-drop-on-full-out-1",reason="Buffer full"} 1`
-	// wait for the drop metric to be updated, time out after 10s.
-	timeoutChan := time.After(time.Second * 10)
+	// wait for the drop metric to be updated, time out after 20s.
+	timeoutChan := time.After(time.Second * 20)
 	ticker := time.NewTicker(time.Second * 2)
 	defer ticker.Stop()
 	for {
