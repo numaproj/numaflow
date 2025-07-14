@@ -2271,7 +2271,7 @@ mod jetstream_tests {
             };
             assert_eq!(username, "test-user");
             assert_eq!(password, "test-pass");
-            assert_eq!(config.consumer, "test-stream");
+            assert_eq!(config.consumer, "numaflow-test-stream");
             assert_eq!(config.addr, "nats://localhost:4222");
         } else {
             panic!("Expected SourceType::Jetstream");
