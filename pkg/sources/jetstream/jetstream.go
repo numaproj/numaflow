@@ -248,6 +248,7 @@ func (ns *jsSource) getNatsOptionsForSource() ([]natslib.Option, error) {
 // createOrUpdateConsumer creates a new consumer or updates an existing consumer in the JetStream stream.
 func (ns *jsSource) createOrUpdateConsumer(ctx context.Context) (jetstreamlib.Consumer, error) {
 	var streamName string
+	var consumerName string
 	var existing bool
 
 	if ns.servingEnabled {
@@ -257,6 +258,7 @@ func (ns *jsSource) createOrUpdateConsumer(ctx context.Context) (jetstreamlib.Co
 		}
 	} else {
 		streamName = ns.jsSpec.Stream
+		consumerName = ns.jsSpec.Consumer
 	}
 
 	stream, err := jetstreamlib.New(ns.natsConn)
@@ -265,7 +267,6 @@ func (ns *jsSource) createOrUpdateConsumer(ctx context.Context) (jetstreamlib.Co
 		return nil, fmt.Errorf("creating jetstream instance for the NATS server: %w", err)
 	}
 
-	consumerName := ns.jsSpec.Consumer
 	if consumerName == "" {
 		consumerName = fmt.Sprintf("numaflow-%s-%s-%s", ns.pipelineName, ns.vertexName, streamName)
 	}
