@@ -83,7 +83,7 @@ func TestWatermarkResponse_UnmarshalJSON(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var resp WatermarkResponse
 			err := resp.UnmarshalJSON([]byte(tt.jsonData))
-			
+
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {

@@ -60,10 +60,12 @@ pub(crate) async fn start_forwarder(
     // This should be running throughout the lifetime of the application, hence the handle is not
     // joined.
     let metrics_state = metrics::MetricsState {
-        health_checks: metrics::ComponentHealthChecks::Monovertex(Box::new(metrics::MonovertexComponents {
-            source: source.clone(),
-            sink: sink_writer.clone(),
-        })),
+        health_checks: metrics::ComponentHealthChecks::Monovertex(Box::new(
+            metrics::MonovertexComponents {
+                source: source.clone(),
+                sink: sink_writer.clone(),
+            },
+        )),
         watermark_fetcher_state: None, // Monovertex doesn't have watermark handles
     };
 

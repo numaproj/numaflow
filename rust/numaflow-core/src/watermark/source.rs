@@ -1178,6 +1178,14 @@ mod tests {
             idle_config: None,
         };
 
+        // delete the stores first
+        let _ = js_context
+            .delete_key_value(ot_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(hb_bucket_name.to_string())
+            .await;
+
         // create key value stores
         js_context
             .create_key_value(Config {
@@ -1197,6 +1205,44 @@ mod tests {
             .await
             .unwrap();
 
+        // Publish some WMB entries to the source OT bucket to simulate source processors
+        let ot_bucket = js_context.get_key_value(ot_bucket_name).await.unwrap();
+
+        // Create WMB entries that will be read by the ProcessorManager
+        let wmb1 = WMB {
+            watermark: 60000,
+            offset: 1,
+            idle: false,
+            partition: 0,
+        };
+        let wmb2 = WMB {
+            watermark: 70000,
+            offset: 2,
+            idle: false,
+            partition: 0,
+        };
+
+        // Publish WMB entries to the OT bucket with a processor name
+        let processor_name = "source-processor-0";
+        let wmb1_bytes: bytes::BytesMut = wmb1.try_into().unwrap();
+        let wmb2_bytes: bytes::BytesMut = wmb2.try_into().unwrap();
+        ot_bucket
+            .put(processor_name, wmb1_bytes.freeze())
+            .await
+            .unwrap();
+        ot_bucket
+            .put(processor_name, wmb2_bytes.freeze())
+            .await
+            .unwrap();
+
+        // Also publish a heartbeat to the HB bucket to mark the processor as active
+        let hb_bucket = js_context.get_key_value(hb_bucket_name).await.unwrap();
+        let current_time = chrono::Utc::now().timestamp_millis();
+        hb_bucket
+            .put(processor_name, current_time.to_string().into())
+            .await
+            .unwrap();
+
         let mut handle = SourceWatermarkHandle::new(
             Duration::from_millis(100),
             js_context.clone(),
@@ -1207,34 +1253,25 @@ mod tests {
         .await
         .expect("Failed to create source watermark handle");
 
-        let messages = vec![
-            Message {
-                offset: Offset::Int(IntOffset {
-                    offset: 1,
-                    partition_idx: 0,
-                }),
-                event_time: DateTime::from_timestamp_millis(60000).unwrap(),
-                ..Default::default()
-            },
-            Message {
-                offset: Offset::Int(IntOffset {
-                    offset: 2,
-                    partition_idx: 0,
-                }),
-                event_time: DateTime::from_timestamp_millis(70000).unwrap(),
-                ..Default::default()
-            },
-        ];
+        // Poll for head watermark with timeout using tokio::time::timeout
+        let timeout_duration = Duration::from_millis(200);
+        let poll_interval = Duration::from_millis(10);
 
-        handle
-            .generate_and_publish_source_watermark(&messages)
-            .await;
+        let head_watermark = tokio::time::timeout(timeout_duration, async {
+            loop {
+                let watermark = handle.fetch_head_watermark().await;
 
-        // Wait a bit for the watermarks to be published
-        tokio::time::sleep(Duration::from_millis(100)).await;
+                // Break if we got a valid watermark (not -1)
+                if watermark.timestamp_millis() != -1 {
+                    return watermark;
+                }
 
-        // Now test fetch_head_watermark
-        let head_watermark = handle.fetch_head_watermark().await;
+                // Wait before next poll
+                tokio::time::sleep(poll_interval).await;
+            }
+        })
+        .await
+        .expect("Timeout: head watermark still -1 after 200ms");
 
         // The head watermark should be a valid timestamp (not -1)
         assert_ne!(head_watermark.timestamp_millis(), -1);
