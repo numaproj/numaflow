@@ -177,7 +177,6 @@ pub(crate) mod source {
         }
     }
 
-    // todo adarsh
     impl TryFrom<Box<numaflow_models::models::JetStreamSource>> for SourceType {
         type Error = Error;
         fn try_from(
@@ -506,6 +505,10 @@ pub(crate) mod source {
 
             if let Some(jetstream) = source.jetstream.take() {
                 return jetstream.try_into();
+            }
+
+            if let Some(nats) = source.nats.take() {
+                return nats.try_into();
             }
 
             if let Some(kafka) = source.kafka.take() {
