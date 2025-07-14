@@ -965,12 +965,13 @@ pub async fn watermark_handler(State(state): State<MetricsState>) -> impl IntoRe
             partitions.insert("0".to_string(), watermark.timestamp_millis());
         }
 
-        // For ISB watermark handle, fetch watermarks for all partitions (0 to partition_count-1)
+        // For every other vertex type, fetch watermarks for all partitions (0 to partition_count-1)
         WatermarkHandle::ISB(isb_handle) => {
             let mut handle_clone = isb_handle.clone();
 
             // For reduce vertices, only return partition 0 since they read from single partition
             // For other vertex types, fetch watermarks for all partitions
+            // watermark_fetcher_state.partition_count will already be set to 1 for reduce vertex
             for partition_idx in 0..watermark_fetcher_state.partition_count {
                 let watermark = handle_clone.fetch_head_watermark(partition_idx).await;
                 partitions.insert(partition_idx.to_string(), watermark.timestamp_millis());
