@@ -4303,6 +4303,8 @@ spec:
                             type: object
                             x-kubernetes-map-type: atomic
                         type: object
+                      consumer:
+                        type: string
                       stream:
                         type: string
                       tls:
@@ -4352,6 +4354,7 @@ spec:
                       url:
                         type: string
                     required:
+                    - consumer
                     - stream
                     - url
                     type: object

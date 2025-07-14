@@ -20895,12 +20895,17 @@
       "type": "object",
       "required": [
         "url",
-        "stream"
+        "stream",
+        "consumer"
       ],
       "properties": {
         "auth": {
           "description": "Auth information",
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.NatsAuth"
+        },
+        "consumer": {
+          "description": "Consumer represents the name of the consumer of the stream",
+          "type": "string"
         },
         "stream": {
           "description": "Stream represents the name of the stream.",

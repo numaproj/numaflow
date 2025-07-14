@@ -20902,6 +20902,10 @@
           "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.NatsAuth",
           "description": "Auth information"
         },
+        "consumer": {
+          "description": "Consumer represents the name of the consumer of the stream",
+          "type": "string"
+        },
         "stream": {
           "description": "Stream represents the name of the stream.",
           "type": "string"
@@ -20917,7 +20921,8 @@
       },
       "required": [
         "url",
-        "stream"
+        "stream",
+        "consumer"
       ],
       "type": "object"
     },

@@ -2766,6 +2766,14 @@ func schema_pkg_apis_numaflow_v1alpha1_JetStreamSource(ref common.ReferenceCallb
 							Format:      "",
 						},
 					},
+					"consumer": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Consumer represents the name of the consumer of the stream",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 					"tls": {
 						SchemaProps: spec.SchemaProps{
 							Description: "TLS configuration for the nats client.",
@@ -2779,7 +2787,7 @@ func schema_pkg_apis_numaflow_v1alpha1_JetStreamSource(ref common.ReferenceCallb
 						},
 					},
 				},
-				Required: []string{"url", "stream"},
+				Required: []string{"url", "stream", "consumer"},
 			},
 		},
 		Dependencies: []string{

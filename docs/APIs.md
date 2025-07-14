@@ -5356,6 +5356,24 @@ Stream represents the name of the stream.
 
 <td>
 
+<code>consumer</code></br> <em> string </em>
+</td>
+
+<td>
+
+<p>
+
+Consumer represents the name of the consumer of the stream
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>tls</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.TLS">
 TLS </a> </em>
 </td>
