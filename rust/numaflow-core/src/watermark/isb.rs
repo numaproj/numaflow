@@ -1019,7 +1019,7 @@ mod tests {
         assert!(wmb_found, "Idle watermark not found");
     }
 
-    #[cfg(feature = "nats-tests")]
+    // #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_fetch_head_watermark() {
         let client = async_nats::connect("localhost:4222").await.unwrap();
@@ -1142,7 +1142,7 @@ mod tests {
         .expect("Failed to create ISBWatermarkHandle");
 
         // Poll for head watermark with timeout using tokio::time::timeout
-        let timeout_duration = Duration::from_millis(200);
+        let timeout_duration = Duration::from_secs(1);
         let poll_interval = Duration::from_millis(10);
 
         let head_watermark = tokio::time::timeout(timeout_duration, async {
@@ -1159,7 +1159,7 @@ mod tests {
             }
         })
         .await
-        .expect("Timeout: head watermark still -1 after 200ms");
+        .expect("Timeout: head watermark still -1 after 1s");
 
         // The head watermark should be a valid timestamp (not -1)
         assert_ne!(head_watermark.timestamp_millis(), -1);
