@@ -1,4 +1,4 @@
-use crate::config::get_vertex_name;
+use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::message::{IntOffset, Message, MessageID, Offset};
 use crate::reduce::reducer::unaligned::windower::{
     UnalignedWindowMessage, UnalignedWindowOperation, Window,
@@ -109,6 +109,8 @@ pub(crate) struct UserDefinedSessionResponse {
     pub index: u32,
     /// vertex name for creating the message ID
     pub vertex_name: &'static str,
+    /// vertex replica for creating the message ID
+    pub vertex_replica: u16,
 }
 
 impl From<UserDefinedSessionResponse> for Message {
@@ -135,7 +137,11 @@ impl From<UserDefinedSessionResponse> for Message {
             // this will be unique for each response which will be used for dedup (index is used because
             // each window can have multiple reduce responses)
             id: MessageID {
-                vertex_name: user_response.vertex_name.into(),
+                vertex_name: format!(
+                    "{}-{}",
+                    user_response.vertex_name, user_response.vertex_replica
+                )
+                .into(),
                 offset: offset_str.into(),
                 index: user_response.index as i32,
             },
@@ -228,6 +234,7 @@ impl UserDefinedSessionReduce {
                             response,
                             index,
                             vertex_name,
+                            vertex_replica: *get_vertex_replica(),
                         };
 
                         if result_tx.send(user_response).await.is_err() {
