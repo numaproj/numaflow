@@ -159,15 +159,15 @@ func (h *HTTPWatermarkFetcher) fetchFromSinglePod(partitionCount int) {
 	ctx, cancel := context.WithTimeout(h.ctx, time.Second*3)
 	defer cancel()
 
-	fromVertex := h.pipeline.GetVertex(h.edge.From)
-	if fromVertex == nil {
-		h.log.Errorf("From vertex %s not found", h.edge.From)
+	toVertex := h.pipeline.GetVertex(h.edge.To)
+	if toVertex == nil {
+		h.log.Errorf("From vertex %s not found", h.edge.To)
 		return
 	}
 
 	// Build URL for 0th pod of the from vertex
-	headlessServiceName := fmt.Sprintf("%s-%s-headless", h.pipeline.Name, h.edge.From)
-	podName := fmt.Sprintf("%s-%s-0", h.pipeline.Name, h.edge.From)
+	headlessServiceName := fmt.Sprintf("%s-%s-headless", h.pipeline.Name, h.edge.To)
+	podName := fmt.Sprintf("%s-%s-0", h.pipeline.Name, h.edge.To)
 	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/watermark",
 		podName, headlessServiceName, h.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 
@@ -191,19 +191,19 @@ func (h *HTTPWatermarkFetcher) fetchFromSinglePod(partitionCount int) {
 
 // fetchFromAllPods fetches watermarks from all pods for reduce vertices
 func (h *HTTPWatermarkFetcher) fetchFromAllPods(partitionCount int) {
-	fromVertex := h.pipeline.GetVertex(h.edge.From)
-	if fromVertex == nil {
-		h.log.Errorf("From vertex %s not found", h.edge.From)
+	toVertex := h.pipeline.GetVertex(h.edge.To)
+	if toVertex == nil {
+		h.log.Errorf("To vertex %s not found", h.edge.To)
 		return
 	}
 
-	headlessServiceName := fmt.Sprintf("%s-%s-headless", h.pipeline.Name, h.edge.From)
+	headlessServiceName := fmt.Sprintf("%s-%s-headless", h.pipeline.Name, h.edge.To)
 
 	// For reduce vertices, each partition maps to a separate pod
 	for i := 0; i < partitionCount; i++ {
 		ctx, cancel := context.WithTimeout(h.ctx, time.Second*3)
 
-		podName := fmt.Sprintf("%s-%s-%d", h.pipeline.Name, h.edge.From, i)
+		podName := fmt.Sprintf("%s-%s-%d", h.pipeline.Name, h.edge.To, i)
 		url := fmt.Sprintf("https://%s.%s.%s.svc:%v/watermark",
 			podName, headlessServiceName, h.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 

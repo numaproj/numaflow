@@ -61,6 +61,7 @@ enum SourceActorMessage {
         oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
     },
     FetchHeadWatermark {
+        partition_idx: u16,
         oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
     },
 }
@@ -123,8 +124,11 @@ impl SourceWatermarkActor {
             }
 
             // fetch the head watermark
-            SourceActorMessage::FetchHeadWatermark { oneshot_tx } => {
-                let watermark = self.fetcher.fetch_head_watermark();
+            SourceActorMessage::FetchHeadWatermark {
+                partition_idx,
+                oneshot_tx,
+            } => {
+                let watermark = self.fetcher.fetch_head_watermark(partition_idx);
                 oneshot_tx
                     .send(Ok(watermark))
                     .map_err(|_| Error::Watermark("failed to send response".to_string()))?;
@@ -317,12 +321,15 @@ impl SourceWatermarkHandle {
     }
 
     /// Fetches the head watermark using the source watermark fetcher. This returns the minimum
-    /// of the head watermarks across all active processors.
-    pub(crate) async fn fetch_head_watermark(&mut self) -> Watermark {
+    /// of the head watermarks across all active processors for the specified partition.
+    pub(crate) async fn fetch_head_watermark(&mut self, partition_idx: u16) -> Watermark {
         let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
         if let Err(e) = self
             .sender
-            .send(SourceActorMessage::FetchHeadWatermark { oneshot_tx })
+            .send(SourceActorMessage::FetchHeadWatermark {
+                partition_idx,
+                oneshot_tx,
+            })
             .await
         {
             error!(?e, "Failed to send message");
@@ -1259,7 +1266,7 @@ mod tests {
 
         let head_watermark = tokio::time::timeout(timeout_duration, async {
             loop {
-                let watermark = handle.fetch_head_watermark().await;
+                let watermark = handle.fetch_head_watermark(0).await;
 
                 // Break if we got a valid watermark (not -1)
                 if watermark.timestamp_millis() != -1 {

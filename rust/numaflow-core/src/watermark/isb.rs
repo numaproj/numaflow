@@ -60,6 +60,7 @@ enum ISBWaterMarkActorMessage {
         oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
     },
     FetchHead {
+        partition_idx: u16,
         oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
     },
 }
@@ -130,8 +131,12 @@ impl ISBWatermarkActor {
             }
 
             // fetches the head watermark
-            ISBWaterMarkActorMessage::FetchHead { oneshot_tx } => {
-                self.handle_fetch_head_watermark(oneshot_tx).await
+            ISBWaterMarkActorMessage::FetchHead {
+                partition_idx,
+                oneshot_tx,
+            } => {
+                self.handle_fetch_head_watermark(partition_idx, oneshot_tx)
+                    .await
             }
         }
     }
@@ -179,9 +184,10 @@ impl ISBWatermarkActor {
     // fetches the head watermark and sends the response back via oneshot channel
     async fn handle_fetch_head_watermark(
         &mut self,
+        partition_idx: u16,
         oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
     ) -> Result<()> {
-        let watermark = self.fetcher.fetch_head_watermark();
+        let watermark = self.fetcher.fetch_head_watermark(partition_idx);
         oneshot_tx
             .send(Ok(watermark))
             .map_err(|_| Error::Watermark("failed to send response".to_string()))
@@ -325,12 +331,15 @@ impl ISBWatermarkHandle {
     }
 
     /// Fetches the head watermark using the watermark fetcher. This returns the minimum
-    /// of the head watermarks across all processors and partitions.
-    pub(crate) async fn fetch_head_watermark(&mut self) -> Watermark {
+    /// of the head watermarks across all processors for the specified partition.
+    pub(crate) async fn fetch_head_watermark(&mut self, partition_idx: u16) -> Watermark {
         let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
         if let Err(e) = self
             .sender
-            .send(ISBWaterMarkActorMessage::FetchHead { oneshot_tx })
+            .send(ISBWaterMarkActorMessage::FetchHead {
+                partition_idx,
+                oneshot_tx,
+            })
             .await
         {
             error!(?e, "Failed to send message");
@@ -1138,7 +1147,7 @@ mod tests {
 
         let head_watermark = tokio::time::timeout(timeout_duration, async {
             loop {
-                let watermark = handle.fetch_head_watermark().await;
+                let watermark = handle.fetch_head_watermark(0).await;
 
                 // Break if we got a valid watermark (not -1)
                 if watermark.timestamp_millis() != -1 {

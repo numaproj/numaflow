@@ -51,9 +51,9 @@ impl SourceWatermarkFetcher {
     }
 
     /// Fetches the head watermark for the source, which is the minimum head watermark of all the active
-    /// processors. This method is similar to fetch_source_watermark but provides a dedicated interface
+    /// processors for the specified partition. This method is similar to fetch_source_watermark but provides a dedicated interface
     /// for fetching head watermarks.
-    pub(crate) fn fetch_head_watermark(&mut self) -> Watermark {
+    pub(crate) fn fetch_head_watermark(&mut self, partition_idx: u16) -> Watermark {
         let mut min_wm = i64::MAX;
 
         for (_, processor) in self
@@ -68,11 +68,14 @@ impl SourceWatermarkFetcher {
                 continue;
             }
 
-            // only consider the head watermark of the processor
-            let head_wm = processor.timelines.first().unwrap().get_head_watermark();
+            // Only consider the head watermark of the processor for the requested partition
+            // For sources, typically only partition 0 is used, but we check the requested partition
+            if let Some(timeline) = processor.timelines.get(partition_idx as usize) {
+                let head_wm = timeline.get_head_watermark();
 
-            if head_wm != -1 && head_wm < min_wm {
-                min_wm = head_wm;
+                if head_wm != -1 && head_wm < min_wm {
+                    min_wm = head_wm;
+                }
             }
         }
 
@@ -268,7 +271,7 @@ mod tests {
         let mut fetcher = SourceWatermarkFetcher::new(processor_manager);
 
         // Invoke fetch_head_watermark and verify the result
-        let watermark = fetcher.fetch_head_watermark();
+        let watermark = fetcher.fetch_head_watermark(0);
         assert_eq!(watermark.timestamp_millis(), 300);
     }
 
@@ -347,7 +350,7 @@ mod tests {
         let mut fetcher = SourceWatermarkFetcher::new(processor_manager);
 
         // Invoke fetch_head_watermark and verify the result (should be minimum of head watermarks)
-        let watermark = fetcher.fetch_head_watermark();
+        let watermark = fetcher.fetch_head_watermark(0);
         assert_eq!(watermark.timestamp_millis(), 323);
     }
 
@@ -396,7 +399,7 @@ mod tests {
         let mut fetcher = SourceWatermarkFetcher::new(processor_manager);
 
         // Invoke fetch_head_watermark and verify the result (should only consider active processor)
-        let watermark = fetcher.fetch_head_watermark();
+        let watermark = fetcher.fetch_head_watermark(0);
         assert_eq!(watermark.timestamp_millis(), 100);
     }
 }

@@ -961,7 +961,7 @@ pub async fn watermark_handler(State(state): State<MetricsState>) -> impl IntoRe
         // For source watermark handle, always fetch only partition 0
         WatermarkHandle::Source(source_handle) => {
             let mut handle_clone = source_handle.clone();
-            let watermark = handle_clone.fetch_head_watermark().await;
+            let watermark = handle_clone.fetch_head_watermark(0).await;
             partitions.insert("0".to_string(), watermark.timestamp_millis());
         }
 
@@ -972,14 +972,13 @@ pub async fn watermark_handler(State(state): State<MetricsState>) -> impl IntoRe
             // For reduce vertices, only return partition 0 since they read from single partition
             // For other vertex types, fetch watermarks for all partitions
             for partition_idx in 0..watermark_fetcher_state.partition_count {
-                let watermark = handle_clone.fetch_head_watermark().await;
+                let watermark = handle_clone.fetch_head_watermark(partition_idx).await;
                 partitions.insert(partition_idx.to_string(), watermark.timestamp_millis());
             }
         }
     }
 
     let response = WatermarkResponse { partitions };
-
     let json_response = serde_json::to_string(&response)
         .unwrap_or_else(|_| r#"{"error": "Failed to serialize watermark response"}"#.to_string());
 

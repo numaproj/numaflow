@@ -150,8 +150,8 @@ impl ISBWatermarkFetcher {
     }
 
     /// Fetches the head watermark using the watermark fetcher. This returns the minimum
-    /// of the head watermarks across all processors and partitions.
-    pub(crate) fn fetch_head_watermark(&mut self) -> Watermark {
+    /// of the head watermarks across all processors for the specified partition.
+    pub(crate) fn fetch_head_watermark(&mut self, partition_idx: u16) -> Watermark {
         let mut min_wm = i64::MAX;
 
         for (edge, processor_manager) in &self.processor_managers {
@@ -167,7 +167,8 @@ impl ISBWatermarkFetcher {
                 .filter(|processor| processor.is_active());
 
             for processor in active_processors {
-                for timeline in &processor.timelines {
+                // Only check the timeline for the requested partition
+                if let Some(timeline) = processor.timelines.get(partition_idx as usize) {
                     let head_watermark = timeline.get_head_watermark();
                     if head_watermark != -1 {
                         epoch = epoch.min(head_watermark);
@@ -177,12 +178,11 @@ impl ISBWatermarkFetcher {
 
             if epoch < i64::MAX {
                 min_wm = min_wm.min(epoch);
-                // update the last processed watermark for this particular edge and all the partitions
+                // update the last processed watermark for this particular edge and the specific partition
                 self.last_processed_wm
                     .get_mut(edge)
                     .unwrap_or_else(|| panic!("invalid vertex {edge}"))
-                    .iter_mut()
-                    .for_each(|partition| *partition = epoch);
+                    [partition_idx as usize] = epoch;
             }
         }
 
@@ -1468,7 +1468,7 @@ mod tests {
             .unwrap();
 
         // Invoke fetch_head_watermark and verify the result
-        let watermark = fetcher.fetch_head_watermark();
+        let watermark = fetcher.fetch_head_watermark(0);
         assert_eq!(watermark.timestamp_millis(), 300);
     }
 
@@ -1586,7 +1586,7 @@ mod tests {
             .unwrap();
 
         // Invoke fetch_head_watermark and verify the result (should be minimum across all timelines)
-        let watermark = fetcher.fetch_head_watermark();
+        let watermark = fetcher.fetch_head_watermark(0);
         assert_eq!(watermark.timestamp_millis(), 150);
     }
 
@@ -1661,7 +1661,7 @@ mod tests {
                 .unwrap();
 
         // Invoke fetch_head_watermark and verify the result (should be minimum across all edges)
-        let watermark = fetcher.fetch_head_watermark();
+        let watermark = fetcher.fetch_head_watermark(0);
         assert_eq!(watermark.timestamp_millis(), 150);
     }
 }
