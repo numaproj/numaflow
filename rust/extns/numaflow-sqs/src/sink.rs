@@ -192,7 +192,7 @@ mod tests {
     use aws_config::BehaviorVersion;
     use aws_sdk_sqs::types::BatchResultErrorEntry;
     use aws_sdk_sqs::{Client, Config};
-    use aws_smithy_mocks_experimental::{MockResponseInterceptor, Rule, RuleMode, mock};
+    use aws_smithy_mocks::{MockResponseInterceptor, Rule, RuleMode, mock};
     use aws_smithy_types::error::ErrorMetadata;
     use bytes::Bytes;
     use test_log::test;

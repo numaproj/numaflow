@@ -2259,6 +2259,7 @@ mod jetstream_tests {
                 token: None,
             })),
             stream: "test-stream".to_string(),
+            consumer: "numaflow-test-stream".to_string(),
             tls: None,
             url: "nats://localhost:4222".to_string(),
         };
@@ -2292,6 +2293,7 @@ mod jetstream_tests {
         let jetstream_source = JetStreamSource {
             auth: None,
             stream: "test-stream".to_string(),
+            consumer: "numaflow-test-stream".to_string(),
             tls: Some(Box::new(Tls {
                 ca_cert_secret: Some(SecretKeySelector {
                     name: ca_cert_name.clone(),
@@ -2339,6 +2341,7 @@ mod jetstream_tests {
                 token: None,
             })),
             stream: "test-stream".to_string(),
+            consumer: "numaflow-test-stream".to_string(),
             tls: None,
             url: "nats://localhost:4222".to_string(),
         };

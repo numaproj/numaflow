@@ -113,7 +113,7 @@ pub mod tests {
     use aws_sdk_sqs::Config;
     use aws_sdk_sqs::config::BehaviorVersion;
     use aws_sdk_sqs::types::MessageSystemAttributeName;
-    use aws_smithy_mocks_experimental::{MockResponseInterceptor, Rule, RuleMode, mock};
+    use aws_smithy_mocks::{MockResponseInterceptor, Rule, RuleMode, mock};
     use bytes::Bytes;
     use chrono::Utc;
     use numaflow_sqs::source::{SQS_DEFAULT_REGION, SqsSourceBuilder};
