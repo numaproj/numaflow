@@ -357,9 +357,11 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 			Image:           req.Image,
 			ImagePullPolicy: req.PullPolicy,
 			Resources:       req.DefaultResources,
-			Args:            []string{"side-inputs-synchronizer", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.SideInputsStoreName, "--side-inputs=" + strings.Join(v.Spec.SideInputs, ",")},
+			Args:            []string{"side-input", "side-inputs-synchronizer", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.SideInputsStoreName, "--side-inputs=" + strings.Join(v.Spec.SideInputs, ",")},
 		}
 		sideInputsWatcher.Env = append(sideInputsWatcher.Env, v.commonEnvs()...)
+		sideInputsWatcher.Env = append(sideInputsWatcher.Env, corev1.EnvVar{Name: EnvNumaflowRuntime, Value: "rust"})
+
 		if x := v.Spec.SideInputsContainerTemplate; x != nil {
 			x.ApplyToContainer(&sideInputsWatcher)
 		}
@@ -415,13 +417,14 @@ func (v Vertex) getInitContainers(req GetVertexPodSpecReq) []corev1.Container {
 		},
 	}
 	if v.HasSideInputs() {
+		envVars = append(envVars, corev1.EnvVar{Name: EnvNumaflowRuntime, Value: "rust"})
 		initContainers = append(initContainers, corev1.Container{
 			Name:            CtrInitSideInputs,
 			Env:             envVars,
 			Image:           req.Image,
 			ImagePullPolicy: req.PullPolicy,
 			Resources:       req.DefaultResources,
-			Args:            []string{"side-inputs-init", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.SideInputsStoreName, "--side-inputs=" + strings.Join(v.Spec.SideInputs, ",")},
+			Args:            []string{"side-input", "side-inputs-init", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.SideInputsStoreName, "--side-inputs=" + strings.Join(v.Spec.SideInputs, ",")},
 		})
 	}
 

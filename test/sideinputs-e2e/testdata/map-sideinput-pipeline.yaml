@@ -10,7 +10,7 @@ spec:
         image: quay.io/numaio/numaflow-go/map-sideinput:stable
         imagePullPolicy: Always
       trigger:
-        schedule: "@every 5s"
+        schedule: "*/5 * * * * *"
   vertices:
     - name: in
       source:

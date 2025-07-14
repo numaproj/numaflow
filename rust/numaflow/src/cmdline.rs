@@ -1,14 +1,19 @@
 use clap::{Command, arg};
 
+/// SideInput Command Line Interface
+pub(crate) mod sideinput;
+
 pub(super) fn root_cli() -> Command {
     Command::new("numaflow")
         .author("Numaflow Authors")
-        .about("Numaflow is a stream processing framework")
+        .about("Numaflow is a stream processing framework for K8s")
+        .long_about("https://numaflow.numaproj.io/")
         .subcommand_required(true)
         .arg_required_else_help(true)
         .subcommand(add_monitor_subcommand())
         .subcommand(add_serving_subcommand())
         .subcommand(add_processor_subcommand())
+        .subcommand(sideinput::add_sideinput_subcommand())
 }
 
 fn add_processor_subcommand() -> Command {
@@ -24,6 +29,9 @@ fn add_processor_subcommand() -> Command {
                 .value_parser(["jetstream", "redis", ""])
                 .required(false),
         )
+        .subcommand(sideinput::add_sideinput_subcommand())
+        // TODO: remove after moving e2e to Rust, this is a hack
+        .allow_external_subcommands(true)
 }
 
 fn add_monitor_subcommand() -> Command {
