@@ -20,6 +20,7 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::{self, Instant};
 use tokio_stream::StreamExt;
+use uuid::Uuid;
 
 pub type Result<T> = core::result::Result<T, Error>;
 
@@ -30,8 +31,18 @@ pub enum Error {
     #[error("Connecting to NATS {server} - {error}")]
     Connection { server: String, error: String },
 
+    #[error("Subscribing to NATS {subject} - {queue} - {error}")]
+    Subscription {
+        subject: String,
+        queue: String,
+        error: String,
+    },
+
     #[error("Jestream - {0}")]
     Jetstream(String),
+
+    #[error("NATS - {0}")]
+    Nats(String),
 
     #[error("{0}")]
     Other(String),
@@ -60,6 +71,14 @@ pub struct TlsClientAuthCerts {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct NatsSourceConfig {
+    pub addr: String,
+    pub subject: String,
+    pub queue: String,
+    pub auth: Option<NatsAuth>,
+    pub tls: Option<TlsConfig>,
+}
+#[derive(Debug, Clone, PartialEq)]
 pub struct JetstreamSourceConfig {
     pub addr: String,
     pub stream: String,
@@ -77,6 +96,25 @@ pub struct Message {
     pub stream_sequence: u64,
     pub published_timestamp: DateTime<chrono::Utc>,
     pub headers: HashMap<String, String>,
+}
+
+/// NatsMessage represents a  Numaflow Message which can be converted from Nats message
+#[derive(Debug)]
+pub struct NatsMessage {
+    pub value: Bytes,
+    pub id: String, // UUID or unique string for dedup/offset
+    pub event_time: DateTime<chrono::Utc>,
+}
+
+impl TryFrom<async_nats::Message> for NatsMessage {
+    type Error = Error;
+    fn try_from(msg: async_nats::Message) -> Result<Self> {
+        Ok(NatsMessage {
+            value: Bytes::from(msg.payload),
+            id: Uuid::new_v4().to_string(),
+            event_time: chrono::Utc::now(),
+        })
+    }
 }
 
 impl TryFrom<JetstreamMessage> for Message {
@@ -114,6 +152,191 @@ impl TryFrom<JetstreamMessage> for Message {
             )
             .expect("Failed to convert timestamp to DateTime"),
         })
+    }
+}
+
+enum NatsActorMessage {
+    Read {
+        respond_to: oneshot::Sender<Result<Vec<NatsMessage>>>,
+    },
+}
+struct NatsActor {
+    subscriber: async_nats::Subscriber,
+    read_timeout: Duration,
+    batch_size: usize,
+    handler_rx: mpsc::Receiver<NatsActorMessage>,
+}
+
+impl NatsActor {
+    async fn start(
+        config: NatsSourceConfig,
+        batch_size: usize,
+        read_timeout: Duration,
+        handler_rx: mpsc::Receiver<NatsActorMessage>,
+    ) -> Result<()> {
+        let mut conn_opts = ConnectOptions::new()
+            .max_reconnects(None) // unlimited reconnects
+            .reconnect_delay_callback(|attempts| {
+                std::time::Duration::from_millis(std::cmp::min((attempts * 10) as u64, 1000))
+            })
+            .ping_interval(Duration::from_secs(3))
+            .retry_on_initial_connect();
+        if let Some(auth) = config.auth {
+            conn_opts = match auth {
+                NatsAuth::Basic { username, password } => {
+                    conn_opts.user_and_password(username, password)
+                }
+                NatsAuth::NKey(nkey) => conn_opts.nkey(nkey),
+                NatsAuth::Token(token) => conn_opts.token(token),
+            };
+        }
+        if let Some(tls_config) = config.tls {
+            conn_opts = Self::configure_tls(conn_opts, tls_config)?;
+        }
+        let client = async_nats::connect_with_options(&config.addr, conn_opts)
+            .await
+            .map_err(|err| Error::Connection {
+                server: config.addr.to_string(),
+                error: err.to_string(),
+            })?;
+
+        // Subscribe to the subject/queue
+        let subscription = client
+            .queue_subscribe(config.subject.clone(), config.queue.clone())
+            .await
+            .map_err(|err| Error::Subscription {
+                subject: config.subject.to_string(),
+                queue: config.queue.clone(),
+                error: err.to_string(),
+            })?;
+
+        tokio::spawn(async move {
+            let mut actor = NatsActor {
+                subscriber: subscription,
+                read_timeout,
+                batch_size,
+                handler_rx,
+            };
+            tracing::info!(subject=?config.subject, queue=?config.queue, "Starting NATS source actor...");
+            actor.run().await;
+        });
+
+        Ok(())
+    }
+
+    async fn run(&mut self) {
+        while let Some(msg) = self.handler_rx.recv().await {
+            self.handle_message(msg).await;
+        }
+    }
+
+    /// Reads messages from the NATS subscriber, up to batch_size or until timeout, similar to Go natsSource.Read
+    async fn read_messages(&mut self) -> Result<Vec<NatsMessage>> {
+        let mut messages: Vec<NatsMessage> = Vec::with_capacity(self.batch_size);
+        let mut count = 0;
+        let timeout = tokio::time::sleep(self.read_timeout);
+        tokio::pin!(timeout);
+        loop {
+            if count >= self.batch_size {
+                break;
+            }
+            tokio::select! {
+                _ = &mut timeout => {
+                    tracing::debug!(msg_count = messages.len(), "Timed out waiting for NATS messages");
+                    break;
+                }
+                maybe_msg = self.subscriber.next() => {
+                    let Some(msg) = maybe_msg else {
+                        break;
+                    };
+                    let nats_msg = NatsMessage::try_from(msg)?;
+                    messages.push(nats_msg);
+                    count += 1;
+                }
+            }
+        }
+        tracing::debug!(msg_count = messages.len(), "Read messages from NATS");
+        Ok(messages)
+    }
+
+    fn configure_tls(
+        mut conn_opts: ConnectOptions,
+        tls_config: TlsConfig,
+    ) -> Result<ConnectOptions> {
+        if tls_config.insecure_skip_verify {
+            tracing::warn!(
+                "'insecureSkipVerify' is set to true, certificate validation will not be performed when connecting to NATS server"
+            );
+            let tls_client_config = rustls::ClientConfig::builder()
+                .dangerous()
+                .with_custom_certificate_verifier(Arc::new(NoVerifier))
+                .with_no_client_auth();
+            conn_opts = conn_opts
+                .require_tls(true)
+                .tls_client_config(tls_client_config);
+        } else {
+            let root_store = Self::load_root_store(tls_config.ca_cert)?;
+            let tls_client = Self::configure_client_auth(tls_config.client_auth, root_store)?;
+            conn_opts = conn_opts.require_tls(true).tls_client_config(tls_client);
+        }
+        Ok(conn_opts)
+    }
+
+    fn load_root_store(ca_cert: Option<String>) -> Result<rustls::RootCertStore> {
+        let mut root_store = rustls::RootCertStore::empty();
+        let native_certs = rustls_native_certs::load_native_certs();
+        if !native_certs.errors.is_empty() {
+            return Err(Error::Other(format!(
+                "Loading native certs from certificate store: {:?}",
+                native_certs.errors
+            )));
+        }
+        root_store.add_parsable_certificates(native_certs.unwrap());
+        if let Some(ca_cert) = ca_cert {
+            let cert = CertificateDer::from_pem_slice(ca_cert.as_bytes())
+                .map_err(|err| Error::Other(format!("Parsing CA cert: {err:?}")))?;
+            root_store.add(cert).map_err(|err| {
+                Error::Other(format!("Adding CA cert to in-memory cert store: {err:?}"))
+            })?;
+        }
+        Ok(root_store)
+    }
+
+    fn configure_client_auth(
+        client_auth: Option<TlsClientAuthCerts>,
+        root_store: rustls::RootCertStore,
+    ) -> Result<rustls::ClientConfig> {
+        match client_auth {
+            Some(client_auth) => {
+                let client_cert = CertificateDer::from_pem_slice(
+                    client_auth.client_cert.as_bytes(),
+                )
+                .map_err(|err| Error::Other(format!("Parsing client tls certificate: {err:?}")))?;
+                let client_key =
+                    PrivateKeyDer::from_pem_slice(client_auth.client_cert_private_key.as_bytes())
+                        .map_err(|err| {
+                        Error::Other(format!("Parsing client tls private key: {err:?}"))
+                    })?;
+                rustls::ClientConfig::builder()
+                    .with_root_certificates(root_store)
+                    .with_client_auth_cert(vec![client_cert], client_key)
+                    .map_err(|err| {
+                        Error::Other(format!("Client TLS private key is invalid: {err:?}"))
+                    })
+            }
+            None => Ok(rustls::ClientConfig::builder()
+                .with_root_certificates(root_store)
+                .with_no_client_auth()),
+        }
+    }
+
+    async fn handle_message(&mut self, msg: NatsActorMessage) {
+        match msg {
+            NatsActorMessage::Read { respond_to } => {
+                let messages = self.read_messages().await;
+                let _ = respond_to.send(messages);
+            }
+        }
     }
 }
 
@@ -387,6 +610,31 @@ impl JetstreamActor {
 #[derive(Clone)]
 pub struct JetstreamSource {
     actor_tx: mpsc::Sender<JetstreamActorMessage>,
+}
+
+#[derive(Clone)]
+pub struct NatsSource {
+    actor_tx: mpsc::Sender<NatsActorMessage>,
+}
+
+impl NatsSource {
+    pub async fn connect(
+        config: NatsSourceConfig,
+        batch_size: usize,
+        read_timeout: Duration,
+    ) -> Result<Self> {
+        let (tx, rx) = mpsc::channel(10);
+        NatsActor::start(config, batch_size, read_timeout, rx).await?;
+        Ok(Self { actor_tx: tx })
+    }
+
+    pub async fn read_messages(&self) -> Result<Vec<NatsMessage>> {
+        let (tx, rx) = oneshot::channel();
+        let msg = NatsActorMessage::Read { respond_to: tx };
+        let _ = self.actor_tx.send(msg).await;
+        rx.await
+            .map_err(|_| Error::Other("Actor task terminated".into()))?
+    }
 }
 
 impl JetstreamSource {
@@ -684,7 +932,6 @@ XdvExDsAdjbkBG7ynn9pmMgIJg==
 
     use async_nats::jetstream::Context;
     use async_nats::jetstream::stream::Config as StreamConfig;
-    use std::time::Duration;
 
     async fn setup_jetstream() -> (Context, String) {
         let client = async_nats::connect("localhost").await.unwrap();

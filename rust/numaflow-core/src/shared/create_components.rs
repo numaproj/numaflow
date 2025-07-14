@@ -26,6 +26,7 @@ use crate::source::generator::new_generator;
 use crate::source::http::CoreHttpSource;
 use crate::source::jetstream::new_jetstream_source;
 use crate::source::kafka::new_kafka_source;
+use crate::source::nats::new_nats_source;
 use crate::source::pulsar::new_pulsar_source;
 use crate::source::sqs::new_sqs_source;
 use crate::source::user_defined::new_source;
@@ -456,6 +457,17 @@ pub async fn create_source(
             Ok(Source::new(
                 batch_size,
                 source::SourceType::Jetstream(jetstream),
+                tracker_handle,
+                source_config.read_ahead,
+                transformer,
+                watermark_handle,
+            ))
+        }
+        SourceType::Nats(nats_config) => {
+            let nats = new_nats_source(nats_config.clone(), batch_size, read_timeout).await?;
+            Ok(Source::new(
+                batch_size,
+                source::SourceType::Nats(nats),
                 tracker_handle,
                 source_config.read_ahead,
                 transformer,

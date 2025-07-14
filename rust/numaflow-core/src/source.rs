@@ -21,7 +21,7 @@ use crate::{
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use chrono::Utc;
-use numaflow_jetstream::JetstreamSource;
+use numaflow_jetstream::{JetstreamSource, NatsSource};
 use numaflow_kafka::source::KafkaSource;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pulsar::source::PulsarSource;
@@ -54,6 +54,7 @@ pub(crate) mod generator;
 pub(crate) mod pulsar;
 
 pub(crate) mod jetstream;
+pub(crate) mod nats;
 
 pub(crate) mod sqs;
 
@@ -101,6 +102,7 @@ pub(crate) enum SourceType {
     Jetstream(JetstreamSource),
     Kafka(KafkaSource),
     Http(CoreHttpSource),
+    Nats(NatsSource),
 }
 
 enum ActorMessage {
@@ -252,6 +254,12 @@ impl Source {
                 tokio::spawn(async move {
                     let actor =
                         SourceActor::new(receiver, jetstream.clone(), jetstream.clone(), jetstream);
+                    actor.run().await;
+                });
+            }
+            SourceType::Nats(nats) => {
+                tokio::spawn(async move {
+                    let actor = SourceActor::new(receiver, nats.clone(), nats.clone(), nats);
                     actor.run().await;
                 });
             }
