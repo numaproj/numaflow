@@ -18,9 +18,9 @@ pub(crate) mod source {
     use base64::Engine;
     use base64::prelude::BASE64_STANDARD;
     use bytes::Bytes;
-    use numaflow_jetstream::{
-        JetstreamSourceConfig, NatsAuth, NatsSourceConfig, TlsClientAuthCerts, TlsConfig,
-    };
+    use numaflow_jetstream::jetstream::JetstreamSourceConfig;
+    use numaflow_jetstream::nats::NatsSourceConfig;
+    use numaflow_jetstream::{NatsAuth, TlsClientAuthCerts, TlsConfig};
     use numaflow_kafka::source::KafkaSourceConfig;
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source, SqsSource};
     use numaflow_pulsar::{PulsarAuth, source::PulsarSourceConfig};

@@ -21,7 +21,8 @@ use crate::{
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use chrono::Utc;
-use numaflow_jetstream::{JetstreamSource, NatsSource};
+use numaflow_jetstream::jetstream::JetstreamSource;
+use numaflow_jetstream::nats::NatsSource;
 use numaflow_kafka::source::KafkaSource;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pulsar::source::PulsarSource;
