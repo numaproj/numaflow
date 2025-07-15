@@ -1,3 +1,4 @@
+import { Dispatch, SetStateAction } from "react";
 import { PipelineData } from "../../components/pages/Namespace/partials/NamespaceListingWrapper/PipelinesTypes";
 
 export interface NamespacePipelineSummary {
@@ -45,7 +46,7 @@ export interface PipelineCardProps {
   statusData?: any;
   isbData?: any;
   refresh: () => void;
-  setPipelineHealthMap: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  setPipelineHealthMap: Dispatch<SetStateAction<Record<string, string>>>;
 }
 
 export interface MonoVertexCardProps {
@@ -54,7 +55,7 @@ export interface MonoVertexCardProps {
   statusData?: any;
   isbData?: any;
   refresh: () => void;
-  setMonoVertexHealthMap: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  setMonoVertexHealthMap: Dispatch<SetStateAction<Record<string, string>>>;
 }
 
 export interface NamespacePipelineListingProps {

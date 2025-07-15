@@ -27,6 +27,7 @@ import {
   GetConsolidatedHealthStatus,
 } from "../../../../../utils";
 import { useMonoVertexUpdateFetch } from "../../../../../utils/fetchWrappers/monoVertexUpdateFetch";
+import { useMonoVertexHealthFetch } from "../../../../../utils/fetchWrappers/monoVertexHealthFetch";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import { AppContext } from "../../../../../App";
 import { SidebarType } from "../../../../common/SlidingSidebar";
@@ -34,7 +35,6 @@ import { ViewType } from "../../../../common/SpecEditor";
 import pipelineIcon from "../../../../../images/pipeline.png";
 
 import "./style.css";
-import { useMonoVertexHealthFetch } from "../../../../../utils/fetchWrappers/monoVertexHealthFetch";
 
 export interface DeleteProps {
   type: "pipeline";
@@ -237,7 +237,7 @@ export function MonoVertexCard({
     pipelineAbleToLoad,
   });
 
-    useEffect(() => {
+  useEffect(() => {
     if (healthError) {
       addError(healthError);
     }
@@ -500,7 +500,9 @@ export function MonoVertexCard({
                 className={"pipeline-logo"}
               />
               <img
-                src={IconsStatusMap[healthLoading ? UNKNOWN : getHealth(pipelineStatus)]}
+                src={IconsStatusMap[
+                  healthLoading ? UNKNOWN : getHealth(pipelineStatus)
+                ]}
                 alt="Health"
                 className={"pipeline-logo"}
               />
@@ -516,7 +518,9 @@ export function MonoVertexCard({
               }}
             >
               <span>{StatusString[pipelineStatus]}</span>
-              <span>{StatusString[healthLoading ? UNKNOWN : getHealth(pipelineStatus)]}</span>
+              <span>{StatusString[
+                healthLoading ? UNKNOWN : getHealth(pipelineStatus)
+                ]}</span>
             </Box>
           </Grid>
 

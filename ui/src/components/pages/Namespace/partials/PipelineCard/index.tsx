@@ -29,6 +29,7 @@ import {
   GetConsolidatedHealthStatus,
 } from "../../../../../utils";
 import { usePipelineUpdateFetch } from "../../../../../utils/fetchWrappers/pipelineUpdateFetch";
+import { usePipelineHealthFetch } from "../../../../../utils/fetchWrappers/pipelineHealthFetch";
 import { AppContextProps } from "../../../../../types/declarations/app";
 import { AppContext } from "../../../../../App";
 import { SidebarType } from "../../../../common/SlidingSidebar";
@@ -36,7 +37,6 @@ import { ViewType } from "../../../../common/SpecEditor";
 import pipelineIcon from "../../../../../images/pipeline.png";
 
 import "./style.css";
-import { usePipelineHealthFetch } from "../../../../../utils/fetchWrappers/pipelineHealthFetch";
 
 export interface DeleteProps {
   type: "pipeline" | "isb";
@@ -186,7 +186,7 @@ export function PipelineCard({
     pipelineAbleToLoad,
   });
 
-   useEffect(() => {
+  useEffect(() => {
     if (healthError) {
       addError(healthError);
     }
@@ -539,7 +539,9 @@ export function PipelineCard({
               />
               <img
                 src={
-                  IconsStatusMap[healthLoading ? UNKNOWN : getHealth(pipelineStatus)]
+                  IconsStatusMap[
+                    healthLoading ? UNKNOWN : getHealth(pipelineStatus)
+                  ]
                 }
                 alt="Health"
                 className={"pipeline-logo"}
@@ -558,7 +560,9 @@ export function PipelineCard({
               <span>{StatusString[pipelineStatus]}</span>
               <span>
                 {
-                  StatusString[healthLoading ? UNKNOWN : getHealth(pipelineStatus)]
+                  StatusString[
+                    healthLoading ? UNKNOWN : getHealth(pipelineStatus)
+                  ]
                 }
               </span>
             </Box>

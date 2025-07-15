@@ -179,6 +179,7 @@ export function PipelineListing({
     healthFilter,
     statusFilter,
     pipelineHealthMap,
+    monoVertexHealthMap,
   ]);
 
 
