@@ -37,7 +37,7 @@ type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-// WatermarkResponse represents the JSON response from the /watermark endpoint
+// WatermarkResponse represents the JSON response from the /runtime/watermark endpoint
 // Example: {"0": 1752314641078, "1": 1752314641079}
 type WatermarkResponse struct {
 	Partitions map[string]int64 `json:"-"` // Use custom unmarshaling
@@ -49,7 +49,7 @@ func (w *WatermarkResponse) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, &w.Partitions)
 }
 
-// HTTPWatermarkFetcher fetches watermarks from vertex pods via HTTP /watermark endpoint
+// HTTPWatermarkFetcher fetches watermarks from vertex pods via HTTP /runtime/watermark endpoint
 type HTTPWatermarkFetcher struct {
 	pipeline   *v1alpha1.Pipeline
 	edge       v1alpha1.Edge
@@ -168,7 +168,7 @@ func (h *HTTPWatermarkFetcher) fetchFromSinglePod(partitionCount int) {
 	// Build URL for 0th pod of the from vertex
 	headlessServiceName := fmt.Sprintf("%s-%s-headless", h.pipeline.Name, h.edge.To)
 	podName := fmt.Sprintf("%s-%s-0", h.pipeline.Name, h.edge.To)
-	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/watermark",
+	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/runtime/watermark",
 		podName, headlessServiceName, h.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 
 	h.log.Debugf("Background fetching watermarks from single pod: %s", url)
@@ -204,7 +204,7 @@ func (h *HTTPWatermarkFetcher) fetchFromAllPods(partitionCount int) {
 		ctx, cancel := context.WithTimeout(h.ctx, time.Second*3)
 
 		podName := fmt.Sprintf("%s-%s-%d", h.pipeline.Name, h.edge.To, i)
-		url := fmt.Sprintf("https://%s.%s.%s.svc:%v/watermark",
+		url := fmt.Sprintf("https://%s.%s.%s.svc:%v/runtime/watermark",
 			podName, headlessServiceName, h.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 
 		h.log.Debugf("Background fetching watermark from pod %d: %s", i, url)
