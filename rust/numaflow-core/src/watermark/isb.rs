@@ -1017,7 +1017,7 @@ mod tests {
         assert!(wmb_found, "Idle watermark not found");
     }
 
-    // #[cfg(feature = "nats-tests")]
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_fetch_head_watermark() {
         let client = async_nats::connect("localhost:4222").await.unwrap();
@@ -1036,7 +1036,6 @@ mod tests {
             delay: None,
         };
 
-        // delete the stores
         let _ = js_context
             .delete_key_value(ot_bucket_name.to_string())
             .await;
@@ -1060,55 +1059,6 @@ mod tests {
                 history: 1,
                 ..Default::default()
             })
-            .await
-            .unwrap();
-
-        // Publish some WMB entries to the OT bucket to simulate upstream processors
-        let ot_bucket = js_context.get_key_value(ot_bucket_name).await.unwrap();
-
-        // Create WMB entries that will be read by the ProcessorManager
-        let wmb1 = WMB {
-            watermark: 100,
-            offset: 1,
-            idle: false,
-            partition: 0,
-        };
-        let wmb2 = WMB {
-            watermark: 200,
-            offset: 2,
-            idle: false,
-            partition: 0,
-        };
-        let wmb3 = WMB {
-            watermark: 300,
-            offset: 3,
-            idle: false,
-            partition: 0,
-        };
-
-        // Publish WMB entries to the OT bucket with a processor name
-        let processor_name = "test-processor-0";
-        let wmb1_bytes: bytes::BytesMut = wmb1.try_into().unwrap();
-        let wmb2_bytes: bytes::BytesMut = wmb2.try_into().unwrap();
-        let wmb3_bytes: bytes::BytesMut = wmb3.try_into().unwrap();
-        ot_bucket
-            .put(processor_name, wmb1_bytes.freeze())
-            .await
-            .unwrap();
-        ot_bucket
-            .put(processor_name, wmb2_bytes.freeze())
-            .await
-            .unwrap();
-        ot_bucket
-            .put(processor_name, wmb3_bytes.freeze())
-            .await
-            .unwrap();
-
-        // Also publish a heartbeat to the HB bucket to mark the processor as active
-        let hb_bucket = js_context.get_key_value(hb_bucket_name).await.unwrap();
-        let current_time = chrono::Utc::now().timestamp_millis();
-        hb_bucket
-            .put(processor_name, current_time.to_string().into())
             .await
             .unwrap();
 
@@ -1140,37 +1090,45 @@ mod tests {
         .await
         .expect("Failed to create ISBWatermarkHandle");
 
-        // Poll for head watermark with timeout using tokio::time::timeout
-        let timeout_duration = Duration::from_secs(1);
-        let poll_interval = Duration::from_millis(10);
+        let mut fetched_watermark = -1;
+        // publish watermark and try fetching to see if something is getting published
+        for i in 0..10 {
+            let offset = Offset::Int(IntOffset {
+                offset: i,
+                partition_idx: 0,
+            });
 
-        let head_watermark = tokio::time::timeout(timeout_duration, async {
-            loop {
-                let watermark = handle.fetch_head_watermark(0).await;
+            handle
+                .insert_offset(
+                    offset.clone(),
+                    Some(Watermark::from_timestamp_millis(i * 100).unwrap()),
+                )
+                .await;
 
-                // Break if we got a valid watermark (not -1)
-                if watermark.timestamp_millis() != -1 {
-                    return watermark;
-                }
+            handle
+                .publish_watermark(
+                    Stream {
+                        name: "test_stream",
+                        vertex: "from_vertex",
+                        partition: 0,
+                    },
+                    Offset::Int(IntOffset {
+                        offset: i,
+                        partition_idx: 0,
+                    }),
+                )
+                .await;
 
-                // Wait before next poll
-                tokio::time::sleep(poll_interval).await;
+            let watermark = handle.fetch_head_watermark(0).await;
+
+            if watermark.timestamp_millis() != -1 {
+                fetched_watermark = watermark.timestamp_millis();
+                break;
             }
-        })
-        .await
-        .expect("Timeout: head watermark still -1 after 1s");
+            sleep(Duration::from_millis(10)).await;
+            handle.remove_offset(offset.clone()).await;
+        }
 
-        // The head watermark should be a valid timestamp (not -1)
-        assert_ne!(head_watermark.timestamp_millis(), -1);
-
-        // Clean up
-        js_context
-            .delete_key_value(ot_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(hb_bucket_name.to_string())
-            .await
-            .unwrap();
+        assert_ne!(fetched_watermark, -1);
     }
 }
