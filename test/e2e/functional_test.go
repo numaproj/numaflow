@@ -200,16 +200,23 @@ func (s *FunctionalSuite) TestDropOnFull() {
 	w.Exec("/bin/sh", []string{"-c", scaleDownArgs}, CheckVertexScaled)
 	w.Expect().VertexSizeScaledTo("out", 0)
 
-	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")))
 	// give buffer writer some time to update the isFull attribute.
-	// 20s is a carefully chosen number to create a stable buffer full scenario.
-	time.Sleep(time.Second * 20)
+	// 10s is a carefully chosen number to create a stable buffer full scenario.
+	// Three messages are sent since there are two partitions and first two messages may go to different partitions.
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("1")))
+	time.Sleep(time.Second * 10)
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("2")))
+	time.Sleep(time.Second * 10)
+	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("3")))
 
+	// If messages were sent to different partitions
 	expectedDropMetricOne := `forwarder_drop_total{vertex="in",pipeline="drop-on-full",vertex_type="Source",replica="0",partition_name="numaflow-system-drop-on-full-out-0",reason="Buffer full"} 1`
 	expectedDropMetricTwo := `forwarder_drop_total{vertex="in",pipeline="drop-on-full",vertex_type="Source",replica="0",partition_name="numaflow-system-drop-on-full-out-1",reason="Buffer full"} 1`
-	// wait for the drop metric to be updated, time out after 20s.
-	timeoutChan := time.After(time.Second * 20)
+	// If messages were sent to the same partition
+	expectedDropMetricThree := `forwarder_drop_total{vertex="in",pipeline="drop-on-full",vertex_type="Source",replica="0",partition_name="numaflow-system-drop-on-full-out-0",reason="Buffer full"} 2`
+	expectedDropMetricFour := `forwarder_drop_total{vertex="in",pipeline="drop-on-full",vertex_type="Source",replica="0",partition_name="numaflow-system-drop-on-full-out-1",reason="Buffer full"} 2`
+	// wait for the drop metric to be updated, time out after 10 seconds.
+	timeoutChan := time.After(time.Second * 10)
 	ticker := time.NewTicker(time.Second * 2)
 	defer ticker.Stop()
 	for {
@@ -218,7 +225,7 @@ func (s *FunctionalSuite) TestDropOnFull() {
 			metricsString := HTTPExpect(s.T(), "https://localhost:8001").GET("/metrics").
 				Expect().
 				Status(200).Body().Raw()
-			if strings.Contains(metricsString, expectedDropMetricOne) || strings.Contains(metricsString, expectedDropMetricTwo) {
+			if strings.Contains(metricsString, expectedDropMetricOne) || strings.Contains(metricsString, expectedDropMetricTwo) || strings.Contains(metricsString, expectedDropMetricThree) || strings.Contains(metricsString, expectedDropMetricFour) {
 				return
 			}
 		case <-timeoutChan:
