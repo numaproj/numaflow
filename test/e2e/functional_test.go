@@ -225,7 +225,6 @@ func (s *FunctionalSuite) TestDropOnFull() {
 			metricsString := HTTPExpect(s.T(), "https://localhost:8001").GET("/metrics").
 				Expect().
 				Status(200).Body().Raw()
-			s.T().Logf("metrics string at time %s: %s", time.Now().Format(time.RFC3339), metricsString)
 			if strings.Contains(metricsString, expectedDropMetricOne) || strings.Contains(metricsString, expectedDropMetricTwo) || strings.Contains(metricsString, expectedDropMetricThree) || strings.Contains(metricsString, expectedDropMetricFour) {
 				return
 			}
