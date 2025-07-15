@@ -1,8 +1,9 @@
 //! Runs the user-defined side-input generator at specified intervals (cron expr).
 
+use crate::config::isb;
+use crate::create_js_context;
 use crate::error::{Error, Result};
 use crate::manager::client::UserDefinedSideInputClient;
-use crate::{create_js_context, isb};
 use async_nats::jetstream;
 use bytes::Bytes;
 use chrono_tz::{Tz, UTC};
@@ -13,15 +14,15 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 /// gRPC client to interact with the user-defined side-input generator.
-mod client;
+pub(super) mod client;
 
 /// Cron expression for the side-input trigger.
 #[derive(Debug, Clone)]
 pub(crate) struct SideInputTrigger {
     /// The schedule to trigger the creation of the side input data.
-    schedule: Schedule,
+    pub(crate) schedule: Schedule,
     /// Timezone for the schedule, defaults to [UTC].
-    timezone: Tz,
+    pub(crate) timezone: Tz,
 }
 
 impl SideInputTrigger {
@@ -120,15 +121,21 @@ impl SideInputManager {
                 .next()
                 .expect("cron schedule should have at least one next time");
 
+            info!(scheduled=?datetime, "Next side-input generation scheduled");
+
+            let duration_until = (datetime.with_timezone(&chrono::Utc) - chrono::Utc::now())
+                .to_std()
+                .unwrap_or(Duration::from_secs(0));
+
             // sleep until the next run time
             let sleep_util = tokio::time::sleep_until(tokio::time::Instant::from_std(
-                Instant::now() + Duration::from_micros(datetime.timestamp_micros() as u64),
+                Instant::now() + duration_until,
             ));
 
             // check if we have been cancelled
             tokio::select! {
                 _ = sleep_util => {
-                    info!(?datetime, "running schedule for side-input generation");
+                    debug!(scheduled=?datetime, "running schedule for side-input generation");
                 }
                 _ = self.cancellation_token.cancelled() => {
                     info!("Cancellation token received, exiting side-input manager");
@@ -162,7 +169,7 @@ impl SideInputManager {
                 .put(self.key, Bytes::from(side_input_response.value))
                 .await
                 .map_err(|e| Error::SideInput(format!("Failed to store side input: {e:?}")))?;
-            debug!("Side input stored in the bucket");
+            info!("Side input stored in the bucket");
         } else {
             info!("Side input is not broadcasted since no_broadcast is set to true");
         }
@@ -241,7 +248,7 @@ mod tests {
         let _ = js_context.delete_key_value(store_name).await; // Clean up if exists
 
         let kv_store = js_context
-            .create_key_value(async_nats::jetstream::kv::Config {
+            .create_key_value(jetstream::kv::Config {
                 bucket: store_name.to_string(),
                 ..Default::default()
             })
