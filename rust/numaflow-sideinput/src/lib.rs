@@ -31,6 +31,8 @@ pub enum SideInputMode {
     Manager {
         /// The ISB bucket where the side-input values are stored.
         side_input_store: &'static str,
+        /// Server Info file
+        server_info_path: &'static str,
     },
     Synchronizer {
         /// The list of side input names to synchronize.
@@ -58,11 +60,15 @@ pub async fn run(
     cancellation_token: CancellationToken,
 ) -> Result<()> {
     match mode {
-        SideInputMode::Manager { side_input_store } => {
+        SideInputMode::Manager {
+            side_input_store,
+            server_info_path,
+        } => {
             start_manager(
                 get_bucket_name(side_input_store),
                 uds_path,
                 env_vars,
+                server_info_path,
                 cancellation_token,
             )
             .await
@@ -90,11 +96,17 @@ async fn start_manager(
     side_input_store: &'static str,
     uds_path: std::path::PathBuf,
     env_vars: HashMap<String, String>,
+    server_info_path: &'static str,
     cancellation_token: CancellationToken,
 ) -> Result<()> {
     let trigger = config::SideInputTriggerConfig::load(env_vars.clone());
 
-    let client = manager::client::UserDefinedSideInputClient::new(uds_path).await?;
+    let client = manager::client::UserDefinedSideInputClient::new(
+        uds_path,
+        server_info_path.into(),
+        cancellation_token.clone(),
+    )
+    .await?;
 
     let side_input_trigger = SideInputTrigger::new(trigger.schedule, trigger.timezone)?;
 
