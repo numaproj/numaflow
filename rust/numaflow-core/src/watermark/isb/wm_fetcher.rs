@@ -1497,11 +1497,13 @@ mod tests {
             ot_bucket: "ot_bucket",
             hb_bucket: "hb_bucket",
             partitions: 1,
+            delay: None,
         };
 
-        let mut fetcher = ISBWatermarkFetcher::new(processor_managers, &[bucket_config])
-            .await
-            .unwrap();
+        let mut fetcher =
+            ISBWatermarkFetcher::new(processor_managers, &[bucket_config], VertexType::MapUDF)
+                .await
+                .unwrap();
 
         // Invoke fetch_head_watermark and verify the result
         let watermark = fetcher.fetch_head_watermark(0);
@@ -1615,11 +1617,13 @@ mod tests {
             ot_bucket: "ot_bucket",
             hb_bucket: "hb_bucket",
             partitions: 2,
+            delay: None,
         };
 
-        let mut fetcher = ISBWatermarkFetcher::new(processor_managers, &[bucket_config])
-            .await
-            .unwrap();
+        let mut fetcher =
+            ISBWatermarkFetcher::new(processor_managers, &[bucket_config], VertexType::MapUDF)
+                .await
+                .unwrap();
 
         // Invoke fetch_head_watermark and verify the result (should be minimum across all timelines)
         let watermark = fetcher.fetch_head_watermark(0);
@@ -1683,18 +1687,23 @@ mod tests {
             ot_bucket: "ot_bucket1",
             hb_bucket: "hb_bucket1",
             partitions: 1,
+            delay: None,
         };
         let bucket_config2 = BucketConfig {
             vertex: "edge2",
             ot_bucket: "ot_bucket2",
             hb_bucket: "hb_bucket2",
             partitions: 1,
+            delay: None,
         };
 
-        let mut fetcher =
-            ISBWatermarkFetcher::new(processor_managers, &[bucket_config1, bucket_config2])
-                .await
-                .unwrap();
+        let mut fetcher = ISBWatermarkFetcher::new(
+            processor_managers,
+            &[bucket_config1, bucket_config2],
+            VertexType::MapUDF,
+        )
+        .await
+        .unwrap();
 
         // Invoke fetch_head_watermark and verify the result (should be minimum across all edges)
         let watermark = fetcher.fetch_head_watermark(0);

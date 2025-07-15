@@ -1033,6 +1033,7 @@ mod tests {
             partitions: 1,
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
+            delay: None,
         };
 
         // delete the stores
