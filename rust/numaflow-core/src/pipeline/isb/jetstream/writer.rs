@@ -28,7 +28,7 @@ use crate::error::Error;
 
 use crate::message::{IntOffset, Message, Offset};
 use crate::metrics::{
-    PIPELINE_PARTITION_NAME_LABEL, pipeline_drop_metric_labels, pipeline_isb_metric_labels,
+    PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_metrics_labels, pipeline_drop_metric_labels,
     pipeline_metric_labels, pipeline_metrics,
 };
 use crate::shared::forward;
@@ -126,8 +126,9 @@ impl JetstreamWriter {
                     for config in &*self.config {
                         for stream in &config.writer_config.streams {
                             let stream = stream.name;
+                            let buffer_labels = jetstream_isb_metrics_labels(stream);
                             match Self::fetch_buffer_usage(self.js_ctx.clone(), stream, config.writer_config.max_length).await {
-                                Ok((soft_usage, solid_usage)) => {
+                                Ok((soft_usage, solid_usage, num_pending, num_ack_pending)) => {
                                     if solid_usage >= config.writer_config.usage_limit && soft_usage >= config.writer_config.usage_limit {
                                         if let Some(is_full) = self.is_full.get(stream) {
                                             is_full.store(true, Ordering::Relaxed);
@@ -135,9 +136,14 @@ impl JetstreamWriter {
                                     } else if let Some(is_full) = self.is_full.get(stream) {
                                         is_full.store(false, Ordering::Relaxed);
                                     }
+                                    pipeline_metrics().jetstream_isb.buffer_soft_usage.get_or_create(&buffer_labels).set((soft_usage * 100.0) as i64);
+                                    pipeline_metrics().jetstream_isb.buffer_solid_usage.get_or_create(&buffer_labels).set((solid_usage * 100.0) as i64);
+                                    pipeline_metrics().jetstream_isb.buffer_pending.get_or_create(&buffer_labels).set(num_pending as i64);
+                                    pipeline_metrics().jetstream_isb.buffer_ack_pending.get_or_create(&buffer_labels).set(num_ack_pending as i64);
                                 }
                                 Err(e) => {
                                     error!(?e, "Failed to fetch buffer usage for stream {}, updating isFull to true", stream);
+                                    pipeline_metrics().jetstream_isb.isfull_error_total.get_or_create(&buffer_labels).inc();
                                     if let Some(is_full) = self.is_full.get(stream) {
                                         is_full.store(true, Ordering::Relaxed);
                                     }
@@ -171,7 +177,7 @@ impl JetstreamWriter {
         js_ctx: Context,
         stream_name: &str,
         max_length: usize,
-    ) -> Result<(f64, f64)> {
+    ) -> Result<(f64, f64, u64, u64)> {
         let mut stream = js_ctx
             .get_stream(stream_name)
             .await
@@ -200,7 +206,12 @@ impl JetstreamWriter {
             stream_info.state.messages as f64 / max_length as f64
         };
 
-        Ok((soft_usage, solid_usage))
+        Ok((
+            soft_usage,
+            solid_usage,
+            consumer_info.num_pending,
+            consumer_info.num_ack_pending as u64,
+        ))
     }
 
     /// Starts reading messages from the stream and writes them to Jetstream ISB.
@@ -398,7 +409,11 @@ impl JetstreamWriter {
                 .map(|is_full| is_full.load(Ordering::Relaxed))
             {
                 Some(true) => {
-                    // FIXME: add metrics
+                    pipeline_metrics()
+                        .jetstream_isb
+                        .isfull_total
+                        .get_or_create(&jetstream_isb_metrics_labels(stream.name))
+                        .inc();
                     if log_counter >= 500 {
                         warn!(?stream, "stream is full (throttled logging)");
                         log_counter = 0;
@@ -474,7 +489,6 @@ impl JetstreamWriter {
         message: Message,
         cln_token: CancellationToken,
     ) -> Result<()> {
-        let start_time = Instant::now();
         let permit = Arc::clone(&self.sem)
             .acquire_owned()
             .await
@@ -547,12 +561,6 @@ impl JetstreamWriter {
                 .delete(message.offset.clone())
                 .await
                 .expect("Failed to delete offset from tracker");
-
-            pipeline_metrics()
-                .isb
-                .paf_resolution_time
-                .get_or_create(pipeline_isb_metric_labels())
-                .observe(start_time.elapsed().as_micros() as f64);
         });
 
         Ok(())

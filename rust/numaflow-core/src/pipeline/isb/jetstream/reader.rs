@@ -311,6 +311,7 @@ impl JetStreamReader {
             .messages()
             .await
         {
+            //adarsh
             Ok(mut messages) => {
                 let mut batch = Vec::with_capacity(batch_size);
                 while let Some(message) = messages.next().await {
