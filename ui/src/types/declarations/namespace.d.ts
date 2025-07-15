@@ -45,8 +45,18 @@ export interface PipelineCardProps {
   statusData?: any;
   isbData?: any;
   refresh: () => void;
-  health?: string;
+  setPipelineHealthMap: React.Dispatch<React.SetStateAction<Record<string, string>>>;
 }
+
+export interface MonoVertexCardProps {
+  namespace: string;
+  data: NamespacePipelineSummary;
+  statusData?: any;
+  isbData?: any;
+  refresh: () => void;
+  setMonoVertexHealthMap: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+}
+
 export interface NamespacePipelineListingProps {
   namespace: string;
   data: NamespaceSummaryData;

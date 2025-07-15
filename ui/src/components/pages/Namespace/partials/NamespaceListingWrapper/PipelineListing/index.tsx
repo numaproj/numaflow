@@ -223,7 +223,6 @@ export function PipelineListing({
                   statusData={pipelineData ? pipelineData[p.name] : {}}
                   isbData={isbData ? isbData[isbName] : {}}
                   refresh={refresh}
-                  health={pipelineHealthMap[p.name] || UNKNOWN}
                   setPipelineHealthMap={setPipelineHealthMap} 
                 />
               </Grid>
@@ -236,7 +235,6 @@ export function PipelineListing({
                 data={p}
                 statusData={monoVertexData ? monoVertexData[p.name] : {}}
                 refresh={refresh}
-                health={monoVertexHealthMap[p.name] || UNKNOWN}
                 setMonoVertexHealthMap={setMonoVertexHealthMap}
               />
             </Grid>

@@ -50,9 +50,8 @@ export function PipelineCard({
   statusData,
   isbData,
   refresh,
-  health,
   setPipelineHealthMap,
-}: PipelineCardProps & {setPipelineHealthMap?: React.Dispatch<React.SetStateAction<Record<string, string>>>}) {
+}: PipelineCardProps) {
   const { addError, setSidebarProps, host, isReadOnly } =
     useContext<AppContextProps>(AppContext);
   const [viewOption] = useState("view");
@@ -187,30 +186,35 @@ export function PipelineCard({
     pipelineAbleToLoad,
   });
 
-  useEffect(() => {
-    if (setPipelineHealthMap){
-      if (healthData){
-        const pipelineStatus = statusData?.pipeline?.status?.phase || UNKNOWN;
-        const consolidated = GetConsolidatedHealthStatus(
-          pipelineStatus,
-          healthData?.resourceHealthStatus,
-          healthData?.dataHealthStatus
-        )
-        setPipelineHealthMap((prev) => ({
-          ...prev,
-          [data.name]: consolidated,
-        }));
-      } else if (healthError){
-        setPipelineHealthMap(prev => ({
-          ...prev,
-          [data.name]: UNKNOWN,
-        }))
-      }
-    }
+   useEffect(() => {
     if (healthError) {
       addError(healthError);
     }
-  },[healthData, healthError, data.name, setPipelineHealthMap, statusData, addError]);
+  }, [healthError]);
+
+  const getHealth = useCallback(
+    (pipelineStatus: string) => {
+      if (healthData) {
+        const { resourceHealthStatus, dataHealthStatus } = healthData;
+        const consolidated =  GetConsolidatedHealthStatus(
+          pipelineStatus,
+          resourceHealthStatus,
+          dataHealthStatus
+        );
+        setPipelineHealthMap((prev) => ({
+        ...prev,
+        [data.name]: consolidated,
+        }));
+        return consolidated;
+      }
+      setPipelineHealthMap((prev) => ({
+        ...prev,
+        [data.name]: UNKNOWN,
+        }));
+      return UNKNOWN;
+    },
+    [healthData]
+  );
 
   const isbType = GetISBType(isbData?.isbService?.spec) || UNKNOWN;
   const isbSize =
@@ -535,7 +539,7 @@ export function PipelineCard({
               />
               <img
                 src={
-                  IconsStatusMap[health || UNKNOWN]
+                  IconsStatusMap[healthLoading ? UNKNOWN : getHealth(pipelineStatus)]
                 }
                 alt="Health"
                 className={"pipeline-logo"}
@@ -554,7 +558,7 @@ export function PipelineCard({
               <span>{StatusString[pipelineStatus]}</span>
               <span>
                 {
-                  StatusString[health || UNKNOWN]
+                  StatusString[healthLoading ? UNKNOWN : getHealth(pipelineStatus)]
                 }
               </span>
             </Box>

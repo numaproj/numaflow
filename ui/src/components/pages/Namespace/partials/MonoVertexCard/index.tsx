@@ -1,7 +1,7 @@
 import React, { useCallback, useContext, useEffect, useState } from "react";
 import Paper from "@mui/material/Paper";
 import { Link } from "react-router-dom";
-import { PipelineCardProps } from "../../../../../types/declarations/namespace";
+import { MonoVertexCardProps } from "../../../../../types/declarations/namespace";
 import {
   Box,
   Button,
@@ -46,9 +46,8 @@ export function MonoVertexCard({
   data,
   statusData,
   refresh,
-  health,
   setMonoVertexHealthMap,
-}: PipelineCardProps & {setMonoVertexHealthMap?: React.Dispatch<React.SetStateAction<Record<string, string>>>}) {
+}: MonoVertexCardProps) {
   const { addError, setSidebarProps, host, isReadOnly } =
     useContext<AppContextProps>(AppContext);
   const [viewOption] = useState("view");
@@ -226,6 +225,7 @@ export function MonoVertexCard({
     }
   }, [statusData]);
 
+
   const {
     data: healthData,
     loading: healthLoading,
@@ -236,30 +236,36 @@ export function MonoVertexCard({
     addError,
     pipelineAbleToLoad,
   });
-  
-  useEffect(() => {
-    if (setMonoVertexHealthMap){
-      if (healthData){
-        const consolidated = GetConsolidatedHealthStatus(
-          pipelineStatus,
-          healthData?.resourceHealthStatus,
-          healthData?.dataHealthStatus
-        )
-        setMonoVertexHealthMap((prev) => ({
-          ...prev,
-          [data.name]: consolidated,
-        }));
-      } else if (healthError){
-        setMonoVertexHealthMap(prev => ({
-          ...prev,
-          [data.name]: UNKNOWN,
-        }))
-      }
-    }
+
+    useEffect(() => {
     if (healthError) {
       addError(healthError);
     }
-  },[healthData, healthError, data.name, setMonoVertexHealthMap, statusData, addError]);
+  }, [healthError]);
+  
+  const getHealth = useCallback(
+    (pipelineStatus: string) => {
+      if (healthData) {
+        const { resourceHealthStatus, dataHealthStatus } = healthData;
+        const consolidated =  GetConsolidatedHealthStatus(
+          pipelineStatus,
+          resourceHealthStatus,
+          dataHealthStatus
+        );
+        setMonoVertexHealthMap((prev) => ({
+        ...prev,
+        [data.name]: consolidated,
+        }));
+        return consolidated;
+      }
+      setMonoVertexHealthMap((prev) => ({
+        ...prev,
+        [data.name]: UNKNOWN,
+        }));
+      return UNKNOWN;
+    },
+    [healthData]
+  );
 
   return (
     <>
@@ -494,7 +500,7 @@ export function MonoVertexCard({
                 className={"pipeline-logo"}
               />
               <img
-                src={IconsStatusMap[health || UNKNOWN]}
+                src={IconsStatusMap[healthLoading ? UNKNOWN : getHealth(pipelineStatus)]}
                 alt="Health"
                 className={"pipeline-logo"}
               />
@@ -510,7 +516,7 @@ export function MonoVertexCard({
               }}
             >
               <span>{StatusString[pipelineStatus]}</span>
-              <span>{StatusString[health || UNKNOWN]}</span>
+              <span>{StatusString[healthLoading ? UNKNOWN : getHealth(pipelineStatus)]}</span>
             </Box>
           </Grid>
 
