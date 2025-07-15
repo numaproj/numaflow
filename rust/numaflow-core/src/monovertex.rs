@@ -59,11 +59,15 @@ pub(crate) async fn start_forwarder(
     // Start the metrics server in a separate background async spawn,
     // This should be running throughout the lifetime of the application, hence the handle is not
     // joined.
-    let metrics_state =
-        metrics::ComponentHealthChecks::Monovertex(Box::new(metrics::MonovertexComponents {
-            source: source.clone(),
-            sink: sink_writer.clone(),
-        }));
+    let metrics_state = metrics::MetricsState {
+        health_checks: metrics::ComponentHealthChecks::Monovertex(Box::new(
+            metrics::MonovertexComponents {
+                source: source.clone(),
+                sink: sink_writer.clone(),
+            },
+        )),
+        watermark_fetcher_state: None, // Monovertex doesn't have watermark handles
+    };
 
     // start the metrics server
     // FIXME: what to do with the handle
