@@ -167,24 +167,8 @@ pub(crate) mod map {
     };
     use crate::error::Error;
 
-    /// A map can be run in different modes.
-    #[derive(Debug, Clone, PartialEq)]
-    pub enum MapMode {
-        Unary,
-        Batch,
-        Stream,
-    }
-
-    impl MapMode {
-        pub(crate) fn from_str(s: &str) -> Option<MapMode> {
-            match s {
-                "unary-map" => Some(MapMode::Unary),
-                "stream-map" => Some(MapMode::Stream),
-                "batch-map" => Some(MapMode::Batch),
-                _ => None,
-            }
-        }
-    }
+    /// re-export MapMode from shared.
+    pub use numaflow_shared::server_info::MapMode;
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct MapVtxConfig {
