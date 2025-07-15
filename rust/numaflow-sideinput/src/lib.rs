@@ -326,8 +326,15 @@ mod tests {
         // Set socket file path in environment
 
         let cancel_token = CancellationToken::new();
+        let server_info_path = Box::leak(
+            server_info_file
+                .to_string_lossy()
+                .into_owned()
+                .into_boxed_str(),
+        );
         let mode = SideInputMode::Manager {
             side_input_store: store_name,
+            server_info_path,
         };
 
         // Start the manager in a background task
