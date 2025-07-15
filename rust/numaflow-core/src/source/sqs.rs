@@ -259,7 +259,7 @@ pub mod tests {
     }
 
     fn get_queue_attributes_output() -> Rule {
-        let queue_attributes_output = mock!(aws_sdk_sqs::Client::get_queue_attributes)
+        mock!(aws_sdk_sqs::Client::get_queue_attributes)
             .match_requests(|inp| {
                 inp.queue_url().unwrap()
                     == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
@@ -271,12 +271,11 @@ pub mod tests {
                         "0",
                     )
                     .build()
-            });
-        queue_attributes_output
+            })
     }
 
     fn get_delete_message_output() -> Rule {
-        let delete_message_output = mock!(aws_sdk_sqs::Client::delete_message_batch)
+        mock!(aws_sdk_sqs::Client::delete_message_batch)
             .match_requests(|inp| {
                 inp.queue_url().unwrap()
                     == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
@@ -298,8 +297,7 @@ pub mod tests {
                     )
                     .build()
                     .unwrap()
-            });
-        delete_message_output
+            })
     }
 
     fn get_receive_message_output() -> Rule {
@@ -323,14 +321,13 @@ pub mod tests {
     }
 
     fn get_queue_url_output() -> Rule {
-        let queue_url_output = mock!(aws_sdk_sqs::Client::get_queue_url)
+        mock!(aws_sdk_sqs::Client::get_queue_url)
             .match_requests(|inp| inp.queue_name().unwrap() == "test-q")
             .then_output(|| {
                 aws_sdk_sqs::operation::get_queue_url::GetQueueUrlOutput::builder()
                     .queue_url("https://sqs.us-west-2.amazonaws.com/926113353675/test-q/")
                     .build()
-            });
-        queue_url_output
+            })
     }
 
     fn get_test_config_with_interceptor(interceptor: MockResponseInterceptor) -> Config {
