@@ -34,8 +34,8 @@ pub enum Error {
     #[error("Config Error - {0}")]
     Config(String),
 
-    #[error("ServerInfo Error - {0}")]
-    ServerInfo(String),
+    #[error("Error in Shared - {0}")]
+    Shared(numaflow_shared::error::Error),
 
     #[error("Proto Error - {0}")]
     Proto(String),
@@ -78,8 +78,6 @@ pub enum Error {
 
 impl From<numaflow_shared::error::Error> for Error {
     fn from(value: numaflow_shared::error::Error) -> Self {
-        match value {
-            numaflow_shared::error::Error::ServerInfo(e) => Error::ServerInfo(e),
-        }
+        Error::Shared(value)
     }
 }
