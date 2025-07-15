@@ -529,6 +529,7 @@ mod tests {
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
             partitions: 1,
+            delay: None,
         };
 
         let processor_manager =
@@ -619,6 +620,7 @@ mod tests {
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
             partitions: 1,
+            delay: None,
         };
 
         let processor_manager =
@@ -751,6 +753,7 @@ mod tests {
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
             partitions: 3,
+            delay: None,
         };
 
         // Create processor manager for reduce UDF with replica 1

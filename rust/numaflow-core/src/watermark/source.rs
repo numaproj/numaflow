@@ -508,6 +508,7 @@ mod tests {
                 partitions: 1, // partitions is always one for source
                 ot_bucket: ot_bucket_name,
                 hb_bucket: hb_bucket_name,
+                delay: None,
             },
             to_vertex_bucket_config: vec![],
             idle_config: None,
@@ -636,12 +637,14 @@ mod tests {
                 partitions: 2,
                 ot_bucket: source_ot_bucket_name,
                 hb_bucket: source_hb_bucket_name,
+                delay: None,
             },
             to_vertex_bucket_config: vec![BucketConfig {
                 vertex: "edge_vertex",
                 partitions: 2,
                 ot_bucket: edge_ot_bucket_name,
                 hb_bucket: edge_hb_bucket_name,
+                delay: None,
             }],
             idle_config: None,
         };
@@ -815,6 +818,7 @@ mod tests {
             partitions: 1,
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
+            delay: None,
         };
 
         let to_vertex_bucket_config = BucketConfig {
@@ -822,7 +826,22 @@ mod tests {
             partitions: 1,
             ot_bucket: to_vertex_ot_bucket_name,
             hb_bucket: to_vertex_hb_bucket_name,
+            delay: None,
         };
+
+        // delete stores if the exist
+        let _ = js_context
+            .delete_key_value(ot_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(hb_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(to_vertex_ot_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(to_vertex_hb_bucket_name.to_string())
+            .await;
 
         // create key value stores
         js_context
@@ -944,24 +963,6 @@ mod tests {
         }
 
         assert!(wmb_found, "Idle watermark not found");
-
-        // delete the stores
-        js_context
-            .delete_key_value(ot_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(hb_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(to_vertex_ot_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(to_vertex_hb_bucket_name.to_string())
-            .await
-            .unwrap();
     }
 
     #[cfg(feature = "nats-tests")]
@@ -1007,6 +1008,7 @@ mod tests {
             partitions: 1,
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
+            delay: None,
         };
 
         let to_vertex_bucket_config = BucketConfig {
@@ -1014,7 +1016,21 @@ mod tests {
             partitions: 1,
             ot_bucket: to_vertex_ot_bucket_name,
             hb_bucket: to_vertex_hb_bucket_name,
+            delay: None,
         };
+
+        let _ = js_context
+            .delete_key_value(ot_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(hb_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(to_vertex_ot_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(to_vertex_hb_bucket_name.to_string())
+            .await;
 
         // create key value stores
         js_context
@@ -1144,24 +1160,6 @@ mod tests {
         }
 
         assert!(wmb_found, "Idle watermark not found");
-
-        // delete the stores
-        js_context
-            .delete_key_value(ot_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(hb_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(to_vertex_ot_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(to_vertex_hb_bucket_name.to_string())
-            .await
-            .unwrap();
     }
 
     #[cfg(feature = "nats-tests")]
@@ -1180,6 +1178,7 @@ mod tests {
                 partitions: 1,
                 ot_bucket: ot_bucket_name,
                 hb_bucket: hb_bucket_name,
+                delay: None,
             },
             to_vertex_bucket_config: vec![],
             idle_config: None,
