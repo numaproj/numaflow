@@ -40,6 +40,7 @@ impl MapMode {
     }
 }
 
+/// ContainerType represents the type of processor containers used in Numaflow.
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub enum ContainerType {
     Sourcer,
@@ -55,7 +56,8 @@ pub enum ContainerType {
 }
 
 impl ContainerType {
-    fn as_str(&self) -> &'static str {
+    /// Returns the string representation of the [ContainerType].
+    pub fn as_str(&self) -> &'static str {
         match self {
             ContainerType::Sourcer => "sourcer",
             ContainerType::SourceTransformer => "sourcetransformer",
@@ -96,21 +98,24 @@ impl From<String> for ContainerType {
 
 /// ServerInfo structure to store server-related information
 #[derive(Serialize, Deserialize, Debug)]
-pub(crate) struct ServerInfo {
+pub struct ServerInfo {
+    /// Protocol used by the server. This is for multi-proc mode.
     #[serde(default)]
-    pub(crate) protocol: String,
+    protocol: String,
+    /// Language of the SDK/container. This is for publishing metrics.
     #[serde(default)]
-    pub(crate) language: String,
+    pub language: String,
     #[serde(default)]
-    pub(crate) minimum_numaflow_version: String,
+    minimum_numaflow_version: String,
+    /// SDK version used for publishing metrics.
     #[serde(default)]
-    pub(crate) version: String,
+    pub version: String,
     #[serde(default)]
-    pub(crate) metadata: Option<HashMap<String, String>>, // Metadata is optional
+    metadata: Option<HashMap<String, String>>, // Metadata is optional
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub(crate) enum Protocol {
+pub enum Protocol {
     #[allow(clippy::upper_case_acronyms)]
     TCP,
     #[allow(clippy::upper_case_acronyms)]
@@ -118,7 +123,8 @@ pub(crate) enum Protocol {
 }
 
 impl ServerInfo {
-    pub(crate) fn get_map_mode(&self) -> Option<MapMode> {
+    /// get_map_mode returns the [MapMode] from the metadata.
+    pub fn get_map_mode(&self) -> Option<MapMode> {
         if let Some(metadata) = &self.metadata
             && let Some(map_mode) = metadata.get(MAP_MODE_KEY)
         {
@@ -127,9 +133,9 @@ impl ServerInfo {
         None
     }
 
-    // get_http_endpoints returns the list of http endpoints for multi proc mode
-    // from the metadata.
-    pub(crate) fn get_http_endpoints(&self) -> Vec<String> {
+    /// get_http_endpoints returns the list of http endpoints for multi proc mode
+    /// from the metadata.
+    pub fn get_http_endpoints(&self) -> Vec<String> {
         if let Some(metadata) = &self.metadata
             && let Some(endpoints) = metadata.get(HTTP_ENDPOINTS_KEY)
         {
@@ -138,7 +144,8 @@ impl ServerInfo {
         vec![]
     }
 
-    pub(crate) fn get_protocol(&self) -> Protocol {
+    /// get_protocol returns the protocol used by the server. This is for multi-proc mode.
+    pub fn get_protocol(&self) -> Protocol {
         match self.protocol.as_str() {
             "tcp" => Protocol::TCP,
             _ => Protocol::UDS,
@@ -148,7 +155,7 @@ impl ServerInfo {
 
 /// sdk_server_info waits until the server info file is ready and check whether the
 /// server is compatible with Numaflow.
-pub(crate) async fn sdk_server_info(
+pub async fn sdk_server_info(
     file_path: PathBuf,
     cln_token: CancellationToken,
 ) -> error::Result<ServerInfo> {

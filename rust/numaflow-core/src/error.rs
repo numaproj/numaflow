@@ -75,3 +75,11 @@ pub enum Error {
     #[allow(clippy::upper_case_acronyms)]
     WAL(String),
 }
+
+impl From<numaflow_shared::error::Error> for Error {
+    fn from(value: numaflow_shared::error::Error) -> Self {
+        match value {
+            numaflow_shared::error::Error::ServerInfo(e) => Error::ServerInfo(e),
+        }
+    }
+}
