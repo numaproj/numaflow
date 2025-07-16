@@ -227,7 +227,15 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let client = UserDefinedSideInputClient::new(sock_file).await?;
+        let server_info_path = Box::leak(
+            server_info_file
+                .to_string_lossy()
+                .into_owned()
+                .into_boxed_str(),
+        );
+        let client =
+            UserDefinedSideInputClient::new(sock_file, (&server_info_path).into(), cancel.clone())
+                .await?;
 
         // create trigger
         let side_input_trigger = SideInputTrigger::new("* * * * * *", None)?;

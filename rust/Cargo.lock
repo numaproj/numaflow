@@ -2513,6 +2513,7 @@ dependencies = [
  "numaflow 0.2.1",
  "numaflow-models",
  "numaflow-pb",
+ "numaflow-shared",
  "serde_json",
  "tempfile",
  "thiserror 2.0.12",
