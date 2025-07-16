@@ -267,17 +267,23 @@ func (ns *jsSource) createOrUpdateConsumer(ctx context.Context) (jetstreamlib.Co
 		return nil, fmt.Errorf("creating jetstream instance for the NATS server: %w", err)
 	}
 
+	var consumer jetstreamlib.Consumer
 	if consumerName == "" {
 		consumerName = fmt.Sprintf("numaflow-%s-%s-%s", ns.pipelineName, ns.vertexName, streamName)
-	}
-	consumer, err := stream.CreateOrUpdateConsumer(ctx, streamName, jetstreamlib.ConsumerConfig{
-		Durable:       consumerName,
-		Description:   "Numaflow JetStream consumer",
-		DeliverPolicy: jetstreamlib.DeliverAllPolicy,
-		AckPolicy:     jetstreamlib.AckExplicitPolicy,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("creating jetstream consumer for stream %q: %w", streamName, err)
+		consumer, err = stream.CreateOrUpdateConsumer(ctx, streamName, jetstreamlib.ConsumerConfig{
+			Durable:       consumerName,
+			Description:   "Numaflow JetStream consumer",
+			DeliverPolicy: jetstreamlib.DeliverAllPolicy,
+			AckPolicy:     jetstreamlib.AckExplicitPolicy,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("creating jetstream consumer for stream %q: %w", streamName, err)
+		}
+	} else {
+		consumer, err = stream.Consumer(ctx, streamName, consumerName)
+		if err != nil {
+			return nil, fmt.Errorf("getting jetstream consumer for stream %q: %w", streamName, err)
+		}
 	}
 	return consumer, nil
 }
