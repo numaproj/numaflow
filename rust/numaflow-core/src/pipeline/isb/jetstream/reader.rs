@@ -24,7 +24,6 @@ use backoff::strategy::fixed;
 use bytes::Bytes;
 use chrono::Utc;
 use flate2::read::GzDecoder;
-use futures::stream;
 use prost::Message as ProtoMessage;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 use tokio::task::JoinHandle;

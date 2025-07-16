@@ -691,8 +691,15 @@ impl PipelineMetrics {
             pending_raw: Family::<Vec<(String, String)>, Gauge>::default(),
         };
         let mut registry = global_registry().registry.lock();
+        Self::register_forwarder_metrics(&metrics, &mut registry);
+        Self::register_source_forwarder_metrics(&metrics, &mut registry);
+        Self::register_sink_forwarder_metrics(&metrics, &mut registry);
+        Self::register_jetstream_isb_metrics(&metrics, &mut registry);
+        Self::register_vertex_metrics(&metrics, &mut registry);
+        metrics
+    }
 
-        // Pipeline forwarder sub-registry
+    fn register_forwarder_metrics(metrics: &Self, registry: &mut Registry) {
         let forwarder_registry = registry.sub_registry_with_prefix("forwarder");
         forwarder_registry.register(
             READ_TOTAL,
@@ -799,7 +806,9 @@ impl PipelineMetrics {
             "A Gauge to keep track of the read batch size for source vtx",
             metrics.forwarder.read_batch_size.clone(),
         );
+    }
 
+    fn register_source_forwarder_metrics(metrics: &Self, registry: &mut Registry) {
         // Pipeline source forwarder sub-registry
         let source_forwarder_registry = registry.sub_registry_with_prefix("source_forwarder");
 
@@ -828,7 +837,9 @@ impl PipelineMetrics {
             "Processing times of source transformer (100 microseconds to 15 minutes)",
             metrics.source_forwarder.transformer_processing_time.clone(),
         );
+    }
 
+    fn register_sink_forwarder_metrics(metrics: &Self, registry: &mut Registry) {
         // Pipeline sink forwarder sub-registry
         let sink_forwarder_registry = registry.sub_registry_with_prefix("forwarder");
 
@@ -852,7 +863,10 @@ impl PipelineMetrics {
             "Processing times of write operations to a fallback sink (100 microseconds to 20 minutes)",
             metrics.sink_forwarder.fbsink_write_processing_time.clone(),
         );
+    }
 
+    fn register_jetstream_isb_metrics(metrics: &Self, registry: &mut Registry) {
+        // Pipeline JetStream ISB sub-registry
         let jetstream_isb_registry = registry.sub_registry_with_prefix("isb_jetstream");
         jetstream_isb_registry.register(
             JETSTREAM_ISB_READ_ERROR_TOTAL,
@@ -879,11 +893,13 @@ impl PipelineMetrics {
             "Total number of jetstream write timeouts",
             metrics.jetstream_isb.write_timeout_total.clone(),
         );
+        // isbSoftUsage is indicative of the buffer that is used up, it is calculated based on the messages in pending + ack pending
         jetstream_isb_registry.register(
             JETSTREAM_ISB_BUFFER_SOFT_USAGE,
             "Percentage of buffer soft usage",
             metrics.jetstream_isb.buffer_soft_usage.clone(),
         );
+        // isbSolidUsage is indicative of buffer that is used up, it is calculated based on the messages remaining in the stream (if it's not Limits retention policy)
         jetstream_isb_registry.register(
             JETSTREAM_ISB_BUFFER_SOLID_USAGE,
             "Percentage of buffer solid usage",
@@ -914,7 +930,10 @@ impl PipelineMetrics {
             "Processing times of Acks for jetstream",
             metrics.jetstream_isb.ack_time_total.clone(),
         );
+    }
 
+    fn register_vertex_metrics(metrics: &Self, registry: &mut Registry) {
+        // Pipeline vertex sub-registry
         let vertex_registry = registry.sub_registry_with_prefix("vertex");
         vertex_registry.register(
             VERTEX_PENDING,
@@ -926,7 +945,6 @@ impl PipelineMetrics {
             "Total number of pending messages",
             metrics.pending_raw.clone(),
         );
-        metrics
     }
 }
 
@@ -2058,9 +2076,25 @@ mod tests {
             "version".to_string(),
             "container_type".to_string(),
         );
+        let jetstream_isb_labels = jetstream_isb_metrics_labels("test_jetstream_isb");
         global_metrics.sdk_info.get_or_create(&sdk_labels).set(1);
 
         let metrics = monovertex_metrics();
+        let pipeline_metrics = pipeline_metrics();
+
+        let common_pipeline_labels = vec![
+            (PIPELINE_NAME_LABEL.to_string(), "test-pipeline".to_string()),
+            (PIPELINE_VERTEX_LABEL.to_string(), "test-vertex".to_string()),
+            (
+                PIPELINE_VERTEX_TYPE_LABEL.to_string(),
+                "test-vertex-type".to_string(),
+            ),
+            (
+                PIPELINE_REPLICA_LABEL.to_string(),
+                "test-replica".to_string(),
+            ),
+        ];
+
         // Use a fixed set of labels instead of the ones from mvtx_forward_metric_labels() since other test functions may also set it.
         let common_labels = vec![
             (
@@ -2114,6 +2148,31 @@ mod tests {
             .get_or_create(&common_labels)
             .observe(5.0);
 
+        // pipeline forwarder metrics
+        pipeline_metrics
+            .forwarder
+            .read_total
+            .get_or_create(&common_pipeline_labels)
+            .inc_by(10);
+
+        pipeline_metrics
+            .forwarder
+            .ack_processing_time
+            .get_or_create(&common_pipeline_labels)
+            .observe(5.0);
+
+        // populate jetstream isb metrics
+        pipeline_metrics
+            .jetstream_isb
+            .buffer_pending
+            .get_or_create(&jetstream_isb_labels)
+            .set(5);
+        pipeline_metrics
+            .jetstream_isb
+            .buffer_soft_usage
+            .get_or_create(&jetstream_isb_labels)
+            .set(10);
+
         // Validate the metric names
         let state = global_registry().registry.lock();
         let mut buffer = String::new();
@@ -2149,6 +2208,12 @@ mod tests {
             r#"monovtx_fallback_sink_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 5.0"#,
             r#"monovtx_fallback_sink_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_fallback_sink_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"forwarder_read_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 10"#,
+            r#"forwarder_ack_processing_time_sum{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 5.0"#,
+            r#"forwarder_ack_processing_time_count{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
+            r#"forwarder_ack_processing_time_bucket{le="100.0",pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
+            r#"isb_jetstream_buffer_soft_usage{buffer="test_jetstream_isb"} 10"#,
+            r#"isb_jetstream_buffer_pending{buffer="test_jetstream_isb"} 5"#,
         ];
 
         let got = buffer
