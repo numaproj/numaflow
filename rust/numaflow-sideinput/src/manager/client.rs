@@ -31,13 +31,6 @@ impl UserDefinedSideInputClient {
         Ok(Self { client })
     }
 
-    pub(crate) async fn ready(&mut self) -> bool {
-        match self.client.is_ready(Request::new(())).await {
-            Ok(response) => response.into_inner().ready,
-            Err(_) => false,
-        }
-    }
-
     pub(crate) async fn retrieve_side_input(&mut self) -> Result<SideInputResponse> {
         let response = self
             .client
