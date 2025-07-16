@@ -20903,7 +20903,7 @@
           "description": "Auth information"
         },
         "consumer": {
-          "description": "Consumer represents the name of the consumer of the stream",
+          "description": "Consumer represents the name of the consumer of the stream If not specified, a consumer with name `numaflow-\u003cpipeline_name\u003e-\u003cvertex_name\u003e-\u003cstream_name\u003e` will be created. If consumer name is specified, then the consumer must already exist in the Stream",
           "type": "string"
         },
         "stream": {
@@ -20921,8 +20921,7 @@
       },
       "required": [
         "url",
-        "stream",
-        "consumer"
+        "stream"
       ],
       "type": "object"
     },

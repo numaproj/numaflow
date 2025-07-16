@@ -8057,7 +8057,6 @@ spec:
                       url:
                         type: string
                     required:
-                    - consumer
                     - stream
                     - url
                     type: object
@@ -19615,7 +19614,6 @@ spec:
                             url:
                               type: string
                           required:
-                          - consumer
                           - stream
                           - url
                           type: object
@@ -31530,7 +31528,6 @@ spec:
                                 url:
                                   type: string
                               required:
-                              - consumer
                               - stream
                               - url
                               type: object
@@ -39416,7 +39413,6 @@ spec:
                       url:
                         type: string
                     required:
-                    - consumer
                     - stream
                     - url
                     type: object

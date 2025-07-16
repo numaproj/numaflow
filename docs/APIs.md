@@ -5361,9 +5361,14 @@ Stream represents the name of the stream.
 
 <td>
 
+<em>(Optional)</em>
 <p>
 
-Consumer represents the name of the consumer of the stream
+Consumer represents the name of the consumer of the stream If not
+specified, a consumer with name
+<code>numaflow-\<pipeline_name\>-\<vertex_name\>-\<stream_name\></code>
+will be created. If consumer name is specified, then the consumer must
+already exist in the Stream
 </p>
 
 </td>
