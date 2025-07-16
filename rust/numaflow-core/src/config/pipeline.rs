@@ -224,6 +224,7 @@ pub(crate) enum VertexConfig {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ReduceVtxConfig {
+    pub(crate) keyed: bool,
     pub(crate) reducer_config: ReducerConfig,
     pub(crate) wal_storage_config: Option<StorageConfig>,
 }
@@ -483,6 +484,7 @@ impl PipelineConfig {
 
                 (
                     VertexConfig::Reduce(ReduceVtxConfig {
+                        keyed: group_by.keyed.unwrap_or(true),
                         reducer_config: group_by.try_into()?,
                         wal_storage_config: storage_config,
                     }),

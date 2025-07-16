@@ -169,7 +169,7 @@ impl UserDefinedAlignedReduce {
         cln_token: CancellationToken,
     ) -> Result<()> {
         // Convert AlignedWindowMessage stream to ReduceRequest stream
-        let (req_tx, req_rx) = tokio::sync::mpsc::channel(100);
+        let (req_tx, req_rx) = tokio::sync::mpsc::channel(500);
 
         // Spawn a task to convert AlignedWindowMessages to ReduceRequests and send them to req_tx
         // NOTE: - This is not really required (for client side streaming reduce), we do this because

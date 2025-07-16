@@ -9,11 +9,19 @@ spec:
     readBatchSize: 50
   vertices:
     - name: in
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       scale:
         min: 1
       source:
         http: {}
     - name: atoi
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       scale:
         min: 1
       udf:
@@ -24,8 +32,8 @@ spec:
     - name: keyed-fixed-sum
       containerTemplate:
         env:
-          - name: NUMAFLOW_DEBUG
-            value: "false" # DO NOT forget the double quotes!!!
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       partitions: 2
       udf:
         container:
@@ -44,8 +52,8 @@ spec:
     - name: non-keyed-fixed-sum
       containerTemplate:
         env:
-          - name: NUMAFLOW_DEBUG
-            value: "false" # DO NOT forget the double quotes!!!
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
@@ -63,8 +71,8 @@ spec:
     - name: non-keyed-sliding-sum
       containerTemplate:
         env:
-          - name: NUMAFLOW_DEBUG
-            value: "false" # DO NOT forget the double quotes!!!
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
@@ -81,6 +89,10 @@ spec:
               volumeSize: 1Gi
               accessMode: ReadWriteOnce
     - name: sink
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       scale:
         min: 1
       sink:

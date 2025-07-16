@@ -9,19 +9,33 @@ spec:
     readBatchSize: 50
   vertices:
     - name: in
+      limits:
+        readBatchSize: 1
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       scale:
         min: 1
       source:
         http: {}
     - name: atoi
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       scale:
         min: 1
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
           image: quay.io/numaio/numaflow-go/map-even-odd:stable
-          imagePullPolicy: Always
+          imagePullPolicy: Never
     - name: compute-sum
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       partitions: 1
       udf:
         container:
@@ -39,6 +53,10 @@ spec:
               volumeSize: 10Gi
               accessMode: ReadWriteOnce
     - name: sink
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       scale:
         min: 1
       sink:

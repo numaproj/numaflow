@@ -9,9 +9,17 @@ spec:
     readBatchSize: 50
   vertices:
     - name: in
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       source:
         http: {}
     - name: atoi
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       scale:
         min: 1
       udf:
@@ -20,6 +28,10 @@ spec:
           image: quay.io/numaio/numaflow-go/map-even-odd:stable
           imagePullPolicy: Always
     - name: compute-sum
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       partitions: 2
       udf:
         container:
@@ -36,18 +48,23 @@ spec:
               volumeSize: 10Gi
               accessMode: ReadWriteOnce
     - name: sink
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       scale:
         min: 1
       sink:
-        udsink:
-          container:
-            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis_sink
-            image: quay.io/numaio/numaflow-go/redis-sink:stable
-            imagePullPolicy: Always
-            env:
-              - name: SINK_HASH_KEY
-                # The key is set in the format of "pipeline_name-vertex_name"
-                value: "even-odd-sum-sink"
+        log: {}
+#        udsink:
+#          container:
+#            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis_sink
+#            image: quay.io/numaio/numaflow-go/redis-sink:stable
+#            imagePullPolicy: Always
+#            env:
+#              - name: SINK_HASH_KEY
+#                # The key is set in the format of "pipeline_name-vertex_name"
+#                value: "even-odd-sum-sink"
   edges:
     - from: in
       to: atoi

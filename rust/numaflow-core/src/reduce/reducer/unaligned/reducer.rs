@@ -16,6 +16,7 @@ use numaflow_pb::objects::wal::GcEvent;
 use prost::Message as ProstMessage;
 use std::collections::HashMap;
 use std::ops::Sub;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -23,6 +24,8 @@ use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
+
+const DEFAULT_KEY_FOR_NON_KEYED_STREAM: &str = "NON_KEYED_STREAM";
 
 /// Represents an active reduce stream for a pnf slot.
 struct ActiveStream {
@@ -510,6 +513,8 @@ pub(crate) struct UnalignedReducer {
     allowed_lateness: Duration,
     /// current watermark for the reduce vertex.
     current_watermark: DateTime<Utc>,
+    /// Whether the reduce is keyed or not.
+    keyed: bool,
     /// Graceful shutdown timeout duration.
     graceful_timeout: Duration,
 }
@@ -522,6 +527,7 @@ impl UnalignedReducer {
         allowed_lateness: Duration,
         gc_wal: Option<AppendOnlyWal>,
         graceful_timeout: Duration,
+        keyed: bool,
     ) -> Self {
         Self {
             client,
@@ -532,6 +538,7 @@ impl UnalignedReducer {
             gc_wal,
             allowed_lateness,
             current_watermark: DateTime::from_timestamp_millis(-1).expect("Invalid timestamp"),
+            keyed,
             graceful_timeout,
         }
     }
@@ -553,6 +560,7 @@ impl UnalignedReducer {
         // the one that calls shutdown
         let hard_shutdown_token_owner = hard_shutdown_token.clone();
         let graceful_timeout = self.graceful_timeout;
+        let keyed = self.keyed;
 
         // spawn a task to cancel the token after graceful timeout when the main token is cancelled
         let shutdown_handle = tokio::spawn(async move {
@@ -596,10 +604,16 @@ impl UnalignedReducer {
                             continue;
                         }
 
-                        let Some(msg) = read_msg else {
+                        let Some(mut msg) = read_msg else {
                             // end of stream we can exit
                             break;
                         };
+
+                        // if the stream is not keyed, then we need to set all the messages to have the same key
+                        // so that all the messages go to the same reduce task.
+                        if !keyed {
+                            msg.keys = Arc::new([DEFAULT_KEY_FOR_NON_KEYED_STREAM.to_string()]);
+                        }
 
                          // update the watermark.
                         // we cannot simply assign incoming message's watermark as the current watermark,
@@ -921,6 +935,7 @@ mod tests {
             Duration::from_secs(0), // No allowed lateness for testing
             None,                   // No GC WAL for testing
             Duration::from_millis(50),
+            true,
         )
         .await;
 
@@ -1143,6 +1158,7 @@ mod tests {
             Duration::from_secs(0), // No allowed lateness for testing
             None,                   // No GC WAL for testing
             Duration::from_millis(50),
+            true,
         )
         .await;
 
@@ -1422,6 +1438,7 @@ mod tests {
             Duration::from_secs(0), // No allowed lateness for testing
             None,                   // No GC WAL for testing
             Duration::from_millis(50),
+            true,
         )
         .await;
 
@@ -1621,6 +1638,7 @@ mod tests {
             Duration::from_secs(0), // No allowed lateness for testing
             None,                   // No GC WAL for testing
             Duration::from_millis(50),
+            true,
         )
         .await;
 
@@ -1852,6 +1870,7 @@ mod tests {
             Duration::from_secs(0), // No allowed lateness for testing
             None,                   // No GC WAL for testing
             Duration::from_millis(50),
+            true,
         )
         .await;
 
