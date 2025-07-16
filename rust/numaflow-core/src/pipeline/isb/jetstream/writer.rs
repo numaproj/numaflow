@@ -136,8 +136,8 @@ impl JetstreamWriter {
                                     } else if let Some(is_full) = self.is_full.get(stream) {
                                         is_full.store(false, Ordering::Relaxed);
                                     }
-                                    pipeline_metrics().jetstream_isb.buffer_soft_usage.get_or_create(&buffer_labels).set((soft_usage * 100.0) as i64);
-                                    pipeline_metrics().jetstream_isb.buffer_solid_usage.get_or_create(&buffer_labels).set((solid_usage * 100.0) as i64);
+                                    pipeline_metrics().jetstream_isb.buffer_soft_usage.get_or_create(&buffer_labels).set(soft_usage);
+                                    pipeline_metrics().jetstream_isb.buffer_solid_usage.get_or_create(&buffer_labels).set(solid_usage);
                                     pipeline_metrics().jetstream_isb.buffer_pending.get_or_create(&buffer_labels).set(num_pending as i64);
                                     pipeline_metrics().jetstream_isb.buffer_ack_pending.get_or_create(&buffer_labels).set(num_ack_pending as i64);
                                 }

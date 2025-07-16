@@ -14,6 +14,7 @@ use rcgen::{CertifiedKey, generate_simple_self_signed};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::net::SocketAddr;
+use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use std::{env, iter};
@@ -457,8 +458,8 @@ pub(crate) struct JetStreamISBMetrics {
     pub(crate) write_error_total: Family<Vec<(String, String)>, Counter>,
     pub(crate) write_timeout_total: Family<Vec<(String, String)>, Counter>,
 
-    pub(crate) buffer_soft_usage: Family<Vec<(String, String)>, Gauge>,
-    pub(crate) buffer_solid_usage: Family<Vec<(String, String)>, Gauge>,
+    pub(crate) buffer_soft_usage: Family<Vec<(String, String)>, Gauge<f64, AtomicU64>>,
+    pub(crate) buffer_solid_usage: Family<Vec<(String, String)>, Gauge<f64, AtomicU64>>,
     pub(crate) buffer_pending: Family<Vec<(String, String)>, Gauge>,
     pub(crate) buffer_ack_pending: Family<Vec<(String, String)>, Gauge>,
 
@@ -476,8 +477,8 @@ impl JetStreamISBMetrics {
             write_error_total: Family::<Vec<(String, String)>, Counter>::default(),
             write_timeout_total: Family::<Vec<(String, String)>, Counter>::default(),
 
-            buffer_soft_usage: Family::<Vec<(String, String)>, Gauge>::default(),
-            buffer_solid_usage: Family::<Vec<(String, String)>, Gauge>::default(),
+            buffer_soft_usage: Family::<Vec<(String, String)>, Gauge<f64, AtomicU64>>::default(),
+            buffer_solid_usage: Family::<Vec<(String, String)>, Gauge<f64, AtomicU64>>::default(),
             buffer_pending: Family::<Vec<(String, String)>, Gauge>::default(),
             buffer_ack_pending: Family::<Vec<(String, String)>, Gauge>::default(),
 
@@ -2171,7 +2172,7 @@ mod tests {
             .jetstream_isb
             .buffer_soft_usage
             .get_or_create(&jetstream_isb_labels)
-            .set(10);
+            .set(0.22);
 
         // Validate the metric names
         let state = global_registry().registry.lock();
@@ -2212,7 +2213,7 @@ mod tests {
             r#"forwarder_ack_processing_time_sum{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 5.0"#,
             r#"forwarder_ack_processing_time_count{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
             r#"forwarder_ack_processing_time_bucket{le="100.0",pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
-            r#"isb_jetstream_buffer_soft_usage{buffer="test_jetstream_isb"} 10"#,
+            r#"isb_jetstream_buffer_soft_usage{buffer="test_jetstream_isb"} 0.22"#,
             r#"isb_jetstream_buffer_pending{buffer="test_jetstream_isb"} 5"#,
         ];
 
