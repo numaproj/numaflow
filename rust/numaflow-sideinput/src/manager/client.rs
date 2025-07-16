@@ -18,17 +18,17 @@ pub(crate) struct UserDefinedSideInputClient {
 }
 
 impl UserDefinedSideInputClient {
-    pub(crate) async fn new(uds_path: PathBuf) -> Result<Self> {
+    pub(crate) async fn new(
+        uds_path: PathBuf,
+        server_info_path: PathBuf,
+        cln_token: CancellationToken,
+    ) -> Result<Self> {
         let channel = create_rpc_channel(uds_path).await?;
         let client = SideInputClient::new(channel);
-        Ok(Self { client })
-    }
 
-    pub(crate) async fn ready(&mut self) -> bool {
-        match self.client.is_ready(Request::new(())).await {
-            Ok(response) => response.into_inner().ready,
-            Err(_) => false,
-        }
+        numaflow_shared::server_info::sdk_server_info(server_info_path, cln_token.clone()).await?;
+
+        Ok(Self { client })
     }
 
     pub(crate) async fn retrieve_side_input(&mut self) -> Result<SideInputResponse> {

@@ -156,7 +156,10 @@ pub(crate) async fn run_sideinput(
                 .expect("side-inputs-store is required");
             let side_input_store = Box::leak(side_input_store.clone().into_boxed_str());
 
-            let mode = SideInputMode::Manager { side_input_store };
+            let mode = SideInputMode::Manager {
+                side_input_store,
+                server_info_path: SIDE_INPUT_SERVER_INFO_FILE,
+            };
             Ok(
                 numaflow_sideinput::run(mode, SIDE_INPUT_SOCKET_FILE.into(), env_vars, cln_token)
                     .await?,

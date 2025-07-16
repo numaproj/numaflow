@@ -1,5 +1,5 @@
 use crate::Result;
-use crate::config::get_vertex_name;
+use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::message::{IntOffset, Message, MessageID, Offset};
 use crate::reduce::reducer::aligned::windower::{AlignedWindowMessage, AlignedWindowOperation};
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
@@ -108,6 +108,7 @@ struct UdReducerResponse {
     pub response: ReduceResponse,
     pub index: i32,
     pub vertex_name: &'static str,
+    pub vertex_replica: u16,
 }
 
 impl From<UdReducerResponse> for Message {
@@ -139,7 +140,7 @@ impl From<UdReducerResponse> for Message {
             // this will be unique for each response which will be used for dedup (index is used because
             // each window can have multiple reduce responses)
             id: MessageID {
-                vertex_name: wrapper.vertex_name.into(),
+                vertex_name: format!("{}-{}", wrapper.vertex_name, wrapper.vertex_replica).into(),
                 offset: offset_str.into(),
                 index: wrapper.index,
             },
@@ -230,6 +231,7 @@ impl UserDefinedAlignedReduce {
                         response,
                         index,
                         vertex_name,
+                        vertex_replica: *get_vertex_replica(),
                     }
                     .into();
 

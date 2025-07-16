@@ -39,6 +39,7 @@ const DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS: u64 = 20; // time we will wait for UD
 const ENV_NUMAFLOW_SERVING_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
+const ENV_NUMAFLOW_WATERMARK_DELAY: &str = "NUMAFLOW_WATERMARK_DELAY_IN_MS";
 const ENV_PAF_BATCH_SIZE: &str = "PAF_BATCH_SIZE";
 const ENV_NUMAFLOW_GRACEFUL_TIMEOUT_SECS: &str = "NUMAFLOW_GRACEFUL_TIMEOUT_SECS";
 const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
@@ -48,6 +49,7 @@ pub(crate) const DEFAULT_STREAM_MAP_SOCKET: &str = "/var/run/numaflow/mapstream.
 const DEFAULT_MAP_SERVER_INFO_FILE: &str = "/var/run/numaflow/mapper-server-info";
 const DEFAULT_SERVING_STORE_SOCKET: &str = "/var/run/numaflow/serving.sock";
 const DEFAULT_SERVING_STORE_SERVER_INFO_FILE: &str = "/var/run/numaflow/serving-server-info";
+const DEFAULT_WATERMARK_DELAY_IN_MILLIS: u64 = 100;
 pub(crate) const VERTEX_TYPE_SOURCE: &str = "Source";
 pub(crate) const VERTEX_TYPE_SINK: &str = "Sink";
 pub(crate) const VERTEX_TYPE_MAP_UDF: &str = "MapUDF";
@@ -168,24 +170,8 @@ pub(crate) mod map {
     };
     use crate::error::Error;
 
-    /// A map can be run in different modes.
-    #[derive(Debug, Clone, PartialEq)]
-    pub enum MapMode {
-        Unary,
-        Batch,
-        Stream,
-    }
-
-    impl MapMode {
-        pub(crate) fn from_str(s: &str) -> Option<MapMode> {
-            match s {
-                "unary-map" => Some(MapMode::Unary),
-                "stream-map" => Some(MapMode::Stream),
-                "batch-map" => Some(MapMode::Batch),
-                _ => None,
-            }
-        }
-    }
+    /// re-export MapMode from shared.
+    pub use numaflow_shared::server_info::MapMode;
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct MapVtxConfig {
@@ -609,6 +595,11 @@ impl PipelineConfig {
             .clone()
             .is_none_or(|w| !w.disabled.unwrap_or(false))
         {
+            let delay_in_millis = env_vars
+                .get(ENV_NUMAFLOW_WATERMARK_DELAY)
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(DEFAULT_WATERMARK_DELAY_IN_MILLIS);
+
             Self::create_watermark_config(
                 vertex_obj.spec.watermark.clone(),
                 &namespace,
@@ -617,6 +608,7 @@ impl PipelineConfig {
                 &vertex,
                 &from_vertex_config,
                 &to_vertex_config,
+                delay_in_millis,
             )
         } else {
             None
@@ -709,6 +701,7 @@ impl PipelineConfig {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn create_watermark_config(
         watermark_spec: Option<Box<Watermark>>,
         namespace: &str,
@@ -717,6 +710,7 @@ impl PipelineConfig {
         vertex: &VertexConfig,
         from_vertex_config: &[FromVertexConfig],
         to_vertex_config: &[ToVertexConfig],
+        delay_in_millis: u64,
     ) -> Option<WatermarkConfig> {
         let max_delay = watermark_spec
             .as_ref()
@@ -750,6 +744,7 @@ impl PipelineConfig {
                 )
                 .into_boxed_str(),
             ),
+            delay: Some(Duration::from_millis(delay_in_millis)),
         };
 
         // Helper function to create bucket config for from_vertex
@@ -771,6 +766,7 @@ impl PipelineConfig {
                     )
                     .into_boxed_str(),
                 ),
+                delay: Some(Duration::from_millis(delay_in_millis)),
             };
 
         match vertex {
@@ -787,6 +783,7 @@ impl PipelineConfig {
                         format!("{namespace}-{pipeline_name}-{vertex_name}_SOURCE_PROCESSORS")
                             .into_boxed_str(),
                     ),
+                    delay: Some(Duration::from_millis(delay_in_millis)),
                 },
                 to_vertex_bucket_config: to_vertex_config
                     .iter()
@@ -960,6 +957,7 @@ mod tests {
                     partitions: 1,
                     ot_bucket: "default-simple-pipeline-in-out_OT",
                     hb_bucket: "default-simple-pipeline-in-out_PROCESSORS",
+                    delay: Some(Duration::from_millis(100)),
                 }],
                 to_vertex_config: vec![],
             })),
@@ -1081,12 +1079,14 @@ mod tests {
                     partitions: 1,
                     ot_bucket: "default-simple-pipeline-in_SOURCE_OT",
                     hb_bucket: "default-simple-pipeline-in_SOURCE_PROCESSORS",
+                    delay: Some(Duration::from_millis(100)),
                 },
                 to_vertex_bucket_config: vec![BucketConfig {
                     vertex: "out",
                     partitions: 1,
                     ot_bucket: "default-simple-pipeline-in-out_OT",
                     hb_bucket: "default-simple-pipeline-in-out_PROCESSORS",
+                    delay: Some(Duration::from_millis(100)),
                 }],
                 idle_config: None,
             })),
@@ -1179,6 +1179,7 @@ mod tests {
                     partitions: 1,
                     ot_bucket: "default-simple-pipeline-in-map_OT",
                     hb_bucket: "default-simple-pipeline-in-map_PROCESSORS",
+                    delay: Some(Duration::from_millis(100)),
                 }],
                 to_vertex_config: vec![],
             })),

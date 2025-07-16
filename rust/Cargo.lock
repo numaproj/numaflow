@@ -2478,6 +2478,7 @@ dependencies = [
  "numaflow-monitor",
  "numaflow-pb",
  "numaflow-pulsar",
+ "numaflow-shared",
  "numaflow-sqs",
  "parking_lot",
  "pep440_rs",
@@ -2619,6 +2620,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "numaflow-shared"
+version = "0.1.0"
+dependencies = [
+ "pep440_rs",
+ "semver",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-util",
+ "tracing",
+]
+
+[[package]]
 name = "numaflow-sideinput"
 version = "0.1.0"
 dependencies = [
@@ -2633,6 +2649,7 @@ dependencies = [
  "numaflow 0.2.1",
  "numaflow-models",
  "numaflow-pb",
+ "numaflow-shared",
  "serde_json",
  "tempfile",
  "thiserror 2.0.12",

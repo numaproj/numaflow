@@ -1,4 +1,4 @@
-use crate::config::get_vertex_name;
+use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::message::{IntOffset, Message, MessageID, Offset};
 use crate::reduce::reducer::unaligned::windower::{
     UnalignedWindowMessage, UnalignedWindowOperation, Window,
@@ -98,7 +98,7 @@ impl From<AccumulatorResponse> for Message {
                 .expect("event time should be present"),
             watermark: result.watermark.map(utc_from_timestamp),
             id: MessageID {
-                vertex_name: get_vertex_name().to_string().into(),
+                vertex_name: format!("{}-{}", get_vertex_name(), get_vertex_replica()).into(),
                 offset: result.id.into(),
                 index: 0,
             },
