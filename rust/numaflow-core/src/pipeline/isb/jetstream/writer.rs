@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use async_nats::jetstream::Context;
 use async_nats::jetstream::consumer::PullConsumer;
-use async_nats::jetstream::context::{Publish, PublishAckFuture};
+use async_nats::jetstream::context::{Publish, PublishAckFuture, PublishErrorKind};
 use async_nats::jetstream::publish::PublishAck;
 use async_nats::jetstream::stream::RetentionPolicy::Limits;
 use bytes::{Bytes, BytesMut};
@@ -177,7 +177,7 @@ impl JetstreamWriter {
         js_ctx: Context,
         stream_name: &str,
         max_length: usize,
-    ) -> Result<(f64, f64, u64, u64)> {
+    ) -> Result<(f64, f64, u64, usize)> {
         let mut stream = js_ctx
             .get_stream(stream_name)
             .await
@@ -210,7 +210,7 @@ impl JetstreamWriter {
             soft_usage,
             solid_usage,
             consumer_info.num_pending,
-            consumer_info.num_ack_pending as u64,
+            consumer_info.num_ack_pending,
         ))
     }
 
@@ -462,7 +462,21 @@ impl JetstreamWriter {
                     .await
                 {
                     Ok(paf) => break paf,
-                    Err(e) => error!(?e, "publishing failed, retrying"),
+                    Err(e) => {
+                        pipeline_metrics()
+                            .jetstream_isb
+                            .write_error_total
+                            .get_or_create(&jetstream_isb_metrics_labels(stream.name))
+                            .inc();
+                        error!(?e, "publishing failed, retrying");
+                        if let PublishErrorKind::TimedOut = e.kind() {
+                            pipeline_metrics()
+                                .jetstream_isb
+                                .write_timeout_total
+                                .get_or_create(&jetstream_isb_metrics_labels(stream.name))
+                                .inc();
+                        }
+                    }
                 },
                 None => error!("Stream {} not found in is_full map", stream),
             }
@@ -594,6 +608,11 @@ impl JetstreamWriter {
                             elapsed_ms = start_time.elapsed().as_millis(),
                             "Blocking write successful in",
                         );
+                        pipeline_metrics()
+                            .jetstream_isb
+                            .write_time_total
+                            .get_or_create(&jetstream_isb_metrics_labels(stream.name))
+                            .observe(start_time.elapsed().as_micros() as f64);
                         return Ok(ack);
                     }
                     Err(e) => {
@@ -602,6 +621,11 @@ impl JetstreamWriter {
                     }
                 },
                 Err(e) => {
+                    pipeline_metrics()
+                        .jetstream_isb
+                        .write_error_total
+                        .get_or_create(&jetstream_isb_metrics_labels(stream.name))
+                        .inc();
                     error!(?e, "publishing failed, retrying");
                     sleep(Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS)).await;
                 }
@@ -1007,7 +1031,7 @@ mod tests {
         }
 
         // Fetch buffer usage
-        let (soft_usage, _) =
+        let (soft_usage, _, _, _) =
             JetstreamWriter::fetch_buffer_usage(context.clone(), stream.name, max_length)
                 .await
                 .unwrap();

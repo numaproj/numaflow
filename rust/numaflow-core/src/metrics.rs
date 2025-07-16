@@ -105,6 +105,8 @@ const PIPELINE_TRANSFORMER_DROP_TOTAL: &str = "transformer_drop";
 const JETSTREAM_ISB_ISFULL_ERROR_TOTAL: &str = "isFull_error";
 const JETSTREAM_ISB_ISFULL_TOTAL: &str = "isFull";
 const JETSTREAM_ISB_WRITE_TIMEOUT_TOTAL: &str = "write_timeout";
+const JETSTREAM_ISB_WRITE_ERROR_TOTAL: &str = "write_error";
+const JETSTREAM_ISB_READ_ERROR_TOTAL: &str = "read_error";
 
 // pending as gauge for mvtx (these metric names are hardcoded in the auto-scaler)
 const PENDING: &str = "pending";
@@ -137,9 +139,9 @@ const SINK_TIME: &str = "time";
 const FALLBACK_SINK_TIME: &str = "time";
 
 // jetstream isb processing times
-const JETSTREAM_ISB_READ_TIME_TOTAL: &str = "read_time";
-const JETSTREAM_ISB_WRITE_TIME_TOTAL: &str = "write_time";
-const JETSTREAM_ISB_ACK_TIME_TOTAL: &str = "ack_time";
+const JETSTREAM_ISB_READ_TIME_TOTAL: &str = "read_time_total";
+const JETSTREAM_ISB_WRITE_TIME_TOTAL: &str = "write_time_total";
+const JETSTREAM_ISB_ACK_TIME_TOTAL: &str = "ack_time_total";
 
 /// A deep healthcheck for components. Each component should implement IsReady for both builtins and
 /// user-defined containers.
@@ -853,7 +855,7 @@ impl PipelineMetrics {
 
         let jetstream_isb_registry = registry.sub_registry_with_prefix("isb_jetstream");
         jetstream_isb_registry.register(
-            READ_ERROR_TOTAL,
+            JETSTREAM_ISB_READ_ERROR_TOTAL,
             "Total number of jetstream read errors",
             metrics.jetstream_isb.read_error_total.clone(),
         );
@@ -868,7 +870,7 @@ impl PipelineMetrics {
             metrics.jetstream_isb.isfull_total.clone(),
         );
         jetstream_isb_registry.register(
-            WRITE_ERROR_TOTAL,
+            JETSTREAM_ISB_WRITE_ERROR_TOTAL,
             "Total number of jetstream write errors",
             metrics.jetstream_isb.write_error_total.clone(),
         );
