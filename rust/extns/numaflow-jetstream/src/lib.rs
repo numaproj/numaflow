@@ -60,6 +60,12 @@ pub struct TlsClientAuthCerts {
     pub client_cert_private_key: String,
 }
 
+/// Consumer name field is optional in the spec.
+/// If not provided, we will use a default name in the format of:
+///     - `numaflow-{pipeline_name}-{vertex_name}-{stream_name}` for pipeline
+///     - `numaflow-{pipeline_name}mvtx-{stream_name}` for monovertex
+/// If the user specifies a consumer name, we expect the consumer to already exist in the stream.
+/// If the user does not specify a consumer name, we will create a new consumer on the stream.
 #[derive(Debug, Clone, PartialEq)]
 pub enum JetstreamConsumerName {
     UserSpecified(String),
@@ -864,5 +870,16 @@ XdvExDsAdjbkBG7ynn9pmMgIJg==
             messages.is_empty(),
             "No messages should be returned after all messages are acked"
         );
+    }
+
+    #[test]
+    fn test_jetstream_consumer_name_as_ref_user_specified() {
+        let user_specified_name = JetstreamConsumerName::UserSpecified("my-consumer".to_string());
+        let name_ref: &str = user_specified_name.as_ref();
+        assert_eq!(name_ref, "my-consumer");
+
+        let default_name = JetstreamConsumerName::Default("default-consumer".to_string());
+        let name_ref: &str = default_name.as_ref();
+        assert_eq!(name_ref, "default-consumer");
     }
 }
