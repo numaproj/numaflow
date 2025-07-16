@@ -3,8 +3,6 @@
 //!
 //! [SideInput]: https://numaflow.numaproj.io/user-guide/reference/side-inputs/
 
-#![allow(dead_code)]
-
 use crate::error::{Error, Result};
 use crate::manager::SideInputTrigger;
 use async_nats::jetstream::Context;
