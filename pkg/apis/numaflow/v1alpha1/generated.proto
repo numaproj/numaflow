@@ -840,8 +840,8 @@ message JetStreamSource {
   optional string stream = 2;
 
   // Consumer represents the name of the consumer of the stream
-  // If not specified, a consumer with name `numaflow-<pipeline_name>-<vertex_name>-<stream_name>` will be created.
-  // If consumer name is specified, then the consumer must already exist in the Stream
+  // If not specified, a consumer with name `numaflow-pipeline_name-vertex_name-stream_name` will be created.
+  // If consumer name is specified, then the consumer must already exist on the Stream
   // +optional
   optional string consumer = 3;
 
