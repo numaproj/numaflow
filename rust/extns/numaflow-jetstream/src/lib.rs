@@ -61,10 +61,25 @@ pub struct TlsClientAuthCerts {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum JetstreamConsumerName {
+    UserSpecified(String),
+    Default(String),
+}
+
+impl AsRef<str> for JetstreamConsumerName {
+    fn as_ref(&self) -> &str {
+        match self {
+            JetstreamConsumerName::UserSpecified(name) => name,
+            JetstreamConsumerName::Default(name) => name,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct JetstreamSourceConfig {
     pub addr: String,
     pub stream: String,
-    pub consumer: String,
+    pub consumer: JetstreamConsumerName,
     pub auth: Option<NatsAuth>,
     pub tls: Option<TlsConfig>,
 }
@@ -174,24 +189,36 @@ impl JetstreamActor {
             })?;
 
         let js_ctx = async_nats::jetstream::new(client);
-        let consumer: PullConsumer = js_ctx
-            .create_consumer_on_stream(
-                consumer::pull::Config {
-                    durable_name: Some(config.consumer.clone()),
-                    description: Some("Numaflow Jetstream Consumer".into()),
-                    deliver_policy: DeliverPolicy::All,
-                    ack_policy: AckPolicy::Explicit,
-                    ..Default::default()
-                },
-                &config.stream,
-            )
-            .await
-            .map_err(|e| {
-                Error::Jetstream(format!(
-                    "Creating consumer {} on stream {}: {e:?}",
-                    config.consumer, config.stream
-                ))
-            })?;
+        let consumer: PullConsumer = match config.consumer {
+            JetstreamConsumerName::UserSpecified(name) => js_ctx
+                .get_consumer_from_stream(&name, &config.stream)
+                .await
+                .map_err(|e| {
+                    Error::Jetstream(format!(
+                        "Getting consumer {} from Jetstream stream {}: {e:?}",
+                        name, config.stream
+                    ))
+                })?,
+            JetstreamConsumerName::Default(name) => js_ctx
+                .create_consumer_on_stream(
+                    consumer::pull::Config {
+                        durable_name: Some(name.clone()),
+                        description: Some("Numaflow Jetstream Consumer".into()),
+                        deliver_policy: DeliverPolicy::All,
+                        ack_policy: AckPolicy::Explicit,
+                        ..Default::default()
+                    },
+                    &config.stream,
+                )
+                .await
+                .map_err(|e| {
+                    Error::Jetstream(format!(
+                        "Creating consumer {} on stream {}: {e:?}",
+                        name, config.stream
+                    ))
+                })?,
+        };
+
         let message_stream = consumer.messages().await.unwrap();
 
         tokio::spawn(async move {
@@ -739,7 +766,7 @@ XdvExDsAdjbkBG7ynn9pmMgIJg==
         let config = JetstreamSourceConfig {
             addr: "localhost".to_string(),
             stream: stream_name.clone(),
-            consumer: stream_name,
+            consumer: JetstreamConsumerName::UserSpecified(stream_name),
             auth: None,
             tls: None,
         };
