@@ -16,6 +16,7 @@ bytes.workspace = true
 tower.workspace = true
 numaflow-pb.workspace = true
 numaflow-models.workspace = true
+numaflow-shared.workspace = true
 serde_json.workspace = true
 tonic.workspace = true
 chrono.workspace = true

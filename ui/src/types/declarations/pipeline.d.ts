@@ -205,6 +205,22 @@ export interface PipelineHealthFetchResult {
   refresh: () => void;
 }
 
+export interface MonoVertexHealthFetchResult {
+  data?: MonoVertexHealthData;
+  loading: boolean;
+  error: any;
+  refresh: () => void;
+}
+
+export interface MonoVertexHealthData {
+  dataHealthCode?: string;
+  dataHealthMessage: string;
+  dataHealthStatus: string;
+  resourceHealthCode0?: string;
+  resourceHealthMessage: string;
+  resourceHealthStatus: string;
+}
+
 export interface PipelineHealthData {
   dataHealthCode?: string;
   dataHealthMessage: string;

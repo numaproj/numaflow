@@ -335,6 +335,9 @@ export const GetConsolidatedHealthStatus = (
   resourceHealthStatus: string,
   dataHealthStatus: string
 ): string => {
+  if (!pipelineStatus || !resourceHealthStatus || !dataHealthStatus) {
+    return UNKNOWN;
+  }
   if (
     compareIgnoreCase(pipelineStatus, PAUSING) ||
     compareIgnoreCase(pipelineStatus, PAUSED)
