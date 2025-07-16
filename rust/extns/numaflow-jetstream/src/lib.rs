@@ -729,11 +729,10 @@ XdvExDsAdjbkBG7ynn9pmMgIJg==
     use async_nats::jetstream::stream::Config as StreamConfig;
     use std::time::Duration;
 
-    async fn setup_jetstream() -> (Context, String) {
+    async fn setup_jetstream(stream_name: &str, create_consumer: bool) -> Context {
         let client = async_nats::connect("localhost").await.unwrap();
         let js = async_nats::jetstream::new(client);
 
-        let stream_name = "js_source_test_stream";
         let _ = js.delete_stream(stream_name).await;
         let stream = js
             .get_or_create_stream(StreamConfig {
@@ -743,36 +742,175 @@ XdvExDsAdjbkBG7ynn9pmMgIJg==
             .await
             .unwrap();
 
-        stream
-            .get_or_create_consumer(
-                stream_name,
-                async_nats::jetstream::consumer::pull::Config {
-                    durable_name: Some(stream_name.to_string()),
-                    ..Default::default()
-                },
-            )
-            .await
-            .unwrap();
+        if create_consumer {
+            stream
+                .get_or_create_consumer(
+                    stream_name,
+                    async_nats::jetstream::consumer::pull::Config {
+                        durable_name: Some(stream_name.to_string()),
+                        ..Default::default()
+                    },
+                )
+                .await
+                .unwrap();
+        }
 
-        (js, stream_name.to_string())
+        js
     }
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
-    async fn test_jetstream_source() {
+    async fn test_jetstream_source_user_specified_consumer_name() {
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-        let (js, stream_name) = setup_jetstream().await;
+
+        let stream_name = "test_jetstream_source_user_specified_consumer_name";
+        // When user specified consumer name, but it doesn't exist, it should return an error
+        let _ = setup_jetstream(stream_name, false).await;
+
+        let config = JetstreamSourceConfig {
+            addr: "localhost".to_string(),
+            stream: stream_name.into(),
+            consumer: JetstreamConsumerName::UserSpecified(stream_name.into()),
+            auth: None,
+            tls: None,
+        };
+
+        let read_timeout = Duration::from_secs(1);
+        let source = JetstreamSource::connect(config.clone(), 30, read_timeout).await;
+        assert!(
+            matches!(source, Err(Error::Jetstream(e)) if e.contains(format!("Getting consumer {} from Jetstream stream {}", stream_name, stream_name).as_str()))
+        );
+
+        // When user specified consumer name, and it exists, it should connect successfully
+        let js = setup_jetstream(stream_name, true).await;
+        for i in 0..100 {
+            js.publish(stream_name, format!("message {}", i).into())
+                .await
+                .unwrap();
+        }
+        let config = JetstreamSourceConfig {
+            addr: "localhost".to_string(),
+            stream: stream_name.into(),
+            consumer: JetstreamConsumerName::UserSpecified(stream_name.into()),
+            auth: None,
+            tls: None,
+        };
+        let source = JetstreamSource::connect(config, 30, read_timeout)
+            .await
+            .unwrap();
+
+        // Read messages
+        let messages = source.read_messages().await.unwrap();
+        assert_eq!(messages.len(), 30);
+        let pending = source.pending_messages().await.unwrap();
+        assert_eq!(
+            pending,
+            Some(100),
+            "Pending messages should include unacknowledged messages"
+        );
+
+        // Ack messages
+        let offsets: Vec<u64> = messages.iter().map(|msg| msg.stream_sequence).collect();
+        source.ack_messages(offsets).await.unwrap();
+
+        // Check pending messages
+        // If checked immediately, Nats server intermittently returns 1 more than the actual value
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        let pending = source.pending_messages().await.unwrap();
+        assert_eq!(
+            pending,
+            Some(70),
+            "Pending messages should be 70 after acking 30 messages"
+        );
+
+        // Read remaining messages
+        let messages = source.read_messages().await.unwrap();
+        assert_eq!(messages.len(), 30);
+
+        // Ack remaining messages
+        let offsets: Vec<u64> = messages.iter().map(|msg| msg.stream_sequence).collect();
+        source.ack_messages(offsets).await.unwrap();
+
+        // Check pending messages
+        // If checked immediately, Nats server intermittently returns 1 more than the actual value
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        let pending = source.pending_messages().await.unwrap();
+        assert_eq!(
+            pending,
+            Some(40),
+            "Pending messages should be 40 after acking another 30 messages"
+        );
+
+        // Read remaining messages
+        let messages = source.read_messages().await.unwrap();
+        assert_eq!(messages.len(), 30);
+
+        // Ack remaining messages
+        let offsets: Vec<u64> = messages.iter().map(|msg| msg.stream_sequence).collect();
+        source.ack_messages(offsets).await.unwrap();
+
+        // Check pending messages
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        let pending = source.pending_messages().await.unwrap();
+        assert_eq!(
+            pending,
+            Some(10),
+            "Pending messages should be 10 after acking another 30 messages"
+        );
+
+        // Read remaining messages
+        let messages = source.read_messages().await.unwrap();
+        assert_eq!(messages.len(), 10);
+
+        // Ack remaining messages
+        let offsets: Vec<u64> = messages.iter().map(|msg| msg.stream_sequence).collect();
+        source.ack_messages(offsets).await.unwrap();
+
+        // Check pending messages
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        let pending = source.pending_messages().await.unwrap();
+        assert_eq!(
+            pending,
+            Some(0),
+            "Pending messages should be 0 after acking all messages"
+        );
+
+        // Ensure read operation returns after the read timeout
+        let start = Instant::now();
+        let messages = source.read_messages().await.unwrap();
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed < read_timeout + Duration::from_millis(100),
+            "Read operation should return in 1 second"
+        );
+        assert!(
+            messages.is_empty(),
+            "No messages should be returned after all messages are acked"
+        );
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_jetstream_source_default_consumer_name() {
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
+        let stream_name = "test_jetstream_source_default_consumer_name";
+        // Consumer is not created here
+        let js = setup_jetstream(stream_name, false).await;
 
         for i in 0..100 {
-            js.publish(stream_name.clone(), format!("message {}", i).into())
+            js.publish(stream_name, format!("message {}", i).into())
                 .await
                 .unwrap();
         }
 
         let config = JetstreamSourceConfig {
             addr: "localhost".to_string(),
-            stream: stream_name.clone(),
-            consumer: JetstreamConsumerName::UserSpecified(stream_name),
+            stream: stream_name.into(),
+            consumer: JetstreamConsumerName::Default(format!(
+                "numaflow-testpipeline-{}-in",
+                stream_name
+            )),
             auth: None,
             tls: None,
         };
