@@ -5,6 +5,7 @@ use crate::reduce::reducer::aligned::windower::{AlignedWindowMessage, AlignedWin
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 use numaflow_pb::clients::reduce::reduce_client::ReduceClient;
 use numaflow_pb::clients::reduce::{ReduceRequest, ReduceResponse, reduce_request};
+use std::ops::Sub;
 use std::sync::Arc;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
@@ -133,7 +134,8 @@ impl From<UdReducerResponse> for Message {
             },
             value: result.value.into(),
             offset: Offset::Int(IntOffset::new(0, 0)),
-            event_time: utc_from_timestamp(window.end.unwrap()),
+            event_time: utc_from_timestamp(window.end.unwrap())
+                .sub(chrono::Duration::milliseconds(1)),
             watermark: window
                 .end
                 .map(|ts| utc_from_timestamp(ts) - chrono::Duration::milliseconds(1)),
