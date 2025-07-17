@@ -1058,6 +1058,15 @@ pub(crate) fn pipeline_drop_metric_labels(
 pub(crate) fn jetstream_isb_metrics_labels(buffer_name: &str) -> Vec<(String, String)> {
     vec![("buffer".to_string(), buffer_name.to_string())]
 }
+pub(crate) fn jetstream_isb_error_metrics_labels(
+    buffer_name: &str,
+    reason: String,
+) -> Vec<(String, String)> {
+    vec![
+        ("buffer".to_string(), buffer_name.to_string()),
+        ("reason".to_string(), reason),
+    ]
+}
 
 /// metrics_handler is used to generate and return a snapshot of the
 /// current state of the metrics in the global registry
@@ -2078,6 +2087,8 @@ mod tests {
             "container_type".to_string(),
         );
         let jetstream_isb_labels = jetstream_isb_metrics_labels("test_jetstream_isb");
+        let jetstream_isb_error_labels =
+            jetstream_isb_error_metrics_labels("test_jetstream_isb", "test_error".to_string());
         global_metrics.sdk_info.get_or_create(&sdk_labels).set(1);
 
         let metrics = monovertex_metrics();
@@ -2173,6 +2184,11 @@ mod tests {
             .buffer_soft_usage
             .get_or_create(&jetstream_isb_labels)
             .set(0.22);
+        pipeline_metrics
+            .jetstream_isb
+            .write_error_total
+            .get_or_create(&jetstream_isb_error_labels)
+            .inc();
 
         // Validate the metric names
         let state = global_registry().registry.lock();
@@ -2213,6 +2229,7 @@ mod tests {
             r#"forwarder_ack_processing_time_sum{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 5.0"#,
             r#"forwarder_ack_processing_time_count{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
             r#"forwarder_ack_processing_time_bucket{le="100.0",pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
+            r#"isb_jetstream_write_error_total{buffer="test_jetstream_isb",reason="test_error"} 1"#,
             r#"isb_jetstream_buffer_soft_usage{buffer="test_jetstream_isb"} 0.22"#,
             r#"isb_jetstream_buffer_pending{buffer="test_jetstream_isb"} 5"#,
         ];
@@ -2223,6 +2240,8 @@ mod tests {
             .filter(|line| !line.starts_with("#"))
             .collect::<Vec<&str>>()
             .join("\n");
+
+        println!("{}", got);
 
         for t in expected {
             assert!(got.contains(t));

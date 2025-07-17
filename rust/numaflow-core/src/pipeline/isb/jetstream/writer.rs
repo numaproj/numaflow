@@ -28,8 +28,9 @@ use crate::error::Error;
 
 use crate::message::{IntOffset, Message, Offset};
 use crate::metrics::{
-    PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_metrics_labels, pipeline_drop_metric_labels,
-    pipeline_metric_labels, pipeline_metrics,
+    PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_error_metrics_labels,
+    jetstream_isb_metrics_labels, pipeline_drop_metric_labels, pipeline_metric_labels,
+    pipeline_metrics,
 };
 use crate::shared::forward;
 use crate::tracker::TrackerHandle;
@@ -150,7 +151,7 @@ impl JetstreamWriter {
                                 }
                                 Err(e) => {
                                     error!(?e, "Failed to fetch buffer info for stream {}, updating isFull to true", stream);
-                                    pipeline_metrics().jetstream_isb.isfull_error_total.get_or_create(&buffer_labels).inc();
+                                    pipeline_metrics().jetstream_isb.isfull_error_total.get_or_create(&jetstream_isb_error_metrics_labels(stream, e.to_string())).inc();
                                     if let Some(is_full) = self.is_full.get(stream) {
                                         is_full.store(true, Ordering::Relaxed);
                                     }
@@ -384,6 +385,13 @@ impl JetstreamWriter {
             .write_processing_time
             .get_or_create(&labels)
             .observe(write_processing_start.elapsed().as_micros() as f64);
+
+        // jetstream write time histogram metric
+        pipeline_metrics()
+            .jetstream_isb
+            .write_time_total
+            .get_or_create(&jetstream_isb_metrics_labels(partition_name))
+            .observe(write_processing_start.elapsed().as_micros() as f64);
     }
 
     /// Writes the message to the JetStream ISB and returns a future which can be
@@ -473,14 +481,20 @@ impl JetstreamWriter {
                         pipeline_metrics()
                             .jetstream_isb
                             .write_error_total
-                            .get_or_create(&jetstream_isb_metrics_labels(stream.name))
+                            .get_or_create(&jetstream_isb_error_metrics_labels(
+                                stream.name,
+                                e.kind().to_string(),
+                            ))
                             .inc();
                         error!(?e, "publishing failed, retrying");
                         if let PublishErrorKind::TimedOut = e.kind() {
                             pipeline_metrics()
                                 .jetstream_isb
                                 .write_timeout_total
-                                .get_or_create(&jetstream_isb_metrics_labels(stream.name))
+                                .get_or_create(&jetstream_isb_error_metrics_labels(
+                                    stream.name,
+                                    e.kind().to_string(),
+                                ))
                                 .inc();
                         }
                     }
@@ -538,6 +552,24 @@ impl JetstreamWriter {
                             ?e, stream = ?stream,
                             "Failed to resolve the future trying blocking write",
                         );
+                        pipeline_metrics()
+                            .jetstream_isb
+                            .write_error_total
+                            .get_or_create(&jetstream_isb_error_metrics_labels(
+                                stream.name,
+                                e.kind().to_string(),
+                            ))
+                            .inc();
+                        if let PublishErrorKind::TimedOut = e.kind() {
+                            pipeline_metrics()
+                                .jetstream_isb
+                                .write_timeout_total
+                                .get_or_create(&jetstream_isb_error_metrics_labels(
+                                    stream.name,
+                                    e.kind().to_string(),
+                                ))
+                                .inc();
+                        }
                         this.blocking_write(stream.clone(), message.clone(), cln_token.clone())
                             .await
                     }
@@ -983,7 +1015,6 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_fetch_buffer_info() {
-
         let js_url = "localhost:4222";
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();

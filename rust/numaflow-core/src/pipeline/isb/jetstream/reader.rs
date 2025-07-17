@@ -10,8 +10,8 @@ use crate::config::pipeline::isb_config::{CompressionType, ISBConfig};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, MessageID, MessageType, Metadata, Offset, ReadAck};
 use crate::metrics::{
-    PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_metrics_labels, pipeline_metric_labels,
-    pipeline_metrics,
+    PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_error_metrics_labels,
+    jetstream_isb_metrics_labels, pipeline_metric_labels, pipeline_metrics,
 };
 use crate::shared::grpc::utc_from_timestamp;
 use crate::tracker::TrackerHandle;
@@ -330,7 +330,10 @@ impl JetStreamReader {
                 pipeline_metrics()
                     .jetstream_isb
                     .read_error_total
-                    .get_or_create(&jetstream_isb_metrics_labels(self.stream.name))
+                    .get_or_create(&jetstream_isb_error_metrics_labels(
+                        self.stream.name,
+                        e.kind().to_string(),
+                    ))
                     .inc();
                 warn!(?e, stream=?self.stream, "Failed to get message batch from Jetstream (ignoring, will be retried)");
                 vec![]
