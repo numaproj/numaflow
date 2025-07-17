@@ -9,6 +9,8 @@ spec:
     readBatchSize: 50
   vertices:
     - name: in
+      limits:
+        readBatchSize: 1
       containerTemplate:
         env:
           - name: NUMAFLOW_RUNTIME
@@ -55,16 +57,15 @@ spec:
       scale:
         min: 1
       sink:
-        log: {}
-#        udsink:
-#          container:
-#            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis_sink
-#            image: quay.io/numaio/numaflow-go/redis-sink:stable
-#            imagePullPolicy: Always
-#            env:
-#              - name: SINK_HASH_KEY
-#                # The key is set in the format of "pipeline_name-vertex_name"
-#                value: "even-odd-sum-sink"
+        udsink:
+          container:
+            # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis_sink
+            image: quay.io/numaio/numaflow-go/redis-sink:stable
+            imagePullPolicy: Always
+            env:
+              - name: SINK_HASH_KEY
+                # The key is set in the format of "pipeline_name-vertex_name"
+                value: "even-odd-sum-sink"
   edges:
     - from: in
       to: atoi

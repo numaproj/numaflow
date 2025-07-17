@@ -98,7 +98,7 @@ var minimumSupportedSDKVersions = sdkConstraints{
 		ContainerTypeSessionreducer:    "0.9.0rc100",
 		ContainerTypeSideinput:         "0.9.0rc100",
 		ContainerTypeFbsinker:          "0.9.0rc100",
-		ContainerTypeAccumulator:       "0.9.0-z",
+		ContainerTypeAccumulator:       "0.9.0-rc100",
 	},
 	Go: map[ContainerType]string{
 		// meaning the minimum supported go SDK version is 0.9.0

@@ -9,6 +9,8 @@ spec:
     readBatchSize: 50
   vertices:
     - name: in
+      limits:
+        readBatchSize: 1
       containerTemplate:
         env:
           - name: NUMAFLOW_RUNTIME
