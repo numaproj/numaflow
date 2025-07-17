@@ -2768,7 +2768,7 @@ func schema_pkg_apis_numaflow_v1alpha1_JetStreamSource(ref common.ReferenceCallb
 					},
 					"consumer": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Consumer represents the name of the consumer of the stream If not specified, a consumer with name `numaflow-pipeline_name-vertex_name-stream_name` will be created. If consumer name is specified, then the consumer must already exist on the Stream",
+							Description: "Consumer represents the name of the consumer of the stream If not specified, a consumer with name `numaflow-pipeline_name-vertex_name-stream_name` will be created. If a consumer name is specified, a consumer with that name will be created if it doesn't exist on the stream.",
 							Default:     "",
 							Type:        []string{"string"},
 							Format:      "",

@@ -270,6 +270,13 @@ func (ns *jsSource) createOrUpdateConsumer(ctx context.Context) (jetstreamlib.Co
 	var consumer jetstreamlib.Consumer
 	if consumerName == "" {
 		consumerName = fmt.Sprintf("numaflow-%s-%s-%s", ns.pipelineName, ns.vertexName, streamName)
+	}
+	consumer, err = stream.Consumer(ctx, streamName, consumerName)
+	if err != nil {
+		if !errors.Is(err, jetstreamlib.ErrConsumerNotFound) {
+			return nil, fmt.Errorf("getting jetstream consumer for stream %q: %w", streamName, err)
+		}
+		ns.logger.Infow("Consumer not found on the stream, creating a new one", zap.String("stream", streamName), zap.String("consumer", consumerName))
 		consumer, err = stream.CreateOrUpdateConsumer(ctx, streamName, jetstreamlib.ConsumerConfig{
 			Durable:       consumerName,
 			Description:   "Numaflow JetStream consumer",
@@ -278,11 +285,6 @@ func (ns *jsSource) createOrUpdateConsumer(ctx context.Context) (jetstreamlib.Co
 		})
 		if err != nil {
 			return nil, fmt.Errorf("creating jetstream consumer for stream %q: %w", streamName, err)
-		}
-	} else {
-		consumer, err = stream.Consumer(ctx, streamName, consumerName)
-		if err != nil {
-			return nil, fmt.Errorf("getting jetstream consumer for stream %q: %w", streamName, err)
 		}
 	}
 	return consumer, nil

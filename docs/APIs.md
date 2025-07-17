@@ -5367,8 +5367,8 @@ Stream represents the name of the stream.
 Consumer represents the name of the consumer of the stream If not
 specified, a consumer with name
 <code>numaflow-pipeline_name-vertex_name-stream_name</code> will be
-created. If consumer name is specified, then the consumer must already
-exist on the Stream
+created. If a consumer name is specified, a consumer with that name will
+be created if it doesn’t exist on the stream.
 </p>
 
 </td>

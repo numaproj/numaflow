@@ -23,7 +23,7 @@ type JetStreamSource struct {
 	Stream string `json:"stream" protobuf:"bytes,2,opt,name=stream"`
 	// Consumer represents the name of the consumer of the stream
 	// If not specified, a consumer with name `numaflow-pipeline_name-vertex_name-stream_name` will be created.
-	// If consumer name is specified, then the consumer must already exist on the Stream
+	// If a consumer name is specified, a consumer with that name will be created if it doesn't exist on the stream.
 	// +optional
 	Consumer string `json:"consumer" protobuf:"bytes,3,opt,name=consumer"`
 	// TLS configuration for the nats client.
