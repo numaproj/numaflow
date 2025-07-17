@@ -32,7 +32,7 @@ impl JetstreamWatcher {
 }
 
 impl futures::Stream for JetstreamWatcher {
-    type Item = Result<Entry>;
+    type Item = Entry;
 
     fn poll_next(
         mut self: Pin<&mut Self>,
@@ -59,7 +59,7 @@ impl futures::Stream for JetstreamWatcher {
                     self.poll_next(cx)
                 }
                 Some(inner_entry) => match inner_entry {
-                    Ok(entry) => Poll::Ready(Some(Ok(entry))),
+                    Ok(entry) => Poll::Ready(Some(entry)),
                     Err(e) => {
                         warn!(?e, "Failed to get next entry from watcher");
                         self.recreate_future = Some(Box::pin(create_watcher(self.bucket.clone())));
@@ -258,13 +258,12 @@ mod tests {
         // Read initial entries
         for _ in 0..2 {
             match timeout(timeout_duration, watcher.next()).await {
-                Ok(Some(Ok(entry))) => {
+                Ok(Some(entry)) => {
                     entries.push((
                         entry.key.clone(),
                         String::from_utf8_lossy(&entry.value).to_string(),
                     ));
                 }
-                Ok(Some(Err(e))) => panic!("Error reading entry: {e:?}"),
                 Ok(None) => break,
                 Err(_) => panic!("Timeout waiting for entry"),
             }
@@ -282,13 +281,12 @@ mod tests {
         // Read new entries
         for _ in 0..2 {
             match timeout(timeout_duration, watcher.next()).await {
-                Ok(Some(Ok(entry))) => {
+                Ok(Some(entry)) => {
                     entries.push((
                         entry.key.clone(),
                         String::from_utf8_lossy(&entry.value).to_string(),
                     ));
                 }
-                Ok(Some(Err(e))) => panic!("Error reading entry: {e:?}"),
                 Ok(None) => break,
                 Err(_) => panic!("Timeout waiting for entry"),
             }

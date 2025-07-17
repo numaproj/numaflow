@@ -184,10 +184,6 @@ mod tests {
                 counter: Arc::new(AtomicU32::new(0)),
             }
         }
-
-        fn with_counter(counter: Arc<AtomicU32>) -> Self {
-            Self { counter }
-        }
     }
 
     #[tonic::async_trait]
