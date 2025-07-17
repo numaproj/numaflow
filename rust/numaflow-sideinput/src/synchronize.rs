@@ -5,14 +5,12 @@ use crate::error::{Error, Result};
 use crate::synchronize::persistence::update_side_input_file;
 use async_nats::jetstream;
 use async_nats::jetstream::Context;
-use async_nats::jetstream::kv::{Operation, Watch};
-use backoff::retry::Retry;
-use backoff::strategy::fixed;
+use async_nats::jetstream::kv::Operation;
 use std::collections::HashSet;
 use std::path;
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, trace, warn};
+use tracing::{info, trace, warn};
 
 /// Persistence to Local File Store related functions.
 mod persistence;
@@ -64,16 +62,21 @@ impl SideInputSynchronizer {
                 ))
             })?;
 
-        self.run(bucket).await;
+        let bucket_watcher =
+            numaflow_shared::isb::jetstream::JetstreamWatcher::new(bucket.clone()).await?;
+
+        self.run(bucket, bucket_watcher).await;
 
         Ok(())
     }
 
     /// Monitors the bucket for changes and updates the side input files accordingly. If
     /// `SideInputSynchronizer.run_once` is true, it will only process the initial values and then return.
-    async fn run(self, bucket: jetstream::kv::Store) {
-        let mut bucket_watcher = create_watcher(bucket.clone()).await;
-
+    async fn run(
+        self,
+        bucket: jetstream::kv::Store,
+        mut bucket_watcher: numaflow_shared::isb::jetstream::JetstreamWatcher,
+    ) {
         let mut seen_keys: Option<HashSet<String>> = None;
         if self.run_once {
             info!("Running side input synchronizer once for initialization");
@@ -86,20 +89,12 @@ impl SideInputSynchronizer {
                     info!("Cancellation token triggered. Stopping side input synchronizer.");
                     break;
                 }
-                val = bucket_watcher.next() => {
-                    let Some(val) = val else {
-                        warn!("SideInput watcher stopped, recreating watcher");
-                        bucket_watcher = create_watcher(bucket.clone()).await;
-                        continue;
-                    };
+                kv = bucket_watcher.next() => {
 
-                    let kv = match val {
-                        Ok(kv) => kv,
-                        Err(e) => {
-                            warn!(error = ?e, "Failed to get next kv entry, recreating watcher");
-                            bucket_watcher = create_watcher(bucket.clone()).await;
-                            continue;
-                        }
+                    // this watcher can never return None
+                    let Some(kv) = kv else {
+                        warn!("This should never happen, watcher should never return None");
+                        continue;
                     };
 
                     match kv.operation {
@@ -118,6 +113,7 @@ impl SideInputSynchronizer {
                             }
 
                             let value = bucket.get(&kv.key).await.unwrap().unwrap();
+
                             let mount_path = path::Path::new(self.mount_path).join(&kv.key);
                             update_side_input_file(mount_path, &value).unwrap();
                         }
@@ -146,32 +142,11 @@ impl SideInputSynchronizer {
     }
 }
 
-/// creates a watcher for the given bucket, will retry infinitely until it succeeds
-async fn create_watcher(bucket: jetstream::kv::Store) -> Watch {
-    const RECONNECT_INTERVAL: u64 = 1000;
-    // infinite retry
-    let interval = fixed::Interval::from_millis(RECONNECT_INTERVAL).take(usize::MAX);
-
-    Retry::new(
-        interval,
-        async || match bucket.watch_all_from_revision(1).await {
-            Ok(w) => Ok(w),
-            Err(e) => {
-                error!(?e, "Failed to create watcher");
-                Err(Error::SideInput(format!("Failed to create watcher: {e}")))
-            }
-        },
-        |_: &Error| true,
-    )
-    .await
-    .expect("Failed to create ot watcher")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::isb::ClientConfig;
     use crate::create_js_context;
+    use numaflow_shared::isb::jetstream::config::ClientConfig;
     use std::time::Duration;
     use tempfile::TempDir;
     use tokio_util::sync::CancellationToken;
@@ -290,8 +265,7 @@ mod tests {
 
         let config = ClientConfig {
             url: "localhost:4222".to_string(),
-            user: None,
-            password: None,
+            ..Default::default()
         };
 
         let cancellation_token = CancellationToken::new();
@@ -313,32 +287,6 @@ mod tests {
         } else {
             panic!("Expected SideInput error");
         }
-    }
-
-    #[cfg(feature = "nats-tests")]
-    #[tokio::test]
-    async fn test_create_watcher() {
-        // Connect to NATS server
-        let client = async_nats::connect("localhost:4222").await.unwrap();
-        let js_context = jetstream::new(client);
-
-        // Create a test KV store
-        let store_name = "test-watcher-store";
-        let _ = js_context.delete_key_value(store_name).await; // Clean up if exists
-
-        let kv_store = js_context
-            .create_key_value(jetstream::kv::Config {
-                bucket: store_name.to_string(),
-                ..Default::default()
-            })
-            .await
-            .unwrap();
-
-        // Test creating a watcher
-        let _watcher = create_watcher(kv_store.clone()).await;
-
-        // Clean up
-        let _ = js_context.delete_key_value(store_name).await;
     }
 
     /// Test that side input filtering works correctly
