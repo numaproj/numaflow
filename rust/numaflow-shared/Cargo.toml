@@ -21,3 +21,7 @@ tempfile = "3.20.0"
 
 [lints]
 workspace = true
+
+[features]
+nats-tests = []
+all-tests = ["nats-tests"]

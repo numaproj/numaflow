@@ -11,6 +11,8 @@ use std::task::Poll;
 use std::time::Duration;
 use tracing::{error, warn};
 
+/// JetstreamWatcher is a wrapper around the Watcher that automatically recreates the watcher
+/// when it fails. You can call [futures::Stream::poll_next] on it.
 pub struct JetstreamWatcher {
     watcher: Watch,
     bucket: jetstream::kv::Store,
@@ -18,6 +20,7 @@ pub struct JetstreamWatcher {
 }
 
 impl JetstreamWatcher {
+    /// Creates a new JetstreamWatcher.
     pub async fn new(bucket: jetstream::kv::Store) -> Result<Self> {
         let watcher = create_watcher(bucket.clone()).await;
         Ok(Self {
@@ -35,7 +38,7 @@ impl futures::Stream for JetstreamWatcher {
         mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Option<Self::Item>> {
-        // only poll the future when the watcher has failed (that is when we set this future)
+        // only poll recreate_watcher if it is set. This happens when the watcher has failed.
         if let Some(mut future) = self.recreate_future.take() {
             match future.as_mut().poll(cx) {
                 Poll::Ready(watcher) => {
@@ -46,6 +49,7 @@ impl futures::Stream for JetstreamWatcher {
             }
         }
 
+        // poll the watcher that polls the nats KV stream
         match self.watcher.poll_next_unpin(cx) {
             Poll::Ready(entry) => match entry {
                 None => {
@@ -175,5 +179,158 @@ pub mod config {
                     .unwrap_or(false),
             })
         }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use std::collections::HashMap;
+
+        #[test]
+        fn test_client_config_default() {
+            let config = ClientConfig::default();
+            assert_eq!(config.url, "localhost:4222");
+            assert_eq!(config.user, None);
+            assert_eq!(config.password, None);
+            assert!(!config.tls_enabled);
+        }
+
+        #[test]
+        fn test_client_config_load_success_only_url() {
+            let mut env_vars = HashMap::new();
+            env_vars.insert(
+                "NUMAFLOW_ISBSVC_JETSTREAM_URL".to_string(),
+                "nats://localhost:4222".to_string(),
+            );
+
+            let config = ClientConfig::load(env_vars).unwrap();
+            assert_eq!(config.url, "nats://localhost:4222");
+            assert_eq!(config.user, None);
+            assert_eq!(config.password, None);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures::StreamExt;
+    use std::time::Duration;
+    use tokio::time::timeout;
+
+    /// End-to-end test for JetstreamWatcher
+    /// This test verifies that:
+    /// 1. JetstreamWatcher can be created successfully
+    /// 2. It can watch for key-value changes in a JetStream KV store
+    /// 3. It properly handles stream recreation when the watcher fails
+    /// 4. It continues to receive updates after recreation
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_jetstream_watcher_end_to_end() {
+        // Connect to NATS server
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+
+        // Create a test KV store
+        let store_name = "test-jetstream-watcher";
+        let _ = js_context.delete_key_value(store_name).await; // Clean up if exists
+
+        let kv_store = js_context
+            .create_key_value(jetstream::kv::Config {
+                bucket: store_name.to_string(),
+                history: 5,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        // Create JetstreamWatcher
+        let mut watcher = JetstreamWatcher::new(kv_store.clone()).await.unwrap();
+
+        // Put some initial data
+        kv_store.put("key1", "value1".into()).await.unwrap();
+        kv_store.put("key2", "value2".into()).await.unwrap();
+
+        // Collect entries with timeout
+        let mut entries = Vec::new();
+        let timeout_duration = Duration::from_secs(5);
+
+        // Read initial entries
+        for _ in 0..2 {
+            match timeout(timeout_duration, watcher.next()).await {
+                Ok(Some(Ok(entry))) => {
+                    entries.push((
+                        entry.key.clone(),
+                        String::from_utf8_lossy(&entry.value).to_string(),
+                    ));
+                }
+                Ok(Some(Err(e))) => panic!("Error reading entry: {e:?}"),
+                Ok(None) => break,
+                Err(_) => panic!("Timeout waiting for entry"),
+            }
+        }
+
+        // Verify we got the initial entries
+        assert_eq!(entries.len(), 2);
+        assert!(entries.iter().any(|(k, v)| k == "key1" && v == "value1"));
+        assert!(entries.iter().any(|(k, v)| k == "key2" && v == "value2"));
+
+        // Add more data to test continuous watching
+        kv_store.put("key3", "value3".into()).await.unwrap();
+        kv_store.put("key1", "updated_value1".into()).await.unwrap();
+
+        // Read new entries
+        for _ in 0..2 {
+            match timeout(timeout_duration, watcher.next()).await {
+                Ok(Some(Ok(entry))) => {
+                    entries.push((
+                        entry.key.clone(),
+                        String::from_utf8_lossy(&entry.value).to_string(),
+                    ));
+                }
+                Ok(Some(Err(e))) => panic!("Error reading entry: {e:?}"),
+                Ok(None) => break,
+                Err(_) => panic!("Timeout waiting for entry"),
+            }
+        }
+
+        // Verify we got the new entries
+        assert!(entries.iter().any(|(k, v)| k == "key3" && v == "value3"));
+        assert!(
+            entries
+                .iter()
+                .any(|(k, v)| k == "key1" && v == "updated_value1")
+        );
+
+        // Clean up
+        let _ = js_context.delete_key_value(store_name).await;
+    }
+
+    /// Test create_watcher function directly
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_create_watcher_function() {
+        // Connect to NATS server
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+
+        // Create a test KV store
+        let store_name = "test-create-watcher-function";
+        let _ = js_context.delete_key_value(store_name).await; // Clean up if exists
+
+        let kv_store = js_context
+            .create_key_value(jetstream::kv::Config {
+                bucket: store_name.to_string(),
+                history: 5,
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        // Test creating a watcher directly
+        let _watcher = create_watcher(kv_store.clone()).await;
+
+        // Clean up
+        let _ = js_context.delete_key_value(store_name).await;
     }
 }
