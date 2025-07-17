@@ -3,15 +3,12 @@
 //!
 //! [SideInput]: https://numaflow.numaproj.io/user-guide/reference/side-inputs/
 
-#![allow(dead_code)]
-
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::manager::SideInputTrigger;
 use async_nats::jetstream::Context;
-use async_nats::{ConnectOptions, jetstream};
-use config::isb;
+use numaflow_shared::isb::jetstream::config::ClientConfig;
+use numaflow_shared::isb::jetstream::create_js_context;
 use std::collections::HashMap;
-use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 mod error;
@@ -111,7 +108,7 @@ async fn start_manager(
     let side_input_trigger = SideInputTrigger::new(trigger.schedule, trigger.timezone)?;
 
     manager::SideInputManager::new(side_input_store, trigger.name, client, cancellation_token)
-        .run(isb::ClientConfig::load(env_vars)?, side_input_trigger)
+        .run(ClientConfig::load(env_vars)?, side_input_trigger)
         .await
 }
 
@@ -138,26 +135,8 @@ async fn start_synchronizer(
 }
 
 async fn build_js_context(env_vars: HashMap<String, String>) -> Result<Context> {
-    let client = isb::ClientConfig::load(env_vars)?;
-    create_js_context(client).await
-}
-
-async fn create_js_context(config: isb::ClientConfig) -> Result<Context> {
-    // TODO: make these configurable. today this is hardcoded on Golang code too.
-    let mut opts = ConnectOptions::new()
-        .max_reconnects(None) // unlimited reconnects
-        .ping_interval(Duration::from_secs(3))
-        .retry_on_initial_connect();
-
-    if let (Some(user), Some(password)) = (config.user, config.password) {
-        opts = opts.user_and_password(user, password);
-    }
-
-    let js_client = async_nats::connect_with_options(&config.url, opts)
-        .await
-        .map_err(|e| Error::Connection(e.to_string()))?;
-
-    Ok(jetstream::new(js_client))
+    let client = ClientConfig::load(env_vars)?;
+    create_js_context(client).await.map_err(|e| e.into())
 }
 
 #[cfg(test)]
@@ -186,10 +165,6 @@ mod tests {
                 counter: Arc::new(AtomicU32::new(0)),
             }
         }
-
-        fn with_counter(counter: Arc<AtomicU32>) -> Self {
-            Self { counter }
-        }
     }
 
     #[tonic::async_trait]
@@ -214,10 +189,11 @@ mod tests {
                 .into_boxed_str(),
         );
 
-        let js_ctx = create_js_context(config::isb::ClientConfig {
+        let js_ctx = create_js_context(ClientConfig {
             url: "localhost:4222".to_string(),
             user: None,
             password: None,
+            ..Default::default()
         })
         .await?;
 

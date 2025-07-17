@@ -9,7 +9,10 @@ use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
 use crate::config::pipeline::isb_config::{CompressionType, ISBConfig};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, MessageID, MessageType, Metadata, Offset, ReadAck};
-use crate::metrics::{PIPELINE_PARTITION_NAME_LABEL, pipeline_metric_labels, pipeline_metrics};
+use crate::metrics::{
+    PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_error_metrics_labels,
+    jetstream_isb_metrics_labels, pipeline_metric_labels, pipeline_metrics,
+};
 use crate::shared::grpc::utc_from_timestamp;
 use crate::tracker::TrackerHandle;
 use crate::watermark::isb::ISBWatermarkHandle;
@@ -324,15 +327,23 @@ impl JetStreamReader {
                 batch
             }
             Err(e) => {
+                pipeline_metrics()
+                    .jetstream_isb
+                    .read_error_total
+                    .get_or_create(&jetstream_isb_error_metrics_labels(
+                        self.stream.name,
+                        e.kind().to_string(),
+                    ))
+                    .inc();
                 warn!(?e, stream=?self.stream, "Failed to get message batch from Jetstream (ignoring, will be retried)");
                 vec![]
             }
         };
 
         pipeline_metrics()
-            .forwarder
-            .read_processing_time
-            .get_or_create(&labels.to_vec())
+            .jetstream_isb
+            .read_time_total
+            .get_or_create(&jetstream_isb_metrics_labels(self.stream.name))
             .observe(start.elapsed().as_micros() as f64);
 
         debug!(
@@ -383,6 +394,7 @@ impl JetStreamReader {
                 .expect("Failed to acquire semaphore permit");
 
             tokio::spawn(Self::start_work_in_progress(
+                self.name(),
                 labels.to_vec(),
                 message.offset.clone(),
                 jetstream_message,
@@ -395,6 +407,12 @@ impl JetStreamReader {
 
             read_messages.push(message);
         }
+
+        pipeline_metrics()
+            .forwarder
+            .read_processing_time
+            .get_or_create(&labels.to_vec())
+            .observe(start.elapsed().as_micros() as f64);
 
         Ok(read_messages)
     }
@@ -440,6 +458,7 @@ impl JetStreamReader {
     /// sending the final `Ack` or `Nak` (due to some unhandled/unknown failure), we will send `Nak` to Jetstream.
     #[allow(clippy::too_many_arguments)]
     async fn start_work_in_progress(
+        stream_name: &str,
         labels: Vec<(String, String)>,
         offset: Offset,
         msg: JetstreamMessage,
@@ -486,11 +505,15 @@ impl JetStreamReader {
                         .await;
 
                     pipeline_metrics()
+                        .jetstream_isb
+                        .ack_time_total
+                        .get_or_create(&jetstream_isb_metrics_labels(stream_name))
+                        .observe(ack_start.elapsed().as_micros() as f64);
+                    pipeline_metrics()
                         .forwarder
                         .ack_processing_time
                         .get_or_create(&labels)
                         .observe(ack_start.elapsed().as_micros() as f64);
-
                     pipeline_metrics()
                         .forwarder
                         .ack_total

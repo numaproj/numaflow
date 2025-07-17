@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use async_nats::jetstream::Context;
 use async_nats::jetstream::consumer::PullConsumer;
-use async_nats::jetstream::context::{Publish, PublishAckFuture};
+use async_nats::jetstream::context::{Publish, PublishAckFuture, PublishErrorKind};
 use async_nats::jetstream::publish::PublishAck;
 use async_nats::jetstream::stream::RetentionPolicy::Limits;
 use bytes::{Bytes, BytesMut};
@@ -28,13 +28,21 @@ use crate::error::Error;
 
 use crate::message::{IntOffset, Message, Offset};
 use crate::metrics::{
-    PIPELINE_PARTITION_NAME_LABEL, pipeline_drop_metric_labels, pipeline_isb_metric_labels,
-    pipeline_metric_labels, pipeline_metrics,
+    PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_error_metrics_labels,
+    jetstream_isb_metrics_labels, pipeline_drop_metric_labels, pipeline_metric_labels,
+    pipeline_metrics,
 };
 use crate::shared::forward;
 use crate::tracker::TrackerHandle;
 use crate::watermark::WatermarkHandle;
 
+#[derive(Debug)]
+pub struct BufferInfo {
+    pub soft_usage: f64,
+    pub solid_usage: f64,
+    pub num_pending: u64,
+    pub num_ack_pending: usize,
+}
 /// Configuration for creating a JetstreamWriter
 #[derive(Clone)]
 pub(crate) struct ISBWriterConfig {
@@ -54,7 +62,7 @@ const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
 /// Writes to JetStream ISB. Exposes both write and blocking methods to write messages.
 /// It accepts a cancellation token to stop infinite retries during shutdown.
 /// JetstreamWriter is one to many mapping of streams to write messages to. It also
-/// maintains the buffer usage metrics for each stream.
+/// maintains the buffer usage metrics and pending metrics for each stream.
 ///
 /// Error handling and shutdown: Unlike udf components we will not have non retryable
 /// errors here all the failures are infinitely retried until the message is successfully
@@ -115,7 +123,7 @@ impl JetstreamWriter {
         this
     }
 
-    /// Checks the buffer usage metrics (soft and solid usage) for each stream in the streams vector.
+    /// Checks the buffer usage metrics (soft and solid usage) and pending metrics for each stream in the streams vector.
     /// If the usage is greater than the bufferUsageLimit, it sets the is_full flag to true.
     async fn check_stream_status(&mut self, cln_token: CancellationToken) {
         let mut interval =
@@ -126,18 +134,24 @@ impl JetstreamWriter {
                     for config in &*self.config {
                         for stream in &config.writer_config.streams {
                             let stream = stream.name;
-                            match Self::fetch_buffer_usage(self.js_ctx.clone(), stream, config.writer_config.max_length).await {
-                                Ok((soft_usage, solid_usage)) => {
-                                    if solid_usage >= config.writer_config.usage_limit && soft_usage >= config.writer_config.usage_limit {
+                            let buffer_labels = jetstream_isb_metrics_labels(stream);
+                            match Self::fetch_buffer_info(self.js_ctx.clone(), stream, config.writer_config.max_length).await {
+                                Ok(buffer_info) => {
+                                    if buffer_info.solid_usage >= config.writer_config.usage_limit && buffer_info.soft_usage >= config.writer_config.usage_limit {
                                         if let Some(is_full) = self.is_full.get(stream) {
                                             is_full.store(true, Ordering::Relaxed);
                                         }
                                     } else if let Some(is_full) = self.is_full.get(stream) {
                                         is_full.store(false, Ordering::Relaxed);
                                     }
+                                    pipeline_metrics().jetstream_isb.buffer_soft_usage.get_or_create(&buffer_labels).set(buffer_info.soft_usage);
+                                    pipeline_metrics().jetstream_isb.buffer_solid_usage.get_or_create(&buffer_labels).set(buffer_info.solid_usage);
+                                    pipeline_metrics().jetstream_isb.buffer_pending.get_or_create(&buffer_labels).set(buffer_info.num_pending as i64);
+                                    pipeline_metrics().jetstream_isb.buffer_ack_pending.get_or_create(&buffer_labels).set(buffer_info.num_ack_pending as i64);
                                 }
                                 Err(e) => {
-                                    error!(?e, "Failed to fetch buffer usage for stream {}, updating isFull to true", stream);
+                                    error!(?e, "Failed to fetch buffer info for stream {}, updating isFull to true", stream);
+                                    pipeline_metrics().jetstream_isb.isfull_error_total.get_or_create(&jetstream_isb_error_metrics_labels(stream, e.to_string())).inc();
                                     if let Some(is_full) = self.is_full.get(stream) {
                                         is_full.store(true, Ordering::Relaxed);
                                     }
@@ -153,7 +167,7 @@ impl JetstreamWriter {
         }
     }
 
-    /// Fetches the buffer usage metrics (soft and solid usage) for the given stream.
+    /// Fetches the buffer usage metrics (soft and solid usage) and pending metrics for the given stream.
     ///
     /// Soft Usage:
     /// Formula: (NumPending + NumAckPending) / maxLength
@@ -167,11 +181,11 @@ impl JetstreamWriter {
     /// - Otherwise: solidUsage = State.Msgs / maxLength
     /// - State.Msgs: The total number of messages in the stream.
     /// - maxLength: The maximum length of the buffer.
-    async fn fetch_buffer_usage(
+    async fn fetch_buffer_info(
         js_ctx: Context,
         stream_name: &str,
         max_length: usize,
-    ) -> Result<(f64, f64)> {
+    ) -> Result<BufferInfo> {
         let mut stream = js_ctx
             .get_stream(stream_name)
             .await
@@ -200,7 +214,12 @@ impl JetstreamWriter {
             stream_info.state.messages as f64 / max_length as f64
         };
 
-        Ok((soft_usage, solid_usage))
+        Ok(BufferInfo {
+            soft_usage,
+            solid_usage,
+            num_pending: consumer_info.num_pending,
+            num_ack_pending: consumer_info.num_ack_pending,
+        })
     }
 
     /// Starts reading messages from the stream and writes them to Jetstream ISB.
@@ -366,6 +385,13 @@ impl JetstreamWriter {
             .write_processing_time
             .get_or_create(&labels)
             .observe(write_processing_start.elapsed().as_micros() as f64);
+
+        // jetstream write time histogram metric
+        pipeline_metrics()
+            .jetstream_isb
+            .write_time_total
+            .get_or_create(&jetstream_isb_metrics_labels(partition_name))
+            .observe(write_processing_start.elapsed().as_micros() as f64);
     }
 
     /// Writes the message to the JetStream ISB and returns a future which can be
@@ -398,7 +424,11 @@ impl JetstreamWriter {
                 .map(|is_full| is_full.load(Ordering::Relaxed))
             {
                 Some(true) => {
-                    // FIXME: add metrics
+                    pipeline_metrics()
+                        .jetstream_isb
+                        .isfull_total
+                        .get_or_create(&jetstream_isb_metrics_labels(stream.name))
+                        .inc();
                     if log_counter >= 500 {
                         warn!(?stream, "stream is full (throttled logging)");
                         log_counter = 0;
@@ -447,7 +477,27 @@ impl JetstreamWriter {
                     .await
                 {
                     Ok(paf) => break paf,
-                    Err(e) => error!(?e, "publishing failed, retrying"),
+                    Err(e) => {
+                        pipeline_metrics()
+                            .jetstream_isb
+                            .write_error_total
+                            .get_or_create(&jetstream_isb_error_metrics_labels(
+                                stream.name,
+                                e.kind().to_string(),
+                            ))
+                            .inc();
+                        error!(?e, "publishing failed, retrying");
+                        if let PublishErrorKind::TimedOut = e.kind() {
+                            pipeline_metrics()
+                                .jetstream_isb
+                                .write_timeout_total
+                                .get_or_create(&jetstream_isb_error_metrics_labels(
+                                    stream.name,
+                                    e.kind().to_string(),
+                                ))
+                                .inc();
+                        }
+                    }
                 },
                 None => error!("Stream {} not found in is_full map", stream),
             }
@@ -474,7 +524,6 @@ impl JetstreamWriter {
         message: Message,
         cln_token: CancellationToken,
     ) -> Result<()> {
-        let start_time = Instant::now();
         let permit = Arc::clone(&self.sem)
             .acquire_owned()
             .await
@@ -503,6 +552,24 @@ impl JetstreamWriter {
                             ?e, stream = ?stream,
                             "Failed to resolve the future trying blocking write",
                         );
+                        pipeline_metrics()
+                            .jetstream_isb
+                            .write_error_total
+                            .get_or_create(&jetstream_isb_error_metrics_labels(
+                                stream.name,
+                                e.kind().to_string(),
+                            ))
+                            .inc();
+                        if let PublishErrorKind::TimedOut = e.kind() {
+                            pipeline_metrics()
+                                .jetstream_isb
+                                .write_timeout_total
+                                .get_or_create(&jetstream_isb_error_metrics_labels(
+                                    stream.name,
+                                    e.kind().to_string(),
+                                ))
+                                .inc();
+                        }
                         this.blocking_write(stream.clone(), message.clone(), cln_token.clone())
                             .await
                     }
@@ -547,12 +614,6 @@ impl JetstreamWriter {
                 .delete(message.offset.clone())
                 .await
                 .expect("Failed to delete offset from tracker");
-
-            pipeline_metrics()
-                .isb
-                .paf_resolution_time
-                .get_or_create(pipeline_isb_metric_labels())
-                .observe(start_time.elapsed().as_micros() as f64);
         });
 
         Ok(())
@@ -586,6 +647,11 @@ impl JetstreamWriter {
                             elapsed_ms = start_time.elapsed().as_millis(),
                             "Blocking write successful in",
                         );
+                        pipeline_metrics()
+                            .jetstream_isb
+                            .write_time_total
+                            .get_or_create(&jetstream_isb_metrics_labels(stream.name))
+                            .observe(start_time.elapsed().as_micros() as f64);
                         return Ok(ack);
                     }
                     Err(e) => {
@@ -594,6 +660,11 @@ impl JetstreamWriter {
                     }
                 },
                 Err(e) => {
+                    pipeline_metrics()
+                        .jetstream_isb
+                        .write_error_total
+                        .get_or_create(&jetstream_isb_metrics_labels(stream.name))
+                        .inc();
                     error!(?e, "publishing failed, retrying");
                     sleep(Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS)).await;
                 }
@@ -943,13 +1014,13 @@ mod tests {
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
-    async fn test_fetch_buffer_usage() {
+    async fn test_fetch_buffer_info() {
         let js_url = "localhost:4222";
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
 
-        let stream = Stream::new("test_fetch_buffer_usage", "temp", 0);
+        let stream = Stream::new("test_fetch_buffer_info", "temp", 0);
         // Delete stream if it exists
         let _ = context.delete_stream(stream.name).await;
         let _stream = context
@@ -998,15 +1069,16 @@ mod tests {
                 .unwrap();
         }
 
-        // Fetch buffer usage
-        let (soft_usage, _) =
-            JetstreamWriter::fetch_buffer_usage(context.clone(), stream.name, max_length)
+        // Fetch buffer info
+        let buffer_info =
+            JetstreamWriter::fetch_buffer_info(context.clone(), stream.name, max_length)
                 .await
                 .unwrap();
 
-        // Verify the buffer usage metrics
-        assert_eq!(soft_usage, 0.8);
-        assert_eq!(soft_usage, 0.8);
+        // Verify the buffer info metrics
+        assert_eq!(buffer_info.soft_usage, 0.8);
+        assert_eq!(buffer_info.solid_usage, 0.8);
+        assert_eq!(buffer_info.num_pending, 80);
 
         // Clean up
         context

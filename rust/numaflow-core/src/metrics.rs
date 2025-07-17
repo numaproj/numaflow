@@ -1,9 +1,3 @@
-use std::collections::{BTreeMap, HashMap};
-use std::net::SocketAddr;
-use std::sync::{Arc, OnceLock};
-use std::time::Duration;
-use std::{env, iter};
-
 use axum::body::Body;
 use axum::extract::State;
 use axum::http::{Response, StatusCode};
@@ -18,6 +12,12 @@ use prometheus_client::metrics::histogram::Histogram;
 use prometheus_client::registry::Registry;
 use rcgen::{CertifiedKey, generate_simple_self_signed};
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, HashMap};
+use std::net::SocketAddr;
+use std::sync::atomic::AtomicU64;
+use std::sync::{Arc, OnceLock};
+use std::time::Duration;
+use std::{env, iter};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time;
@@ -102,6 +102,13 @@ const TRANSFORMER_READ_TOTAL: &str = "transformer_read";
 const TRANSFORMER_WRITE_TOTAL: &str = "transformer_write";
 const PIPELINE_TRANSFORMER_DROP_TOTAL: &str = "transformer_drop";
 
+// jetstream isb counters
+const JETSTREAM_ISB_ISFULL_ERROR_TOTAL: &str = "isFull_error";
+const JETSTREAM_ISB_ISFULL_TOTAL: &str = "isFull";
+const JETSTREAM_ISB_WRITE_TIMEOUT_TOTAL: &str = "write_timeout";
+const JETSTREAM_ISB_WRITE_ERROR_TOTAL: &str = "write_error";
+const JETSTREAM_ISB_READ_ERROR_TOTAL: &str = "read_error";
+
 // pending as gauge for mvtx (these metric names are hardcoded in the auto-scaler)
 const PENDING: &str = "pending";
 const PENDING_RAW: &str = "pending_raw";
@@ -111,6 +118,12 @@ const VERTEX_PENDING_RAW: &str = "pending_messages_raw";
 
 // read batch size as gauge
 const READ_BATCH_SIZE: &str = "read_batch_size";
+
+// jetstream isb gauges
+const JETSTREAM_ISB_BUFFER_SOFT_USAGE: &str = "buffer_soft_usage";
+const JETSTREAM_ISB_BUFFER_SOLID_USAGE: &str = "buffer_solid_usage";
+const JETSTREAM_ISB_BUFFER_PENDING: &str = "buffer_pending";
+const JETSTREAM_ISB_BUFFER_ACK_PENDING: &str = "buffer_ack_pending";
 
 // processing times as timers
 const E2E_TIME: &str = "processing_time";
@@ -125,6 +138,11 @@ const TRANSFORM_TIME: &str = "time";
 const ACK_TIME: &str = "ack_time";
 const SINK_TIME: &str = "time";
 const FALLBACK_SINK_TIME: &str = "time";
+
+// jetstream isb processing times
+const JETSTREAM_ISB_READ_TIME_TOTAL: &str = "read_time_total";
+const JETSTREAM_ISB_WRITE_TIME_TOTAL: &str = "write_time_total";
+const JETSTREAM_ISB_ACK_TIME_TOTAL: &str = "ack_time_total";
 
 /// A deep healthcheck for components. Each component should implement IsReady for both builtins and
 /// user-defined containers.
@@ -270,7 +288,7 @@ pub(crate) struct PipelineMetrics {
     pub(crate) source_forwarder: SourceForwarderMetrics,
     // sink forwarder specific metrics
     pub(crate) sink_forwarder: SinkForwarderMetrics,
-    pub(crate) isb: PipelineISBMetrics,
+    pub(crate) jetstream_isb: JetStreamISBMetrics,
     pub(crate) pending: Family<Vec<(String, String)>, Gauge>,
     // TODO(lookback) - using new implementation only for monovertex right now,
     // deprecate old metric and use only this as well once
@@ -345,6 +363,44 @@ pub(crate) struct PipelineForwarderMetrics {
     pub(crate) read_batch_size: Family<Vec<(String, String)>, Gauge>,
 }
 
+impl PipelineForwarderMetrics {
+    pub(crate) fn new() -> Self {
+        Self {
+            read_total: Family::<Vec<(String, String)>, Counter>::default(),
+            data_read_total: Family::<Vec<(String, String)>, Counter>::default(),
+            read_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
+            data_read_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
+            read_error_total: Family::<Vec<(String, String)>, Counter>::default(),
+            write_total: Family::<Vec<(String, String)>, Counter>::default(),
+            write_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
+            write_error_total: Family::<Vec<(String, String)>, Counter>::default(),
+            drop_total: Family::<Vec<(String, String)>, Counter>::default(),
+            drop_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
+            ack_total: Family::<Vec<(String, String)>, Counter>::default(),
+            udf_read_total: Family::<Vec<(String, String)>, Counter>::default(),
+            udf_drop_total: Family::<Vec<(String, String)>, Counter>::default(),
+            udf_error_total: Family::<Vec<(String, String)>, Counter>::default(),
+            udf_write_total: Family::<Vec<(String, String)>, Counter>::default(),
+            read_batch_size: Family::<Vec<(String, String)>, Gauge>::default(),
+            read_processing_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
+                || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 10.0, 10)),
+            ),
+            write_processing_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
+                || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10)),
+            ),
+            ack_processing_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
+                || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 10.0, 10)),
+            ),
+            udf_processing_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
+                || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10)),
+            ),
+            e2e_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10))
+            }),
+        }
+    }
+}
+
 pub(crate) struct SourceForwarderMetrics {
     // source transformer counters
     pub(crate) transformer_read_total: Family<Vec<(String, String)>, Counter>,
@@ -354,6 +410,21 @@ pub(crate) struct SourceForwarderMetrics {
 
     // source transformer histogram
     pub(crate) transformer_processing_time: Family<Vec<(String, String)>, Histogram>,
+}
+
+impl SourceForwarderMetrics {
+    pub(crate) fn new() -> Self {
+        Self {
+            transformer_read_total: Family::<Vec<(String, String)>, Counter>::default(),
+            transformer_write_total: Family::<Vec<(String, String)>, Counter>::default(),
+            transformer_error_total: Family::<Vec<(String, String)>, Counter>::default(),
+            transformer_drop_total: Family::<Vec<(String, String)>, Counter>::default(),
+            transformer_processing_time:
+                Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                    Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
+                }),
+        }
+    }
 }
 
 pub(crate) struct SinkForwarderMetrics {
@@ -366,8 +437,62 @@ pub(crate) struct SinkForwarderMetrics {
     pub(crate) fbsink_write_processing_time: Family<Vec<(String, String)>, Histogram>,
 }
 
-pub(crate) struct PipelineISBMetrics {
-    pub(crate) paf_resolution_time: Family<Vec<(String, String)>, Histogram>,
+impl SinkForwarderMetrics {
+    pub(crate) fn new() -> Self {
+        Self {
+            fbsink_write_total: Family::<Vec<(String, String)>, Counter>::default(),
+            fbsink_write_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
+            fbsink_write_error_total: Family::<Vec<(String, String)>, Counter>::default(),
+            fbsink_write_processing_time:
+                Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                    Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10))
+                }),
+        }
+    }
+}
+
+pub(crate) struct JetStreamISBMetrics {
+    pub(crate) read_error_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) isfull_error_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) isfull_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) write_error_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) write_timeout_total: Family<Vec<(String, String)>, Counter>,
+
+    pub(crate) buffer_soft_usage: Family<Vec<(String, String)>, Gauge<f64, AtomicU64>>,
+    pub(crate) buffer_solid_usage: Family<Vec<(String, String)>, Gauge<f64, AtomicU64>>,
+    pub(crate) buffer_pending: Family<Vec<(String, String)>, Gauge>,
+    pub(crate) buffer_ack_pending: Family<Vec<(String, String)>, Gauge>,
+
+    pub(crate) write_time_total: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) read_time_total: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) ack_time_total: Family<Vec<(String, String)>, Histogram>,
+}
+
+impl JetStreamISBMetrics {
+    pub(crate) fn new() -> Self {
+        Self {
+            read_error_total: Family::<Vec<(String, String)>, Counter>::default(),
+            isfull_error_total: Family::<Vec<(String, String)>, Counter>::default(),
+            isfull_total: Family::<Vec<(String, String)>, Counter>::default(),
+            write_error_total: Family::<Vec<(String, String)>, Counter>::default(),
+            write_timeout_total: Family::<Vec<(String, String)>, Counter>::default(),
+
+            buffer_soft_usage: Family::<Vec<(String, String)>, Gauge<f64, AtomicU64>>::default(),
+            buffer_solid_usage: Family::<Vec<(String, String)>, Gauge<f64, AtomicU64>>::default(),
+            buffer_pending: Family::<Vec<(String, String)>, Gauge>::default(),
+            buffer_ack_pending: Family::<Vec<(String, String)>, Gauge>::default(),
+
+            write_time_total: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
+                || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 2.0, 10)),
+            ),
+            read_time_total: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
+                || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 2.0, 10)),
+            ),
+            ack_time_total: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
+                || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 2.0, 10)),
+            ),
+        }
+    }
 }
 
 /// Exponential bucket distribution with range.
@@ -556,68 +681,10 @@ impl MonoVtxMetrics {
 impl PipelineMetrics {
     fn new() -> Self {
         let metrics = Self {
-            forwarder: PipelineForwarderMetrics {
-                read_total: Family::<Vec<(String, String)>, Counter>::default(),
-                data_read_total: Family::<Vec<(String, String)>, Counter>::default(),
-                read_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
-                data_read_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
-                read_error_total: Family::<Vec<(String, String)>, Counter>::default(),
-                write_total: Family::<Vec<(String, String)>, Counter>::default(),
-                write_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
-                write_error_total: Family::<Vec<(String, String)>, Counter>::default(),
-                drop_total: Family::<Vec<(String, String)>, Counter>::default(),
-                drop_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
-                ack_total: Family::<Vec<(String, String)>, Counter>::default(),
-                udf_read_total: Family::<Vec<(String, String)>, Counter>::default(),
-                udf_drop_total: Family::<Vec<(String, String)>, Counter>::default(),
-                udf_error_total: Family::<Vec<(String, String)>, Counter>::default(),
-                udf_write_total: Family::<Vec<(String, String)>, Counter>::default(),
-                read_batch_size: Family::<Vec<(String, String)>, Gauge>::default(),
-                read_processing_time:
-                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 10.0, 10))
-                    }),
-                write_processing_time:
-                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10))
-                    }),
-                ack_processing_time:
-                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 10.0, 10))
-                    }),
-                udf_processing_time:
-                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
-                    }),
-                e2e_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                    Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10))
-                }),
-            },
-            source_forwarder: SourceForwarderMetrics {
-                transformer_read_total: Family::<Vec<(String, String)>, Counter>::default(),
-                transformer_write_total: Family::<Vec<(String, String)>, Counter>::default(),
-                transformer_drop_total: Family::<Vec<(String, String)>, Counter>::default(),
-                transformer_error_total: Family::<Vec<(String, String)>, Counter>::default(),
-                transformer_processing_time:
-                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
-                    }),
-            },
-            sink_forwarder: SinkForwarderMetrics {
-                fbsink_write_total: Family::<Vec<(String, String)>, Counter>::default(),
-                fbsink_write_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
-                fbsink_write_error_total: Family::<Vec<(String, String)>, Counter>::default(),
-                fbsink_write_processing_time:
-                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10))
-                    }),
-            },
-            isb: PipelineISBMetrics {
-                paf_resolution_time:
-                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
-                    }),
-            },
+            forwarder: PipelineForwarderMetrics::new(),
+            source_forwarder: SourceForwarderMetrics::new(),
+            sink_forwarder: SinkForwarderMetrics::new(),
+            jetstream_isb: JetStreamISBMetrics::new(),
             pending: Family::<Vec<(String, String)>, Gauge>::default(),
             // TODO(lookback) - using new implementation only for monovertex right now,
             // deprecate old metric and use only this as well once
@@ -625,8 +692,15 @@ impl PipelineMetrics {
             pending_raw: Family::<Vec<(String, String)>, Gauge>::default(),
         };
         let mut registry = global_registry().registry.lock();
+        Self::register_forwarder_metrics(&metrics, &mut registry);
+        Self::register_source_forwarder_metrics(&metrics, &mut registry);
+        Self::register_sink_forwarder_metrics(&metrics, &mut registry);
+        Self::register_jetstream_isb_metrics(&metrics, &mut registry);
+        Self::register_vertex_metrics(&metrics, &mut registry);
+        metrics
+    }
 
-        // Pipeline forwarder sub-registry
+    fn register_forwarder_metrics(metrics: &Self, registry: &mut Registry) {
         let forwarder_registry = registry.sub_registry_with_prefix("forwarder");
         forwarder_registry.register(
             READ_TOTAL,
@@ -733,7 +807,9 @@ impl PipelineMetrics {
             "A Gauge to keep track of the read batch size for source vtx",
             metrics.forwarder.read_batch_size.clone(),
         );
+    }
 
+    fn register_source_forwarder_metrics(metrics: &Self, registry: &mut Registry) {
         // Pipeline source forwarder sub-registry
         let source_forwarder_registry = registry.sub_registry_with_prefix("source_forwarder");
 
@@ -762,7 +838,9 @@ impl PipelineMetrics {
             "Processing times of source transformer (100 microseconds to 15 minutes)",
             metrics.source_forwarder.transformer_processing_time.clone(),
         );
+    }
 
+    fn register_sink_forwarder_metrics(metrics: &Self, registry: &mut Registry) {
         // Pipeline sink forwarder sub-registry
         let sink_forwarder_registry = registry.sub_registry_with_prefix("forwarder");
 
@@ -786,7 +864,77 @@ impl PipelineMetrics {
             "Processing times of write operations to a fallback sink (100 microseconds to 20 minutes)",
             metrics.sink_forwarder.fbsink_write_processing_time.clone(),
         );
+    }
 
+    fn register_jetstream_isb_metrics(metrics: &Self, registry: &mut Registry) {
+        // Pipeline JetStream ISB sub-registry
+        let jetstream_isb_registry = registry.sub_registry_with_prefix("isb_jetstream");
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_READ_ERROR_TOTAL,
+            "Total number of jetstream read errors",
+            metrics.jetstream_isb.read_error_total.clone(),
+        );
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_ISFULL_ERROR_TOTAL,
+            "Total number of jetstream isFull errors",
+            metrics.jetstream_isb.isfull_error_total.clone(),
+        );
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_ISFULL_TOTAL,
+            "Total number of IsFull",
+            metrics.jetstream_isb.isfull_total.clone(),
+        );
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_WRITE_ERROR_TOTAL,
+            "Total number of jetstream write errors",
+            metrics.jetstream_isb.write_error_total.clone(),
+        );
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_WRITE_TIMEOUT_TOTAL,
+            "Total number of jetstream write timeouts",
+            metrics.jetstream_isb.write_timeout_total.clone(),
+        );
+        // isbSoftUsage is indicative of the buffer that is used up, it is calculated based on the messages in pending + ack pending
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_BUFFER_SOFT_USAGE,
+            "Percentage of buffer soft usage",
+            metrics.jetstream_isb.buffer_soft_usage.clone(),
+        );
+        // isbSolidUsage is indicative of buffer that is used up, it is calculated based on the messages remaining in the stream (if it's not Limits retention policy)
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_BUFFER_SOLID_USAGE,
+            "Percentage of buffer solid usage",
+            metrics.jetstream_isb.buffer_solid_usage.clone(),
+        );
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_BUFFER_PENDING,
+            "Number of pending messages",
+            metrics.jetstream_isb.buffer_pending.clone(),
+        );
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_BUFFER_ACK_PENDING,
+            "Number of messages pending ack",
+            metrics.jetstream_isb.buffer_ack_pending.clone(),
+        );
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_WRITE_TIME_TOTAL,
+            "Processing times of Writes for jetstream",
+            metrics.jetstream_isb.write_time_total.clone(),
+        );
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_READ_TIME_TOTAL,
+            "Processing times of Reads for jetstream",
+            metrics.jetstream_isb.read_time_total.clone(),
+        );
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_ACK_TIME_TOTAL,
+            "Processing times of Acks for jetstream",
+            metrics.jetstream_isb.ack_time_total.clone(),
+        );
+    }
+
+    fn register_vertex_metrics(metrics: &Self, registry: &mut Registry) {
+        // Pipeline vertex sub-registry
         let vertex_registry = registry.sub_registry_with_prefix("vertex");
         vertex_registry.register(
             VERTEX_PENDING,
@@ -798,7 +946,6 @@ impl PipelineMetrics {
             "Total number of pending messages",
             metrics.pending_raw.clone(),
         );
-        metrics
     }
 }
 
@@ -908,29 +1055,21 @@ pub(crate) fn pipeline_drop_metric_labels(
     ]
 }
 
-static PIPELINE_ISB_METRICS_LABELS: OnceLock<Vec<(String, String)>> = OnceLock::new();
-
-pub(crate) fn pipeline_isb_metric_labels() -> &'static Vec<(String, String)> {
-    PIPELINE_ISB_METRICS_LABELS.get_or_init(|| {
-        vec![
-            (
-                PIPELINE_NAME_LABEL.to_string(),
-                get_pipeline_name().to_string(),
-            ),
-            (
-                PIPELINE_REPLICA_LABEL.to_string(),
-                get_vertex_replica().to_string(),
-            ),
-            (
-                PIPELINE_VERTEX_LABEL.to_string(),
-                get_vertex_name().to_string(),
-            ),
-        ]
-    })
+pub(crate) fn jetstream_isb_metrics_labels(buffer_name: &str) -> Vec<(String, String)> {
+    vec![("buffer".to_string(), buffer_name.to_string())]
+}
+pub(crate) fn jetstream_isb_error_metrics_labels(
+    buffer_name: &str,
+    reason: String,
+) -> Vec<(String, String)> {
+    vec![
+        ("buffer".to_string(), buffer_name.to_string()),
+        ("reason".to_string(), reason),
+    ]
 }
 
-// metrics_handler is used to generate and return a snapshot of the
-// current state of the metrics in the global registry
+/// metrics_handler is used to generate and return a snapshot of the
+/// current state of the metrics in the global registry
 pub async fn metrics_handler() -> impl IntoResponse {
     let state = global_registry().registry.lock();
     let mut buffer = String::new();
@@ -1947,9 +2086,27 @@ mod tests {
             "version".to_string(),
             "container_type".to_string(),
         );
+        let jetstream_isb_labels = jetstream_isb_metrics_labels("test_jetstream_isb");
+        let jetstream_isb_error_labels =
+            jetstream_isb_error_metrics_labels("test_jetstream_isb", "test_error".to_string());
         global_metrics.sdk_info.get_or_create(&sdk_labels).set(1);
 
         let metrics = monovertex_metrics();
+        let pipeline_metrics = pipeline_metrics();
+
+        let common_pipeline_labels = vec![
+            (PIPELINE_NAME_LABEL.to_string(), "test-pipeline".to_string()),
+            (PIPELINE_VERTEX_LABEL.to_string(), "test-vertex".to_string()),
+            (
+                PIPELINE_VERTEX_TYPE_LABEL.to_string(),
+                "test-vertex-type".to_string(),
+            ),
+            (
+                PIPELINE_REPLICA_LABEL.to_string(),
+                "test-replica".to_string(),
+            ),
+        ];
+
         // Use a fixed set of labels instead of the ones from mvtx_forward_metric_labels() since other test functions may also set it.
         let common_labels = vec![
             (
@@ -2003,6 +2160,36 @@ mod tests {
             .get_or_create(&common_labels)
             .observe(5.0);
 
+        // pipeline forwarder metrics
+        pipeline_metrics
+            .forwarder
+            .read_total
+            .get_or_create(&common_pipeline_labels)
+            .inc_by(10);
+
+        pipeline_metrics
+            .forwarder
+            .ack_processing_time
+            .get_or_create(&common_pipeline_labels)
+            .observe(5.0);
+
+        // populate jetstream isb metrics
+        pipeline_metrics
+            .jetstream_isb
+            .buffer_pending
+            .get_or_create(&jetstream_isb_labels)
+            .set(5);
+        pipeline_metrics
+            .jetstream_isb
+            .buffer_soft_usage
+            .get_or_create(&jetstream_isb_labels)
+            .set(0.22);
+        pipeline_metrics
+            .jetstream_isb
+            .write_error_total
+            .get_or_create(&jetstream_isb_error_labels)
+            .inc();
+
         // Validate the metric names
         let state = global_registry().registry.lock();
         let mut buffer = String::new();
@@ -2038,6 +2225,13 @@ mod tests {
             r#"monovtx_fallback_sink_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 5.0"#,
             r#"monovtx_fallback_sink_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_fallback_sink_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"forwarder_read_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 10"#,
+            r#"forwarder_ack_processing_time_sum{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 5.0"#,
+            r#"forwarder_ack_processing_time_count{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
+            r#"forwarder_ack_processing_time_bucket{le="100.0",pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
+            r#"isb_jetstream_write_error_total{buffer="test_jetstream_isb",reason="test_error"} 1"#,
+            r#"isb_jetstream_buffer_soft_usage{buffer="test_jetstream_isb"} 0.22"#,
+            r#"isb_jetstream_buffer_pending{buffer="test_jetstream_isb"} 5"#,
         ];
 
         let got = buffer
