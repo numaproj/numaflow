@@ -608,6 +608,7 @@ async fn start_aligned_reduce_forwarder(
             gc_wal,
             aligned_config.window_config.allowed_lateness,
             config.graceful_shutdown_time,
+            reduce_vtx_config.keyed,
         )
         .await,
     );
@@ -774,6 +775,7 @@ async fn start_unaligned_reduce_forwarder(
             unaligned_config.window_config.allowed_lateness,
             gc_wal,
             config.graceful_shutdown_time,
+            reduce_vtx_config.keyed,
         )
         .await,
     );
