@@ -18,9 +18,7 @@ pub(crate) mod source {
     use base64::Engine;
     use base64::prelude::BASE64_STANDARD;
     use bytes::Bytes;
-    use numaflow_jetstream::{
-        JetstreamConsumerName, JetstreamSourceConfig, NatsAuth, TlsClientAuthCerts, TlsConfig,
-    };
+    use numaflow_jetstream::{JetstreamSourceConfig, NatsAuth, TlsClientAuthCerts, TlsConfig};
     use numaflow_kafka::source::KafkaSourceConfig;
     use numaflow_models::models::{GeneratorSource, PulsarSource, Source, SqsSource};
     use numaflow_pulsar::{PulsarAuth, source::PulsarSourceConfig};
@@ -300,7 +298,7 @@ pub(crate) mod source {
 
             let js_config = JetstreamSourceConfig {
                 addr: value.url,
-                consumer: JetstreamConsumerName::UserSpecified(value.consumer.unwrap_or_default()),
+                consumer: value.consumer.unwrap_or_default(),
                 stream: value.stream,
                 auth,
                 tls,
@@ -2214,7 +2212,7 @@ mod jetstream_tests {
     use std::path::Path;
 
     use k8s_openapi::api::core::v1::SecretKeySelector;
-    use numaflow_jetstream::{JetstreamConsumerName, NatsAuth};
+    use numaflow_jetstream::NatsAuth;
     use numaflow_models::models::BasicAuth;
     use numaflow_models::models::{JetStreamSource, Tls};
 
@@ -2273,10 +2271,7 @@ mod jetstream_tests {
             };
             assert_eq!(username, "test-user");
             assert_eq!(password, "test-pass");
-            assert_eq!(
-                config.consumer,
-                JetstreamConsumerName::UserSpecified("numaflow-test-stream".to_string())
-            );
+            assert_eq!(config.consumer, "numaflow-test-stream");
             assert_eq!(config.addr, "nats://localhost:4222");
         } else {
             panic!("Expected SourceType::Jetstream");

@@ -124,12 +124,12 @@ impl MonovertexConfig {
 
         let mut source_type: SourceType = source.try_into()?;
         if let SourceType::Jetstream(ref mut js_config) = source_type {
-            if js_config.consumer.as_ref().is_empty() {
-                js_config.consumer = numaflow_jetstream::JetstreamConsumerName::Default(format!(
+            if js_config.consumer.is_empty() {
+                js_config.consumer = format!(
                     "numaflow-{}-mvtx-{}",
                     get_pipeline_name(),
-                    &js_config.stream,
-                ));
+                    &js_config.stream
+                );
             }
         }
 

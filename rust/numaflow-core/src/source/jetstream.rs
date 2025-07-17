@@ -175,7 +175,7 @@ mod tests {
         let config = numaflow_jetstream::JetstreamSourceConfig {
             addr: "localhost".to_string(),
             stream: stream_name.to_string(),
-            consumer: numaflow_jetstream::JetstreamConsumerName::UserSpecified(consumer),
+            consumer,
             auth: None,
             tls: None,
         };
