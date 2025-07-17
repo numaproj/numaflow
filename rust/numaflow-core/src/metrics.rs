@@ -2241,8 +2241,6 @@ mod tests {
             .collect::<Vec<&str>>()
             .join("\n");
 
-        println!("{}", got);
-
         for t in expected {
             assert!(got.contains(t));
         }
