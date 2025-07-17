@@ -145,8 +145,8 @@ impl SideInputSynchronizer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::isb::ClientConfig;
     use crate::create_js_context;
+    use numaflow_shared::isb::jetstream::config::ClientConfig;
     use std::time::Duration;
     use tempfile::TempDir;
     use tokio_util::sync::CancellationToken;
@@ -265,8 +265,7 @@ mod tests {
 
         let config = ClientConfig {
             url: "localhost:4222".to_string(),
-            user: None,
-            password: None,
+            ..Default::default()
         };
 
         let cancellation_token = CancellationToken::new();
