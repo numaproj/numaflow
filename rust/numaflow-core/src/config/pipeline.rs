@@ -969,6 +969,110 @@ mod tests {
     }
 
     #[test]
+    fn test_pipeline_config_load_jetstream_source() {
+        let pipeline_cfg = r#"
+        {
+            "metadata": {
+                "name": "rust-pipeline-in",
+                "namespace": "default",
+                "creationTimestamp": null
+            },
+            "spec": {
+                "name": "in",
+                "source": {
+                "jetstream": {
+                    "url": "jetstream-server.internal",
+                    "stream": "testing-numaflow",
+                    "consumer": "",
+                    "tls": null
+                }
+                },
+                "containerTemplate": {
+                "resources": {},
+                "env": [
+                    {
+                    "name": "NUMAFLOW_RUNTIME",
+                    "value": "rust"
+                    }
+                ]
+                },
+                "limits": {
+                "readBatchSize": 500,
+                "readTimeout": "1s",
+                "bufferMaxLength": 30000,
+                "bufferUsageLimit": 80
+                },
+                "scale": {
+                "min": 1,
+                "max": 1
+                },
+                "updateStrategy": {},
+                "pipelineName": "rust-pipeline",
+                "interStepBufferServiceName": "",
+                "replicas": 0,
+                "toEdges": [
+                {
+                    "from": "in",
+                    "to": "out",
+                    "conditions": null,
+                    "fromVertexType": "Source",
+                    "fromVertexPartitionCount": 1,
+                    "fromVertexLimits": {
+                    "readBatchSize": 500,
+                    "readTimeout": "1s",
+                    "bufferMaxLength": 30000,
+                    "bufferUsageLimit": 80
+                    },
+                    "toVertexType": "Sink",
+                    "toVertexPartitionCount": 1,
+                    "toVertexLimits": {
+                    "readBatchSize": 500,
+                    "readTimeout": "1s",
+                    "bufferMaxLength": 30000,
+                    "bufferUsageLimit": 80
+                    }
+                }
+                ],
+                "watermark": {
+                "maxDelay": "0s"
+                },
+                "lifecycle": {}
+            },
+            "status": {
+                "phase": "",
+                "replicas": 0,
+                "desiredReplicas": 0,
+                "lastScaledAt": null
+            }
+        }"#;
+
+        let pipeline_cfg_base64 = BASE64_STANDARD.encode(pipeline_cfg);
+
+        let pipeline_config = PipelineConfig::load(
+            pipeline_cfg_base64.to_string(),
+            vec![("NUMAFLOW_ISBSVC_JETSTREAM_URL", "localhost:4222")],
+        )
+        .unwrap();
+
+        // We are verifying the consumer name is in the format: numaflow-<pipeline_name>-<vertex_name>-<stream_name>
+        let expected_vertex_config = VertexConfig::Source(SourceVtxConfig {
+            source_config: SourceConfig {
+                read_ahead: false,
+                source_type: SourceType::Jetstream(numaflow_jetstream::JetstreamSourceConfig {
+                    addr: "jetstream-server.internal".to_string(),
+                    stream: "testing-numaflow".to_string(),
+                    consumer: "numaflow-rust-pipeline-in-testing-numaflow".to_string(),
+                    auth: None,
+                    tls: None,
+                }),
+            },
+            transformer_config: None,
+        });
+
+        assert_eq!(pipeline_config.vertex_config, expected_vertex_config);
+    }
+
+    #[test]
     fn test_pipeline_config_load_all() {
         let pipeline_cfg_base64 = "eyJtZXRhZGF0YSI6eyJuYW1lIjoic2ltcGxlLXBpcGVsaW5lLWluIiwibmFtZXNwYWNlIjoiZGVmYXVsdCIsImNyZWF0aW9uVGltZXN0YW1wIjpudWxsfSwic3BlYyI6eyJuYW1lIjoiaW4iLCJzb3VyY2UiOnsiZ2VuZXJhdG9yIjp7InJwdSI6MTAwMDAwLCJkdXJhdGlvbiI6IjFzIiwibXNnU2l6ZSI6OCwiaml0dGVyIjoiMHMifX0sImNvbnRhaW5lclRlbXBsYXRlIjp7InJlc291cmNlcyI6e30sImVudiI6W3sibmFtZSI6IlBBRl9CQVRDSF9TSVpFIiwidmFsdWUiOiIxMDAwMDAifV19LCJsaW1pdHMiOnsicmVhZEJhdGNoU2l6ZSI6MTAwMCwicmVhZFRpbWVvdXQiOiIxcyIsImJ1ZmZlck1heExlbmd0aCI6MTUwMDAwLCJidWZmZXJVc2FnZUxpbWl0Ijo4NX0sInNjYWxlIjp7Im1pbiI6MX0sInVwZGF0ZVN0cmF0ZWd5Ijp7InR5cGUiOiJSb2xsaW5nVXBkYXRlIiwicm9sbGluZ1VwZGF0ZSI6eyJtYXhVbmF2YWlsYWJsZSI6IjI1JSJ9fSwicGlwZWxpbmVOYW1lIjoic2ltcGxlLXBpcGVsaW5lIiwiaW50ZXJTdGVwQnVmZmVyU2VydmljZU5hbWUiOiIiLCJyZXBsaWNhcyI6MCwidG9FZGdlcyI6W3siZnJvbSI6ImluIiwidG8iOiJvdXQiLCJjb25kaXRpb25zIjpudWxsLCJmcm9tVmVydGV4VHlwZSI6IlNvdXJjZSIsImZyb21WZXJ0ZXhQYXJ0aXRpb25Db3VudCI6MSwiZnJvbVZlcnRleExpbWl0cyI6eyJyZWFkQmF0Y2hTaXplIjoxMDAwLCJyZWFkVGltZW91dCI6IjFzIiwiYnVmZmVyTWF4TGVuZ3RoIjoxNTAwMDAsImJ1ZmZlclVzYWdlTGltaXQiOjg1fSwidG9WZXJ0ZXhUeXBlIjoiU2luayIsInRvVmVydGV4UGFydGl0aW9uQ291bnQiOjEsInRvVmVydGV4TGltaXRzIjp7InJlYWRCYXRjaFNpemUiOjEwMDAsInJlYWRUaW1lb3V0IjoiMXMiLCJidWZmZXJNYXhMZW5ndGgiOjE1MDAwMCwiYnVmZmVyVXNhZ2VMaW1pdCI6ODV9fV0sIndhdGVybWFyayI6eyJkaXNhYmxlZCI6dHJ1ZSwibWF4RGVsYXkiOiIwcyJ9fSwic3RhdHVzIjp7InBoYXNlIjoiIiwicmVwbGljYXMiOjAsImRlc2lyZWRSZXBsaWNhcyI6MCwibGFzdFNjYWxlZEF0IjpudWxsfX0=";
 
