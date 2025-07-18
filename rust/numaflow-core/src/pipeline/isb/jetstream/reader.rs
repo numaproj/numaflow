@@ -126,7 +126,10 @@ impl JSWrappedMessage {
             tags: None,
             value: Bytes::from(Self::decompress(self.compression_type, body)?),
             offset: offset.clone(),
-            event_time: message_info.event_time.map(utc_from_timestamp).unwrap(),
+            event_time: message_info
+                .event_time
+                .map(utc_from_timestamp)
+                .expect("event time should be present"),
             id: MessageID {
                 vertex_name: self.vertex_name.into(),
                 offset: offset.to_string().into(),
@@ -134,12 +137,7 @@ impl JSWrappedMessage {
             },
             headers: header.headers,
             watermark: None,
-            metadata: Some(Metadata {
-                previous_vertex: header
-                    .id
-                    .ok_or(Error::Proto("Missing id".to_string()))?
-                    .vertex_name,
-            }),
+            metadata: header.metadata.map(Metadata::from),
             is_late: message_info.is_late,
         })
     }

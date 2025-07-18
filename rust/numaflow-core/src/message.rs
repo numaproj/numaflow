@@ -105,7 +105,170 @@ impl Default for Message {
 pub(crate) struct Metadata {
     /// name of the previous vertex.
     pub(crate) previous_vertex: String,
-    // In the future we could use this for OTLP, etc.
+    pub(crate) sys_metadata: HashMap<String, KeyValueGroup>,
+    pub(crate) user_metadata: HashMap<String, KeyValueGroup>,
+}
+
+impl Default for Metadata {
+    fn default() -> Self {
+        Self {
+            previous_vertex: "".to_string(),
+            sys_metadata: HashMap::new(),
+            user_metadata: HashMap::new(),
+        }
+    }
+}
+
+impl From<numaflow_pb::objects::isb::Metadata> for Metadata {
+    fn from(metadata: numaflow_pb::objects::isb::Metadata) -> Self {
+        Self {
+            previous_vertex: metadata.previous_vertex,
+            sys_metadata: metadata
+                .sys_metadata
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
+            user_metadata: metadata
+                .user_metadata
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
+        }
+    }
+}
+
+impl From<Metadata> for numaflow_pb::objects::isb::Metadata {
+    fn from(metadata: Metadata) -> Self {
+        Self {
+            previous_vertex: metadata.previous_vertex,
+            sys_metadata: metadata
+                .sys_metadata
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
+            user_metadata: metadata
+                .user_metadata
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
+        }
+    }
+}
+
+impl TryFrom<Metadata> for BytesMut {
+    type Error = Error;
+
+    fn try_from(metadata: Metadata) -> Result<Self, Self::Error> {
+        let proto_metadata = numaflow_pb::objects::isb::Metadata {
+            previous_vertex: metadata.previous_vertex,
+            sys_metadata: metadata
+                .sys_metadata
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
+            user_metadata: metadata
+                .user_metadata
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
+        };
+
+        let mut buf = BytesMut::new();
+        proto_metadata
+            .encode(&mut buf)
+            .map_err(|e| Error::Proto(e.to_string()))?;
+        Ok(buf)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct KeyValueGroup {
+    pub(crate) group: HashMap<String, KeyValue>,
+}
+
+impl From<numaflow_pb::objects::isb::KeyValueGroup> for KeyValueGroup {
+    fn from(group: numaflow_pb::objects::isb::KeyValueGroup) -> Self {
+        Self {
+            group: group
+                .key_value
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
+        }
+    }
+}
+
+impl TryFrom<KeyValueGroup> for BytesMut {
+    type Error = Error;
+
+    fn try_from(group: KeyValueGroup) -> Result<Self, Self::Error> {
+        let proto_group = numaflow_pb::objects::isb::KeyValueGroup {
+            key_value: group
+                .group
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
+        };
+
+        let mut buf = BytesMut::new();
+        proto_group
+            .encode(&mut buf)
+            .map_err(|e| Error::Proto(e.to_string()))?;
+        Ok(buf)
+    }
+}
+
+impl From<KeyValueGroup> for numaflow_pb::objects::isb::KeyValueGroup {
+    fn from(group: KeyValueGroup) -> Self {
+        Self {
+            key_value: group
+                .group
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct KeyValue {
+    pub(crate) key: String,
+    pub(crate) value: Bytes,
+}
+
+impl From<numaflow_pb::objects::isb::KeyValue> for KeyValue {
+    fn from(kv: numaflow_pb::objects::isb::KeyValue) -> Self {
+        Self {
+            key: kv.key,
+            value: kv.value.into(),
+        }
+    }
+}
+
+impl From<KeyValue> for numaflow_pb::objects::isb::KeyValue {
+    fn from(kv: KeyValue) -> Self {
+        Self {
+            key: kv.key,
+            value: kv.value.to_vec(),
+        }
+    }
+}
+
+impl TryFrom<KeyValue> for BytesMut {
+    type Error = Error;
+
+    fn try_from(kv: KeyValue) -> Result<Self, Self::Error> {
+        let proto_kv = numaflow_pb::objects::isb::KeyValue {
+            key: kv.key,
+            value: kv.value.to_vec(),
+        };
+
+        let mut buf = BytesMut::new();
+        proto_kv
+            .encode(&mut buf)
+            .map_err(|e| Error::Proto(e.to_string()))?;
+        Ok(buf)
+    }
 }
 
 /// Offset of the message which will be used to acknowledge the message.
@@ -270,6 +433,7 @@ impl TryFrom<Message> for BytesMut {
                 id: Some(message.id.into()),
                 keys: message.keys.to_vec(),
                 headers: message.headers,
+                metadata: message.metadata.map(|m| m.into()),
             }),
             body: Some(numaflow_pb::objects::isb::Body {
                 payload: message.value.to_vec(),
@@ -351,6 +515,7 @@ mod tests {
                 id: Some(message.id.into()),
                 keys: message.keys.to_vec(),
                 headers: message.headers,
+                metadata: message.metadata.map(|m| m.into()),
             }),
             body: Some(Body {
                 payload: message.value.clone().into(),

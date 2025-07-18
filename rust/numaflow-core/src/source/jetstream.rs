@@ -4,7 +4,7 @@ use std::time::Duration;
 use numaflow_jetstream::{JetstreamSource, JetstreamSourceConfig};
 
 use crate::config::{get_vertex_name, get_vertex_replica};
-use crate::message::{IntOffset, MessageID, Metadata, Offset};
+use crate::message::{IntOffset, MessageID, Offset};
 use crate::source::SourceReader;
 use crate::{Error, Result, message::Message};
 
@@ -31,15 +31,14 @@ impl From<numaflow_jetstream::Message> for Message {
                 index: 0,
             },
             headers: message.headers,
-            metadata: Some(Metadata {
-                previous_vertex: get_vertex_name().to_string(),
-            }),
+            // metadata starts once it is in the Numaflow
+            metadata: None,
             is_late: false,
         }
     }
 }
 
-impl From<numaflow_jetstream::Error> for crate::Error {
+impl From<numaflow_jetstream::Error> for Error {
     fn from(value: numaflow_jetstream::Error) -> Self {
         Self::Source(format!("Jetstream source: {value:?}"))
     }
@@ -49,7 +48,7 @@ pub(crate) async fn new_jetstream_source(
     cfg: JetstreamSourceConfig,
     batch_size: usize,
     timeout: Duration,
-) -> crate::Result<JetstreamSource> {
+) -> Result<JetstreamSource> {
     Ok(JetstreamSource::connect(cfg, batch_size, timeout).await?)
 }
 
