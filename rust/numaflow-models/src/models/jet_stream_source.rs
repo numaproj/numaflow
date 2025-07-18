@@ -20,6 +20,9 @@ limitations under the License.
 pub struct JetStreamSource {
     #[serde(rename = "auth", skip_serializing_if = "Option::is_none")]
     pub auth: Option<Box<crate::models::NatsAuth>>,
+    /// Consumer represents the name of the consumer of the stream If not specified, a consumer with name `numaflow-pipeline_name-vertex_name-stream_name` will be created. If a consumer name is specified, a consumer with that name will be created if it doesn't exist on the stream.
+    #[serde(rename = "consumer", skip_serializing_if = "Option::is_none")]
+    pub consumer: Option<String>,
     /// Stream represents the name of the stream.
     #[serde(rename = "stream")]
     pub stream: String,
@@ -34,6 +37,7 @@ impl JetStreamSource {
     pub fn new(stream: String, url: String) -> JetStreamSource {
         JetStreamSource {
             auth: None,
+            consumer: None,
             stream,
             tls: None,
             url,

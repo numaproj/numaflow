@@ -9493,6 +9493,8 @@ spec:
                                       type: object
                                       x-kubernetes-map-type: atomic
                                   type: object
+                                consumer:
+                                  type: string
                                 stream:
                                   type: string
                                 tls:

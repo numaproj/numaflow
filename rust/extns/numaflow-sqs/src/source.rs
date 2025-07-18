@@ -564,7 +564,7 @@ mod tests {
     use aws_sdk_sqs::Config;
     use aws_sdk_sqs::config::BehaviorVersion;
     use aws_sdk_sqs::types::MessageAttributeValue;
-    use aws_smithy_mocks_experimental::{MockResponseInterceptor, Rule, RuleMode, mock};
+    use aws_smithy_mocks::{MockResponseInterceptor, Rule, RuleMode, mock};
     use aws_smithy_types::error::ErrorMetadata;
     use test_log::test;
 

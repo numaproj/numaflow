@@ -298,7 +298,7 @@ pub(crate) mod source {
 
             let js_config = JetstreamSourceConfig {
                 addr: value.url,
-                consumer: value.stream.clone(),
+                consumer: value.consumer.unwrap_or_default(),
                 stream: value.stream,
                 auth,
                 tls,
@@ -2259,6 +2259,7 @@ mod jetstream_tests {
                 token: None,
             })),
             stream: "test-stream".to_string(),
+            consumer: Some("numaflow-test-stream".to_string()),
             tls: None,
             url: "nats://localhost:4222".to_string(),
         };
@@ -2270,7 +2271,7 @@ mod jetstream_tests {
             };
             assert_eq!(username, "test-user");
             assert_eq!(password, "test-pass");
-            assert_eq!(config.consumer, "test-stream");
+            assert_eq!(config.consumer, "numaflow-test-stream");
             assert_eq!(config.addr, "nats://localhost:4222");
         } else {
             panic!("Expected SourceType::Jetstream");
@@ -2292,6 +2293,7 @@ mod jetstream_tests {
         let jetstream_source = JetStreamSource {
             auth: None,
             stream: "test-stream".to_string(),
+            consumer: None,
             tls: Some(Box::new(Tls {
                 ca_cert_secret: Some(SecretKeySelector {
                     name: ca_cert_name.clone(),
@@ -2339,6 +2341,7 @@ mod jetstream_tests {
                 token: None,
             })),
             stream: "test-stream".to_string(),
+            consumer: None,
             tls: None,
             url: "nats://localhost:4222".to_string(),
         };

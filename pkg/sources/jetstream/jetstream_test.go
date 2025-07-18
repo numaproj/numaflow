@@ -31,7 +31,7 @@ func TestJetstreamRead(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		_, err := js.Publish(ctx, "test-stream", []byte("test-message"))
 		assert.NoError(t, err)
 	}
@@ -83,7 +83,7 @@ func TestJetstreamSourceServingEnabled(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		_, err := js.Publish(ctx, "test-stream", []byte("test-message"))
 		assert.NoError(t, err)
 	}
