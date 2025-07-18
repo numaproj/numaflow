@@ -4,7 +4,7 @@ use std::time::Duration;
 use numaflow_jetstream::{JetstreamSource, JetstreamSourceConfig};
 
 use crate::config::{get_vertex_name, get_vertex_replica};
-use crate::message::{IntOffset, MessageID, Offset};
+use crate::message::{IntOffset, MessageID, Metadata, Offset};
 use crate::source::SourceReader;
 use crate::{Error, Result, message::Message};
 
@@ -32,7 +32,11 @@ impl From<numaflow_jetstream::Message> for Message {
             },
             headers: message.headers,
             // metadata starts once it is in the Numaflow
-            metadata: None,
+            metadata: Some(Metadata {
+                previous_vertex: get_vertex_name().to_string(),
+                sys_metadata: Default::default(),
+                user_metadata: Default::default(),
+            }),
             is_late: false,
         }
     }
@@ -88,7 +92,7 @@ impl SourceAcker for JetstreamSource {
 }
 
 impl super::LagReader for JetstreamSource {
-    async fn pending(&mut self) -> crate::error::Result<Option<usize>> {
+    async fn pending(&mut self) -> Result<Option<usize>> {
         Ok(self.pending_messages().await?)
     }
 }
