@@ -3,13 +3,13 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 
+use crate::Error;
+use crate::config::get_vertex_name;
+use crate::shared::grpc::prost_timestamp_from_utc;
 use bytes::{Bytes, BytesMut};
 use chrono::{DateTime, Utc};
 use prost::Message as ProtoMessage;
 use serde::{Deserialize, Serialize};
-
-use crate::Error;
-use crate::shared::grpc::prost_timestamp_from_utc;
 
 const DROP: &str = "U+005C__DROP__";
 
@@ -140,7 +140,8 @@ impl From<numaflow_pb::objects::isb::Metadata> for Metadata {
 impl From<Metadata> for numaflow_pb::objects::isb::Metadata {
     fn from(metadata: Metadata) -> Self {
         Self {
-            previous_vertex: metadata.previous_vertex,
+            // write the current vertex name so that next vertex knows who sent it.
+            previous_vertex: get_vertex_name().to_string(),
             sys_metadata: metadata
                 .sys_metadata
                 .into_iter()
