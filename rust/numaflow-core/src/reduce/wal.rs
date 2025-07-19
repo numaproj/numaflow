@@ -40,6 +40,7 @@ impl TryFrom<WalMessage> for Bytes {
                     id: Some(message.id.into()),
                     keys: message.keys.to_vec(),
                     headers: message.headers,
+                    metadata: message.metadata.map(|m| m.into()),
                 }),
                 body: Some(numaflow_pb::objects::isb::Body {
                     payload: message.value.to_vec(),

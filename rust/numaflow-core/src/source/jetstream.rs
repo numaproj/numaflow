@@ -33,13 +33,15 @@ impl From<numaflow_jetstream::Message> for Message {
             headers: message.headers,
             metadata: Some(Metadata {
                 previous_vertex: get_vertex_name().to_string(),
+                sys_metadata: Default::default(),
+                user_metadata: Default::default(),
             }),
             is_late: false,
         }
     }
 }
 
-impl From<numaflow_jetstream::Error> for crate::Error {
+impl From<numaflow_jetstream::Error> for Error {
     fn from(value: numaflow_jetstream::Error) -> Self {
         Self::Source(format!("Jetstream source: {value:?}"))
     }
@@ -49,7 +51,7 @@ pub(crate) async fn new_jetstream_source(
     cfg: JetstreamSourceConfig,
     batch_size: usize,
     timeout: Duration,
-) -> crate::Result<JetstreamSource> {
+) -> Result<JetstreamSource> {
     Ok(JetstreamSource::connect(cfg, batch_size, timeout).await?)
 }
 
@@ -89,7 +91,7 @@ impl SourceAcker for JetstreamSource {
 }
 
 impl super::LagReader for JetstreamSource {
-    async fn pending(&mut self) -> crate::error::Result<Option<usize>> {
+    async fn pending(&mut self) -> Result<Option<usize>> {
         Ok(self.pending_messages().await?)
     }
 }
