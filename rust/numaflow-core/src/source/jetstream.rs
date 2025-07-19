@@ -31,7 +31,6 @@ impl From<numaflow_jetstream::Message> for Message {
                 index: 0,
             },
             headers: message.headers,
-            // metadata starts once it is in the Numaflow
             metadata: Some(Metadata {
                 previous_vertex: get_vertex_name().to_string(),
                 sys_metadata: Default::default(),

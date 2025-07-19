@@ -38,7 +38,7 @@ pub struct Header {
         ::prost::alloc::string::String,
     >,
     /// Metadata is the metadata of the message
-    #[prost(message, optional, tag = "7")]
+    #[prost(message, optional, tag = "6")]
     pub metadata: ::core::option::Option<Metadata>,
 }
 /// Metadata is the metadata of the message

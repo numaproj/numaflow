@@ -155,32 +155,6 @@ impl From<Metadata> for numaflow_pb::objects::isb::Metadata {
     }
 }
 
-impl TryFrom<Metadata> for BytesMut {
-    type Error = Error;
-
-    fn try_from(metadata: Metadata) -> Result<Self, Self::Error> {
-        let proto_metadata = numaflow_pb::objects::isb::Metadata {
-            previous_vertex: metadata.previous_vertex,
-            sys_metadata: metadata
-                .sys_metadata
-                .into_iter()
-                .map(|(k, v)| (k, v.into()))
-                .collect(),
-            user_metadata: metadata
-                .user_metadata
-                .into_iter()
-                .map(|(k, v)| (k, v.into()))
-                .collect(),
-        };
-
-        let mut buf = BytesMut::new();
-        proto_metadata
-            .encode(&mut buf)
-            .map_err(|e| Error::Proto(e.to_string()))?;
-        Ok(buf)
-    }
-}
-
 #[derive(Debug, Clone)]
 pub(crate) struct KeyValueGroup {
     pub(crate) group: HashMap<String, KeyValue>,
@@ -195,26 +169,6 @@ impl From<numaflow_pb::objects::isb::KeyValueGroup> for KeyValueGroup {
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
         }
-    }
-}
-
-impl TryFrom<KeyValueGroup> for BytesMut {
-    type Error = Error;
-
-    fn try_from(group: KeyValueGroup) -> Result<Self, Self::Error> {
-        let proto_group = numaflow_pb::objects::isb::KeyValueGroup {
-            key_value: group
-                .group
-                .into_iter()
-                .map(|(k, v)| (k, v.into()))
-                .collect(),
-        };
-
-        let mut buf = BytesMut::new();
-        proto_group
-            .encode(&mut buf)
-            .map_err(|e| Error::Proto(e.to_string()))?;
-        Ok(buf)
     }
 }
 
