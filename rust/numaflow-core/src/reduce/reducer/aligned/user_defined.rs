@@ -1,10 +1,11 @@
 use crate::Result;
-use crate::config::get_vertex_name;
+use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::message::{IntOffset, Message, MessageID, Offset};
 use crate::reduce::reducer::aligned::windower::{AlignedWindowMessage, AlignedWindowOperation};
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 use numaflow_pb::clients::reduce::reduce_client::ReduceClient;
 use numaflow_pb::clients::reduce::{ReduceRequest, ReduceResponse, reduce_request};
+use std::ops::Sub;
 use std::sync::Arc;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
@@ -108,6 +109,7 @@ struct UdReducerResponse {
     pub response: ReduceResponse,
     pub index: i32,
     pub vertex_name: &'static str,
+    pub vertex_replica: u16,
 }
 
 impl From<UdReducerResponse> for Message {
@@ -132,14 +134,15 @@ impl From<UdReducerResponse> for Message {
             },
             value: result.value.into(),
             offset: Offset::Int(IntOffset::new(0, 0)),
-            event_time: utc_from_timestamp(window.end.unwrap()),
+            event_time: utc_from_timestamp(window.end.unwrap())
+                .sub(chrono::Duration::milliseconds(1)),
             watermark: window
                 .end
                 .map(|ts| utc_from_timestamp(ts) - chrono::Duration::milliseconds(1)),
             // this will be unique for each response which will be used for dedup (index is used because
             // each window can have multiple reduce responses)
             id: MessageID {
-                vertex_name: wrapper.vertex_name.into(),
+                vertex_name: format!("{}-{}", wrapper.vertex_name, wrapper.vertex_replica).into(),
                 offset: offset_str.into(),
                 index: wrapper.index,
             },
@@ -168,7 +171,7 @@ impl UserDefinedAlignedReduce {
         cln_token: CancellationToken,
     ) -> Result<()> {
         // Convert AlignedWindowMessage stream to ReduceRequest stream
-        let (req_tx, req_rx) = tokio::sync::mpsc::channel(100);
+        let (req_tx, req_rx) = tokio::sync::mpsc::channel(500);
 
         // Spawn a task to convert AlignedWindowMessages to ReduceRequests and send them to req_tx
         // NOTE: - This is not really required (for client side streaming reduce), we do this because
@@ -230,6 +233,7 @@ impl UserDefinedAlignedReduce {
                         response,
                         index,
                         vertex_name,
+                        vertex_replica: *get_vertex_replica(),
                     }
                     .into();
 

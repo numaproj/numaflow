@@ -50,6 +50,7 @@ export function PipelineCard({
   statusData,
   isbData,
   refresh,
+  setPipelineHealthMap,
 }: PipelineCardProps) {
   const { addError, setSidebarProps, host, isReadOnly } =
     useContext<AppContextProps>(AppContext);
@@ -195,12 +196,21 @@ export function PipelineCard({
     (pipelineStatus: string) => {
       if (healthData) {
         const { resourceHealthStatus, dataHealthStatus } = healthData;
-        return GetConsolidatedHealthStatus(
+        const consolidated =  GetConsolidatedHealthStatus(
           pipelineStatus,
           resourceHealthStatus,
           dataHealthStatus
         );
+        setPipelineHealthMap((prev) => ({
+        ...prev,
+        [data.name]: consolidated,
+        }));
+        return consolidated;
       }
+      setPipelineHealthMap((prev) => ({
+        ...prev,
+        [data.name]: UNKNOWN,
+        }));
       return UNKNOWN;
     },
     [healthData]

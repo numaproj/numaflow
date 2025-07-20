@@ -295,7 +295,7 @@ ifeq (, $(shell which lychee))
 ifeq ($(shell uname),Darwin)
 	brew install lychee
 else
-	curl -sSfL https://github.com/lycheeverse/lychee/releases/download/v0.13.0/lychee-v0.13.0-$(shell uname -m)-unknown-linux-gnu.tar.gz | sudo tar xz -C /usr/local/bin/
+	curl -sSfL https://github.com/lycheeverse/lychee/releases/download/lychee-v0.19.1/lychee-$(shell uname -m)-unknown-linux-gnu.tar.gz | sudo tar xz -C /usr/local/bin/
 endif
 endif
 
@@ -311,7 +311,7 @@ docs-serve: docs
 
 .PHONY: docs-linkcheck
 docs-linkcheck: /usr/local/bin/lychee
-	lychee --exclude-path=CHANGELOG.md --exclude-path=./docs/APIs.md --exclude "https://localhost:*" --exclude "http://localhost:*" --exclude "http://127.0.0.1*" *.md $(shell find ./docs -name '*.md') $(shell find ./examples -name '*.yaml') --accept 200,429
+	lychee --insecure --accept '100..=399,429' --exclude-path=CHANGELOG.md --exclude-path=USERS.md --exclude-path=./docs/APIs.md --exclude "https://localhost:*" --exclude "http://localhost:*" --exclude "http://127.0.0.1*" *.md $(shell find ./docs -name '*.md') $(shell find ./examples -name '*.yaml')
 
 # pre-push checks
 

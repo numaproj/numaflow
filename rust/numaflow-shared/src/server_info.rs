@@ -12,9 +12,8 @@ use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
-use crate::config::pipeline::map::MapMode;
 use crate::error::{self, Error};
-use crate::shared::server_info::version::SdkConstraints;
+use crate::server_info::version::SdkConstraints;
 
 // Constant to represent the end of the server info.
 // Equivalent to U+005C__END__.
@@ -22,6 +21,26 @@ const END: &str = "U+005C__END__";
 const MAP_MODE_KEY: &str = "MAP_MODE";
 const HTTP_ENDPOINTS_KEY: &str = "MULTIPROC_ENDPOINTS";
 
+/// A map can be run in different modes.
+#[derive(Debug, Clone, PartialEq)]
+pub enum MapMode {
+    Unary,
+    Batch,
+    Stream,
+}
+
+impl MapMode {
+    pub fn from_str(s: &str) -> Option<MapMode> {
+        match s {
+            "unary-map" => Some(MapMode::Unary),
+            "stream-map" => Some(MapMode::Stream),
+            "batch-map" => Some(MapMode::Batch),
+            _ => None,
+        }
+    }
+}
+
+/// ContainerType represents the type of processor containers used in Numaflow.
 #[derive(Debug, Eq, PartialEq, Clone, Hash)]
 pub enum ContainerType {
     Sourcer,
@@ -37,7 +56,8 @@ pub enum ContainerType {
 }
 
 impl ContainerType {
-    fn as_str(&self) -> &'static str {
+    /// Returns the string representation of the [ContainerType].
+    pub fn as_str(&self) -> &'static str {
         match self {
             ContainerType::Sourcer => "sourcer",
             ContainerType::SourceTransformer => "sourcetransformer",
@@ -78,21 +98,24 @@ impl From<String> for ContainerType {
 
 /// ServerInfo structure to store server-related information
 #[derive(Serialize, Deserialize, Debug)]
-pub(crate) struct ServerInfo {
+pub struct ServerInfo {
+    /// Protocol used by the server. This is for multi-proc mode.
     #[serde(default)]
-    pub(crate) protocol: String,
+    protocol: String,
+    /// Language of the SDK/container. This is for publishing metrics.
     #[serde(default)]
-    pub(crate) language: String,
+    pub language: String,
     #[serde(default)]
-    pub(crate) minimum_numaflow_version: String,
+    minimum_numaflow_version: String,
+    /// SDK version used for publishing metrics.
     #[serde(default)]
-    pub(crate) version: String,
+    pub version: String,
     #[serde(default)]
-    pub(crate) metadata: Option<HashMap<String, String>>, // Metadata is optional
+    metadata: Option<HashMap<String, String>>, // Metadata is optional
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub(crate) enum Protocol {
+pub enum Protocol {
     #[allow(clippy::upper_case_acronyms)]
     TCP,
     #[allow(clippy::upper_case_acronyms)]
@@ -100,7 +123,8 @@ pub(crate) enum Protocol {
 }
 
 impl ServerInfo {
-    pub(crate) fn get_map_mode(&self) -> Option<MapMode> {
+    /// get_map_mode returns the [MapMode] from the metadata.
+    pub fn get_map_mode(&self) -> Option<MapMode> {
         if let Some(metadata) = &self.metadata
             && let Some(map_mode) = metadata.get(MAP_MODE_KEY)
         {
@@ -109,9 +133,9 @@ impl ServerInfo {
         None
     }
 
-    // get_http_endpoints returns the list of http endpoints for multi proc mode
-    // from the metadata.
-    pub(crate) fn get_http_endpoints(&self) -> Vec<String> {
+    /// get_http_endpoints returns the list of http endpoints for multi proc mode
+    /// from the metadata.
+    pub fn get_http_endpoints(&self) -> Vec<String> {
         if let Some(metadata) = &self.metadata
             && let Some(endpoints) = metadata.get(HTTP_ENDPOINTS_KEY)
         {
@@ -120,7 +144,8 @@ impl ServerInfo {
         vec![]
     }
 
-    pub(crate) fn get_protocol(&self) -> Protocol {
+    /// get_protocol returns the protocol used by the server. This is for multi-proc mode.
+    pub fn get_protocol(&self) -> Protocol {
         match self.protocol.as_str() {
             "tcp" => Protocol::TCP,
             _ => Protocol::UDS,
@@ -130,7 +155,7 @@ impl ServerInfo {
 
 /// sdk_server_info waits until the server info file is ready and check whether the
 /// server is compatible with Numaflow.
-pub(crate) async fn sdk_server_info(
+pub async fn sdk_server_info(
     file_path: PathBuf,
     cln_token: CancellationToken,
 ) -> error::Result<ServerInfo> {
@@ -457,24 +482,28 @@ mod version {
         go_version_map.insert(ContainerType::Sinker, "0.9.0-z".to_string());
         go_version_map.insert(ContainerType::FbSinker, "0.9.0-z".to_string());
         go_version_map.insert(ContainerType::Mapper, "0.9.0-z".to_string());
+        go_version_map.insert(ContainerType::SideInput, "0.9.0-z".to_string());
         let mut python_version_map = HashMap::new();
         python_version_map.insert(ContainerType::Sourcer, "0.9.0rc100".to_string());
         python_version_map.insert(ContainerType::SourceTransformer, "0.9.0rc100".to_string());
         python_version_map.insert(ContainerType::Sinker, "0.9.0rc100".to_string());
         python_version_map.insert(ContainerType::FbSinker, "0.9.0rc100".to_string());
         python_version_map.insert(ContainerType::Mapper, "0.9.0rc100".to_string());
+        python_version_map.insert(ContainerType::SideInput, "0.9.0rc100".to_string());
         let mut java_version_map = HashMap::new();
         java_version_map.insert(ContainerType::Sourcer, "0.9.0-z".to_string());
         java_version_map.insert(ContainerType::SourceTransformer, "0.9.0-z".to_string());
         java_version_map.insert(ContainerType::Sinker, "0.9.0-z".to_string());
         java_version_map.insert(ContainerType::FbSinker, "0.9.0-z".to_string());
         java_version_map.insert(ContainerType::Mapper, "0.9.0-z".to_string());
+        java_version_map.insert(ContainerType::SideInput, "0.9.0-z".to_string());
         let mut rust_version_map = HashMap::new();
-        rust_version_map.insert(ContainerType::Sourcer, "0.1.0-z".to_string());
-        rust_version_map.insert(ContainerType::SourceTransformer, "0.1.0-z".to_string());
-        rust_version_map.insert(ContainerType::Sinker, "0.1.0-z".to_string());
-        rust_version_map.insert(ContainerType::FbSinker, "0.1.0-z".to_string());
-        rust_version_map.insert(ContainerType::Mapper, "0.1.0-z".to_string());
+        rust_version_map.insert(ContainerType::Sourcer, "0.2.0-z".to_string());
+        rust_version_map.insert(ContainerType::SourceTransformer, "0.2.0-z".to_string());
+        rust_version_map.insert(ContainerType::Sinker, "0.2.0-z".to_string());
+        rust_version_map.insert(ContainerType::FbSinker, "0.2.0-z".to_string());
+        rust_version_map.insert(ContainerType::Mapper, "0.2.0-z".to_string());
+        rust_version_map.insert(ContainerType::SideInput, "0.2.0-z".to_string());
 
         let mut m = HashMap::new();
         m.insert("go".to_string(), go_version_map);
@@ -688,7 +717,7 @@ mod tests {
         assert!(result.is_err());
         assert!(
             result.unwrap_err().to_string().contains(
-            "SDK version 1.1.0 must be upgraded to at least 1.2.0, in order to work with the current numaflow version"));
+                "SDK version 1.1.0 must be upgraded to at least 1.2.0, in order to work with the current numaflow version"));
     }
 
     #[tokio::test]
@@ -828,7 +857,7 @@ mod tests {
         assert!(result.is_err());
         assert!(
             result.unwrap_err().to_string().contains(
-            "ServerInfo Error - SDK version 0.0.9 must be upgraded to at least 0.1.0, in order to work with the current numaflow version"));
+                "ServerInfo Error - SDK version 0.0.9 must be upgraded to at least 0.1.0, in order to work with the current numaflow version"));
     }
 
     #[tokio::test]

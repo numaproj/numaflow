@@ -1,6 +1,5 @@
 //! Runs the user-defined side-input generator at specified intervals (cron expr).
 
-use crate::config::isb;
 use crate::create_js_context;
 use crate::error::{Error, Result};
 use crate::manager::client::UserDefinedSideInputClient;
@@ -8,6 +7,7 @@ use async_nats::jetstream;
 use bytes::Bytes;
 use chrono_tz::{Tz, UTC};
 use cron::Schedule;
+use numaflow_shared::isb::jetstream::config::ClientConfig;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 use tokio_util::sync::CancellationToken;
@@ -72,7 +72,7 @@ impl SideInputManager {
 
     pub(crate) async fn run(
         mut self,
-        js_client_config: isb::ClientConfig,
+        js_client_config: ClientConfig,
         side_input_trigger: SideInputTrigger,
     ) -> Result<()> {
         // Wait for the side-input client to be ready
@@ -227,7 +227,15 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let client = UserDefinedSideInputClient::new(sock_file).await?;
+        let server_info_path = Box::leak(
+            server_info_file
+                .to_string_lossy()
+                .into_owned()
+                .into_boxed_str(),
+        );
+        let client =
+            UserDefinedSideInputClient::new(sock_file, (&server_info_path).into(), cancel.clone())
+                .await?;
 
         // create trigger
         let side_input_trigger = SideInputTrigger::new("* * * * * *", None)?;
@@ -258,10 +266,9 @@ mod tests {
         let manager_handle = tokio::spawn(async move {
             manager
                 .run(
-                    isb::ClientConfig {
+                    ClientConfig {
                         url: "localhost:4222".to_string(),
-                        user: None,
-                        password: None,
+                        ..Default::default()
                     },
                     side_input_trigger,
                 )

@@ -59,6 +59,10 @@ enum ISBWaterMarkActorMessage {
     FetchHeadIdle {
         oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
     },
+    FetchHead {
+        partition_idx: u16,
+        oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
+    },
 }
 
 /// Tuple of offset and watermark. We will use this to track the inflight messages.
@@ -125,6 +129,15 @@ impl ISBWatermarkActor {
             ISBWaterMarkActorMessage::FetchHeadIdle { oneshot_tx } => {
                 self.handle_fetch_head_idle_watermark(oneshot_tx).await
             }
+
+            // fetches the head watermark
+            ISBWaterMarkActorMessage::FetchHead {
+                partition_idx,
+                oneshot_tx,
+            } => {
+                self.handle_fetch_head_watermark(partition_idx, oneshot_tx)
+                    .await
+            }
         }
     }
 
@@ -163,6 +176,18 @@ impl ISBWatermarkActor {
         oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
     ) -> Result<()> {
         let watermark = self.fetcher.fetch_head_idle_watermark();
+        oneshot_tx
+            .send(Ok(watermark))
+            .map_err(|_| Error::Watermark("failed to send response".to_string()))
+    }
+
+    // fetches the head watermark and sends the response back via oneshot channel
+    async fn handle_fetch_head_watermark(
+        &mut self,
+        partition_idx: u16,
+        oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
+    ) -> Result<()> {
+        let watermark = self.fetcher.fetch_head_watermark(partition_idx);
         oneshot_tx
             .send(Ok(watermark))
             .map_err(|_| Error::Watermark("failed to send response".to_string()))
@@ -216,7 +241,8 @@ impl ISBWatermarkHandle {
             processor_managers.insert(from_bucket_config.vertex, processor_manager);
         }
         let fetcher =
-            ISBWatermarkFetcher::new(processor_managers, &config.from_vertex_config).await?;
+            ISBWatermarkFetcher::new(processor_managers, &config.from_vertex_config, vertex_type)
+                .await?;
 
         let processor_name = format!("{vertex_name}-{vertex_replica}");
         let publisher = ISBWatermarkPublisher::new(
@@ -298,6 +324,34 @@ impl ISBWatermarkHandle {
 
                 wm
             }
+            Err(e) => {
+                error!(?e, "Failed to receive response");
+                Watermark::from_timestamp_millis(-1).expect("failed to parse time")
+            }
+        }
+    }
+
+    /// Fetches the head watermark using the watermark fetcher. This returns the minimum
+    /// of the head watermarks across all processors for the specified partition.
+    pub(crate) async fn fetch_head_watermark(&mut self, partition_idx: u16) -> Watermark {
+        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
+        if let Err(e) = self
+            .sender
+            .send(ISBWaterMarkActorMessage::FetchHead {
+                partition_idx,
+                oneshot_tx,
+            })
+            .await
+        {
+            error!(?e, "Failed to send message");
+            return Watermark::from_timestamp_millis(-1).expect("failed to parse time");
+        }
+
+        match oneshot_rx.await {
+            Ok(watermark) => watermark.unwrap_or_else(|e| {
+                error!(?e, "Failed to fetch head watermark");
+                Watermark::from_timestamp_millis(-1).expect("failed to parse time")
+            }),
             Err(e) => {
                 error!(?e, "Failed to receive response");
                 Watermark::from_timestamp_millis(-1).expect("failed to parse time")
@@ -500,6 +554,7 @@ mod tests {
             partitions: 1,
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
+            delay: None,
         };
 
         let to_bucket_config = BucketConfig {
@@ -507,7 +562,21 @@ mod tests {
             partitions: 1,
             ot_bucket: to_ot_bucket_name,
             hb_bucket: to_hb_bucket_name,
+            delay: None,
         };
+
+        let _ = js_context
+            .delete_key_value(ot_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(hb_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(to_ot_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(to_hb_bucket_name.to_string())
+            .await;
 
         // create key value stores
         js_context
@@ -672,27 +741,9 @@ mod tests {
         if !wmb_found {
             panic!("WMB not found");
         }
-
-        // delete the stores
-        js_context
-            .delete_key_value(ot_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(hb_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(to_ot_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(to_hb_bucket_name.to_string())
-            .await
-            .unwrap();
     }
 
-    #[cfg(feature = "nats-tests")]
+    // #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_fetch_watermark() {
         let client = async_nats::connect("localhost:4222").await.unwrap();
@@ -708,7 +759,15 @@ mod tests {
             partitions: 1,
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
+            delay: None,
         };
+
+        let _ = js_context
+            .delete_key_value(ot_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(hb_bucket_name.to_string())
+            .await;
 
         // create key value stores
         js_context
@@ -802,16 +861,6 @@ mod tests {
         }
 
         assert_ne!(fetched_watermark, -1);
-
-        // delete the stores
-        js_context
-            .delete_key_value(ot_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
-            .delete_key_value(hb_bucket_name.to_string())
-            .await
-            .unwrap();
     }
 
     #[cfg(feature = "nats-tests")]
@@ -832,6 +881,7 @@ mod tests {
             partitions: 1,
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
+            delay: None,
         };
 
         let to_bucket_config = BucketConfig {
@@ -839,7 +889,22 @@ mod tests {
             partitions: 1,
             ot_bucket: to_ot_bucket_name,
             hb_bucket: to_hb_bucket_name,
+            delay: None,
         };
+
+        // delete the stores
+        let _ = js_context
+            .delete_key_value(ot_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(hb_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(to_ot_bucket_name.to_string())
+            .await;
+        let _ = js_context
+            .delete_key_value(to_hb_bucket_name.to_string())
+            .await;
 
         // create key value stores
         js_context
@@ -945,23 +1010,120 @@ mod tests {
         }
 
         assert!(wmb_found, "Idle watermark not found");
+    }
 
-        // delete the stores
-        js_context
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_fetch_head_watermark() {
+        let client = async_nats::connect("localhost:4222").await.unwrap();
+        let js_context = jetstream::new(client);
+
+        let ot_bucket_name = "test_fetch_head_watermark_OT";
+        let hb_bucket_name = "test_fetch_head_watermark_PROCESSORS";
+
+        let vertex_name = "test-vertex";
+
+        let from_bucket_config = BucketConfig {
+            vertex: "from_vertex",
+            partitions: 1,
+            ot_bucket: ot_bucket_name,
+            hb_bucket: hb_bucket_name,
+            delay: None,
+        };
+
+        let _ = js_context
             .delete_key_value(ot_bucket_name.to_string())
-            .await
-            .unwrap();
-        js_context
+            .await;
+        let _ = js_context
             .delete_key_value(hb_bucket_name.to_string())
-            .await
-            .unwrap();
+            .await;
+
+        // create key value stores
         js_context
-            .delete_key_value(to_ot_bucket_name.to_string())
+            .create_key_value(Config {
+                bucket: ot_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
             .await
             .unwrap();
+
         js_context
-            .delete_key_value(to_hb_bucket_name.to_string())
+            .create_key_value(Config {
+                bucket: hb_bucket_name.to_string(),
+                history: 1,
+                ..Default::default()
+            })
             .await
             .unwrap();
+
+        let edge_config = EdgeWatermarkConfig {
+            from_vertex_config: vec![from_bucket_config.clone()],
+            to_vertex_config: vec![from_bucket_config.clone()],
+        };
+
+        let mut handle = ISBWatermarkHandle::new(
+            vertex_name,
+            0,
+            VertexType::MapUDF,
+            Duration::from_millis(100),
+            js_context.clone(),
+            &edge_config,
+            &[ToVertexConfig {
+                name: "from_vertex",
+                partitions: 0,
+                writer_config: BufferWriterConfig {
+                    streams: vec![Stream::new("test_stream", "from_vertex", 0)],
+                    ..Default::default()
+                },
+                conditions: None,
+                to_vertex_type: VertexType::Sink,
+            }],
+            CancellationToken::new(),
+            None,
+        )
+        .await
+        .expect("Failed to create ISBWatermarkHandle");
+
+        let mut fetched_watermark = -1;
+        // publish watermark and try fetching to see if something is getting published
+        for i in 0..10 {
+            let offset = Offset::Int(IntOffset {
+                offset: i,
+                partition_idx: 0,
+            });
+
+            handle
+                .insert_offset(
+                    offset.clone(),
+                    Some(Watermark::from_timestamp_millis(i * 100).unwrap()),
+                )
+                .await;
+
+            handle
+                .publish_watermark(
+                    Stream {
+                        name: "test_stream",
+                        vertex: "from_vertex",
+                        partition: 0,
+                    },
+                    Offset::Int(IntOffset {
+                        offset: i,
+                        partition_idx: 0,
+                    }),
+                )
+                .await;
+
+            let watermark = handle.fetch_head_watermark(0).await;
+
+            if watermark.timestamp_millis() != -1 {
+                fetched_watermark = watermark.timestamp_millis();
+                break;
+            }
+            sleep(Duration::from_millis(10)).await;
+            handle.remove_offset(offset.clone()).await;
+        }
+
+        assert_ne!(fetched_watermark, -1);
     }
 }

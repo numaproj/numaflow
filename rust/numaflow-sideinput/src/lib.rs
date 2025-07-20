@@ -3,15 +3,12 @@
 //!
 //! [SideInput]: https://numaflow.numaproj.io/user-guide/reference/side-inputs/
 
-#![allow(dead_code)]
-
-use crate::error::{Error, Result};
+use crate::error::Result;
 use crate::manager::SideInputTrigger;
 use async_nats::jetstream::Context;
-use async_nats::{ConnectOptions, jetstream};
-use config::isb;
+use numaflow_shared::isb::jetstream::config::ClientConfig;
+use numaflow_shared::isb::jetstream::create_js_context;
 use std::collections::HashMap;
-use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
 mod error;
@@ -31,6 +28,8 @@ pub enum SideInputMode {
     Manager {
         /// The ISB bucket where the side-input values are stored.
         side_input_store: &'static str,
+        /// Server Info file
+        server_info_path: &'static str,
     },
     Synchronizer {
         /// The list of side input names to synchronize.
@@ -58,11 +57,15 @@ pub async fn run(
     cancellation_token: CancellationToken,
 ) -> Result<()> {
     match mode {
-        SideInputMode::Manager { side_input_store } => {
+        SideInputMode::Manager {
+            side_input_store,
+            server_info_path,
+        } => {
             start_manager(
                 get_bucket_name(side_input_store),
                 uds_path,
                 env_vars,
+                server_info_path,
                 cancellation_token,
             )
             .await
@@ -90,16 +93,22 @@ async fn start_manager(
     side_input_store: &'static str,
     uds_path: std::path::PathBuf,
     env_vars: HashMap<String, String>,
+    server_info_path: &'static str,
     cancellation_token: CancellationToken,
 ) -> Result<()> {
     let trigger = config::SideInputTriggerConfig::load(env_vars.clone());
 
-    let client = manager::client::UserDefinedSideInputClient::new(uds_path).await?;
+    let client = manager::client::UserDefinedSideInputClient::new(
+        uds_path,
+        server_info_path.into(),
+        cancellation_token.clone(),
+    )
+    .await?;
 
     let side_input_trigger = SideInputTrigger::new(trigger.schedule, trigger.timezone)?;
 
     manager::SideInputManager::new(side_input_store, trigger.name, client, cancellation_token)
-        .run(isb::ClientConfig::load(env_vars)?, side_input_trigger)
+        .run(ClientConfig::load(env_vars)?, side_input_trigger)
         .await
 }
 
@@ -126,26 +135,8 @@ async fn start_synchronizer(
 }
 
 async fn build_js_context(env_vars: HashMap<String, String>) -> Result<Context> {
-    let client = isb::ClientConfig::load(env_vars)?;
-    create_js_context(client).await
-}
-
-async fn create_js_context(config: isb::ClientConfig) -> Result<Context> {
-    // TODO: make these configurable. today this is hardcoded on Golang code too.
-    let mut opts = ConnectOptions::new()
-        .max_reconnects(None) // unlimited reconnects
-        .ping_interval(Duration::from_secs(3))
-        .retry_on_initial_connect();
-
-    if let (Some(user), Some(password)) = (config.user, config.password) {
-        opts = opts.user_and_password(user, password);
-    }
-
-    let js_client = async_nats::connect_with_options(&config.url, opts)
-        .await
-        .map_err(|e| Error::Connection(e.to_string()))?;
-
-    Ok(jetstream::new(js_client))
+    let client = ClientConfig::load(env_vars)?;
+    create_js_context(client).await.map_err(|e| e.into())
 }
 
 #[cfg(test)]
@@ -174,10 +165,6 @@ mod tests {
                 counter: Arc::new(AtomicU32::new(0)),
             }
         }
-
-        fn with_counter(counter: Arc<AtomicU32>) -> Self {
-            Self { counter }
-        }
     }
 
     #[tonic::async_trait]
@@ -202,10 +189,11 @@ mod tests {
                 .into_boxed_str(),
         );
 
-        let js_ctx = create_js_context(config::isb::ClientConfig {
+        let js_ctx = create_js_context(ClientConfig {
             url: "localhost:4222".to_string(),
             user: None,
             password: None,
+            ..Default::default()
         })
         .await?;
 
@@ -314,8 +302,15 @@ mod tests {
         // Set socket file path in environment
 
         let cancel_token = CancellationToken::new();
+        let server_info_path = Box::leak(
+            server_info_file
+                .to_string_lossy()
+                .into_owned()
+                .into_boxed_str(),
+        );
         let mode = SideInputMode::Manager {
             side_input_store: store_name,
+            server_info_path,
         };
 
         // Start the manager in a background task

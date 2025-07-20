@@ -45,6 +45,8 @@ pub(crate) struct BucketConfig {
     pub(crate) ot_bucket: &'static str,
     /// Heartbeat bucket for processor heartbeats.
     pub(crate) hb_bucket: &'static str,
+    /// Optional delay to publish watermark, to reduce the number of writes to the kv bucket.
+    pub(crate) delay: Option<Duration>,
 }
 
 /// Edge's Watermark is purely based on the previous vertex and the next vertex. It only has to

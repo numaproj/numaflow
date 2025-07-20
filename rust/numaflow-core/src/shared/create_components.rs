@@ -18,7 +18,6 @@ use crate::reduce::reducer::unaligned::user_defined::UserDefinedUnalignedReduce;
 use crate::reduce::reducer::unaligned::user_defined::accumulator::UserDefinedAccumulator;
 use crate::reduce::reducer::unaligned::user_defined::session::UserDefinedSessionReduce;
 use crate::shared::grpc;
-use crate::shared::server_info::{ContainerType, Protocol, sdk_server_info};
 use crate::sink::serve::ServingStore;
 use crate::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
 use crate::source::Source;
@@ -43,6 +42,7 @@ use numaflow_pb::clients::sessionreduce::session_reduce_client::SessionReduceCli
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use numaflow_shared::server_info::{ContainerType, Protocol, sdk_server_info};
 use numaflow_sqs::sink::SqsSinkBuilder;
 use tokio_util::sync::CancellationToken;
 

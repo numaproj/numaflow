@@ -539,6 +539,7 @@ mod tests {
         const FROM_VERTEX_NAME: &str = "source-vertex";
         message.metadata = Some(Metadata {
             previous_vertex: FROM_VERTEX_NAME.into(),
+            ..Default::default()
         });
 
         let callback_info: ServingCallbackInfo = TryFrom::try_from(&message).unwrap();
@@ -760,6 +761,7 @@ mod tests {
             headers,
             metadata: Some(Metadata {
                 previous_vertex: "source-vertex".into(),
+                ..Default::default()
             }),
             is_late: false,
         };
