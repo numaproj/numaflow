@@ -29,7 +29,6 @@ GOPATH=$(shell go env GOPATH)
 endif
 
 DOCKER_PUSH?=false
-DOCKER_BUILD_ARGS?=
 IMAGE_NAMESPACE?=quay.io/numaproj
 VERSION?=latest
 BASE_VERSION:=latest
@@ -51,6 +50,8 @@ ifneq (${GIT_TAG},)
 VERSION=$(GIT_TAG)
 override LDFLAGS += -X ${PACKAGE}.gitTag=${GIT_TAG}
 endif
+
+DOCKER_BUILD_ARGS=--build-arg "VERSION=$(VERSION)" --build-arg "BUILD_DATE=$(BUILD_DATE)" --build-arg "GIT_COMMIT=$(GIT_COMMIT)" --build-arg "GIT_BRANCH=$(GIT_BRANCH)" --build-arg "GIT_TAG=$(GIT_TAG)" --build-arg "GIT_TREE_STATE=$(GIT_TREE_STATE)"
 
 # Check Python
 PYTHON:=$(shell command -v python 2> /dev/null)

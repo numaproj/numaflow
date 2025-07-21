@@ -12,6 +12,8 @@ mod setup_tracing;
 /// Build the command line interface.
 mod cmdline;
 
+const VERSION_INFO: &str = env!("NUMAFLOW_VERSION_INFO");
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     setup_tracing::register();
@@ -49,13 +51,13 @@ async fn run(cli: clap::Command) -> Result<(), Box<dyn Error>> {
 
     match cli_matches.subcommand() {
         Some(("monitor", _)) => {
-            info!("Starting monitor");
+            info!(VERSION_INFO, "Starting monitor");
             numaflow_monitor::run()
                 .await
                 .map_err(|e| format!("Error running monitor binary: {e:?}"))?;
         }
         Some(("serving", _)) => {
-            info!("Starting serving");
+            info!(VERSION_INFO, "Starting serving");
             if env::var(serving::ENV_MIN_PIPELINE_SPEC).is_err() {
                 return Err(
                     "Environment variable NUMAFLOW_SERVING_MIN_PIPELINE_SPEC is not set".into(),
@@ -66,15 +68,17 @@ async fn run(cli: clap::Command) -> Result<(), Box<dyn Error>> {
             serving::run(cfg).await?;
         }
         Some(("processor", _)) => {
-            info!("Starting processing pipeline");
+            info!(VERSION_INFO, "Starting processing pipeline");
             numaflow_core::run()
                 .await
                 .map_err(|e| format!("Error running core binary: {e:?}"))?;
         }
         Some(("side-input", args)) => {
+            info!(VERSION_INFO, "Starting side input");
             sideinput::run_sideinput(args, cln_token).await?;
         }
         others => {
+            info!(VERSION_INFO, "Numaflow");
             return Err(format!("Invalid subcommand {others:?}").into());
         }
     }
