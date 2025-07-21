@@ -139,6 +139,8 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_jetstream_source_reader_acker_lagreader() {
+        use crate::reader::LagReader;
+
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
         // Setup Jetstream context and stream
@@ -175,7 +177,7 @@ mod tests {
         }
 
         // Configure JetstreamSource
-        let config = numaflow_jetstream::JetstreamSourceConfig {
+        let config = numaflow_jetstream::jetstream::JetstreamSourceConfig {
             addr: "localhost".to_string(),
             stream: stream_name.to_string(),
             consumer,
@@ -184,7 +186,7 @@ mod tests {
         };
 
         let read_timeout = Duration::from_secs(1);
-        let mut source = super::new_jetstream_source(config, 20, read_timeout)
+        let mut source: JetstreamSource = super::new_jetstream_source(config, 20, read_timeout)
             .await
             .unwrap();
 

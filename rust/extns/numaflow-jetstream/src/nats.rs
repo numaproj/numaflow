@@ -5,6 +5,7 @@ use chrono::DateTime;
 use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::StreamExt;
+use tracing::debug;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -16,7 +17,7 @@ pub struct NatsSourceConfig {
     pub tls: Option<TlsConfig>,
 }
 
-/// NatsMessage represents a Numaflow Message which can be converted from Nats message
+/// NatsMessage represents a Numaflow Message which can be converted from a Nats message
 #[derive(Debug)]
 pub struct NatsMessage {
     pub value: Bytes,
@@ -35,12 +36,14 @@ impl TryFrom<async_nats::Message> for NatsMessage {
     }
 }
 
+/// NatsActorMessage represents a message sent to the NatsActor
 enum NatsActorMessage {
     Read {
         respond_to: oneshot::Sender<Result<Vec<NatsMessage>>>,
     },
 }
 
+/// NatsActor represents a NATS subscriber actor
 struct NatsActor {
     sub: async_nats::Subscriber,
     read_timeout: Duration,
@@ -81,7 +84,7 @@ impl NatsActor {
                 error: err.to_string(),
             })?;
 
-        // Subscribe to the subject/queue
+        // Wait for the subscription to be ready
         let sub = client
             .queue_subscribe(config.subject.clone(), config.queue.clone())
             .await
@@ -91,6 +94,7 @@ impl NatsActor {
                 error: err.to_string(),
             })?;
 
+        // Spawn the NATS actor
         tokio::spawn(async move {
             let mut actor = NatsActor {
                 sub,
@@ -136,10 +140,11 @@ impl NatsActor {
                 }
             }
         }
-        tracing::debug!(msg_count = messages.len(), "Read messages from NATS");
+        debug!(msg_count = messages.len(), "Read messages from NATS");
         Ok(messages)
     }
 
+    /// Handles messages sent to the NatsActor
     async fn handle_message(&mut self, msg: NatsActorMessage) {
         match msg {
             NatsActorMessage::Read { respond_to } => {
@@ -172,5 +177,66 @@ impl NatsSource {
         let _ = self.actor_tx.send(msg).await;
         rx.await
             .map_err(|_| Error::Other("Actor task terminated".into()))?
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_nats_source() {
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+        let subject = "nats_source_test_subject";
+        let queue = "nats_source_test_queue";
+        let msg_count = 5;
+
+        let config = NatsSourceConfig {
+            addr: "localhost".to_string(),
+            subject: subject.to_string(),
+            queue: queue.to_string(),
+            auth: None,
+            tls: None,
+        };
+
+        // Connect to the NATS server with batch size and read timeout
+        let read_timeout = Duration::from_secs(1);
+        let source = NatsSource::connect(config, 2, read_timeout).await.unwrap();
+        // Wait for NATS Actor to start and subscribe to the subject with queue
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        // Publish messages
+        let client = async_nats::connect("localhost").await.unwrap();
+        for i in 0..msg_count {
+            client
+                .publish(subject, format!("message {}", i).into())
+                .await
+                .unwrap();
+        }
+
+        // Read the first batch
+        // Read Messages loop will break when batch size is reached in this case
+        let messages = source.read_messages().await.unwrap();
+        assert_eq!(messages.len(), 2);
+
+        // Read the second batch
+        // Read Messages loop will break when batch size is reached in this case
+        let messages = source.read_messages().await.unwrap();
+        assert_eq!(messages.len(), 2);
+
+        // Read the third batch
+        // Read Messages loop will break when timeout is reached in this case
+        // as batch size is 2 and remaining messages are 1
+        let messages = source.read_messages().await.unwrap();
+        assert_eq!(messages.len(), 1);
+
+        // Should be empty after all messages are read
+        let messages = source.read_messages().await.unwrap();
+        assert!(
+            messages.is_empty(),
+            "No messages should be returned after all messages are read"
+        );
     }
 }

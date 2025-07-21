@@ -36,6 +36,8 @@ impl From<NatsMessage> for Message {
             headers: Default::default(),
             metadata: Some(Metadata {
                 previous_vertex: get_vertex_name().to_string(),
+                sys_metadata: Default::default(),
+                user_metadata: Default::default(),
             }),
             is_late: false,
         }
