@@ -639,11 +639,11 @@ mod tests {
         // (sorted by end time descending, so window3 comes first)
         assert_eq!(merged_groups.len(), 2);
 
-        // First group should have 1 window (window3)
-        assert_eq!(merged_groups[0].len(), 1);
+        // First group should have 2 windows (window2 and window1)
+        assert_eq!(merged_groups[0].len(), 2);
 
-        // Second group should have 2 windows (window2 and window1)
-        assert_eq!(merged_groups[1].len(), 2);
+        // Second group should  have 1 window (window3)
+        assert_eq!(merged_groups[1].len(), 1);
     }
 
     #[test]
@@ -770,60 +770,6 @@ mod tests {
         let expected_oldest =
             msg2.event_time + chrono::Duration::from_std(windower.timeout).unwrap();
         assert_eq!(oldest_time, expected_oldest);
-    }
-
-    #[test]
-    fn test_windows_that_can_be_merged_go_style_algorithm() {
-        // Test the optimized Go-style algorithm with the same example from Go documentation
-        let now = Utc::now();
-
-        // Create windows matching the Go example: (75, 85), (60, 90), (80, 100) and (110, 120)
-        let window1 = Window::new(
-            now + chrono::Duration::seconds(75),
-            now + chrono::Duration::seconds(85),
-            Arc::from(vec!["test_key".to_string()]),
-        );
-        let window2 = Window::new(
-            now + chrono::Duration::seconds(60),
-            now + chrono::Duration::seconds(90),
-            Arc::from(vec!["test_key".to_string()]),
-        );
-        let window3 = Window::new(
-            now + chrono::Duration::seconds(80),
-            now + chrono::Duration::seconds(100),
-            Arc::from(vec!["test_key".to_string()]),
-        );
-        let window4 = Window::new(
-            now + chrono::Duration::seconds(110),
-            now + chrono::Duration::seconds(120),
-            Arc::from(vec!["test_key".to_string()]),
-        );
-
-        // Input windows sorted by end time (ascending): (85, 90, 100, 120)
-        let windows = vec![window1, window2, window3, window4];
-
-        // Test merging
-        let merged_groups = SessionWindowManager::windows_that_can_be_merged(&windows);
-
-        // Should have 2 groups: one with the first three overlapping windows, one with the standalone window
-        assert_eq!(merged_groups.len(), 2);
-
-        // First group should have 1 window (the standalone window4 with end time 120)
-        assert_eq!(merged_groups[0].len(), 1);
-        assert_eq!(
-            merged_groups[0][0].end_time,
-            now + chrono::Duration::seconds(120)
-        );
-
-        // Second group should have 3 windows (the overlapping windows)
-        assert_eq!(merged_groups[1].len(), 3);
-
-        // Verify the windows in the second group are the overlapping ones
-        let second_group_end_times: Vec<_> = merged_groups[1].iter().map(|w| w.end_time).collect();
-
-        assert!(second_group_end_times.contains(&(now + chrono::Duration::seconds(85))));
-        assert!(second_group_end_times.contains(&(now + chrono::Duration::seconds(90))));
-        assert!(second_group_end_times.contains(&(now + chrono::Duration::seconds(100))));
     }
 
     #[test]

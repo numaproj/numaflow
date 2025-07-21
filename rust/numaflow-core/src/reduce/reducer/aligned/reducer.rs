@@ -512,6 +512,8 @@ impl AlignedReducer {
                 }
             }
 
+            // abort the shutdown handle since we are done processing, no need to wait for the
+            // hard shutdown.
             shutdown_handle.abort();
 
             info!(status=?self.final_result, "Aligned Reduce component successfully completed");
