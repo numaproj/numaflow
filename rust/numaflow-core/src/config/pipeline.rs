@@ -21,6 +21,7 @@ use crate::config::components::reduce::{ReducerConfig, StorageConfig};
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::sink::SinkType;
 use crate::config::components::source::SourceConfig;
+use crate::config::components::source::SourceSpec;
 use crate::config::components::source::SourceType;
 use crate::config::components::transformer::{TransformerConfig, TransformerType};
 use crate::config::get_vertex_replica;
@@ -402,15 +403,8 @@ impl PipelineConfig {
                 transformer_type: TransformerType::UserDefined(Default::default()),
             });
 
-            let mut source_type: SourceType = source.try_into()?;
-            if let SourceType::Jetstream(ref mut js_config) = source_type {
-                if js_config.consumer.is_empty() {
-                    js_config.consumer = format!(
-                        "numaflow-{pipeline_name}-{vertex_name}-{}",
-                        js_config.stream
-                    );
-                }
-            }
+            let source = SourceSpec::new(pipeline_name.clone(), vertex_name.clone(), source);
+            let source_type: SourceType = source.try_into()?;
 
             (
                 VertexConfig::Source(SourceVtxConfig {

@@ -14,7 +14,7 @@ use super::{
 use crate::Result;
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::sink::SinkConfig;
-use crate::config::components::source::{GeneratorConfig, SourceConfig, SourceType};
+use crate::config::components::source::{GeneratorConfig, SourceConfig, SourceSpec, SourceType};
 use crate::config::components::transformer::{
     TransformerConfig, TransformerType, UserDefinedConfig,
 };
@@ -122,12 +122,8 @@ impl MonovertexConfig {
             .clone()
             .ok_or_else(|| Error::Config("Source not found".to_string()))?;
 
-        let mut source_type: SourceType = source.try_into()?;
-        if let SourceType::Jetstream(ref mut js_config) = source_type {
-            if js_config.consumer.is_empty() {
-                js_config.consumer = format!("numaflow-{}-{}", mono_vertex_name, &js_config.stream);
-            }
-        }
+        let source = SourceSpec::new(mono_vertex_name.clone(), "mvtx".into(), source);
+        let source_type: SourceType = source.try_into()?;
 
         let source_config = SourceConfig {
             read_ahead: env_vars

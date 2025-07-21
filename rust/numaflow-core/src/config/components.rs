@@ -20,7 +20,7 @@ pub(crate) mod source {
     use bytes::Bytes;
     use numaflow_jetstream::{JetstreamSourceConfig, NatsAuth, TlsClientAuthCerts, TlsConfig};
     use numaflow_kafka::source::KafkaSourceConfig;
-    use numaflow_models::models::{GeneratorSource, PulsarSource, Source, SqsSource};
+    use numaflow_models::models::{GeneratorSource, PulsarSource, SqsSource};
     use numaflow_pulsar::{PulsarAuth, source::PulsarSourceConfig};
     use numaflow_sqs::source::SqsSourceConfig;
     use serde::{Deserialize, Serialize};
@@ -39,6 +39,47 @@ pub(crate) mod source {
             Self {
                 read_ahead: false,
                 source_type: SourceType::Generator(GeneratorConfig::default()),
+            }
+        }
+    }
+
+    pub(crate) struct JetstreamSourceSpec {
+        pipeline_name: String,
+        vertex_name: String,
+        spec: Box<numaflow_models::models::JetStreamSource>,
+    }
+
+    impl JetstreamSourceSpec {
+        pub(crate) fn new(
+            pipeline_name: String,
+            vertex_name: String,
+            spec: Box<numaflow_models::models::JetStreamSource>,
+        ) -> Self {
+            Self {
+                pipeline_name,
+                vertex_name,
+                spec,
+            }
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) struct SourceSpec {
+        pipeline_name: String,
+        vertex_name: String,
+        spec: Box<numaflow_models::models::Source>,
+    }
+
+    impl SourceSpec {
+        pub(crate) fn new(
+            pipeline_name: String,
+            vertex_name: String,
+            spec: Box<numaflow_models::models::Source>,
+        ) -> Self {
+            Self {
+                pipeline_name,
+                vertex_name,
+                spec,
             }
         }
     }
@@ -174,12 +215,10 @@ pub(crate) mod source {
         }
     }
 
-    impl TryFrom<Box<numaflow_models::models::JetStreamSource>> for SourceType {
+    impl TryFrom<JetstreamSourceSpec> for SourceType {
         type Error = Error;
-        fn try_from(
-            value: Box<numaflow_models::models::JetStreamSource>,
-        ) -> std::result::Result<Self, Self::Error> {
-            let auth: Option<NatsAuth> = match value.auth {
+        fn try_from(value: JetstreamSourceSpec) -> std::result::Result<Self, Self::Error> {
+            let auth: Option<NatsAuth> = match value.spec.auth {
                 Some(auth) => {
                     if let Some(basic_auth) = auth.basic {
                         let user_secret_selector = &basic_auth.user.ok_or_else(|| {
@@ -227,7 +266,7 @@ pub(crate) mod source {
                 None => None,
             };
 
-            let tls = if let Some(tls_config) = value.tls {
+            let tls = if let Some(tls_config) = value.spec.tls {
                 let tls_skip_verify = tls_config.insecure_skip_verify.unwrap_or(false);
                 if tls_skip_verify {
                     Some(TlsConfig {
@@ -297,9 +336,14 @@ pub(crate) mod source {
             };
 
             let js_config = JetstreamSourceConfig {
-                addr: value.url,
-                consumer: value.consumer.unwrap_or_default(),
-                stream: value.stream,
+                addr: value.spec.url,
+                consumer: value.spec.consumer.unwrap_or_else(|| {
+                    format!(
+                        "numaflow-{}-{}-{}",
+                        value.pipeline_name, value.vertex_name, value.spec.stream
+                    )
+                }),
+                stream: value.spec.stream,
                 auth,
                 tls,
             };
@@ -343,39 +387,44 @@ pub(crate) mod source {
         }
     }
 
-    impl TryFrom<Box<Source>> for SourceType {
+    impl TryFrom<SourceSpec> for SourceType {
         type Error = Error;
 
-        fn try_from(mut source: Box<Source>) -> Result<Self> {
-            if let Some(generator) = source.generator.take() {
+        fn try_from(mut source: SourceSpec) -> Result<Self> {
+            if let Some(generator) = source.spec.generator.take() {
                 return generator.try_into();
             }
 
-            if source.udsource.is_some() {
+            if source.spec.udsource.is_some() {
                 return Ok(SourceType::UserDefined(UserDefinedConfig::default()));
             }
 
-            if let Some(pulsar) = source.pulsar.take() {
+            if let Some(pulsar) = source.spec.pulsar.take() {
                 return pulsar.try_into();
             }
 
-            if let Some(sqs) = source.sqs.take() {
+            if let Some(sqs) = source.spec.sqs.take() {
                 return sqs.try_into();
             }
 
-            if let Some(_serving) = source.serving.take() {
+            if let Some(_serving) = source.spec.serving.take() {
                 panic!("Serving source is invalid");
             }
 
-            if let Some(jetstream) = source.jetstream.take() {
-                return jetstream.try_into();
+            if let Some(jetstream) = source.spec.jetstream.take() {
+                return JetstreamSourceSpec::new(
+                    source.pipeline_name,
+                    source.vertex_name,
+                    jetstream,
+                )
+                .try_into();
             }
 
-            if let Some(kafka) = source.kafka.take() {
+            if let Some(kafka) = source.spec.kafka.take() {
                 return kafka.try_into();
             }
 
-            if let Some(http) = source.http.take() {
+            if let Some(http) = source.spec.http.take() {
                 return http.try_into();
             }
 
@@ -2216,6 +2265,8 @@ mod jetstream_tests {
     use numaflow_models::models::BasicAuth;
     use numaflow_models::models::{JetStreamSource, Tls};
 
+    use crate::config::components::source::JetstreamSourceSpec;
+
     use super::source::SourceType;
 
     const SECRET_BASE_PATH: &str = "/tmp/numaflow";
@@ -2264,7 +2315,12 @@ mod jetstream_tests {
             url: "nats://localhost:4222".to_string(),
         };
 
-        let source_type = SourceType::try_from(Box::new(jetstream_source)).unwrap();
+        let source_type = SourceType::try_from(JetstreamSourceSpec::new(
+            "test-pipeline".to_string(),
+            "test-vertex".to_string(),
+            Box::new(jetstream_source),
+        ))
+        .unwrap();
         if let SourceType::Jetstream(config) = source_type {
             let NatsAuth::Basic { username, password } = config.auth.unwrap() else {
                 panic!("Basic auth creds must be set");
@@ -2315,7 +2371,12 @@ mod jetstream_tests {
             url: "nats://localhost:4222".to_string(),
         };
 
-        let source_type = SourceType::try_from(Box::new(jetstream_source)).unwrap();
+        let source_type = SourceType::try_from(JetstreamSourceSpec::new(
+            "test-pipeline".to_string(),
+            "test-vertex".to_string(),
+            Box::new(jetstream_source),
+        ))
+        .unwrap();
         if let SourceType::Jetstream(config) = source_type {
             let tls_config = config.tls.unwrap();
             assert_eq!(tls_config.ca_cert.unwrap(), "test-ca-cert");
@@ -2346,7 +2407,11 @@ mod jetstream_tests {
             url: "nats://localhost:4222".to_string(),
         };
 
-        let result = SourceType::try_from(Box::new(jetstream_source));
+        let result = SourceType::try_from(JetstreamSourceSpec::new(
+            "test-pipeline".to_string(),
+            "test-vertex".to_string(),
+            Box::new(jetstream_source),
+        ));
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert_eq!(
