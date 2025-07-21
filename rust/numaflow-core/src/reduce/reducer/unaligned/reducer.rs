@@ -133,7 +133,7 @@ impl ReduceTask {
                     }
 
                     // Create a new channel for the next batch
-                    let (new_writer_tx, new_writer_rx) = mpsc::channel(100);
+                    let (new_writer_tx, new_writer_rx) = mpsc::channel(500);
                     let writer_stream = ReceiverStream::new(new_writer_rx);
                     writer_tx = new_writer_tx;
 
