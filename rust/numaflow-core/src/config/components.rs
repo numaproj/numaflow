@@ -335,14 +335,17 @@ pub(crate) mod source {
                 None
             };
 
+            let mut consumer = value.spec.consumer.unwrap_or_default();
+            if consumer.trim().is_empty() {
+                consumer = format!(
+                    "numaflow-{}-{}-{}",
+                    value.pipeline_name, value.vertex_name, value.spec.stream
+                )
+            }
+
             let js_config = JetstreamSourceConfig {
                 addr: value.spec.url,
-                consumer: value.spec.consumer.unwrap_or_else(|| {
-                    format!(
-                        "numaflow-{}-{}-{}",
-                        value.pipeline_name, value.vertex_name, value.spec.stream
-                    )
-                }),
+                consumer,
                 stream: value.spec.stream,
                 auth,
                 tls,

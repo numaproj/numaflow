@@ -542,7 +542,7 @@ mod tests {
             source_type: SourceType::Jetstream(numaflow_jetstream::JetstreamSourceConfig {
                 addr: "jetstream-server.internal".to_string(),
                 stream: "mystream".to_string(),
-                consumer: "numaflow-simple-mono-vertex-mystream".to_string(),
+                consumer: "numaflow-simple-mono-vertex-mvtx-mystream".to_string(),
                 auth: None,
                 tls: None,
             }),
