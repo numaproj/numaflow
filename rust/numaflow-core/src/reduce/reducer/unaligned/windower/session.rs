@@ -402,6 +402,8 @@ impl SessionWindowManager {
             merged_groups.push(merged_group);
         }
 
+        // reverse so that the smaller windows gets merged and closed first
+        merged_groups.reverse();
         merged_groups
     }
 

@@ -8,6 +8,7 @@ use crate::reduce::reducer::unaligned::windower::{
     UnalignedWindowManager, UnalignedWindowMessage, Window,
 };
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
+use crate::watermark::WatermarkHandle;
 
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::accumulator::AccumulatorRequest;

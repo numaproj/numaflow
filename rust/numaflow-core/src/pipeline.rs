@@ -592,10 +592,12 @@ async fn start_aligned_reduce_forwarder(
             health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
                 UserDefinedReduce::Aligned(reducer_client.clone()),
             ))),
-            watermark_fetcher_state: watermark_handle.map(|handle| WatermarkFetcherState {
-                watermark_handle: WatermarkHandle::ISB(handle),
-                partition_count: 1, // Reduce vertices always read from single partition (partition 0)
-            }),
+            watermark_fetcher_state: watermark_handle
+                .clone()
+                .map(|handle| WatermarkFetcherState {
+                    watermark_handle: WatermarkHandle::ISB(handle),
+                    partition_count: 1, // Reduce vertices always read from single partition (partition 0)
+                }),
         },
     )
     .await;
@@ -608,7 +610,9 @@ async fn start_aligned_reduce_forwarder(
             gc_wal,
             aligned_config.window_config.allowed_lateness,
             config.graceful_shutdown_time,
+            config.read_timeout,
             reduce_vtx_config.keyed,
+            watermark_handle,
         )
         .await,
     );

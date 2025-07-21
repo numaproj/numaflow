@@ -359,6 +359,31 @@ impl ISBWatermarkHandle {
         }
     }
 
+    /// Fetches the head idle watermark using the watermark fetcher. This returns the minimum
+    /// of all the head watermarks across all processors if they are ALL idle, otherwise returns -1.
+    pub(crate) async fn fetch_head_idle_watermark(&mut self) -> Watermark {
+        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
+        if let Err(e) = self
+            .sender
+            .send(ISBWaterMarkActorMessage::FetchHeadIdle { oneshot_tx })
+            .await
+        {
+            error!(?e, "Failed to send message");
+            return Watermark::from_timestamp_millis(-1).expect("failed to parse time");
+        }
+
+        match oneshot_rx.await {
+            Ok(watermark) => watermark.unwrap_or_else(|e| {
+                error!(?e, "Failed to fetch head idle watermark");
+                Watermark::from_timestamp_millis(-1).expect("failed to parse time")
+            }),
+            Err(e) => {
+                error!(?e, "Failed to receive response");
+                Watermark::from_timestamp_millis(-1).expect("failed to parse time")
+            }
+        }
+    }
+
     /// publish_watermark publishes the watermark for the given stream and offset.
     pub(crate) async fn publish_watermark(&mut self, stream: Stream, offset: Offset) {
         let Offset::Int(offset) = offset else {
