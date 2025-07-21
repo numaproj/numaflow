@@ -143,6 +143,7 @@ impl SessionWindowManager {
     /// Windows overlap if they intersect, considering that end time is exclusive and start time is inclusive.
     /// For windows [a,b) and [c,d), they overlap if a < d and c < b.
     fn find_window_to_merge(window_set: &BTreeSet<Window>, window: &Window) -> Option<Window> {
+        // TODO: this is not efficient, since its sorted we should be able to find the window in O(log n) time.
         window_set
             .iter()
             .find(|existing_window| {
@@ -224,82 +225,85 @@ impl SessionWindowManager {
         key: &str,
         closing_group: Vec<Window>,
     ) -> Option<Vec<UnalignedWindowMessage>> {
-        let mut messages = Vec::new();
-        if closing_group.is_empty() {
-            return None;
+        match closing_group.len() {
+            0 => None,
+            1 => self.process_single_closing_window(key, closing_group.into_iter().next().unwrap()),
+            _ => self.process_multiple_closing_windows(key, closing_group),
         }
+    }
 
-        if closing_group.len() == 1 {
-            // only window, no need to merge them, but we need to check if they can be merged with an active window.
-            let window = closing_group.into_iter().next().unwrap();
-            let merge_result = {
-                let mut active_windows = self.active_windows.write().expect("Poisoned lock");
-                Self::try_merge_with_active(&mut active_windows, key, &window)
-            };
+    /// Process a single closing window, attempting to merge with active windows
+    fn process_single_closing_window(
+        &self,
+        key: &str,
+        window: Window,
+    ) -> Option<Vec<UnalignedWindowMessage>> {
+        let merge_result = {
+            let mut active_windows = self.active_windows.write().expect("Poisoned lock");
+            Self::try_merge_with_active(&mut active_windows, key, &window)
+        };
 
-            match merge_result {
-                Some((old_active, _new_merged)) => {
-                    messages.push(UnalignedWindowMessage {
-                        operation: UnalignedWindowOperation::Merge {
-                            windows: vec![old_active, window],
-                        },
-                        pnf_slot: SHARED_PNF_SLOT,
-                    });
-                }
-                None => {
-                    // Move window to closed_windows
-                    {
-                        let mut closed_windows =
-                            self.closed_windows.write().expect("Poisoned lock");
-                        closed_windows.insert(window.clone());
-                    }
-
-                    messages.push(UnalignedWindowMessage {
-                        operation: UnalignedWindowOperation::Close {
-                            window: window.clone(),
-                        },
-                        pnf_slot: SHARED_PNF_SLOT,
-                    });
+        let message = match merge_result {
+            Some((old_active, _new_merged)) => UnalignedWindowMessage {
+                operation: UnalignedWindowOperation::Merge {
+                    windows: vec![old_active, window],
+                },
+                pnf_slot: SHARED_PNF_SLOT,
+            },
+            None => {
+                self.move_to_closed_windows(&window);
+                UnalignedWindowMessage {
+                    operation: UnalignedWindowOperation::Close { window },
+                    pnf_slot: SHARED_PNF_SLOT,
                 }
             }
-            return Some(messages);
-        }
+        };
 
-        // merge among the windows in the close group
-        let (merged_window, merge_msg) = Self::merge_windows(&closing_group);
-        messages.push(merge_msg);
+        Some(vec![message])
+    }
 
-        // Try to merge with active windows
+    /// Process multiple closing windows by merging them first, then attempting to merge with active windows
+    fn process_multiple_closing_windows(
+        &self,
+        key: &str,
+        closing_group: Vec<Window>,
+    ) -> Option<Vec<UnalignedWindowMessage>> {
+        let (merged_window, initial_merge_msg) = Self::merge_windows(&closing_group);
+        let mut messages = vec![initial_merge_msg];
+
         let merge_result = {
             let mut active_windows = self.active_windows.write().expect("Poisoned lock");
             Self::try_merge_with_active(&mut active_windows, key, &merged_window)
         };
 
-        match merge_result {
-            Some((old_active, _new_merged)) => {
-                messages.push(UnalignedWindowMessage {
-                    operation: UnalignedWindowOperation::Merge {
-                        windows: vec![merged_window, old_active],
-                    },
-                    pnf_slot: SHARED_PNF_SLOT,
-                });
-            }
+        let final_message = match merge_result {
+            Some((old_active, _new_merged)) => UnalignedWindowMessage {
+                operation: UnalignedWindowOperation::Merge {
+                    windows: vec![merged_window, old_active],
+                },
+                pnf_slot: SHARED_PNF_SLOT,
+            },
             None => {
-                // Move window to closed_windows
-                {
-                    let mut closed_windows = self.closed_windows.write().expect("Poisoned lock");
-                    closed_windows.insert(merged_window.clone());
-                }
-
-                messages.push(UnalignedWindowMessage {
+                self.move_to_closed_windows(&merged_window);
+                UnalignedWindowMessage {
                     operation: UnalignedWindowOperation::Close {
-                        window: merged_window.clone(),
+                        window: merged_window,
                     },
                     pnf_slot: SHARED_PNF_SLOT,
-                });
+                }
             }
         };
+
+        messages.push(final_message);
         Some(messages)
+    }
+
+    /// Helper to move a window to the closed windows store
+    fn move_to_closed_windows(&self, window: &Window) {
+        self.closed_windows
+            .write()
+            .expect("Poisoned lock")
+            .insert(window.clone());
     }
 
     /// Try to merge a window with active windows during the close operation.
