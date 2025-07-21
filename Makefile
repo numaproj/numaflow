@@ -213,6 +213,18 @@ build-rust-in-docker-multi:
 	cp -pv rust/target/aarch64-unknown-linux-gnu/release/entrypoint dist/entrypoint-linux-arm64
 	cp -pv rust/target/x86_64-unknown-linux-gnu/release/entrypoint dist/entrypoint-linux-amd64
 
+# Set Rust target triplet based on host architecture
+RUST_TARGET_TRIPLET := x86_64-unknown-linux-gnu
+ifeq ($(HOST_ARCH),arm64)
+	RUST_TARGET_TRIPLET := aarch64-unknown-linux-gnu
+endif
+
+
+.PHONY: build-rust-docker-ghactions
+build-rust-docker-ghactions:
+	mkdir -p dist
+	docker run $(DOCKER_ENV_ARGS) -v ./dist/cargo:/root/.cargo -v ./rust/:/app/ -w /app --rm ubuntu:24.04 bash build.sh $(HOST_ARCH)
+
 image-multi: ui-build set-qemu dist/$(BINARY_NAME)-linux-arm64.gz dist/$(BINARY_NAME)-linux-amd64.gz
 ifndef GITHUB_ACTIONS
 	$(MAKE) build-rust-in-docker-multi

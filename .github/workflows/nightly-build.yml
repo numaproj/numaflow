@@ -46,8 +46,7 @@ jobs:
       - uses: actions/checkout@v4
       # TODO: Use actions/cache@v4 to cache target/ directory
       - name: Build binary
-        run: |
-          docker run -v ./rust/:/app/ -w /app --rm ubuntu:24.04 bash build.sh amd64
+        run: make build-rust-docker-ghactions
       - name: Rename binaries
         run: |
           cp -pv rust/target/x86_64-unknown-linux-gnu/release/numaflow ./numaflow-rs-linux-amd64
@@ -77,12 +76,8 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
-      - name: Update Rust Toolchain Target
-        run: |
-          echo "targets = ['aarch64-unknown-linux-gnu']" >> rust/rust-toolchain.toml
       - name: Build binary
-        run: |
-          docker run -v ./rust/:/app/ -w /app --rm ubuntu:24.04 bash build.sh aarch64
+        run: make build-rust-docker-ghactions
       - name: Rename binary
         run: |
           cp -pv rust/target/aarch64-unknown-linux-gnu/release/numaflow numaflow-rs-linux-arm64
