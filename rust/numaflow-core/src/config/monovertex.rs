@@ -14,7 +14,7 @@ use super::{
 use crate::Result;
 use crate::config::components::metrics::MetricsConfig;
 use crate::config::components::sink::SinkConfig;
-use crate::config::components::source::{GeneratorConfig, SourceConfig};
+use crate::config::components::source::{GeneratorConfig, SourceConfig, SourceSpec, SourceType};
 use crate::config::components::transformer::{
     TransformerConfig, TransformerType, UserDefinedConfig,
 };
@@ -122,6 +122,9 @@ impl MonovertexConfig {
             .clone()
             .ok_or_else(|| Error::Config("Source not found".to_string()))?;
 
+        let source = SourceSpec::new(mono_vertex_name.clone(), "mvtx".into(), source);
+        let source_type: SourceType = source.try_into()?;
+
         let source_config = SourceConfig {
             read_ahead: env_vars
                 .get("READ_AHEAD")
@@ -129,7 +132,7 @@ impl MonovertexConfig {
                 .unwrap_or("false")
                 .parse()
                 .unwrap(),
-            source_type: source.try_into()?,
+            source_type,
         };
 
         let sink = mono_vertex_obj
@@ -480,5 +483,71 @@ mod tests {
                 "/var/run/numaflow/fb-sinker-server-info"
             );
         }
+    }
+
+    #[test]
+    fn test_load_jetstream_source() {
+        let mvtx_config = r#"
+        {
+            "metadata": {
+                "name": "simple-mono-vertex",
+                "namespace": "default",
+                "creationTimestamp": null
+            },
+            "spec": {
+                "replicas": 0,
+                "source": {
+                "jetstream": {
+                    "url": "jetstream-server.internal",
+                    "stream": "mystream",
+                    "consumer": "",
+                    "tls": null
+                }
+                },
+                "sink": {
+                "log": {},
+                "retryStrategy": {}
+                },
+                "limits": {
+                "readBatchSize": 500,
+                "readTimeout": "1s"
+                },
+                "scale": {
+                "lookbackSeconds": 120
+                },
+                "updateStrategy": {},
+                "lifecycle": {}
+            },
+            "status": {
+                "replicas": 0,
+                "desiredReplicas": 0,
+                "lastUpdated": null,
+                "lastScaledAt": null
+            }
+        }
+        "#;
+
+        let encoded_mvtx_config = BASE64_STANDARD.encode(mvtx_config);
+        let env_vars = HashMap::from([
+            (ENV_MONO_VERTEX_OBJ.to_string(), encoded_mvtx_config),
+            (
+                "NUMAFLOW_MONO_VERTEX_NAME".to_string(),
+                "simple-mono-vertex".to_string(),
+            ),
+        ]);
+
+        let config = MonovertexConfig::load(env_vars).unwrap();
+        let expected_source_config = crate::config::components::source::SourceConfig {
+            read_ahead: false,
+            source_type: SourceType::Jetstream(numaflow_jetstream::JetstreamSourceConfig {
+                addr: "jetstream-server.internal".to_string(),
+                stream: "mystream".to_string(),
+                consumer: "numaflow-simple-mono-vertex-mvtx-mystream".to_string(),
+                auth: None,
+                tls: None,
+            }),
+        };
+
+        assert_eq!(config.source_config, expected_source_config);
     }
 }

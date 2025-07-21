@@ -86,7 +86,7 @@ pub mod tests {
     use aws_sdk_sqs::Config;
     use aws_sdk_sqs::config::BehaviorVersion;
     use aws_sdk_sqs::types::BatchResultErrorEntry;
-    use aws_smithy_mocks_experimental::{MockResponseInterceptor, Rule, RuleMode, mock};
+    use aws_smithy_mocks::{MockResponseInterceptor, Rule, RuleMode, mock};
     use chrono::Utc;
     use numaflow::source;
     use numaflow::source::{Message, Offset, SourceReadRequest};
