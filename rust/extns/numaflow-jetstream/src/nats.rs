@@ -205,7 +205,7 @@ mod tests {
         let read_timeout = Duration::from_secs(1);
         let source = NatsSource::connect(config, 2, read_timeout).await.unwrap();
         // Wait for NATS Actor to start and subscribe to the subject with queue
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        tokio::time::sleep(Duration::from_millis(50)).await;
 
         // Publish messages
         let client = async_nats::connect("localhost").await.unwrap();

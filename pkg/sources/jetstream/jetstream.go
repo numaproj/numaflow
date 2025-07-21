@@ -248,6 +248,7 @@ func (ns *jsSource) getNatsOptionsForSource() ([]natslib.Option, error) {
 // createOrUpdateConsumer creates a new consumer or updates an existing consumer in the JetStream stream.
 func (ns *jsSource) createOrUpdateConsumer(ctx context.Context) (jetstreamlib.Consumer, error) {
 	var streamName string
+	var consumerName string
 	var existing bool
 
 	if ns.servingEnabled {
@@ -257,6 +258,7 @@ func (ns *jsSource) createOrUpdateConsumer(ctx context.Context) (jetstreamlib.Co
 		}
 	} else {
 		streamName = ns.jsSpec.Stream
+		consumerName = ns.jsSpec.Consumer
 	}
 
 	stream, err := jetstreamlib.New(ns.natsConn)
@@ -265,15 +267,25 @@ func (ns *jsSource) createOrUpdateConsumer(ctx context.Context) (jetstreamlib.Co
 		return nil, fmt.Errorf("creating jetstream instance for the NATS server: %w", err)
 	}
 
-	consumerName := fmt.Sprintf("numaflow-%s-%s-%s", ns.pipelineName, ns.vertexName, streamName)
-	consumer, err := stream.CreateOrUpdateConsumer(ctx, streamName, jetstreamlib.ConsumerConfig{
-		Durable:       consumerName,
-		Description:   "Numaflow JetStream consumer",
-		DeliverPolicy: jetstreamlib.DeliverAllPolicy,
-		AckPolicy:     jetstreamlib.AckExplicitPolicy,
-	})
+	var consumer jetstreamlib.Consumer
+	if consumerName == "" {
+		consumerName = fmt.Sprintf("numaflow-%s-%s-%s", ns.pipelineName, ns.vertexName, streamName)
+	}
+	consumer, err = stream.Consumer(ctx, streamName, consumerName)
 	if err != nil {
-		return nil, fmt.Errorf("creating jetstream consumer for stream %q: %w", streamName, err)
+		if !errors.Is(err, jetstreamlib.ErrConsumerNotFound) {
+			return nil, fmt.Errorf("getting jetstream consumer for stream %q: %w", streamName, err)
+		}
+		ns.logger.Infow("Consumer not found on the stream, creating a new one", zap.String("stream", streamName), zap.String("consumer", consumerName))
+		consumer, err = stream.CreateOrUpdateConsumer(ctx, streamName, jetstreamlib.ConsumerConfig{
+			Durable:       consumerName,
+			Description:   "Numaflow JetStream consumer",
+			DeliverPolicy: jetstreamlib.DeliverAllPolicy,
+			AckPolicy:     jetstreamlib.AckExplicitPolicy,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("creating jetstream consumer for stream %q: %w", streamName, err)
+		}
 	}
 	return consumer, nil
 }

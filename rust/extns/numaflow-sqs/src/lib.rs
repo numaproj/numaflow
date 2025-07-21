@@ -108,7 +108,7 @@ pub async fn create_sqs_client(config: SqsConfig) -> Result<Client, Error> {
 #[cfg(test)]
 mod tests {
     use aws_config::BehaviorVersion;
-    use aws_smithy_mocks_experimental::{MockResponseInterceptor, RuleMode, mock};
+    use aws_smithy_mocks::{MockResponseInterceptor, RuleMode, mock};
     use aws_smithy_types::error::ErrorMetadata;
 
     use super::*;

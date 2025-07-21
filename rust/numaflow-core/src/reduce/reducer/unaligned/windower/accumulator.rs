@@ -28,12 +28,11 @@ use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use chrono::{DateTime, Utc};
-
 use crate::message::Message;
 use crate::reduce::reducer::unaligned::windower::{
     SHARED_PNF_SLOT, UnalignedWindowMessage, UnalignedWindowOperation, Window, combine_keys,
 };
+use chrono::{DateTime, Utc};
 
 /// Represents the key global state of an accumulator window.
 #[derive(Debug, Clone)]
@@ -67,8 +66,10 @@ impl WindowState {
 
     /// Adds the event time to the message timestamps in sorted order.
     fn append_timestamp(&self, event_time: DateTime<Utc>) {
-        let mut timestamps = self.message_timestamps.write().expect("Poisoned lock");
-        timestamps.insert(event_time);
+        {
+            let mut timestamps = self.message_timestamps.write().expect("Poisoned lock");
+            timestamps.insert(event_time);
+        }
 
         // Update last seen event time if this is newer
         let mut last_seen = self.last_seen_event_time.write().expect("Poisoned lock");
@@ -79,22 +80,25 @@ impl WindowState {
 
     /// Deletes event times before the given end time.
     fn delete_timestamps_before(&self, end_time: DateTime<Utc>) {
-        let mut timestamps = self
-            .message_timestamps
-            .write()
-            .expect("Failed to acquire write lock on message_timestamps");
+        let latest_timestamp = {
+            let mut timestamps = self
+                .message_timestamps
+                .write()
+                .expect("Failed to acquire write lock on message_timestamps");
 
-        // Retain timestamps greater than or equal to the end time
-        timestamps.retain(|&ts| ts >= end_time);
-
-        let oldest_timestamp = timestamps.iter().next().cloned();
+            // Retain timestamps greater than or equal to the end time
+            timestamps.retain(|&ts| ts >= end_time);
+            timestamps.iter().last().cloned()
+        };
 
         let mut last_seen = self
             .last_seen_event_time
             .write()
             .expect("Failed to acquire write lock on last_seen_event_time");
-        *last_seen = oldest_timestamp
-            .unwrap_or_else(|| DateTime::from_timestamp_millis(-1).expect("Invalid timestamp"));
+
+        if let Some(latest_timestamp) = latest_timestamp {
+            *last_seen = latest_timestamp;
+        }
     }
 
     /// Gets the oldest timestamp in this window state.
@@ -130,7 +134,6 @@ impl AccumulatorWindowManager {
         let keys = Arc::clone(&msg.keys);
 
         let mut active_windows = self.active_windows.write().expect("Poisoned lock");
-
         // Check if a window already exists for the key, if exits we can do append else we will have
         // to create a new window for the key
         if let Some(window_state) = active_windows.get(&combined_key) {
@@ -168,9 +171,8 @@ impl AccumulatorWindowManager {
     /// Closes windows that have been inactive for longer than the timeout. This function is called
     /// when the watermark has progressed, and we need to close the windows that are inactive for
     /// longer than the timeout.
-    pub(crate) fn close_windows(&self, current_time: DateTime<Utc>) -> Vec<UnalignedWindowMessage> {
+    pub(crate) fn close_windows(&self, watermark: DateTime<Utc>) -> Vec<UnalignedWindowMessage> {
         let mut result = Vec::new();
-
         let mut active_windows = self.active_windows.write().expect("Poisoned lock");
 
         // Iterate and remove inactive windows
@@ -180,7 +182,7 @@ impl AccumulatorWindowManager {
                 .read()
                 .expect("Poisoned lock");
 
-            if current_time > last_seen + chrono::Duration::from_std(self.timeout).unwrap() {
+            if watermark > last_seen + self.timeout {
                 result.push(UnalignedWindowMessage {
                     operation: UnalignedWindowOperation::Close {
                         window: window_state.window.clone(),

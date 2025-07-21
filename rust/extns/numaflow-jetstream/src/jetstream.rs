@@ -1,9 +1,10 @@
 use crate::{Error, NatsAuth, Result, TlsConfig, tls};
-use async_nats::jetstream::{AckKind, Message as JetstreamMessage};
+use async_nats::jetstream::consumer::{AckPolicy, DeliverPolicy};
+use async_nats::jetstream::{AckKind, Message as JetstreamMessage, consumer};
 use async_nats::{
     ConnectOptions,
     jetstream::consumer::{
-        Consumer, PullConsumer,
+        Consumer,
         pull::{Config, Stream},
     },
 };
@@ -131,15 +132,54 @@ impl JetstreamActor {
             })?;
 
         let js_ctx = async_nats::jetstream::new(client);
-        let consumer: PullConsumer = js_ctx
+        let consumer = js_ctx
             .get_consumer_from_stream(&config.consumer, &config.stream)
-            .await
-            .map_err(|err| {
-                Error::Jetstream(format!(
-                    "Getting consumer {} from stream {}: {err:?}",
-                    config.consumer, config.stream
-                ))
-            })?;
+            .await;
+
+        let consumer = match consumer {
+            Ok(consumer) => consumer,
+            Err(e) => {
+                let async_nats::jetstream::stream::ConsumerErrorKind::JetStream(e) = e.kind()
+                else {
+                    return Err(Error::Jetstream(format!(
+                        "Getting consumer {} from Jetstream stream {}: {e:?}",
+                        config.consumer, config.stream
+                    )));
+                };
+
+                if e.error_code() != async_nats::jetstream::ErrorCode::CONSUMER_NOT_FOUND {
+                    return Err(Error::Jetstream(format!(
+                        "Getting consumer {} from Jetstream stream {}: {e:?}",
+                        config.consumer, config.stream
+                    )));
+                }
+
+                tracing::info!(
+                    "Consumer {} not found on stream {}. Creating new consumer.",
+                    config.consumer,
+                    config.stream
+                );
+                js_ctx
+                    .create_consumer_on_stream(
+                        consumer::pull::Config {
+                            durable_name: Some(config.consumer.clone()),
+                            description: Some("Numaflow Jetstream Consumer".into()),
+                            deliver_policy: DeliverPolicy::All,
+                            ack_policy: AckPolicy::Explicit,
+                            ..Default::default()
+                        },
+                        &config.stream,
+                    )
+                    .await
+                    .map_err(|e| {
+                        Error::Jetstream(format!(
+                            "Creating consumer {} on stream {}: {e:?}",
+                            config.consumer, config.stream
+                        ))
+                    })?
+            }
+        };
+
         let message_stream = consumer.messages().await.unwrap();
 
         tokio::spawn(async move {
@@ -435,12 +475,12 @@ mod tests {
 
     use async_nats::jetstream::Context;
     use async_nats::jetstream::stream::Config as StreamConfig;
+    use std::time::Duration;
 
-    async fn setup_jetstream() -> (Context, String) {
+    async fn setup_jetstream(stream_name: &str, create_consumer: bool) -> Context {
         let client = async_nats::connect("localhost").await.unwrap();
         let js = async_nats::jetstream::new(client);
 
-        let stream_name = "js_source_test_stream";
         let _ = js.delete_stream(stream_name).await;
         let stream = js
             .get_or_create_stream(StreamConfig {
@@ -450,45 +490,33 @@ mod tests {
             .await
             .unwrap();
 
-        stream
-            .get_or_create_consumer(
-                stream_name,
-                async_nats::jetstream::consumer::pull::Config {
-                    durable_name: Some(stream_name.to_string()),
-                    ..Default::default()
-                },
-            )
-            .await
-            .unwrap();
-
-        (js, stream_name.to_string())
-    }
-
-    #[cfg(feature = "nats-tests")]
-    #[tokio::test]
-    async fn test_jetstream_source() {
-        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-        let (js, stream_name) = setup_jetstream().await;
-
-        for i in 0..100 {
-            js.publish(stream_name.clone(), format!("message {}", i).into())
+        if create_consumer {
+            stream
+                .get_or_create_consumer(
+                    stream_name,
+                    async_nats::jetstream::consumer::pull::Config {
+                        durable_name: Some(stream_name.to_string()),
+                        ..Default::default()
+                    },
+                )
                 .await
                 .unwrap();
         }
 
-        let config = JetstreamSourceConfig {
-            addr: "localhost".to_string(),
-            stream: stream_name.clone(),
-            consumer: stream_name,
-            auth: None,
-            tls: None,
-        };
+        js
+    }
 
+    async fn source_functionality_test(
+        source: JetstreamSource,
+        js: Context,
+        stream_name: &'static str,
+    ) {
+        for i in 0..100 {
+            js.publish(stream_name, format!("message {}", i).into())
+                .await
+                .unwrap();
+        }
         let read_timeout = Duration::from_secs(1);
-        let source = JetstreamSource::connect(config, 30, read_timeout)
-            .await
-            .unwrap();
-
         // Read messages
         let messages = source.read_messages().await.unwrap();
         assert_eq!(messages.len(), 30);
@@ -577,5 +605,47 @@ mod tests {
             messages.is_empty(),
             "No messages should be returned after all messages are acked"
         );
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_jetstream_source_consumer_exists_on_stream() {
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
+        let stream_name = "test_jetstream_source_consumer_exists_on_stream";
+        let js = setup_jetstream(stream_name, true).await;
+        let config = JetstreamSourceConfig {
+            addr: "localhost".to_string(),
+            stream: stream_name.into(),
+            consumer: stream_name.into(),
+            auth: None,
+            tls: None,
+        };
+        let source = JetstreamSource::connect(config, 30, Duration::from_secs(1))
+            .await
+            .unwrap();
+
+        source_functionality_test(source, js, stream_name).await;
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_jetstream_source_consumer_not_exists_on_stream() {
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
+        let stream_name = "test_jetstream_source_consumer_not_exists_on_stream";
+        let js = setup_jetstream(stream_name, false).await;
+        let config = JetstreamSourceConfig {
+            addr: "localhost".to_string(),
+            stream: stream_name.into(),
+            consumer: stream_name.into(),
+            auth: None,
+            tls: None,
+        };
+        let source = JetstreamSource::connect(config, 30, Duration::from_secs(1))
+            .await
+            .unwrap();
+
+        source_functionality_test(source, js, stream_name).await;
     }
 }
