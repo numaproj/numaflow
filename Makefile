@@ -52,6 +52,7 @@ override LDFLAGS += -X ${PACKAGE}.gitTag=${GIT_TAG}
 endif
 
 DOCKER_BUILD_ARGS=--build-arg "VERSION=$(VERSION)" --build-arg "BUILD_DATE=$(BUILD_DATE)" --build-arg "GIT_COMMIT=$(GIT_COMMIT)" --build-arg "GIT_BRANCH=$(GIT_BRANCH)" --build-arg "GIT_TAG=$(GIT_TAG)" --build-arg "GIT_TREE_STATE=$(GIT_TREE_STATE)"
+DOCKER_ENV_ARGS=--env "VERSION=$(VERSION)" --env "BUILD_DATE=$(BUILD_DATE)" --env "GIT_COMMIT=$(GIT_COMMIT)" --env "GIT_BRANCH=$(GIT_BRANCH)" --env "GIT_TAG=$(GIT_TAG)" --env "GIT_TREE_STATE=$(GIT_TREE_STATE)"
 
 # Check Python
 PYTHON:=$(shell command -v python 2> /dev/null)
@@ -206,7 +207,7 @@ build-rust-in-docker:
 .PHONY: build-rust-in-docker-multi
 build-rust-in-docker-multi:
 	mkdir -p dist
-	docker run -v ./dist/cargo:/root/.cargo -v ./rust/:/app/ -w /app --rm ubuntu:24.04 bash build.sh all
+	docker run $(DOCKER_ENV_ARGS) -v ./dist/cargo:/root/.cargo -v ./rust/:/app/ -w /app --rm ubuntu:24.04 bash build.sh all
 	cp -pv rust/target/aarch64-unknown-linux-gnu/release/numaflow dist/numaflow-rs-linux-arm64
 	cp -pv rust/target/x86_64-unknown-linux-gnu/release/numaflow dist/numaflow-rs-linux-amd64
 	cp -pv rust/target/aarch64-unknown-linux-gnu/release/entrypoint dist/entrypoint-linux-arm64
