@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use numaflow_jetstream::jetstream::{
+use numaflow_nats::jetstream::{
     JetstreamSource, JetstreamSourceConfig, Message as JetstreamMessage,
 };
 
@@ -43,8 +43,8 @@ impl From<JetstreamMessage> for Message {
     }
 }
 
-impl From<numaflow_jetstream::Error> for Error {
-    fn from(value: numaflow_jetstream::Error) -> Self {
+impl From<numaflow_nats::Error> for Error {
+    fn from(value: numaflow_nats::Error) -> Self {
         Self::Source(format!("Jetstream source: {value:?}"))
     }
 }
@@ -103,7 +103,7 @@ mod tests {
 
     use super::*;
     use bytes::Bytes;
-    use numaflow_jetstream::jetstream::Message as JetstreamMessage;
+    use numaflow_nats::jetstream::Message as JetstreamMessage;
     use std::collections::HashMap;
 
     #[tokio::test]
@@ -177,7 +177,7 @@ mod tests {
         }
 
         // Configure JetstreamSource
-        let config = numaflow_jetstream::jetstream::JetstreamSourceConfig {
+        let config = numaflow_nats::jetstream::JetstreamSourceConfig {
             addr: "localhost".to_string(),
             stream: stream_name.to_string(),
             consumer,

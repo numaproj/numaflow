@@ -5,7 +5,7 @@ use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::message::Message;
 use crate::message::{MessageID, Metadata, Offset, StringOffset};
 use crate::source::SourceReader;
-use numaflow_jetstream::nats::{NatsMessage, NatsSource, NatsSourceConfig};
+use numaflow_nats::nats::{NatsMessage, NatsSource, NatsSourceConfig};
 
 use super::SourceAcker;
 

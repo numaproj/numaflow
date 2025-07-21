@@ -1,5 +1,5 @@
 [package]
-name = "numaflow-jetstream"
+name = "numaflow-nats"
 version = "0.1.0"
 edition = "2024"
 

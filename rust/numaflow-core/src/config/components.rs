@@ -18,11 +18,11 @@ pub(crate) mod source {
     use base64::Engine;
     use base64::prelude::BASE64_STANDARD;
     use bytes::Bytes;
-    use numaflow_jetstream::jetstream::JetstreamSourceConfig;
-    use numaflow_jetstream::nats::NatsSourceConfig;
-    use numaflow_jetstream::{NatsAuth, TlsClientAuthCerts, TlsConfig};
     use numaflow_kafka::source::KafkaSourceConfig;
     use numaflow_models::models::{GeneratorSource, PulsarSource, SqsSource};
+    use numaflow_nats::jetstream::JetstreamSourceConfig;
+    use numaflow_nats::nats::NatsSourceConfig;
+    use numaflow_nats::{NatsAuth, TlsClientAuthCerts, TlsConfig};
     use numaflow_pulsar::{PulsarAuth, source::PulsarSourceConfig};
     use numaflow_sqs::source::SqsSourceConfig;
     use serde::{Deserialize, Serialize};
@@ -2404,9 +2404,9 @@ mod jetstream_tests {
     use std::path::Path;
 
     use k8s_openapi::api::core::v1::SecretKeySelector;
-    use numaflow_jetstream::NatsAuth;
     use numaflow_models::models::BasicAuth;
     use numaflow_models::models::{JetStreamSource, Tls};
+    use numaflow_nats::NatsAuth;
 
     use crate::config::components::source::JetstreamSourceSpec;
 
@@ -4216,10 +4216,10 @@ mod pulsar_source_tests {
 #[cfg(test)]
 mod nats_source_tests {
     use super::source::SourceType;
-    use numaflow_models::models::NatsSource;
     use k8s_openapi::api::core::v1::SecretKeySelector;
+    use numaflow_models::models::NatsSource;
     use numaflow_models::models::{BasicAuth, NatsAuth};
-    use numaflow_jetstream;
+    use numaflow_nats;
 
     const SECRET_BASE_PATH: &str = "/tmp/numaflow";
 
@@ -4259,7 +4259,7 @@ mod nats_source_tests {
 
         let source_type = SourceType::try_from(nats_source).unwrap();
         if let SourceType::Nats(config) = source_type {
-            let numaflow_jetstream::NatsAuth::Basic { username, password } = config.auth.unwrap() else {
+            let numaflow_nats::NatsAuth::Basic { username, password } = config.auth.unwrap() else {
                 panic!("Basic auth creds must be set");
             };
             assert_eq!(username, "test-user");

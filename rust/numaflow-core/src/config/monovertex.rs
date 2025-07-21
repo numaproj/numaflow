@@ -539,15 +539,13 @@ mod tests {
         let config = MonovertexConfig::load(env_vars).unwrap();
         let expected_source_config = crate::config::components::source::SourceConfig {
             read_ahead: false,
-            source_type: SourceType::Jetstream(
-                numaflow_jetstream::jetstream::JetstreamSourceConfig {
-                    addr: "jetstream-server.internal".to_string(),
-                    stream: "mystream".to_string(),
-                    consumer: "numaflow-simple-mono-vertex-mvtx-mystream".to_string(),
-                    auth: None,
-                    tls: None,
-                },
-            ),
+            source_type: SourceType::Jetstream(numaflow_nats::jetstream::JetstreamSourceConfig {
+                addr: "jetstream-server.internal".to_string(),
+                stream: "mystream".to_string(),
+                consumer: "numaflow-simple-mono-vertex-mvtx-mystream".to_string(),
+                auth: None,
+                tls: None,
+            }),
         };
 
         assert_eq!(config.source_config, expected_source_config);

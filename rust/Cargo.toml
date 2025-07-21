@@ -9,7 +9,7 @@ members = [
     # extensions
     "extns/numaflow-pulsar",
     "extns/numaflow-sqs",
-    "extns/numaflow-jetstream",
+    "extns/numaflow-nats",
     "extns/numaflow-kafka",
     "extns/numaflow-http",
     # generated
@@ -67,7 +67,7 @@ numaflow-shared = { path = "numaflow-shared" }
 backoff = { path = "backoff" }
 numaflow-pb = { path = "numaflow-pb" }
 numaflow-pulsar = { path = "extns/numaflow-pulsar" }
-numaflow-jetstream = { path = "extns/numaflow-jetstream" }
+numaflow-nats = { path = "extns/numaflow-nats" }
 numaflow-kafka = { path = "extns/numaflow-kafka" }
 numaflow-sqs = { path = "extns/numaflow-sqs" }
 numaflow-http = { path = "extns/numaflow-http" }

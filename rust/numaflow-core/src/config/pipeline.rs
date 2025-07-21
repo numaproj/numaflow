@@ -1055,7 +1055,7 @@ mod tests {
             source_config: SourceConfig {
                 read_ahead: false,
                 source_type: SourceType::Jetstream(
-                    numaflow_jetstream::jetstream::JetstreamSourceConfig {
+                    numaflow_nats::jetstream::JetstreamSourceConfig {
                         addr: "jetstream-server.internal".to_string(),
                         stream: "testing-numaflow".to_string(),
                         consumer: "numaflow-rust-pipeline-in-testing-numaflow".to_string(),
