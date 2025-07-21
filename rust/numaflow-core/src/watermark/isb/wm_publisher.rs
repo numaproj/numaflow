@@ -172,7 +172,8 @@ impl ISBWatermarkPublisher {
         // NOTE: in idling case since we reuse the control message offset, we can have the same offset
         // with larger watermark (we should publish it).
         let last_state = &mut last_published_wm_state[stream.partition as usize];
-        if offset < last_state.offset || watermark < last_state.watermark {
+        if offset < last_state.offset {
+            last_state.watermark = last_state.watermark.max(watermark);
             return;
         }
 
@@ -184,8 +185,8 @@ impl ISBWatermarkPublisher {
         // Supposed publish watermark offset=3605637 watermark=1750758998480 last_published_offset=3605147 last_published_watermark=1750758997480
         // Actual published watermark offset=3605637 watermark=1750758998480
         // We should've published watermark for offset 3605646 and skipped publishing for offset 3605637
-        if watermark == last_state.watermark {
-            last_state.offset = offset;
+        if watermark <= last_state.watermark {
+            last_state.offset = last_state.offset.max(offset);
             return;
         }
 

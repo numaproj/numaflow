@@ -380,6 +380,13 @@ impl JetStreamReader {
                 let watermark = watermark_handle
                     .fetch_watermark(message.offset.clone())
                     .await;
+                if message.event_time < watermark {
+                    warn!(
+                        event_time = ?message.event_time.timestamp_millis(),
+                        watermark = ?watermark.timestamp_millis(),
+                        "Event time is before the watermark, message will be dropped"
+                    );
+                }
                 message.watermark = Some(watermark);
             }
 
