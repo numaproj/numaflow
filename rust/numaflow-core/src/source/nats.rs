@@ -76,3 +76,33 @@ impl super::LagReader for NatsSource {
         Ok(None)
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use bytes::Bytes;
+    use numaflow_nats::nats::NatsMessage;
+
+    #[tokio::test]
+    async fn test_try_from_nats_message_success() {
+        let test_timestamp = chrono::DateTime::parse_from_rfc3339("2023-01-01T12:30:45.123456789Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+
+        let nats_message = NatsMessage {
+            value: Bytes::from("test_value"),
+            id: "msg-id-123".to_string(),
+            event_time: test_timestamp,
+        };
+
+        let message: Message = nats_message.into();
+
+        assert_eq!(message.value, Bytes::from("test_value"));
+        assert_eq!(message.offset.to_string(), format!("msg-id-123-0"));
+        assert_eq!(message.metadata.unwrap().previous_vertex, get_vertex_name());
+        assert_eq!(message.event_time, test_timestamp);
+        assert_eq!(message.event_time.timestamp(), 1672576245);
+        assert_eq!(message.event_time.timestamp_subsec_nanos(), 123456789);
+    }
+}

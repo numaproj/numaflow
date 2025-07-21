@@ -15,14 +15,15 @@ pub(crate) mod source {
     use crate::Result;
     use crate::config::get_vertex_name;
     use crate::error::Error;
+    use crate::shared::create_components::{parse_nats_auth, parse_tls_config};
     use base64::Engine;
     use base64::prelude::BASE64_STANDARD;
     use bytes::Bytes;
     use numaflow_kafka::source::KafkaSourceConfig;
     use numaflow_models::models::{GeneratorSource, PulsarSource, SqsSource};
+    use numaflow_nats::NatsAuth;
     use numaflow_nats::jetstream::JetstreamSourceConfig;
     use numaflow_nats::nats::NatsSourceConfig;
-    use numaflow_nats::{NatsAuth, TlsClientAuthCerts, TlsConfig};
     use numaflow_pulsar::{PulsarAuth, source::PulsarSourceConfig};
     use numaflow_sqs::source::SqsSourceConfig;
     use serde::{Deserialize, Serialize};
@@ -221,123 +222,8 @@ pub(crate) mod source {
     impl TryFrom<JetstreamSourceSpec> for SourceType {
         type Error = Error;
         fn try_from(value: JetstreamSourceSpec) -> std::result::Result<Self, Self::Error> {
-            let auth: Option<NatsAuth> = match value.spec.auth {
-                Some(auth) => {
-                    if let Some(basic_auth) = auth.basic {
-                        let user_secret_selector = &basic_auth.user.ok_or_else(|| {
-                            Error::Config("Username can not be empty for basic auth".into())
-                        })?;
-                        let username = crate::shared::create_components::get_secret_from_volume(
-                            &user_secret_selector.name,
-                            &user_secret_selector.key,
-                        )
-                        .map_err(|e| {
-                            Error::Config(format!("Failed to get username secret: {e:?}"))
-                        })?;
-
-                        let password_secret_selector = &basic_auth.password.ok_or_else(|| {
-                            Error::Config("Password can not be empty for basic auth".into())
-                        })?;
-                        let password = crate::shared::create_components::get_secret_from_volume(
-                            &password_secret_selector.name,
-                            &password_secret_selector.key,
-                        )
-                        .map_err(|e| {
-                            Error::Config(format!("Failed to get password secret: {e:?}"))
-                        })?;
-                        Some(NatsAuth::Basic { username, password })
-                    } else if let Some(nkey_auth) = auth.nkey {
-                        let nkey = crate::shared::create_components::get_secret_from_volume(
-                            &nkey_auth.name,
-                            &nkey_auth.key,
-                        )
-                        .map_err(|e| Error::Config(format!("Failed to get nkey secret: {e:?}")))?;
-                        Some(NatsAuth::NKey(nkey))
-                    } else if let Some(token_auth) = auth.token {
-                        let token = crate::shared::create_components::get_secret_from_volume(
-                            &token_auth.name,
-                            &token_auth.key,
-                        )
-                        .map_err(|e| Error::Config(format!("Failed to get token secret: {e:?}")))?;
-                        Some(NatsAuth::Token(token))
-                    } else {
-                        return Err(Error::Config(
-                            "Authentication is specified, but auth setting is empty".into(),
-                        ));
-                    }
-                }
-                None => None,
-            };
-
-            let tls = if let Some(tls_config) = value.spec.tls {
-                let tls_skip_verify = tls_config.insecure_skip_verify.unwrap_or(false);
-                if tls_skip_verify {
-                    Some(TlsConfig {
-                        insecure_skip_verify: true,
-                        ca_cert: None,
-                        client_auth: None,
-                    })
-                } else {
-                    let ca_cert = tls_config
-                        .ca_cert_secret
-                        .map(|ca_cert_secret| {
-                            match crate::shared::create_components::get_secret_from_volume(
-                                &ca_cert_secret.name,
-                                &ca_cert_secret.key,
-                            ) {
-                                Ok(secret) => Ok(secret),
-                                Err(e) => Err(Error::Config(format!(
-                                    "Failed to get CA cert secret: {e:?}"
-                                ))),
-                            }
-                        })
-                        .transpose()?;
-
-                    let tls_client_auth_certs = match tls_config.cert_secret {
-                        Some(client_cert_secret) => {
-                            let client_cert =
-                                crate::shared::create_components::get_secret_from_volume(
-                                    &client_cert_secret.name,
-                                    &client_cert_secret.key,
-                                )
-                                .map_err(|e| {
-                                    Error::Config(format!(
-                                        "Failed to get client cert secret: {e:?}"
-                                    ))
-                                })?;
-
-                            let Some(private_key_secret) = tls_config.key_secret else {
-                                return Err(Error::Config("Client cert is specified for TLS authentication, but private key is not specified".into()));
-                            };
-
-                            let client_cert_private_key =
-                                crate::shared::create_components::get_secret_from_volume(
-                                    &private_key_secret.name,
-                                    &private_key_secret.key,
-                                )
-                                .map_err(|e| {
-                                    Error::Config(format!(
-                                        "Failed to get client cert private key secret: {e:?}"
-                                    ))
-                                })?;
-                            Some(TlsClientAuthCerts {
-                                client_cert,
-                                client_cert_private_key,
-                            })
-                        }
-                        None => None,
-                    };
-
-                    Some(TlsConfig {
-                        insecure_skip_verify: tls_config.insecure_skip_verify.unwrap_or(false),
-                        ca_cert,
-                        client_auth: tls_client_auth_certs,
-                    })
-                }
-            } else {
-                None
-            };
-
+            let auth: Option<NatsAuth> = parse_nats_auth(value.spec.auth)?;
+            let tls = parse_tls_config(value.spec.tls)?;
             let mut consumer = value.spec.consumer.unwrap_or_default();
             if consumer.trim().is_empty() {
                 consumer = format!(
@@ -362,123 +248,8 @@ pub(crate) mod source {
         fn try_from(
             value: Box<numaflow_models::models::NatsSource>,
         ) -> std::result::Result<Self, Self::Error> {
-            let auth: Option<NatsAuth> = match value.auth {
-                Some(auth) => {
-                    if let Some(basic_auth) = auth.basic {
-                        let user_secret_selector = &basic_auth.user.ok_or_else(|| {
-                            Error::Config("Username can not be empty for basic auth".into())
-                        })?;
-                        let username = crate::shared::create_components::get_secret_from_volume(
-                            &user_secret_selector.name,
-                            &user_secret_selector.key,
-                        )
-                        .map_err(|e| {
-                            Error::Config(format!("Failed to get username secret: {e:?}"))
-                        })?;
-
-                        let password_secret_selector = &basic_auth.password.ok_or_else(|| {
-                            Error::Config("Password can not be empty for basic auth".into())
-                        })?;
-                        let password = crate::shared::create_components::get_secret_from_volume(
-                            &password_secret_selector.name,
-                            &password_secret_selector.key,
-                        )
-                        .map_err(|e| {
-                            Error::Config(format!("Failed to get password secret: {e:?}"))
-                        })?;
-                        Some(NatsAuth::Basic { username, password })
-                    } else if let Some(nkey_auth) = auth.nkey {
-                        let nkey = crate::shared::create_components::get_secret_from_volume(
-                            &nkey_auth.name,
-                            &nkey_auth.key,
-                        )
-                        .map_err(|e| Error::Config(format!("Failed to get nkey secret: {e:?}")))?;
-                        Some(NatsAuth::NKey(nkey))
-                    } else if let Some(token_auth) = auth.token {
-                        let token = crate::shared::create_components::get_secret_from_volume(
-                            &token_auth.name,
-                            &token_auth.key,
-                        )
-                        .map_err(|e| Error::Config(format!("Failed to get token secret: {e:?}")))?;
-                        Some(NatsAuth::Token(token))
-                    } else {
-                        return Err(Error::Config(
-                            "Authentication is specified, but auth setting is empty".into(),
-                        ));
-                    }
-                }
-                None => None,
-            };
-
-            let tls = if let Some(tls_config) = value.tls {
-                let tls_skip_verify = tls_config.insecure_skip_verify.unwrap_or(false);
-                if tls_skip_verify {
-                    Some(TlsConfig {
-                        insecure_skip_verify: true,
-                        ca_cert: None,
-                        client_auth: None,
-                    })
-                } else {
-                    let ca_cert = tls_config
-                        .ca_cert_secret
-                        .map(|ca_cert_secret| {
-                            match crate::shared::create_components::get_secret_from_volume(
-                                &ca_cert_secret.name,
-                                &ca_cert_secret.key,
-                            ) {
-                                Ok(secret) => Ok(secret),
-                                Err(e) => Err(Error::Config(format!(
-                                    "Failed to get CA cert secret: {e:?}"
-                                ))),
-                            }
-                        })
-                        .transpose()?;
-
-                    let tls_client_auth_certs = match tls_config.cert_secret {
-                        Some(client_cert_secret) => {
-                            let client_cert =
-                                crate::shared::create_components::get_secret_from_volume(
-                                    &client_cert_secret.name,
-                                    &client_cert_secret.key,
-                                )
-                                .map_err(|e| {
-                                    Error::Config(format!(
-                                        "Failed to get client cert secret: {e:?}"
-                                    ))
-                                })?;
-
-                            let Some(private_key_secret) = tls_config.key_secret else {
-                                return Err(Error::Config("Client cert is specified for TLS authentication, but private key is not specified".into()));
-                            };
-
-                            let client_cert_private_key =
-                                crate::shared::create_components::get_secret_from_volume(
-                                    &private_key_secret.name,
-                                    &private_key_secret.key,
-                                )
-                                .map_err(|e| {
-                                    Error::Config(format!(
-                                        "Failed to get client cert private key secret: {e:?}"
-                                    ))
-                                })?;
-                            Some(TlsClientAuthCerts {
-                                client_cert,
-                                client_cert_private_key,
-                            })
-                        }
-                        None => None,
-                    };
-
-                    Some(TlsConfig {
-                        insecure_skip_verify: tls_config.insecure_skip_verify.unwrap_or(false),
-                        ca_cert,
-                        client_auth: tls_client_auth_certs,
-                    })
-                }
-            } else {
-                None
-            };
-
+            let auth = parse_nats_auth(value.auth)?;
+            let tls = parse_tls_config(value.tls)?;
             let nats_config = NatsSourceConfig {
                 addr: value.url,
                 subject: value.subject,
