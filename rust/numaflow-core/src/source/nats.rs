@@ -80,6 +80,8 @@ impl super::LagReader for NatsSource {
 #[cfg(test)]
 mod tests {
 
+    use crate::reader::LagReader;
+
     use super::*;
     use bytes::Bytes;
     use numaflow_nats::nats::NatsMessage;
@@ -104,5 +106,90 @@ mod tests {
         assert_eq!(message.event_time, test_timestamp);
         assert_eq!(message.event_time.timestamp(), 1672576245);
         assert_eq!(message.event_time.timestamp_subsec_nanos(), 123456789);
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_new_nats_source_returns_source() {
+        let config = NatsSourceConfig {
+            addr: "localhost".to_string(),
+            subject: "dummy".to_string(),
+            queue: "dummy".to_string(),
+            auth: None,
+            tls: None,
+        };
+        let batch_size = 1;
+        let read_timeout = Duration::from_millis(10);
+        let result = super::new_nats_source(config, batch_size, read_timeout).await;
+        assert!(result.is_ok());
+        let source = result.unwrap();
+        let name = source.name();
+        assert_eq!(name, "NATS");
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_nats_source_read_empty_returns_empty_vec() {
+        // It simply checks that read() returns an empty Vec when there are no messages.
+        // We already have checked read_messages functionality in the test_nats_source test.
+        let config = NatsSourceConfig {
+            addr: "localhost".to_string(),
+            subject: "test_nats_source_read_empty".to_string(),
+            queue: "test_nats_source_read_empty".to_string(),
+            auth: None,
+            tls: None,
+        };
+        let batch_size = 2;
+        let read_timeout = Duration::from_millis(50);
+
+        // Connect to the NATS server
+        let mut source = NatsSource::connect(config, batch_size, read_timeout)
+            .await
+            .unwrap();
+        let messages = source.read().await.unwrap_or_default();
+        assert!(
+            messages.is_empty(),
+            "Expected empty Vec when no messages are published"
+        );
+    }
+
+    #[cfg(feature = "nats-tests")]
+    #[tokio::test]
+    async fn test_nats_source_pending_returns_none() {
+        // A dummy NatsSource
+        let config = NatsSourceConfig {
+            addr: "localhost".to_string(),
+            subject: "dummy".to_string(),
+            queue: "dummy".to_string(),
+            auth: None,
+            tls: None,
+        };
+
+        // Connect to the NATS server
+        let mut source = NatsSource::connect(config, 1, std::time::Duration::from_millis(10))
+            .await
+            .unwrap();
+        let pending = source.pending().await.unwrap();
+        assert_eq!(pending, None);
+    }
+
+    #[tokio::test]
+    async fn test_nats_source_ack_is_noop() {
+        // A dummy NatsSource
+        let config = NatsSourceConfig {
+            addr: "localhost".to_string(),
+            subject: "dummy".to_string(),
+            queue: "dummy".to_string(),
+            auth: None,
+            tls: None,
+        };
+
+        // Connect to the NATS server
+        let mut source = NatsSource::connect(config, 1, std::time::Duration::from_millis(10))
+            .await
+            .unwrap();
+        // Ack should succeed and do nothing
+        let result = source.ack(vec![]).await;
+        assert!(result.is_ok());
     }
 }
