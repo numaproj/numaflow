@@ -37,6 +37,45 @@ pub struct Header {
         ::prost::alloc::string::String,
         ::prost::alloc::string::String,
     >,
+    /// Metadata is the metadata of the message
+    #[prost(message, optional, tag = "6")]
+    pub metadata: ::core::option::Option<Metadata>,
+}
+/// Metadata is the metadata of the message
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Metadata {
+    /// PreviousVertex is the name of the previous vertex
+    #[prost(string, tag = "1")]
+    pub previous_vertex: ::prost::alloc::string::String,
+    /// SystemMetadata is the system metadata of the message
+    #[prost(map = "string, message", tag = "2")]
+    pub sys_metadata: ::std::collections::HashMap<
+        ::prost::alloc::string::String,
+        KeyValueGroup,
+    >,
+    /// UserMetadata is the user metadata of the message
+    #[prost(map = "string, message", tag = "3")]
+    pub user_metadata: ::std::collections::HashMap<
+        ::prost::alloc::string::String,
+        KeyValueGroup,
+    >,
+}
+/// KeyValueGroup is a group of key-value pairs for a given group.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct KeyValueGroup {
+    /// KeyValue is a key-value pair
+    #[prost(map = "string, message", tag = "1")]
+    pub key_value: ::std::collections::HashMap<::prost::alloc::string::String, KeyValue>,
+}
+/// KeyValue is a key-value pair
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct KeyValue {
+    /// Key is the key of the key-value pair
+    #[prost(string, tag = "1")]
+    pub key: ::prost::alloc::string::String,
+    /// Value is the value of the key-value pair
+    #[prost(bytes = "vec", tag = "2")]
+    pub value: ::prost::alloc::vec::Vec<u8>,
 }
 /// MessageID is the message ID of the message which is used for exactly-once-semantics.
 #[derive(Clone, PartialEq, ::prost::Message)]

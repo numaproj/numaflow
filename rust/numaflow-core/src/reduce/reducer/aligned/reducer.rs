@@ -11,6 +11,7 @@ use chrono::{DateTime, Utc};
 use numaflow_pb::objects::wal::GcEvent;
 use std::collections::HashMap;
 use std::ops::Sub;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -18,6 +19,7 @@ use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
+const DEFAULT_KEY_FOR_NON_KEYED_STREAM: &str = "NON_KEYED_STREAM";
 
 /// Represents an active reduce stream for a window.
 struct ActiveStream {
@@ -356,6 +358,8 @@ pub(crate) struct AlignedReducer {
     allowed_lateness: Duration,
     /// current watermark for the reduce vertex.
     current_watermark: DateTime<Utc>,
+    /// Whether the reduce is keyed or not.
+    keyed: bool,
     /// Graceful shutdown timeout duration.
     graceful_timeout: Duration,
 }
@@ -368,6 +372,7 @@ impl AlignedReducer {
         gc_wal: Option<AppendOnlyWal>,
         allowed_lateness: Duration,
         graceful_timeout: Duration,
+        keyed: bool,
     ) -> Self {
         Self {
             client,
@@ -378,6 +383,7 @@ impl AlignedReducer {
             gc_wal,
             allowed_lateness,
             current_watermark: DateTime::from_timestamp_millis(-1).expect("Invalid timestamp"),
+            keyed,
             graceful_timeout,
         }
     }
@@ -399,6 +405,7 @@ impl AlignedReducer {
         // the one that calls shutdown
         let hard_shutdown_token_owner = hard_shutdown_token.clone();
         let graceful_timeout = self.graceful_timeout;
+        let keyed = self.keyed;
 
         // spawn a task to cancel the token after graceful timeout when the main token is cancelled
         let shutdown_handle = tokio::spawn(async move {
@@ -441,9 +448,15 @@ impl AlignedReducer {
 
                     // Process input messages
                     read_msg = input_stream.next() => {
-                        let Some(msg) = read_msg else {
+                        let Some(mut msg) = read_msg else {
                             break;
                         };
+
+                        // if the stream is not keyed, then we need to set all the messages to have the same key
+                        // so that all the messages go to the same reduce task.
+                        if !keyed {
+                            msg.keys = Arc::new([DEFAULT_KEY_FOR_NON_KEYED_STREAM.to_string()]);
+                        }
 
                         // If shutting down, drain the stream
                         if self.shutting_down_on_err {
@@ -693,6 +706,7 @@ mod tests {
             None, // No GC WAL for testing
             Duration::from_secs(0),
             Duration::from_millis(50),
+            true,
         )
         .await;
 
@@ -939,6 +953,7 @@ mod tests {
             None, // No GC WAL for testing
             Duration::from_secs(0),
             Duration::from_millis(50),
+            true,
         )
         .await;
 
@@ -1188,6 +1203,7 @@ mod tests {
             None, // No GC WAL for testing
             Duration::from_secs(0),
             Duration::from_millis(50),
+            true,
         )
         .await;
 

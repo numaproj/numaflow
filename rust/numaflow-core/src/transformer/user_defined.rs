@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use numaflow_pb::clients::sourcetransformer::{
     self, SourceTransformRequest, SourceTransformResponse,
-    source_transform_client::SourceTransformClient,
+    source_transform_client::SourceTransformClient, source_transform_response,
 };
 use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
@@ -12,7 +12,7 @@ use tonic::{Request, Streaming};
 
 use crate::config::get_vertex_name;
 use crate::error::{Error, Result};
-use crate::message::{Message, MessageID, Offset};
+use crate::message::{Message, MessageID, Metadata, Offset};
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
 
 type ResponseSenderMap =
@@ -23,6 +23,41 @@ struct ParentMessageInfo {
     offset: Offset,
     is_late: bool,
     headers: HashMap<String, String>,
+    metadata: Option<Metadata>,
+}
+
+// we are passing the reference for msg info because we can have more than 1 response for a single request and
+// each response will use the same parent message info.
+struct UserDefinedTransformerMessage<'a>(
+    source_transform_response::Result,
+    &'a ParentMessageInfo,
+    i32,
+);
+
+impl From<UserDefinedTransformerMessage<'_>> for Message {
+    fn from(value: UserDefinedTransformerMessage<'_>) -> Self {
+        Message {
+            typ: Default::default(),
+            id: MessageID {
+                vertex_name: get_vertex_name().to_string().into(),
+                index: value.2,
+                offset: value.1.offset.clone().to_string().into(),
+            },
+            keys: Arc::from(value.0.keys),
+            tags: Some(Arc::from(value.0.tags)),
+            value: value.0.value.into(),
+            offset: value.1.offset.clone(),
+            event_time: value
+                .0
+                .event_time
+                .map(utc_from_timestamp)
+                .expect("event time should be present"),
+            headers: value.1.headers.clone(),
+            watermark: None,
+            metadata: value.1.metadata.clone(),
+            is_late: value.1.is_late,
+        }
+    }
 }
 
 /// UserDefinedTransformer exposes methods to do user-defined transformations.
@@ -132,26 +167,7 @@ impl UserDefinedTransformer {
             if let Some((msg_info, sender)) = sender_map.lock().await.remove(&msg_id) {
                 let mut response_messages = vec![];
                 for (i, result) in resp.results.into_iter().enumerate() {
-                    let message = Message {
-                        typ: Default::default(),
-                        id: MessageID {
-                            vertex_name: get_vertex_name().to_string().into(),
-                            index: i as i32,
-                            offset: msg_info.offset.clone().to_string().into(),
-                        },
-                        keys: Arc::from(result.keys),
-                        tags: Some(Arc::from(result.tags)),
-                        value: result.value.into(),
-                        offset: msg_info.offset.clone(),
-                        event_time: result
-                            .event_time
-                            .map(utc_from_timestamp)
-                            .expect("event time should be present"),
-                        headers: msg_info.headers.clone(),
-                        watermark: None,
-                        metadata: None,
-                        is_late: msg_info.is_late,
-                    };
+                    let message = UserDefinedTransformerMessage(result, &msg_info, i as i32).into();
                     response_messages.push(message);
                 }
                 sender
@@ -173,6 +189,7 @@ impl UserDefinedTransformer {
             offset: message.offset.clone(),
             headers: message.headers.clone(),
             is_late: message.is_late,
+            metadata: message.metadata.clone(),
         };
 
         self.senders

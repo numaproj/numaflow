@@ -7,9 +7,17 @@ spec:
     maxDelay: 30s
   vertices:
     - name: in
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       source:
         http: {}
     - name: atoi
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       scale:
         min: 1
       udf:
@@ -18,6 +26,10 @@ spec:
           image: quay.io/numaio/numaflow-go/map-even-odd:stable
           imagePullPolicy: Always
     - name: compute-sum
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       partitions: 2
       udf:
         container:
@@ -34,6 +46,10 @@ spec:
           storage:
             emptyDir: {}
     - name: sink
+      containerTemplate:
+        env:
+          - name: NUMAFLOW_RUNTIME
+            value: "rust"
       scale:
         min: 1
       sink:

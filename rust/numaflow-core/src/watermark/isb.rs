@@ -537,11 +537,6 @@ mod tests {
     use crate::watermark::wmb::WMB;
 
     #[cfg(feature = "nats-tests")]
-    use bytes;
-    #[cfg(feature = "nats-tests")]
-    use chrono;
-
-    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_isb_watermark_handle_publish_watermark() {
         let client = async_nats::connect("localhost:4222").await.unwrap();

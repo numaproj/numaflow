@@ -13,7 +13,7 @@ use tracing::error;
 use crate::config::get_vertex_name;
 use crate::config::pipeline::VERTEX_TYPE_MAP_UDF;
 use crate::error::{Error, Result};
-use crate::message::{Message, MessageID, Offset};
+use crate::message::{Message, MessageID, Metadata, Offset};
 use crate::metrics::{pipeline_metric_labels, pipeline_metrics};
 use crate::shared::grpc::prost_timestamp_from_utc;
 
@@ -32,6 +32,7 @@ struct ParentMessageInfo {
     /// this remains 0 for all except map-streaming because in map-streaming there could be more than
     /// one response for a single request.
     current_index: i32,
+    metadata: Option<Metadata>,
 }
 
 impl From<Message> for MapRequest {
@@ -133,6 +134,7 @@ impl UserDefinedUnaryMap {
             is_late: message.is_late,
             start_time: Instant::now(),
             current_index: 0,
+            metadata: message.metadata.clone(),
         };
 
         pipeline_metrics()
@@ -245,6 +247,7 @@ impl UserDefinedBatchMap {
                 is_late: message.is_late,
                 start_time: Instant::now(),
                 current_index: 0,
+                metadata: message.metadata.clone(),
             };
 
             pipeline_metrics()
@@ -464,6 +467,7 @@ impl UserDefinedStreamMap {
             start_time: Instant::now(),
             is_late: message.is_late,
             current_index: 0,
+            metadata: message.metadata.clone(),
         };
 
         pipeline_metrics()
@@ -484,6 +488,8 @@ impl UserDefinedStreamMap {
     }
 }
 
+// we are passing the reference for msg info because we can have more than 1 response for a single request and
+// each response will use the same parent message info.
 struct UserDefinedMessage<'a>(map::map_response::Result, &'a ParentMessageInfo, i32);
 
 impl From<UserDefinedMessage<'_>> for Message {
@@ -502,8 +508,8 @@ impl From<UserDefinedMessage<'_>> for Message {
             event_time: value.1.event_time,
             headers: value.1.headers.clone(),
             watermark: None,
-            metadata: None,
             is_late: value.1.is_late,
+            metadata: value.1.metadata.clone(),
         }
     }
 }
