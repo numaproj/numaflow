@@ -12,6 +12,8 @@ mod setup_tracing;
 /// Build the command line interface.
 mod cmdline;
 
+const VERSION_INFO: &str = env!("NUMAFLOW_VERSION_INFO");
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     setup_tracing::register();
@@ -20,6 +22,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     rustls::crypto::aws_lc_rs::default_provider()
         .install_default()
         .expect("Installing default CryptoProvider");
+
+    info!(VERSION_INFO, "Numaflow version information");
 
     let cli = cmdline::root_cli();
 
@@ -72,6 +76,7 @@ async fn run(cli: clap::Command) -> Result<(), Box<dyn Error>> {
                 .map_err(|e| format!("Error running core binary: {e:?}"))?;
         }
         Some(("side-input", args)) => {
+            info!("Starting side input");
             sideinput::run_sideinput(args, cln_token).await?;
         }
         others => {

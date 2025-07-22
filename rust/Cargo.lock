@@ -2404,6 +2404,7 @@ dependencies = [
 name = "numaflow"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "clap",
  "numaflow-core",
  "numaflow-monitor",
