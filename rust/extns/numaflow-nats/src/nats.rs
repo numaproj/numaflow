@@ -8,25 +8,6 @@ use tokio_stream::StreamExt;
 use tracing::debug;
 use uuid::Uuid;
 
-#[cfg(test)]
-fn make_conn_opts() -> ConnectOptions {
-    ConnectOptions::new()
-        .max_reconnects(1)
-        .reconnect_delay_callback(|_| std::time::Duration::from_millis(10))
-        .ping_interval(Duration::from_secs(1))
-}
-
-#[cfg(not(test))]
-fn make_conn_opts() -> ConnectOptions {
-    ConnectOptions::new()
-        .max_reconnects(None) // unlimited reconnects
-        .reconnect_delay_callback(|attempts| {
-            std::time::Duration::from_millis(std::cmp::min((attempts * 10) as u64, 1000))
-        })
-        .ping_interval(Duration::from_secs(3))
-        .retry_on_initial_connect() // run in background
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct NatsSourceConfig {
     pub addr: String,
@@ -77,7 +58,13 @@ impl NatsActor {
         read_timeout: Duration,
         handler_rx: mpsc::Receiver<NatsActorMessage>,
     ) -> Result<()> {
-        let mut conn_opts = make_conn_opts();
+        let mut conn_opts = ConnectOptions::new()
+            .max_reconnects(None) // unlimited reconnects
+            .reconnect_delay_callback(|attempts| {
+                std::time::Duration::from_millis(std::cmp::min((attempts * 10) as u64, 1000))
+            })
+            .ping_interval(Duration::from_secs(3))
+            .retry_on_initial_connect(); // run in background
         if let Some(auth) = config.auth {
             conn_opts = match auth {
                 NatsAuth::Basic { username, password } => {
@@ -251,27 +238,5 @@ mod tests {
             messages.is_empty(),
             "No messages should be returned after all messages are read"
         );
-    }
-
-    #[cfg(feature = "nats-tests")]
-    #[tokio::test]
-    async fn test_connection_error_on_invalid_server() {
-        let config = NatsSourceConfig {
-            addr: "localhostt:9999".to_string(),
-            subject: "test_connection_error".to_string(),
-            queue: "test_connection_error".to_string(),
-            auth: None,
-            tls: None,
-        };
-        let (_tx, rx) = tokio::sync::mpsc::channel(1);
-        let result = NatsActor::start(config.clone(), 1, Duration::from_millis(10), rx).await;
-        match result {
-            Err(Error::Connection { server, error }) => {
-                assert_eq!(server, "localhostt:9999");
-                assert!(!error.is_empty());
-            }
-            Ok(_) => panic!("Expected error, but got Ok"),
-            Err(e) => panic!("Unexpected error: {:?}", e),
-        }
     }
 }

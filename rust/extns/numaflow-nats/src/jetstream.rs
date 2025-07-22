@@ -3,10 +3,7 @@ use async_nats::jetstream::consumer::{AckPolicy, DeliverPolicy};
 use async_nats::jetstream::{AckKind, Message as JetstreamMessage, consumer};
 use async_nats::{
     ConnectOptions,
-    jetstream::consumer::{
-        Consumer,
-        pull::{Config, Stream},
-    },
+    jetstream::consumer::{Consumer, pull::Config},
 };
 use backoff::retry::Retry;
 use backoff::strategy::fixed;
@@ -91,7 +88,6 @@ enum JetstreamActorMessage {
 
 struct JetstreamActor {
     consumer: Consumer<Config>,
-    messages: Stream,
     read_timeout: Duration,
     batch_size: usize,
     in_progress_messages: HashMap<u64, MessageProcessingTracker>,
@@ -180,12 +176,9 @@ impl JetstreamActor {
             }
         };
 
-        let message_stream = consumer.messages().await.unwrap();
-
         tokio::spawn(async move {
             let mut actor = JetstreamActor {
                 consumer,
-                messages: message_stream,
                 read_timeout,
                 batch_size,
                 in_progress_messages: HashMap::new(),
@@ -224,34 +217,25 @@ impl JetstreamActor {
         }
     }
 
-    /// Reads messages from the Jetstream stream with honoring timeouts.
+    /// Reads messages in batch from the Jetstream with honoring timeouts.
     async fn read_messages(&mut self) -> Result<Vec<Message>> {
-        let mut messages: Vec<Message> = vec![];
-        let timeout = tokio::time::timeout(self.read_timeout, std::future::pending::<()>());
-        tokio::pin!(timeout);
-        loop {
-            if messages.len() >= self.batch_size {
-                break;
-            }
-            tokio::select! {
-                biased;
-
-                _ = &mut timeout => {
-                    break;
-                }
-
-                message = self.messages.next() => {
-                    let Some(message) = message else {
-                        break;
-                    };
-                    let message = message
-                        .map_err(|e| Error::Jetstream(format!("Getting next message from the stream: {e:?}")))?;
-                    let message = self.process_message(message).await?;
-                    messages.push(message);
-                }
-            }
+        let mut messages: Vec<Message> = Vec::with_capacity(self.batch_size);
+        let mut batch = self
+            .consumer
+            .batch()
+            .max_messages(self.batch_size)
+            .expires(self.read_timeout)
+            .messages()
+            .await
+            .map_err(|e| Error::Jetstream(format!("Failed to fetch batch from consumer: {e:?}")))?;
+        while let Some(message) = batch.next().await {
+            let message = message.map_err(|e| {
+                Error::Jetstream(format!("Failed to fetch message from batch: {e:?}"))
+            })?;
+            let message = self.process_message(message).await?;
+            messages.push(message);
         }
-        tracing::debug!(msg_count = messages.len(), "Read messages from Jetstream");
+        tracing::debug!(msg_count = messages.len(), "Read batch from Jetstream");
         Ok(messages)
     }
 
