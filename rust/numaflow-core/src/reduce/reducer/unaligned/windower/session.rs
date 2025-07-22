@@ -122,7 +122,7 @@ impl SessionWindowManager {
     /// Windows must overlap first (considering end time is exclusive) before they can be expanded.
     fn expand_window_if_needed(new_window: &Window, existing_window: &Window) -> Option<Window> {
         // First check if windows overlap (end time is exclusive, start time is inclusive)
-        // [a,b) and [c,d) overlap if a < c and c < b
+        // [a,b) and [c,d) overlap if a < d and c < b
         let windows_overlap = new_window.start_time < existing_window.end_time
             && existing_window.start_time < new_window.end_time;
 
@@ -130,7 +130,16 @@ impl SessionWindowManager {
             return None;
         }
 
-        // If windows overlap, always expand to accommodate both windows
+        // Check if the new window is completely contained within the existing window
+        // If so, this should be an append operation, not an expand operation
+        let new_window_contained = new_window.start_time >= existing_window.start_time
+            && new_window.end_time <= existing_window.end_time;
+
+        if new_window_contained {
+            return None; // No expansion needed, should append to existing window
+        }
+
+        // If windows overlap and expansion is needed, expand to accommodate both windows
         // Use min of start times and max of end times
         Some(Window::new(
             new_window.start_time.min(existing_window.start_time),
@@ -814,40 +823,209 @@ mod tests {
     }
 
     #[test]
-    fn test_contained_window_expansion() {
-        // Test that a window completely contained within another still triggers expansion
-        // (which effectively becomes an append operation since boundaries don't change)
+    fn test_specific_contained_window_scenario() {
+        // Test the specific scenario: existing window [10, 30), new window [20, 30)
         let now = Utc::now();
 
-        let window1 = Window::new(
-            now + chrono::Duration::seconds(5),
-            now + chrono::Duration::seconds(20),
-            Arc::from(vec!["test_key".to_string()]),
-        );
-        let window2 = Window::new(
+        let existing_window = Window::new(
             now + chrono::Duration::seconds(10),
-            now + chrono::Duration::seconds(15),
+            now + chrono::Duration::seconds(30),
+            Arc::from(vec!["test_key".to_string()]),
+        );
+        let new_window = Window::new(
+            now + chrono::Duration::seconds(20),
+            now + chrono::Duration::seconds(30),
             Arc::from(vec!["test_key".to_string()]),
         );
 
-        // Test find_window_to_merge
-        let mut window_set = BTreeSet::new();
-        window_set.insert(window1.clone());
-
-        let result = SessionWindowManager::find_window_to_merge(&window_set, &window2);
-        assert!(result.is_some(), "Windows should overlap");
-
-        // Test expand_window_if_needed - window2 is contained within window1, should still expand
-        // (boundaries remain the same since window2 is contained, but it's still an expansion operation)
-        let expansion = SessionWindowManager::expand_window_if_needed(&window2, &window1);
+        // Test that this should be an append operation (expand_window_if_needed returns None)
+        let expansion =
+            SessionWindowManager::expand_window_if_needed(&new_window, &existing_window);
         assert!(
-            expansion.is_some(),
-            "Overlapping windows should always trigger expansion"
+            expansion.is_none(),
+            "Window [20,30) should append to existing window [10,30), not expand"
         );
 
-        let expanded = expansion.unwrap();
-        // Since window2 is contained within window1, boundaries should remain the same
-        assert_eq!(expanded.start_time, now + chrono::Duration::seconds(5));
-        assert_eq!(expanded.end_time, now + chrono::Duration::seconds(20));
+        // Test find_window_to_merge still finds the window for merging
+        let mut window_set = BTreeSet::new();
+        window_set.insert(existing_window.clone());
+
+        let result = SessionWindowManager::find_window_to_merge(&window_set, &new_window);
+        assert!(
+            result.is_some(),
+            "Windows should still be found for merging"
+        );
+        assert_eq!(result.unwrap(), existing_window);
+    }
+
+    #[test]
+    fn test_comprehensive_window_scenarios() {
+        let now = Utc::now();
+        let key: Arc<[String]> = Arc::from(vec!["test_key".to_string()]);
+
+        let existing_window =
+            Window::new(now, now + chrono::Duration::seconds(100), Arc::clone(&key));
+
+        // Scenario 1: New window contained in existing [20, 80) contained in [0, 100)
+        let contained_window = Window::new(
+            now + chrono::Duration::seconds(20),
+            now + chrono::Duration::seconds(80),
+            Arc::clone(&key),
+        );
+
+        let expansion =
+            SessionWindowManager::expand_window_if_needed(&contained_window, &existing_window);
+        assert!(
+            expansion.is_none(),
+            "Contained window should trigger append, not expand"
+        );
+
+        // Scenario 2: Existing window contained in new window [-10, 120) contains [0, 100)
+        let larger_window = Window::new(
+            now - chrono::Duration::seconds(10),
+            now + chrono::Duration::seconds(120),
+            Arc::clone(&key),
+        );
+
+        let expansion2 =
+            SessionWindowManager::expand_window_if_needed(&larger_window, &existing_window);
+        assert!(expansion2.is_some(), "Larger window should trigger expand");
+        let expanded = expansion2.unwrap();
+        assert_eq!(expanded.start_time, now - chrono::Duration::seconds(10));
+        assert_eq!(expanded.end_time, now + chrono::Duration::seconds(120));
+
+        // Scenario 3: Identical windows [0, 100) and [0, 100)
+        let identical_window =
+            Window::new(now, now + chrono::Duration::seconds(100), Arc::clone(&key));
+
+        let expansion3 =
+            SessionWindowManager::expand_window_if_needed(&identical_window, &existing_window);
+        assert!(
+            expansion3.is_none(),
+            "Identical windows should trigger append, not expand"
+        );
+
+        // Scenario 4: Partial overlap requiring expansion [50, 150) overlaps [0, 100)
+        let partial_overlap_window = Window::new(
+            now + chrono::Duration::seconds(50),
+            now + chrono::Duration::seconds(150),
+            Arc::clone(&key),
+        );
+
+        let expansion4 = SessionWindowManager::expand_window_if_needed(
+            &partial_overlap_window,
+            &existing_window,
+        );
+        assert!(
+            expansion4.is_some(),
+            "Partial overlap should trigger expand"
+        );
+        let expanded2 = expansion4.unwrap();
+        assert_eq!(expanded2.start_time, now);
+        assert_eq!(expanded2.end_time, now + chrono::Duration::seconds(150));
+    }
+
+    #[test]
+    fn test_assign_windows_different_cases() {
+        // Test assign_windows flow for realistic session window behavior
+        let windower = SessionWindowManager::new(Duration::from_secs(60));
+        let now = Utc::now();
+        let key: Arc<[String]> = Arc::from(vec!["test_key".to_string()]);
+
+        // Scenario 1: Create initial window with first message
+        let msg1 = Message {
+            typ: Default::default(),
+            keys: Arc::clone(&key),
+            tags: None,
+            value: "msg1".as_bytes().to_vec().into(),
+            offset: Default::default(),
+            event_time: now,
+            ..Default::default()
+        };
+
+        let result1 = windower.assign_windows(msg1);
+        assert_eq!(result1.len(), 1);
+        match &result1[0].operation {
+            UnalignedWindowOperation::Open { window, .. } => {
+                assert_eq!(window.start_time, now);
+                assert_eq!(window.end_time, now + chrono::Duration::seconds(60));
+            }
+            _ => panic!("Expected Open operation for first message"),
+        }
+
+        // Scenario 2: Test expansion - new message extends existing window
+        let msg2 = Message {
+            typ: Default::default(),
+            keys: Arc::clone(&key),
+            tags: None,
+            value: "msg2".as_bytes().to_vec().into(),
+            offset: Default::default(),
+            event_time: now + chrono::Duration::seconds(30), // Creates [now+30, now+90) which extends [now, now+60)
+            ..Default::default()
+        };
+
+        let result2 = windower.assign_windows(msg2);
+        assert_eq!(result2.len(), 1);
+        match &result2[0].operation {
+            UnalignedWindowOperation::Expand { windows, .. } => {
+                assert_eq!(windows.len(), 2);
+                let old_window = &windows[0];
+                let new_window = &windows[1];
+                assert_eq!(old_window.start_time, now);
+                assert_eq!(old_window.end_time, now + chrono::Duration::seconds(60));
+                assert_eq!(new_window.start_time, now);
+                assert_eq!(new_window.end_time, now + chrono::Duration::seconds(90));
+            }
+            _ => panic!("Expected Expand operation, got {:?}", result2[0].operation),
+        }
+
+        // Scenario 3: Test expansion in the other direction - message before existing window
+        let msg3 = Message {
+            typ: Default::default(),
+            keys: Arc::clone(&key),
+            tags: None,
+            value: "msg3".as_bytes().to_vec().into(),
+            offset: Default::default(),
+            event_time: now - chrono::Duration::seconds(10), // Creates [now-10, now+50) which extends [now, now+90)
+            ..Default::default()
+        };
+
+        let result3 = windower.assign_windows(msg3);
+        assert_eq!(result3.len(), 1);
+        match &result3[0].operation {
+            UnalignedWindowOperation::Expand { windows, .. } => {
+                assert_eq!(windows.len(), 2);
+                let old_window = &windows[0];
+                let new_window = &windows[1];
+                assert_eq!(old_window.start_time, now);
+                assert_eq!(old_window.end_time, now + chrono::Duration::seconds(90));
+                assert_eq!(new_window.start_time, now - chrono::Duration::seconds(10));
+                assert_eq!(new_window.end_time, now + chrono::Duration::seconds(90));
+            }
+            _ => panic!("Expected Expand operation, got {:?}", result3[0].operation),
+        }
+
+        // Scenario 4: Test with a new key to create a separate window
+        let key2: Arc<[String]> = Arc::from(vec!["different_key".to_string()]);
+        let msg4 = Message {
+            typ: Default::default(),
+            keys: Arc::clone(&key2),
+            tags: None,
+            value: "msg4".as_bytes().to_vec().into(),
+            offset: Default::default(),
+            event_time: now + chrono::Duration::seconds(20),
+            ..Default::default()
+        };
+
+        let result4 = windower.assign_windows(msg4);
+        assert_eq!(result4.len(), 1);
+        match &result4[0].operation {
+            UnalignedWindowOperation::Open { window, .. } => {
+                assert_eq!(window.start_time, now + chrono::Duration::seconds(20));
+                assert_eq!(window.end_time, now + chrono::Duration::seconds(80));
+                assert_eq!(window.keys, key2);
+            }
+            _ => panic!("Expected Open operation for different key"),
+        }
     }
 }
