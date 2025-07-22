@@ -10,6 +10,7 @@ use numaflow_pb::clients::sessionreduce::{
     SessionReduceRequest, SessionReduceResponse, session_reduce_request,
 };
 use std::collections::HashMap;
+use std::ops::Sub;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
@@ -121,9 +122,10 @@ impl From<UserDefinedSessionResponse> for Message {
 
         // Create offset from window start and end time
         let offset_str = format!(
-            "{}-{}",
+            "{}-{}-{}",
             utc_from_timestamp(window.start.expect("window start missing")).timestamp_millis(),
-            utc_from_timestamp(window.end.expect("window end missing")).timestamp_millis()
+            utc_from_timestamp(window.end.expect("window end missing")).timestamp_millis(),
+            window.keys.join(":")
         );
 
         Message {
@@ -132,8 +134,12 @@ impl From<UserDefinedSessionResponse> for Message {
             tags: (!result.tags.is_empty()).then(|| Arc::from(result.tags)),
             value: result.value.into(),
             offset: Offset::Int(IntOffset::new(0, 0)),
-            event_time: utc_from_timestamp(window.end.unwrap()),
-            watermark: window.end.map(utc_from_timestamp),
+            event_time: utc_from_timestamp(window.end.unwrap())
+                .sub(chrono::Duration::milliseconds(1)),
+            watermark: window
+                .end
+                .map(utc_from_timestamp)
+                .map(|ts| ts - chrono::Duration::milliseconds(1)),
             // this will be unique for each response which will be used for dedup (index is used because
             // each window can have multiple reduce responses)
             id: MessageID {

@@ -8,6 +8,7 @@ use crate::reduce::reducer::unaligned::windower::{
     UnalignedWindowManager, UnalignedWindowMessage, Window,
 };
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
+use crate::watermark::isb::ISBWatermarkHandle;
 
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::accumulator::AccumulatorRequest;
@@ -517,9 +518,15 @@ pub(crate) struct UnalignedReducer {
     keyed: bool,
     /// Graceful shutdown timeout duration.
     graceful_timeout: Duration,
+    /// Idle timeout duration for reading messages.
+    idle_timeout: Duration,
+    /// Watermark handle for fetching head idle wmb to check if any windows can be closed,
+    /// when there is no data.
+    watermark_handle: Option<ISBWatermarkHandle>,
 }
 
 impl UnalignedReducer {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn new(
         client: UserDefinedUnalignedReduce,
         window_manager: UnalignedWindowManager,
@@ -527,7 +534,9 @@ impl UnalignedReducer {
         allowed_lateness: Duration,
         gc_wal: Option<AppendOnlyWal>,
         graceful_timeout: Duration,
+        idle_timeout: Duration,
         keyed: bool,
+        watermark_handle: Option<ISBWatermarkHandle>,
     ) -> Self {
         Self {
             client,
@@ -540,13 +549,15 @@ impl UnalignedReducer {
             current_watermark: DateTime::from_timestamp_millis(-1).expect("Invalid timestamp"),
             keyed,
             graceful_timeout,
+            idle_timeout,
+            watermark_handle,
         }
     }
 
     /// Starts the reduce component and returns a handle to the main task.
     pub(crate) async fn start(
         mut self,
-        mut input_stream: ReceiverStream<Message>,
+        input_stream: ReceiverStream<Message>,
         cln_token: CancellationToken,
     ) -> crate::Result<JoinHandle<crate::Result<()>>> {
         // Set up error and GC channels
@@ -590,75 +601,58 @@ impl UnalignedReducer {
             actor.run().await;
         });
 
+        // Start the main task
         let handle = tokio::spawn(async move {
+            let mut input_stream = input_stream;
+
             loop {
                 tokio::select! {
-                    // listen for errors from any running tasks
-                    Some(error) = error_rx.recv() => {
-                        self.handle_error(error, &cln_token);
+                    // Check for errors from reduce tasks
+                    Some(err) = error_rx.recv() => {
+                        self.handle_error(err, &cln_token);
                     }
 
-                    read_msg = input_stream.next() => {
-                        if self.shutting_down_on_err {
-                            info!("Unaligned reducer is in shutdown mode, ignoring the message");
-                            continue;
-                        }
+                    // Process input messages with timeout
+                    read_msg = tokio::time::timeout(self.idle_timeout, input_stream.next()) => {
+                        match read_msg {
+                            Ok(Some(mut msg)) => {
+                                // If shutting down, drain the stream
+                                if self.shutting_down_on_err {
+                                    info!("Unaligned reducer is in shutdown mode, ignoring the message");
+                                    continue;
+                                }
 
-                        let Some(mut msg) = read_msg else {
-                            // end of stream we can exit
-                            break;
-                        };
+                                // If the stream is not keyed, set all messages to have the same key
+                                if !keyed {
+                                    msg.keys = Arc::new([DEFAULT_KEY_FOR_NON_KEYED_STREAM.to_string()]);
+                                }
 
-                        // if the stream is not keyed, then we need to set all the messages to have the same key
-                        // so that all the messages go to the same reduce task.
-                        if !keyed {
-                            msg.keys = Arc::new([DEFAULT_KEY_FOR_NON_KEYED_STREAM.to_string()]);
-                        }
+                                // Update the watermark - use max to ensure it never regresses
+                                self.current_watermark = self
+                                    .current_watermark
+                                    .max(msg.watermark.unwrap_or_default());
 
-                         // update the watermark.
-                        // we cannot simply assign incoming message's watermark as the current watermark,
-                        // because it can be -1. watermark will never regress, so use max.
-                        self.current_watermark = self.current_watermark.max(msg.watermark.unwrap_or_default());
-
-                        // check if any windows can be closed based on the current watermark
-                        let close_window_messages = self.window_manager.close_windows(self.current_watermark);
-                        for window_msg in close_window_messages {
-                            actor_tx
-                                .send(window_msg)
-                                .await
-                                .expect("failed to send message to actor");
-                        }
-
-                        // only drop the message if it is late and the event time is before the watermark - allowed lateness
-                        if msg.is_late && msg.event_time < self.current_watermark.sub(self.allowed_lateness) {
-                            debug!(event_time = ?msg.event_time.timestamp_millis(), watermark = ?self.current_watermark.timestamp_millis(), "Late message detected, dropping");
-                            // TODO(ajain): add a metric for this
-                            continue;
-                        }
-
-                        if self.current_watermark > msg.event_time {
-                            error!(current_watermark=?self.current_watermark, message_event_time=?msg.event_time, "Old message popped up, Watermark is behind the event time");
-                            continue;
-                        }
-
-                        // Convert the message to UnalignedWindowMessage
-                        let window_messages = self.window_manager.assign_windows(msg);
-                        for window_msg in window_messages {
-                            // Send the message to the actor
-                            actor_tx
-                                .send(window_msg)
-                                .await
-                                .expect("failed to send message to actor");
+                                self.assign_and_close_windows(msg, &actor_tx).await;
+                            }
+                            Ok(None) => {
+                                // Stream ended
+                                break;
+                            }
+                            Err(_timeout) => {
+                                // watermark can still progress when there is no data, because of idle watermark
+                                // so we need to check if any windows can be closed based on the idle watermark.
+                                self.close_windows_by_idle_wm(&actor_tx).await;
+                            }
                         }
                     }
                 }
             }
 
             // Drop the sender to signal the actor to stop
-            drop(actor_tx);
             info!(
                 "Unaligned Reduce component is shutting down, waiting for active reduce tasks to complete"
             );
+            drop(actor_tx);
 
             // Wait for the actor to complete
             if let Err(e) = actor_handle.await {
@@ -669,7 +663,7 @@ impl UnalignedReducer {
             // hard shutdown.
             shutdown_handle.abort();
 
-            info!(status=?self.final_result, "UnalignedReduce component successfully completed");
+            info!(status=?self.final_result, "Unaligned Reduce component successfully completed");
             self.final_result
         });
 
@@ -690,10 +684,92 @@ impl UnalignedReducer {
     /// handle errors from the reduce tasks by cancelling token so that upstream knows there is an
     /// issue and stops sending new messages.
     fn handle_error(&mut self, error: Error, cln_token: &CancellationToken) {
-        error!(?error, "Error in reduce component");
-        self.final_result = Err(error);
-        self.shutting_down_on_err = true;
-        cln_token.cancel();
+        if self.final_result.is_ok() {
+            error!(?error, "Error received while performing reduce operation");
+            cln_token.cancel();
+            self.final_result = Err(error);
+            self.shutting_down_on_err = true;
+        }
+    }
+
+    /// Closes windows based on the provided watermark and sends close messages to the actor.
+    async fn close_windows_by_wm(
+        &self,
+        watermark: DateTime<Utc>,
+        actor_tx: &mpsc::Sender<UnalignedWindowMessage>,
+    ) {
+        let window_messages = self
+            .window_manager
+            .close_windows(watermark.sub(self.allowed_lateness));
+
+        for window_msg in window_messages {
+            actor_tx
+                .send(window_msg)
+                .await
+                .expect("Failed to send close window message");
+        }
+    }
+
+    /// Assigns windows to a message and sends the messages to the actor, also closes any windows
+    /// that can be closed based on the current watermark.
+    async fn assign_and_close_windows(
+        &mut self,
+        msg: Message,
+        actor_tx: &mpsc::Sender<UnalignedWindowMessage>,
+    ) {
+        // Drop late messages
+        if msg.is_late && msg.event_time < self.current_watermark.sub(self.allowed_lateness) {
+            debug!(event_time = ?msg.event_time.timestamp_millis(), watermark = ?self.current_watermark.timestamp_millis(), "Late message detected, dropping");
+            // TODO(ajain): add a metric for this
+            return;
+        }
+
+        // Validate message event time against current watermark
+        if self.current_watermark > msg.event_time {
+            error!(
+                current_watermark = ?self.current_watermark.timestamp_millis(),
+                message_event_time = ?msg.event_time.timestamp_millis(),
+                is_late = ?msg.is_late,
+                offset = ?msg.offset,
+                "Old message popped up, Watermark is behind the event time"
+            );
+            return;
+        }
+
+        // Close windows based on current watermark
+        self.close_windows_by_wm(self.current_watermark, actor_tx)
+            .await;
+
+        // Assign windows to the message
+        let window_messages = self.window_manager.assign_windows(msg);
+
+        // Send each window message to the actor for processing
+        for window_msg in window_messages {
+            actor_tx
+                .send(window_msg)
+                .await
+                .expect("Failed to send window message");
+        }
+    }
+
+    /// Closes windows based on the idle watermark.
+    async fn close_windows_by_idle_wm(&mut self, actor_tx: &mpsc::Sender<UnalignedWindowMessage>) {
+        if self.shutting_down_on_err {
+            return;
+        }
+
+        let Some(ref mut watermark_handle) = self.watermark_handle else {
+            return;
+        };
+
+        // Only fetch idle watermark if we have a watermark handle
+        let idle_watermark = watermark_handle.fetch_head_idle_watermark().await;
+
+        // Only close windows if the idle watermark is greater than the current watermark
+        if idle_watermark > self.current_watermark {
+            self.current_watermark = idle_watermark;
+            self.close_windows_by_wm(idle_watermark, actor_tx).await;
+        }
     }
 }
 
@@ -935,7 +1011,9 @@ mod tests {
             Duration::from_secs(0), // No allowed lateness for testing
             None,                   // No GC WAL for testing
             Duration::from_millis(50),
+            Duration::from_secs(1), // Idle timeout
             true,
+            None, // No watermark handle for testing
         )
         .await;
 
@@ -1158,7 +1236,9 @@ mod tests {
             Duration::from_secs(0), // No allowed lateness for testing
             None,                   // No GC WAL for testing
             Duration::from_millis(50),
+            Duration::from_secs(1), // Idle timeout
             true,
+            None, // No watermark handle for testing
         )
         .await;
 
@@ -1438,7 +1518,9 @@ mod tests {
             Duration::from_secs(0), // No allowed lateness for testing
             None,                   // No GC WAL for testing
             Duration::from_millis(50),
+            Duration::from_secs(1),
             true,
+            None,
         )
         .await;
 
@@ -1638,7 +1720,9 @@ mod tests {
             Duration::from_secs(0), // No allowed lateness for testing
             None,                   // No GC WAL for testing
             Duration::from_millis(50),
+            Duration::from_secs(1),
             true,
+            None,
         )
         .await;
 
@@ -1870,7 +1954,9 @@ mod tests {
             Duration::from_secs(0), // No allowed lateness for testing
             None,                   // No GC WAL for testing
             Duration::from_millis(50),
+            Duration::from_secs(1),
             true,
+            None,
         )
         .await;
 
