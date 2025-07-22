@@ -31,7 +31,7 @@ impl fmt::Display for Version {
 /// Returns the version information
 pub fn get_version() -> Result<Version, Box<dyn std::error::Error>> {
     let version = std::env::var("VERSION").unwrap_or_else(|_| "latest".to_string());
-    let build_date = get_build_date()?;
+    let build_date = get_build_date();
     let git_commit = get_git_commit()?;
 
     let git_tree_state = get_git_tree_state()?;
@@ -76,16 +76,12 @@ pub fn get_version() -> Result<Version, Box<dyn std::error::Error>> {
     })
 }
 
-fn get_build_date() -> Result<String, Box<dyn std::error::Error>> {
+fn get_build_date() ->  String {
     // If the binary is built within a container, this env variable will be set.
     if let Ok(build_date) = std::env::var("BUILD_DATE") {
-        return Ok(build_date);
+        return build_date;
     }
-    let output = Command::new("date")
-        .args(&["-u", "+%Y-%m-%dT%H:%M:%SZ"])
-        .output()?;
-    let build_date = String::from_utf8(output.stdout)?.trim().to_string();
-    Ok(build_date)
+    format!("{:?}", chrono::Utc::now())
 }
 
 fn get_git_commit() -> Result<String, Box<dyn std::error::Error>> {

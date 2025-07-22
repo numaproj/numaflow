@@ -23,6 +23,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .install_default()
         .expect("Installing default CryptoProvider");
 
+    info!(VERSION_INFO, "Numaflow version information");
+
     let cli = cmdline::root_cli();
 
     if let Err(e) = run(cli).await {
@@ -51,13 +53,13 @@ async fn run(cli: clap::Command) -> Result<(), Box<dyn Error>> {
 
     match cli_matches.subcommand() {
         Some(("monitor", _)) => {
-            info!(VERSION_INFO, "Starting monitor");
+            info!("Starting monitor");
             numaflow_monitor::run()
                 .await
                 .map_err(|e| format!("Error running monitor binary: {e:?}"))?;
         }
         Some(("serving", _)) => {
-            info!(VERSION_INFO, "Starting serving");
+            info!("Starting serving");
             if env::var(serving::ENV_MIN_PIPELINE_SPEC).is_err() {
                 return Err(
                     "Environment variable NUMAFLOW_SERVING_MIN_PIPELINE_SPEC is not set".into(),
@@ -68,17 +70,16 @@ async fn run(cli: clap::Command) -> Result<(), Box<dyn Error>> {
             serving::run(cfg).await?;
         }
         Some(("processor", _)) => {
-            info!(VERSION_INFO, "Starting processing pipeline");
+            info!("Starting processing pipeline");
             numaflow_core::run()
                 .await
                 .map_err(|e| format!("Error running core binary: {e:?}"))?;
         }
         Some(("side-input", args)) => {
-            info!(VERSION_INFO, "Starting side input");
+            info!("Starting side input");
             sideinput::run_sideinput(args, cln_token).await?;
         }
         others => {
-            info!(VERSION_INFO, "Numaflow");
             return Err(format!("Invalid subcommand {others:?}").into());
         }
     }
