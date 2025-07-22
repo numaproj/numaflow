@@ -122,7 +122,7 @@ impl SessionWindowManager {
     /// Windows must overlap first (considering end time is exclusive) before they can be expanded.
     fn expand_window_if_needed(new_window: &Window, existing_window: &Window) -> Option<Window> {
         // First check if windows overlap (end time is exclusive, start time is inclusive)
-        // [a,b) and [c,d) overlap if a < d and c < b
+        // [a,b) and [c,d) overlap if a < c and c < b
         let windows_overlap = new_window.start_time < existing_window.end_time
             && existing_window.start_time < new_window.end_time;
 
