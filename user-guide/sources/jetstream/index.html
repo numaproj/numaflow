@@ -13,7 +13,7 @@
     
     
       
-        <title>Configuring GPU - Numaflow - Data/streaming processing platform on Kubernetes</title>
+        <title>Jetstream Source - Numaflow - Data/streaming processing platform on Kubernetes</title>
       
     
     
@@ -74,7 +74,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#configuring-gpu" class="md-skip">
+        <a href="#jetstream-source" class="md-skip">
           Skip to content
         </a>
       
@@ -108,7 +108,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Configuring GPU
+              Jetstream Source
             
           </span>
         </div>
@@ -581,12 +581,14 @@
               
   
   
+    
+  
   
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2" type="checkbox" id="__nav_3_2" >
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_2" type="checkbox" id="__nav_3_2" checked>
       
       
       
@@ -609,7 +611,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sources/overview/" class="md-nav__link">
+      <a href="../overview/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -623,7 +625,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sources/generator/" class="md-nav__link">
+      <a href="../generator/" class="md-nav__link">
         Generator Source
       </a>
     </li>
@@ -637,7 +639,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sources/http/" class="md-nav__link">
+      <a href="../http/" class="md-nav__link">
         HTTP Source
       </a>
     </li>
@@ -651,7 +653,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sources/kafka/" class="md-nav__link">
+      <a href="../kafka/" class="md-nav__link">
         Kafka Source
       </a>
     </li>
@@ -665,7 +667,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sources/pulsar/" class="md-nav__link">
+      <a href="../pulsar/" class="md-nav__link">
         Pulsar Source
       </a>
     </li>
@@ -679,7 +681,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sources/nats/" class="md-nav__link">
+      <a href="../nats/" class="md-nav__link">
         Nats Source
       </a>
     </li>
@@ -691,11 +693,52 @@
               
   
   
+    
   
-    <li class="md-nav__item">
-      <a href="../../sources/jetstream/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          Jetstream Source
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         Jetstream Source
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#auth" class="md-nav__link">
+    Auth
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -707,7 +750,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sources/sqs/" class="md-nav__link">
+      <a href="../sqs/" class="md-nav__link">
         SQS Source
       </a>
     </li>
@@ -721,7 +764,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sources/user-defined-sources/" class="md-nav__link">
+      <a href="../user-defined-sources/" class="md-nav__link">
         User-defined Sources
       </a>
     </li>
@@ -761,7 +804,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sources/transformer/overview/" class="md-nav__link">
+      <a href="../transformer/overview/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -801,7 +844,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sources/transformer/builtin-transformers/" class="md-nav__link">
+      <a href="../transformer/builtin-transformers/" class="md-nav__link">
         Overview
       </a>
     </li>
@@ -815,7 +858,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sources/transformer/builtin-transformers/filter/" class="md-nav__link">
+      <a href="../transformer/builtin-transformers/filter/" class="md-nav__link">
         Filter
       </a>
     </li>
@@ -829,7 +872,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sources/transformer/builtin-transformers/event-time-extractor/" class="md-nav__link">
+      <a href="../transformer/builtin-transformers/event-time-extractor/" class="md-nav__link">
         Event Time Extractor
       </a>
     </li>
@@ -843,7 +886,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../sources/transformer/builtin-transformers/time-extraction-filter/" class="md-nav__link">
+      <a href="../transformer/builtin-transformers/time-extraction-filter/" class="md-nav__link">
         Event Time Extraction Filter
       </a>
     </li>
@@ -1429,14 +1472,12 @@
               
   
   
-    
-  
   
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
       
-        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_6" type="checkbox" id="__nav_3_6" checked>
+        <input class="md-nav__toggle md-toggle" data-md-toggle="__nav_3_6" type="checkbox" id="__nav_3_6" >
       
       
       
@@ -1473,7 +1514,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../pipeline-tuning/" class="md-nav__link">
+      <a href="../../reference/pipeline-tuning/" class="md-nav__link">
         Pipeline Tuning
       </a>
     </li>
@@ -1487,7 +1528,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../autoscaling/" class="md-nav__link">
+      <a href="../../reference/autoscaling/" class="md-nav__link">
         Autoscaling
       </a>
     </li>
@@ -1501,7 +1542,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../conditional-forwarding/" class="md-nav__link">
+      <a href="../../reference/conditional-forwarding/" class="md-nav__link">
         Conditional Forwarding
       </a>
     </li>
@@ -1515,7 +1556,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../pipeline-operations/" class="md-nav__link">
+      <a href="../../reference/pipeline-operations/" class="md-nav__link">
         Pipeline Operations
       </a>
     </li>
@@ -1527,100 +1568,11 @@
               
   
   
-    
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" data-md-toggle="toc" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          Configuring GPU
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../reference/gpu/" class="md-nav__link">
         Configuring GPU
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
-    Prerequisites
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#adding-annotations-if-required" class="md-nav__link">
-    Adding Annotations (If Required)
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#specifying-gpu-resource-requests-and-limits" class="md-nav__link">
-    Specifying GPU Resource Requests and Limits
-  </a>
-  
-    <nav class="md-nav" aria-label="Specifying GPU Resource Requests and Limits">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#example-vertex-requesting-a-gpu-with-annotations-and-node-selector" class="md-nav__link">
-    Example: Vertex Requesting a GPU (with Annotations and Node Selector)
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#dynamic-resource-allocation-advanced" class="md-nav__link">
-    Dynamic Resource Allocation (Advanced)
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#troubleshooting" class="md-nav__link">
-    Troubleshooting
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#references" class="md-nav__link">
-    References
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -1632,7 +1584,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../join-vertex/" class="md-nav__link">
+      <a href="../../reference/join-vertex/" class="md-nav__link">
         Joins and Cycles
       </a>
     </li>
@@ -1646,7 +1598,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../multi-partition/" class="md-nav__link">
+      <a href="../../reference/multi-partition/" class="md-nav__link">
         Multi-partitioned Edges
       </a>
     </li>
@@ -1660,7 +1612,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../side-inputs/" class="md-nav__link">
+      <a href="../../reference/side-inputs/" class="md-nav__link">
         Side Inputs
       </a>
     </li>
@@ -1674,7 +1626,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../mvtx-tuning/" class="md-nav__link">
+      <a href="../../reference/mvtx-tuning/" class="md-nav__link">
         MonoVertex Tuning
       </a>
     </li>
@@ -1688,7 +1640,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../mvtx-operations/" class="md-nav__link">
+      <a href="../../reference/mvtx-operations/" class="md-nav__link">
         MonoVertex Operations
       </a>
     </li>
@@ -1728,7 +1680,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../configuration/pod-specifications/" class="md-nav__link">
+      <a href="../../reference/configuration/pod-specifications/" class="md-nav__link">
         Pod Specifications
       </a>
     </li>
@@ -1742,7 +1694,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../configuration/container-resources/" class="md-nav__link">
+      <a href="../../reference/configuration/container-resources/" class="md-nav__link">
         Container Resources
       </a>
     </li>
@@ -1756,7 +1708,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../configuration/volumes/" class="md-nav__link">
+      <a href="../../reference/configuration/volumes/" class="md-nav__link">
         Volumes
       </a>
     </li>
@@ -1770,7 +1722,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../configuration/environment-variables/" class="md-nav__link">
+      <a href="../../reference/configuration/environment-variables/" class="md-nav__link">
         Environment Variables
       </a>
     </li>
@@ -1784,7 +1736,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../configuration/labels-and-annotations/" class="md-nav__link">
+      <a href="../../reference/configuration/labels-and-annotations/" class="md-nav__link">
         Labels And Annotations
       </a>
     </li>
@@ -1798,7 +1750,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../configuration/init-containers/" class="md-nav__link">
+      <a href="../../reference/configuration/init-containers/" class="md-nav__link">
         Init Containers
       </a>
     </li>
@@ -1812,7 +1764,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../configuration/sidecar-containers/" class="md-nav__link">
+      <a href="../../reference/configuration/sidecar-containers/" class="md-nav__link">
         Sidecar Containers
       </a>
     </li>
@@ -1826,7 +1778,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../configuration/liveness-and-readiness/" class="md-nav__link">
+      <a href="../../reference/configuration/liveness-and-readiness/" class="md-nav__link">
         Liveness and Readiness
       </a>
     </li>
@@ -1840,7 +1792,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../configuration/pipeline-customization/" class="md-nav__link">
+      <a href="../../reference/configuration/pipeline-customization/" class="md-nav__link">
         Pipeline Customization
       </a>
     </li>
@@ -1854,7 +1806,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../configuration/dra/" class="md-nav__link">
+      <a href="../../reference/configuration/dra/" class="md-nav__link">
         Dynamic Resource Allocation
       </a>
     </li>
@@ -1868,7 +1820,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../configuration/istio/" class="md-nav__link">
+      <a href="../../reference/configuration/istio/" class="md-nav__link">
         Running on Istio
       </a>
     </li>
@@ -1882,7 +1834,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../configuration/max-message-size/" class="md-nav__link">
+      <a href="../../reference/configuration/max-message-size/" class="md-nav__link">
         Maximum Message Size
       </a>
     </li>
@@ -1896,7 +1848,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../configuration/update-strategy/" class="md-nav__link">
+      <a href="../../reference/configuration/update-strategy/" class="md-nav__link">
         Update Strategy
       </a>
     </li>
@@ -1917,7 +1869,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../kustomize/kustomize/" class="md-nav__link">
+      <a href="../../reference/kustomize/kustomize/" class="md-nav__link">
         Kustomize Integration
       </a>
     </li>
@@ -2680,56 +2632,8 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#prerequisites" class="md-nav__link">
-    Prerequisites
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#adding-annotations-if-required" class="md-nav__link">
-    Adding Annotations (If Required)
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#specifying-gpu-resource-requests-and-limits" class="md-nav__link">
-    Specifying GPU Resource Requests and Limits
-  </a>
-  
-    <nav class="md-nav" aria-label="Specifying GPU Resource Requests and Limits">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#example-vertex-requesting-a-gpu-with-annotations-and-node-selector" class="md-nav__link">
-    Example: Vertex Requesting a GPU (with Annotations and Node Selector)
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#dynamic-resource-allocation-advanced" class="md-nav__link">
-    Dynamic Resource Allocation (Advanced)
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#troubleshooting" class="md-nav__link">
-    Troubleshooting
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#references" class="md-nav__link">
-    References
+  <a href="#auth" class="md-nav__link">
+    Auth
   </a>
   
 </li>
@@ -2746,73 +2650,45 @@
             <article class="md-content__inner md-typeset">
               
                 
-  <a href="https://github.com/numaproj/numaflow/edit/main/docs/user-guide/reference/gpu.md" title="Edit this page" class="md-content__button md-icon">
+  <a href="https://github.com/numaproj/numaflow/edit/main/docs/user-guide/sources/jetstream.md" title="Edit this page" class="md-content__button md-icon">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75L3 17.25Z"/></svg>
   </a>
 
 
 
-<h1 id="configuring-gpu">Configuring GPU<a class="headerlink" href="#configuring-gpu" title="Permanent link">&para;</a></h1>
-<p>GPU resources can be configured on a Pipeline Vertex or a MonoVertex.</p>
-<h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h2>
-<p>Your cluster must support GPU scheduling and have the appropriate device plugin installed.<br />
-See the <a href="https://kubernetes.io/docs/concepts/extend-kubernetes/compute-storage-net/device-plugins/">Kubernetes device plugins documentation</a> and <a href="https://github.com/NVIDIA/k8s-device-plugin">NVIDIA device plugin guide</a> for details.</p>
-<h2 id="adding-annotations-if-required">Adding Annotations (If Required)<a class="headerlink" href="#adding-annotations-if-required" title="Permanent link">&para;</a></h2>
-<p>In most clusters, specifying the GPU resource in the <code>limits</code> field is enough. Some environments may require additional annotations for GPU access or monitoring. Check with your administrator if unsure.</p>
-<p><strong>Example:</strong></p>
-<div class="highlight"><pre><span></span><code><span class="nt">vertices</span><span class="p">:</span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpu-vertex</span>
-<span class="w">    </span><span class="nt">metadata</span><span class="p">:</span>
-<span class="w">      </span><span class="nt">annotations</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">mycompany.com/gpu-enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span><span class="w">   </span><span class="c1"># Replace with your annotation key and value</span>
-<span class="w">    </span><span class="nt">udf</span><span class="p">:</span>
-<span class="w">      </span><span class="nt">container</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-ml-image:latest</span>
-<span class="w">        </span><span class="nt">resources</span><span class="p">:</span>
-<span class="w">          </span><span class="nt">limits</span><span class="p">:</span>
-<span class="w">            </span><span class="nt">nvidia.com/gpu</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+<h1 id="jetstream-source">Jetstream Source<a class="headerlink" href="#jetstream-source" title="Permanent link">&para;</a></h1>
+<p>A <code>Jetstream</code> source is used to ingest the messages from a <a href="https://docs.nats.io/nats-concepts/jetstream">Jetstream stream</a>.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">vertices</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">input</span>
+<span class="w">      </span><span class="nt">source</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">jetstream</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">nats://demo.nats.io</span><span class="w"> </span><span class="c1"># Jetstream server url</span>
+<span class="w">          </span><span class="nt">stream</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-stream</span><span class="w"> </span><span class="c1"># stream name</span>
+<span class="w">          </span><span class="nt">consumer</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-consumer</span><span class="w"> </span><span class="c1"># Optional, Name of the consumer on the stream.</span>
+<span class="w">          </span><span class="nt">tls</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional.</span>
+<span class="w">            </span><span class="nt">insecureSkipVerify</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, whether to skip TLS verification. Default to false.</span>
+<span class="w">            </span><span class="nt">caCertSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, a secret reference, which contains the CA Cert.</span>
+<span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-ca-cert</span>
+<span class="w">              </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-ca-cert-key</span>
+<span class="w">            </span><span class="nt">certSecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, pointing to a secret reference which contains the Cert.</span>
+<span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-cert</span>
+<span class="w">              </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-cert-key</span>
+<span class="w">            </span><span class="nt">keySecret</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, pointing to a secret reference which contains the Private Key.</span>
+<span class="w">              </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pk</span>
+<span class="w">              </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pk-key</span>
+<span class="w">          </span><span class="nt">auth</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional.</span>
+<span class="w">            </span><span class="nt">basic</span><span class="p">:</span><span class="w"> </span><span class="c1"># Optional, pointing to the secret references which contain user name and password.</span>
+<span class="w">              </span><span class="nt">user</span><span class="p">:</span>
+<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-secret</span>
+<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-user</span>
+<span class="w">              </span><span class="nt">password</span><span class="p">:</span>
+<span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-secret</span>
+<span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-password</span>
 </code></pre></div>
-<h2 id="specifying-gpu-resource-requests-and-limits">Specifying GPU Resource Requests and Limits<a class="headerlink" href="#specifying-gpu-resource-requests-and-limits" title="Permanent link">&para;</a></h2>
-<p>Request a GPU by setting the <code>nvidia.com/gpu</code> resource in the <code>limits</code> field under the container section:</p>
-<div class="highlight"><pre><span></span><code><span class="nt">resources</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">limits</span><span class="p">:</span>
-<span class="w">    </span><span class="nt">nvidia.com/gpu</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
-</code></pre></div>
-<blockquote>
-<p><strong>Important:</strong>
-For GPUs, Kubernetes requires that <code>requests</code> and <code>limits</code> must be the same (or specify only <code>limits</code>).</p>
-</blockquote>
-<h3 id="example-vertex-requesting-a-gpu-with-annotations-and-node-selector">Example: Vertex Requesting a GPU (with Annotations and Node Selector)<a class="headerlink" href="#example-vertex-requesting-a-gpu-with-annotations-and-node-selector" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code><span class="nt">vertices</span><span class="p">:</span>
-<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gpu-vertex</span>
-<span class="w">    </span><span class="nt">metadata</span><span class="p">:</span>
-<span class="w">      </span><span class="nt">annotations</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">mycompany.com/gpu-enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span><span class="w">  </span><span class="c1"># Example annotation, use only if required by your cluster</span>
-<span class="w">    </span><span class="nt">nodeSelector</span><span class="p">:</span>
-<span class="w">      </span><span class="nt">nvidia.com/gpu.present</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span><span class="w">       </span><span class="c1"># Replace with your cluster&#39;s GPU node label</span>
-<span class="w">    </span><span class="nt">udf</span><span class="p">:</span>
-<span class="w">      </span><span class="nt">container</span><span class="p">:</span>
-<span class="w">        </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-ml-image:latest</span>
-<span class="w">        </span><span class="nt">resources</span><span class="p">:</span>
-<span class="w">          </span><span class="nt">limits</span><span class="p">:</span>
-<span class="w">            </span><span class="nt">nvidia.com/gpu</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
-</code></pre></div>
-<blockquote>
-<p>Adjust the nodeSelector and annotations as required by your cluster setup.</p>
-</blockquote>
-<h2 id="dynamic-resource-allocation-advanced">Dynamic Resource Allocation (Advanced)<a class="headerlink" href="#dynamic-resource-allocation-advanced" title="Permanent link">&para;</a></h2>
-<p>For advanced GPU scheduling using Dynamic Resource Allocation (DRA), see <a href="../configuration/dra/">Dynamic Resource Allocation documentation</a>.</p>
-<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
-<p>If your vertex is not using GPU resources as expected:
-- <strong>Pod Pending:</strong> Check for available GPU nodes and device plugin status.
-- <strong>Pod does not detect GPU:</strong> Ensure your container image includes necessary GPU drivers and libraries (e.g., CUDA).
-- <strong>Still having issues?</strong> Consult your cluster documentation or administrator.</p>
-<h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
-<ul>
-<li><a href="../configuration/container-resources/">Container Resources</a></li>
-<li><a href="../configuration/dra/">Dynamic Resource Allocation</a></li>
-<li><a href="https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/">Kubernetes: Managing Resources for Containers</a></li>
-</ul>
+<p>The <code>consumer</code> field represents the name of the consumer of the stream. If not specified, a consumer with name format <code>numaflow-&lt;pipeline_name&gt;-&lt;vertex_name&gt;-&lt;stream_name&gt;</code> will used. Numaflow will attempt to create this consumer on the stream if it doesn't exist.</p>
+<h2 id="auth">Auth<a class="headerlink" href="#auth" title="Permanent link">&para;</a></h2>
+<p>The <code>auth</code> strategies supported in <code>Jetstream</code> source include <code>basic</code> (user and password), <code>token</code> and <code>nkey</code>, check the <a href="https://github.com/numaproj/numaflow/blob/main/docs/APIs.md#numaflow.numaproj.io/v1alpha1.NatsAuth">API</a> for the details.</p>
 
               
             </article>
@@ -2833,7 +2709,7 @@ For GPUs, Kubernetes requires that <code>requests</code> and <code>limits</code>
     <nav class="md-footer__inner md-grid" aria-label="Footer" >
       
         
-        <a href="../pipeline-operations/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Pipeline Operations" rel="prev">
+        <a href="../nats/" class="md-footer__link md-footer__link--prev" aria-label="Previous: Nats Source" rel="prev">
           <div class="md-footer__button md-icon">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
           </div>
@@ -2842,20 +2718,20 @@ For GPUs, Kubernetes requires that <code>requests</code> and <code>limits</code>
               <span class="md-footer__direction">
                 Previous
               </span>
-              Pipeline Operations
+              Nats Source
             </div>
           </div>
         </a>
       
       
         
-        <a href="../join-vertex/" class="md-footer__link md-footer__link--next" aria-label="Next: Joins and Cycles" rel="next">
+        <a href="../sqs/" class="md-footer__link md-footer__link--next" aria-label="Next: SQS Source" rel="next">
           <div class="md-footer__title">
             <div class="md-ellipsis">
               <span class="md-footer__direction">
                 Next
               </span>
-              Joins and Cycles
+              SQS Source
             </div>
           </div>
           <div class="md-footer__button md-icon">
