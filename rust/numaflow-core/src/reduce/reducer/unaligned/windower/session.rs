@@ -214,39 +214,43 @@ impl SessionWindowManager {
     ) -> Vec<UnalignedWindowMessage> {
         Self::windows_that_can_be_merged(&closed_windows)
             .into_iter()
-            .filter_map(|group| self.process_closing_window_group(key, group))
+            .filter_map(|group| self.process_close_window_group(key, group))
             .flatten()
             .collect()
     }
 
-    /// Process a group of windows that can be merged
-    fn process_closing_window_group(
+    /// Process multiple closing windows by merging them first, then attempting to merge with active windows
+    fn process_close_window_group(
         &self,
         key: &str,
         closing_group: Vec<Window>,
     ) -> Option<Vec<UnalignedWindowMessage>> {
-        match closing_group.len() {
-            0 => None,
-            1 => self.process_single_closing_window(key, closing_group.into_iter().next().unwrap()),
-            _ => self.process_multiple_closing_windows(key, closing_group),
+        if closing_group.is_empty() {
+            return None;
         }
-    }
 
-    /// Process a single closing window, attempting to merge with active windows
-    fn process_single_closing_window(
-        &self,
-        key: &str,
-        window: Window,
-    ) -> Option<Vec<UnalignedWindowMessage>> {
-        let merge_result = {
+        let mut messages = Vec::new();
+        let (merge_result, window) = if closing_group.len() == 1 {
+            let window = closing_group.into_iter().next().unwrap();
             let mut active_windows = self.active_windows.write().expect("Poisoned lock");
-            Self::try_merge_with_active(&mut active_windows, key, &window)
+            (
+                Self::try_merge_with_active(&mut active_windows, key, &window),
+                window,
+            )
+        } else {
+            let (merged_window, initial_merge_msg) = Self::merge_windows(&closing_group);
+            messages.push(initial_merge_msg);
+            let mut active_windows = self.active_windows.write().expect("Poisoned lock");
+            (
+                Self::try_merge_with_active(&mut active_windows, key, &merged_window),
+                merged_window,
+            )
         };
 
-        let message = match merge_result {
+        let final_message = match merge_result {
             Some((old_active, _new_merged)) => UnalignedWindowMessage {
                 operation: UnalignedWindowOperation::Merge {
-                    windows: vec![old_active, window],
+                    windows: vec![window, old_active],
                 },
                 pnf_slot: SHARED_PNF_SLOT,
             },
@@ -254,41 +258,6 @@ impl SessionWindowManager {
                 self.move_to_closed_windows(&window);
                 UnalignedWindowMessage {
                     operation: UnalignedWindowOperation::Close { window },
-                    pnf_slot: SHARED_PNF_SLOT,
-                }
-            }
-        };
-
-        Some(vec![message])
-    }
-
-    /// Process multiple closing windows by merging them first, then attempting to merge with active windows
-    fn process_multiple_closing_windows(
-        &self,
-        key: &str,
-        closing_group: Vec<Window>,
-    ) -> Option<Vec<UnalignedWindowMessage>> {
-        let (merged_window, initial_merge_msg) = Self::merge_windows(&closing_group);
-        let mut messages = vec![initial_merge_msg];
-
-        let merge_result = {
-            let mut active_windows = self.active_windows.write().expect("Poisoned lock");
-            Self::try_merge_with_active(&mut active_windows, key, &merged_window)
-        };
-
-        let final_message = match merge_result {
-            Some((old_active, _new_merged)) => UnalignedWindowMessage {
-                operation: UnalignedWindowOperation::Merge {
-                    windows: vec![merged_window, old_active],
-                },
-                pnf_slot: SHARED_PNF_SLOT,
-            },
-            None => {
-                self.move_to_closed_windows(&merged_window);
-                UnalignedWindowMessage {
-                    operation: UnalignedWindowOperation::Close {
-                        window: merged_window,
-                    },
                     pnf_slot: SHARED_PNF_SLOT,
                 }
             }
