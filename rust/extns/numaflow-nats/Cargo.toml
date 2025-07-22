@@ -1,5 +1,5 @@
 [package]
-name = "numaflow-jetstream"
+name = "numaflow-nats"
 version = "0.1.0"
 edition = "2024"
 
@@ -15,6 +15,7 @@ chrono.workspace = true
 tokio-stream.workspace = true
 rustls-pki-types = "1.11.0"
 rustls-native-certs = "0.8.1"
+uuid = { workspace = true, features = ["v4"] }
 
 [features]
 nats-tests = []

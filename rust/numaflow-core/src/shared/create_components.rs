@@ -25,6 +25,7 @@ use crate::source::generator::new_generator;
 use crate::source::http::CoreHttpSource;
 use crate::source::jetstream::new_jetstream_source;
 use crate::source::kafka::new_kafka_source;
+use crate::source::nats::new_nats_source;
 use crate::source::pulsar::new_pulsar_source;
 use crate::source::sqs::new_sqs_source;
 use crate::source::user_defined::new_source;
@@ -34,6 +35,8 @@ use crate::watermark::isb::ISBWatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
 use crate::{config, error, metrics, source};
 use async_nats::jetstream::Context;
+use numaflow_models::models::{NatsAuth, Tls};
+use numaflow_nats::{TlsClientAuthCerts, TlsConfig};
 use numaflow_pb::clients::accumulator::accumulator_client::AccumulatorClient;
 use numaflow_pb::clients::map::map_client::MapClient;
 use numaflow_pb::clients::reduce::reduce_client::ReduceClient;
@@ -462,6 +465,17 @@ pub async fn create_source(
                 watermark_handle,
             ))
         }
+        SourceType::Nats(nats_config) => {
+            let nats = new_nats_source(nats_config.clone(), batch_size, read_timeout).await?;
+            Ok(Source::new(
+                batch_size,
+                source::SourceType::Nats(nats),
+                tracker_handle,
+                source_config.read_ahead,
+                transformer,
+                watermark_handle,
+            ))
+        }
         SourceType::Kafka(kafka_config) => {
             let config = *kafka_config.clone();
             let kafka = new_kafka_source(config, batch_size, read_timeout).await?;
@@ -541,6 +555,113 @@ pub(crate) async fn create_unaligned_reducer(
             .await,
         )),
     }
+}
+
+pub(crate) fn parse_nats_auth(
+    auth: Option<Box<NatsAuth>>,
+) -> Result<Option<numaflow_nats::NatsAuth>, Error> {
+    match auth {
+        Some(auth) => {
+            if let Some(basic_auth) = auth.basic {
+                let user_secret_selector = &basic_auth.user.ok_or_else(|| {
+                    Error::Config("Username can not be empty for basic auth".into())
+                })?;
+                let username = get_secret_from_volume(
+                    &user_secret_selector.name,
+                    &user_secret_selector.key,
+                )
+                .map_err(|e| Error::Config(format!("Failed to get username secret: {e:?}")))?;
+
+                let password_secret_selector = &basic_auth.password.ok_or_else(|| {
+                    Error::Config("Password can not be empty for basic auth".into())
+                })?;
+                let password = get_secret_from_volume(
+                    &password_secret_selector.name,
+                    &password_secret_selector.key,
+                )
+                .map_err(|e| Error::Config(format!("Failed to get password secret: {e:?}")))?;
+
+                Ok(Some(numaflow_nats::NatsAuth::Basic { username, password }))
+            } else if let Some(nkey_auth) = auth.nkey {
+                let nkey = get_secret_from_volume(&nkey_auth.name, &nkey_auth.key)
+                    .map_err(|e| Error::Config(format!("Failed to get nkey secret: {e:?}")))?;
+                Ok(Some(numaflow_nats::NatsAuth::NKey(nkey)))
+            } else if let Some(token_auth) = auth.token {
+                let token = get_secret_from_volume(&token_auth.name, &token_auth.key)
+                    .map_err(|e| Error::Config(format!("Failed to get token secret: {e:?}")))?;
+                Ok(Some(numaflow_nats::NatsAuth::Token(token)))
+            } else {
+                Err(Error::Config(
+                    "Authentication is specified, but auth setting is empty".into(),
+                ))
+            }
+        }
+        None => Ok(None),
+    }
+}
+
+pub(crate) fn parse_tls_config(tls_config: Option<Box<Tls>>) -> Result<Option<TlsConfig>, Error> {
+    let Some(tls_config) = tls_config else {
+        return Ok(None);
+    };
+
+    let tls_skip_verify = tls_config.insecure_skip_verify.unwrap_or(false);
+    if tls_skip_verify {
+        return Ok(Some(TlsConfig {
+            insecure_skip_verify: true,
+            ca_cert: None,
+            client_auth: None,
+        }));
+    }
+
+    let ca_cert = tls_config
+        .ca_cert_secret
+        .map(|ca_cert_secret| {
+            crate::shared::create_components::get_secret_from_volume(
+                &ca_cert_secret.name,
+                &ca_cert_secret.key,
+            )
+            .map_err(|e| Error::Config(format!("Failed to get CA cert secret: {e:?}")))
+        })
+        .transpose()?;
+
+    let client_auth = match tls_config.cert_secret {
+        Some(client_cert_secret) => {
+            let client_cert = crate::shared::create_components::get_secret_from_volume(
+                &client_cert_secret.name,
+                &client_cert_secret.key,
+            )
+            .map_err(|e| Error::Config(format!("Failed to get client cert secret: {e:?}")))?;
+
+            let Some(private_key_secret) = tls_config.key_secret else {
+                return Err(Error::Config(
+                    "Client cert is specified for TLS authentication, but private key is not specified".into(),
+                ));
+            };
+
+            let client_cert_private_key = crate::shared::create_components::get_secret_from_volume(
+                &private_key_secret.name,
+                &private_key_secret.key,
+            )
+            .map_err(|e| {
+                Error::Config(format!(
+                    "Failed to get client cert private key secret: {e:?}"
+                ))
+            })?;
+
+            Some(TlsClientAuthCerts {
+                client_cert,
+                client_cert_private_key,
+            })
+        }
+        None => None,
+    };
+
+    Ok(Some(TlsConfig {
+        insecure_skip_verify: false,
+        ca_cert,
+        client_auth,
+    }))
 }
 
 #[cfg(test)]

@@ -15,12 +15,15 @@ pub(crate) mod source {
     use crate::Result;
     use crate::config::get_vertex_name;
     use crate::error::Error;
+    use crate::shared::create_components::{parse_nats_auth, parse_tls_config};
     use base64::Engine;
     use base64::prelude::BASE64_STANDARD;
     use bytes::Bytes;
-    use numaflow_jetstream::{JetstreamSourceConfig, NatsAuth, TlsClientAuthCerts, TlsConfig};
     use numaflow_kafka::source::KafkaSourceConfig;
     use numaflow_models::models::{GeneratorSource, PulsarSource, SqsSource};
+    use numaflow_nats::NatsAuth;
+    use numaflow_nats::jetstream::JetstreamSourceConfig;
+    use numaflow_nats::nats::NatsSourceConfig;
     use numaflow_pulsar::{PulsarAuth, source::PulsarSourceConfig};
     use numaflow_sqs::source::SqsSourceConfig;
     use serde::{Deserialize, Serialize};
@@ -93,6 +96,7 @@ pub(crate) mod source {
         Sqs(SqsSourceConfig),
         Kafka(Box<KafkaSourceConfig>),
         Http(numaflow_http::HttpSourceConfig),
+        Nats(NatsSourceConfig),
     }
 
     impl TryFrom<Box<GeneratorSource>> for SourceType {
@@ -218,123 +222,8 @@ pub(crate) mod source {
     impl TryFrom<JetstreamSourceSpec> for SourceType {
         type Error = Error;
         fn try_from(value: JetstreamSourceSpec) -> std::result::Result<Self, Self::Error> {
-            let auth: Option<NatsAuth> = match value.spec.auth {
-                Some(auth) => {
-                    if let Some(basic_auth) = auth.basic {
-                        let user_secret_selector = &basic_auth.user.ok_or_else(|| {
-                            Error::Config("Username can not be empty for basic auth".into())
-                        })?;
-                        let username = crate::shared::create_components::get_secret_from_volume(
-                            &user_secret_selector.name,
-                            &user_secret_selector.key,
-                        )
-                        .map_err(|e| {
-                            Error::Config(format!("Failed to get username secret: {e:?}"))
-                        })?;
-
-                        let password_secret_selector = &basic_auth.password.ok_or_else(|| {
-                            Error::Config("Password can not be empty for basic auth".into())
-                        })?;
-                        let password = crate::shared::create_components::get_secret_from_volume(
-                            &password_secret_selector.name,
-                            &password_secret_selector.key,
-                        )
-                        .map_err(|e| {
-                            Error::Config(format!("Failed to get password secret: {e:?}"))
-                        })?;
-                        Some(NatsAuth::Basic { username, password })
-                    } else if let Some(nkey_auth) = auth.nkey {
-                        let nkey = crate::shared::create_components::get_secret_from_volume(
-                            &nkey_auth.name,
-                            &nkey_auth.key,
-                        )
-                        .map_err(|e| Error::Config(format!("Failed to get nkey secret: {e:?}")))?;
-                        Some(NatsAuth::NKey(nkey))
-                    } else if let Some(token_auth) = auth.token {
-                        let token = crate::shared::create_components::get_secret_from_volume(
-                            &token_auth.name,
-                            &token_auth.key,
-                        )
-                        .map_err(|e| Error::Config(format!("Failed to get token secret: {e:?}")))?;
-                        Some(NatsAuth::Token(token))
-                    } else {
-                        return Err(Error::Config(
-                            "Authentication is specified, but auth setting is empty".into(),
-                        ));
-                    }
-                }
-                None => None,
-            };
-
-            let tls = if let Some(tls_config) = value.spec.tls {
-                let tls_skip_verify = tls_config.insecure_skip_verify.unwrap_or(false);
-                if tls_skip_verify {
-                    Some(TlsConfig {
-                        insecure_skip_verify: true,
-                        ca_cert: None,
-                        client_auth: None,
-                    })
-                } else {
-                    let ca_cert = tls_config
-                        .ca_cert_secret
-                        .map(|ca_cert_secret| {
-                            match crate::shared::create_components::get_secret_from_volume(
-                                &ca_cert_secret.name,
-                                &ca_cert_secret.key,
-                            ) {
-                                Ok(secret) => Ok(secret),
-                                Err(e) => Err(Error::Config(format!(
-                                    "Failed to get CA cert secret: {e:?}"
-                                ))),
-                            }
-                        })
-                        .transpose()?;
-
-                    let tls_client_auth_certs = match tls_config.cert_secret {
-                        Some(client_cert_secret) => {
-                            let client_cert =
-                                crate::shared::create_components::get_secret_from_volume(
-                                    &client_cert_secret.name,
-                                    &client_cert_secret.key,
-                                )
-                                .map_err(|e| {
-                                    Error::Config(format!(
-                                        "Failed to get client cert secret: {e:?}"
-                                    ))
-                                })?;
-
-                            let Some(private_key_secret) = tls_config.key_secret else {
-                                return Err(Error::Config("Client cert is specified for TLS authentication, but private key is not specified".into()));
-                            };
-
-                            let client_cert_private_key =
-                                crate::shared::create_components::get_secret_from_volume(
-                                    &private_key_secret.name,
-                                    &private_key_secret.key,
-                                )
-                                .map_err(|e| {
-                                    Error::Config(format!(
-                                        "Failed to get client cert private key secret: {e:?}"
-                                    ))
-                                })?;
-                            Some(TlsClientAuthCerts {
-                                client_cert,
-                                client_cert_private_key,
-                            })
-                        }
-                        None => None,
-                    };
-
-                    Some(TlsConfig {
-                        insecure_skip_verify: tls_config.insecure_skip_verify.unwrap_or(false),
-                        ca_cert,
-                        client_auth: tls_client_auth_certs,
-                    })
-                }
-            } else {
-                None
-            };
-
+            let auth: Option<NatsAuth> = parse_nats_auth(value.spec.auth)?;
+            let tls = parse_tls_config(value.spec.tls)?;
             let mut consumer = value.spec.consumer.unwrap_or_default();
             if consumer.trim().is_empty() {
                 consumer = format!(
@@ -351,6 +240,24 @@ pub(crate) mod source {
                 tls,
             };
             Ok(SourceType::Jetstream(js_config))
+        }
+    }
+
+    impl TryFrom<Box<numaflow_models::models::NatsSource>> for SourceType {
+        type Error = Error;
+        fn try_from(
+            value: Box<numaflow_models::models::NatsSource>,
+        ) -> std::result::Result<Self, Self::Error> {
+            let auth = parse_nats_auth(value.auth)?;
+            let tls = parse_tls_config(value.tls)?;
+            let nats_config = NatsSourceConfig {
+                addr: value.url,
+                subject: value.subject,
+                queue: value.queue,
+                auth,
+                tls,
+            };
+            Ok(SourceType::Nats(nats_config))
         }
     }
 
@@ -421,6 +328,10 @@ pub(crate) mod source {
                     jetstream,
                 )
                 .try_into();
+            }
+
+            if let Some(nats) = source.spec.nats.take() {
+                return nats.try_into();
             }
 
             if let Some(kafka) = source.spec.kafka.take() {
@@ -2264,9 +2175,9 @@ mod jetstream_tests {
     use std::path::Path;
 
     use k8s_openapi::api::core::v1::SecretKeySelector;
-    use numaflow_jetstream::NatsAuth;
     use numaflow_models::models::BasicAuth;
     use numaflow_models::models::{JetStreamSource, Tls};
+    use numaflow_nats::NatsAuth;
 
     use crate::config::components::source::JetstreamSourceSpec;
 
@@ -4069,6 +3980,187 @@ mod pulsar_source_tests {
         assert!(
             err.to_string()
                 .contains("Failed to get username secret from volume")
+        );
+    }
+}
+
+#[cfg(test)]
+mod nats_source_tests {
+    use super::source::SourceType;
+    use k8s_openapi::api::core::v1::SecretKeySelector;
+    use numaflow_models::models::NatsSource;
+    use numaflow_models::models::{BasicAuth, NatsAuth};
+    use numaflow_nats;
+
+    const SECRET_BASE_PATH: &str = "/tmp/numaflow";
+
+    #[test]
+    fn test_try_from_nats_source_with_basic_auth() {
+        // Setup fake secrets
+        let secret_name = "nats-basic-auth-secret";
+        let user_key = "username";
+        let pass_key = "password";
+        let path = format!("{SECRET_BASE_PATH}/{secret_name}");
+        std::fs::create_dir_all(&path).unwrap();
+        std::fs::write(format!("{path}/{user_key}"), "test-user").unwrap();
+        std::fs::write(format!("{path}/{pass_key}"), "test-pass").unwrap();
+
+        let nats_source = Box::new(NatsSource {
+            url: "nats://localhost:4222".to_string(),
+            subject: "test-subject".to_string(),
+            queue: "test-queue".to_string(),
+            auth: Some(Box::new(NatsAuth {
+                basic: Some(Box::new(BasicAuth {
+                    user: Some(SecretKeySelector {
+                        name: secret_name.to_string(),
+                        key: user_key.to_string(),
+                        ..Default::default()
+                    }),
+                    password: Some(SecretKeySelector {
+                        name: secret_name.to_string(),
+                        key: pass_key.to_string(),
+                        ..Default::default()
+                    }),
+                })),
+                nkey: None,
+                token: None,
+            })),
+            tls: None,
+        });
+
+        let source_type = SourceType::try_from(nats_source).unwrap();
+        if let SourceType::Nats(config) = source_type {
+            let numaflow_nats::NatsAuth::Basic { username, password } = config.auth.unwrap() else {
+                panic!("Basic auth creds must be set");
+            };
+            assert_eq!(username, "test-user");
+            assert_eq!(password, "test-pass");
+            assert_eq!(config.addr, "nats://localhost:4222");
+            assert_eq!(config.subject, "test-subject");
+            assert_eq!(config.queue, "test-queue");
+        } else {
+            panic!("Expected SourceType::Nats");
+        }
+
+        // Cleanup
+        if std::path::Path::new(&path).exists() {
+            std::fs::remove_dir_all(&path).unwrap();
+        }
+    }
+
+    #[test]
+    fn test_try_from_nats_source_basic() {
+        let nats_source = Box::new(NatsSource {
+            url: "nats://localhost:4222".to_string(),
+            subject: "test-subject".to_string(),
+            queue: "test-queue".to_string(),
+            auth: None,
+            tls: None,
+        });
+
+        let source_type = SourceType::try_from(nats_source).unwrap();
+        if let SourceType::Nats(config) = source_type {
+            assert_eq!(config.addr, "nats://localhost:4222");
+            assert_eq!(config.subject, "test-subject");
+            assert_eq!(config.queue, "test-queue");
+            assert!(config.auth.is_none());
+            assert!(config.tls.is_none());
+        } else {
+            panic!("Expected SourceType::Nats");
+        }
+    }
+
+    #[test]
+    fn test_try_from_nats_source_with_tls() {
+        use k8s_openapi::api::core::v1::SecretKeySelector;
+        use numaflow_models::models::Tls;
+
+        let test_name = "test_try_from_nats_source_with_tls";
+        let ca_cert_name = format!("{test_name}-tls-ca-cert");
+        let cert_name = format!("{test_name}-tls-cert");
+        let key_name = format!("{test_name}-tls-key");
+
+        // Setup fake secrets
+        let setup_secret = |name: &str, key: &str, value: &str| {
+            let path = format!("{SECRET_BASE_PATH}/{name}");
+            std::fs::create_dir_all(&path).unwrap();
+            std::fs::write(format!("{path}/{key}"), value).unwrap();
+        };
+        setup_secret(&ca_cert_name, "ca", "test-ca-cert");
+        setup_secret(&cert_name, "cert", "test-cert");
+        setup_secret(&key_name, "key", "test-key");
+
+        let nats_source = Box::new(NatsSource {
+            url: "nats://localhost:4222".to_string(),
+            subject: "test-subject".to_string(),
+            queue: "test-queue".to_string(),
+            auth: None,
+            tls: Some(Box::new(Tls {
+                ca_cert_secret: Some(SecretKeySelector {
+                    name: ca_cert_name.clone(),
+                    key: "ca".to_string(),
+                    ..Default::default()
+                }),
+                cert_secret: Some(SecretKeySelector {
+                    name: cert_name.clone(),
+                    key: "cert".to_string(),
+                    ..Default::default()
+                }),
+                key_secret: Some(SecretKeySelector {
+                    name: key_name.clone(),
+                    key: "key".to_string(),
+                    ..Default::default()
+                }),
+                insecure_skip_verify: Some(false),
+            })),
+        });
+
+        let source_type = SourceType::try_from(nats_source).unwrap();
+        if let SourceType::Nats(config) = source_type {
+            let tls_config = config.tls.unwrap();
+            assert_eq!(tls_config.ca_cert.unwrap(), "test-ca-cert");
+            let client_auth = tls_config.client_auth.as_ref().unwrap();
+            assert_eq!(client_auth.client_cert, "test-cert");
+            assert_eq!(client_auth.client_cert_private_key, "test-key");
+            assert!(!tls_config.insecure_skip_verify);
+        } else {
+            panic!("Expected SourceType::Nats");
+        }
+
+        // Cleanup
+        let cleanup_secret = |name: &str| {
+            let path = format!("{SECRET_BASE_PATH}/{name}");
+            if std::path::Path::new(&path).exists() {
+                std::fs::remove_dir_all(&path).unwrap();
+            }
+        };
+        cleanup_secret(&ca_cert_name);
+        cleanup_secret(&cert_name);
+        cleanup_secret(&key_name);
+    }
+
+    #[test]
+    fn test_try_from_nats_source_with_invalid_auth() {
+        use numaflow_models::models::NatsAuth;
+
+        let nats_source = Box::new(NatsSource {
+            url: "nats://localhost:4222".to_string(),
+            subject: "test-subject".to_string(),
+            queue: "test-queue".to_string(),
+            auth: Some(Box::new(NatsAuth {
+                basic: None,
+                nkey: None,
+                token: None,
+            })),
+            tls: None,
+        });
+
+        let result = SourceType::try_from(nats_source);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "Config Error - Authentication is specified, but auth setting is empty"
         );
     }
 }

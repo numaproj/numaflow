@@ -1054,13 +1054,15 @@ mod tests {
         let expected_vertex_config = VertexConfig::Source(SourceVtxConfig {
             source_config: SourceConfig {
                 read_ahead: false,
-                source_type: SourceType::Jetstream(numaflow_jetstream::JetstreamSourceConfig {
-                    addr: "jetstream-server.internal".to_string(),
-                    stream: "testing-numaflow".to_string(),
-                    consumer: "numaflow-rust-pipeline-in-testing-numaflow".to_string(),
-                    auth: None,
-                    tls: None,
-                }),
+                source_type: SourceType::Jetstream(
+                    numaflow_nats::jetstream::JetstreamSourceConfig {
+                        addr: "jetstream-server.internal".to_string(),
+                        stream: "testing-numaflow".to_string(),
+                        consumer: "numaflow-rust-pipeline-in-testing-numaflow".to_string(),
+                        auth: None,
+                        tls: None,
+                    },
+                ),
             },
             transformer_config: None,
         });

@@ -1,7 +1,9 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use numaflow_jetstream::{JetstreamSource, JetstreamSourceConfig};
+use numaflow_nats::jetstream::{
+    JetstreamSource, JetstreamSourceConfig, Message as JetstreamMessage,
+};
 
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::message::{IntOffset, MessageID, Metadata, Offset};
@@ -10,8 +12,8 @@ use crate::{Error, Result, message::Message};
 
 use super::SourceAcker;
 
-impl From<numaflow_jetstream::Message> for Message {
-    fn from(message: numaflow_jetstream::Message) -> Self {
+impl From<JetstreamMessage> for Message {
+    fn from(message: JetstreamMessage) -> Self {
         let offset = Offset::Int(IntOffset::new(
             message.stream_sequence as i64,
             *get_vertex_replica(),
@@ -41,8 +43,8 @@ impl From<numaflow_jetstream::Message> for Message {
     }
 }
 
-impl From<numaflow_jetstream::Error> for Error {
-    fn from(value: numaflow_jetstream::Error) -> Self {
+impl From<numaflow_nats::Error> for Error {
+    fn from(value: numaflow_nats::Error) -> Self {
         Self::Source(format!("Jetstream source: {value:?}"))
     }
 }
@@ -98,11 +100,10 @@ impl super::LagReader for JetstreamSource {
 
 #[cfg(test)]
 mod tests {
-    use crate::reader::LagReader;
 
     use super::*;
     use bytes::Bytes;
-    use numaflow_jetstream::Message as JetstreamMessage;
+    use numaflow_nats::jetstream::Message as JetstreamMessage;
     use std::collections::HashMap;
 
     #[tokio::test]
@@ -138,6 +139,8 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_jetstream_source_reader_acker_lagreader() {
+        use crate::reader::LagReader;
+
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
         // Setup Jetstream context and stream
@@ -174,7 +177,7 @@ mod tests {
         }
 
         // Configure JetstreamSource
-        let config = numaflow_jetstream::JetstreamSourceConfig {
+        let config = numaflow_nats::jetstream::JetstreamSourceConfig {
             addr: "localhost".to_string(),
             stream: stream_name.to_string(),
             consumer,
@@ -183,7 +186,7 @@ mod tests {
         };
 
         let read_timeout = Duration::from_secs(1);
-        let mut source = super::new_jetstream_source(config, 20, read_timeout)
+        let mut source: JetstreamSource = super::new_jetstream_source(config, 20, read_timeout)
             .await
             .unwrap();
 

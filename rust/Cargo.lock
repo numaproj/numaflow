@@ -2461,10 +2461,10 @@ dependencies = [
  "lz4",
  "numaflow 0.2.1",
  "numaflow-http",
- "numaflow-jetstream",
  "numaflow-kafka",
  "numaflow-models",
  "numaflow-monitor",
+ "numaflow-nats",
  "numaflow-pb",
  "numaflow-pulsar",
  "numaflow-shared",
@@ -2518,23 +2518,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "numaflow-jetstream"
-version = "0.1.0"
-dependencies = [
- "async-nats",
- "backoff",
- "bytes",
- "chrono",
- "rustls 0.23.29",
- "rustls-native-certs 0.8.1",
- "rustls-pki-types",
- "thiserror 2.0.12",
- "tokio",
- "tokio-stream",
- "tracing",
-]
-
-[[package]]
 name = "numaflow-kafka"
 version = "0.1.0"
 dependencies = [
@@ -2580,6 +2563,24 @@ dependencies = [
  "tonic",
  "tower",
  "tracing",
+]
+
+[[package]]
+name = "numaflow-nats"
+version = "0.1.0"
+dependencies = [
+ "async-nats",
+ "backoff",
+ "bytes",
+ "chrono",
+ "rustls 0.23.29",
+ "rustls-native-certs 0.8.1",
+ "rustls-pki-types",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]
