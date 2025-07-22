@@ -76,7 +76,7 @@ pub fn get_version() -> Result<Version, Box<dyn std::error::Error>> {
     })
 }
 
-fn get_build_date() ->  String {
+fn get_build_date() -> String {
     // If the binary is built within a container, this env variable will be set.
     if let Ok(build_date) = std::env::var("BUILD_DATE") {
         return build_date;
