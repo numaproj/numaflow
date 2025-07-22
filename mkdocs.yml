@@ -55,6 +55,7 @@ nav:
           - user-guide/sources/kafka.md
           - user-guide/sources/pulsar.md
           - user-guide/sources/nats.md
+          - user-guide/sources/jetstream.md
           - SQS Source: user-guide/sources/sqs.md
           - user-guide/sources/user-defined-sources.md
           - Data Transformer:
