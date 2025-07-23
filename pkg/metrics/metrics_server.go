@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -40,7 +39,7 @@ import (
 )
 
 const (
-	VertexPendingMessages = "vertex_pending_messages"
+	VertexPendingMessages = "vertex_pending_messages_old"
 	LabelPeriod           = "period"
 )
 
@@ -282,21 +281,16 @@ func (ms *metricsServer) Start(ctx context.Context) (func(ctx context.Context) e
 		Handler:   mux,
 		TLSConfig: &tls.Config{Certificates: []tls.Certificate{*cer}, MinVersion: tls.VersionTLS12},
 	}
-	replicaStr, defined := os.LookupEnv(dfv1.EnvReplica)
-	if !defined {
-		return nil, fmt.Errorf("required environment variable '%s' not defined", dfv1.EnvReplica)
-	}
-	replica, err := strconv.Atoi(replicaStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid replica value %q: %w", replicaStr, err)
-	}
+
+	// With 1.6 release, data plane is moving to Rust and pending calculation is done at daemon
+
 	// Buildup pending information
 	// If the vertex is a source, then only trigger for pod replica id=0
-	if !(ms.vertex.IsASource() && replica != 0) {
-		go ms.buildupPendingInfo(ctx)
-		// Expose pending metrics
-		go ms.exposePendingMetrics(ctx)
-	}
+	// if !(ms.vertex.IsASource() && replica != 0) {
+	// 	go ms.buildupPendingInfo(ctx)
+	// 	// Expose pending metrics
+	// 	go ms.exposePendingMetrics(ctx)
+	// }
 
 	go func() {
 		log.Info("Starting metrics HTTPS server")

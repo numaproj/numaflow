@@ -97,10 +97,7 @@ async fn start(
             LagReader::Source(Box::new(source.clone())),
         )
         .await;
-        // TODO(lookback) - using new implementation for monovertex right now,
-        // deprecate old implementation and use this for pipeline as well once
-        // corresponding changes are completed.
-        Some(pending_reader.start_(is_mono_vertex()).await)
+        Some(pending_reader.start(is_mono_vertex()).await)
     } else {
         None
     };

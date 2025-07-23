@@ -24,11 +24,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/prometheus/common/expfmt"
-	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/daemon"
@@ -36,7 +33,6 @@ import (
 	runtimeinfo "github.com/numaproj/numaflow/pkg/daemon/server/service/runtime"
 	"github.com/numaproj/numaflow/pkg/daemon/server/service/watermark"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
-	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -152,7 +148,6 @@ func (ps *PipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 	if abstractVertex.IsASource() {
 		bufferList = append(bufferList, req.GetVertex())
 	}
-	partitionPendingInfo := ps.getPending(ctx, req)
 	metricsArr := make([]*daemon.VertexMetrics, len(bufferList))
 
 	for idx, partitionName := range bufferList {
@@ -162,81 +157,12 @@ func (ps *PipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daem
 		}
 		// get the processing rate for each partition
 		vm.ProcessingRates = ps.rater.GetRates(req.GetVertex(), partitionName)
-		partitionPending := partitionPendingInfo[partitionName]
-		vm.Pendings = partitionPending
+		vm.Pendings = ps.rater.GetPending(ps.pipeline.Name, req.GetVertex(), partitionName)
 		metricsArr[idx] = vm
 	}
 
 	resp.VertexMetrics = metricsArr
 	return resp, nil
-}
-
-// getPending returns the pending count for each partition of the vertex
-func (ps *PipelineMetadataQuery) getPending(ctx context.Context, req *daemon.GetVertexMetricsRequest) map[string]map[string]*wrapperspb.Int64Value {
-	vertexName := fmt.Sprintf("%s-%s", ps.pipeline.Name, req.GetVertex())
-	log := logging.FromContext(ctx)
-
-	vertex := &v1alpha1.Vertex{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: vertexName,
-		},
-	}
-	abstractVertex := ps.pipeline.GetVertex(req.GetVertex())
-
-	metricsCount := 1
-	if abstractVertex.IsReduceUDF() {
-		metricsCount = abstractVertex.GetPartitionCount()
-	}
-	headlessServiceName := vertex.GetHeadlessServiceName()
-	totalPendingMap := make(map[string]map[string]*wrapperspb.Int64Value)
-	for idx := 0; idx < metricsCount; idx++ {
-		// Get the headless service name
-		// We can query the metrics endpoint of the (i)th pod to obtain this value.
-		// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc:2469/metrics
-		url := fmt.Sprintf("https://%s-%v.%s.%s.svc:%v/metrics", vertexName, idx, headlessServiceName, ps.pipeline.Namespace, v1alpha1.VertexMetricsPort)
-		if res, err := ps.httpClient.Get(url); err != nil {
-			log.Debugf("Error reading the metrics endpoint, it might be because of vertex scaling down to 0: %f", err.Error())
-			return nil
-		} else {
-			// expfmt Parser from prometheus to parse the metrics
-			textParser := expfmt.TextParser{}
-			result, err := textParser.TextToMetricFamilies(res.Body)
-			if err != nil {
-				log.Errorw("Error in parsing to prometheus metric families", zap.Error(err))
-				return nil
-			}
-
-			// Get the pending messages for this partition
-			if value, ok := result[metrics.VertexPendingMessages]; ok {
-				metricsList := value.GetMetric()
-				for _, metric := range metricsList {
-					labels := metric.GetLabel()
-					lookback := ""
-					partitionName := ""
-					for _, label := range labels {
-						if label.GetName() == metrics.LabelPeriod {
-							lookback = label.GetValue()
-
-						}
-						if label.GetName() == metrics.LabelPartitionName {
-							partitionName = label.GetValue()
-						}
-					}
-					if _, ok := totalPendingMap[partitionName]; !ok {
-						totalPendingMap[partitionName] = make(map[string]*wrapperspb.Int64Value)
-						totalPendingMap[partitionName][lookback] = wrapperspb.Int64(int64(metric.Gauge.GetValue()))
-					} else {
-						if v, ok := totalPendingMap[partitionName][lookback]; !ok {
-							totalPendingMap[partitionName][lookback] = wrapperspb.Int64(int64(metric.Gauge.GetValue()))
-						} else {
-							totalPendingMap[partitionName][lookback] = wrapperspb.Int64(v.GetValue() + int64(metric.Gauge.GetValue()))
-						}
-					}
-				}
-			}
-		}
-	}
-	return totalPendingMap
 }
 
 func (ps *PipelineMetadataQuery) GetPipelineStatus(ctx context.Context, req *daemon.GetPipelineStatusRequest) (*daemon.GetPipelineStatusResponse, error) {

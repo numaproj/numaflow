@@ -166,7 +166,7 @@ async fn start_source_forwarder(
             LagReader::Source(Box::new(source.clone())),
         )
         .await;
-        Some(pending_reader.start_(is_mono_vertex()).await)
+        Some(pending_reader.start(is_mono_vertex()).await)
     } else {
         None
     };
@@ -281,7 +281,7 @@ async fn start_map_forwarder(
         LagReader::ISB(isb_lag_readers),
     )
     .await;
-    let _pending_reader_handle = pending_reader.start_(is_mono_vertex()).await;
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
     let metrics_server_handle = start_metrics_server(
         config.metrics_config.clone(),
@@ -580,7 +580,7 @@ async fn start_aligned_reduce_forwarder(
         LagReader::ISB(vec![buffer_reader]),
     )
     .await;
-    let _pending_reader_handle = pending_reader.start_(is_mono_vertex()).await;
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
     // Create user-defined aligned reducer client
     let reducer_client = create_components::create_aligned_reducer(aligned_config.clone()).await?;
@@ -747,7 +747,7 @@ async fn start_unaligned_reduce_forwarder(
         LagReader::ISB(vec![buffer_reader]),
     )
     .await;
-    let _pending_reader_handle = pending_reader.start_(is_mono_vertex()).await;
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
     // Create user-defined unaligned reducer client
     let reducer_client =
@@ -875,7 +875,7 @@ async fn start_sink_forwarder(
         LagReader::ISB(buffer_readers.clone()),
     )
     .await;
-    let _pending_reader_handle = pending_reader.start_(is_mono_vertex()).await;
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
     // Start the metrics server with one of the clients
     if let Some(sink_handle) = sink_writers.first() {

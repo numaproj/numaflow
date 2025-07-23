@@ -1254,13 +1254,14 @@ impl PendingReaderBuilder {
 }
 
 impl PendingReader {
+    /// Starts the lag reader by spawning task to expose pending metrics for daemon server.
     /// Dropping the PendingReaderTasks will abort the background tasks.
-    pub async fn start_(&self, is_mono_vertex: bool) -> PendingReaderTasks_ {
+    pub async fn start(&self, is_mono_vertex: bool) -> PendingReaderTasks_ {
         let lag_checking_interval = self.lag_checking_interval;
 
         let lag_reader = self.lag_reader.clone();
         let expose_handle = tokio::spawn(async move {
-            expose_pending_metrics_(lag_reader, lag_checking_interval, is_mono_vertex).await;
+            expose_pending_metrics(lag_reader, lag_checking_interval, is_mono_vertex).await;
         });
         PendingReaderTasks_ { expose_handle }
     }
@@ -1275,7 +1276,7 @@ impl Drop for PendingReaderTasks_ {
 }
 
 // Periodically exposes the pending metrics by calculating the average pending messages over different intervals.
-async fn expose_pending_metrics_(
+async fn expose_pending_metrics(
     mut lag_reader: LagReader,
     lag_checking_interval: Duration,
     is_mono_vertex: bool,
