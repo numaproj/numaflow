@@ -583,7 +583,9 @@ async fn start_aligned_reduce_forwarder(
     let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
     // Create user-defined aligned reducer client
-    let reducer_client = create_components::create_aligned_reducer(aligned_config.clone()).await?;
+    let reducer_client =
+        create_components::create_aligned_reducer(aligned_config.clone(), cln_token.clone())
+            .await?;
 
     // Start the metrics server with one of the clients
     start_metrics_server(
@@ -592,10 +594,12 @@ async fn start_aligned_reduce_forwarder(
             health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
                 UserDefinedReduce::Aligned(reducer_client.clone()),
             ))),
-            watermark_fetcher_state: watermark_handle.map(|handle| WatermarkFetcherState {
-                watermark_handle: WatermarkHandle::ISB(handle),
-                partition_count: 1, // Reduce vertices always read from single partition (partition 0)
-            }),
+            watermark_fetcher_state: watermark_handle
+                .clone()
+                .map(|handle| WatermarkFetcherState {
+                    watermark_handle: WatermarkHandle::ISB(handle),
+                    partition_count: 1, // Reduce vertices always read from single partition (partition 0)
+                }),
         },
     )
     .await;
@@ -608,7 +612,9 @@ async fn start_aligned_reduce_forwarder(
             gc_wal,
             aligned_config.window_config.allowed_lateness,
             config.graceful_shutdown_time,
+            config.read_timeout,
             reduce_vtx_config.keyed,
+            watermark_handle,
         )
         .await,
     );
@@ -751,7 +757,8 @@ async fn start_unaligned_reduce_forwarder(
 
     // Create user-defined unaligned reducer client
     let reducer_client =
-        create_components::create_unaligned_reducer(unaligned_config.clone()).await?;
+        create_components::create_unaligned_reducer(unaligned_config.clone(), cln_token.clone())
+            .await?;
 
     start_metrics_server(
         config.metrics_config.clone(),
@@ -759,10 +766,12 @@ async fn start_unaligned_reduce_forwarder(
             health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
                 UserDefinedReduce::Unaligned(reducer_client.clone()),
             ))),
-            watermark_fetcher_state: watermark_handle.map(|handle| WatermarkFetcherState {
-                watermark_handle: WatermarkHandle::ISB(handle),
-                partition_count: 1, // Reduce vertices always read from single partition (partition 0)
-            }),
+            watermark_fetcher_state: watermark_handle
+                .clone()
+                .map(|handle| WatermarkFetcherState {
+                    watermark_handle: WatermarkHandle::ISB(handle),
+                    partition_count: 1, // Reduce vertices always read from single partition (partition 0)
+                }),
         },
     )
     .await;
@@ -775,7 +784,9 @@ async fn start_unaligned_reduce_forwarder(
             unaligned_config.window_config.allowed_lateness,
             gc_wal,
             config.graceful_shutdown_time,
+            config.read_timeout,
             reduce_vtx_config.keyed,
+            watermark_handle,
         )
         .await,
     );

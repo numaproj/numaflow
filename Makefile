@@ -29,7 +29,6 @@ GOPATH=$(shell go env GOPATH)
 endif
 
 DOCKER_PUSH?=false
-DOCKER_BUILD_ARGS?=
 IMAGE_NAMESPACE?=quay.io/numaproj
 VERSION?=latest
 BASE_VERSION:=latest
@@ -51,6 +50,9 @@ ifneq (${GIT_TAG},)
 VERSION=$(GIT_TAG)
 override LDFLAGS += -X ${PACKAGE}.gitTag=${GIT_TAG}
 endif
+
+DOCKER_BUILD_ARGS=--build-arg "VERSION=$(VERSION)" --build-arg "BUILD_DATE=$(BUILD_DATE)" --build-arg "GIT_COMMIT=$(GIT_COMMIT)" --build-arg "GIT_BRANCH=$(GIT_BRANCH)" --build-arg "GIT_TAG=$(GIT_TAG)" --build-arg "GIT_TREE_STATE=$(GIT_TREE_STATE)"
+DOCKER_ENV_ARGS=--env "VERSION=$(VERSION)" --env "BUILD_DATE=$(BUILD_DATE)" --env "GIT_COMMIT=$(GIT_COMMIT)" --env "GIT_BRANCH=$(GIT_BRANCH)" --env "GIT_TAG=$(GIT_TAG)" --env "GIT_TREE_STATE=$(GIT_TREE_STATE)"
 
 # Check Python
 PYTHON:=$(shell command -v python 2> /dev/null)
@@ -205,11 +207,23 @@ build-rust-in-docker:
 .PHONY: build-rust-in-docker-multi
 build-rust-in-docker-multi:
 	mkdir -p dist
-	docker run -v ./dist/cargo:/root/.cargo -v ./rust/:/app/ -w /app --rm ubuntu:24.04 bash build.sh all
+	docker run $(DOCKER_ENV_ARGS) -v ./dist/cargo:/root/.cargo -v ./rust/:/app/ -w /app --rm ubuntu:24.04 bash build.sh all
 	cp -pv rust/target/aarch64-unknown-linux-gnu/release/numaflow dist/numaflow-rs-linux-arm64
 	cp -pv rust/target/x86_64-unknown-linux-gnu/release/numaflow dist/numaflow-rs-linux-amd64
 	cp -pv rust/target/aarch64-unknown-linux-gnu/release/entrypoint dist/entrypoint-linux-arm64
 	cp -pv rust/target/x86_64-unknown-linux-gnu/release/entrypoint dist/entrypoint-linux-amd64
+
+# Set Rust target triplet based on host architecture
+RUST_TARGET_TRIPLET := x86_64-unknown-linux-gnu
+ifeq ($(HOST_ARCH),arm64)
+	RUST_TARGET_TRIPLET := aarch64-unknown-linux-gnu
+endif
+
+
+.PHONY: build-rust-docker-ghactions
+build-rust-docker-ghactions:
+	mkdir -p dist
+	docker run $(DOCKER_ENV_ARGS) -v ./dist/cargo:/root/.cargo -v ./rust/:/app/ -w /app --rm ubuntu:24.04 bash build.sh $(HOST_ARCH)
 
 image-multi: ui-build set-qemu dist/$(BINARY_NAME)-linux-arm64.gz dist/$(BINARY_NAME)-linux-amd64.gz
 ifndef GITHUB_ACTIONS

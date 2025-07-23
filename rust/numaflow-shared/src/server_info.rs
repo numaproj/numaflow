@@ -50,6 +50,7 @@ pub enum ContainerType {
     Reducer,
     ReduceStreamer,
     SessionReducer,
+    Accumulator,
     SideInput,
     FbSinker,
     Unknown,
@@ -66,6 +67,7 @@ impl ContainerType {
             ContainerType::Reducer => "reducer",
             ContainerType::ReduceStreamer => "reducestreamer",
             ContainerType::SessionReducer => "sessionreducer",
+            ContainerType::Accumulator => "accumulator",
             ContainerType::SideInput => "sideinput",
             ContainerType::FbSinker => "fb-sinker",
             ContainerType::Unknown => "unknown",
@@ -89,6 +91,7 @@ impl From<String> for ContainerType {
             "reducer" => ContainerType::Reducer,
             "reducestreamer" => ContainerType::ReduceStreamer,
             "sessionreducer" => ContainerType::SessionReducer,
+            "accumulator" => ContainerType::Accumulator,
             "sideinput" => ContainerType::SideInput,
             "fb-sinker" => ContainerType::FbSinker,
             _ => ContainerType::Unknown,
@@ -483,6 +486,10 @@ mod version {
         go_version_map.insert(ContainerType::FbSinker, "0.9.0-z".to_string());
         go_version_map.insert(ContainerType::Mapper, "0.9.0-z".to_string());
         go_version_map.insert(ContainerType::SideInput, "0.9.0-z".to_string());
+        go_version_map.insert(ContainerType::Reducer, "0.9.0-z".to_string());
+        go_version_map.insert(ContainerType::ReduceStreamer, "0.9.0-z".to_string());
+        go_version_map.insert(ContainerType::SessionReducer, "0.9.0-z".to_string());
+        go_version_map.insert(ContainerType::Accumulator, "0.10.0-z".to_string());
         let mut python_version_map = HashMap::new();
         python_version_map.insert(ContainerType::Sourcer, "0.9.0rc100".to_string());
         python_version_map.insert(ContainerType::SourceTransformer, "0.9.0rc100".to_string());
@@ -490,6 +497,10 @@ mod version {
         python_version_map.insert(ContainerType::FbSinker, "0.9.0rc100".to_string());
         python_version_map.insert(ContainerType::Mapper, "0.9.0rc100".to_string());
         python_version_map.insert(ContainerType::SideInput, "0.9.0rc100".to_string());
+        python_version_map.insert(ContainerType::Reducer, "0.9.0rc100".to_string());
+        python_version_map.insert(ContainerType::ReduceStreamer, "0.9.0rc100".to_string());
+        python_version_map.insert(ContainerType::SessionReducer, "0.9.0rc100".to_string());
+        python_version_map.insert(ContainerType::Accumulator, "0.10.0rc100".to_string());
         let mut java_version_map = HashMap::new();
         java_version_map.insert(ContainerType::Sourcer, "0.9.0-z".to_string());
         java_version_map.insert(ContainerType::SourceTransformer, "0.9.0-z".to_string());
@@ -497,6 +508,10 @@ mod version {
         java_version_map.insert(ContainerType::FbSinker, "0.9.0-z".to_string());
         java_version_map.insert(ContainerType::Mapper, "0.9.0-z".to_string());
         java_version_map.insert(ContainerType::SideInput, "0.9.0-z".to_string());
+        java_version_map.insert(ContainerType::Reducer, "0.9.0-z".to_string());
+        java_version_map.insert(ContainerType::ReduceStreamer, "0.9.0-z".to_string());
+        java_version_map.insert(ContainerType::SessionReducer, "0.9.0-z".to_string());
+        java_version_map.insert(ContainerType::Accumulator, "0.10.0-z".to_string());
         let mut rust_version_map = HashMap::new();
         rust_version_map.insert(ContainerType::Sourcer, "0.2.0-z".to_string());
         rust_version_map.insert(ContainerType::SourceTransformer, "0.2.0-z".to_string());
@@ -504,6 +519,10 @@ mod version {
         rust_version_map.insert(ContainerType::FbSinker, "0.2.0-z".to_string());
         rust_version_map.insert(ContainerType::Mapper, "0.2.0-z".to_string());
         rust_version_map.insert(ContainerType::SideInput, "0.2.0-z".to_string());
+        rust_version_map.insert(ContainerType::Reducer, "0.2.0-z".to_string());
+        rust_version_map.insert(ContainerType::ReduceStreamer, "0.3.0-z".to_string());
+        rust_version_map.insert(ContainerType::SessionReducer, "0.3.0-z".to_string());
+        rust_version_map.insert(ContainerType::Accumulator, "0.3.0-z".to_string());
 
         let mut m = HashMap::new();
         m.insert("go".to_string(), go_version_map);
