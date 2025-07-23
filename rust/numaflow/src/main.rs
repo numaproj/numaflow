@@ -55,6 +55,7 @@ fn main() {
     rt.block_on(async move {
         if let Err(e) = run(cli).await {
             error!("{e:?}");
+            std::process::exit(1);
         }
     });
 
