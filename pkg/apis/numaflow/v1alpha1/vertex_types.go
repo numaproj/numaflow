@@ -202,12 +202,6 @@ func (v Vertex) commonEnvs() []corev1.EnvVar {
 		{Name: EnvReplica, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + KeyReplica + "']"}}},
 		{Name: EnvPipelineName, Value: v.Spec.PipelineName},
 		{Name: EnvVertexName, Value: v.Spec.Name},
-	}
-}
-
-// SidecarEnvs returns the envs for sidecar containers.
-func (v Vertex) sidecarEnvs() []corev1.EnvVar {
-	return []corev1.EnvVar{
 		{Name: EnvCPULimit, ValueFrom: &corev1.EnvVarSource{
 			ResourceFieldRef: &corev1.ResourceFieldSelector{Resource: "limits.cpu"}}},
 		{Name: EnvCPURequest, ValueFrom: &corev1.EnvVarSource{
@@ -339,7 +333,6 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 
 	for i := 0; i < len(sidecarContainers); i++ { // udf, udsink, udsource, or source vertex specifies a udtransformer
 		sidecarContainers[i].Env = append(sidecarContainers[i].Env, v.commonEnvs()...)
-		sidecarContainers[i].Env = append(sidecarContainers[i].Env, v.sidecarEnvs()...)
 	}
 
 	initContainers := v.getInitContainers(req)
