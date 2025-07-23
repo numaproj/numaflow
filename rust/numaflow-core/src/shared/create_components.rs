@@ -506,7 +506,26 @@ pub async fn create_source(
 /// Creates a user-defined aligned reducer client
 pub(crate) async fn create_aligned_reducer(
     reducer_config: config::components::reduce::AlignedReducerConfig,
+    cln_token: CancellationToken,
 ) -> crate::Result<UserDefinedAlignedReduce> {
+    let server_info = sdk_server_info(
+        reducer_config.user_defined_config.server_info_path.into(),
+        cln_token.clone(),
+    )
+    .await?;
+
+    let metric_labels = metrics::sdk_info_labels(
+        config::get_component_type().to_string(),
+        config::get_vertex_name().to_string(),
+        server_info.language,
+        server_info.version,
+        "aligned-reducer".to_string(),
+    );
+    metrics::global_metrics()
+        .sdk_info
+        .get_or_create(&metric_labels)
+        .set(1);
+
     // Create gRPC channel
     let channel =
         grpc::create_rpc_channel(reducer_config.user_defined_config.socket_path.into()).await?;
@@ -524,7 +543,26 @@ pub(crate) async fn create_aligned_reducer(
 
 pub(crate) async fn create_unaligned_reducer(
     reducer_config: config::components::reduce::UnalignedReducerConfig,
+    cln_token: CancellationToken,
 ) -> crate::Result<UserDefinedUnalignedReduce> {
+    let server_info = sdk_server_info(
+        reducer_config.user_defined_config.server_info_path.into(),
+        cln_token.clone(),
+    )
+    .await?;
+
+    let metric_labels = metrics::sdk_info_labels(
+        config::get_component_type().to_string(),
+        config::get_vertex_name().to_string(),
+        server_info.language,
+        server_info.version,
+        "unaligned-reducer".to_string(),
+    );
+    metrics::global_metrics()
+        .sdk_info
+        .get_or_create(&metric_labels)
+        .set(1);
+
     // Create gRPC channel
     let channel =
         grpc::create_rpc_channel(reducer_config.user_defined_config.socket_path.into()).await?;
