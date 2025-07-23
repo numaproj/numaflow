@@ -2,10 +2,10 @@ use cmdline::sideinput;
 use std::collections::HashMap;
 use std::env;
 use std::error::Error;
-use tokio::signal;
 use tokio::task::JoinHandle;
+use tokio::{runtime, signal};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 mod setup_tracing;
 
@@ -14,27 +14,52 @@ mod cmdline;
 
 const VERSION_INFO: &str = env!("NUMAFLOW_VERSION_INFO");
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+fn main() {
     setup_tracing::register();
-
     // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
     rustls::crypto::aws_lc_rs::default_provider()
         .install_default()
         .expect("Installing default CryptoProvider");
 
-    info!(VERSION_INFO, "Numaflow version information");
+    // Tokio runtime automatically spins up N number of worker threads based on the available cpu cores.
+    // In a k8s environment, this value is calculated based on the `resources.limits.cpu` value. If it is not set,
+    // the worker thread count will be equivalent to the logical cores available on the host node.
+    // On a node with 32 cores, the memory usage of numa container stays at around 120MB to 140MB
+    // when `resources.limits.cpu` is not set. If set explicitly to 1 CPU or less, the memory usage
+    // stays around 20MB.
+    // The `NUMAFLOW_CPU_REQUEST` environment variable is set by the controller as a reference to
+    // the `resource.requests.cpu`. We can not use the `NUMAFLOW_CPU_LIMITS` (references
+    // `resources.limits.cpu`) value, since its value will be host's logical core count if not set
+    // explicitly.
+    // User may specify a higher value by setting NUMAFLOW_CPU_REQUEST in `containerTemplate.env`
+    // section for the vertex.
+    let cpu_core_count = env::var("NUMAFLOW_CPU_REQUEST").unwrap_or_else(|_| "1".into());
+    let worker_thread_count = cpu_core_count.parse::<usize>().inspect_err(|e| {
+        warn!(integer_conversion_error=?e, "The value of NUMAFLOW_CPU_REQUEST environment variable should be a valid unsigned integer. Worker thread count will be set to 1");
+    }).unwrap_or(1).max(1);
+
+    let rt = runtime::Builder::new_multi_thread()
+        .enable_all()
+        .worker_threads(worker_thread_count)
+        .build()
+        .unwrap();
+
+    info!(
+        VERSION_INFO,
+        tokio_worker_threads = worker_thread_count,
+        "Numaflow runtime details"
+    );
 
     let cli = cmdline::root_cli();
 
-    if let Err(e) = run(cli).await {
-        error!("{e:?}");
-        return Err(e);
-    }
+    rt.block_on(async move {
+        if let Err(e) = run(cli).await {
+            error!("{e:?}");
+            std::process::exit(1);
+        }
+    });
 
     info!("Exited.");
-
-    Ok(())
 }
 
 async fn run(cli: clap::Command) -> Result<(), Box<dyn Error>> {
