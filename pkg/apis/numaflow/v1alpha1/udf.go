@@ -38,6 +38,8 @@ func (in UDF) getContainers(req getContainerReq) ([]corev1.Container, []corev1.C
 }
 
 func (in UDF) getMainContainer(req getContainerReq) corev1.Container {
+	// TODO: Default runtime is rust in 1.6, we will remove this env in 1.7
+	req.env = append(req.env, corev1.EnvVar{Name: EnvNumaflowRuntime, Value: "rust"})
 	if in.GroupBy == nil {
 		args := []string{"processor", "--type=" + string(VertexTypeMapUDF), "--isbsvc-type=" + string(req.isbSvcType)}
 		return containerBuilder{}.

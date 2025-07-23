@@ -186,7 +186,7 @@ impl ISBWatermarkPublisher {
         // Actual published watermark offset=3605637 watermark=1750758998480
         // We should've published watermark for offset 3605646 and skipped publishing for offset 3605637
         // if watermark cannot be computed, still we should publish the last known valid WM for the latest offset
-        if watermark == -1 || watermark == last_state.watermark {
+        if watermark <= last_state.watermark {
             last_state.offset = last_state.offset.max(offset);
             return;
         }
