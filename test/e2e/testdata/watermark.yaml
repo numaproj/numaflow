@@ -12,60 +12,28 @@ spec:
         generator:
           rpu: 1
           duration: 1s
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_DEBUG
-            value: !!str "true"
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
     - name: cat1
       partitions: 2
       udf:
         container:
           image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
-          imagePullPolicy: Always
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_DEBUG
-            value: !!str "true"
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
+          imagePullPolicy: IfNotPresent
     - name: cat2
       udf:
         container:
           image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
-          imagePullPolicy: Always
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_DEBUG
-            value: !!str "true"
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
+          imagePullPolicy: IfNotPresent
     - name: cat3
       partitions: 3
       udf:
         container:
           image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
-          imagePullPolicy: Always
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_DEBUG
-            value: !!str "true"
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
+          imagePullPolicy: IfNotPresent
     - name: output1
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       sink:
         # A simple log printing sink
         log: {}
     - name: output2
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       sink:
         # A simple log printing sink
         log: {}

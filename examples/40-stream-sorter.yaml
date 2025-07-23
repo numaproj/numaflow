@@ -7,10 +7,7 @@ spec:
     readBatchSize: 1
   vertices:
     - name: input-one
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
+
       scale:
         min: 1
       source:
@@ -18,10 +15,7 @@ spec:
           rpu: 10
           keyCount: 1
     - name: input-two
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
+
       scale:
         min: 1
       source:
@@ -29,10 +23,7 @@ spec:
           rpu: 10
           keyCount: 1
     - name: accum
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
+
       udf:
         container:
           image: quay.io/numaio/numaflow-rs/stream-sorter:stable
@@ -45,10 +36,7 @@ spec:
             persistentVolumeClaim:
               volumeSize: 1Gi
     - name: sink
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
+
       scale:
         min: 1
       sink:

@@ -11,38 +11,26 @@ spec:
     - name: in
       limits:
         readBatchSize: 1
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       scale:
         min: 1
       source:
         http: {}
     - name: atoi
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       scale:
         min: 1
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
           image: quay.io/numaio/numaflow-go/map-even-odd:stable
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
     - name: compute-sum
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       partitions: 1
       udf:
         container:
           # compute the sum, see https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/reduce/sum
           # this also serves as a Java reduce sdk test case
           image: quay.io/numaio/numaflow-java/reduce-sum:stable
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
         groupBy:
           window:
             fixed:
@@ -53,10 +41,6 @@ spec:
               volumeSize: 10Gi
               accessMode: ReadWriteOnce
     - name: sink
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       scale:
         min: 1
       sink:
@@ -64,7 +48,7 @@ spec:
           container:
             # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis_sink
             image: quay.io/numaio/numaflow-go/redis-sink:stable
-            imagePullPolicy: Always
+            imagePullPolicy: IfNotPresent
             env:
               - name: SINK_HASH_KEY
                 # The key is set in the format of "pipeline_name-vertex_name"

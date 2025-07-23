@@ -9,30 +9,18 @@ spec:
     - name: in
       limits:
         readBatchSize: 1
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       scale:
         min: 1
       source:
         http: {}
     - name: even-odd
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       scale:
         min: 1
       udf:
         container:
           image: quay.io/numaio/numaflow-go/map-even-odd:stable
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
     - name: compute-count
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       partitions: 1
       udf:
         container:
@@ -49,10 +37,6 @@ spec:
               volumeSize: 2Gi
               accessMode: ReadWriteOnce
     - name: sink
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       scale:
         min: 1
       sink:

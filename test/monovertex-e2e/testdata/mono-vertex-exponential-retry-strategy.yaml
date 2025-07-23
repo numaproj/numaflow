@@ -19,4 +19,4 @@ spec:
     udsink:
       container:
         image: quay.io/numaio/numaflow-go/sink-retry-e2e:stable
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent

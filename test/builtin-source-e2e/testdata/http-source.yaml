@@ -7,18 +7,10 @@ spec:
     disabled: true
   vertices:
     - name: in
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       source:
         http:
           service: true
     - name: out
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       sink:
         udsink:
           container:
