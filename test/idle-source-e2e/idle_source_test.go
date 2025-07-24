@@ -48,8 +48,10 @@ type IdleSourceSuite struct {
 }
 
 func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
-
-	is.T().SkipNow()
+	// the reduce feature is not supported with redis ISBSVC
+	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
+		is.T().SkipNow()
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
@@ -91,7 +93,6 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithHttpSource() {
 }
 
 func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
-
 	// the reduce feature is not supported with redis ISBSVC
 	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
 		is.T().SkipNow()

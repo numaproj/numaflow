@@ -36,7 +36,7 @@ spec:
           keyed: false
           storage:
             persistentVolumeClaim:
-              volumeSize: 10Gi
+              volumeSize: 1Gi
               accessMode: ReadWriteOnce
     - name: sink
       scale:

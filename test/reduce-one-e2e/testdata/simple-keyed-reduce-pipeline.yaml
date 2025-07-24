@@ -5,12 +5,8 @@ metadata:
 spec:
   watermark:
     maxDelay: 30s
-  limits:
-    readBatchSize: 50
   vertices:
     - name: in
-      limits:
-        readBatchSize: 1
       scale:
         min: 1
       source:
@@ -38,7 +34,7 @@ spec:
           keyed: true
           storage:
             persistentVolumeClaim:
-              volumeSize: 10Gi
+              volumeSize: 1Gi
               accessMode: ReadWriteOnce
     - name: sink
       scale:

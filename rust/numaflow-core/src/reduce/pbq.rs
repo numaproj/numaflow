@@ -149,7 +149,7 @@ impl PBQ {
         tokio::spawn(async move {
             while let Some(offset) = offset_stream.next().await {
                 tracker_handle
-                    .delete(offset)
+                    .delete(offset, None)
                     .await
                     .expect("Failed to delete offset");
             }
