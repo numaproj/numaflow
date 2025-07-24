@@ -186,7 +186,7 @@ type partitionMaxDuration struct {
 	maxUnchangedDuration map[string]int64
 }
 
-func CalculateMaxLookback(counts []*TimestampedCounts, startIndex, endIndex int) int64 {
+func CalculateLookback(counts []*TimestampedCounts, startIndex, endIndex int) int64 {
 	lookBackData := partitionMaxDuration{
 		lastSeen:             make(map[string]partitionLastSeen),
 		maxUnchangedDuration: make(map[string]int64),
@@ -198,13 +198,13 @@ func CalculateMaxLookback(counts []*TimestampedCounts, startIndex, endIndex int)
 
 func processTimeline(counts []*TimestampedCounts, startIndex, endIndex int, data *partitionMaxDuration) {
 	for i := startIndex; i <= endIndex; i++ {
-		item := counts[i].PodPartitionCountSnapshot()
+		podPartitionCountMap := counts[i].PodPartitionCountSnapshot()
 		curTime := counts[i].PodTimestamp()
 
 		// For each partition, create a mapping to count(aggregating across all pods)
 		partitionAggMap := make(map[string]float64)
 
-		for _, partitionCountsMap := range item {
+		for _, partitionCountsMap := range podPartitionCountMap {
 			for partitionName, count := range partitionCountsMap {
 				partitionAggMap[partitionName] += count
 			}
@@ -247,7 +247,7 @@ func finalizeDurations(lastCount *TimestampedCounts, data *partitionMaxDuration)
 	}
 }
 
-// Calculate the maximum duration found across all pods.
+// Calculate the maximum duration found across all partitions.
 func findGlobalMaxDuration(maxUnchangedDuration map[string]int64) int64 {
 	globalMaxSecs := int64(0)
 	for _, duration := range maxUnchangedDuration {
