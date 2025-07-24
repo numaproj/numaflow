@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"time"
 
+	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -163,6 +164,13 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 	log := logging.FromContext(ctx).With("worker", fmt.Sprint(worker)).With("podKey", key)
 	log.Debugf("Working on key: %s", key)
 	podInfo, err := r.podTracker.GetPodInfo(key)
+	isSource := false
+	for _, v := range r.pipeline.Spec.Vertices {
+		if v.Name == podInfo.vertexName {
+			isSource = v.IsASource()
+			break
+		}
+	}
 	if err != nil {
 		return err
 	}
@@ -170,13 +178,14 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 	var podPendingCount *PodPendingCount
 	now := time.Now().Add(CountWindow).Truncate(CountWindow).Unix()
 	if r.podTracker.IsActive(key) {
-		podReadCount = r.getPodReadCounts(podInfo.vertexName, podInfo.podName)
+		podMetrics := r.getPodMetrics(podInfo.vertexName, podInfo.podName)
+		podReadCount = r.getPodReadCounts(podInfo.vertexName, podInfo.podName, podMetrics)
 		if podReadCount == nil {
 			log.Debugf("Failed retrieving total podReadCount for pod %s", podInfo.podName)
 		}
-		// Pending is only fetched from replica 0. Only maintain that in the timeline
-		if podInfo.replica == 0 {
-			podPendingCount = r.getPodPendingCounts(podInfo.vertexName, podInfo.podName)
+		// If pod is a source, raw pending metric is calculated only for 0th replica. Only maintain that in the timeline
+		if !(isSource && podInfo.replica != 0) {
+			podPendingCount = r.getPodPendingCounts(podInfo.vertexName, podInfo.podName, podMetrics)
 			if podPendingCount == nil {
 				log.Debugf("Failed retrieving pending counts for pod %s vertex %s", podInfo.podName, podInfo.vertexName)
 			}
@@ -253,10 +262,8 @@ func sleep(ctx context.Context, duration time.Duration) {
 	}
 }
 
-// TODO: merge metrics query of pending and read counts
-func (r *Rater) getPodPendingCounts(vertexName, podName string) *PodPendingCount {
-	pendingMetricName := "vertex_pending_messages_raw"
-	// scrape the pending metric from pod metric port
+// getPodMetrics Fetches the metrics for a given pod from the Prometheus metrics endpoint.
+func (r *Rater) getPodMetrics(vertexName, podName string) map[string]*dto.MetricFamily {
 	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/metrics", podName, r.pipeline.Name+"-"+vertexName+"-headless", r.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 	resp, err := r.httpClient.Get(url)
 	if err != nil {
@@ -268,11 +275,16 @@ func (r *Rater) getPodPendingCounts(vertexName, podName string) *PodPendingCount
 	textParser := expfmt.TextParser{}
 	result, err := textParser.TextToMetricFamilies(resp.Body)
 	if err != nil {
-		r.log.Errorf("[vertex name %s, pod name %s]: failed parsing to prometheus metric families, %v", vertexName, podName, err.Error())
+		r.log.Errorf("[Pod name %s]:  failed parsing to prometheus metric families, %v", podName, err.Error())
 		return nil
 	}
+	return result
+}
 
-	if value, ok := result[pendingMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
+// getPodPendingCounts returns the partition pending counts for a given pod
+func (r *Rater) getPodPendingCounts(vertexName, podName string, metricsData map[string]*dto.MetricFamily) *PodPendingCount {
+	pendingMetricName := "vertex_pending_messages_raw"
+	if value, ok := metricsData[pendingMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
 		metricsList := value.GetMetric()
 		partitionPendingCount := make(map[string]float64)
 		for _, ele := range metricsList {
@@ -305,25 +317,9 @@ func (r *Rater) getPodPendingCounts(vertexName, podName string) *PodPendingCount
 
 // getPodReadCounts returns the total number of messages read by the pod
 // since a pod can read from multiple partitions, we will return a map of partition to read count.
-func (r *Rater) getPodReadCounts(vertexName, podName string) *PodReadCount {
+func (r *Rater) getPodReadCounts(vertexName, podName string, metricsData map[string]*dto.MetricFamily) *PodReadCount {
 	readTotalMetricName := "forwarder_data_read_total"
-	// scrape the read total metric from pod metric port
-	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/metrics", podName, r.pipeline.Name+"-"+vertexName+"-headless", r.pipeline.Namespace, v1alpha1.VertexMetricsPort)
-	resp, err := r.httpClient.Get(url)
-	if err != nil {
-		r.log.Warnf("[vertex name %s, pod name %s]: failed reading the metrics endpoint, the pod might have been scaled down: %v", vertexName, podName, err.Error())
-		return nil
-	}
-	defer resp.Body.Close()
-
-	textParser := expfmt.TextParser{}
-	result, err := textParser.TextToMetricFamilies(resp.Body)
-	if err != nil {
-		r.log.Errorf("[vertex name %s, pod name %s]: failed parsing to prometheus metric families, %v", vertexName, podName, err.Error())
-		return nil
-	}
-
-	if value, ok := result[readTotalMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
+	if value, ok := metricsData[readTotalMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
 		metricsList := value.GetMetric()
 		partitionReadCount := make(map[string]float64)
 		for _, ele := range metricsList {

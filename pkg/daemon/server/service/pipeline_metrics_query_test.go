@@ -160,7 +160,7 @@ vertex_pending_messages{period="default",partition_name="-simple-pipeline-cat-0"
 	pendings["1m"] = wrapperspb.Int64(5)
 	pendings["5m"] = wrapperspb.Int64(6)
 	pendings["default"] = wrapperspb.Int64(7)
-	// assert.Equal(t, resp.VertexMetrics[0].GetPendings(), pendings)
+	assert.Equal(t, resp.VertexMetrics[0].GetPendings(), pendings)
 }
 
 func TestGetBuffer(t *testing.T) {

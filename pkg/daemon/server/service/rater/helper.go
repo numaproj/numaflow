@@ -67,6 +67,7 @@ func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, p
 	q.Append(tc)
 }
 
+// TODO: what happens if vertex is Reduce, do we just add pending of a partition across all pods?
 func CalculatePending(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64, partitionName string) int64 {
 	counts := q.Items()
 	if len(counts) <= 1 {
@@ -173,28 +174,21 @@ func findStartIndex(lookbackSeconds int64, counts []*TimestampedCounts) int {
 	return startIndex
 }
 
-type podLastSeen struct {
+type partitionLastSeen struct {
 	count    float64
 	seenTime int64
 }
 
-type podMaxDuration struct {
-	// Map to keep track of the last seen count and timestamp of each pod.
-	lastSeen map[string]podLastSeen
-	// Map to store the maximum duration for which the value of any pod was unchanged.
+type partitionMaxDuration struct {
+	// Map to keep track of the last seen count and timestamp of each partition.
+	lastSeen map[string]partitionLastSeen
+	// Map to store the maximum duration for which the value of any partition was unchanged.
 	maxUnchangedDuration map[string]int64
 }
 
-// CalculateMaxLookback computes the maximum duration (in seconds) for which the count of messages processed by any pod
-// remained unchanged within a specified range of indices in a queue of TimestampedCounts. It does this by analyzing each
-// data point between the startIndex and endIndex, checking the count changes for each pod, and noting the durations
-// during which these counts stay consistent. The metric is updated when data is read by the pod
-// This would encapsulate the lookback for two scenarios
-// 1. Slow processing vertex
-// 2. Slow data source - data arrives after long intervals
 func CalculateMaxLookback(counts []*TimestampedCounts, startIndex, endIndex int) int64 {
-	lookBackData := podMaxDuration{
-		lastSeen:             make(map[string]podLastSeen),
+	lookBackData := partitionMaxDuration{
+		lastSeen:             make(map[string]partitionLastSeen),
 		maxUnchangedDuration: make(map[string]int64),
 	}
 	processTimeline(counts, startIndex, endIndex, &lookBackData)
@@ -202,54 +196,52 @@ func CalculateMaxLookback(counts []*TimestampedCounts, startIndex, endIndex int)
 	return findGlobalMaxDuration(lookBackData.maxUnchangedDuration)
 }
 
-func processTimeline(counts []*TimestampedCounts, startIndex, endIndex int, data *podMaxDuration) {
+func processTimeline(counts []*TimestampedCounts, startIndex, endIndex int, data *partitionMaxDuration) {
 	for i := startIndex; i <= endIndex; i++ {
 		item := counts[i].PodPartitionCountSnapshot()
 		curTime := counts[i].PodTimestamp()
 
-		for podName, partitionCounts := range item {
-			// Aggregate: sum all partition counts for this pod
-			aggCount := float64(0)
-			for _, count := range partitionCounts {
-				aggCount += count
+		// For each partition, create a mapping to count(aggregating across all pods)
+		partitionAggMap := make(map[string]float64)
+
+		for _, partitionCountsMap := range item {
+			for partitionName, count := range partitionCountsMap {
+				partitionAggMap[partitionName] += count
 			}
-			lastSeenData, found := data.lastSeen[podName]
+		}
+
+		for partitionName, aggCount := range partitionAggMap {
+			lastSeenData, found := data.lastSeen[partitionName]
 			if found && lastSeenData.count == aggCount {
 				continue
 			}
 			if found && aggCount > lastSeenData.count {
 				duration := curTime - lastSeenData.seenTime
-				if currentMax, ok := data.maxUnchangedDuration[podName]; !ok || duration > currentMax {
-					data.maxUnchangedDuration[podName] = duration
+				if currentMax, ok := data.maxUnchangedDuration[partitionName]; !ok || duration > currentMax {
+					data.maxUnchangedDuration[partitionName] = duration
 				}
 			}
-			// The value is updated in the lastSeen for 3 cases
-			// 1. If this is the first time seeing the pod entry or
-			// 2. in case of a value increase,
-			// 3. In case of a value decrease which is treated as a new entry for pod
-			data.lastSeen[podName] = podLastSeen{aggCount, curTime}
+			data.lastSeen[partitionName] = partitionLastSeen{aggCount, curTime}
 		}
 	}
 }
 
-// Check for pods that did not change at all during the iteration,
-// and update their maxUnchangedDuration to the full period from first seen to lastTime.
-// Note: There is a case where one pod was getting data earlier, but then stopped altogether.
-// For example, one partition in Kafka not getting data after a while. This case will not be covered
-// by our logic, and we would keep increasing the look back in such a scenario.
-func finalizeDurations(lastCount *TimestampedCounts, data *podMaxDuration) {
+func finalizeDurations(lastCount *TimestampedCounts, data *partitionMaxDuration) {
 	endVals := lastCount.PodPartitionCountSnapshot()
 	lastTime := lastCount.PodTimestamp()
-	for key, lastSeenData := range data.lastSeen {
+
+	// Aggregate across all pods for each partition
+	partitionAggMap := make(map[string]float64)
+	for _, partitionCounts := range endVals {
+		for partitionName, count := range partitionCounts {
+			partitionAggMap[partitionName] += count
+		}
+	}
+	for partitionName, lastSeenData := range data.lastSeen {
 		endDuration := lastTime - lastSeenData.seenTime
-		// This condition covers two scenarios:
-		// 1. There is an entry in the last seen, but not in maxUnchangedDuration
-		// It was seen once, but value never changed. In this case update the maxDuration, but only when
-		// the count > 0
-		// 2. The value has not changed till the boundary, and this duration is larger than the current max
-		if _, exists := endVals[key]; exists && lastSeenData.count != 0 {
-			if currentMax, ok := data.maxUnchangedDuration[key]; !ok || endDuration > currentMax {
-				data.maxUnchangedDuration[key] = endDuration
+		if _, exists := partitionAggMap[partitionName]; exists && lastSeenData.count != 0 {
+			if currentMax, ok := data.maxUnchangedDuration[partitionName]; !ok || endDuration > currentMax {
+				data.maxUnchangedDuration[partitionName] = endDuration
 			}
 		}
 	}
