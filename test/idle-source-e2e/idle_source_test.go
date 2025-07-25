@@ -129,7 +129,7 @@ func (is *IdleSourceSuite) TestIdleKeyedReducePipelineWithKafkaSource() {
 				if i < 600 {
 					SendMessage(topic, "data", generateMsg("2", startTime), 1)
 				}
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(10 * time.Millisecond)
 				startTime = startTime.Add(1 * time.Second)
 			}
 		}

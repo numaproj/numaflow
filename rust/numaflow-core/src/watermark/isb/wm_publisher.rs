@@ -192,10 +192,7 @@ impl ISBWatermarkPublisher {
         }
 
         if watermark < last_state.watermark {
-            error!(
-                "Watermark regression detected, watermark: {}, last published watermark: {}",
-                watermark, last_state.watermark
-            );
+            warn!(?watermark, ?last_state.watermark, "Watermark regression detected, skipping publish");
             return;
         }
 

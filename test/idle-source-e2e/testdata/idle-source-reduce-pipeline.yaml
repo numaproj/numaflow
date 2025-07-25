@@ -14,7 +14,7 @@ spec:
   vertices:
     - name: in
       scale:
-        min: 2
+        min: 1
       source:
         http: {}
     - name: atoi
