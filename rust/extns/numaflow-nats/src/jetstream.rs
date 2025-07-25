@@ -74,12 +74,12 @@ impl TryFrom<&str> for ConsumerDeliverPolicy {
                 let timestamp = match epoch_ms.is_positive() {
                     true => SystemTime::UNIX_EPOCH.checked_add(duration),
                     false => SystemTime::UNIX_EPOCH.checked_sub(duration),
-                };
-                let Some(timestamp) = timestamp else {
-                    return Err(Error::Other(format!(
-                        "Specified epoch_time '{start_time}' is out of bounds to be represented as systemt time"
-                    )));
-                };
+                }.ok_or(
+                    Error::Other(format!(
+                        "Specified epoch_time '{start_time}' is out of bounds to be represented as system time"
+                    ))
+                )?;
+
                 Self(DeliverPolicy::ByStartTime {
                     start_time: timestamp.into(),
                 })
@@ -127,7 +127,7 @@ impl TryFrom<JetstreamMessage> for Message {
                         k.to_string(),
                         v.first().map(|v| v.to_string()).unwrap_or_default(),
                     )
-                }) //NOTE: we are only using the first value of the header
+                }) // NOTE: we are only using the first value of the header
                 .collect(),
             None => HashMap::new(),
         };
