@@ -26,7 +26,7 @@ pub struct JetStreamSource {
     /// https://docs.nats.io/nats-concepts/jetstream/consumers#deliverpolicy
     #[serde(rename = "deliver_policy", skip_serializing_if = "Option::is_none")]
     pub deliver_policy: Option<String>,
-    /// https://docs.nats.io/nats-concepts/jetstream/consumers#filtersubjects
+    /// https://docs.nats.io/nats-concepts/jetstream/consumers#filtesubjects
     #[serde(rename = "filter_subjects", skip_serializing_if = "Option::is_none")]
     pub filter_subjects: Option<Vec<String>>,
     /// Stream represents the name of the stream.

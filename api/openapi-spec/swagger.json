@@ -20911,7 +20911,7 @@
           "type": "string"
         },
         "filter_subjects": {
-          "description": "https://docs.nats.io/nats-concepts/jetstream/consumers#filtersubjects",
+          "description": "https://docs.nats.io/nats-concepts/jetstream/consumers#filtesubjects",
           "type": "array",
           "items": {
             "type": "string"

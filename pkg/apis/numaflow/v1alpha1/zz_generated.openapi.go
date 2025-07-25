@@ -2784,7 +2784,7 @@ func schema_pkg_apis_numaflow_v1alpha1_JetStreamSource(ref common.ReferenceCallb
 					},
 					"filter_subjects": {
 						SchemaProps: spec.SchemaProps{
-							Description: "https://docs.nats.io/nats-concepts/jetstream/consumers#filtersubjects",
+							Description: "https://docs.nats.io/nats-concepts/jetstream/consumers#filtesubjects",
 							Type:        []string{"array"},
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{

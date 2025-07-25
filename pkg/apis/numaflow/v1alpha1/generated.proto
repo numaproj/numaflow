@@ -850,7 +850,7 @@ message JetStreamSource {
   optional string deliver_policy = 4;
 
   // +optional
-  // https://docs.nats.io/nats-concepts/jetstream/consumers#filtersubjects
+  // https://docs.nats.io/nats-concepts/jetstream/consumers#filtesubjects
   repeated string filter_subjects = 5;
 
   // TLS configuration for the nats client.

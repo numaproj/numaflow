@@ -5406,7 +5406,7 @@ be created if it doesn’t exist on the stream.
 <em>(Optional)</em>
 <p>
 
-<a href="https://docs.nats.io/nats-concepts/jetstream/consumers#filtersubjects">https://docs.nats.io/nats-concepts/jetstream/consumers#filtersubjects</a>
+<a href="https://docs.nats.io/nats-concepts/jetstream/consumers#filtesubjects">https://docs.nats.io/nats-concepts/jetstream/consumers#filtesubjects</a>
 </p>
 
 </td>
