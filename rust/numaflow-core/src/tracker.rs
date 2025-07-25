@@ -18,7 +18,7 @@ use chrono::{DateTime, Utc};
 use serving::callback::CallbackHandler;
 use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
 use tokio::sync::{mpsc, oneshot};
-use tracing::error;
+use tracing::{error, info};
 
 use crate::Result;
 use crate::config::pipeline::isb::Stream;
@@ -275,6 +275,10 @@ impl Tracker {
         write_offsets: Option<Vec<(Stream, Offset)>>,
     ) {
         let Some(mut entry) = self.entries.remove(&offset) else {
+            info!(?offset, "Offset not found in tracker");
+            if let Some(write_offsets) = write_offsets {
+                self.publish_watermarks(write_offsets, &offset).await;
+            }
             return;
         };
         if entry.count > 0 {
