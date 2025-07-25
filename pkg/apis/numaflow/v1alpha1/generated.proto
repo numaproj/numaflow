@@ -845,13 +845,21 @@ message JetStreamSource {
   // +optional
   optional string consumer = 3;
 
+  // https://docs.nats.io/nats-concepts/jetstream/consumers#deliverpolicy
+  // +optional
+  optional string deliver_policy = 4;
+
+  // +optional
+  // https://docs.nats.io/nats-concepts/jetstream/consumers#filtersubjects
+  repeated string filter_subjects = 5;
+
   // TLS configuration for the nats client.
   // +optional
-  optional TLS tls = 4;
+  optional TLS tls = 6;
 
   // Auth information
   // +optional
-  optional NatsAuth auth = 5;
+  optional NatsAuth auth = 7;
 }
 
 message JobTemplate {

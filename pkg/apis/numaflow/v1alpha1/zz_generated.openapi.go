@@ -2774,6 +2774,29 @@ func schema_pkg_apis_numaflow_v1alpha1_JetStreamSource(ref common.ReferenceCallb
 							Format:      "",
 						},
 					},
+					"deliver_policy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "https://docs.nats.io/nats-concepts/jetstream/consumers#deliverpolicy",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"filter_subjects": {
+						SchemaProps: spec.SchemaProps{
+							Description: "https://docs.nats.io/nats-concepts/jetstream/consumers#filtersubjects",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
 					"tls": {
 						SchemaProps: spec.SchemaProps{
 							Description: "TLS configuration for the nats client.",

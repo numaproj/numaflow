@@ -23,6 +23,12 @@ pub struct JetStreamSource {
     /// Consumer represents the name of the consumer of the stream If not specified, a consumer with name `numaflow-pipeline_name-vertex_name-stream_name` will be created. If a consumer name is specified, a consumer with that name will be created if it doesn't exist on the stream.
     #[serde(rename = "consumer", skip_serializing_if = "Option::is_none")]
     pub consumer: Option<String>,
+    /// https://docs.nats.io/nats-concepts/jetstream/consumers#deliverpolicy
+    #[serde(rename = "deliver_policy", skip_serializing_if = "Option::is_none")]
+    pub deliver_policy: Option<String>,
+    /// https://docs.nats.io/nats-concepts/jetstream/consumers#filtersubjects
+    #[serde(rename = "filter_subjects", skip_serializing_if = "Option::is_none")]
+    pub filter_subjects: Option<Vec<String>>,
     /// Stream represents the name of the stream.
     #[serde(rename = "stream")]
     pub stream: String,
@@ -38,6 +44,8 @@ impl JetStreamSource {
         JetStreamSource {
             auth: None,
             consumer: None,
+            deliver_policy: None,
+            filter_subjects: None,
             stream,
             tls: None,
             url,

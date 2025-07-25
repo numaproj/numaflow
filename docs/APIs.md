@@ -5379,6 +5379,44 @@ be created if it doesn’t exist on the stream.
 
 <td>
 
+<code>deliver_policy</code></br> <em> string </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+<a href="https://docs.nats.io/nats-concepts/jetstream/consumers#deliverpolicy">https://docs.nats.io/nats-concepts/jetstream/consumers#deliverpolicy</a>
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
+<code>filter_subjects</code></br> <em> \[\]string </em>
+</td>
+
+<td>
+
+<em>(Optional)</em>
+<p>
+
+<a href="https://docs.nats.io/nats-concepts/jetstream/consumers#filtersubjects">https://docs.nats.io/nats-concepts/jetstream/consumers#filtersubjects</a>
+</p>
+
+</td>
+
+</tr>
+
+<tr>
+
+<td>
+
 <code>tls</code></br> <em> <a href="#numaflow.numaproj.io/v1alpha1.TLS">
 TLS </a> </em>
 </td>

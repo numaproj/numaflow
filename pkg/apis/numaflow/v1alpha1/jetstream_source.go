@@ -26,10 +26,16 @@ type JetStreamSource struct {
 	// If a consumer name is specified, a consumer with that name will be created if it doesn't exist on the stream.
 	// +optional
 	Consumer string `json:"consumer" protobuf:"bytes,3,opt,name=consumer"`
+	// https://docs.nats.io/nats-concepts/jetstream/consumers#deliverpolicy
+	// +optional
+	DeliverPolicy string `json:"deliver_policy" protobuf:"bytes,4,opt,name=deliver_policy"`
+	// +optional
+	// https://docs.nats.io/nats-concepts/jetstream/consumers#filtersubjects
+	FilterSubjects []string `json:"filter_subjects" protobuf:"bytes,5,opt,name=filter_subjects"`
 	// TLS configuration for the nats client.
 	// +optional
-	TLS *TLS `json:"tls" protobuf:"bytes,4,opt,name=tls"`
+	TLS *TLS `json:"tls" protobuf:"bytes,6,opt,name=tls"`
 	// Auth information
 	// +optional
-	Auth *NatsAuth `json:"auth,omitempty" protobuf:"bytes,5,opt,name=auth"`
+	Auth *NatsAuth `json:"auth,omitempty" protobuf:"bytes,7,opt,name=auth"`
 }
