@@ -5387,7 +5387,11 @@ be created if it doesn’t exist on the stream.
 <em>(Optional)</em>
 <p>
 
+The point in the stream from which to receive messages.
 <a href="https://docs.nats.io/nats-concepts/jetstream/consumers#deliverpolicy">https://docs.nats.io/nats-concepts/jetstream/consumers#deliverpolicy</a>
+Valid options are: “all”, “new”, “last”, “last_per_subject”,
+“by_start_sequence 42”, “by_start_time 1753428483000”. The second value
+to “by_start_time” is unix epoch time in milliseconds.
 </p>
 
 </td>
@@ -5406,6 +5410,8 @@ be created if it doesn’t exist on the stream.
 <em>(Optional)</em>
 <p>
 
+A set of subjects that overlap with the subjects bound to the stream to
+filter delivery to subscribers.
 <a href="https://docs.nats.io/nats-concepts/jetstream/consumers#filtesubjects">https://docs.nats.io/nats-concepts/jetstream/consumers#filtesubjects</a>
 </p>
 
