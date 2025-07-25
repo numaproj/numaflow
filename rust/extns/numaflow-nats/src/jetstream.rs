@@ -1,4 +1,6 @@
-use crate::{Error, NatsAuth, Result, TlsConfig, tls};
+use std::time::{Duration, SystemTime};
+use std::collections::HashMap;
+
 use async_nats::jetstream::consumer::{AckPolicy, DeliverPolicy};
 use async_nats::jetstream::{AckKind, Message as JetstreamMessage, consumer};
 use async_nats::{
@@ -9,11 +11,53 @@ use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use bytes::Bytes;
 use chrono::DateTime;
-use std::{collections::HashMap, time::Duration};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::{self, Instant};
 use tokio_stream::StreamExt;
+
+use crate::{Error, NatsAuth, Result, TlsConfig, tls};
+
+pub struct ConsumerDeliverPolicy(DeliverPolicy);
+
+impl TryFrom<&str> for ConsumerDeliverPolicy {
+    type Error = Error;
+
+    fn try_from(value: &str)-> Result<Self> {
+
+        let fields = value.split_ascii_whitespace().map(|v| v.trim().to_lowercase()).collect::<Vec<String>>();
+        let fields = fields.iter().map(|s|s.as_ref()).collect::<Vec<&str>>();
+
+        let policy = match fields[..] {
+            ["all"] => Self(DeliverPolicy::All),
+            ["last"] => Self(DeliverPolicy::Last),
+            ["last_per_subject"] => Self(DeliverPolicy::LastPerSubject),
+            ["new"] => Self(DeliverPolicy::New),
+            ["by_start_sequence", sequence] => {
+                let sequence_id = sequence.parse::<u64>().map_err(|err| Error::Other(format!("start_sequence '{sequence}' is not a valid unsigned integer: {err:?}")))?;
+                Self(DeliverPolicy::ByStartSequence {
+                    start_sequence: sequence_id,
+                })
+            },
+            ["by_start_time", start_time] => {
+                let epoch_ms = start_time.parse::<i64>().map_err(|err| Error::Other(format!("epoch time should be in milliseconds specified as a valid integer: {err:?}")))?;
+                let duration = Duration::from_millis(epoch_ms.unsigned_abs());
+                let timestamp = match epoch_ms.is_positive() {
+                    true => SystemTime::UNIX_EPOCH.checked_add(duration),
+                    false => SystemTime::UNIX_EPOCH.checked_sub(duration),
+                };
+                let Some(timestamp) = timestamp else {
+                    return Err(Error::Other(format!("Specified epoch_time '{start_time}' is out of bounds to be represented as systemt time")))
+                };
+                Self(DeliverPolicy::ByStartTime {
+                    start_time: timestamp.into(),
+                })
+            }
+            _ => return Err(Error::Other(format!("Invalid option for DeliverPolicy: {value}"))),
+        };
+        Ok(policy)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct JetstreamSourceConfig {
