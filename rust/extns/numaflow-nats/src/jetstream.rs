@@ -22,8 +22,11 @@ use crate::{Error, NatsAuth, Result, TlsConfig, tls};
 pub struct ConsumerDeliverPolicy(DeliverPolicy);
 
 impl ConsumerDeliverPolicy {
-    // When using, assoicated constant (`ConsumerDeliverPolicy::ALL`) feels better compared to `Default::default()`
     pub const ALL: ConsumerDeliverPolicy = ConsumerDeliverPolicy(DeliverPolicy::All);
+    pub const LAST: ConsumerDeliverPolicy = ConsumerDeliverPolicy(DeliverPolicy::Last);
+    pub const NEW: ConsumerDeliverPolicy = ConsumerDeliverPolicy(DeliverPolicy::New);
+    pub const LAST_PER_SUBJECT: ConsumerDeliverPolicy =
+        ConsumerDeliverPolicy(DeliverPolicy::LastPerSubject);
 
     pub fn by_start_sequence(start_sequence: u64) -> Self {
         Self(DeliverPolicy::ByStartSequence { start_sequence })
@@ -119,7 +122,12 @@ impl TryFrom<JetstreamMessage> for Message {
         let headers = match msg.message.headers.as_ref() {
             Some(headers) => headers
                 .iter()
-                .map(|(k, v)| (k.to_string(), v[0].as_str().to_string())) //NOTE: we are only using the first value of the header
+                .map(|(k, v)| {
+                    (
+                        k.to_string(),
+                        v.first().map(|v| v.to_string()).unwrap_or_default(),
+                    )
+                }) //NOTE: we are only using the first value of the header
                 .collect(),
             None => HashMap::new(),
         };
@@ -714,5 +722,57 @@ mod tests {
             .unwrap();
 
         source_functionality_test(source, js, stream_name).await;
+    }
+
+    #[test]
+    fn test_try_from_str_for_consumer_deliver_policy() {
+        let policy: ConsumerDeliverPolicy = "all".try_into().unwrap();
+        assert_eq!(policy, ConsumerDeliverPolicy::ALL);
+
+        let policy: ConsumerDeliverPolicy = "AlL".try_into().unwrap();
+        assert_eq!(policy, ConsumerDeliverPolicy::ALL);
+
+        let policy: ConsumerDeliverPolicy = "last".try_into().unwrap();
+        assert_eq!(policy, ConsumerDeliverPolicy::LAST);
+
+        let policy: ConsumerDeliverPolicy = "lAsT".try_into().unwrap();
+        assert_eq!(policy, ConsumerDeliverPolicy::LAST);
+
+        let policy: ConsumerDeliverPolicy = "new".try_into().unwrap();
+        assert_eq!(policy, ConsumerDeliverPolicy::NEW);
+
+        let policy: ConsumerDeliverPolicy = "NEW".try_into().unwrap();
+        assert_eq!(policy, ConsumerDeliverPolicy::NEW);
+
+        let policy: ConsumerDeliverPolicy = "last_per_subject".try_into().unwrap();
+        assert_eq!(policy, ConsumerDeliverPolicy::LAST_PER_SUBJECT);
+
+        let policy: ConsumerDeliverPolicy = "last_PER_suBJEct".try_into().unwrap();
+        assert_eq!(policy, ConsumerDeliverPolicy::LAST_PER_SUBJECT);
+
+        let policy: ConsumerDeliverPolicy = "by_start_sequence 768".try_into().unwrap();
+        assert_eq!(policy, ConsumerDeliverPolicy::by_start_sequence(768));
+
+        let policy: Result<ConsumerDeliverPolicy> = "by_start_sequence 7invalid8".try_into();
+        let policy_parse_err = policy.unwrap_err();
+        dbg!(&policy_parse_err);
+        assert!(
+            matches!(policy_parse_err, Error::Other(v) if v == "start_sequence '7invalid8' is not a valid unsigned integer: ParseIntError { kind: InvalidDigit }")
+        );
+
+        let policy: ConsumerDeliverPolicy = "by_start_time 1753428483000".try_into().unwrap();
+        assert_eq!(
+            policy,
+            ConsumerDeliverPolicy::by_start_time(
+                SystemTime::UNIX_EPOCH + Duration::from_millis(1753428483000)
+            )
+        );
+
+        let policy: Result<ConsumerDeliverPolicy> = "by_start_time 175invalid3428483000".try_into();
+        let policy_parse_err = policy.unwrap_err();
+        dbg!(&policy_parse_err);
+        assert!(
+            matches!(policy_parse_err, Error::Other(v) if v == "epoch time should be in milliseconds specified as a valid integer: ParseIntError { kind: InvalidDigit }")
+        );
     }
 }
