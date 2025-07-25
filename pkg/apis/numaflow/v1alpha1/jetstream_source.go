@@ -30,7 +30,7 @@ type JetStreamSource struct {
 	// +optional
 	DeliverPolicy string `json:"deliver_policy" protobuf:"bytes,4,opt,name=deliver_policy"`
 	// +optional
-	// https://docs.nats.io/nats-concepts/jetstream/consumers#filtersubjects
+	// https://docs.nats.io/nats-concepts/jetstream/consumers#filtesubjects
 	FilterSubjects []string `json:"filter_subjects" protobuf:"bytes,5,opt,name=filter_subjects"`
 	// TLS configuration for the nats client.
 	// +optional

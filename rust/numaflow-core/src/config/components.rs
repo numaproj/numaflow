@@ -22,7 +22,7 @@ pub(crate) mod source {
     use numaflow_kafka::source::KafkaSourceConfig;
     use numaflow_models::models::{GeneratorSource, PulsarSource, SqsSource};
     use numaflow_nats::NatsAuth;
-    use numaflow_nats::jetstream::JetstreamSourceConfig;
+    use numaflow_nats::jetstream::{JetstreamSourceConfig, ConsumerDeliverPolicy};
     use numaflow_nats::nats::NatsSourceConfig;
     use numaflow_pulsar::{PulsarAuth, source::PulsarSourceConfig};
     use numaflow_sqs::source::SqsSourceConfig;
@@ -232,10 +232,16 @@ pub(crate) mod source {
                 )
             }
 
+            let mut deliver_policy = ConsumerDeliverPolicy::ALL;
+            if let Some(policy) = value.delivery_policy && !policy.is_empty() {
+                deliver_policy = policy.try_into()?;
+            }
+
             let js_config = JetstreamSourceConfig {
                 addr: value.spec.url,
                 consumer,
                 stream: value.spec.stream,
+                deliver_policy,
                 auth,
                 tls,
             };

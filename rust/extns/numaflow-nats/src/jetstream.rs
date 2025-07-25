@@ -18,7 +18,12 @@ use tokio_stream::StreamExt;
 
 use crate::{Error, NatsAuth, Result, TlsConfig, tls};
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct ConsumerDeliverPolicy(DeliverPolicy);
+
+impl ConsumerDeliverPolicy {
+    pub const ALL: ConsumerDeliverPolicy = ConsumerDeliverPolicy(DeliverPolicy::All);
+}
 
 impl TryFrom<&str> for ConsumerDeliverPolicy {
     type Error = Error;
@@ -64,6 +69,7 @@ pub struct JetstreamSourceConfig {
     pub addr: String,
     pub stream: String,
     pub consumer: String,
+    pub deliver_policy: ConsumerDeliverPolicy,
     pub auth: Option<NatsAuth>,
     pub tls: Option<TlsConfig>,
 }
@@ -204,7 +210,7 @@ impl JetstreamActor {
                         consumer::pull::Config {
                             durable_name: Some(config.consumer.clone()),
                             description: Some("Numaflow Jetstream Consumer".into()),
-                            deliver_policy: DeliverPolicy::All,
+                            deliver_policy: config.deliver_policy.0,
                             ack_policy: AckPolicy::Explicit,
                             ..Default::default()
                         },
