@@ -820,6 +820,7 @@ impl PipelineConfig {
 #[cfg(test)]
 mod tests {
     use numaflow_models::models::{Container, Udf};
+    use numaflow_nats::jetstream::ConsumerDeliverPolicy;
     use numaflow_pulsar::source::PulsarSourceConfig;
 
     use super::*;
@@ -1059,6 +1060,8 @@ mod tests {
                         addr: "jetstream-server.internal".to_string(),
                         stream: "testing-numaflow".to_string(),
                         consumer: "numaflow-rust-pipeline-in-testing-numaflow".to_string(),
+                        filter_subjects: vec![],
+                        deliver_policy: ConsumerDeliverPolicy::ALL,
                         auth: None,
                         tls: None,
                     },

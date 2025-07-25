@@ -101,10 +101,13 @@ impl super::LagReader for JetstreamSource {
 #[cfg(test)]
 mod tests {
 
-    use super::*;
-    use bytes::Bytes;
-    use numaflow_nats::jetstream::Message as JetstreamMessage;
     use std::collections::HashMap;
+
+    use bytes::Bytes;
+    use numaflow_nats::jetstream::ConsumerDeliverPolicy;
+    use numaflow_nats::jetstream::Message as JetstreamMessage;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_try_from_jetstream_message_success() {
@@ -181,6 +184,8 @@ mod tests {
             addr: "localhost".to_string(),
             stream: stream_name.to_string(),
             consumer,
+            filter_subjects: vec![],
+            deliver_policy: ConsumerDeliverPolicy::ALL,
             auth: None,
             tls: None,
         };

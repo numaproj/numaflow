@@ -24,6 +24,16 @@ pub struct ConsumerDeliverPolicy(DeliverPolicy);
 impl ConsumerDeliverPolicy {
     // When using, assoicated constant (`ConsumerDeliverPolicy::ALL`) feels better compared to `Default::default()`
     pub const ALL: ConsumerDeliverPolicy = ConsumerDeliverPolicy(DeliverPolicy::All);
+
+    pub fn by_start_sequence(start_sequence: u64) -> Self {
+        Self(DeliverPolicy::ByStartSequence { start_sequence })
+    }
+
+    pub fn by_start_time(timestamp: SystemTime) -> Self {
+        Self(DeliverPolicy::ByStartTime {
+            start_time: timestamp.into(),
+        })
+    }
 }
 
 impl TryFrom<&str> for ConsumerDeliverPolicy {

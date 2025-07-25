@@ -208,6 +208,7 @@ impl MonovertexConfig {
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
+    use std::time::{Duration, SystemTime};
 
     use base64::Engine;
     use base64::prelude::BASE64_STANDARD;
@@ -218,6 +219,8 @@ mod tests {
     use crate::config::components::transformer::TransformerType;
     use crate::config::monovertex::MonovertexConfig;
     use crate::error::Error;
+
+    use numaflow_nats::jetstream::ConsumerDeliverPolicy;
 
     #[test]
     fn test_load_valid_config() {
@@ -501,6 +504,8 @@ mod tests {
                     "url": "jetstream-server.internal",
                     "stream": "mystream",
                     "consumer": "",
+                    "deliver_policy": "by_start_time 1753428483000",
+                    "filter_subjects": [ "abc.A.*", "abc.B.*"],
                     "tls": null
                 }
                 },
@@ -543,6 +548,10 @@ mod tests {
                 addr: "jetstream-server.internal".to_string(),
                 stream: "mystream".to_string(),
                 consumer: "numaflow-simple-mono-vertex-mvtx-mystream".to_string(),
+                deliver_policy: ConsumerDeliverPolicy::by_start_time(
+                    SystemTime::UNIX_EPOCH + Duration::from_millis(1753428483000),
+                ),
+                filter_subjects: vec!["abc.A.*".into(), "abc.B.*".into()],
                 auth: None,
                 tls: None,
             }),
