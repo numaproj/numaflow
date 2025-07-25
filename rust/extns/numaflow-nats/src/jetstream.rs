@@ -755,7 +755,7 @@ mod tests {
 
         let policy: Result<ConsumerDeliverPolicy> = "by_start_sequence 7invalid8".try_into();
         let policy_parse_err = policy.unwrap_err();
-        dbg!(&policy_parse_err);
+
         assert!(
             matches!(policy_parse_err, Error::Other(v) if v == "start_sequence '7invalid8' is not a valid unsigned integer: ParseIntError { kind: InvalidDigit }")
         );
@@ -770,7 +770,7 @@ mod tests {
 
         let policy: Result<ConsumerDeliverPolicy> = "by_start_time 175invalid3428483000".try_into();
         let policy_parse_err = policy.unwrap_err();
-        dbg!(&policy_parse_err);
+
         assert!(
             matches!(policy_parse_err, Error::Other(v) if v == "epoch time should be in milliseconds specified as a valid integer: ParseIntError { kind: InvalidDigit }")
         );
