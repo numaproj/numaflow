@@ -242,6 +242,7 @@ pub(crate) mod source {
                 consumer,
                 stream: value.spec.stream,
                 deliver_policy,
+                filter_subjects: value.filter_subjects.unwrap_or_default(),
                 auth,
                 tls,
             };

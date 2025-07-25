@@ -87,6 +87,7 @@ pub struct JetstreamSourceConfig {
     pub stream: String,
     pub consumer: String,
     pub deliver_policy: ConsumerDeliverPolicy,
+    pub filter_subjects: Vec<String>,
     pub auth: Option<NatsAuth>,
     pub tls: Option<TlsConfig>,
 }
@@ -229,6 +230,7 @@ impl JetstreamActor {
                             description: Some("Numaflow Jetstream Consumer".into()),
                             deliver_policy: config.deliver_policy.0,
                             ack_policy: AckPolicy::Explicit,
+                            filter_subjects: config.filter_subjects,
                             ..Default::default()
                         },
                         &config.stream,
@@ -669,6 +671,8 @@ mod tests {
             addr: "localhost".to_string(),
             stream: stream_name.into(),
             consumer: stream_name.into(),
+            deliver_policy: ConsumerDeliverPolicy::ALL,
+            filter_subjects: vec![],
             auth: None,
             tls: None,
         };
@@ -690,6 +694,8 @@ mod tests {
             addr: "localhost".to_string(),
             stream: stream_name.into(),
             consumer: stream_name.into(),
+            deliver_policy: ConsumerDeliverPolicy::ALL,
+            filter_subjects: vec![],
             auth: None,
             tls: None,
         };
