@@ -67,7 +67,7 @@ func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, p
 	q.Append(tc)
 }
 
-// TODO: what happens if vertex is Reduce, do we just add pending of a partition across all pods?
+// CalculatePending calculates the pending messages for a given partition in the last lookback seconds
 func CalculatePending(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64, partitionName string) int64 {
 	counts := q.Items()
 	if len(counts) <= 1 {
@@ -82,7 +82,27 @@ func CalculatePending(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookback
 	sum := int64(0)
 	num := int64(0)
 	for i := startIndex; i <= endIndex; i++ {
-		// Get the current pod partition map, and sum the pending values for given partition name
+		// We maintain the map only for 0th replica for all the vertices except Reduce.
+		// So currentPodPartitionMap will only have entry for one pod name except in case of Reduce.
+		// Even for Reduce, num would turn out to be 1, as there is 1-1 mapping between partition and pod.
+		/*
+			Eg: For Non-reduce vertices, currentPodPartitionMap:
+				map[
+					simple-pipeline-cat-0:map[ // pod with replica 0, no entry for pod with replica 1
+						default-simple-pipeline-cat-0:331 // first partition
+						default-simple-pipeline-cat-1:364 // second partition
+					]
+				]
+			Eg: For Reduce vertices, currentPodPartitionMap:
+				map[
+					simple-pipeline-reduce-0:map[ // pod with replica 0
+						default-simple-pipeline-reduce-0:331 // first partition
+					]
+					simple-pipeline-reduce-1:map[ // pod with replica 1
+						default-simple-pipeline-reduce-1:364 // second partition
+					]
+				]
+		*/
 		currentPodPartitionMap := counts[i].PodPartitionCountSnapshot()
 		for _, pendingCount := range currentPodPartitionMap {
 			val, ok := pendingCount[partitionName]
@@ -186,6 +206,13 @@ type partitionMaxDuration struct {
 	maxUnchangedDuration map[string]int64
 }
 
+// CalculateLookback computes the maximum duration (in seconds) for which the count of messages processed by any partition
+// remained unchanged within a specified range of indices in a queue of TimestampedCounts. It does this by analyzing each
+// data point between the startIndex and endIndex, checking the count changes for each partition, and noting the durations
+// during which these counts stay consistent. The metric is updated when data is read.
+// This would encapsulate the lookback for two scenarios
+// 1. Slow processing vertex
+// 2. Slow data source - data arrives after long intervals
 func CalculateLookback(counts []*TimestampedCounts, startIndex, endIndex int) int64 {
 	lookBackData := partitionMaxDuration{
 		lastSeen:             make(map[string]partitionLastSeen),
@@ -196,6 +223,7 @@ func CalculateLookback(counts []*TimestampedCounts, startIndex, endIndex int) in
 	return findGlobalMaxDuration(lookBackData.maxUnchangedDuration)
 }
 
+// processTimeline processes the timeline of counts and updates the maxUnchangedDuration for each partition.
 func processTimeline(counts []*TimestampedCounts, startIndex, endIndex int, data *partitionMaxDuration) {
 	for i := startIndex; i <= endIndex; i++ {
 		podPartitionCountMap := counts[i].PodPartitionCountSnapshot()
@@ -215,17 +243,24 @@ func processTimeline(counts []*TimestampedCounts, startIndex, endIndex int, data
 			if found && lastSeenData.count == aggCount {
 				continue
 			}
+			// If the read count data has updated
 			if found && aggCount > lastSeenData.count {
 				duration := curTime - lastSeenData.seenTime
 				if currentMax, ok := data.maxUnchangedDuration[partitionName]; !ok || duration > currentMax {
 					data.maxUnchangedDuration[partitionName] = duration
 				}
 			}
+			// The value is updated in the lastSeen for 3 cases
+			// 1. If this is the first time seeing the partition entry or
+			// 2. in case of a value increase,
+			// 3. In case of a value decrease which is treated as a new entry for partition
 			data.lastSeen[partitionName] = partitionLastSeen{aggCount, curTime}
 		}
 	}
 }
 
+// Check for partitions that did not change at all during the iteration,
+// and update their maxUnchangedDuration to the full period from first seen to lastTime.
 func finalizeDurations(lastCount *TimestampedCounts, data *partitionMaxDuration) {
 	endVals := lastCount.PodPartitionCountSnapshot()
 	lastTime := lastCount.PodTimestamp()

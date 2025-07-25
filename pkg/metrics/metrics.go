@@ -369,11 +369,11 @@ var (
 	}, []string{LabelMonoVertexName, LabelPeriod})
 
 	// Vertex Pending Messages is a gauge used to represent pending messages for a given vertex
-	VertexPendingMssgs = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	VertexPendingMessages = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "vertex",
 		Name:      "pending_messages",
 		Help:      "A Gauge to keep track of the total number of pending messages for the vertex",
-	}, []string{LabelPipeline, LabelVertex, LabelPartitionName, LabelPeriod})
+	}, []string{LabelPipeline, LabelVertex, LabelVertexType, LabelPartitionName, LabelPeriod})
 
 	VertexLookBackSecs = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "vertex",

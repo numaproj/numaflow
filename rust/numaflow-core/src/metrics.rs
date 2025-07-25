@@ -1221,7 +1221,7 @@ pub(crate) struct PendingReader {
     lag_checking_interval: Duration,
 }
 
-pub(crate) struct PendingReaderTasks_ {
+pub(crate) struct PendingReaderTasks {
     expose_handle: JoinHandle<()>,
 }
 
@@ -1256,19 +1256,19 @@ impl PendingReaderBuilder {
 impl PendingReader {
     /// Starts the lag reader by spawning task to expose pending metrics for daemon server.
     /// Dropping the PendingReaderTasks will abort the background tasks.
-    pub async fn start(&self, is_mono_vertex: bool) -> PendingReaderTasks_ {
+    pub async fn start(&self, is_mono_vertex: bool) -> PendingReaderTasks {
         let lag_checking_interval = self.lag_checking_interval;
 
         let lag_reader = self.lag_reader.clone();
         let expose_handle = tokio::spawn(async move {
             expose_pending_metrics(lag_reader, lag_checking_interval, is_mono_vertex).await;
         });
-        PendingReaderTasks_ { expose_handle }
+        PendingReaderTasks { expose_handle }
     }
 }
 
-/// When the PendingReaderTasks_ is dropped, we need to clean up the pending exposer and the pending builder tasks.
-impl Drop for PendingReaderTasks_ {
+/// When the PendingReaderTasks is dropped, we need to clean up the pending exposer and the pending builder tasks.
+impl Drop for PendingReaderTasks {
     fn drop(&mut self) {
         self.expose_handle.abort();
         info!("Stopped the Lag-Reader Expose tasks");

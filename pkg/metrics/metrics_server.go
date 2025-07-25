@@ -39,13 +39,13 @@ import (
 )
 
 const (
-	VertexPendingMessages = "vertex_pending_messages_old"
-	LabelPeriod           = "period"
+	VertexPendingMessagesOld = "vertex_pending_messages_old"
+	LabelPeriod              = "period"
 )
 
 var (
 	pending = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: VertexPendingMessages,
+		Name: VertexPendingMessagesOld,
 		Help: "Average pending messages in the last period of seconds. It is the pending messages of a vertex, not a pod.",
 	}, []string{LabelPipeline, LabelVertex, LabelPeriod, LabelPartitionName})
 

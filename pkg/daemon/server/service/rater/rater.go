@@ -41,7 +41,7 @@ import (
 type Ratable interface {
 	Start(ctx context.Context) error
 	GetRates(vertexName, partitionName string) map[string]*wrapperspb.DoubleValue
-	GetPending(pipelineName, vertexName, partitionName string) map[string]*wrapperspb.Int64Value
+	GetPending(pipelineName, vertexName, vertexType, partitionName string) map[string]*wrapperspb.Int64Value
 }
 
 var _ Ratable = (*Rater)(nil)
@@ -164,13 +164,8 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 	log := logging.FromContext(ctx).With("worker", fmt.Sprint(worker)).With("podKey", key)
 	log.Debugf("Working on key: %s", key)
 	podInfo, err := r.podTracker.GetPodInfo(key)
-	isSource := false
-	for _, v := range r.pipeline.Spec.Vertices {
-		if v.Name == podInfo.vertexName {
-			isSource = v.IsASource()
-			break
-		}
-	}
+	vtx := r.pipeline.GetVertex(podInfo.vertexName)
+	isReduce := vtx.IsReduceUDF()
 	if err != nil {
 		return err
 	}
@@ -183,8 +178,8 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 		if podReadCount == nil {
 			log.Debugf("Failed retrieving total podReadCount for pod %s", podInfo.podName)
 		}
-		// If pod is a source, raw pending metric is calculated only for 0th replica. Only maintain that in the timeline
-		if !(isSource && podInfo.replica != 0) {
+		// Only maintain the timestamped pending counts if pod is a Reduce or if it is the 0th replica of any other vertex type.
+		if isReduce || podInfo.replica == 0 {
 			podPendingCount = r.getPodPendingCounts(podInfo.vertexName, podInfo.podName, podMetrics)
 			if podPendingCount == nil {
 				log.Debugf("Failed retrieving pending counts for pod %s vertex %s", podInfo.podName, podInfo.vertexName)
@@ -365,7 +360,7 @@ func (r *Rater) GetRates(vertexName, partitionName string) map[string]*wrappersp
 }
 
 // GetPending returns the pending count for the vertex partition in the format of lookback second to pending mappings
-func (r *Rater) GetPending(pipelineName, vertexName, partitionName string) map[string]*wrapperspb.Int64Value {
+func (r *Rater) GetPending(pipelineName, vertexName, vertexType, partitionName string) map[string]*wrapperspb.Int64Value {
 	r.log.Debugf("Current timestampedPendingCount for vertex %s is: %v", vertexName, r.timestampedPendingCount[vertexName])
 	var result = make(map[string]*wrapperspb.Int64Value)
 	// calculate pending for each lookback seconds
@@ -374,7 +369,7 @@ func (r *Rater) GetPending(pipelineName, vertexName, partitionName string) map[s
 		result[n] = wrapperspb.Int64(pending)
 		// Expose the metric for pending
 		if pending != isb.PendingNotAvailable {
-			metrics.VertexPendingMssgs.WithLabelValues(pipelineName, vertexName, partitionName, n).Set(float64(pending))
+			metrics.VertexPendingMessages.WithLabelValues(pipelineName, vertexName, vertexType, partitionName, n).Set(float64(pending))
 		}
 	}
 	return result

@@ -22,7 +22,7 @@ use crate::config::pipeline::{
 };
 use crate::config::{get_vertex_replica, is_mono_vertex};
 use crate::metrics::{
-    ComponentHealthChecks, LagReader, MetricsState, PendingReaderTasks_, PipelineComponents,
+    ComponentHealthChecks, LagReader, MetricsState, PendingReaderTasks, PipelineComponents,
     WatermarkFetcherState,
 };
 use crate::pipeline::forwarder::reduce_forwarder::ReduceForwarder;
@@ -160,7 +160,7 @@ async fn start_source_forwarder(
     .await?;
 
     // only check the pending and lag for source for pod_id = 0
-    let _pending_reader_handle: Option<PendingReaderTasks_> = if config.replica == 0 {
+    let _pending_reader_handle: Option<PendingReaderTasks> = if config.replica == 0 {
         let pending_reader = shared::metrics::create_pending_reader(
             &config.metrics_config,
             LagReader::Source(Box::new(source.clone())),

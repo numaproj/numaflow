@@ -91,7 +91,7 @@ func (mr *mockRater_TestGetVertexMetrics) GetRates(vertexName string, partitionN
 	return res
 }
 
-func (mr *mockRater_TestGetVertexMetrics) GetPending(pipelinename string, vertexName string, partitionName string) map[string]*wrapperspb.Int64Value {
+func (mr *mockRater_TestGetVertexMetrics) GetPending(pipelinename, vertexName, vertexType, partitionName string) map[string]*wrapperspb.Int64Value {
 	res := make(map[string]*wrapperspb.Int64Value)
 	res["default"] = wrapperspb.Int64(7)
 	res["1m"] = wrapperspb.Int64(5)

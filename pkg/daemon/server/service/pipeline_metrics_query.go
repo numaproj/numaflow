@@ -141,23 +141,28 @@ func (ps *PipelineMetadataQuery) GetBuffer(ctx context.Context, req *daemon.GetB
 func (ps *PipelineMetadataQuery) GetVertexMetrics(ctx context.Context, req *daemon.GetVertexMetricsRequest) (*daemon.GetVertexMetricsResponse, error) {
 	resp := new(daemon.GetVertexMetricsResponse)
 
-	abstractVertex := ps.pipeline.GetVertex(req.GetVertex())
-	bufferList := abstractVertex.OwnedBufferNames(ps.pipeline.Namespace, ps.pipeline.Name)
+	pipelineName := ps.pipeline.Name
+	namespace := ps.pipeline.Namespace
+	vertexName := req.GetVertex()
+	abstractVertex := ps.pipeline.GetVertex(vertexName)
+	bufferList := abstractVertex.OwnedBufferNames(namespace, pipelineName)
+	vertexType := abstractVertex.GetVertexType()
 
 	// source vertex will have a single partition, which is the vertex name itself
 	if abstractVertex.IsASource() {
-		bufferList = append(bufferList, req.GetVertex())
+		bufferList = append(bufferList, vertexName)
 	}
 	metricsArr := make([]*daemon.VertexMetrics, len(bufferList))
 
 	for idx, partitionName := range bufferList {
 		vm := &daemon.VertexMetrics{
-			Pipeline: ps.pipeline.Name,
-			Vertex:   req.Vertex,
+			Pipeline: pipelineName,
+			Vertex:   vertexName,
 		}
 		// get the processing rate for each partition
 		vm.ProcessingRates = ps.rater.GetRates(req.GetVertex(), partitionName)
-		vm.Pendings = ps.rater.GetPending(ps.pipeline.Name, req.GetVertex(), partitionName)
+		// get the pendings for the partition
+		vm.Pendings = ps.rater.GetPending(pipelineName, vertexName, string(vertexType), partitionName)
 		metricsArr[idx] = vm
 	}
 
