@@ -1,4 +1,6 @@
-use crate::{Error, NatsAuth, Result, TlsConfig, tls};
+use std::collections::HashMap;
+use std::time::{Duration, SystemTime};
+
 use async_nats::jetstream::consumer::{AckPolicy, DeliverPolicy};
 use async_nats::jetstream::{AckKind, Message as JetstreamMessage, consumer};
 use async_nats::{
@@ -9,17 +11,96 @@ use backoff::retry::Retry;
 use backoff::strategy::fixed;
 use bytes::Bytes;
 use chrono::DateTime;
-use std::{collections::HashMap, time::Duration};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::{self, Instant};
 use tokio_stream::StreamExt;
+
+use crate::{Error, NatsAuth, Result, TlsConfig, tls};
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConsumerDeliverPolicy(DeliverPolicy);
+
+impl ConsumerDeliverPolicy {
+    pub const ALL: ConsumerDeliverPolicy = ConsumerDeliverPolicy(DeliverPolicy::All);
+    pub const LAST: ConsumerDeliverPolicy = ConsumerDeliverPolicy(DeliverPolicy::Last);
+    pub const NEW: ConsumerDeliverPolicy = ConsumerDeliverPolicy(DeliverPolicy::New);
+    pub const LAST_PER_SUBJECT: ConsumerDeliverPolicy =
+        ConsumerDeliverPolicy(DeliverPolicy::LastPerSubject);
+
+    pub fn by_start_sequence(start_sequence: u64) -> Self {
+        Self(DeliverPolicy::ByStartSequence { start_sequence })
+    }
+
+    pub fn by_start_time(timestamp: SystemTime) -> Self {
+        Self(DeliverPolicy::ByStartTime {
+            start_time: timestamp.into(),
+        })
+    }
+}
+
+impl TryFrom<&str> for ConsumerDeliverPolicy {
+    type Error = Error;
+
+    fn try_from(value: &str) -> Result<Self> {
+        let fields = value
+            .split_ascii_whitespace()
+            .map(|v| v.trim().to_lowercase())
+            .collect::<Vec<String>>();
+        let fields = fields.iter().map(|s| s.as_ref()).collect::<Vec<&str>>();
+
+        let policy = match fields[..] {
+            ["all"] => Self(DeliverPolicy::All),
+            ["last"] => Self(DeliverPolicy::Last),
+            ["last_per_subject"] => Self(DeliverPolicy::LastPerSubject),
+            ["new"] => Self(DeliverPolicy::New),
+            ["by_start_sequence", sequence] => {
+                let sequence_id = sequence.parse::<u64>().map_err(|err| {
+                    Error::Other(format!(
+                        "start_sequence '{sequence}' is not a valid unsigned integer: {err:?}"
+                    ))
+                })?;
+                Self(DeliverPolicy::ByStartSequence {
+                    start_sequence: sequence_id,
+                })
+            }
+            ["by_start_time", start_time] => {
+                let epoch_ms = start_time.parse::<i64>().map_err(|err| {
+                    Error::Other(format!(
+                        "epoch time should be in milliseconds specified as a valid integer: {err:?}"
+                    ))
+                })?;
+                let duration = Duration::from_millis(epoch_ms.unsigned_abs());
+                let timestamp = match epoch_ms.is_positive() {
+                    true => SystemTime::UNIX_EPOCH.checked_add(duration),
+                    false => SystemTime::UNIX_EPOCH.checked_sub(duration),
+                }.ok_or(
+                    Error::Other(format!(
+                        "Specified epoch_time '{start_time}' is out of bounds to be represented as system time"
+                    ))
+                )?;
+
+                Self(DeliverPolicy::ByStartTime {
+                    start_time: timestamp.into(),
+                })
+            }
+            _ => {
+                return Err(Error::Other(format!(
+                    "Invalid option for DeliverPolicy: {value}"
+                )));
+            }
+        };
+        Ok(policy)
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct JetstreamSourceConfig {
     pub addr: String,
     pub stream: String,
     pub consumer: String,
+    pub deliver_policy: ConsumerDeliverPolicy,
+    pub filter_subjects: Vec<String>,
     pub auth: Option<NatsAuth>,
     pub tls: Option<TlsConfig>,
 }
@@ -41,7 +122,12 @@ impl TryFrom<JetstreamMessage> for Message {
         let headers = match msg.message.headers.as_ref() {
             Some(headers) => headers
                 .iter()
-                .map(|(k, v)| (k.to_string(), v[0].as_str().to_string())) //NOTE: we are only using the first value of the header
+                .map(|(k, v)| {
+                    (
+                        k.to_string(),
+                        v.first().map(|v| v.to_string()).unwrap_or_default(),
+                    )
+                }) // NOTE: we are only using the first value of the header
                 .collect(),
             None => HashMap::new(),
         };
@@ -160,8 +246,9 @@ impl JetstreamActor {
                         consumer::pull::Config {
                             durable_name: Some(config.consumer.clone()),
                             description: Some("Numaflow Jetstream Consumer".into()),
-                            deliver_policy: DeliverPolicy::All,
+                            deliver_policy: config.deliver_policy.0,
                             ack_policy: AckPolicy::Explicit,
+                            filter_subjects: config.filter_subjects,
                             ..Default::default()
                         },
                         &config.stream,
@@ -602,6 +689,8 @@ mod tests {
             addr: "localhost".to_string(),
             stream: stream_name.into(),
             consumer: stream_name.into(),
+            deliver_policy: ConsumerDeliverPolicy::ALL,
+            filter_subjects: vec![],
             auth: None,
             tls: None,
         };
@@ -623,6 +712,8 @@ mod tests {
             addr: "localhost".to_string(),
             stream: stream_name.into(),
             consumer: stream_name.into(),
+            deliver_policy: ConsumerDeliverPolicy::ALL,
+            filter_subjects: vec![],
             auth: None,
             tls: None,
         };
@@ -631,5 +722,57 @@ mod tests {
             .unwrap();
 
         source_functionality_test(source, js, stream_name).await;
+    }
+
+    #[test]
+    fn test_try_from_str_for_consumer_deliver_policy() {
+        let policy: ConsumerDeliverPolicy = "all".try_into().unwrap();
+        assert_eq!(policy, ConsumerDeliverPolicy::ALL);
+
+        let policy: ConsumerDeliverPolicy = "AlL".try_into().unwrap();
+        assert_eq!(policy, ConsumerDeliverPolicy::ALL);
+
+        let policy: ConsumerDeliverPolicy = "last".try_into().unwrap();
+        assert_eq!(policy, ConsumerDeliverPolicy::LAST);
+
+        let policy: ConsumerDeliverPolicy = "lAsT".try_into().unwrap();
+        assert_eq!(policy, ConsumerDeliverPolicy::LAST);
+
+        let policy: ConsumerDeliverPolicy = "new".try_into().unwrap();
+        assert_eq!(policy, ConsumerDeliverPolicy::NEW);
+
+        let policy: ConsumerDeliverPolicy = "NEW".try_into().unwrap();
+        assert_eq!(policy, ConsumerDeliverPolicy::NEW);
+
+        let policy: ConsumerDeliverPolicy = "last_per_subject".try_into().unwrap();
+        assert_eq!(policy, ConsumerDeliverPolicy::LAST_PER_SUBJECT);
+
+        let policy: ConsumerDeliverPolicy = "last_PER_suBJEct".try_into().unwrap();
+        assert_eq!(policy, ConsumerDeliverPolicy::LAST_PER_SUBJECT);
+
+        let policy: ConsumerDeliverPolicy = "by_start_sequence 768".try_into().unwrap();
+        assert_eq!(policy, ConsumerDeliverPolicy::by_start_sequence(768));
+
+        let policy: Result<ConsumerDeliverPolicy> = "by_start_sequence 7invalid8".try_into();
+        let policy_parse_err = policy.unwrap_err();
+
+        assert!(
+            matches!(policy_parse_err, Error::Other(v) if v == "start_sequence '7invalid8' is not a valid unsigned integer: ParseIntError { kind: InvalidDigit }")
+        );
+
+        let policy: ConsumerDeliverPolicy = "by_start_time 1753428483000".try_into().unwrap();
+        assert_eq!(
+            policy,
+            ConsumerDeliverPolicy::by_start_time(
+                SystemTime::UNIX_EPOCH + Duration::from_millis(1753428483000)
+            )
+        );
+
+        let policy: Result<ConsumerDeliverPolicy> = "by_start_time 175invalid3428483000".try_into();
+        let policy_parse_err = policy.unwrap_err();
+
+        assert!(
+            matches!(policy_parse_err, Error::Other(v) if v == "epoch time should be in milliseconds specified as a valid integer: ParseIntError { kind: InvalidDigit }")
+        );
     }
 }

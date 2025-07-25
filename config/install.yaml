@@ -8008,6 +8008,12 @@ spec:
                         type: object
                       consumer:
                         type: string
+                      deliver_policy:
+                        type: string
+                      filter_subjects:
+                        items:
+                          type: string
+                        type: array
                       stream:
                         type: string
                       tls:
@@ -19565,6 +19571,12 @@ spec:
                               type: object
                             consumer:
                               type: string
+                            deliver_policy:
+                              type: string
+                            filter_subjects:
+                              items:
+                                type: string
+                              type: array
                             stream:
                               type: string
                             tls:
@@ -31479,6 +31491,12 @@ spec:
                                   type: object
                                 consumer:
                                   type: string
+                                deliver_policy:
+                                  type: string
+                                filter_subjects:
+                                  items:
+                                    type: string
+                                  type: array
                                 stream:
                                   type: string
                                 tls:
@@ -39364,6 +39382,12 @@ spec:
                         type: object
                       consumer:
                         type: string
+                      deliver_policy:
+                        type: string
+                      filter_subjects:
+                        items:
+                          type: string
+                        type: array
                       stream:
                         type: string
                       tls:
