@@ -5,32 +5,20 @@ metadata:
 spec:
   vertices:
     - name: in
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       source:
         http: {}
     - name: p1
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       udf:
         container:
           image: quay.io/numaio/numaflow-go/map-filter:stable # A UDF which filters payloads with `id` < 100, `msg` is "hello", and `desc` contains "good"
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
     - name: out
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       sink:
         udsink:
           container:
             # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis_sink
             image: quay.io/numaio/numaflow-go/redis-sink:stable
-            imagePullPolicy: Always
+            imagePullPolicy: IfNotPresent
             env:
               - name: SINK_HASH_KEY
                 # The key is set in the format of "pipeline_name-vertex_name"

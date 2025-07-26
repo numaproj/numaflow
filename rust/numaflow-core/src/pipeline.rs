@@ -127,7 +127,12 @@ async fn start_source_forwarder(
     } else {
         None
     };
-    let tracker_handle = TrackerHandle::new(None, serving_callback_handler);
+
+    let tracker_handle = TrackerHandle::new(
+        source_watermark_handle.clone().map(WatermarkHandle::Source),
+        serving_callback_handler,
+    );
+
     let buffer_writer = JetstreamWriter::new(ISBWriterConfig {
         config: config.to_vertex_config.clone(),
         js_ctx: js_context,
@@ -230,8 +235,10 @@ async fn start_map_forwarder(
     };
 
     // create tracker and buffer writer, they can be shared across all forwarders
-    let tracker_handle =
-        TrackerHandle::new(watermark_handle.clone(), serving_callback_handler.clone());
+    let tracker_handle = TrackerHandle::new(
+        watermark_handle.clone().map(WatermarkHandle::ISB),
+        serving_callback_handler.clone(),
+    );
     let buffer_writer = JetstreamWriter::new(ISBWriterConfig {
         config: config.to_vertex_config.clone(),
         js_ctx: js_context.clone(),
@@ -850,8 +857,10 @@ async fn start_sink_forwarder(
     let mut sink_writers = vec![];
     let mut buffer_readers = vec![];
     for stream in reader_config.streams.clone() {
-        let tracker_handle =
-            TrackerHandle::new(watermark_handle.clone(), serving_callback_handler.clone());
+        let tracker_handle = TrackerHandle::new(
+            watermark_handle.clone().map(WatermarkHandle::ISB),
+            serving_callback_handler.clone(),
+        );
 
         let buffer_reader = JetStreamReader::new(ISBReaderConfig {
             vertex_type: config.vertex_type.to_string(),

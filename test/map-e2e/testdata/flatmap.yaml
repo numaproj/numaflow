@@ -5,29 +5,17 @@ metadata:
 spec:
   vertices:
     - name: in
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       source:
         http: {}
     - name: go-split
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       scale:
         min: 1
       udf:
         container:
           # Split input message into an array with comma, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/flatmap
           image: quay.io/numaio/numaflow-go/map-flatmap:stable
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
     - name: go-udsink
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       scale:
         min: 1
       sink:
@@ -35,12 +23,8 @@ spec:
           container:
             # https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/log
             image: quay.io/numaio/numaflow-go/sink-log:stable
-            imagePullPolicy: Always
+            imagePullPolicy: IfNotPresent
     - name: python-split
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       scale:
         min: 1
       udf:
@@ -50,12 +34,8 @@ spec:
             - example.py
           # Split input message into an array with comma, https://github.com/numaproj/numaflow-python/tree/main/examples/map/flatmap
           image: quay.io/numaio/numaflow-python/map-flatmap:stable
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
     - name: python-udsink
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       scale:
         min: 1
       sink:
@@ -66,24 +46,16 @@ spec:
             - example.py
             # https://github.com/numaproj/numaflow-python/tree/main/examples/sink/log
             image: quay.io/numaio/numaflow-python/sink-log:stable
-            imagePullPolicy: Always
+            imagePullPolicy: IfNotPresent
     - name: java-split
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       scale:
         min: 1
       udf:
         container:
           # Split input message into an array with comma, see https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/map/flatmap
           image: quay.io/numaio/numaflow-java/map-flatmap:stable
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
     - name: java-udsink
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       scale:
         min: 1
       sink:
@@ -91,7 +63,7 @@ spec:
           container:
             # https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/sink/simple
             image: quay.io/numaio/numaflow-java/simple-sink:stable
-            imagePullPolicy: Always
+            imagePullPolicy: IfNotPresent
   edges:
     - from: in
       to: go-split

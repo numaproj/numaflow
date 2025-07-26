@@ -494,7 +494,7 @@ impl SinkWriter {
                             for offset in offsets {
                                 // Delete the message from the tracker
                                 self.tracker_handle
-                                    .delete(offset)
+                                    .delete(offset, None)
                                     .await
                                     .expect("tracker delete should never fail");
                             }

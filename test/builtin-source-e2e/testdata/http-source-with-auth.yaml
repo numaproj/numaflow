@@ -5,10 +5,6 @@ metadata:
 spec:
   vertices:
     - name: in
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       source:
         http:
           auth:
@@ -16,10 +12,6 @@ spec:
               name: http-source-fake-token
               key: fake-token
     - name: out
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       sink:
         udsink:
           container:
