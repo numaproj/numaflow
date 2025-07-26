@@ -275,7 +275,6 @@ impl Tracker {
         write_offsets: Option<Vec<(Stream, Offset)>>,
     ) {
         let Some(mut entry) = self.entries.remove(&offset) else {
-            info!(?offset, "Offset not found in tracker");
             if let Some(write_offsets) = write_offsets {
                 self.publish_watermarks(write_offsets, &offset).await;
             }

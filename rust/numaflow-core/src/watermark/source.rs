@@ -16,10 +16,7 @@
 //! [ISB]: https://numaflow.numaproj.io/core-concepts/inter-step-buffer/
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::Duration;
-
-use std::sync::Mutex;
 use tokio::sync::mpsc::Receiver;
 use tokio_util::sync::CancellationToken;
 use tracing::error;
@@ -28,7 +25,7 @@ use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::SourceWatermarkConfig;
 use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::{Error, Result};
-use crate::message::{Message, Offset};
+use crate::message::{IntOffset, Message, Offset};
 use crate::watermark::idle::isb::ISBIdleDetector;
 use crate::watermark::idle::source::SourceIdleDetector;
 use crate::watermark::processor::manager::ProcessorManager;
@@ -45,18 +42,6 @@ pub(crate) mod source_wm_publisher;
 /// Messages that can be sent to the SourceWatermarkActor
 #[allow(clippy::enum_variant_names)]
 enum SourceActorMessage {
-    PublishSourceWatermark {
-        partition: u16,
-        event_time: i64,
-        is_idle: bool,
-    },
-    PublishISBWatermark {
-        input_partition: u16,
-        stream: Stream,
-        offset: i64,
-        watermark: i64,
-        is_idle: bool,
-    },
     FetchSourceWatermark {
         oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
     },
@@ -64,19 +49,45 @@ enum SourceActorMessage {
         partition_idx: u16,
         oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
     },
+    GenerateAndPublishSourceWatermark {
+        messages: Vec<Message>,
+    },
+    PublishSourceISBWatermark {
+        stream: Stream,
+        offset: IntOffset,
+        input_partition: u16,
+    },
+    PublishSourceIdleWatermark {
+        partitions: Vec<u16>,
+    },
+    PublishISBIdleWatermark,
 }
 
 /// SourceWatermarkActor comprises SourcePublisher and SourceFetcher.
-/// Only responsible for the actual fetch and publish operations.
+/// Contains all computation logic and data structures.
 struct SourceWatermarkActor {
     publisher: SourceWatermarkPublisher,
     fetcher: SourceWatermarkFetcher,
+    isb_idle_manager: ISBIdleDetector,
+    source_idle_manager: Option<SourceIdleDetector>,
+    active_input_partitions: HashMap<u16, bool>,
 }
 
 impl SourceWatermarkActor {
     /// Creates a new SourceWatermarkActor.
-    fn new(publisher: SourceWatermarkPublisher, fetcher: SourceWatermarkFetcher) -> Self {
-        Self { publisher, fetcher }
+    fn new(
+        publisher: SourceWatermarkPublisher,
+        fetcher: SourceWatermarkFetcher,
+        isb_idle_manager: ISBIdleDetector,
+        source_idle_manager: Option<SourceIdleDetector>,
+    ) -> Self {
+        Self {
+            publisher,
+            fetcher,
+            isb_idle_manager,
+            source_idle_manager,
+            active_input_partitions: HashMap::new(),
+        }
     }
 
     /// Runs the SourceWatermarkActor
@@ -91,29 +102,7 @@ impl SourceWatermarkActor {
     /// Handles the SourceActorMessage.
     async fn handle_message(&mut self, message: SourceActorMessage) -> Result<()> {
         match message {
-            // publish the watermark for the messages read from the source to the source bucket
-            SourceActorMessage::PublishSourceWatermark {
-                partition,
-                event_time,
-                is_idle,
-            } => {
-                self.publisher
-                    .publish_source_watermark(partition, event_time, is_idle)
-                    .await;
-            }
 
-            // publish the watermark for the messages written to ISB
-            SourceActorMessage::PublishISBWatermark {
-                input_partition,
-                stream,
-                offset,
-                watermark,
-                is_idle,
-            } => {
-                self.publisher
-                    .publish_isb_watermark(input_partition, &stream, offset, watermark, is_idle)
-                    .await;
-            }
 
             // fetch the source watermark
             SourceActorMessage::FetchSourceWatermark { oneshot_tx } => {
@@ -133,7 +122,190 @@ impl SourceWatermarkActor {
                     .send(Ok(watermark))
                     .map_err(|_| Error::Watermark("failed to send response".to_string()))?;
             }
+
+            // generate and publish source watermark with computation
+            SourceActorMessage::GenerateAndPublishSourceWatermark { messages } => {
+                self.handle_generate_and_publish_source_watermark(messages).await?;
+            }
+
+            // publish source ISB watermark with computation
+            SourceActorMessage::PublishSourceISBWatermark {
+                stream,
+                offset,
+                input_partition,
+            } => {
+                self.handle_publish_source_isb_watermark(stream, offset, input_partition).await?;
+            }
+
+            // publish source idle watermark with computation
+            SourceActorMessage::PublishSourceIdleWatermark { partitions } => {
+                self.handle_publish_source_idle_watermark(partitions).await?;
+            }
+
+            // publish ISB idle watermark with computation
+            SourceActorMessage::PublishISBIdleWatermark => {
+                self.handle_publish_isb_idle_watermark().await?;
+            }
         }
+
+        Ok(())
+    }
+
+    /// Handles generating and publishing source watermark with computation
+    async fn handle_generate_and_publish_source_watermark(&mut self, messages: Vec<Message>) -> Result<()> {
+        // we need to build a hash-map of the lowest event time for each partition
+        let partition_to_lowest_event_time =
+            messages.iter().fold(HashMap::new(), |mut acc, message| {
+                let partition_id = match &message.offset {
+                    Offset::Int(offset) => offset.partition_idx,
+                    Offset::String(offset) => offset.partition_idx,
+                };
+
+                let event_time = message.event_time.timestamp_millis();
+
+                let lowest_event_time = acc.entry(partition_id).or_insert(event_time);
+                if event_time < *lowest_event_time {
+                    *lowest_event_time = event_time;
+                }
+                acc
+            });
+
+        if partition_to_lowest_event_time.is_empty() {
+            return Ok(());
+        }
+
+        // Publish the watermark for each partition
+        for (partition, event_time) in partition_to_lowest_event_time {
+            self.publisher
+                .publish_source_watermark(partition, event_time, false)
+                .await;
+
+            // cache the active input partitions, we need it for publishing isb idle watermark
+            self.active_input_partitions.insert(partition, true);
+        }
+
+        // Reset the source idle manager
+        if let Some(source_idle_manager) = &mut self.source_idle_manager {
+            source_idle_manager.reset();
+        }
+
+        Ok(())
+    }
+
+    /// Handles publishing source ISB watermark with computation
+    async fn handle_publish_source_isb_watermark(&mut self, stream: Stream, offset: IntOffset, input_partition: u16) -> Result<()> {
+        // Fetch the source watermark
+        let watermark = self.fetcher.fetch_source_watermark();
+
+        // Publish the watermark
+        self.publisher
+            .publish_isb_watermark(input_partition, &stream, offset.offset, watermark.timestamp_millis(), false)
+            .await;
+
+        // Mark the vertex and partition as active since we published the watermark
+        self.isb_idle_manager.reset_idle(&stream).await;
+
+        Ok(())
+    }
+
+    /// Handles publishing source idle watermark with computation
+    async fn handle_publish_source_idle_watermark(&mut self, partitions: Vec<u16>) -> Result<()> {
+        // First check if source idle manager exists and if source is idling
+        let is_source_idling = if let Some(source_idle_manager) = &self.source_idle_manager {
+            source_idle_manager.is_source_idling()
+        } else {
+            return Ok(());
+        };
+
+        if !is_source_idling {
+            return Ok(());
+        }
+
+        // Fetch the source watermark first
+        let compute_wm = self.fetcher.fetch_source_watermark();
+
+        // Now get the idle watermark
+        let idle_wm = if let Some(source_idle_manager) = &mut self.source_idle_manager {
+            source_idle_manager.update_and_fetch_idle_wm(compute_wm.timestamp_millis())
+        } else {
+            return Ok(());
+        };
+
+        // publish the idle watermark for the given partitions
+        for partition in partitions.iter() {
+            self.publisher
+                .publish_source_watermark(*partition, idle_wm, true)
+                .await;
+        }
+
+        // since isb will also be idling since we are not reading any data
+        // we need to propagate idle watermarks to ISB
+        let compute_wm = self.fetcher.fetch_source_watermark();
+        if compute_wm.timestamp_millis() == -1 {
+            return Ok(());
+        }
+
+        // all the isb partitions will be idling because the source is idling, fetch the idle offset
+        // for each vertex and partition and publish the idle watermark
+        let vertex_streams = self.isb_idle_manager.fetch_all_streams().await;
+        for stream in vertex_streams.iter() {
+            let offset = self
+                .isb_idle_manager
+                .fetch_idle_offset(stream)
+                .await
+                .unwrap_or(-1);
+            for idle_partition in partitions.iter() {
+                self.publisher
+                    .publish_isb_watermark(*idle_partition, stream, offset, compute_wm.timestamp_millis(), true)
+                    .await;
+            }
+
+            // mark the vertex and partition as idle, since we published the idle watermark
+            self.isb_idle_manager
+                .update_idle_metadata(stream, offset)
+                .await;
+        }
+
+        Ok(())
+    }
+
+    /// Handles publishing ISB idle watermark with computation
+    async fn handle_publish_isb_idle_watermark(&mut self) -> Result<()> {
+        // if source is idling, we can avoid publishing the idle watermark since we publish
+        // the idle watermark for all the downstream partitions in the source idling control flow
+        if let Some(source_idle_manager) = &self.source_idle_manager
+            && source_idle_manager.is_source_idling()
+        {
+            return Ok(());
+        }
+
+        // fetch the source watermark, identify the idle partitions and publish the idle watermark
+        let compute_wm = self.fetcher.fetch_source_watermark();
+        if compute_wm.timestamp_millis() == -1 {
+            return Ok(());
+        }
+
+        // we should only publish to active input partitions, because we consider input-partitions as
+        // the processing entity while publishing watermark inside source
+        let idle_streams = self.isb_idle_manager.fetch_idle_streams().await;
+        for stream in idle_streams.iter() {
+            let offset = self
+                .isb_idle_manager
+                .fetch_idle_offset(stream)
+                .await
+                .unwrap_or(-1);
+            let active_input_partitions: Vec<u16> = self.active_input_partitions.keys().cloned().collect();
+            for partition in active_input_partitions {
+                self.publisher
+                    .publish_isb_watermark(partition, stream, offset, compute_wm.timestamp_millis(), true)
+                    .await;
+            }
+            self.isb_idle_manager
+                .update_idle_metadata(stream, offset)
+                .await;
+        }
+        // clear the cache since we published the idle watermarks
+        self.active_input_partitions.clear();
 
         Ok(())
     }
@@ -141,13 +313,10 @@ impl SourceWatermarkActor {
 
 /// SourceWatermarkHandle is the handle for the SourceWatermarkActor.
 /// Exposes methods to publish the source watermark and edge watermark.
-/// Contains all the computation logic.
+/// Lightweight handle that only sends messages to the actor.
 #[derive(Clone)]
 pub(crate) struct SourceWatermarkHandle {
     sender: tokio::sync::mpsc::Sender<SourceActorMessage>,
-    isb_idle_manager: ISBIdleDetector,
-    source_idle_manager: Option<SourceIdleDetector>,
-    active_input_partitions: Arc<Mutex<HashMap<u16, bool>>>,
 }
 
 impl SourceWatermarkHandle {
@@ -186,15 +355,10 @@ impl SourceWatermarkHandle {
         let isb_idle_manager =
             ISBIdleDetector::new(idle_timeout, to_vertex_configs, js_context.clone()).await;
 
-        let actor = SourceWatermarkActor::new(publisher, fetcher);
+        let actor = SourceWatermarkActor::new(publisher, fetcher, isb_idle_manager.clone(), source_idle_manager.clone());
         tokio::spawn(async move { actor.run(receiver).await });
 
-        let source_watermark_handle = Self {
-            sender,
-            isb_idle_manager,
-            source_idle_manager,
-            active_input_partitions: Arc::new(Mutex::new(HashMap::new())),
-        };
+        let source_watermark_handle = Self { sender };
 
         // start a task to keep publishing idle watermarks every 100ms
         tokio::spawn({
@@ -219,50 +383,15 @@ impl SourceWatermarkHandle {
 
     /// Generates and Publishes the source watermark for the given messages.
     pub(crate) async fn generate_and_publish_source_watermark(&mut self, messages: &[Message]) {
-        // we need to build a hash-map of the lowest event time for each partition
-        let partition_to_lowest_event_time =
-            messages.iter().fold(HashMap::new(), |mut acc, message| {
-                let partition_id = match &message.offset {
-                    Offset::Int(offset) => offset.partition_idx,
-                    Offset::String(offset) => offset.partition_idx,
-                };
-
-                let event_time = message.event_time.timestamp_millis();
-
-                let lowest_event_time = acc.entry(partition_id).or_insert(event_time);
-                if event_time < *lowest_event_time {
-                    *lowest_event_time = event_time;
-                }
-                acc
+        // Send the generate and publish source watermark message to the actor (fire-and-forget)
+        self.sender
+            .send(SourceActorMessage::GenerateAndPublishSourceWatermark {
+                messages: messages.to_vec(),
+            })
+            .await
+            .unwrap_or_else(|e| {
+                error!("Failed to send message: {:?}", e);
             });
-
-        if partition_to_lowest_event_time.is_empty() {
-            return;
-        }
-
-        // Publish the watermark for each partition
-        for (partition, event_time) in partition_to_lowest_event_time {
-            self.sender
-                .send(SourceActorMessage::PublishSourceWatermark {
-                    partition,
-                    event_time,
-                    is_idle: false,
-                })
-                .await
-                .unwrap_or_else(|e| error!("failed to send message: {:?}", e));
-
-            // cache the active input partitions, we need it for publishing isb idle watermark
-            let mut active_input_partitions = self
-                .active_input_partitions
-                .lock()
-                .expect("failed to acquire lock");
-            active_input_partitions.insert(partition, true);
-        }
-
-        // Reset the source idle manager
-        if let Some(source_idle_manager) = &mut self.source_idle_manager {
-            source_idle_manager.reset();
-        }
     }
 
     /// Publishes the watermark for the given input partition on to the ISB of the next vertex.
@@ -277,23 +406,17 @@ impl SourceWatermarkHandle {
             return;
         };
 
-        // Fetch the source watermark
-        let watermark = self.fetch_source_watermark().await;
-
-        // Send the publish watermark message to the actor
+        // Send the publish source ISB watermark message to the actor (fire-and-forget)
         self.sender
-            .send(SourceActorMessage::PublishISBWatermark {
+            .send(SourceActorMessage::PublishSourceISBWatermark {
+                stream,
+                offset,
                 input_partition,
-                stream: stream.clone(),
-                offset: offset.offset,
-                watermark: watermark.timestamp_millis(),
-                is_idle: false,
             })
             .await
-            .expect("failed to send message");
-
-        // Mark the vertex and partition as active since we published the watermark
-        self.isb_idle_manager.reset_idle(&stream).await;
+            .unwrap_or_else(|e| {
+                error!("Failed to send message: {:?}", e);
+            });
     }
 
     /// Fetches the source watermark.
@@ -349,128 +472,23 @@ impl SourceWatermarkHandle {
     }
 
     pub(crate) async fn publish_source_idle_watermark(&mut self, partitions: Vec<u16>) {
-        // First check if source idle manager exists and if source is idling
-        let is_source_idling = if let Some(source_idle_manager) = &self.source_idle_manager {
-            source_idle_manager.is_source_idling()
-        } else {
-            return;
-        };
-
-        if !is_source_idling {
-            return;
-        }
-
-        // Fetch the source watermark first
-        let compute_wm = self.fetch_source_watermark().await;
-
-        // Now get the idle watermark
-        let idle_wm = if let Some(source_idle_manager) = &mut self.source_idle_manager {
-            source_idle_manager.update_and_fetch_idle_wm(compute_wm.timestamp_millis())
-        } else {
-            return;
-        };
-
-        // publish the idle watermark for the given partitions
-        for partition in partitions.iter() {
-            self.sender
-                .send(SourceActorMessage::PublishSourceWatermark {
-                    partition: *partition,
-                    event_time: idle_wm,
-                    is_idle: true,
-                })
-                .await
-                .unwrap_or_else(|e| error!("failed to send message: {:?}", e));
-        }
-
-        // since isb will also be idling since we are not reading any data
-        // we need to propagate idle watermarks to ISB
-        let compute_wm = self.fetch_source_watermark().await;
-        if compute_wm.timestamp_millis() == -1 {
-            return;
-        }
-
-        // all the isb partitions will be idling because the source is idling, fetch the idle offset
-        // for each vertex and partition and publish the idle watermark
-        let vertex_streams = self.isb_idle_manager.fetch_all_streams().await;
-        for stream in vertex_streams.iter() {
-            let offset = self
-                .isb_idle_manager
-                .fetch_idle_offset(stream)
-                .await
-                .unwrap_or(-1);
-            for idle_partition in partitions.iter() {
-                self.sender
-                    .send(SourceActorMessage::PublishISBWatermark {
-                        input_partition: *idle_partition,
-                        stream: stream.clone(),
-                        offset,
-                        watermark: compute_wm.timestamp_millis(),
-                        is_idle: true,
-                    })
-                    .await
-                    .unwrap_or_else(|e| error!("failed to send message: {:?}", e));
-            }
-
-            // mark the vertex and partition as idle, since we published the idle watermark
-            self.isb_idle_manager
-                .update_idle_metadata(stream, offset)
-                .await;
-        }
+        // Send the publish source idle watermark message to the actor (fire-and-forget)
+        self.sender
+            .send(SourceActorMessage::PublishSourceIdleWatermark { partitions })
+            .await
+            .unwrap_or_else(|e| {
+                error!("Failed to send message: {:?}", e);
+            });
     }
 
     pub(crate) async fn publish_isb_idle_watermark(&mut self) {
-        // if source is idling, we can avoid publishing the idle watermark since we publish
-        // the idle watermark for all the downstream partitions in the source idling control flow
-        if let Some(source_idle_manager) = &self.source_idle_manager
-            && source_idle_manager.is_source_idling()
-        {
-            return;
-        }
-
-        // fetch the source watermark, identify the idle partitions and publish the idle watermark
-        let compute_wm = self.fetch_source_watermark().await;
-        if compute_wm.timestamp_millis() == -1 {
-            return;
-        }
-
-        // we should only publish to active input partitions, because we consider input-partitions as
-        // the processing entity while publishing watermark inside source
-        let idle_streams = self.isb_idle_manager.fetch_idle_streams().await;
-        for stream in idle_streams.iter() {
-            let offset = self
-                .isb_idle_manager
-                .fetch_idle_offset(stream)
-                .await
-                .unwrap_or(-1);
-            let active_input_partitions = {
-                let active_input_partitions = self
-                    .active_input_partitions
-                    .lock()
-                    .expect("failed to acquire lock");
-                active_input_partitions.keys().cloned().collect::<Vec<_>>()
-            };
-            for partition in active_input_partitions {
-                self.sender
-                    .send(SourceActorMessage::PublishISBWatermark {
-                        input_partition: partition,
-                        stream: stream.clone(),
-                        offset,
-                        watermark: compute_wm.timestamp_millis(),
-                        is_idle: true,
-                    })
-                    .await
-                    .unwrap_or_else(|e| error!("failed to send message: {:?}", e));
-            }
-            self.isb_idle_manager
-                .update_idle_metadata(stream, offset)
-                .await;
-        }
-        // clear the cache since we published the idle watermarks
-        let mut active_input_partitions = self
-            .active_input_partitions
-            .lock()
-            .expect("failed to acquire lock");
-        active_input_partitions.clear();
+        // Send the publish ISB idle watermark message to the actor (fire-and-forget)
+        self.sender
+            .send(SourceActorMessage::PublishISBIdleWatermark)
+            .await
+            .unwrap_or_else(|e| {
+                error!("Failed to send message: {:?}", e);
+            });
     }
 }
 
