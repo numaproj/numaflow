@@ -902,18 +902,34 @@ mod tests {
             request_handles.push(handle);
         }
 
-        // Use the actor to read messages from HttpSource
-        let (read_tx, read_rx) = oneshot::channel();
-        actor_tx
-            .send(HttpActorMessage::Read {
-                size: test_data.len(),
-                response_tx: read_tx,
-            })
-            .await
-            .unwrap();
+        // Use the actor to read messages from HttpSource with timeout
+        let mut all_messages = Vec::new();
+        let expected_count = test_data.len();
 
-        // Wait for the read response
-        let messages = read_rx.await.unwrap().unwrap();
+        let result = tokio::time::timeout(Duration::from_secs(1), async {
+            while all_messages.len() < expected_count {
+                let (read_tx, read_rx) = oneshot::channel();
+                actor_tx
+                    .send(HttpActorMessage::Read {
+                        size: expected_count - all_messages.len(),
+                        response_tx: read_tx,
+                    })
+                    .await
+                    .unwrap();
+
+                // Wait for the read response
+                let messages = read_rx.await.unwrap().unwrap();
+                all_messages.extend(messages);
+
+                if all_messages.len() >= expected_count {
+                    break;
+                }
+            }
+            all_messages
+        })
+        .await;
+
+        let messages = result.unwrap();
 
         // Verify we got the expected number of messages
         assert_eq!(messages.len(), test_data.len());
