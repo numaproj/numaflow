@@ -25,7 +25,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Receiver;
 use tokio_util::sync::CancellationToken;
-use tracing::error;
+use tracing::warn;
 
 use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::watermark::EdgeWatermarkConfig;
@@ -130,7 +130,7 @@ impl ISBWatermarkActor {
     async fn run(mut self, mut receiver: Receiver<ISBWaterMarkActorMessage>) {
         while let Some(message) = receiver.recv().await {
             if let Err(e) = self.handle_message(message).await {
-                error!("error handling watermark actor message: {:?}", e);
+                warn!("error handling watermark actor message: {:?}", e);
             }
         }
     }
@@ -178,7 +178,7 @@ impl ISBWatermarkActor {
         }
     }
 
-    // fetches the watermark for the given offset and sends the response back via oneshot channel
+    /// fetches the watermark for the given offset and sends the response back via oneshot channel
     async fn handle_fetch_watermark(
         &mut self,
         offset: IntOffset,
@@ -196,7 +196,7 @@ impl ISBWatermarkActor {
             .map_err(|_| Error::Watermark("failed to send response".to_string()))
     }
 
-    // publishes the watermark for the given stream and offset
+    /// publishes the watermark for the given stream and offset
     async fn handle_publish_watermark(&mut self, stream: Stream, offset: IntOffset) -> Result<()> {
         // Compute the minimum watermark
         let min_wm = self.compute_min_watermark();
@@ -211,7 +211,7 @@ impl ISBWatermarkActor {
         Ok(())
     }
 
-    // fetches the head idle watermark and sends the response back via oneshot channel
+    /// fetches the head idle watermark and sends the response back via oneshot channel
     async fn handle_fetch_head_idle_watermark(
         &mut self,
         oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
@@ -222,7 +222,7 @@ impl ISBWatermarkActor {
             .map_err(|_| Error::Watermark("failed to send response".to_string()))
     }
 
-    // fetches the head watermark and sends the response back via oneshot channel
+    /// fetches the head watermark and sends the response back via oneshot channel
     async fn handle_fetch_head_watermark(
         &mut self,
         partition_idx: u16,
@@ -234,7 +234,7 @@ impl ISBWatermarkActor {
             .map_err(|_| Error::Watermark("failed to send response".to_string()))
     }
 
-    // inserts offset to tracked offsets
+    /// inserts offset to tracked offsets so we can figure out the lowest unprocessed watermark
     async fn handle_insert_offset(
         &mut self,
         offset: IntOffset,
@@ -252,7 +252,7 @@ impl ISBWatermarkActor {
         Ok(())
     }
 
-    // removes offset from tracked offsets
+    /// removes offset from tracked offsets
     async fn handle_remove_offset(&mut self, offset: IntOffset) -> Result<()> {
         // Remove the offset from the tracked offsets
         if let Some(set) = self.offset_set.get_mut(&offset.partition_idx)
@@ -267,7 +267,7 @@ impl ISBWatermarkActor {
         Ok(())
     }
 
-    // publishes idle watermark
+    /// publishes idle watermark
     async fn handle_publish_idle_watermark(&mut self) -> Result<()> {
         // Compute the minimum watermark
         let mut min_wm = self.compute_min_watermark();
@@ -416,7 +416,7 @@ impl ISBWatermarkHandle {
     /// return -1.
     pub(crate) async fn fetch_watermark(&mut self, offset: Offset) -> Watermark {
         let Offset::Int(offset) = offset else {
-            error!(?offset, "Invalid offset type, cannot compute watermark");
+            warn!(?offset, "Invalid offset type, cannot compute watermark");
             return Watermark::from_timestamp_millis(-1).expect("failed to parse time");
         };
 
@@ -426,17 +426,17 @@ impl ISBWatermarkHandle {
             .send(ISBWaterMarkActorMessage::Fetch { offset, oneshot_tx })
             .await
         {
-            error!(?e, "Failed to send message");
+            warn!(?e, "Failed to send message");
             return Watermark::from_timestamp_millis(-1).expect("failed to parse time");
         }
 
         match oneshot_rx.await {
             Ok(watermark) => watermark.unwrap_or_else(|e| {
-                error!(?e, "Failed to fetch watermark");
+                warn!(?e, "Failed to fetch watermark");
                 Watermark::from_timestamp_millis(-1).expect("failed to parse time")
             }),
             Err(e) => {
-                error!(?e, "Failed to receive response");
+                warn!(?e, "Failed to receive response");
                 Watermark::from_timestamp_millis(-1).expect("failed to parse time")
             }
         }
@@ -454,17 +454,17 @@ impl ISBWatermarkHandle {
             })
             .await
         {
-            error!(?e, "Failed to send message");
+            warn!(?e, "Failed to send message");
             return Watermark::from_timestamp_millis(-1).expect("failed to parse time");
         }
 
         match oneshot_rx.await {
             Ok(watermark) => watermark.unwrap_or_else(|e| {
-                error!(?e, "Failed to fetch head watermark");
+                warn!(?e, "Failed to fetch head watermark");
                 Watermark::from_timestamp_millis(-1).expect("failed to parse time")
             }),
             Err(e) => {
-                error!(?e, "Failed to receive response");
+                warn!(?e, "Failed to receive response");
                 Watermark::from_timestamp_millis(-1).expect("failed to parse time")
             }
         }
@@ -479,17 +479,17 @@ impl ISBWatermarkHandle {
             .send(ISBWaterMarkActorMessage::FetchHeadIdle { oneshot_tx })
             .await
         {
-            error!(?e, "Failed to send message");
+            warn!(?e, "Failed to send message");
             return Watermark::from_timestamp_millis(-1).expect("failed to parse time");
         }
 
         match oneshot_rx.await {
             Ok(watermark) => watermark.unwrap_or_else(|e| {
-                error!(?e, "Failed to fetch head idle watermark");
+                warn!(?e, "Failed to fetch head idle watermark");
                 Watermark::from_timestamp_millis(-1).expect("failed to parse time")
             }),
             Err(e) => {
-                error!(?e, "Failed to receive response");
+                warn!(?e, "Failed to receive response");
                 Watermark::from_timestamp_millis(-1).expect("failed to parse time")
             }
         }
@@ -498,7 +498,7 @@ impl ISBWatermarkHandle {
     /// publish_watermark publishes the watermark for the given stream and offset.
     pub(crate) async fn publish_watermark(&mut self, stream: Stream, offset: Offset) {
         let Offset::Int(offset) = offset else {
-            error!(?offset, "Invalid offset type, cannot publish watermark");
+            warn!(?offset, "Invalid offset type, cannot publish watermark");
             return;
         };
 
@@ -507,14 +507,14 @@ impl ISBWatermarkHandle {
             .send(ISBWaterMarkActorMessage::Publish { stream, offset })
             .await
             .unwrap_or_else(|e| {
-                error!("Failed to send message: {:?}", e);
+                warn!("Failed to send message: {:?}", e);
             });
     }
 
     /// remove_offset removes the offset from the tracked offsets.
     pub(crate) async fn remove_offset(&mut self, offset: Offset) {
         let Offset::Int(offset) = offset else {
-            error!(?offset, "Invalid offset type, cannot remove offset");
+            warn!(?offset, "Invalid offset type, cannot remove offset");
             return;
         };
 
@@ -523,14 +523,14 @@ impl ISBWatermarkHandle {
             .send(ISBWaterMarkActorMessage::RemoveOffset { offset })
             .await
             .unwrap_or_else(|e| {
-                error!("Failed to send message: {:?}", e);
+                warn!("Failed to send message: {:?}", e);
             });
     }
 
     /// insert_offset inserts the offset to the tracked offsets.
     pub(crate) async fn insert_offset(&mut self, offset: Offset, watermark: Option<Watermark>) {
         let Offset::Int(offset) = offset else {
-            error!(?offset, "Invalid offset type, cannot insert offset");
+            warn!(?offset, "Invalid offset type, cannot insert offset");
             return;
         };
 
@@ -539,7 +539,7 @@ impl ISBWatermarkHandle {
             .send(ISBWaterMarkActorMessage::InsertOffset { offset, watermark })
             .await
             .unwrap_or_else(|e| {
-                error!("Failed to send message: {:?}", e);
+                warn!("Failed to send message: {:?}", e);
             });
     }
 
@@ -550,7 +550,7 @@ impl ISBWatermarkHandle {
             .send(ISBWaterMarkActorMessage::PublishIdleWatermark)
             .await
             .unwrap_or_else(|e| {
-                error!("Failed to send message: {:?}", e);
+                warn!("Failed to send message: {:?}", e);
             });
     }
 }

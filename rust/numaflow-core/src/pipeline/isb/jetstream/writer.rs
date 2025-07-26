@@ -602,7 +602,8 @@ impl JetstreamWriter {
                 }
             }
 
-            // Delete from tracker with optional watermark publishing
+            // Now that the PAF is resolved, we can delete the entry from the tracker
+            // which will optionally publish the watermarks
             let watermark_info = this.watermark_handle.as_ref().map(|_| offsets);
 
             this.tracker_handle
