@@ -275,6 +275,10 @@ impl Tracker {
         write_offsets: Option<Vec<(Stream, Offset)>>,
     ) {
         let Some(mut entry) = self.entries.remove(&offset) else {
+            // In reduce, delete will be invoked twice, once after writing to WAL(read loop) and
+            // once after the writing the responses from the windows to the ISB, the second delete
+            // is invoked for publishing watermarks and these offsets were never inserted into the
+            // tracker, hence we can publish watermark and return early.
             if let Some(write_offsets) = write_offsets {
                 self.publish_watermarks(write_offsets, &offset).await;
             }

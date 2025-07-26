@@ -102,8 +102,6 @@ impl SourceWatermarkActor {
     /// Handles the SourceActorMessage.
     async fn handle_message(&mut self, message: SourceActorMessage) -> Result<()> {
         match message {
-
-
             // fetch the source watermark
             SourceActorMessage::FetchSourceWatermark { oneshot_tx } => {
                 let watermark = self.fetcher.fetch_source_watermark();
@@ -125,7 +123,8 @@ impl SourceWatermarkActor {
 
             // generate and publish source watermark with computation
             SourceActorMessage::GenerateAndPublishSourceWatermark { messages } => {
-                self.handle_generate_and_publish_source_watermark(messages).await?;
+                self.handle_generate_and_publish_source_watermark(messages)
+                    .await?;
             }
 
             // publish source ISB watermark with computation
@@ -134,12 +133,14 @@ impl SourceWatermarkActor {
                 offset,
                 input_partition,
             } => {
-                self.handle_publish_source_isb_watermark(stream, offset, input_partition).await?;
+                self.handle_publish_source_isb_watermark(stream, offset, input_partition)
+                    .await?;
             }
 
             // publish source idle watermark with computation
             SourceActorMessage::PublishSourceIdleWatermark { partitions } => {
-                self.handle_publish_source_idle_watermark(partitions).await?;
+                self.handle_publish_source_idle_watermark(partitions)
+                    .await?;
             }
 
             // publish ISB idle watermark with computation
@@ -152,7 +153,10 @@ impl SourceWatermarkActor {
     }
 
     /// Handles generating and publishing source watermark with computation
-    async fn handle_generate_and_publish_source_watermark(&mut self, messages: Vec<Message>) -> Result<()> {
+    async fn handle_generate_and_publish_source_watermark(
+        &mut self,
+        messages: Vec<Message>,
+    ) -> Result<()> {
         // we need to build a hash-map of the lowest event time for each partition
         let partition_to_lowest_event_time =
             messages.iter().fold(HashMap::new(), |mut acc, message| {
@@ -193,13 +197,24 @@ impl SourceWatermarkActor {
     }
 
     /// Handles publishing source ISB watermark with computation
-    async fn handle_publish_source_isb_watermark(&mut self, stream: Stream, offset: IntOffset, input_partition: u16) -> Result<()> {
+    async fn handle_publish_source_isb_watermark(
+        &mut self,
+        stream: Stream,
+        offset: IntOffset,
+        input_partition: u16,
+    ) -> Result<()> {
         // Fetch the source watermark
         let watermark = self.fetcher.fetch_source_watermark();
 
         // Publish the watermark
         self.publisher
-            .publish_isb_watermark(input_partition, &stream, offset.offset, watermark.timestamp_millis(), false)
+            .publish_isb_watermark(
+                input_partition,
+                &stream,
+                offset.offset,
+                watermark.timestamp_millis(),
+                false,
+            )
             .await;
 
         // Mark the vertex and partition as active since we published the watermark
@@ -256,7 +271,13 @@ impl SourceWatermarkActor {
                 .unwrap_or(-1);
             for idle_partition in partitions.iter() {
                 self.publisher
-                    .publish_isb_watermark(*idle_partition, stream, offset, compute_wm.timestamp_millis(), true)
+                    .publish_isb_watermark(
+                        *idle_partition,
+                        stream,
+                        offset,
+                        compute_wm.timestamp_millis(),
+                        true,
+                    )
                     .await;
             }
 
@@ -294,10 +315,17 @@ impl SourceWatermarkActor {
                 .fetch_idle_offset(stream)
                 .await
                 .unwrap_or(-1);
-            let active_input_partitions: Vec<u16> = self.active_input_partitions.keys().cloned().collect();
+            let active_input_partitions: Vec<u16> =
+                self.active_input_partitions.keys().cloned().collect();
             for partition in active_input_partitions {
                 self.publisher
-                    .publish_isb_watermark(partition, stream, offset, compute_wm.timestamp_millis(), true)
+                    .publish_isb_watermark(
+                        partition,
+                        stream,
+                        offset,
+                        compute_wm.timestamp_millis(),
+                        true,
+                    )
                     .await;
             }
             self.isb_idle_manager
@@ -355,7 +383,12 @@ impl SourceWatermarkHandle {
         let isb_idle_manager =
             ISBIdleDetector::new(idle_timeout, to_vertex_configs, js_context.clone()).await;
 
-        let actor = SourceWatermarkActor::new(publisher, fetcher, isb_idle_manager.clone(), source_idle_manager.clone());
+        let actor = SourceWatermarkActor::new(
+            publisher,
+            fetcher,
+            isb_idle_manager.clone(),
+            source_idle_manager.clone(),
+        );
         tokio::spawn(async move { actor.run(receiver).await });
 
         let source_watermark_handle = Self { sender };

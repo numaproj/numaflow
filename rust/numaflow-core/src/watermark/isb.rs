@@ -121,7 +121,8 @@ impl ISBWatermarkActor {
             offset_set: HashMap::new(),
             idle_manager,
             window_manager,
-            latest_fetched_wm: Watermark::from_timestamp_millis(-1).expect("failed to parse timestamp"),
+            latest_fetched_wm: Watermark::from_timestamp_millis(-1)
+                .expect("failed to parse timestamp"),
         }
     }
 
@@ -234,7 +235,11 @@ impl ISBWatermarkActor {
     }
 
     // inserts offset to tracked offsets
-    async fn handle_insert_offset(&mut self, offset: IntOffset, watermark: Option<Watermark>) -> Result<()> {
+    async fn handle_insert_offset(
+        &mut self,
+        offset: IntOffset,
+        watermark: Option<Watermark>,
+    ) -> Result<()> {
         let wm = watermark
             .unwrap_or(Watermark::from_timestamp_millis(-1).expect("failed to parse time"));
 
@@ -261,8 +266,6 @@ impl ISBWatermarkActor {
         }
         Ok(())
     }
-
-
 
     // publishes idle watermark
     async fn handle_publish_idle_watermark(&mut self) -> Result<()> {
@@ -381,7 +384,8 @@ impl ISBWatermarkHandle {
         let idle_manager =
             ISBIdleDetector::new(idle_timeout, to_vertex_configs, js_context.clone()).await;
 
-        let actor = ISBWatermarkActor::new(fetcher, publisher, idle_manager.clone(), window_manager);
+        let actor =
+            ISBWatermarkActor::new(fetcher, publisher, idle_manager.clone(), window_manager);
         tokio::spawn(async move { actor.run(receiver).await });
 
         let isb_watermark_handle = Self { sender };
@@ -549,7 +553,6 @@ impl ISBWatermarkHandle {
                 error!("Failed to send message: {:?}", e);
             });
     }
-
 }
 
 #[cfg(test)]
