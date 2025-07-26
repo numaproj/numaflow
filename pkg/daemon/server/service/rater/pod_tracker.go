@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -145,6 +146,7 @@ type podInfo struct {
 	pipelineName string
 	vertexName   string
 	podName      string
+	replica      int
 }
 
 func (pt *PodTracker) GetPodInfo(key string) (*podInfo, error) {
@@ -152,9 +154,14 @@ func (pt *PodTracker) GetPodInfo(key string) (*podInfo, error) {
 	if len(pi) != 3 {
 		return nil, fmt.Errorf("invalid key %q", key)
 	}
+	replica, err := strconv.Atoi(pi[2])
+	if err != nil {
+		return nil, fmt.Errorf("invalid replica in key %q", key)
+	}
 	return &podInfo{
 		pipelineName: pi[0],
 		vertexName:   pi[1],
+		replica:      replica,
 		podName:      strings.Join([]string{pi[0], pi[1], pi[2]}, "-"),
 	}, nil
 }

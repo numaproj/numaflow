@@ -236,7 +236,7 @@ func (r *Rater) getPodPendingCounts(podName string, result map[string]*dto.Metri
 
 // GetPending returns the pending count for the mono vertex
 func (r *Rater) GetPending() map[string]*wrapperspb.Int64Value {
-	r.log.Debugf("Current timestampedPodCounts for MonoVertex %s is: %v", r.monoVertex.Name, r.timestampedPendingCount)
+	r.log.Debugf("Current timestampedPendingCount for MonoVertex %s is: %v", r.monoVertex.Name, r.timestampedPendingCount)
 	var result = make(map[string]*wrapperspb.Int64Value)
 	// calculate pending for each lookback seconds
 	for n, i := range r.buildLookbackSecondsMap() {

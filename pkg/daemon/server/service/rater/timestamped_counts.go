@@ -18,6 +18,7 @@ package rater
 
 import (
 	"fmt"
+	"maps"
 	"sync"
 )
 
@@ -37,6 +38,21 @@ func NewTimestampedCounts(t int64) *TimestampedCounts {
 		podPartitionCount: make(map[string]map[string]float64),
 		lock:              new(sync.RWMutex),
 	}
+}
+
+func (tc *TimestampedCounts) PodTimestamp() int64 {
+	tc.lock.RLock()
+	defer tc.lock.RUnlock()
+	return tc.timestamp
+}
+
+func (tc *TimestampedCounts) UpdatePending(podPendingCount *PodPendingCount) {
+	tc.lock.Lock()
+	defer tc.lock.Unlock()
+	if podPendingCount == nil {
+		return
+	}
+	tc.podPartitionCount[podPendingCount.Name()] = podPendingCount.PartitionPendingCounts()
 }
 
 // Update updates the count of processed messages for a pod
@@ -63,9 +79,7 @@ func (tc *TimestampedCounts) PodPartitionCountSnapshot() map[string]map[string]f
 	tc.lock.RLock()
 	defer tc.lock.RUnlock()
 	counts := make(map[string]map[string]float64)
-	for k, v := range tc.podPartitionCount {
-		counts[k] = v
-	}
+	maps.Copy(counts, tc.podPartitionCount)
 	return counts
 }
 

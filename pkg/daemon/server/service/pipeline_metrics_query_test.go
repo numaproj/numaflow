@@ -91,6 +91,15 @@ func (mr *mockRater_TestGetVertexMetrics) GetRates(vertexName string, partitionN
 	return res
 }
 
+func (mr *mockRater_TestGetVertexMetrics) GetPending(pipelinename, vertexName, vertexType, partitionName string) map[string]*wrapperspb.Int64Value {
+	res := make(map[string]*wrapperspb.Int64Value)
+	res["default"] = wrapperspb.Int64(7)
+	res["1m"] = wrapperspb.Int64(5)
+	res["5m"] = wrapperspb.Int64(6)
+	res["15m"] = wrapperspb.Int64(4)
+	return res
+}
+
 func TestGetVertexMetrics(t *testing.T) {
 	s := test.RunJetStreamServer(t)
 	defer test.ShutdownJetStreamServer(t, s)
@@ -133,7 +142,7 @@ vertex_pending_messages{period="default",partition_name="-simple-pipeline-cat-0"
 
 	vertex := "cat"
 
-	req := &daemon.GetVertexMetricsRequest{Vertex: vertex}
+	req := &daemon.GetVertexMetricsRequest{Pipeline: pipelineName, Vertex: vertex}
 
 	resp, err := pipelineMetricsQueryService.GetVertexMetrics(context.Background(), req)
 	assert.NoError(t, err)
