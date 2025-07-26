@@ -191,6 +191,14 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 				return fmt.Errorf("failed to create stream %q and buffers, %w", streamName, err)
 			}
 			log.Infow("Succeeded to create a stream", zap.String("stream", streamName))
+		}
+
+		_, err = jss.js.ConsumerInfo(streamName, streamName)
+		if err != nil {
+			if !errors.Is(err, nats.ErrConsumerNotFound) {
+				return fmt.Errorf("failed to query information of consumer for stream %q, %w", streamName, err)
+			}
+
 			if _, err := jss.js.AddConsumer(streamName, &nats.ConsumerConfig{
 				Durable:       streamName,
 				DeliverPolicy: nats.DeliverAllPolicy,

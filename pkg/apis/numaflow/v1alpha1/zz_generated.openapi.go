@@ -2774,6 +2774,29 @@ func schema_pkg_apis_numaflow_v1alpha1_JetStreamSource(ref common.ReferenceCallb
 							Format:      "",
 						},
 					},
+					"deliver_policy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The point in the stream from which to receive messages. https://docs.nats.io/nats-concepts/jetstream/consumers#deliverpolicy Valid options are: \"all\", \"new\", \"last\", \"last_per_subject\", \"by_start_sequence 42\", \"by_start_time 1753428483000\". The second value to \"by_start_time\" is unix epoch time in milliseconds.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"filter_subjects": {
+						SchemaProps: spec.SchemaProps{
+							Description: "A set of subjects that overlap with the subjects bound to the stream to filter delivery to subscribers. https://docs.nats.io/nats-concepts/jetstream/consumers#filtesubjects",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
 					"tls": {
 						SchemaProps: spec.SchemaProps{
 							Description: "TLS configuration for the nats client.",

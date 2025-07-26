@@ -22,6 +22,22 @@ images:
     kind: MonoVertex
   - path: spec/sink/fallback/udsink/container/image
     kind: MonoVertex
+  - path: spec/pipeline/vertices/udf/container/image
+    kind: ServingPipeline
+  - path: spec/pipeline/vertices/sidecars/image
+    kind: ServingPipeline
+  - path: spec/pipeline/vertices/sink/udsink/container/image
+    kind: ServingPipeline
+  - path: spec/pipeline/vertices/sink/fallback/udsink/container/image
+    kind: ServingPipeline
+  - path: spec/pipeline/vertices/source/transformer/container/image
+    kind: ServingPipeline
+  - path: spec/pipeline/vertices/source/udsource/container/image
+    kind: ServingPipeline
+  - path: spec/pipeline/sideInputs/container/image
+    kind: ServingPipeline
+  - path: spec/serving/store/container/image
+    kind: ServingPipeline
 
 # https://github.com/kubernetes-sigs/kustomize/blob/master/api/internal/konfig/builtinpluginconsts/namereference.go
 nameReference:
