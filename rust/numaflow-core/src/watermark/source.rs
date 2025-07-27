@@ -697,23 +697,25 @@ mod tests {
             .await
             .expect("Failed to get ot bucket");
 
-        let mut wmb_found = false;
-        for _ in 0..10 {
-            let wmb = ot_bucket
-                .get("source-source_vertex-0")
-                .await
-                .expect("Failed to get wmb");
-            if wmb.is_some() {
-                let wmb: WMB = wmb.unwrap().try_into().unwrap();
-                assert_eq!(wmb.watermark, 60000);
-                wmb_found = true;
-                break;
-            } else {
-                tokio::time::sleep(Duration::from_millis(100)).await;
+        let timeout_duration = Duration::from_secs(1);
+        let result = tokio::time::timeout(timeout_duration, async {
+            loop {
+                let wmb = ot_bucket
+                    .get("source-source_vertex-0")
+                    .await
+                    .expect("Failed to get wmb");
+                if wmb.is_some() {
+                    let wmb: WMB = wmb.unwrap().try_into().unwrap();
+                    assert_eq!(wmb.watermark, 60000);
+                    break;
+                } else {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
             }
-        }
+        })
+        .await;
 
-        if !wmb_found {
+        if result.is_err() {
             panic!("Failed to get watermark");
         }
 
@@ -878,22 +880,25 @@ mod tests {
         }
 
         // check if the watermark is published
-        for _ in 0..10 {
-            let wmb = ot_bucket
-                .get("source_vertex-0")
-                .await
-                .expect("Failed to get wmb");
-            if wmb.is_some() {
-                let wmb: WMB = wmb.unwrap().try_into().unwrap();
-                assert_ne!(wmb.watermark, -1);
-                wmb_found = true;
-                break;
-            } else {
-                tokio::time::sleep(Duration::from_millis(10)).await;
+        let timeout_duration = Duration::from_secs(1);
+        let result = tokio::time::timeout(timeout_duration, async {
+            loop {
+                let wmb = ot_bucket
+                    .get("source_vertex-0")
+                    .await
+                    .expect("Failed to get wmb");
+                if wmb.is_some() {
+                    let wmb: WMB = wmb.unwrap().try_into().unwrap();
+                    assert_ne!(wmb.watermark, -1);
+                    break;
+                } else {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
             }
-        }
+        })
+        .await;
 
-        if !wmb_found {
+        if result.is_err() {
             panic!("Failed to get watermark");
         }
     }
@@ -1072,19 +1077,22 @@ mod tests {
             .await
             .expect("Failed to get ot bucket");
 
-        let mut wmb_found = false;
-        for _ in 0..10 {
-            if let Some(wmb) = ot_bucket.get("v1-0").await.expect("Failed to get wmb") {
-                let wmb: WMB = wmb.try_into().unwrap();
-                // idle watermark should be published
-                if wmb.idle {
-                    wmb_found = true;
-                    break;
+        let timeout_duration = Duration::from_secs(1);
+        let result = tokio::time::timeout(timeout_duration, async {
+            loop {
+                if let Some(wmb) = ot_bucket.get("v1-0").await.expect("Failed to get wmb") {
+                    let wmb: WMB = wmb.try_into().expect("Failed to convert to WMB");
+                    // idle watermark should be published
+                    if wmb.idle {
+                        return true; // Found idle watermark
+                    }
                 }
+                tokio::time::sleep(Duration::from_millis(10)).await;
             }
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
+        })
+        .await;
 
+        let wmb_found = result.unwrap_or(false); // false if timeout occurred
         assert!(wmb_found, "Idle watermark not found");
     }
 
@@ -1269,19 +1277,22 @@ mod tests {
             .await
             .expect("Failed to get ot bucket");
 
-        let mut wmb_found = false;
-        for _ in 0..10 {
-            if let Some(wmb) = ot_bucket.get("v1-0").await.expect("Failed to get wmb") {
-                let wmb: WMB = wmb.try_into().expect("Failed to convert to WMB");
-                // idle watermark should be published
-                if wmb.idle {
-                    wmb_found = true;
-                    break;
+        let timeout_duration = Duration::from_secs(1);
+        let result = tokio::time::timeout(timeout_duration, async {
+            loop {
+                if let Some(wmb) = ot_bucket.get("v1-0").await.expect("Failed to get wmb") {
+                    let wmb: WMB = wmb.try_into().expect("Failed to convert to WMB");
+                    // idle watermark should be published
+                    if wmb.idle {
+                        return true; // Found idle watermark
+                    }
                 }
+                tokio::time::sleep(Duration::from_millis(10)).await;
             }
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
+        })
+        .await;
 
+        let wmb_found = result.unwrap_or(false); // false if timeout occurred
         assert!(wmb_found, "Idle watermark not found");
     }
 

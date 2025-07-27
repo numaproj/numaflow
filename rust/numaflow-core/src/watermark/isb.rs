@@ -752,26 +752,29 @@ mod tests {
             .await;
 
         let ot_bucket = js_context
-            .get_key_value(ot_bucket_name)
+            .get_key_value(to_ot_bucket_name)
             .await
             .expect("Failed to get ot bucket");
 
-        let mut wmb_found = true;
-        for _ in 0..10 {
-            let wmb = ot_bucket
-                .get("test-vertex-0")
-                .await
-                .expect("Failed to get wmb");
+        let timeout_duration = Duration::from_secs(1);
+        let result = tokio::time::timeout(timeout_duration, async {
+            loop {
+                let wmb = ot_bucket
+                    .get("test-vertex-0")
+                    .await
+                    .expect("Failed to get wmb");
 
-            if let Some(wmb) = wmb {
-                let wmb: WMB = wmb.try_into().unwrap();
-                assert_eq!(wmb.watermark, 100);
-                wmb_found = true;
+                if let Some(wmb) = wmb {
+                    let wmb: WMB = wmb.try_into().unwrap();
+                    assert_eq!(wmb.watermark, 100);
+                    break;
+                }
+                sleep(Duration::from_millis(10)).await;
             }
-            sleep(Duration::from_millis(10)).await;
-        }
+        })
+        .await;
 
-        if !wmb_found {
+        if result.is_err() {
             panic!("WMB not found");
         }
 
@@ -797,27 +800,30 @@ mod tests {
             )
             .await;
 
-        let mut wmb_found = true;
-        for _ in 0..10 {
-            let wmb = ot_bucket
-                .get("test-vertex-0")
-                .await
-                .expect("Failed to get wmb");
+        let timeout_duration = Duration::from_secs(1);
+        let result = tokio::time::timeout(timeout_duration, async {
+            loop {
+                let wmb = ot_bucket
+                    .get("test-vertex-0")
+                    .await
+                    .expect("Failed to get wmb");
 
-            if let Some(wmb) = wmb {
-                let wmb: WMB = wmb.try_into().unwrap();
-                assert_eq!(wmb.watermark, 200);
-                wmb_found = true;
+                if let Some(wmb) = wmb {
+                    let wmb: WMB = wmb.try_into().unwrap();
+                    assert_eq!(wmb.watermark, 200);
+                    break;
+                }
+                sleep(Duration::from_millis(10)).await;
             }
-            sleep(Duration::from_millis(10)).await;
-        }
+        })
+        .await;
 
-        if !wmb_found {
+        if result.is_err() {
             panic!("WMB not found");
         }
     }
 
-    // #[cfg(feature = "nats-tests")]
+    #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_fetch_watermark() {
         let client = async_nats::connect("localhost:4222").await.unwrap();
@@ -892,48 +898,53 @@ mod tests {
 
         let mut fetched_watermark = -1;
         // publish watermark and try fetching to see if something is getting published
-        for i in 0..10 {
-            let offset = Offset::Int(IntOffset {
-                offset: i,
-                partition_idx: 0,
-            });
-
-            handle
-                .insert_offset(
-                    offset.clone(),
-                    Some(Watermark::from_timestamp_millis(i * 100).unwrap()),
-                )
-                .await;
-
-            handle
-                .publish_watermark(
-                    Stream {
-                        name: "test_stream",
-                        vertex: "from_vertex",
-                        partition: 0,
-                    },
-                    Offset::Int(IntOffset {
-                        offset: i,
-                        partition_idx: 0,
-                    }),
-                )
-                .await;
-
-            let watermark = handle
-                .fetch_watermark(Offset::Int(IntOffset {
-                    offset: 3,
+        let timeout_duration = Duration::from_secs(1);
+        let result = tokio::time::timeout(timeout_duration, async {
+            for i in 0..10 {
+                let offset = Offset::Int(IntOffset {
+                    offset: i,
                     partition_idx: 0,
-                }))
-                .await;
+                });
 
-            if watermark.timestamp_millis() != -1 {
-                fetched_watermark = watermark.timestamp_millis();
-                break;
+                handle
+                    .insert_offset(
+                        offset.clone(),
+                        Some(Watermark::from_timestamp_millis(i * 100).unwrap()),
+                    )
+                    .await;
+
+                handle
+                    .publish_watermark(
+                        Stream {
+                            name: "test_stream",
+                            vertex: "from_vertex",
+                            partition: 0,
+                        },
+                        Offset::Int(IntOffset {
+                            offset: i,
+                            partition_idx: 0,
+                        }),
+                    )
+                    .await;
+
+                let watermark = handle
+                    .fetch_watermark(Offset::Int(IntOffset {
+                        offset: 3,
+                        partition_idx: 0,
+                    }))
+                    .await;
+
+                if watermark.timestamp_millis() != -1 {
+                    fetched_watermark = watermark.timestamp_millis();
+                    break;
+                }
+                sleep(Duration::from_millis(10)).await;
+                handle.remove_offset(offset.clone()).await;
             }
-            sleep(Duration::from_millis(10)).await;
-            handle.remove_offset(offset.clone()).await;
-        }
+        })
+        .await;
 
+        assert!(result.is_ok(), "Timeout occurred while fetching watermark");
         assert_ne!(fetched_watermark, -1);
     }
 
@@ -1067,23 +1078,25 @@ mod tests {
             .await
             .expect("Failed to get ot bucket");
 
-        let mut wmb_found = false;
-        for _ in 0..10 {
-            if let Some(wmb) = ot_bucket
-                .get("test-vertex-0")
-                .await
-                .expect("Failed to get wmb")
-            {
-                let wmb: WMB = wmb.try_into().unwrap();
-                if wmb.idle {
-                    wmb_found = true;
-                    break;
+        let timeout_duration = Duration::from_secs(1);
+        let result = tokio::time::timeout(timeout_duration, async {
+            loop {
+                if let Some(wmb) = ot_bucket
+                    .get("test-vertex-0")
+                    .await
+                    .expect("Failed to get wmb")
+                {
+                    let wmb: WMB = wmb.try_into().unwrap();
+                    if wmb.idle {
+                        break;
+                    }
                 }
+                tokio::time::sleep(Duration::from_millis(10)).await;
             }
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
+        })
+        .await;
 
-        assert!(wmb_found, "Idle watermark not found");
+        assert!(result.is_ok(), "Idle watermark not found");
     }
 
     #[cfg(feature = "nats-tests")]
