@@ -1,4 +1,4 @@
-use std::cmp::PartialEq;
+use std::cmp::{Ordering, PartialEq};
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
@@ -242,6 +242,22 @@ impl fmt::Display for Offset {
     }
 }
 
+impl PartialOrd for Offset {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Offset {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            (Offset::Int(a), Offset::Int(b)) => a.cmp(b),
+            (Offset::String(a), Offset::String(b)) => a.cmp(b),
+            _ => Ordering::Equal,
+        }
+    }
+}
+
 impl Default for Offset {
     fn default() -> Self {
         Offset::Int(Default::default())
@@ -273,6 +289,18 @@ impl IntOffset {
     }
 }
 
+impl PartialOrd for IntOffset {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for IntOffset {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.offset.cmp(&other.offset)
+    }
+}
+
 impl fmt::Display for IntOffset {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}-{}", self.offset, self.partition_idx)
@@ -293,6 +321,18 @@ impl StringOffset {
             offset: seq.into(),
             partition_idx,
         }
+    }
+}
+
+impl PartialOrd for StringOffset {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for StringOffset {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.offset.cmp(&other.offset)
     }
 }
 

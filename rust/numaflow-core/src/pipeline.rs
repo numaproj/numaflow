@@ -128,10 +128,7 @@ async fn start_source_forwarder(
         None
     };
 
-    let tracker_handle = TrackerHandle::new(
-        source_watermark_handle.clone().map(WatermarkHandle::Source),
-        serving_callback_handler,
-    );
+    let tracker_handle = TrackerHandle::new(serving_callback_handler);
 
     let buffer_writer = JetstreamWriter::new(ISBWriterConfig {
         config: config.to_vertex_config.clone(),
@@ -235,10 +232,7 @@ async fn start_map_forwarder(
     };
 
     // create tracker and buffer writer, they can be shared across all forwarders
-    let tracker_handle = TrackerHandle::new(
-        watermark_handle.clone().map(WatermarkHandle::ISB),
-        serving_callback_handler.clone(),
-    );
+    let tracker_handle = TrackerHandle::new(serving_callback_handler.clone());
     let buffer_writer = JetstreamWriter::new(ISBWriterConfig {
         config: config.to_vertex_config.clone(),
         js_ctx: js_context.clone(),
@@ -500,10 +494,11 @@ async fn start_aligned_reduce_forwarder(
         .cloned()
         .ok_or_else(|| error::Error::Config("No stream found for reduce vertex".to_string()))?;
 
-    // we don't need to pass the watermark handle to the tracker because in reduce windower is
-    // responsible for identifying the lowest watermark in the pod.
-    let tracker_handle =
-        TrackerHandle::new(watermark_handle.clone().map(WatermarkHandle::ISB), None);
+    // For reduce, we don't need to pass the watermark handle to the tracker, since the
+    // tracker only tracks the offsets until they are written to the WAL, watermark is
+    // not published using the tracker, instead writer directly publishes the watermark for reduce
+    // vertices since the lowest watermark is identified by the window manager.
+    let tracker_handle = TrackerHandle::new(None);
 
     // Create buffer reader
     let buffer_reader = JetStreamReader::new(ISBReaderConfig {
@@ -678,8 +673,7 @@ async fn start_unaligned_reduce_forwarder(
 
     // we don't need to pass the watermark handle to the tracker because in reduce windower is
     // responsible for identifying the lowest watermark in the pod.
-    let tracker_handle =
-        TrackerHandle::new(watermark_handle.clone().map(WatermarkHandle::ISB), None);
+    let tracker_handle = TrackerHandle::new(None);
 
     // Create buffer reader
     let buffer_reader = JetStreamReader::new(ISBReaderConfig {
@@ -861,10 +855,7 @@ async fn start_sink_forwarder(
     let mut sink_writers = vec![];
     let mut buffer_readers = vec![];
     for stream in reader_config.streams.clone() {
-        let tracker_handle = TrackerHandle::new(
-            watermark_handle.clone().map(WatermarkHandle::ISB),
-            serving_callback_handler.clone(),
-        );
+        let tracker_handle = TrackerHandle::new(serving_callback_handler.clone());
 
         let buffer_reader = JetStreamReader::new(ISBReaderConfig {
             vertex_type: config.vertex_type.to_string(),

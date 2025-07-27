@@ -982,7 +982,7 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let js_writer = JetstreamWriter::new(ISBWriterConfig {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
@@ -1207,7 +1207,7 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let js_writer = JetstreamWriter::new(ISBWriterConfig {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
@@ -1489,7 +1489,7 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let js_writer = JetstreamWriter::new(ISBWriterConfig {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
@@ -1691,7 +1691,7 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let js_writer = JetstreamWriter::new(ISBWriterConfig {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
@@ -1925,7 +1925,7 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let js_writer = JetstreamWriter::new(ISBWriterConfig {
             config: vec![ToVertexConfig {
                 name: "test-vertex",

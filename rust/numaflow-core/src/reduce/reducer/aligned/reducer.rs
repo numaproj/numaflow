@@ -747,7 +747,7 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         use crate::pipeline::isb::jetstream::writer::ISBWriterConfig;
         let js_writer = JetstreamWriter::new(ISBWriterConfig {
             config: vec![ToVertexConfig {
@@ -996,7 +996,7 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         use crate::pipeline::isb::jetstream::writer::ISBWriterConfig;
         let js_writer = JetstreamWriter::new(ISBWriterConfig {
             config: vec![ToVertexConfig {
@@ -1248,7 +1248,7 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         use crate::pipeline::isb::jetstream::writer::ISBWriterConfig;
         let js_writer = JetstreamWriter::new(ISBWriterConfig {
             config: vec![ToVertexConfig {

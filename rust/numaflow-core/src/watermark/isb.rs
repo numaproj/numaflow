@@ -60,15 +60,6 @@ enum ISBWaterMarkActorMessage {
         partition_idx: u16,
         oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
     },
-    InsertOffset {
-        offset: IntOffset,
-        watermark: Option<Watermark>,
-        oneshot_tx: tokio::sync::oneshot::Sender<Result<()>>,
-    },
-    RemoveOffset {
-        offset: IntOffset,
-        oneshot_tx: tokio::sync::oneshot::Sender<Result<()>>,
-    },
     PublishIdleWatermark {
         oneshot_tx: tokio::sync::oneshot::Sender<Result<()>>,
     },
@@ -100,13 +91,6 @@ impl PartialOrd for OffsetWatermark {
 struct ISBWatermarkActor {
     fetcher: ISBWatermarkFetcher,
     publisher: ISBWatermarkPublisher,
-    /// BTreeSet is used to track the watermarks of the inflight messages because we frequently
-    /// need to get the lowest watermark among the inflight messages and BTreeSet provides O(1)
-    /// time complexity for getting the lowest watermark, even though insertion and deletion are
-    /// O(log n). If we use map or hashset, our lowest watermark fetch call would be O(n) even
-    /// though insertion and deletion are O(1). We do almost same amount insertion, deletion and
-    /// getting the lowest watermark so BTreeSet is the best choice.
-    offset_set: HashMap<u16, BTreeSet<OffsetWatermark>>,
     idle_manager: ISBIdleDetector,
     /// Window manager is used to compute the minimum watermark for the reduce vertex.
     window_manager: Option<WindowManager>,
@@ -123,7 +107,6 @@ impl ISBWatermarkActor {
         Self {
             fetcher,
             publisher,
-            offset_set: HashMap::new(),
             idle_manager,
             window_manager,
             latest_fetched_wm: Watermark::from_timestamp_millis(-1)
@@ -188,26 +171,6 @@ impl ISBWatermarkActor {
                     .map_err(|_| Error::Watermark("failed to send response".to_string()))
             }
 
-            // inserts offset to tracked offsets
-            ISBWaterMarkActorMessage::InsertOffset {
-                offset,
-                watermark,
-                oneshot_tx,
-            } => {
-                let result = self.handle_insert_offset(offset, watermark).await;
-                oneshot_tx
-                    .send(result)
-                    .map_err(|_| Error::Watermark("failed to send response".to_string()))
-            }
-
-            // removes offset from tracked offsets
-            ISBWaterMarkActorMessage::RemoveOffset { offset, oneshot_tx } => {
-                let result = self.handle_remove_offset(offset).await;
-                oneshot_tx
-                    .send(result)
-                    .map_err(|_| Error::Watermark("failed to send response".to_string()))
-            }
-
             // publishes idle watermark
             ISBWaterMarkActorMessage::PublishIdleWatermark { oneshot_tx } => {
                 let result = self.handle_publish_idle_watermark().await;
@@ -230,39 +193,6 @@ impl ISBWatermarkActor {
 
         // Reset idle state for this stream
         self.idle_manager.reset_idle(&stream).await;
-        Ok(())
-    }
-
-    /// inserts offset to tracked offsets so we can figure out the lowest unprocessed watermark
-    async fn handle_insert_offset(
-        &mut self,
-        offset: IntOffset,
-        watermark: Option<Watermark>,
-    ) -> Result<()> {
-        let wm = watermark
-            .unwrap_or(Watermark::from_timestamp_millis(-1).expect("failed to parse time"));
-
-        // Insert the offset and watermark to the tracked offsets
-        let set = self.offset_set.entry(offset.partition_idx).or_default();
-        set.insert(OffsetWatermark {
-            offset: offset.offset,
-            watermark: wm,
-        });
-        Ok(())
-    }
-
-    /// removes offset from tracked offsets
-    async fn handle_remove_offset(&mut self, offset: IntOffset) -> Result<()> {
-        // Remove the offset from the tracked offsets
-        if let Some(set) = self.offset_set.get_mut(&offset.partition_idx)
-            && let Some(&OffsetWatermark { watermark, .. }) =
-                set.iter().find(|ow| ow.offset == offset.offset)
-        {
-            set.remove(&OffsetWatermark {
-                offset: offset.offset,
-                watermark,
-            });
-        }
         Ok(())
     }
 
@@ -507,60 +437,6 @@ impl ISBWatermarkHandle {
             .send(ISBWaterMarkActorMessage::Publish {
                 stream,
                 offset,
-                oneshot_tx,
-            })
-            .await
-        {
-            warn!(?e, "Failed to send message");
-            return;
-        }
-
-        match oneshot_rx.await {
-            Ok(_) => {}
-            Err(e) => {
-                warn!(?e, "Failed to receive response");
-            }
-        }
-    }
-
-    /// remove_offset removes the offset from the tracked offsets.
-    pub(crate) async fn remove_offset(&mut self, offset: Offset) {
-        let Offset::Int(offset) = offset else {
-            warn!(?offset, "Invalid offset type, cannot remove offset");
-            return;
-        };
-
-        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
-        if let Err(e) = self
-            .sender
-            .send(ISBWaterMarkActorMessage::RemoveOffset { offset, oneshot_tx })
-            .await
-        {
-            warn!(?e, "Failed to send message");
-            return;
-        }
-
-        match oneshot_rx.await {
-            Ok(_) => {}
-            Err(e) => {
-                warn!(?e, "Failed to receive response");
-            }
-        }
-    }
-
-    /// insert_offset inserts the offset to the tracked offsets.
-    pub(crate) async fn insert_offset(&mut self, offset: Offset, watermark: Option<Watermark>) {
-        let Offset::Int(offset) = offset else {
-            warn!(?offset, "Invalid offset type, cannot insert offset");
-            return;
-        };
-
-        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
-        if let Err(e) = self
-            .sender
-            .send(ISBWaterMarkActorMessage::InsertOffset {
-                offset,
-                watermark,
                 oneshot_tx,
             })
             .await

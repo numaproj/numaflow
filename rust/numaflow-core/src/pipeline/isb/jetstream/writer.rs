@@ -237,7 +237,7 @@ impl JetstreamWriter {
                 if message.dropped() {
                     // delete the entry from tracker
                     self.tracker_handle
-                        .delete(message.offset, None)
+                        .delete(message.offset)
                         .await
                         .expect("Failed to delete offset from tracker");
                     pipeline_metrics()
@@ -438,7 +438,7 @@ impl JetstreamWriter {
                         BufferFullStrategy::DiscardLatest => {
                             // delete the entry from tracker
                             self.tracker_handle
-                                .delete(offset.clone(), None)
+                                .delete(offset.clone())
                                 .await
                                 .expect("Failed to delete offset from tracker");
                             // increment drop metric if buffer is full and
@@ -621,7 +621,7 @@ impl JetstreamWriter {
                     // Now that the PAF is resolved, we can delete the entry from the tracker
                     // which will optionally publish the watermarks
                     this.tracker_handle
-                        .delete(message.offset.clone(), Some(offsets))
+                        .delete(message.offset.clone())
                         .await
                         .expect("Failed to delete offset from tracker");
                 }
@@ -708,7 +708,7 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_async_write() {
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let cln_token = CancellationToken::new();
         let js_url = "localhost:4222";
         // Create JetStream context
@@ -850,7 +850,7 @@ mod tests {
             }],
             js_ctx: context.clone(),
             paf_concurrency: 100,
-            tracker_handle: TrackerHandle::new(None, None),
+            tracker_handle: TrackerHandle::new(None),
             cancel_token: cln_token.clone(),
             watermark_handle: None,
             vertex_type: VertexType::Source,
@@ -871,7 +871,7 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_write_with_cancellation() {
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let js_url = "localhost:4222";
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
@@ -1080,7 +1080,7 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_check_stream_status() {
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let js_url = "localhost:4222";
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
@@ -1183,7 +1183,7 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
 
         let stream = Stream::new("test_publish_messages", "temp", 0);
         // Delete stream if it exists
@@ -1278,7 +1278,7 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
 
         let stream = Stream::new("test_publish_cancellation", "temp", 0);
         // Delete stream if it exists
@@ -1403,7 +1403,7 @@ mod tests {
         let js_url = "localhost:4222";
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let cln_token = CancellationToken::new();
 
         let vertex1_streams = vec![
