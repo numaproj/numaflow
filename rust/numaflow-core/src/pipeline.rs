@@ -890,7 +890,7 @@ async fn start_sink_forwarder(
             config.read_timeout,
             sink.sink_config.clone(),
             sink.fb_sink_config.clone(),
-            tracker_handle,
+            tracker_handle.clone(),
             serving_store.clone(),
             &cln_token,
         )

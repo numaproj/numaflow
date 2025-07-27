@@ -602,34 +602,48 @@ impl JetstreamWriter {
                 }
             }
 
-            match &this.vertex_type {
-                VertexType::ReduceUDF => {
-                    // reduce offsets are not tracked by the tracker, so the watermark won't be
-                    // published when we delete the entry from the tracker. So we need to publish
-                    // the watermark directly.
-                    if let Some(WatermarkHandle::ISB(watermark_handle)) =
-                        this.watermark_handle.as_mut()
-                    {
-                        for offset in offsets.iter() {
-                            watermark_handle
-                                .publish_watermark(offset.0.clone(), offset.1.clone())
-                                .await;
-                        }
-                    }
-                }
-                _ => {
-                    // Now that the PAF is resolved, we can delete the entry from the tracker
-                    // which will optionally publish the watermarks
-                    this.tracker_handle
-                        .delete(message.offset.clone())
-                        .await
-                        .expect("Failed to delete offset from tracker");
+            if let Some(watermark_handle) = this.watermark_handle.as_mut() {
+                // now the pafs have resolved, lets use the offsets to send watermark
+                for (stream, offset) in offsets {
+                    JetstreamWriter::publish_watermark(watermark_handle, stream, offset, &message)
+                        .await;
                 }
             }
+
+            // Now that the PAF is resolved, we can delete the entry from the tracker
+            // which will optionally publish the watermarks
+            this.tracker_handle
+                .delete(message.offset.clone())
+                .await
+                .expect("Failed to delete offset from tracker");
         });
 
         Ok(())
     }
+
+    /// publishes the watermark for the given stream and offset
+    async fn publish_watermark(
+        watermark_handle: &mut WatermarkHandle,
+        stream: Stream,
+        offset: Offset,
+        message: &Message,
+    ) {
+        match watermark_handle {
+            WatermarkHandle::ISB(handle) => {
+                handle.publish_watermark(stream, offset).await;
+            }
+            WatermarkHandle::Source(handle) => {
+                let input_partition = match &message.offset {
+                    Offset::Int(offset) => offset.partition_idx,
+                    Offset::String(offset) => offset.partition_idx,
+                };
+                handle
+                    .publish_source_isb_watermark(stream, offset, input_partition)
+                    .await;
+            }
+        }
+    }
+
     /// Writes the message to the JetStream ISB and returns the PublishAck. It will do
     /// infinite retries until the message gets published successfully. If it returns
     /// an error it means it is fatal non-retryable error.

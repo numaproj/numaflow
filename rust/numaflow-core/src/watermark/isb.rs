@@ -252,7 +252,6 @@ impl ISBWatermarkActor {
 #[derive(Clone)]
 pub(crate) struct ISBWatermarkHandle {
     sender: mpsc::Sender<ISBWaterMarkActorMessage>,
-    tracker_handle: TrackerHandle,
 }
 
 impl ISBWatermarkHandle {
@@ -308,10 +307,7 @@ impl ISBWatermarkHandle {
         );
         tokio::spawn(async move { actor.run(receiver).await });
 
-        let isb_watermark_handle = Self {
-            sender,
-            tracker_handle,
-        };
+        let isb_watermark_handle = Self { sender };
 
         // start a task to keep publishing idle watermarks every idle_timeout
         tokio::spawn({
@@ -477,9 +473,28 @@ mod tests {
     use super::*;
     use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
     use crate::config::pipeline::watermark::BucketConfig;
-    use crate::message::IntOffset;
+    use crate::message::{IntOffset, Message};
     use crate::tracker::TrackerHandle;
     use crate::watermark::wmb::WMB;
+    use tokio::sync::oneshot;
+
+    // Helper function to create test messages
+    fn create_test_message(
+        offset: i64,
+        partition_idx: u16,
+        watermark_millis: Option<i64>,
+    ) -> Message {
+        let watermark =
+            watermark_millis.map(|millis| chrono::DateTime::from_timestamp_millis(millis).unwrap());
+        Message {
+            offset: Offset::Int(IntOffset {
+                offset,
+                partition_idx,
+            }),
+            watermark,
+            ..Default::default()
+        }
+    }
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
@@ -564,6 +579,7 @@ mod tests {
             from_vertex_config: vec![from_bucket_config.clone()],
             to_vertex_config: vec![to_bucket_config.clone()],
         };
+        let tracker_handle = TrackerHandle::new(None);
 
         let mut handle = ISBWatermarkHandle::new(
             vertex_name,
@@ -584,10 +600,20 @@ mod tests {
             }],
             CancellationToken::new(),
             None,
-            TrackerHandle::new(None),
+            tracker_handle.clone(),
         )
         .await
         .expect("Failed to create ISBWatermarkHandle");
+
+        // Insert test messages into the tracker
+        let message1 = create_test_message(1, 0, Some(100));
+        let message2 = create_test_message(2, 0, Some(200));
+
+        let (ack_send1, _ack_recv1) = oneshot::channel();
+        let (ack_send2, _ack_recv2) = oneshot::channel();
+
+        tracker_handle.insert(&message1, ack_send1).await.unwrap();
+        tracker_handle.insert(&message2, ack_send2).await.unwrap();
 
         handle
             .publish_watermark(
@@ -630,7 +656,13 @@ mod tests {
             panic!("WMB not found");
         }
 
-        // Note: remove_offset functionality is now handled by the tracker
+        tracker_handle
+            .delete(Offset::Int(IntOffset {
+                offset: 1,
+                partition_idx: 0,
+            }))
+            .await
+            .unwrap();
 
         handle
             .publish_watermark(
@@ -718,6 +750,7 @@ mod tests {
             from_vertex_config: vec![from_bucket_config.clone()],
             to_vertex_config: vec![from_bucket_config.clone()],
         };
+        let tracker_handle = TrackerHandle::new(None);
 
         let mut handle = ISBWatermarkHandle::new(
             vertex_name,
@@ -738,7 +771,7 @@ mod tests {
             }],
             CancellationToken::new(),
             None,
-            TrackerHandle::new(None),
+            tracker_handle.clone(),
         )
         .await
         .expect("Failed to create ISBWatermarkHandle");
@@ -753,7 +786,10 @@ mod tests {
                     partition_idx: 0,
                 });
 
-                // Note: insert_offset functionality is now handled by the tracker
+                // Insert message into tracker
+                let message = create_test_message(i, 0, Some(i * 100));
+                let (ack_send, ack_recv) = oneshot::channel();
+                tracker_handle.insert(&message, ack_send).await.unwrap();
 
                 handle
                     .publish_watermark(
@@ -781,7 +817,8 @@ mod tests {
                     break;
                 }
                 sleep(Duration::from_millis(10)).await;
-                // Note: remove_offset functionality is now handled by the tracker
+                tracker_handle.delete(offset.clone()).await.unwrap();
+                ack_recv.await.unwrap();
             }
         })
         .await;
@@ -874,8 +911,9 @@ mod tests {
             from_vertex_config: vec![from_bucket_config.clone()],
             to_vertex_config: vec![to_bucket_config.clone()],
         };
+        let tracker_handle = TrackerHandle::new(None);
 
-        let mut handle = ISBWatermarkHandle::new(
+        let _handle = ISBWatermarkHandle::new(
             vertex_name,
             0,
             VertexType::MapUDF,
@@ -894,12 +932,17 @@ mod tests {
             }],
             CancellationToken::new(),
             None,
-            TrackerHandle::new(None),
+            tracker_handle.clone(),
         )
         .await
         .expect("Failed to create ISBWatermarkHandle");
 
-        // Note: insert_offset functionality is now handled by the tracker
+        // Insert multiple offsets into tracker
+        for i in 1..=3 {
+            let message = create_test_message(i, 0, Some(i * 100));
+            let (ack_send, _ack_recv) = oneshot::channel();
+            tracker_handle.insert(&message, ack_send).await.unwrap();
+        }
 
         // Wait for the idle timeout to trigger
         tokio::time::sleep(Duration::from_millis(20)).await;
@@ -980,6 +1023,7 @@ mod tests {
             from_vertex_config: vec![from_bucket_config.clone()],
             to_vertex_config: vec![from_bucket_config.clone()],
         };
+        let tracker_handle = TrackerHandle::new(None);
 
         let mut handle = ISBWatermarkHandle::new(
             vertex_name,
@@ -1000,7 +1044,7 @@ mod tests {
             }],
             CancellationToken::new(),
             None,
-            TrackerHandle::new(None),
+            tracker_handle.clone(),
         )
         .await
         .expect("Failed to create ISBWatermarkHandle");
@@ -1013,7 +1057,10 @@ mod tests {
                 partition_idx: 0,
             });
 
-            // Note: insert_offset functionality is now handled by the tracker
+            // Insert message into tracker
+            let message = create_test_message(i, 0, Some(i * 100));
+            let (ack_send, ack_recv) = oneshot::channel();
+            tracker_handle.insert(&message, ack_send).await.unwrap();
 
             handle
                 .publish_watermark(
@@ -1036,7 +1083,8 @@ mod tests {
                 break;
             }
             sleep(Duration::from_millis(10)).await;
-            // Note: remove_offset functionality is now handled by the tracker
+            tracker_handle.delete(offset.clone()).await.unwrap();
+            ack_recv.await.unwrap();
         }
 
         assert_ne!(fetched_watermark, -1);

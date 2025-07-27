@@ -570,6 +570,7 @@ impl AlignedReducer {
     ) {
         // Drop late messages
         if msg.is_late && msg.event_time < self.current_watermark.sub(self.allowed_lateness) {
+            debug!(event_time = ?msg.event_time.timestamp_millis(), watermark = ?self.current_watermark.timestamp_millis(), "Late message detected, dropping");
             // TODO(ajain): add a metric for this
             return;
         }

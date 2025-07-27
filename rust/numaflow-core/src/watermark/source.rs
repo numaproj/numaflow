@@ -844,7 +844,6 @@ mod tests {
             partition: 0,
         };
 
-        let mut wmb_found = false;
         for i in 1..11 {
             // publish source watermarks before publishing edge watermarks
             let messages = vec![
