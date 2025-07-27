@@ -999,7 +999,7 @@ mod tests {
             tracker_handle: tracker_handle.clone(),
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Reduce".to_string(),
+            vertex_type: VertexType::ReduceUDF,
             isb_config: None,
         });
 
@@ -1224,7 +1224,7 @@ mod tests {
             tracker_handle: tracker_handle.clone(),
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Reduce".to_string(),
+            vertex_type: VertexType::ReduceUDF,
             isb_config: None,
         });
 
@@ -1506,7 +1506,7 @@ mod tests {
             tracker_handle: tracker_handle.clone(),
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Reduce".to_string(),
+            vertex_type: VertexType::ReduceUDF,
             isb_config: None,
         });
 
@@ -1708,7 +1708,7 @@ mod tests {
             tracker_handle: tracker_handle.clone(),
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Reduce".to_string(),
+            vertex_type: VertexType::ReduceUDF,
             isb_config: None,
         });
 
@@ -1942,7 +1942,7 @@ mod tests {
             tracker_handle: tracker_handle.clone(),
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Reduce".to_string(),
+            vertex_type: VertexType::ReduceUDF,
             isb_config: None,
         });
 

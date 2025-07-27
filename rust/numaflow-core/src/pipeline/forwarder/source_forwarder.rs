@@ -282,7 +282,7 @@ mod tests {
             tracker_handle: tracker_handle.clone(),
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Source".to_string(),
+            vertex_type: VertexType::Source,
             isb_config: None,
         });
 

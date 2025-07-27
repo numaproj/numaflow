@@ -140,7 +140,7 @@ async fn start_source_forwarder(
         tracker_handle: tracker_handle.clone(),
         cancel_token: cln_token.clone(),
         watermark_handle: source_watermark_handle.clone().map(WatermarkHandle::Source),
-        vertex_type: config.vertex_type.to_string(),
+        vertex_type: config.vertex_type,
         isb_config: config.isb_config.clone(),
     });
 
@@ -246,7 +246,7 @@ async fn start_map_forwarder(
         tracker_handle: tracker_handle.clone(),
         cancel_token: cln_token.clone(),
         watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
-        vertex_type: config.vertex_type.to_string(),
+        vertex_type: config.vertex_type.clone(),
         isb_config: config.isb_config.clone(),
     });
 
@@ -502,7 +502,9 @@ async fn start_aligned_reduce_forwarder(
 
     // we don't need to pass the watermark handle to the tracker because in reduce windower is
     // responsible for identifying the lowest watermark in the pod.
-    let tracker_handle = TrackerHandle::new(None, None);
+    let tracker_handle =
+        TrackerHandle::new(watermark_handle.clone().map(WatermarkHandle::ISB), None);
+
     // Create buffer reader
     let buffer_reader = JetStreamReader::new(ISBReaderConfig {
         vertex_type: config.vertex_type.to_string(),
@@ -525,7 +527,7 @@ async fn start_aligned_reduce_forwarder(
         tracker_handle: tracker_handle.clone(),
         cancel_token: cln_token.clone(),
         watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
-        vertex_type: config.vertex_type.to_string(),
+        vertex_type: config.vertex_type.clone(),
         isb_config: config.isb_config.clone(),
     });
 
@@ -676,7 +678,9 @@ async fn start_unaligned_reduce_forwarder(
 
     // we don't need to pass the watermark handle to the tracker because in reduce windower is
     // responsible for identifying the lowest watermark in the pod.
-    let tracker_handle = TrackerHandle::new(None, None);
+    let tracker_handle =
+        TrackerHandle::new(watermark_handle.clone().map(WatermarkHandle::ISB), None);
+
     // Create buffer reader
     let buffer_reader = JetStreamReader::new(ISBReaderConfig {
         vertex_type: config.vertex_type.to_string(),
@@ -698,7 +702,7 @@ async fn start_unaligned_reduce_forwarder(
         tracker_handle: tracker_handle.clone(),
         cancel_token: cln_token.clone(),
         watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
-        vertex_type: config.vertex_type.to_string(),
+        vertex_type: config.vertex_type.clone(),
         isb_config: config.isb_config.clone(),
     });
 

@@ -52,7 +52,7 @@ pub(crate) struct ISBWriterConfig {
     pub tracker_handle: TrackerHandle,
     pub cancel_token: CancellationToken,
     pub watermark_handle: Option<WatermarkHandle>,
-    pub vertex_type: String,
+    pub vertex_type: VertexType,
     pub isb_config: Option<ISBConfig>,
 }
 
@@ -79,7 +79,7 @@ pub(crate) struct JetstreamWriter {
     sem: Arc<Semaphore>,
     watermark_handle: Option<WatermarkHandle>,
     paf_concurrency: usize,
-    vertex_type: String,
+    vertex_type: VertexType,
     compression_type: Option<CompressionType>,
 }
 
@@ -243,7 +243,7 @@ impl JetstreamWriter {
                     pipeline_metrics()
                         .forwarder
                         .udf_drop_total
-                        .get_or_create(pipeline_metric_labels(&self.vertex_type))
+                        .get_or_create(pipeline_metric_labels(self.vertex_type.as_str()))
                         .inc();
                     continue;
                 }
@@ -447,7 +447,7 @@ impl JetstreamWriter {
                                 .forwarder
                                 .drop_total
                                 .get_or_create(&pipeline_drop_metric_labels(
-                                    &self.vertex_type,
+                                    self.vertex_type.as_str(),
                                     stream.name,
                                     "Buffer full",
                                 ))
@@ -456,7 +456,7 @@ impl JetstreamWriter {
                                 .forwarder
                                 .drop_bytes_total
                                 .get_or_create(&pipeline_drop_metric_labels(
-                                    &self.vertex_type,
+                                    self.vertex_type.as_str(),
                                     stream.name,
                                     "Buffer full",
                                 ))
@@ -529,7 +529,7 @@ impl JetstreamWriter {
             .await
             .map_err(|_e| Error::ISB("Failed to acquire semaphore permit".to_string()))?;
 
-        let this = self.clone();
+        let mut this = self.clone();
 
         tokio::spawn(async move {
             let _permit = permit;
@@ -541,7 +541,7 @@ impl JetstreamWriter {
                     Ok(ack) => {
                         Self::send_write_metrics(
                             stream.name,
-                            &this.vertex_type,
+                            this.vertex_type.as_str(),
                             message.clone(),
                             write_processing_start,
                         );
@@ -602,14 +602,30 @@ impl JetstreamWriter {
                 }
             }
 
-            // Now that the PAF is resolved, we can delete the entry from the tracker
-            // which will optionally publish the watermarks
-            let watermark_info = this.watermark_handle.as_ref().map(|_| offsets);
-
-            this.tracker_handle
-                .delete(message.offset.clone(), watermark_info)
-                .await
-                .expect("Failed to delete offset from tracker");
+            match &this.vertex_type {
+                VertexType::ReduceUDF => {
+                    // reduce offsets are not tracked by the tracker, so the watermark won't be
+                    // published when we delete the entry from the tracker. So we need to publish
+                    // the watermark directly.
+                    if let Some(WatermarkHandle::ISB(watermark_handle)) =
+                        this.watermark_handle.as_mut()
+                    {
+                        for offset in offsets.iter() {
+                            watermark_handle
+                                .publish_watermark(offset.0.clone(), offset.1.clone())
+                                .await;
+                        }
+                    }
+                }
+                _ => {
+                    // Now that the PAF is resolved, we can delete the entry from the tracker
+                    // which will optionally publish the watermarks
+                    this.tracker_handle
+                        .delete(message.offset.clone(), Some(offsets))
+                        .await
+                        .expect("Failed to delete offset from tracker");
+                }
+            }
         });
 
         Ok(())
@@ -739,7 +755,7 @@ mod tests {
             tracker_handle,
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Source".to_string(),
+            vertex_type: VertexType::Source,
             isb_config: None,
         });
 
@@ -837,7 +853,7 @@ mod tests {
             tracker_handle: TrackerHandle::new(None, None),
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Source".to_string(),
+            vertex_type: VertexType::Source,
             isb_config: None,
         });
 
@@ -904,7 +920,7 @@ mod tests {
             tracker_handle,
             cancel_token: cancel_token.clone(),
             watermark_handle: None,
-            vertex_type: "Map".to_string(),
+            vertex_type: VertexType::MapUDF,
             isb_config: None,
         });
 
@@ -1116,7 +1132,7 @@ mod tests {
             tracker_handle,
             cancel_token: cancel_token.clone(),
             watermark_handle: None,
-            vertex_type: "Source".to_string(),
+            vertex_type: VertexType::Source,
             isb_config: None,
         });
 
@@ -1211,7 +1227,7 @@ mod tests {
             tracker_handle: tracker_handle.clone(),
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Source".to_string(),
+            vertex_type: VertexType::Source,
             isb_config: None,
         });
 
@@ -1306,7 +1322,7 @@ mod tests {
             tracker_handle: tracker_handle.clone(),
             cancel_token: cancel_token.clone(),
             watermark_handle: None,
-            vertex_type: "Source".to_string(),
+            vertex_type: VertexType::Source,
             isb_config: None,
         });
 
@@ -1454,7 +1470,7 @@ mod tests {
             tracker_handle: tracker_handle.clone(),
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Source".to_string(),
+            vertex_type: VertexType::Source,
             isb_config: None,
         });
 

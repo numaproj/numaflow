@@ -18,7 +18,7 @@ use chrono::{DateTime, Utc};
 use serving::callback::CallbackHandler;
 use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
 use tokio::sync::{mpsc, oneshot};
-use tracing::{error, info};
+use tracing::error;
 
 use crate::Result;
 use crate::config::pipeline::isb::Stream;
@@ -275,15 +275,9 @@ impl Tracker {
         write_offsets: Option<Vec<(Stream, Offset)>>,
     ) {
         let Some(mut entry) = self.entries.remove(&offset) else {
-            // In reduce, delete will be invoked twice, once after writing to WAL(read loop) and
-            // once after the writing the responses from the windows to the ISB, the second delete
-            // is invoked for publishing watermarks and these offsets were never inserted into the
-            // tracker, hence we can publish watermark and return early.
-            if let Some(write_offsets) = write_offsets {
-                self.publish_watermarks(write_offsets, &offset).await;
-            }
             return;
         };
+
         if entry.count > 0 {
             entry.count -= 1;
         }
@@ -346,7 +340,6 @@ impl Tracker {
         match watermark_handle {
             WatermarkHandle::ISB(handle) => {
                 handle.publish_watermark(stream, offset).await;
-                handle.remove_offset(input_offset.clone()).await;
             }
             WatermarkHandle::Source(handle) => {
                 let input_partition = match input_offset {
@@ -381,6 +374,10 @@ impl Tracker {
 
         if let Some(wm_info) = watermark_info {
             self.publish_watermarks(wm_info, &offset).await;
+        }
+
+        if let Some(WatermarkHandle::ISB(watermark_handle)) = self.watermark_handle.as_mut() {
+            watermark_handle.remove_offset(offset).await;
         }
 
         let Some(ref callback_handler) = self.serving_callback_handler else {

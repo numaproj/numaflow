@@ -51,6 +51,7 @@ enum ISBWaterMarkActorMessage {
     Publish {
         stream: Stream,
         offset: IntOffset,
+        oneshot_tx: tokio::sync::oneshot::Sender<Result<()>>,
     },
     FetchHeadIdle {
         oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
@@ -62,11 +63,15 @@ enum ISBWaterMarkActorMessage {
     InsertOffset {
         offset: IntOffset,
         watermark: Option<Watermark>,
+        oneshot_tx: tokio::sync::oneshot::Sender<Result<()>>,
     },
     RemoveOffset {
         offset: IntOffset,
+        oneshot_tx: tokio::sync::oneshot::Sender<Result<()>>,
     },
-    PublishIdleWatermark,
+    PublishIdleWatermark {
+        oneshot_tx: tokio::sync::oneshot::Sender<Result<()>>,
+    },
 }
 
 /// Tuple of offset and watermark. We will use this to track the inflight messages.
@@ -139,17 +144,36 @@ impl ISBWatermarkActor {
         match message {
             // fetches the watermark for the given offset
             ISBWaterMarkActorMessage::Fetch { offset, oneshot_tx } => {
-                self.handle_fetch_watermark(offset, oneshot_tx).await
+                let watermark = self
+                    .fetcher
+                    .fetch_watermark(offset.offset, offset.partition_idx);
+
+                self.latest_fetched_wm = std::cmp::max(watermark, self.latest_fetched_wm);
+
+                oneshot_tx
+                    .send(Ok(watermark))
+                    .map_err(|_| Error::Watermark("failed to send response".to_string()))
             }
 
             // publishes the watermark for the given stream and offset
-            ISBWaterMarkActorMessage::Publish { stream, offset } => {
-                self.handle_publish_watermark(stream, offset).await
+            ISBWaterMarkActorMessage::Publish {
+                stream,
+                offset,
+                oneshot_tx,
+            } => {
+                let result = self.handle_publish_watermark(stream, offset).await;
+                oneshot_tx
+                    .send(result)
+                    .map_err(|_| Error::Watermark("failed to send response".to_string()))
             }
 
             // fetches the head idle watermark
             ISBWaterMarkActorMessage::FetchHeadIdle { oneshot_tx } => {
-                self.handle_fetch_head_idle_watermark(oneshot_tx).await
+                let watermark = self.fetcher.fetch_head_idle_watermark();
+
+                oneshot_tx
+                    .send(Ok(watermark))
+                    .map_err(|_| Error::Watermark("failed to send response".to_string()))
             }
 
             // fetches the head watermark
@@ -157,43 +181,41 @@ impl ISBWatermarkActor {
                 partition_idx,
                 oneshot_tx,
             } => {
-                self.handle_fetch_head_watermark(partition_idx, oneshot_tx)
-                    .await
+                let watermark = self.fetcher.fetch_head_watermark(partition_idx);
+
+                oneshot_tx
+                    .send(Ok(watermark))
+                    .map_err(|_| Error::Watermark("failed to send response".to_string()))
             }
 
             // inserts offset to tracked offsets
-            ISBWaterMarkActorMessage::InsertOffset { offset, watermark } => {
-                self.handle_insert_offset(offset, watermark).await
+            ISBWaterMarkActorMessage::InsertOffset {
+                offset,
+                watermark,
+                oneshot_tx,
+            } => {
+                let result = self.handle_insert_offset(offset, watermark).await;
+                oneshot_tx
+                    .send(result)
+                    .map_err(|_| Error::Watermark("failed to send response".to_string()))
             }
 
             // removes offset from tracked offsets
-            ISBWaterMarkActorMessage::RemoveOffset { offset } => {
-                self.handle_remove_offset(offset).await
+            ISBWaterMarkActorMessage::RemoveOffset { offset, oneshot_tx } => {
+                let result = self.handle_remove_offset(offset).await;
+                oneshot_tx
+                    .send(result)
+                    .map_err(|_| Error::Watermark("failed to send response".to_string()))
             }
 
             // publishes idle watermark
-            ISBWaterMarkActorMessage::PublishIdleWatermark => {
-                self.handle_publish_idle_watermark().await
+            ISBWaterMarkActorMessage::PublishIdleWatermark { oneshot_tx } => {
+                let result = self.handle_publish_idle_watermark().await;
+                oneshot_tx
+                    .send(result)
+                    .map_err(|_| Error::Watermark("failed to send response".to_string()))
             }
         }
-    }
-
-    /// fetches the watermark for the given offset and sends the response back via oneshot channel
-    async fn handle_fetch_watermark(
-        &mut self,
-        offset: IntOffset,
-        oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
-    ) -> Result<()> {
-        let watermark = self
-            .fetcher
-            .fetch_watermark(offset.offset, offset.partition_idx);
-
-        // Update the latest fetched watermark
-        self.latest_fetched_wm = std::cmp::max(watermark, self.latest_fetched_wm);
-
-        oneshot_tx
-            .send(Ok(watermark))
-            .map_err(|_| Error::Watermark("failed to send response".to_string()))
     }
 
     /// publishes the watermark for the given stream and offset
@@ -209,29 +231,6 @@ impl ISBWatermarkActor {
         // Reset idle state for this stream
         self.idle_manager.reset_idle(&stream).await;
         Ok(())
-    }
-
-    /// fetches the head idle watermark and sends the response back via oneshot channel
-    async fn handle_fetch_head_idle_watermark(
-        &mut self,
-        oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
-    ) -> Result<()> {
-        let watermark = self.fetcher.fetch_head_idle_watermark();
-        oneshot_tx
-            .send(Ok(watermark))
-            .map_err(|_| Error::Watermark("failed to send response".to_string()))
-    }
-
-    /// fetches the head watermark and sends the response back via oneshot channel
-    async fn handle_fetch_head_watermark(
-        &mut self,
-        partition_idx: u16,
-        oneshot_tx: tokio::sync::oneshot::Sender<Result<Watermark>>,
-    ) -> Result<()> {
-        let watermark = self.fetcher.fetch_head_watermark(partition_idx);
-        oneshot_tx
-            .send(Ok(watermark))
-            .map_err(|_| Error::Watermark("failed to send response".to_string()))
     }
 
     /// inserts offset to tracked offsets so we can figure out the lowest unprocessed watermark
@@ -502,13 +501,26 @@ impl ISBWatermarkHandle {
             return;
         };
 
-        // Send the publish watermark message to the actor (fire-and-forget)
-        self.sender
-            .send(ISBWaterMarkActorMessage::Publish { stream, offset })
+        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
+        if let Err(e) = self
+            .sender
+            .send(ISBWaterMarkActorMessage::Publish {
+                stream,
+                offset,
+                oneshot_tx,
+            })
             .await
-            .unwrap_or_else(|e| {
-                warn!("Failed to send message: {:?}", e);
-            });
+        {
+            warn!(?e, "Failed to send message");
+            return;
+        }
+
+        match oneshot_rx.await {
+            Ok(_) => {}
+            Err(e) => {
+                warn!(?e, "Failed to receive response");
+            }
+        }
     }
 
     /// remove_offset removes the offset from the tracked offsets.
@@ -518,13 +530,22 @@ impl ISBWatermarkHandle {
             return;
         };
 
-        // Send the remove offset message to the actor (fire-and-forget)
-        self.sender
-            .send(ISBWaterMarkActorMessage::RemoveOffset { offset })
+        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
+        if let Err(e) = self
+            .sender
+            .send(ISBWaterMarkActorMessage::RemoveOffset { offset, oneshot_tx })
             .await
-            .unwrap_or_else(|e| {
-                warn!("Failed to send message: {:?}", e);
-            });
+        {
+            warn!(?e, "Failed to send message");
+            return;
+        }
+
+        match oneshot_rx.await {
+            Ok(_) => {}
+            Err(e) => {
+                warn!(?e, "Failed to receive response");
+            }
+        }
     }
 
     /// insert_offset inserts the offset to the tracked offsets.
@@ -534,24 +555,46 @@ impl ISBWatermarkHandle {
             return;
         };
 
-        // Send the insert offset message to the actor (fire-and-forget)
-        self.sender
-            .send(ISBWaterMarkActorMessage::InsertOffset { offset, watermark })
+        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
+        if let Err(e) = self
+            .sender
+            .send(ISBWaterMarkActorMessage::InsertOffset {
+                offset,
+                watermark,
+                oneshot_tx,
+            })
             .await
-            .unwrap_or_else(|e| {
-                warn!("Failed to send message: {:?}", e);
-            });
+        {
+            warn!(?e, "Failed to send message");
+            return;
+        }
+
+        match oneshot_rx.await {
+            Ok(_) => {}
+            Err(e) => {
+                warn!(?e, "Failed to receive response");
+            }
+        }
     }
 
     /// publishes the idle watermark for the downstream idle partitions.
     pub(crate) async fn publish_idle_watermark(&self) {
-        // Send the publish idle watermark message to the actor (fire-and-forget)
-        self.sender
-            .send(ISBWaterMarkActorMessage::PublishIdleWatermark)
+        let (oneshot_tx, oneshot_rx) = tokio::sync::oneshot::channel();
+        if let Err(e) = self
+            .sender
+            .send(ISBWaterMarkActorMessage::PublishIdleWatermark { oneshot_tx })
             .await
-            .unwrap_or_else(|e| {
-                warn!("Failed to send message: {:?}", e);
-            });
+        {
+            warn!(?e, "Failed to send message");
+            return;
+        }
+
+        match oneshot_rx.await {
+            Ok(_) => {}
+            Err(e) => {
+                warn!(?e, "Failed to receive response");
+            }
+        }
     }
 }
 
