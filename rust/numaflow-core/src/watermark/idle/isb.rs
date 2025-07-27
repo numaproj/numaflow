@@ -44,6 +44,8 @@ impl Default for IdleState {
     }
 }
 
+// TODO(vigith): rename ISBIdleDetector to ISBIdleManager, it is not just detecting, but also managing the idle state.
+
 /// ISBIdleDetector detects the idle partitions in the ISB. It keeps track of the last published watermark
 /// state to detect the idle partitions, it also keeps track of the ctrl message offset that should
 /// be used for publishing the idle watermark.
@@ -107,8 +109,8 @@ impl ISBIdleDetector {
         last_published_wm[stream.partition as usize].wmb_msg_offset = None;
     }
 
-    /// fetches the offset to be used for publishing the idle watermark. Only a WMB can be used
-    /// to send idle watermark, hence if not WMB's are published, we publish an WMB and return its
+    /// fetches the offset to be used for publishing the idle watermark. Only a WMB (idle=true) can be used
+    /// to send idle watermark, hence if no such WMB's are published, we publish a WMB and return its
     /// offset, or return the current "active" WMB's offset.
     pub(crate) async fn fetch_idle_offset(&self, stream: &Stream) -> crate::error::Result<i64> {
         let idle_state = {
@@ -148,8 +150,11 @@ impl ISBIdleDetector {
             .last_published_wm_state
             .write()
             .expect("Failed to get write lock");
-        let last_published_wm = write_guard.get_mut(stream.vertex).expect("Invalid vertex");
-        // setting an offset for wmb-offset means it is idle and we will do inplace incr of WM for that offset.
+        let last_published_wm = write_guard
+            .get_mut(stream.vertex)
+            .unwrap_or_else(|| panic!("Invalid vertex: {}", stream.vertex));
+
+        // setting an offset for wmb-offset means it is idle, and we will do inplace incr of WM for that offset.
         last_published_wm[stream.partition as usize].wmb_msg_offset = Some(offset);
         last_published_wm[stream.partition as usize].last_wm_published_time = Utc::now();
     }

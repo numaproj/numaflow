@@ -148,8 +148,9 @@ impl PBQ {
         // acknowledge the successfully written wal messages by listening on the offset stream.
         tokio::spawn(async move {
             while let Some(offset) = offset_stream.next().await {
+                // no watermark publishing here, since we are just acknowledging the write to WAL
                 tracker_handle
-                    .delete(offset)
+                    .delete(offset, None)
                     .await
                     .expect("Failed to delete offset");
             }

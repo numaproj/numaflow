@@ -237,7 +237,7 @@ impl JetstreamWriter {
                 if message.dropped() {
                     // delete the entry from tracker
                     self.tracker_handle
-                        .delete(message.offset)
+                        .delete(message.offset, None)
                         .await
                         .expect("Failed to delete offset from tracker");
                     pipeline_metrics()
@@ -438,7 +438,7 @@ impl JetstreamWriter {
                         BufferFullStrategy::DiscardLatest => {
                             // delete the entry from tracker
                             self.tracker_handle
-                                .delete(offset.clone())
+                                .delete(offset.clone(), None)
                                 .await
                                 .expect("Failed to delete offset from tracker");
                             // increment drop metric if buffer is full and
@@ -529,7 +529,7 @@ impl JetstreamWriter {
             .await
             .map_err(|_e| Error::ISB("Failed to acquire semaphore permit".to_string()))?;
 
-        let mut this = self.clone();
+        let this = self.clone();
 
         tokio::spawn(async move {
             let _permit = permit;
@@ -602,16 +602,12 @@ impl JetstreamWriter {
                 }
             }
 
-            if let Some(watermark_handle) = this.watermark_handle.as_mut() {
-                // now the pafs have resolved, lets use the offsets to send watermark
-                for (stream, offset) in offsets {
-                    JetstreamWriter::publish_watermark(watermark_handle, stream, offset, &message)
-                        .await;
-                }
-            }
+            // Now that the PAF is resolved, we can delete the entry from the tracker
+            // which will optionally publish the watermarks
+            let watermark_info = this.watermark_handle.as_ref().map(|_| offsets);
 
             this.tracker_handle
-                .delete(message.offset.clone())
+                .delete(message.offset.clone(), watermark_info)
                 .await
                 .expect("Failed to delete offset from tracker");
         });
@@ -672,29 +668,6 @@ impl JetstreamWriter {
 
             if cln_token.is_cancelled() {
                 return Err(Error::ISB("Shutdown signal received".to_string()));
-            }
-        }
-    }
-
-    /// publishes the watermark for the given stream and offset
-    async fn publish_watermark(
-        watermark_handle: &mut WatermarkHandle,
-        stream: Stream,
-        offset: Offset,
-        message: &Message,
-    ) {
-        match watermark_handle {
-            WatermarkHandle::ISB(handle) => {
-                handle.publish_watermark(stream, offset).await;
-            }
-            WatermarkHandle::Source(handle) => {
-                let input_partition = match &message.offset {
-                    Offset::Int(offset) => offset.partition_idx,
-                    Offset::String(offset) => offset.partition_idx,
-                };
-                handle
-                    .publish_source_isb_watermark(stream, offset, input_partition)
-                    .await;
             }
         }
     }

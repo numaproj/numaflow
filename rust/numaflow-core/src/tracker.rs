@@ -18,12 +18,13 @@ use chrono::{DateTime, Utc};
 use serving::callback::CallbackHandler;
 use serving::{DEFAULT_ID_HEADER, DEFAULT_POD_HASH_KEY};
 use tokio::sync::{mpsc, oneshot};
-use tracing::error;
+use tracing::{error, info};
 
 use crate::Result;
+use crate::config::pipeline::isb::Stream;
 use crate::error::Error;
 use crate::message::{Message, Offset, ReadAck};
-use crate::watermark::isb::ISBWatermarkHandle;
+use crate::watermark::WatermarkHandle;
 
 /// TrackerEntry represents the state of a tracked message.
 #[derive(Debug)]
@@ -39,7 +40,6 @@ struct TrackerEntry {
 }
 
 /// ActorMessage represents the messages that can be sent to the Tracker actor.
-#[derive(Debug)]
 enum ActorMessage {
     Insert {
         offset: Offset,
@@ -57,6 +57,7 @@ enum ActorMessage {
     },
     Delete {
         offset: Offset,
+        write_offsets: Option<Vec<(Stream, Offset)>>,
     },
     Discard {
         offset: Offset,
@@ -80,7 +81,7 @@ struct Tracker {
     /// number of entries in the tracker
     entries: HashMap<Offset, TrackerEntry>,
     receiver: mpsc::Receiver<ActorMessage>,
-    watermark_handle: Option<ISBWatermarkHandle>,
+    watermark_handle: Option<WatermarkHandle>,
     serving_callback_handler: Option<CallbackHandler>,
 }
 
@@ -145,7 +146,7 @@ impl Tracker {
     /// Creates a new Tracker instance with the given receiver for actor messages.
     fn new(
         receiver: mpsc::Receiver<ActorMessage>,
-        watermark_handle: Option<ISBWatermarkHandle>,
+        watermark_handle: Option<WatermarkHandle>,
         serving_callback_handler: Option<CallbackHandler>,
     ) -> Self {
         Self {
@@ -181,8 +182,11 @@ impl Tracker {
             ActorMessage::EOF { offset } => {
                 self.handle_eof(offset).await;
             }
-            ActorMessage::Delete { offset } => {
-                self.handle_delete(offset).await;
+            ActorMessage::Delete {
+                offset,
+                write_offsets,
+            } => {
+                self.handle_delete(offset, write_offsets).await;
             }
             ActorMessage::Discard { offset } => {
                 self.handle_discard(offset).await;
@@ -219,7 +223,7 @@ impl Tracker {
             },
         );
 
-        if let Some(watermark_handle) = self.watermark_handle.as_mut() {
+        if let Some(WatermarkHandle::ISB(watermark_handle)) = self.watermark_handle.as_mut() {
             watermark_handle.insert_offset(offset, watermark).await;
         }
     }
@@ -259,14 +263,25 @@ impl Tracker {
         // receiving all the messages.
         if entry.count == 0 {
             let entry = self.entries.remove(&offset).unwrap();
-            self.completed_successfully(offset, entry).await;
+            self.completed_successfully(offset, entry, None).await;
         }
     }
 
     /// Removes an entry from the tracker and sends an acknowledgment if the count is zero
-    /// and the entry is marked as EOF.
-    async fn handle_delete(&mut self, offset: Offset) {
+    /// and the entry is marked as EOF. Publishes watermarks if watermark_info is provided.
+    async fn handle_delete(
+        &mut self,
+        offset: Offset,
+        write_offsets: Option<Vec<(Stream, Offset)>>,
+    ) {
         let Some(mut entry) = self.entries.remove(&offset) else {
+            // In reduce, delete will be invoked twice, once after writing to WAL(read loop) and
+            // once after the writing the responses from the windows to the ISB, the second delete
+            // is invoked for publishing watermarks and these offsets were never inserted into the
+            // tracker, hence we can publish watermark and return early.
+            if let Some(write_offsets) = write_offsets {
+                self.publish_watermarks(write_offsets, &offset).await;
+            }
             return;
         };
         if entry.count > 0 {
@@ -277,7 +292,8 @@ impl Tracker {
         // In map-streaming this won't happen because eof is not tied to the message, rather it is
         // tied to channel-close.
         if entry.count == 0 && entry.eof {
-            self.completed_successfully(offset, entry).await;
+            self.completed_successfully(offset, entry, write_offsets)
+                .await;
         } else {
             // add it back because we removed it
             self.entries.insert(offset, entry);
@@ -293,7 +309,7 @@ impl Tracker {
             .ack_send
             .send(ReadAck::Nak)
             .expect("Failed to send nak");
-        if let Some(watermark_handle) = self.watermark_handle.as_mut() {
+        if let Some(WatermarkHandle::ISB(watermark_handle)) = self.watermark_handle.as_mut() {
             watermark_handle.remove_offset(offset).await;
         }
     }
@@ -311,12 +327,50 @@ impl Tracker {
         self.entries.insert(offset, entry);
     }
 
+    /// Publishes watermarks for the given write offsets using the provided watermark handle.
+    async fn publish_watermarks(
+        &mut self,
+        write_offsets: Vec<(Stream, Offset)>,
+        input_offset: &Offset,
+    ) {
+        for (stream, offset) in write_offsets {
+            self.publish_watermark(stream, offset, input_offset).await;
+        }
+    }
+
+    /// Publishes the watermark for the given stream and offset
+    async fn publish_watermark(&mut self, stream: Stream, offset: Offset, input_offset: &Offset) {
+        let Some(watermark_handle) = self.watermark_handle.as_mut() else {
+            return;
+        };
+        match watermark_handle {
+            WatermarkHandle::ISB(handle) => {
+                handle.publish_watermark(stream, offset).await;
+                handle.remove_offset(input_offset.clone()).await;
+            }
+            WatermarkHandle::Source(handle) => {
+                let input_partition = match input_offset {
+                    Offset::Int(offset) => offset.partition_idx,
+                    Offset::String(offset) => offset.partition_idx,
+                };
+                handle
+                    .publish_source_isb_watermark(stream, offset, input_partition)
+                    .await;
+            }
+        }
+    }
+
     /// This function is called once the message has been successfully processed. This is where
     /// the bookkeeping for a successful message happens, things like,
     /// - ack back
     /// - call serving callbacks
     /// - watermark progression
-    async fn completed_successfully(&mut self, offset: Offset, entry: TrackerEntry) {
+    async fn completed_successfully(
+        &mut self,
+        offset: Offset,
+        entry: TrackerEntry,
+        watermark_info: Option<Vec<(Stream, Offset)>>,
+    ) {
         let TrackerEntry {
             ack_send,
             serving_callback_info: callback_info,
@@ -325,8 +379,8 @@ impl Tracker {
 
         ack_send.send(ReadAck::Ack).expect("Failed to send ack");
 
-        if let Some(watermark_handle) = self.watermark_handle.as_mut() {
-            watermark_handle.remove_offset(offset).await;
+        if let Some(wm_info) = watermark_info {
+            self.publish_watermarks(wm_info, &offset).await;
         }
 
         let Some(ref callback_handler) = self.serving_callback_handler else {
@@ -363,7 +417,7 @@ pub(crate) struct TrackerHandle {
 impl TrackerHandle {
     /// Creates a new TrackerHandle instance and spawns the Tracker.
     pub(crate) fn new(
-        watermark_handle: Option<ISBWatermarkHandle>,
+        watermark_handle: Option<WatermarkHandle>,
         callback_handler: Option<CallbackHandler>,
     ) -> Self {
         let enable_callbacks = callback_handler.is_some();
@@ -457,8 +511,16 @@ impl TrackerHandle {
     }
 
     /// Deletes a message from the Tracker with the given offset.
-    pub(crate) async fn delete(&self, offset: Offset) -> Result<()> {
-        let message = ActorMessage::Delete { offset };
+    /// Optionally publishes watermarks if watermark_info is provided.
+    pub(crate) async fn delete(
+        &self,
+        offset: Offset,
+        write_offsets: Option<Vec<(Stream, Offset)>>,
+    ) -> Result<()> {
+        let message = ActorMessage::Delete {
+            offset,
+            write_offsets,
+        };
         self.sender
             .send(message)
             .await
@@ -484,10 +546,8 @@ impl TrackerHandle {
         self.sender
             .send(message)
             .await
-            .map_err(|e| Error::Tracker(format!("{:?}", e)))?;
-        response
-            .await
-            .map_err(|e| Error::Tracker(format!("{:?}", e)))
+            .map_err(|e| Error::Tracker(format!("{e:?}")))?;
+        response.await.map_err(|e| Error::Tracker(format!("{e:?}")))
     }
 }
 
@@ -582,7 +642,7 @@ mod tests {
         handle.eof(message.offset.clone()).await.unwrap();
 
         // Delete the message
-        handle.delete(message.offset).await.unwrap();
+        handle.delete(message.offset, None).await.unwrap();
 
         // Verify that the message was deleted and ack was received
         let result = timeout(Duration::from_secs(1), ack_recv).await.unwrap();
@@ -616,7 +676,7 @@ mod tests {
         // Insert a new message
         handle.insert(&message, ack_send).await.unwrap();
 
-        let messages: Vec<Message> = std::iter::repeat(message.clone()).take(3).collect();
+        let messages: Vec<Message> = std::iter::repeat_n(message.clone(), 3).collect();
         // Update the message with a count of 3
         for message in messages {
             handle
@@ -626,9 +686,9 @@ mod tests {
         }
 
         // Delete the message three times
-        handle.delete(message.offset.clone()).await.unwrap();
-        handle.delete(message.offset.clone()).await.unwrap();
-        handle.delete(message.offset.clone()).await.unwrap();
+        handle.delete(message.offset.clone(), None).await.unwrap();
+        handle.delete(message.offset.clone(), None).await.unwrap();
+        handle.delete(message.offset.clone(), None).await.unwrap();
 
         // Verify that the message was deleted and ack was received after the third delete
         let result = timeout(Duration::from_secs(1), ack_recv).await.unwrap();
@@ -699,7 +759,7 @@ mod tests {
         // Insert a new message
         handle.insert(&message, ack_send).await.unwrap();
 
-        let messages: Vec<Message> = std::iter::repeat(message.clone()).take(3).collect();
+        let messages: Vec<Message> = std::iter::repeat_n(message.clone(), 3).collect();
         for message in messages {
             handle
                 .update(message.offset.clone(), vec![message.tags.clone()])
@@ -780,7 +840,7 @@ mod tests {
         let result = timeout(Duration::from_secs(1), async {
             loop {
                 let mut keys = callback_bucket.keys().await.unwrap();
-                if let Some(_) = keys.next().await {
+                if keys.next().await.is_some() {
                     break;
                 }
                 tokio::time::sleep(Duration::from_millis(10)).await;
