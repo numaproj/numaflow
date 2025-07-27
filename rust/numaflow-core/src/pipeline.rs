@@ -199,24 +199,6 @@ async fn start_map_forwarder(
     config: PipelineConfig,
     map_vtx_config: MapVtxConfig,
 ) -> Result<()> {
-    // create watermark handle, if watermark is enabled
-    let watermark_handle =
-        create_components::create_edge_watermark_handle(&config, &js_context, &cln_token, None)
-            .await?;
-
-    // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
-    // to a common buffer, in the case of a join.
-    let reader_config = &config
-        .from_vertex_config
-        .first()
-        .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
-        .reader_config;
-
-    // Create buffer writers and buffer readers
-    let mut forwarder_components = vec![];
-    let mut mapper_handle = None;
-    let mut isb_lag_readers = vec![];
-
     let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
         Some(
             CallbackHandler::new(
@@ -233,6 +215,30 @@ async fn start_map_forwarder(
 
     // create tracker and buffer writer, they can be shared across all forwarders
     let tracker_handle = TrackerHandle::new(serving_callback_handler.clone());
+
+    // create watermark handle, if watermark is enabled
+    let watermark_handle = create_components::create_edge_watermark_handle(
+        &config,
+        &js_context,
+        &cln_token,
+        None,
+        tracker_handle.clone(),
+    )
+    .await?;
+
+    // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
+    // to a common buffer, in the case of a join.
+    let reader_config = &config
+        .from_vertex_config
+        .first()
+        .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
+        .reader_config;
+
+    // Create buffer writers and buffer readers
+    let mut forwarder_components = vec![];
+    let mut mapper_handle = None;
+    let mut isb_lag_readers = vec![];
+
     let buffer_writer = JetstreamWriter::new(ISBWriterConfig {
         config: config.to_vertex_config.clone(),
         js_ctx: js_context.clone(),
@@ -447,6 +453,12 @@ async fn start_aligned_reduce_forwarder(
     reduce_vtx_config: ReduceVtxConfig,
     aligned_config: AlignedReducerConfig,
 ) -> Result<()> {
+    // For reduce, we don't need to pass the watermark handle to the tracker, since the
+    // tracker only tracks the offsets until they are written to the WAL, watermark is
+    // not published using the tracker, instead writer directly publishes the watermark for reduce
+    // vertices since the lowest watermark is identified by the window manager.
+    let tracker_handle = TrackerHandle::new(None);
+
     // Create aligned window manager based on window type
     let window_manager = match &aligned_config.window_config.window_type {
         AlignedWindowType::Fixed(fixed_config) => {
@@ -478,6 +490,7 @@ async fn start_aligned_reduce_forwarder(
         &js_context,
         &cln_token,
         Some(WindowManager::Aligned(window_manager.clone())),
+        tracker_handle.clone(),
     )
     .await?;
 
@@ -493,12 +506,6 @@ async fn start_aligned_reduce_forwarder(
         .get(*get_vertex_replica() as usize)
         .cloned()
         .ok_or_else(|| error::Error::Config("No stream found for reduce vertex".to_string()))?;
-
-    // For reduce, we don't need to pass the watermark handle to the tracker, since the
-    // tracker only tracks the offsets until they are written to the WAL, watermark is
-    // not published using the tracker, instead writer directly publishes the watermark for reduce
-    // vertices since the lowest watermark is identified by the window manager.
-    let tracker_handle = TrackerHandle::new(None);
 
     // Create buffer reader
     let buffer_reader = JetStreamReader::new(ISBReaderConfig {
@@ -637,6 +644,10 @@ async fn start_unaligned_reduce_forwarder(
     reduce_vtx_config: ReduceVtxConfig,
     unaligned_config: UnalignedReducerConfig,
 ) -> Result<()> {
+    // we don't need to pass the watermark handle to the tracker because in reduce windower is
+    // responsible for identifying the lowest watermark in the pod.
+    let tracker_handle = TrackerHandle::new(None);
+
     // Create unaligned window manager based on window type
     let window_manager = match &unaligned_config.window_config.window_type {
         UnalignedWindowType::Accumulator(accumulator_config) => {
@@ -655,6 +666,7 @@ async fn start_unaligned_reduce_forwarder(
         &js_context,
         &cln_token,
         Some(WindowManager::Unaligned(window_manager.clone())),
+        tracker_handle.clone(),
     )
     .await?;
 
@@ -670,10 +682,6 @@ async fn start_unaligned_reduce_forwarder(
         .get(*get_vertex_replica() as usize)
         .cloned()
         .ok_or_else(|| error::Error::Config("No stream found for reduce vertex".to_string()))?;
-
-    // we don't need to pass the watermark handle to the tracker because in reduce windower is
-    // responsible for identifying the lowest watermark in the pod.
-    let tracker_handle = TrackerHandle::new(None);
 
     // Create buffer reader
     let buffer_reader = JetStreamReader::new(ISBReaderConfig {
@@ -809,19 +817,6 @@ async fn start_sink_forwarder(
     config: PipelineConfig,
     sink: SinkVtxConfig,
 ) -> Result<()> {
-    // create watermark handle, if watermark is enabled
-    let watermark_handle =
-        create_components::create_edge_watermark_handle(&config, &js_context, &cln_token, None)
-            .await?;
-
-    // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
-    // to a common buffer, in the case of a join.
-    let reader_config = &config
-        .from_vertex_config
-        .first()
-        .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
-        .reader_config;
-
     let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
         Some(
             CallbackHandler::new(
@@ -835,6 +830,26 @@ async fn start_sink_forwarder(
     } else {
         None
     };
+
+    let tracker_handle = TrackerHandle::new(serving_callback_handler.clone());
+
+    // create watermark handle, if watermark is enabled
+    let watermark_handle = create_components::create_edge_watermark_handle(
+        &config,
+        &js_context,
+        &cln_token,
+        None,
+        tracker_handle.clone(),
+    )
+    .await?;
+
+    // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
+    // to a common buffer, in the case of a join.
+    let reader_config = &config
+        .from_vertex_config
+        .first()
+        .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
+        .reader_config;
 
     let serving_store = match &sink.serving_store_config {
         Some(serving_store_config) => match serving_store_config {
@@ -855,8 +870,6 @@ async fn start_sink_forwarder(
     let mut sink_writers = vec![];
     let mut buffer_readers = vec![];
     for stream in reader_config.streams.clone() {
-        let tracker_handle = TrackerHandle::new(serving_callback_handler.clone());
-
         let buffer_reader = JetStreamReader::new(ISBReaderConfig {
             vertex_type: config.vertex_type.to_string(),
             stream,

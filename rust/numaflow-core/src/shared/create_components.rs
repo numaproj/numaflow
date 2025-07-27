@@ -723,6 +723,7 @@ pub async fn create_edge_watermark_handle(
     js_context: &Context,
     cln_token: &CancellationToken,
     window_manager: Option<WindowManager>,
+    tracker_handle: TrackerHandle,
 ) -> error::Result<Option<ISBWatermarkHandle>> {
     match &config.watermark_config {
         Some(WatermarkConfig::Edge(edge_config)) => {
@@ -736,6 +737,7 @@ pub async fn create_edge_watermark_handle(
                 &config.to_vertex_config,
                 cln_token.clone(),
                 window_manager,
+                tracker_handle,
             )
             .await?;
             Ok(Some(handle))

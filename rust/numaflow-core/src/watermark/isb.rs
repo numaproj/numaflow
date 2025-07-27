@@ -19,8 +19,7 @@
 //! ```text
 //! (Write to ISB) -------> (Publish Watermark) ------> (Remove tracked Offset)
 //! ```
-use std::cmp::Ordering;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Receiver;
@@ -33,6 +32,7 @@ use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::{Error, Result};
 use crate::message::{IntOffset, Offset};
 use crate::reduce::reducer::WindowManager;
+use crate::tracker::TrackerHandle;
 use crate::watermark::idle::isb::ISBIdleDetector;
 use crate::watermark::isb::wm_fetcher::ISBWatermarkFetcher;
 use crate::watermark::isb::wm_publisher::ISBWatermarkPublisher;
@@ -65,27 +65,6 @@ enum ISBWaterMarkActorMessage {
     },
 }
 
-/// Tuple of offset and watermark. We will use this to track the inflight messages.
-#[derive(Eq, PartialEq, Debug, Clone)]
-struct OffsetWatermark {
-    /// offset can be -1 if watermark cannot be derived.
-    offset: i64,
-    watermark: Watermark,
-}
-
-/// Ordering will be based on the offset in OffsetWatermark
-impl Ord for OffsetWatermark {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.offset.cmp(&other.offset)
-    }
-}
-
-impl PartialOrd for OffsetWatermark {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
 /// EdgeWatermarkActor comprises EdgeFetcher and EdgePublisher.
 /// Contains all computation logic and data structures.
 struct ISBWatermarkActor {
@@ -95,6 +74,7 @@ struct ISBWatermarkActor {
     /// Window manager is used to compute the minimum watermark for the reduce vertex.
     window_manager: Option<WindowManager>,
     latest_fetched_wm: Watermark,
+    tracker_handle: TrackerHandle,
 }
 
 impl ISBWatermarkActor {
@@ -103,6 +83,7 @@ impl ISBWatermarkActor {
         publisher: ISBWatermarkPublisher,
         idle_manager: ISBIdleDetector,
         window_manager: Option<WindowManager>,
+        tracker_handle: TrackerHandle,
     ) -> Self {
         Self {
             fetcher,
@@ -111,6 +92,7 @@ impl ISBWatermarkActor {
             window_manager,
             latest_fetched_wm: Watermark::from_timestamp_millis(-1)
                 .expect("failed to parse timestamp"),
+            tracker_handle,
         }
     }
 
@@ -184,7 +166,7 @@ impl ISBWatermarkActor {
     /// publishes the watermark for the given stream and offset
     async fn handle_publish_watermark(&mut self, stream: Stream, offset: IntOffset) -> Result<()> {
         // Compute the minimum watermark
-        let min_wm = self.compute_min_watermark();
+        let min_wm = self.compute_min_watermark().await;
 
         // Publish the watermark
         self.publisher
@@ -199,7 +181,7 @@ impl ISBWatermarkActor {
     /// publishes idle watermark
     async fn handle_publish_idle_watermark(&mut self) -> Result<()> {
         // Compute the minimum watermark
-        let mut min_wm = self.compute_min_watermark();
+        let mut min_wm = self.compute_min_watermark().await;
 
         // if the computed min watermark is -1, means there is no data (no windows and inflight messages)
         // we should fetch the head idle watermark and publish it to downstream.
@@ -223,7 +205,7 @@ impl ISBWatermarkActor {
     }
 
     /// Computes the minimum watermark based on window manager and inflight messages.
-    fn compute_min_watermark(&self) -> Watermark {
+    async fn compute_min_watermark(&self) -> Watermark {
         // If window manager is configured, we can use the oldest window's end time - 1ms as the
         // watermark.
         if let Some(window_manager) = &self.window_manager {
@@ -251,15 +233,17 @@ impl ISBWatermarkActor {
         // if window manager is not configured, we should use the lowest watermark among all the
         // inflight messages.
         self.get_lowest_watermark()
+            .await
             .unwrap_or(Watermark::from_timestamp_millis(-1).unwrap())
     }
 
-    /// Gets the lowest watermark among all the inflight requests
-    fn get_lowest_watermark(&self) -> Option<Watermark> {
-        self.offset_set
-            .values()
-            .filter_map(|set| set.iter().next().map(|ow| ow.watermark))
-            .min()
+    /// Gets the lowest watermark among all the inflight requests using the tracker
+    async fn get_lowest_watermark(&self) -> Option<Watermark> {
+        if let Ok(lowest_watermark) = self.tracker_handle.lowest_watermark().await {
+            Some(Watermark::from_timestamp_millis(lowest_watermark.timestamp_millis()).unwrap())
+        } else {
+            None
+        }
     }
 }
 
@@ -268,6 +252,7 @@ impl ISBWatermarkActor {
 #[derive(Clone)]
 pub(crate) struct ISBWatermarkHandle {
     sender: mpsc::Sender<ISBWaterMarkActorMessage>,
+    tracker_handle: TrackerHandle,
 }
 
 impl ISBWatermarkHandle {
@@ -283,6 +268,7 @@ impl ISBWatermarkHandle {
         to_vertex_configs: &[ToVertexConfig],
         cln_token: CancellationToken,
         window_manager: Option<WindowManager>,
+        tracker_handle: TrackerHandle,
     ) -> Result<Self> {
         let (sender, receiver) = mpsc::channel(100);
 
@@ -313,11 +299,19 @@ impl ISBWatermarkHandle {
         let idle_manager =
             ISBIdleDetector::new(idle_timeout, to_vertex_configs, js_context.clone()).await;
 
-        let actor =
-            ISBWatermarkActor::new(fetcher, publisher, idle_manager.clone(), window_manager);
+        let actor = ISBWatermarkActor::new(
+            fetcher,
+            publisher,
+            idle_manager.clone(),
+            window_manager,
+            tracker_handle.clone(),
+        );
         tokio::spawn(async move { actor.run(receiver).await });
 
-        let isb_watermark_handle = Self { sender };
+        let isb_watermark_handle = Self {
+            sender,
+            tracker_handle,
+        };
 
         // start a task to keep publishing idle watermarks every idle_timeout
         tokio::spawn({
@@ -484,6 +478,7 @@ mod tests {
     use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
     use crate::config::pipeline::watermark::BucketConfig;
     use crate::message::IntOffset;
+    use crate::tracker::TrackerHandle;
     use crate::watermark::wmb::WMB;
 
     #[cfg(feature = "nats-tests")]
@@ -589,29 +584,10 @@ mod tests {
             }],
             CancellationToken::new(),
             None,
+            TrackerHandle::new(None),
         )
         .await
         .expect("Failed to create ISBWatermarkHandle");
-
-        handle
-            .insert_offset(
-                Offset::Int(IntOffset {
-                    offset: 1,
-                    partition_idx: 0,
-                }),
-                Some(Watermark::from_timestamp_millis(100).unwrap()),
-            )
-            .await;
-
-        handle
-            .insert_offset(
-                Offset::Int(IntOffset {
-                    offset: 2,
-                    partition_idx: 0,
-                }),
-                Some(Watermark::from_timestamp_millis(200).unwrap()),
-            )
-            .await;
 
         handle
             .publish_watermark(
@@ -654,13 +630,7 @@ mod tests {
             panic!("WMB not found");
         }
 
-        // remove the smaller offset and then publish watermark and see
-        handle
-            .remove_offset(Offset::Int(IntOffset {
-                offset: 1,
-                partition_idx: 0,
-            }))
-            .await;
+        // Note: remove_offset functionality is now handled by the tracker
 
         handle
             .publish_watermark(
@@ -768,6 +738,7 @@ mod tests {
             }],
             CancellationToken::new(),
             None,
+            TrackerHandle::new(None),
         )
         .await
         .expect("Failed to create ISBWatermarkHandle");
@@ -782,12 +753,7 @@ mod tests {
                     partition_idx: 0,
                 });
 
-                handle
-                    .insert_offset(
-                        offset.clone(),
-                        Some(Watermark::from_timestamp_millis(i * 100).unwrap()),
-                    )
-                    .await;
+                // Note: insert_offset functionality is now handled by the tracker
 
                 handle
                     .publish_watermark(
@@ -815,7 +781,7 @@ mod tests {
                     break;
                 }
                 sleep(Duration::from_millis(10)).await;
-                handle.remove_offset(offset.clone()).await;
+                // Note: remove_offset functionality is now handled by the tracker
             }
         })
         .await;
@@ -928,22 +894,12 @@ mod tests {
             }],
             CancellationToken::new(),
             None,
+            TrackerHandle::new(None),
         )
         .await
         .expect("Failed to create ISBWatermarkHandle");
 
-        // Insert multiple offsets
-        for i in 1..=3 {
-            handle
-                .insert_offset(
-                    Offset::Int(IntOffset {
-                        offset: i,
-                        partition_idx: 0,
-                    }),
-                    Some(Watermark::from_timestamp_millis(i * 100).unwrap()),
-                )
-                .await;
-        }
+        // Note: insert_offset functionality is now handled by the tracker
 
         // Wait for the idle timeout to trigger
         tokio::time::sleep(Duration::from_millis(20)).await;
@@ -1044,6 +1000,7 @@ mod tests {
             }],
             CancellationToken::new(),
             None,
+            TrackerHandle::new(None),
         )
         .await
         .expect("Failed to create ISBWatermarkHandle");
@@ -1056,12 +1013,7 @@ mod tests {
                 partition_idx: 0,
             });
 
-            handle
-                .insert_offset(
-                    offset.clone(),
-                    Some(Watermark::from_timestamp_millis(i * 100).unwrap()),
-                )
-                .await;
+            // Note: insert_offset functionality is now handled by the tracker
 
             handle
                 .publish_watermark(
@@ -1084,7 +1036,7 @@ mod tests {
                 break;
             }
             sleep(Duration::from_millis(10)).await;
-            handle.remove_offset(offset.clone()).await;
+            // Note: remove_offset functionality is now handled by the tracker
         }
 
         assert_ne!(fetched_watermark, -1);
