@@ -493,6 +493,11 @@ func (v Vertex) CalculateReplicas() int {
 	if v.Spec.Lifecycle.GetDesiredPhase() == VertexPhasePaused {
 		return 0
 	}
+	// If we are unpausing the pipeline/vertex then we want to start the repilcas from min
+	if v.Status.Phase == VertexPhasePaused && v.Spec.Lifecycle.GetDesiredPhase() == VertexPhaseRunning {
+		return int(v.Spec.Scale.GetMinReplicas())
+
+	}
 	desiredReplicas := v.getReplicas()
 	// Don't allow replicas to be out of the range of min and max when auto scaling is enabled
 	if s := v.Spec.Scale; !s.Disabled {
