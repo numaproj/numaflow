@@ -505,8 +505,6 @@ func Test_pauseAndResumePipeline(t *testing.T) {
 		testObj.Spec.Vertices[1].Scale.Min = ptr.To[int32](3)
 		_, err = r.reconcile(ctx, testObj)
 		assert.NoError(t, err)
-		v, err := r.findExistingVertices(ctx, testObj)
-		assert.NoError(t, err)
 
 		// Pause the pipeline
 		_, err = r.pausePipeline(ctx, testObj)
@@ -522,7 +520,7 @@ func Test_pauseAndResumePipeline(t *testing.T) {
 		testObj.Status.MarkDrainedOnPauseTrue()
 		testObj.Status.MarkPhasePaused()
 
-		v, err = r.findExistingVertices(ctx, testObj)
+		v, err := r.findExistingVertices(ctx, testObj)
 		assert.NoError(t, err)
 		assert.Equal(t, dfv1.VertexPhasePaused, v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Lifecycle.GetDesiredPhase())
 		assert.Equal(t, dfv1.VertexPhasePaused, v[testObj.Name+"-"+testObj.Spec.Vertices[1].Name].Spec.Lifecycle.GetDesiredPhase())
@@ -531,10 +529,6 @@ func Test_pauseAndResumePipeline(t *testing.T) {
 		// resume the pipleine
 		_, err = r.resumePipeline(ctx, testObj)
 		assert.NoError(t, err)
-
-		v, err = r.findExistingVertices(ctx, testObj)
-		assert.NoError(t, err)
-
 	})
 
 	t.Run("test reduce pipeline", func(t *testing.T) {
