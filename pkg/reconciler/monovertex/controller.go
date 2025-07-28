@@ -175,7 +175,7 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 	if desiredPhase != originalPhase {
 		if desiredPhase == dfv1.MonoVertexPhasePaused {
 			// If we are unpausing the Mvtx then we want to start the replicas from min
-			err := mr.patchMonoVertexReplicas(ctx, monoVtx.DeepCopy())
+			err := mr.patchMonoVertexReplicas(ctx, monoVtx)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
