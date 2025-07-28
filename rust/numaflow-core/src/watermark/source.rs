@@ -1291,7 +1291,7 @@ mod tests {
         })
         .await;
 
-        let wmb_found = result.unwrap_or(false); // false if timeout occurred
+        let wmb_found = result.unwrap_or(false);
         assert!(wmb_found, "Idle watermark not found");
     }
 

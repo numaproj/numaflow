@@ -294,7 +294,7 @@ impl AlignedReduceActor {
     }
 
     /// sends the message to the reduce task for the window.
-    async fn window_append(&mut self, window_msg: AlignedWindowMessage) {
+    async fn window_append(&mut self, mut window_msg: AlignedWindowMessage) {
         let window_id = &window_msg.pnf_slot;
 
         // Get the existing stream or log error if not found create a new one.
@@ -304,6 +304,13 @@ impl AlignedReduceActor {
             // this happens because of out-of-order messages, and we have to ensure that the (t+1)th
             // message is sent to the window that could be created by (t)th message iff (t+1)th message
             // belongs to that window created by (t)th message.
+            // update the operation of the window message to open.
+            match window_msg.operation {
+                AlignedWindowOperation::Append { message, window } => {
+                    window_msg.operation = AlignedWindowOperation::Open { message, window };
+                }
+                _ => panic!("Expected Append operation in window_append"),
+            }
             self.window_open(window_msg).await;
             return;
         };
