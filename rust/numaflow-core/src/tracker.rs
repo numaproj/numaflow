@@ -353,7 +353,9 @@ impl Tracker {
         self.entries
             .values()
             .filter_map(|partition_entries| {
-                partition_entries.first_key_value().and_then(|(_, entry)| entry.watermark)
+                partition_entries
+                    .first_key_value()
+                    .and_then(|(_, entry)| entry.watermark)
             })
             .min()
     }
