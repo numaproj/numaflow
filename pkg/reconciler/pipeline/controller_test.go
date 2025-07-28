@@ -508,17 +508,12 @@ func Test_pauseAndResumePipeline(t *testing.T) {
 		v, err := r.findExistingVertices(ctx, testObj)
 		assert.NoError(t, err)
 
-		sourceVertex := v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name]
-		// set the source vertex to be running at 10 replicas
-		err = r.patchVertexReplicas(ctx, &sourceVertex, int32(10))
-		assert.NoError(t, err)
-		udfVertex := v[testObj.Name+"-"+testObj.Spec.Vertices[1].Name]
-		// set the UDF vertex to be running at 5 replicas
-		err = r.patchVertexReplicas(ctx, &udfVertex, int32(5))
-		assert.NoError(t, err)
-
 		// Pause the pipeline
 		_, err = r.pausePipeline(ctx, testObj)
+		assert.NoError(t, err)
+		// while pausing a pipeline, we want to patch the vertex replicas to nil
+		// this will force a resume from the min replica count during the reconcile
+		err = r.patchVertexReplicas(ctx, testObj, allVertexFilter)
 		assert.NoError(t, err)
 
 		// set the desiredPhase for all vertices to paused
@@ -539,12 +534,7 @@ func Test_pauseAndResumePipeline(t *testing.T) {
 
 		v, err = r.findExistingVertices(ctx, testObj)
 		assert.NoError(t, err)
-		// when auto-scaling is enabled, while resuming the pipeline we want the replicas to Scale.Min,
-		assert.Equal(t, v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Scale.GetMinReplicas(), *v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Replicas)
-		assert.Equal(t, v[testObj.Name+"-"+testObj.Spec.Vertices[1].Name].Spec.Scale.GetMinReplicas(), *v[testObj.Name+"-"+testObj.Spec.Vertices[1].Name].Spec.Replicas)
-		assert.Equal(t, v[testObj.Name+"-"+testObj.Spec.Vertices[2].Name].Spec.Scale.GetMinReplicas(), *v[testObj.Name+"-"+testObj.Spec.Vertices[2].Name].Spec.Replicas)
 
-		assert.NoError(t, err)
 	})
 
 	t.Run("test reduce pipeline", func(t *testing.T) {

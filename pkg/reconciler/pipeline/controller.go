@@ -57,6 +57,7 @@ const (
 	deprecatedFinalizerName = dfv1.ControllerPipeline
 
 	pauseTimestampPath = `/metadata/annotations/numaflow.numaproj.io~1pause-timestamp`
+	specReplicasPath   = `/spec/replicas`
 )
 
 // pipelineReconciler reconciles a pipeline object.
@@ -873,14 +874,7 @@ func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeli
 		}
 	}
 
-	// while resume a pipeline, we want to patch the vertex to resume
-	// from the min replica count
-	err := r.resumeVertexReplicas(ctx, pl, allVertexFilter)
-	if err != nil {
-		return false, err
-	}
-
-	_, err = r.updateVerticeDesiredPhase(ctx, pl, allVertexFilter, dfv1.VertexPhaseRunning)
+	_, err := r.updateVerticeDesiredPhase(ctx, pl, allVertexFilter, dfv1.VertexPhaseRunning)
 	if err != nil {
 		return false, err
 	}
@@ -945,6 +939,13 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 		if err != nil {
 			return true, err
 		}
+		// while pausing a pipeline, we want to patch the vertex replicas to nil
+		// this will force a resume from the min replica count during the resume reconciling
+		err = r.patchVertexReplicas(ctx, pl, allVertexFilter)
+		if err != nil {
+			return false, err
+		}
+
 		if errWhileDrain != nil {
 			r.logger.Errorw("Errors encountered while pausing, moving to paused after timeout", zap.Error(errWhileDrain))
 		}
@@ -993,18 +994,18 @@ func (r *pipelineReconciler) updateVerticeDesiredPhase(ctx context.Context, pl *
 	return isVertexPatched, nil
 }
 
-func (r *pipelineReconciler) patchVertexReplicas(ctx context.Context, vertex *dfv1.Vertex, desiredReplicas int32) error {
+func (r *pipelineReconciler) removeVertexReplicas(ctx context.Context, vertex *dfv1.Vertex) error {
 	log := logging.FromContext(ctx)
-	origin := vertex.Spec.Replicas
-	patchJson := fmt.Sprintf(`{"spec":{"replicas":%d}}`, desiredReplicas)
-	if err := r.client.Patch(ctx, vertex, client.RawPatch(types.MergePatchType, []byte(patchJson))); err != nil && !apierrors.IsNotFound(err) {
-		return fmt.Errorf("failed to patch vertex replicas, %w", err)
+	if vertex.Spec.Replicas != nil {
+		if err := r.client.Patch(ctx, vertex, client.RawPatch(types.JSONPatchType, []byte(`[{"op": "remove", "path": "`+specReplicasPath+`"}]`))); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to patch vertex replicas, %w", err)
+		}
+		log.Infow("Pipeline resume - patched vertex replicas to null.", zap.String("namespace", vertex.Namespace), zap.String("pipeline", vertex.Spec.PipelineName), zap.String("vertex", vertex.Spec.Name))
 	}
-	log.Infow("Pipeline resume - vertex replicas changed.", zap.Int32p("from", origin), zap.Int32("to", desiredReplicas), zap.String("namespace", vertex.Namespace), zap.String("pipeline", vertex.Spec.PipelineName), zap.String("vertex", vertex.Spec.Name))
 	return nil
 }
 
-func (r *pipelineReconciler) resumeVertexReplicas(ctx context.Context, pl *dfv1.Pipeline, filter vertexFilterFunc) error {
+func (r *pipelineReconciler) patchVertexReplicas(ctx context.Context, pl *dfv1.Pipeline, filter vertexFilterFunc) error {
 	existingVertices, err := r.findExistingVertices(ctx, pl)
 	if err != nil {
 		return err
@@ -1012,7 +1013,7 @@ func (r *pipelineReconciler) resumeVertexReplicas(ctx context.Context, pl *dfv1.
 	for _, vertex := range existingVertices {
 		if filter(vertex) {
 			// If we are unpausing the Pipeline then we want to start the replicas from min
-			err := r.patchVertexReplicas(ctx, &vertex, vertex.Spec.Scale.GetMinReplicas())
+			err := r.removeVertexReplicas(ctx, &vertex)
 			if err != nil {
 				return err
 			}

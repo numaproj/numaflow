@@ -18,6 +18,7 @@ package monovertex
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -114,6 +115,35 @@ func fakeReconciler(t *testing.T, cl client.WithWatch) *monoVertexReconciler {
 		recorder: record.NewFakeRecorder(64),
 		scaler:   scaling.NewScaler(cl),
 	}
+}
+
+func Test_pauseAndResumeMvtx(t *testing.T) {
+
+	t.Run("test pause mvtx", func(t *testing.T) {
+		cl := fake.NewClientBuilder().Build()
+		r := fakeReconciler(t, cl)
+		testObj := testMonoVtx.DeepCopy()
+		testObj.Spec.Replicas = ptr.To[int32](2)
+		err := cl.Create(context.TODO(), testObj)
+		assert.NoError(t, err)
+
+		_, err = r.reconcile(context.TODO(), testObj)
+		assert.NoError(t, err)
+		mvtx := &dfv1.MonoVertex{}
+		err = r.client.Get(context.TODO(), client.ObjectKey{Namespace: testNamespace, Name: testObj.Name}, mvtx)
+		assert.Equal(t, *mvtx.Spec.Replicas, int32(2))
+
+		fmt.Println("ME-2", testObj.Status.Phase)
+		testObj.Spec.Lifecycle.DesiredPhase = dfv1.MonoVertexPhasePaused
+		_, err = r.reconcile(context.TODO(), testObj)
+		assert.NoError(t, err)
+		assert.Nil(t, testObj.Spec.Replicas)
+		fmt.Println("mE", testObj.Status.Phase)
+
+		testObj.Spec.Lifecycle.DesiredPhase = dfv1.MonoVertexPhaseRunning
+		_, err = r.reconcile(context.TODO(), testObj)
+
+	})
 }
 
 func TestReconcile(t *testing.T) {

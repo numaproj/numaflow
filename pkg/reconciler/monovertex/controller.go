@@ -47,6 +47,8 @@ import (
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
 
+const specReplicasPath = `/spec/replicas`
+
 // monoVertexReconciler reconciles a MonoVertex object.
 type monoVertexReconciler struct {
 	client client.Client
@@ -105,6 +107,17 @@ func (mr *monoVertexReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	return result, err
 }
 
+func (mr *monoVertexReconciler) patchMonoVertexReplicas(ctx context.Context, monoVtx *dfv1.MonoVertex) error {
+	log := logging.FromContext(ctx)
+	if monoVtx.Spec.Replicas != nil {
+		if err := mr.client.Patch(ctx, monoVtx, client.RawPatch(types.JSONPatchType, []byte(`[{"op": "remove", "path": "`+specReplicasPath+`"}]`))); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to patch monoVtx replicas, %w", err)
+		}
+		log.Infow("Updated - mono vertex replicas removed.", zap.String("namespace", monoVtx.Namespace), zap.String("mvtx", monoVtx.Name))
+	}
+	return nil
+}
+
 // reconcile does the real logic.
 func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.MonoVertex) (ctrl.Result, error) {
 	log := logging.FromContext(ctx)
@@ -160,7 +173,14 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 	monoVtx.Status.MarkPhase(monoVtx.Spec.Lifecycle.GetDesiredPhase(), "", "")
 	// If the phase has changed, log the event
 	if monoVtx.Status.Phase != originalPhase {
-		log.Infow("Updated MonoVertex phase", zap.String("originalPhase", string(originalPhase)), zap.String("originalPhase", string(monoVtx.Status.Phase)))
+		if monoVtx.Spec.Lifecycle.GetDesiredPhase() == dfv1.MonoVertexPhasePaused {
+			// If we are unpausing the Mvtx then we want to start the replicas from min
+			err := mr.patchMonoVertexReplicas(ctx, monoVtx)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+		log.Infow("Updated MonoVertex phase", zap.String("originalPhase", string(originalPhase)), zap.String("desiredPhase", string(monoVtx.Status.Phase)))
 		mr.recorder.Eventf(monoVtx, corev1.EventTypeNormal, "UpdateMonoVertexPhase", "Updated MonoVertex phase from %s to %s", string(originalPhase), string(monoVtx.Status.Phase))
 	}
 
