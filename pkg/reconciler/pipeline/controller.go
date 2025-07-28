@@ -872,10 +872,19 @@ func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeli
 			}
 		}
 	}
-	_, err := r.updateVerticeDesiredPhase(ctx, pl, allVertexFilter, dfv1.VertexPhaseRunning)
+
+	// while resume a pipeline, we want to patch the vertex to resume
+	// from the min replica count
+	err := r.resumeVertexReplicas(ctx, pl, allVertexFilter)
 	if err != nil {
 		return false, err
 	}
+
+	_, err = r.updateVerticeDesiredPhase(ctx, pl, allVertexFilter, dfv1.VertexPhaseRunning)
+	if err != nil {
+		return false, err
+	}
+
 	// mark the drained field as false to refresh the drained status as this will
 	// be a new lifecycle from running
 	pl.Status.MarkDrainedOnPauseFalse()
@@ -930,7 +939,6 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 	if err != nil {
 		return false, err
 	}
-
 	// if drain is completed, or we have exceeded the pause deadline, mark pl as paused and scale down
 	if time.Now().After(pauseTimestamp.Add(time.Duration(pl.GetPauseGracePeriodSeconds())*time.Second)) || drainCompleted {
 		_, err = r.updateVerticeDesiredPhase(ctx, pl, allVertexFilter, dfv1.VertexPhasePaused)
@@ -983,6 +991,34 @@ func (r *pipelineReconciler) updateVerticeDesiredPhase(ctx context.Context, pl *
 		}
 	}
 	return isVertexPatched, nil
+}
+
+func (r *pipelineReconciler) patchVertexReplicas(ctx context.Context, vertex *dfv1.Vertex, desiredReplicas int32) error {
+	log := logging.FromContext(ctx)
+	origin := vertex.Spec.Replicas
+	patchJson := fmt.Sprintf(`{"spec":{"replicas":%d}}`, desiredReplicas)
+	if err := r.client.Patch(ctx, vertex, client.RawPatch(types.MergePatchType, []byte(patchJson))); err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("failed to patch vertex replicas, %w", err)
+	}
+	log.Infow("Pipeline resume - vertex replicas changed.", zap.Int32p("from", origin), zap.Int32("to", desiredReplicas), zap.String("namespace", vertex.Namespace), zap.String("pipeline", vertex.Spec.PipelineName), zap.String("vertex", vertex.Spec.Name))
+	return nil
+}
+
+func (r *pipelineReconciler) resumeVertexReplicas(ctx context.Context, pl *dfv1.Pipeline, filter vertexFilterFunc) error {
+	existingVertices, err := r.findExistingVertices(ctx, pl)
+	if err != nil {
+		return err
+	}
+	for _, vertex := range existingVertices {
+		if filter(vertex) {
+			// If we are unpausing the Pipeline then we want to start the replicas from min
+			err := r.patchVertexReplicas(ctx, &vertex, vertex.Spec.Scale.GetMinReplicas())
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (r *pipelineReconciler) safeToDelete(ctx context.Context, pl *dfv1.Pipeline) (bool, error) {

@@ -501,21 +501,49 @@ func Test_pauseAndResumePipeline(t *testing.T) {
 		assert.Nil(t, err)
 		r := fakeReconciler(t, cl)
 		testObj := testPipeline.DeepCopy()
-		testObj.Spec.Vertices[0].Scale.Min = ptr.To[int32](3)
+		testObj.Spec.Vertices[0].Scale.Min = ptr.To[int32](2)
+		testObj.Spec.Vertices[1].Scale.Min = ptr.To[int32](3)
 		_, err = r.reconcile(ctx, testObj)
-		assert.NoError(t, err)
-		_, err = r.pausePipeline(ctx, testObj)
 		assert.NoError(t, err)
 		v, err := r.findExistingVertices(ctx, testObj)
 		assert.NoError(t, err)
-		assert.Equal(t, dfv1.VertexPhasePaused, v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Lifecycle.GetDesiredPhase())
-		_, err = r.resumePipeline(ctx, testObj)
+
+		sourceVertex := v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name]
+		// set the source vertex to be running at 10 replicas
+		err = r.patchVertexReplicas(ctx, &sourceVertex, int32(10))
 		assert.NoError(t, err)
+		udfVertex := v[testObj.Name+"-"+testObj.Spec.Vertices[1].Name]
+		// set the UDF vertex to be running at 5 replicas
+		err = r.patchVertexReplicas(ctx, &udfVertex, int32(5))
+		assert.NoError(t, err)
+
+		// Pause the pipeline
+		_, err = r.pausePipeline(ctx, testObj)
+		assert.NoError(t, err)
+
+		// set the desiredPhase for all vertices to paused
+		_, err = r.updateVerticeDesiredPhase(ctx, testObj, allVertexFilter, dfv1.VertexPhasePaused)
+		assert.NoError(t, err)
+		testObj.Status.MarkDrainedOnPauseTrue()
+		testObj.Status.MarkPhasePaused()
+
 		v, err = r.findExistingVertices(ctx, testObj)
 		assert.NoError(t, err)
-		// when auto-scaling is enabled, while resuming the pipeline, instead of setting the replicas to Scale.Min,
-		// we set it to one and let auto-scaling to scale up
+		assert.Equal(t, dfv1.VertexPhasePaused, v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Lifecycle.GetDesiredPhase())
+		assert.Equal(t, dfv1.VertexPhasePaused, v[testObj.Name+"-"+testObj.Spec.Vertices[1].Name].Spec.Lifecycle.GetDesiredPhase())
+		assert.Equal(t, dfv1.VertexPhasePaused, v[testObj.Name+"-"+testObj.Spec.Vertices[2].Name].Spec.Lifecycle.GetDesiredPhase())
+
+		// resume the pipleine
+		_, err = r.resumePipeline(ctx, testObj)
+		assert.NoError(t, err)
+
+		v, err = r.findExistingVertices(ctx, testObj)
+		assert.NoError(t, err)
+		// when auto-scaling is enabled, while resuming the pipeline we want the replicas to Scale.Min,
 		assert.Equal(t, v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Scale.GetMinReplicas(), *v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Replicas)
+		assert.Equal(t, v[testObj.Name+"-"+testObj.Spec.Vertices[1].Name].Spec.Scale.GetMinReplicas(), *v[testObj.Name+"-"+testObj.Spec.Vertices[1].Name].Spec.Replicas)
+		assert.Equal(t, v[testObj.Name+"-"+testObj.Spec.Vertices[2].Name].Spec.Scale.GetMinReplicas(), *v[testObj.Name+"-"+testObj.Spec.Vertices[2].Name].Spec.Replicas)
+
 		assert.NoError(t, err)
 	})
 
