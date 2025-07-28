@@ -246,7 +246,7 @@ async fn start_map_forwarder(
         tracker_handle: tracker_handle.clone(),
         cancel_token: cln_token.clone(),
         watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
-        vertex_type: config.vertex_type.clone(),
+        vertex_type: config.vertex_type,
         isb_config: config.isb_config.clone(),
     });
 
@@ -529,7 +529,7 @@ async fn start_aligned_reduce_forwarder(
         tracker_handle: tracker_handle.clone(),
         cancel_token: cln_token.clone(),
         watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
-        vertex_type: config.vertex_type.clone(),
+        vertex_type: config.vertex_type,
         isb_config: config.isb_config.clone(),
     });
 
@@ -704,7 +704,7 @@ async fn start_unaligned_reduce_forwarder(
         tracker_handle: tracker_handle.clone(),
         cancel_token: cln_token.clone(),
         watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
-        vertex_type: config.vertex_type.clone(),
+        vertex_type: config.vertex_type,
         isb_config: config.isb_config.clone(),
     });
 

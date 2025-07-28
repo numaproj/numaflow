@@ -159,7 +159,7 @@ impl Tracker {
     }
 
     /// Helper method to get partition from offset
-    fn get_partition(&self, offset: &Offset) -> i32 {
+    fn get_partition(offset: &Offset) -> i32 {
         match offset {
             Offset::Int(int_offset) => int_offset.partition_idx as i32,
             Offset::String(string_offset) => string_offset.partition_idx as i32,
@@ -224,8 +224,8 @@ impl Tracker {
         watermark: Option<DateTime<Utc>>,
         respond_to: oneshot::Sender<ReadAck>,
     ) {
-        let partition = self.get_partition(&offset);
-        let partition_entries = self.entries.entry(partition).or_insert_with(BTreeMap::new);
+        let partition = Self::get_partition(&offset);
+        let partition_entries = self.entries.entry(partition).or_default();
         partition_entries.insert(
             offset.clone(),
             TrackerEntry {
@@ -240,7 +240,7 @@ impl Tracker {
 
     /// Updates an existing entry in the tracker with the number of expected messages for this offset.
     fn handle_update(&mut self, offset: Offset, responses: Vec<Option<Vec<String>>>) {
-        let partition = self.get_partition(&offset);
+        let partition = Self::get_partition(&offset);
         let Some(partition_entries) = self.entries.get_mut(&partition) else {
             return;
         };
@@ -256,7 +256,7 @@ impl Tracker {
 
     /// Appends a response to the serving callback info for the given offset.
     fn handle_append(&mut self, offset: Offset, response: Option<Vec<String>>) {
-        let partition = self.get_partition(&offset);
+        let partition = Self::get_partition(&offset);
         let Some(partition_entries) = self.entries.get_mut(&partition) else {
             return;
         };
@@ -272,7 +272,7 @@ impl Tracker {
 
     /// Update whether we have seen the eof (end of stream) for this offset.
     async fn handle_eof(&mut self, offset: Offset) {
-        let partition = self.get_partition(&offset);
+        let partition = Self::get_partition(&offset);
         let Some(partition_entries) = self.entries.get_mut(&partition) else {
             return;
         };
@@ -292,7 +292,7 @@ impl Tracker {
     /// Removes an entry from the tracker and sends an acknowledgment if the count is zero
     /// and the entry is marked as EOF. Publishes watermarks if watermark_info is provided.
     async fn handle_delete(&mut self, offset: Offset) {
-        let partition = self.get_partition(&offset);
+        let partition = Self::get_partition(&offset);
         let Some(partition_entries) = self.entries.get_mut(&partition) else {
             return;
         };
@@ -317,7 +317,7 @@ impl Tracker {
 
     /// Discards an entry from the tracker and sends a nak.
     async fn handle_discard(&mut self, offset: Offset) {
-        let partition = self.get_partition(&offset);
+        let partition = Self::get_partition(&offset);
         let Some(partition_entries) = self.entries.get_mut(&partition) else {
             return;
         };
@@ -332,7 +332,7 @@ impl Tracker {
 
     /// Resets the count and eof status for an offset in the tracker.
     fn handle_refresh(&mut self, offset: Offset) {
-        let partition = self.get_partition(&offset);
+        let partition = Self::get_partition(&offset);
         let Some(partition_entries) = self.entries.get_mut(&partition) else {
             return;
         };
