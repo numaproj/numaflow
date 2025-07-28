@@ -18,7 +18,6 @@ package monovertex
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -133,12 +132,10 @@ func Test_pauseAndResumeMvtx(t *testing.T) {
 		err = r.client.Get(context.TODO(), client.ObjectKey{Namespace: testNamespace, Name: testObj.Name}, mvtx)
 		assert.Equal(t, *mvtx.Spec.Replicas, int32(2))
 
-		fmt.Println("ME-2", testObj.Status.Phase)
 		testObj.Spec.Lifecycle.DesiredPhase = dfv1.MonoVertexPhasePaused
 		_, err = r.reconcile(context.TODO(), testObj)
 		assert.NoError(t, err)
 		assert.Nil(t, testObj.Spec.Replicas)
-		fmt.Println("mE", testObj.Status.Phase)
 
 		testObj.Spec.Lifecycle.DesiredPhase = dfv1.MonoVertexPhaseRunning
 		_, err = r.reconcile(context.TODO(), testObj)
