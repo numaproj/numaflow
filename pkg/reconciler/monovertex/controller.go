@@ -180,7 +180,6 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 				return ctrl.Result{}, err
 			}
 		}
-		// mark the phase again as the status
 		log.Infow("Updated MonoVertex phase", zap.String("originalPhase", string(originalPhase)), zap.String("desiredPhase", string(desiredPhase)))
 		mr.recorder.Eventf(monoVtx, corev1.EventTypeNormal, "UpdateMonoVertexPhase", "Updated MonoVertex phase from %s to %s", string(originalPhase), string(desiredPhase))
 	}
