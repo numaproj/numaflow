@@ -363,7 +363,13 @@ impl SessionWindowManager {
             // Check if the end time of the last window is after the start time of the previous window
             // If it is that means they should be merged, add the previous window to the merged slice
             // and update the end time of the last window
-            while i > 0 && windows.get(i - 1).expect("should have previous window").end_time > last_window.start_time {
+            while i > 0
+                && windows
+                    .get(i - 1)
+                    .expect("should have previous window")
+                    .end_time
+                    > last_window.start_time
+            {
                 i -= 1;
                 merged_group.push(windows.get(i).expect("should have window").clone());
 

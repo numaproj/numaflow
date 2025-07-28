@@ -264,7 +264,8 @@ impl ProcessorManager {
 
             match vertex_type {
                 VertexType::Source | VertexType::Sink | VertexType::MapUDF => {
-                    processor.timelines
+                    processor
+                        .timelines
                         .get_mut(wmb.partition as usize)
                         .expect("should have partition")
                         .put(wmb);
@@ -275,7 +276,8 @@ impl ProcessorManager {
                     if wmb.partition != vertex_replica {
                         continue;
                     }
-                    processor.timelines
+                    processor
+                        .timelines
                         .get_mut(0)
                         .expect("should have partition 0")
                         .put(wmb);
@@ -356,7 +358,8 @@ impl ProcessorManager {
 
                     match vertex_type {
                         VertexType::Source | VertexType::Sink | VertexType::MapUDF => {
-                            processor.timelines
+                            processor
+                                .timelines
                                 .get_mut(wmb.partition as usize)
                                 .expect("should have partition")
                                 .put(wmb);
@@ -367,7 +370,8 @@ impl ProcessorManager {
                             if wmb.partition != vertex_replica {
                                 continue;
                             }
-                            processor.timelines
+                            processor
+                                .timelines
                                 .get_mut(0)
                                 .expect("should have partition 0")
                                 .put(wmb);
