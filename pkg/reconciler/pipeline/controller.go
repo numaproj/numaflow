@@ -1000,7 +1000,7 @@ func (r *pipelineReconciler) removeVertexReplicas(ctx context.Context, vertex *d
 		if err := r.client.Patch(ctx, vertex, client.RawPatch(types.JSONPatchType, []byte(`[{"op": "remove", "path": "`+specReplicasPath+`"}]`))); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("failed to patch vertex replicas, %w", err)
 		}
-		log.Infow("Pipeline resume - patched vertex replicas to null.", zap.String("namespace", vertex.Namespace), zap.String("pipeline", vertex.Spec.PipelineName), zap.String("vertex", vertex.Spec.Name))
+		log.Infow("Pipeline resume - patched vertex replicas to null.", zap.String("vertex", vertex.Spec.Name))
 	}
 	return nil
 }
