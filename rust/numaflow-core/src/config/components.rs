@@ -299,7 +299,12 @@ pub(crate) mod source {
                     .split('\n')
                     .map(|s| s.split(':').collect::<Vec<&str>>())
                     .filter(|parts| parts.len() == 2)
-                    .map(|parts| (parts[0].trim().to_string(), parts[1].trim().to_string()))
+                    .map(|parts| {
+                        (
+                            parts.first().unwrap().trim().to_string(),
+                            parts.get(1).unwrap().trim().to_string(),
+                        )
+                    })
                     .collect::<HashMap<String, String>>(),
             };
             Ok(SourceType::Kafka(Box::new(kafka_config)))
@@ -629,7 +634,20 @@ pub(crate) mod sink {
                     .split('\n')
                     .map(|s| s.split(':').collect::<Vec<&str>>())
                     .filter(|parts| parts.len() == 2)
-                    .map(|parts| (parts[0].trim().to_string(), parts[1].trim().to_string()))
+                    .map(|parts| {
+                        (
+                            parts
+                                .first()
+                                .expect("should have first part")
+                                .trim()
+                                .to_string(),
+                            parts
+                                .get(1)
+                                .expect("should have second part")
+                                .trim()
+                                .to_string(),
+                        )
+                    })
                     .collect::<HashMap<String, String>>(),
             })))
         }

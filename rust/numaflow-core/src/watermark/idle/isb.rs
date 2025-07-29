@@ -104,9 +104,15 @@ impl ISBIdleDetector {
             .get_mut(stream.vertex)
             .unwrap_or_else(|| panic!("Invalid vertex: {}", stream.vertex));
 
-        last_published_wm[stream.partition as usize].last_wm_published_time = Utc::now();
+        last_published_wm
+            .get_mut(stream.partition as usize)
+            .expect("should have partition")
+            .last_wm_published_time = Utc::now();
         // setting None for wmb-offset means it is active
-        last_published_wm[stream.partition as usize].wmb_msg_offset = None;
+        last_published_wm
+            .get_mut(stream.partition as usize)
+            .expect("should have partition")
+            .wmb_msg_offset = None;
     }
 
     /// fetches the offset to be used for publishing the idle watermark. Only a WMB (idle=true) can be used
@@ -119,7 +125,10 @@ impl ISBIdleDetector {
                 .read()
                 .expect("Failed to get read lock");
             let last_published_wm = read_guard.get(stream.vertex).expect("Invalid vertex");
-            last_published_wm[stream.partition as usize].clone()
+            last_published_wm
+                .get(stream.partition as usize)
+                .expect("should have partition")
+                .clone()
         };
 
         if let Some(offset) = idle_state.wmb_msg_offset {
@@ -155,8 +164,14 @@ impl ISBIdleDetector {
             .unwrap_or_else(|| panic!("Invalid vertex: {}", stream.vertex));
 
         // setting an offset for wmb-offset means it is idle, and we will do inplace incr of WM for that offset.
-        last_published_wm[stream.partition as usize].wmb_msg_offset = Some(offset);
-        last_published_wm[stream.partition as usize].last_wm_published_time = Utc::now();
+        last_published_wm
+            .get_mut(stream.partition as usize)
+            .expect("should have partition")
+            .wmb_msg_offset = Some(offset);
+        last_published_wm
+            .get_mut(stream.partition as usize)
+            .expect("should have partition")
+            .last_wm_published_time = Utc::now();
     }
 
     /// fetches the idle streams, we consider a stream as idle if the last published

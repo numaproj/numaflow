@@ -172,7 +172,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_sqs_sink_e2e() {
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let (source, src_handle, src_shutdown_tx) = get_simple_source(tracker_handle.clone()).await;
         // let source = get_sqs_source().await;
         let sink_writer = get_sqs_sink(tracker_handle.clone()).await;

@@ -652,7 +652,7 @@ mod tests {
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
         };
-        let tracker = TrackerHandle::new(None, None);
+        let tracker = TrackerHandle::new(None);
         let js_reader = JetStreamReader::new(ISBReaderConfig {
             vertex_type: "Map".to_string(),
             stream: stream.clone(),
@@ -715,7 +715,7 @@ mod tests {
 
         reader_cancel_token.cancel();
         for offset in offsets {
-            tracker.delete(offset, None).await.unwrap();
+            tracker.delete(offset).await.unwrap();
         }
         js_reader_task.await.unwrap().unwrap();
         context.delete_stream(stream.name).await.unwrap();
@@ -728,7 +728,7 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
 
         let js_stream = Stream::new("test-ack", "test", 0);
         // Delete stream if it exists
@@ -813,7 +813,7 @@ mod tests {
 
         // after reading messages remove from the tracker so that the messages are acked
         for offset in offsets {
-            tracker_handle.delete(offset, None).await.unwrap();
+            tracker_handle.delete(offset).await.unwrap();
         }
 
         // wait until the tracker becomes empty, don't wait more than 1 second
@@ -909,7 +909,7 @@ mod tests {
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
         };
-        let tracker = TrackerHandle::new(None, None);
+        let tracker = TrackerHandle::new(None);
         let js_reader = JetStreamReader::new(ISBReaderConfig {
             vertex_type: "Map".to_string(),
             stream: stream.clone(),
@@ -981,7 +981,7 @@ mod tests {
         assert_eq!(received_message.offset.to_string(), offset.to_string());
 
         // Clean up
-        tracker.delete(offset, None).await.unwrap();
+        tracker.delete(offset).await.unwrap();
         reader_cancel_token.cancel();
         js_reader_task.await.unwrap().unwrap();
         context.delete_stream(stream.name).await.unwrap();

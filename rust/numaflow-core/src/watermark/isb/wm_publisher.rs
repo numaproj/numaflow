@@ -171,7 +171,9 @@ impl ISBWatermarkPublisher {
         // is monotonically increasing.
         // NOTE: in idling case since we reuse the control message offset, we can have the same offset
         // with larger watermark (we should publish it).
-        let last_state = &mut last_published_wm_state[stream.partition as usize];
+        let last_state = last_published_wm_state
+            .get_mut(stream.partition as usize)
+            .expect("should have partition");
         if offset < last_state.offset {
             last_state.watermark = last_state.watermark.max(watermark);
             return;
@@ -221,7 +223,9 @@ impl ISBWatermarkPublisher {
             .ok();
 
         // update the last published watermark state
-        last_published_wm_state[stream.partition as usize] = LastPublishedState {
+        *last_published_wm_state
+            .get_mut(stream.partition as usize)
+            .expect("should have partition") = LastPublishedState {
             offset,
             watermark,
             last_published_time: Instant::now(),

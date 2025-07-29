@@ -307,7 +307,7 @@ impl SessionWindowManager {
 
     /// Merge multiple windows into a single window
     fn merge_windows(windows: &[Window]) -> (Window, UnalignedWindowMessage) {
-        let first = &windows[0];
+        let first = windows.first().expect("should have first window");
 
         let (start_time, end_time) = windows.iter().fold(
             (first.start_time, first.end_time),
@@ -355,24 +355,31 @@ impl SessionWindowManager {
             i -= 1;
 
             // Initialize a slice to hold the current window and any subsequent mergeable windows
-            let mut merged_group = vec![windows[i].clone()];
+            let mut merged_group = vec![windows.get(i).expect("should have window").clone()];
 
             // Set the last window to be the current window
-            let mut last_window = windows[i].clone();
+            let mut last_window = windows.get(i).expect("should have window").clone();
 
             // Check if the end time of the last window is after the start time of the previous window
             // If it is that means they should be merged, add the previous window to the merged slice
             // and update the end time of the last window
-            while i > 0 && windows[i - 1].end_time > last_window.start_time {
+            while i > 0
+                && windows
+                    .get(i - 1)
+                    .expect("should have previous window")
+                    .end_time
+                    > last_window.start_time
+            {
                 i -= 1;
-                merged_group.push(windows[i].clone());
+                merged_group.push(windows.get(i).expect("should have window").clone());
 
                 // Merge the window into last_window to expand the range
-                if windows[i].start_time < last_window.start_time {
-                    last_window.start_time = windows[i].start_time;
+                let current_window = windows.get(i).expect("should have window");
+                if current_window.start_time < last_window.start_time {
+                    last_window.start_time = current_window.start_time;
                 }
-                if windows[i].end_time > last_window.end_time {
-                    last_window.end_time = windows[i].end_time;
+                if current_window.end_time > last_window.end_time {
+                    last_window.end_time = current_window.end_time;
                 }
             }
 
