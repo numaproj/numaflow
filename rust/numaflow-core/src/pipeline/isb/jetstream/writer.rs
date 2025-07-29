@@ -610,8 +610,8 @@ impl JetstreamWriter {
                 }
             }
 
-            // Now that the PAF is resolved, we can delete the entry from the tracker
-            // which will optionally publish the watermarks
+            // Now that the PAF is resolved, we can delete the entry from the tracker which will send
+            // an ACK to the reader.
             this.tracker_handle
                 .delete(message.offset.clone())
                 .await

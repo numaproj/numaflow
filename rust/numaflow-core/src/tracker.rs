@@ -82,7 +82,7 @@ enum ActorMessage {
 /// It keeps track of message offsets and their completeness, and sends acknowledgments.
 struct Tracker {
     /// entries organized by partition, each partition has its own BTreeMap of offsets
-    entries: HashMap<i32, BTreeMap<Offset, TrackerEntry>>,
+    entries: HashMap<u16, BTreeMap<Offset, TrackerEntry>>,
     receiver: mpsc::Receiver<ActorMessage>,
     serving_callback_handler: Option<CallbackHandler>,
 }
@@ -158,14 +158,6 @@ impl Tracker {
         }
     }
 
-    /// Helper method to get partition from offset
-    fn get_partition(offset: &Offset) -> i32 {
-        match offset {
-            Offset::Int(int_offset) => int_offset.partition_idx as i32,
-            Offset::String(string_offset) => string_offset.partition_idx as i32,
-        }
-    }
-
     /// Runs the Tracker, processing incoming actor messages to update the state.
     async fn run(mut self) {
         while let Some(message) = self.receiver.recv().await {
@@ -224,7 +216,7 @@ impl Tracker {
         watermark: Option<DateTime<Utc>>,
         respond_to: oneshot::Sender<ReadAck>,
     ) {
-        let partition = Self::get_partition(&offset);
+        let partition = offset.partition_idx();
         let partition_entries = self.entries.entry(partition).or_default();
         partition_entries.insert(
             offset.clone(),
@@ -240,7 +232,7 @@ impl Tracker {
 
     /// Updates an existing entry in the tracker with the number of expected messages for this offset.
     fn handle_update(&mut self, offset: Offset, responses: Vec<Option<Vec<String>>>) {
-        let partition = Self::get_partition(&offset);
+        let partition = offset.partition_idx();
         let Some(partition_entries) = self.entries.get_mut(&partition) else {
             return;
         };
@@ -256,7 +248,7 @@ impl Tracker {
 
     /// Appends a response to the serving callback info for the given offset.
     fn handle_append(&mut self, offset: Offset, response: Option<Vec<String>>) {
-        let partition = Self::get_partition(&offset);
+        let partition = offset.partition_idx();
         let Some(partition_entries) = self.entries.get_mut(&partition) else {
             return;
         };
@@ -272,7 +264,7 @@ impl Tracker {
 
     /// Update whether we have seen the eof (end of stream) for this offset.
     async fn handle_eof(&mut self, offset: Offset) {
-        let partition = Self::get_partition(&offset);
+        let partition = offset.partition_idx();
         let Some(partition_entries) = self.entries.get_mut(&partition) else {
             return;
         };
@@ -292,7 +284,7 @@ impl Tracker {
     /// Removes an entry from the tracker and sends an acknowledgment if the count is zero
     /// and the entry is marked as EOF. Publishes watermarks if watermark_info is provided.
     async fn handle_delete(&mut self, offset: Offset) {
-        let partition = Self::get_partition(&offset);
+        let partition = offset.partition_idx();
         let Some(partition_entries) = self.entries.get_mut(&partition) else {
             return;
         };
@@ -317,7 +309,7 @@ impl Tracker {
 
     /// Discards an entry from the tracker and sends a nak.
     async fn handle_discard(&mut self, offset: Offset) {
-        let partition = Self::get_partition(&offset);
+        let partition = offset.partition_idx();
         let Some(partition_entries) = self.entries.get_mut(&partition) else {
             return;
         };
@@ -332,7 +324,7 @@ impl Tracker {
 
     /// Resets the count and eof status for an offset in the tracker.
     fn handle_refresh(&mut self, offset: Offset) {
-        let partition = Self::get_partition(&offset);
+        let partition = offset.partition_idx();
         let Some(partition_entries) = self.entries.get_mut(&partition) else {
             return;
         };
@@ -499,7 +491,6 @@ impl TrackerHandle {
     }
 
     /// Deletes a message from the Tracker with the given offset.
-    /// Optionally publishes watermarks if watermark_info is provided.
     pub(crate) async fn delete(&self, offset: Offset) -> Result<()> {
         let message = ActorMessage::Delete { offset };
         self.sender

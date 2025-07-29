@@ -453,10 +453,7 @@ async fn start_aligned_reduce_forwarder(
     reduce_vtx_config: ReduceVtxConfig,
     aligned_config: AlignedReducerConfig,
 ) -> Result<()> {
-    // For reduce, we don't need to pass the watermark handle to the tracker, since the
-    // tracker only tracks the offsets until they are written to the WAL, watermark is
-    // not published using the tracker, instead writer directly publishes the watermark for reduce
-    // vertices since the lowest watermark is identified by the window manager.
+    // for reduce we do not pass serving callback handler to tracker.
     let tracker_handle = TrackerHandle::new(None);
 
     // Create aligned window manager based on window type
@@ -644,8 +641,7 @@ async fn start_unaligned_reduce_forwarder(
     reduce_vtx_config: ReduceVtxConfig,
     unaligned_config: UnalignedReducerConfig,
 ) -> Result<()> {
-    // we don't need to pass the watermark handle to the tracker because in reduce windower is
-    // responsible for identifying the lowest watermark in the pod.
+    // for reduce we do not pass serving callback handler to tracker.
     let tracker_handle = TrackerHandle::new(None);
 
     // Create unaligned window manager based on window type

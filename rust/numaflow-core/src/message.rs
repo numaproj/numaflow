@@ -233,6 +233,15 @@ pub(crate) enum Offset {
     String(StringOffset),
 }
 
+impl Offset {
+    pub(crate) fn partition_idx(&self) -> u16 {
+        match self {
+            Offset::Int(offset) => offset.partition_idx,
+            Offset::String(offset) => offset.partition_idx,
+        }
+    }
+}
+
 impl fmt::Display for Offset {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
