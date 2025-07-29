@@ -250,10 +250,10 @@ export function PipelineCard({
     },
     [healthData]
   );
-  
+
   // Set health status in map when healthData changes
   useEffect(() => {
-    if (data?.name && setPipelineHealthMap) {
+    if (healthData && data?.name && setPipelineHealthMap) {
       const healthStatus = getHealth(pipelineStatus);
       setPipelineHealthMap((prev) => ({
         ...prev,

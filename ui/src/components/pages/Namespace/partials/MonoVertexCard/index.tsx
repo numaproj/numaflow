@@ -224,7 +224,6 @@ export function MonoVertexCard({
     }
   }, [statusData]);
 
-
   const {
     data: healthData,
     loading: healthLoading,
@@ -241,7 +240,7 @@ export function MonoVertexCard({
       addError(healthError);
     }
   }, [healthError]);
-  
+
   const pipelineStatus = statusData?.monoVertex?.status?.phase || UNKNOWN;
   const getHealth = useCallback(
     (pipelineStatus: string) => {
@@ -260,14 +259,20 @@ export function MonoVertexCard({
 
   // Set health status in map when healthData changes
   useEffect(() => {
-    if (data?.name && setMonoVertexHealthMap) {
+    if (healthData && data?.name && setMonoVertexHealthMap) {
       const healthStatus = getHealth(pipelineStatus);
       setMonoVertexHealthMap((prev) => ({
         ...prev,
         [data.name]: healthStatus,
       }));
     }
-  }, [healthData, pipelineStatus, data?.name, setMonoVertexHealthMap, getHealth]);
+  }, [
+    healthData,
+    pipelineStatus,
+    data?.name,
+    setMonoVertexHealthMap,
+    getHealth,
+  ]);
 
   return (
     <>
@@ -502,9 +507,11 @@ export function MonoVertexCard({
                 className={"pipeline-logo"}
               />
               <img
-                src={IconsStatusMap[
-                  healthLoading ? UNKNOWN : getHealth(pipelineStatus)
-                ]}
+                src={
+                  IconsStatusMap[
+                    healthLoading ? UNKNOWN : getHealth(pipelineStatus)
+                  ]
+                }
                 alt="Health"
                 className={"pipeline-logo"}
               />
@@ -520,9 +527,13 @@ export function MonoVertexCard({
               }}
             >
               <span>{StatusString[pipelineStatus]}</span>
-              <span>{StatusString[
-                healthLoading ? UNKNOWN : getHealth(pipelineStatus)
-                ]}</span>
+              <span>
+                {
+                  StatusString[
+                    healthLoading ? UNKNOWN : getHealth(pipelineStatus)
+                  ]
+                }
+              </span>
             </Box>
           </Grid>
 
