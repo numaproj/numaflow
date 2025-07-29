@@ -509,10 +509,6 @@ func Test_pauseAndResumePipeline(t *testing.T) {
 		// Pause the pipeline
 		_, err = r.pausePipeline(ctx, testObj)
 		assert.NoError(t, err)
-		// while pausing a pipeline, we want to patch the vertex replicas to nil
-		// this will force a resume from the min replica count during the reconcile
-		err = r.patchVertexReplicas(ctx, testObj, allVertexFilter)
-		assert.NoError(t, err)
 
 		// set the desiredPhase for all vertices to paused
 		_, err = r.updateVerticeDesiredPhase(ctx, testObj, allVertexFilter, dfv1.VertexPhasePaused)

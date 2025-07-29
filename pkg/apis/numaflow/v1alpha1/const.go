@@ -42,6 +42,7 @@ const (
 	KeySideInputName       = "numaflow.numaproj.io/side-input-name"
 	KeyPauseTimestamp      = "numaflow.numaproj.io/pause-timestamp"
 	KeyDefaultContainer    = "kubectl.kubernetes.io/default-container"
+	KeyResumeStrategy      = "numaflow.numaproj.io/resume-strategy"
 
 	// ID key in the header of sources like http
 	KeyMetaID          = "X-Numaflow-Id"

@@ -874,6 +874,18 @@ func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeli
 		}
 	}
 
+	// get the resume-strategy annotation
+	resumeStrategy, _ := pl.GetAnnotations()[dfv1.KeyResumeStrategy]
+	if resumeStrategy == string(dfv1.ResumeStrategySlow) {
+		// if resume strategy is defined as slow then,
+		// while resuming a pipeline, we want to patch the vertex replicas to nil
+		// this will force the vertex resume from the min replica count during reconciling
+		err := r.patchVertexReplicas(ctx, pl, allVertexFilter)
+		if err != nil {
+			return false, err
+		}
+	}
+
 	_, err := r.updateVerticeDesiredPhase(ctx, pl, allVertexFilter, dfv1.VertexPhaseRunning)
 	if err != nil {
 		return false, err
@@ -938,12 +950,6 @@ func (r *pipelineReconciler) pausePipeline(ctx context.Context, pl *dfv1.Pipelin
 		_, err = r.updateVerticeDesiredPhase(ctx, pl, allVertexFilter, dfv1.VertexPhasePaused)
 		if err != nil {
 			return true, err
-		}
-		// while pausing a pipeline, we want to patch the vertex replicas to nil
-		// this will force a resume from the min replica count during the resume reconciling
-		err = r.patchVertexReplicas(ctx, pl, allVertexFilter)
-		if err != nil {
-			return false, err
 		}
 
 		if errWhileDrain != nil {
