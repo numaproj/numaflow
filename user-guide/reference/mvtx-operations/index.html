@@ -2672,12 +2672,15 @@
 
 <h1 id="monovertex-operations">MonoVertex Operations<a class="headerlink" href="#monovertex-operations" title="Permanent link">&para;</a></h1>
 <h2 id="pause-a-monovertex">Pause a MonoVertex<a class="headerlink" href="#pause-a-monovertex" title="Permanent link">&para;</a></h2>
-<p>To pause a <a href="../../../core-concepts/monovertex/">MonoVertex</a>, use the command below, it will bring the MonoVertex to <code>Paused</code> status, and terminate all the running MonoVertex pods.</p>
+<p>To pause a <a href="../../../core-concepts/monovertex/">MonoVertex</a>, use the command below, it will bring the MonoVertex to <code>Paused</code> state, and terminate all the running MonoVertex pods.</p>
 <div class="highlight"><pre><span></span><code><span class="w">  </span>kubectl<span class="w"> </span>patch<span class="w"> </span>mvtx<span class="w"> </span>my-mvtx<span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span>--patch<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;: {&quot;lifecycle&quot;: {&quot;desiredPhase&quot;: &quot;Paused&quot;}}}&#39;</span>
 </code></pre></div>
 <h2 id="resume-a-monovertex">Resume a MonoVertex<a class="headerlink" href="#resume-a-monovertex" title="Permanent link">&para;</a></h2>
-<p>The command below will bring the MonoVertex back to <code>Running</code> status.</p>
+<p>The command below will bring the MonoVertex back to <code>Running</code> state, resuming with the same number of pods it had prior to being paused.</p>
 <div class="highlight"><pre><span></span><code><span class="w">  </span>kubectl<span class="w"> </span>patch<span class="w"> </span>mvtx<span class="w"> </span>my-mvtx<span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span>--patch<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;: {&quot;lifecycle&quot;: {&quot;desiredPhase&quot;: &quot;Running&quot;}}}&#39;</span>
+</code></pre></div>
+<p>Run the following command if you would like to resume the MonoVertex with the minimal number of pods (the number defined in <code>spec.scale.min</code>, otherwise 1).</p>
+<div class="highlight"><pre><span></span><code><span class="w">  </span>kubectl<span class="w"> </span>patch<span class="w"> </span>mvtx<span class="w"> </span>my-mvtx<span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span>--patch<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;: {&quot;lifecycle&quot;: {&quot;desiredPhase&quot;: &quot;Running&quot;}, &quot;replicas&quot;: null}}}&#39;</span>
 </code></pre></div>
 
               
