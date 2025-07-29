@@ -143,7 +143,6 @@ export function MonoVertexCard({
     setDeleteProps(undefined);
   }, []);
 
-  const pipelineStatus = statusData?.monoVertex?.status?.phase || UNKNOWN;
   const handleTimer = useCallback(() => {
     const dateString = new Date().toISOString();
     const time = timeAgo(dateString);
@@ -225,7 +224,6 @@ export function MonoVertexCard({
     }
   }, [statusData]);
 
-
   const {
     data: healthData,
     loading: healthLoading,
@@ -242,30 +240,39 @@ export function MonoVertexCard({
       addError(healthError);
     }
   }, [healthError]);
-  
+
+  const pipelineStatus = statusData?.monoVertex?.status?.phase || UNKNOWN;
   const getHealth = useCallback(
     (pipelineStatus: string) => {
       if (healthData) {
         const { resourceHealthStatus, dataHealthStatus } = healthData;
-        const consolidated =  GetConsolidatedHealthStatus(
+        return GetConsolidatedHealthStatus(
           pipelineStatus,
           resourceHealthStatus,
           dataHealthStatus
         );
-        setMonoVertexHealthMap((prev) => ({
-        ...prev,
-        [data.name]: consolidated,
-        }));
-        return consolidated;
       }
-      setMonoVertexHealthMap((prev) => ({
-        ...prev,
-        [data.name]: UNKNOWN,
-        }));
       return UNKNOWN;
     },
     [healthData]
   );
+
+  // Set health status in map when healthData changes
+  useEffect(() => {
+    if (healthData && data?.name && setMonoVertexHealthMap) {
+      const healthStatus = getHealth(pipelineStatus);
+      setMonoVertexHealthMap((prev) => ({
+        ...prev,
+        [data.name]: healthStatus,
+      }));
+    }
+  }, [
+    healthData,
+    pipelineStatus,
+    data?.name,
+    setMonoVertexHealthMap,
+    getHealth,
+  ]);
 
   return (
     <>
@@ -500,9 +507,11 @@ export function MonoVertexCard({
                 className={"pipeline-logo"}
               />
               <img
-                src={IconsStatusMap[
-                  healthLoading ? UNKNOWN : getHealth(pipelineStatus)
-                ]}
+                src={
+                  IconsStatusMap[
+                    healthLoading ? UNKNOWN : getHealth(pipelineStatus)
+                  ]
+                }
                 alt="Health"
                 className={"pipeline-logo"}
               />
@@ -518,9 +527,13 @@ export function MonoVertexCard({
               }}
             >
               <span>{StatusString[pipelineStatus]}</span>
-              <span>{StatusString[
-                healthLoading ? UNKNOWN : getHealth(pipelineStatus)
-                ]}</span>
+              <span>
+                {
+                  StatusString[
+                    healthLoading ? UNKNOWN : getHealth(pipelineStatus)
+                  ]
+                }
+              </span>
             </Box>
           </Grid>
 
