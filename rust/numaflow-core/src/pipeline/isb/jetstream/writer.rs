@@ -52,7 +52,7 @@ pub(crate) struct ISBWriterConfig {
     pub tracker_handle: TrackerHandle,
     pub cancel_token: CancellationToken,
     pub watermark_handle: Option<WatermarkHandle>,
-    pub vertex_type: String,
+    pub vertex_type: VertexType,
     pub isb_config: Option<ISBConfig>,
 }
 
@@ -79,7 +79,7 @@ pub(crate) struct JetstreamWriter {
     sem: Arc<Semaphore>,
     watermark_handle: Option<WatermarkHandle>,
     paf_concurrency: usize,
-    vertex_type: String,
+    vertex_type: VertexType,
     compression_type: Option<CompressionType>,
 }
 
@@ -243,7 +243,7 @@ impl JetstreamWriter {
                     pipeline_metrics()
                         .forwarder
                         .udf_drop_total
-                        .get_or_create(pipeline_metric_labels(&self.vertex_type))
+                        .get_or_create(pipeline_metric_labels(self.vertex_type.as_str()))
                         .inc();
                     continue;
                 }
@@ -447,7 +447,7 @@ impl JetstreamWriter {
                                 .forwarder
                                 .drop_total
                                 .get_or_create(&pipeline_drop_metric_labels(
-                                    &self.vertex_type,
+                                    self.vertex_type.as_str(),
                                     stream.name,
                                     "Buffer full",
                                 ))
@@ -456,7 +456,7 @@ impl JetstreamWriter {
                                 .forwarder
                                 .drop_bytes_total
                                 .get_or_create(&pipeline_drop_metric_labels(
-                                    &self.vertex_type,
+                                    self.vertex_type.as_str(),
                                     stream.name,
                                     "Buffer full",
                                 ))
@@ -541,7 +541,7 @@ impl JetstreamWriter {
                     Ok(ack) => {
                         Self::send_write_metrics(
                             stream.name,
-                            &this.vertex_type,
+                            this.vertex_type.as_str(),
                             message.clone(),
                             write_processing_start,
                         );
@@ -610,6 +610,8 @@ impl JetstreamWriter {
                 }
             }
 
+            // Now that the PAF is resolved, we can delete the entry from the tracker which will send
+            // an ACK to the reader.
             this.tracker_handle
                 .delete(message.offset.clone())
                 .await
@@ -618,6 +620,30 @@ impl JetstreamWriter {
 
         Ok(())
     }
+
+    /// publishes the watermark for the given stream and offset
+    async fn publish_watermark(
+        watermark_handle: &mut WatermarkHandle,
+        stream: Stream,
+        offset: Offset,
+        message: &Message,
+    ) {
+        match watermark_handle {
+            WatermarkHandle::ISB(handle) => {
+                handle.publish_watermark(stream, offset).await;
+            }
+            WatermarkHandle::Source(handle) => {
+                let input_partition = match &message.offset {
+                    Offset::Int(offset) => offset.partition_idx,
+                    Offset::String(offset) => offset.partition_idx,
+                };
+                handle
+                    .publish_source_isb_watermark(stream, offset, input_partition)
+                    .await;
+            }
+        }
+    }
+
     /// Writes the message to the JetStream ISB and returns the PublishAck. It will do
     /// infinite retries until the message gets published successfully. If it returns
     /// an error it means it is fatal non-retryable error.
@@ -675,29 +701,6 @@ impl JetstreamWriter {
             }
         }
     }
-
-    /// publishes the watermark for the given stream and offset
-    async fn publish_watermark(
-        watermark_handle: &mut WatermarkHandle,
-        stream: Stream,
-        offset: Offset,
-        message: &Message,
-    ) {
-        match watermark_handle {
-            WatermarkHandle::ISB(handle) => {
-                handle.publish_watermark(stream, offset).await;
-            }
-            WatermarkHandle::Source(handle) => {
-                let input_partition = match &message.offset {
-                    Offset::Int(offset) => offset.partition_idx,
-                    Offset::String(offset) => offset.partition_idx,
-                };
-                handle
-                    .publish_source_isb_watermark(stream, offset, input_partition)
-                    .await;
-            }
-        }
-    }
 }
 
 #[cfg(test)]
@@ -719,7 +722,7 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_async_write() {
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let cln_token = CancellationToken::new();
         let js_url = "localhost:4222";
         // Create JetStream context
@@ -766,7 +769,7 @@ mod tests {
             tracker_handle,
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Source".to_string(),
+            vertex_type: VertexType::Source,
             isb_config: None,
         });
 
@@ -861,10 +864,10 @@ mod tests {
             }],
             js_ctx: context.clone(),
             paf_concurrency: 100,
-            tracker_handle: TrackerHandle::new(None, None),
+            tracker_handle: TrackerHandle::new(None),
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Source".to_string(),
+            vertex_type: VertexType::Source,
             isb_config: None,
         });
 
@@ -882,7 +885,7 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_write_with_cancellation() {
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let js_url = "localhost:4222";
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
@@ -931,7 +934,7 @@ mod tests {
             tracker_handle,
             cancel_token: cancel_token.clone(),
             watermark_handle: None,
-            vertex_type: "Map".to_string(),
+            vertex_type: VertexType::MapUDF,
             isb_config: None,
         });
 
@@ -1091,7 +1094,7 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_check_stream_status() {
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let js_url = "localhost:4222";
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
@@ -1143,7 +1146,7 @@ mod tests {
             tracker_handle,
             cancel_token: cancel_token.clone(),
             watermark_handle: None,
-            vertex_type: "Source".to_string(),
+            vertex_type: VertexType::Source,
             isb_config: None,
         });
 
@@ -1194,7 +1197,7 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
 
         let stream = Stream::new("test_publish_messages", "temp", 0);
         // Delete stream if it exists
@@ -1238,7 +1241,7 @@ mod tests {
             tracker_handle: tracker_handle.clone(),
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Source".to_string(),
+            vertex_type: VertexType::Source,
             isb_config: None,
         });
 
@@ -1289,7 +1292,7 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
 
         let stream = Stream::new("test_publish_cancellation", "temp", 0);
         // Delete stream if it exists
@@ -1333,7 +1336,7 @@ mod tests {
             tracker_handle: tracker_handle.clone(),
             cancel_token: cancel_token.clone(),
             watermark_handle: None,
-            vertex_type: "Source".to_string(),
+            vertex_type: VertexType::Source,
             isb_config: None,
         });
 
@@ -1414,7 +1417,7 @@ mod tests {
         let js_url = "localhost:4222";
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let cln_token = CancellationToken::new();
 
         let vertex1_streams = vec![
@@ -1481,7 +1484,7 @@ mod tests {
             tracker_handle: tracker_handle.clone(),
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Source".to_string(),
+            vertex_type: VertexType::Source,
             isb_config: None,
         });
 

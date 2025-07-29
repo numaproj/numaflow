@@ -7,6 +7,8 @@ spec:
     maxDelay: 30s
   vertices:
     - name: in
+      limits:
+        readBatchSize: 1
       scale:
         min: 1
       source:
@@ -17,7 +19,7 @@ spec:
       udf:
         container:
           image: quay.io/numaio/numaflow-go/map-even-odd:stable
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
     - name: compute-count
       partitions: 1
       udf:

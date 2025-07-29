@@ -171,8 +171,11 @@ impl ISBWatermarkPublisher {
         // is monotonically increasing.
         // NOTE: in idling case since we reuse the control message offset, we can have the same offset
         // with larger watermark (we should publish it).
-        let last_state = &mut last_published_wm_state[stream.partition as usize];
-        if offset < last_state.offset || watermark < last_state.watermark {
+        let last_state = last_published_wm_state
+            .get_mut(stream.partition as usize)
+            .expect("should have partition");
+        if offset < last_state.offset {
+            last_state.watermark = last_state.watermark.max(watermark);
             return;
         }
 
@@ -184,8 +187,14 @@ impl ISBWatermarkPublisher {
         // Supposed publish watermark offset=3605637 watermark=1750758998480 last_published_offset=3605147 last_published_watermark=1750758997480
         // Actual published watermark offset=3605637 watermark=1750758998480
         // We should've published watermark for offset 3605646 and skipped publishing for offset 3605637
-        if watermark == last_state.watermark {
-            last_state.offset = offset;
+        // if watermark cannot be computed, still we should publish the last known valid WM for the latest offset
+        if watermark == last_state.watermark || watermark == -1 {
+            last_state.offset = last_state.offset.max(offset);
+            return;
+        }
+
+        if watermark < last_state.watermark {
+            warn!(?watermark, ?last_state.watermark, "Watermark regression detected, skipping publish");
             return;
         }
 
@@ -214,7 +223,9 @@ impl ISBWatermarkPublisher {
             .ok();
 
         // update the last published watermark state
-        last_published_wm_state[stream.partition as usize] = LastPublishedState {
+        *last_published_wm_state
+            .get_mut(stream.partition as usize)
+            .expect("should have partition") = LastPublishedState {
             offset,
             watermark,
             last_published_time: Instant::now(),

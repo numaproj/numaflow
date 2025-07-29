@@ -32,7 +32,6 @@ use crate::reduce::reducer::unaligned::windower::{
     SHARED_PNF_SLOT, UnalignedWindowMessage, UnalignedWindowOperation, Window,
 };
 use chrono::{DateTime, Utc};
-use tracing::trace;
 
 /// Active session windows for every key combination (combinedKey -> Sorted window set)
 type ActiveWindowStore = Arc<RwLock<HashMap<String, BTreeSet<Window>>>>;
@@ -89,7 +88,6 @@ impl SessionWindowManager {
             if let Some(expanded_window) = expanded_window {
                 window_set.remove(&existing_window);
                 window_set.insert(expanded_window.clone());
-
                 return vec![UnalignedWindowMessage {
                     operation: UnalignedWindowOperation::Expand {
                         message: msg,
@@ -118,27 +116,50 @@ impl SessionWindowManager {
         }]
     }
 
-    /// expands the window if the start or end time collides.
+    /// expands the window if the windows overlap.
+    /// If windows overlap, always expand to accommodate both windows.
+    /// If the new window is completely contained within existing boundaries, just append to existing window.
+    /// Windows must overlap first (considering end time is exclusive) before they can be expanded.
     fn expand_window_if_needed(new_window: &Window, existing_window: &Window) -> Option<Window> {
-        (new_window.start_time < existing_window.start_time
-            || new_window.end_time > existing_window.end_time)
-            .then(|| {
-                Window::new(
-                    new_window.start_time.min(existing_window.start_time),
-                    new_window.end_time.max(existing_window.end_time),
-                    Arc::clone(&new_window.keys),
-                )
-            })
+        // First check if windows overlap (end time is exclusive, start time is inclusive)
+        // [a,b) and [c,d) overlap if a < d and c < b
+        let windows_overlap = new_window.start_time < existing_window.end_time
+            && existing_window.start_time < new_window.end_time;
+
+        if !windows_overlap {
+            return None;
+        }
+
+        // Check if the new window is completely contained within the existing window
+        // If so, this should be an append operation, not an expand operation
+        let new_window_contained = new_window.start_time >= existing_window.start_time
+            && new_window.end_time <= existing_window.end_time;
+
+        if new_window_contained {
+            return None; // No expansion needed, should append to existing window
+        }
+
+        // If windows overlap and expansion is needed, expand to accommodate both windows
+        // Use min of start times and max of end times
+        Some(Window::new(
+            new_window.start_time.min(existing_window.start_time),
+            new_window.end_time.max(existing_window.end_time),
+            Arc::clone(&new_window.keys),
+        ))
     }
 
     /// finds a window that can be merged with the given window.
+    /// Windows overlap if they intersect, considering that end time is exclusive and start time is inclusive.
+    /// For windows [a,b) and [c,d), they overlap if a < d and c < b.
     fn find_window_to_merge(window_set: &BTreeSet<Window>, window: &Window) -> Option<Window> {
+        // TODO: this is not efficient, since its sorted we should be able to find the window in O(log n) time.
         window_set
             .iter()
             .find(|existing_window| {
-                // Windows overlap if they intersect
-                window.start_time <= existing_window.end_time
-                    && existing_window.start_time <= window.end_time
+                // Windows overlap if they intersect (end time is exclusive, start time is inclusive)
+                // [a,b) and [c,d) overlap if a < d and c < b
+                window.start_time < existing_window.end_time
+                    && existing_window.start_time < window.end_time
             })
             .cloned()
     }
@@ -202,51 +223,65 @@ impl SessionWindowManager {
     ) -> Vec<UnalignedWindowMessage> {
         Self::windows_that_can_be_merged(&closed_windows)
             .into_iter()
-            .filter_map(|group| self.process_closing_window_group(key, group))
+            .filter_map(|group| self.process_close_window_group(key, group))
+            .flatten()
             .collect()
     }
 
-    /// Process a group of windows that can be merged
-    fn process_closing_window_group(
+    /// Process multiple closing windows by merging them first, then attempting to merge with active windows
+    fn process_close_window_group(
         &self,
         key: &str,
         closing_group: Vec<Window>,
-    ) -> Option<UnalignedWindowMessage> {
+    ) -> Option<Vec<UnalignedWindowMessage>> {
         if closing_group.is_empty() {
             return None;
         }
 
-        // merge among the windows in the close group
-        let window_to_close = Self::merge_windows(&closing_group);
-
-        // Try to merge with active windows
-        let merge_result = {
+        let mut messages = Vec::new();
+        let (merge_result, window) = if closing_group.len() == 1 {
+            let window = closing_group.into_iter().next().unwrap();
             let mut active_windows = self.active_windows.write().expect("Poisoned lock");
-            Self::try_merge_with_active(&mut active_windows, key, &window_to_close)
+            (
+                Self::try_merge_with_active(&mut active_windows, key, &window),
+                window,
+            )
+        } else {
+            let (merged_window, initial_merge_msg) = Self::merge_windows(&closing_group);
+            messages.push(initial_merge_msg);
+            let mut active_windows = self.active_windows.write().expect("Poisoned lock");
+            (
+                Self::try_merge_with_active(&mut active_windows, key, &merged_window),
+                merged_window,
+            )
         };
 
-        match merge_result {
-            Some((old_active, new_merged)) => Some(UnalignedWindowMessage {
+        let final_message = match merge_result {
+            Some((old_active, _new_merged)) => UnalignedWindowMessage {
                 operation: UnalignedWindowOperation::Merge {
-                    windows: vec![window_to_close, old_active, new_merged],
+                    windows: vec![window, old_active],
                 },
                 pnf_slot: SHARED_PNF_SLOT,
-            }),
+            },
             None => {
-                // Move window to closed_windows
-                {
-                    let mut closed_windows = self.closed_windows.write().expect("Poisoned lock");
-                    closed_windows.insert(window_to_close.clone());
-                }
-
-                Some(UnalignedWindowMessage {
-                    operation: UnalignedWindowOperation::Close {
-                        window: window_to_close,
-                    },
+                self.move_to_closed_windows(&window);
+                UnalignedWindowMessage {
+                    operation: UnalignedWindowOperation::Close { window },
                     pnf_slot: SHARED_PNF_SLOT,
-                })
+                }
             }
-        }
+        };
+
+        messages.push(final_message);
+        Some(messages)
+    }
+
+    /// Helper to move a window to the closed windows store
+    fn move_to_closed_windows(&self, window: &Window) {
+        self.closed_windows
+            .write()
+            .expect("Poisoned lock")
+            .insert(window.clone());
     }
 
     /// Try to merge a window with active windows during the close operation.
@@ -271,8 +306,8 @@ impl SessionWindowManager {
     }
 
     /// Merge multiple windows into a single window
-    fn merge_windows(windows: &[Window]) -> Window {
-        let first = &windows[0];
+    fn merge_windows(windows: &[Window]) -> (Window, UnalignedWindowMessage) {
+        let first = windows.first().expect("should have first window");
 
         let (start_time, end_time) = windows.iter().fold(
             (first.start_time, first.end_time),
@@ -284,7 +319,15 @@ impl SessionWindowManager {
             },
         );
 
-        Window::new(start_time, end_time, Arc::clone(&first.keys))
+        (
+            Window::new(start_time, end_time, Arc::clone(&first.keys)),
+            UnalignedWindowMessage {
+                operation: UnalignedWindowOperation::Merge {
+                    windows: windows.to_vec(),
+                },
+                pnf_slot: SHARED_PNF_SLOT,
+            },
+        )
     }
 
     /// Groups windows that can be merged together.
@@ -312,24 +355,31 @@ impl SessionWindowManager {
             i -= 1;
 
             // Initialize a slice to hold the current window and any subsequent mergeable windows
-            let mut merged_group = vec![windows[i].clone()];
+            let mut merged_group = vec![windows.get(i).expect("should have window").clone()];
 
             // Set the last window to be the current window
-            let mut last_window = windows[i].clone();
+            let mut last_window = windows.get(i).expect("should have window").clone();
 
             // Check if the end time of the last window is after the start time of the previous window
             // If it is that means they should be merged, add the previous window to the merged slice
             // and update the end time of the last window
-            while i > 0 && windows[i - 1].end_time > last_window.start_time {
+            while i > 0
+                && windows
+                    .get(i - 1)
+                    .expect("should have previous window")
+                    .end_time
+                    > last_window.start_time
+            {
                 i -= 1;
-                merged_group.push(windows[i].clone());
+                merged_group.push(windows.get(i).expect("should have window").clone());
 
                 // Merge the window into last_window to expand the range
-                if windows[i].start_time < last_window.start_time {
-                    last_window.start_time = windows[i].start_time;
+                let current_window = windows.get(i).expect("should have window");
+                if current_window.start_time < last_window.start_time {
+                    last_window.start_time = current_window.start_time;
                 }
-                if windows[i].end_time > last_window.end_time {
-                    last_window.end_time = windows[i].end_time;
+                if current_window.end_time > last_window.end_time {
+                    last_window.end_time = current_window.end_time;
                 }
             }
 
@@ -337,7 +387,8 @@ impl SessionWindowManager {
             merged_groups.push(merged_group);
         }
 
-        trace!(?merged_groups, "Merged groups");
+        // reverse so that the smaller windows gets merged and closed first
+        merged_groups.reverse();
         merged_groups
     }
 
@@ -573,11 +624,11 @@ mod tests {
         // (sorted by end time descending, so window3 comes first)
         assert_eq!(merged_groups.len(), 2);
 
-        // First group should have 1 window (window3)
-        assert_eq!(merged_groups[0].len(), 1);
+        // First group should have 2 windows (window2 and window1)
+        assert_eq!(merged_groups[0].len(), 2);
 
-        // Second group should have 2 windows (window2 and window1)
-        assert_eq!(merged_groups[1].len(), 2);
+        // Second group should  have 1 window (window3)
+        assert_eq!(merged_groups[1].len(), 1);
     }
 
     #[test]
@@ -707,56 +758,281 @@ mod tests {
     }
 
     #[test]
-    fn test_windows_that_can_be_merged_go_style_algorithm() {
-        // Test the optimized Go-style algorithm with the same example from Go documentation
+    fn test_exclusive_end_time_no_overlap() {
+        // Test that windows [5,10) and [10,15) are NOT considered overlapping
         let now = Utc::now();
 
-        // Create windows matching the Go example: (75, 85), (60, 90), (80, 100) and (110, 120)
         let window1 = Window::new(
-            now + chrono::Duration::seconds(75),
-            now + chrono::Duration::seconds(85),
+            now + chrono::Duration::seconds(5),
+            now + chrono::Duration::seconds(10),
             Arc::from(vec!["test_key".to_string()]),
         );
         let window2 = Window::new(
-            now + chrono::Duration::seconds(60),
-            now + chrono::Duration::seconds(90),
+            now + chrono::Duration::seconds(10),
+            now + chrono::Duration::seconds(15),
             Arc::from(vec!["test_key".to_string()]),
         );
-        let window3 = Window::new(
+
+        // Test find_window_to_merge
+        let mut window_set = BTreeSet::new();
+        window_set.insert(window1.clone());
+
+        let result = SessionWindowManager::find_window_to_merge(&window_set, &window2);
+        assert!(
+            result.is_none(),
+            "Windows [5,10) and [10,15) should NOT overlap"
+        );
+
+        // Test expand_window_if_needed
+        let expansion = SessionWindowManager::expand_window_if_needed(&window2, &window1);
+        assert!(
+            expansion.is_none(),
+            "Windows [5,10) and [10,15) should NOT be expandable"
+        );
+    }
+
+    #[test]
+    fn test_overlapping_windows_can_expand() {
+        // Test that windows [5,11) and [10,15) CAN be expanded
+        let now = Utc::now();
+
+        let window1 = Window::new(
+            now + chrono::Duration::seconds(5),
+            now + chrono::Duration::seconds(11),
+            Arc::from(vec!["test_key".to_string()]),
+        );
+        let window2 = Window::new(
+            now + chrono::Duration::seconds(10),
+            now + chrono::Duration::seconds(15),
+            Arc::from(vec!["test_key".to_string()]),
+        );
+
+        // Test find_window_to_merge
+        let mut window_set = BTreeSet::new();
+        window_set.insert(window1.clone());
+
+        let result = SessionWindowManager::find_window_to_merge(&window_set, &window2);
+        assert!(
+            result.is_some(),
+            "Windows [5,11) and [10,15) should overlap"
+        );
+
+        // Test expand_window_if_needed - window2 extends beyond window1
+        let expansion = SessionWindowManager::expand_window_if_needed(&window2, &window1);
+        assert!(
+            expansion.is_some(),
+            "Windows [5,11) and [10,15) should be expandable"
+        );
+
+        let expanded = expansion.unwrap();
+        assert_eq!(expanded.start_time, now + chrono::Duration::seconds(5));
+        assert_eq!(expanded.end_time, now + chrono::Duration::seconds(15));
+    }
+
+    #[test]
+    fn test_specific_contained_window_scenario() {
+        // Test the specific scenario: existing window [10, 30), new window [20, 30)
+        let now = Utc::now();
+
+        let existing_window = Window::new(
+            now + chrono::Duration::seconds(10),
+            now + chrono::Duration::seconds(30),
+            Arc::from(vec!["test_key".to_string()]),
+        );
+        let new_window = Window::new(
+            now + chrono::Duration::seconds(20),
+            now + chrono::Duration::seconds(30),
+            Arc::from(vec!["test_key".to_string()]),
+        );
+
+        // Test that this should be an append operation (expand_window_if_needed returns None)
+        let expansion =
+            SessionWindowManager::expand_window_if_needed(&new_window, &existing_window);
+        assert!(
+            expansion.is_none(),
+            "Window [20,30) should append to existing window [10,30), not expand"
+        );
+
+        // Test find_window_to_merge still finds the window for merging
+        let mut window_set = BTreeSet::new();
+        window_set.insert(existing_window.clone());
+
+        let result = SessionWindowManager::find_window_to_merge(&window_set, &new_window);
+        assert!(
+            result.is_some(),
+            "Windows should still be found for merging"
+        );
+        assert_eq!(result.unwrap(), existing_window);
+    }
+
+    #[test]
+    fn test_comprehensive_window_scenarios() {
+        let now = Utc::now();
+        let key: Arc<[String]> = Arc::from(vec!["test_key".to_string()]);
+
+        let existing_window =
+            Window::new(now, now + chrono::Duration::seconds(100), Arc::clone(&key));
+
+        // Scenario 1: New window contained in existing [20, 80) contained in [0, 100)
+        let contained_window = Window::new(
+            now + chrono::Duration::seconds(20),
             now + chrono::Duration::seconds(80),
-            now + chrono::Duration::seconds(100),
-            Arc::from(vec!["test_key".to_string()]),
+            Arc::clone(&key),
         );
-        let window4 = Window::new(
-            now + chrono::Duration::seconds(110),
+
+        let expansion =
+            SessionWindowManager::expand_window_if_needed(&contained_window, &existing_window);
+        assert!(
+            expansion.is_none(),
+            "Contained window should trigger append, not expand"
+        );
+
+        // Scenario 2: Existing window contained in new window [-10, 120) contains [0, 100)
+        let larger_window = Window::new(
+            now - chrono::Duration::seconds(10),
             now + chrono::Duration::seconds(120),
-            Arc::from(vec!["test_key".to_string()]),
+            Arc::clone(&key),
         );
 
-        // Input windows sorted by end time (ascending): (85, 90, 100, 120)
-        let windows = vec![window1, window2, window3, window4];
+        let expansion2 =
+            SessionWindowManager::expand_window_if_needed(&larger_window, &existing_window);
+        assert!(expansion2.is_some(), "Larger window should trigger expand");
+        let expanded = expansion2.unwrap();
+        assert_eq!(expanded.start_time, now - chrono::Duration::seconds(10));
+        assert_eq!(expanded.end_time, now + chrono::Duration::seconds(120));
 
-        // Test merging
-        let merged_groups = SessionWindowManager::windows_that_can_be_merged(&windows);
+        // Scenario 3: Identical windows [0, 100) and [0, 100)
+        let identical_window =
+            Window::new(now, now + chrono::Duration::seconds(100), Arc::clone(&key));
 
-        // Should have 2 groups: one with the first three overlapping windows, one with the standalone window
-        assert_eq!(merged_groups.len(), 2);
-
-        // First group should have 1 window (the standalone window4 with end time 120)
-        assert_eq!(merged_groups[0].len(), 1);
-        assert_eq!(
-            merged_groups[0][0].end_time,
-            now + chrono::Duration::seconds(120)
+        let expansion3 =
+            SessionWindowManager::expand_window_if_needed(&identical_window, &existing_window);
+        assert!(
+            expansion3.is_none(),
+            "Identical windows should trigger append, not expand"
         );
 
-        // Second group should have 3 windows (the overlapping windows)
-        assert_eq!(merged_groups[1].len(), 3);
+        // Scenario 4: Partial overlap requiring expansion [50, 150) overlaps [0, 100)
+        let partial_overlap_window = Window::new(
+            now + chrono::Duration::seconds(50),
+            now + chrono::Duration::seconds(150),
+            Arc::clone(&key),
+        );
 
-        // Verify the windows in the second group are the overlapping ones
-        let second_group_end_times: Vec<_> = merged_groups[1].iter().map(|w| w.end_time).collect();
+        let expansion4 = SessionWindowManager::expand_window_if_needed(
+            &partial_overlap_window,
+            &existing_window,
+        );
+        assert!(
+            expansion4.is_some(),
+            "Partial overlap should trigger expand"
+        );
+        let expanded2 = expansion4.unwrap();
+        assert_eq!(expanded2.start_time, now);
+        assert_eq!(expanded2.end_time, now + chrono::Duration::seconds(150));
+    }
 
-        assert!(second_group_end_times.contains(&(now + chrono::Duration::seconds(85))));
-        assert!(second_group_end_times.contains(&(now + chrono::Duration::seconds(90))));
-        assert!(second_group_end_times.contains(&(now + chrono::Duration::seconds(100))));
+    #[test]
+    fn test_assign_windows_different_cases() {
+        // Test assign_windows flow for realistic session window behavior
+        let windower = SessionWindowManager::new(Duration::from_secs(60));
+        let now = Utc::now();
+        let key: Arc<[String]> = Arc::from(vec!["test_key".to_string()]);
+
+        // Scenario 1: Create initial window with first message
+        let msg1 = Message {
+            typ: Default::default(),
+            keys: Arc::clone(&key),
+            tags: None,
+            value: "msg1".as_bytes().to_vec().into(),
+            offset: Default::default(),
+            event_time: now,
+            ..Default::default()
+        };
+
+        let result1 = windower.assign_windows(msg1);
+        assert_eq!(result1.len(), 1);
+        match &result1[0].operation {
+            UnalignedWindowOperation::Open { window, .. } => {
+                assert_eq!(window.start_time, now);
+                assert_eq!(window.end_time, now + chrono::Duration::seconds(60));
+            }
+            _ => panic!("Expected Open operation for first message"),
+        }
+
+        // Scenario 2: Test expansion - new message extends existing window
+        let msg2 = Message {
+            typ: Default::default(),
+            keys: Arc::clone(&key),
+            tags: None,
+            value: "msg2".as_bytes().to_vec().into(),
+            offset: Default::default(),
+            event_time: now + chrono::Duration::seconds(30), // Creates [now+30, now+90) which extends [now, now+60)
+            ..Default::default()
+        };
+
+        let result2 = windower.assign_windows(msg2);
+        assert_eq!(result2.len(), 1);
+        match &result2[0].operation {
+            UnalignedWindowOperation::Expand { windows, .. } => {
+                assert_eq!(windows.len(), 2);
+                let old_window = &windows[0];
+                let new_window = &windows[1];
+                assert_eq!(old_window.start_time, now);
+                assert_eq!(old_window.end_time, now + chrono::Duration::seconds(60));
+                assert_eq!(new_window.start_time, now);
+                assert_eq!(new_window.end_time, now + chrono::Duration::seconds(90));
+            }
+            _ => panic!("Expected Expand operation, got {:?}", result2[0].operation),
+        }
+
+        // Scenario 3: Test expansion in the other direction - message before existing window
+        let msg3 = Message {
+            typ: Default::default(),
+            keys: Arc::clone(&key),
+            tags: None,
+            value: "msg3".as_bytes().to_vec().into(),
+            offset: Default::default(),
+            event_time: now - chrono::Duration::seconds(10), // Creates [now-10, now+50) which extends [now, now+90)
+            ..Default::default()
+        };
+
+        let result3 = windower.assign_windows(msg3);
+        assert_eq!(result3.len(), 1);
+        match &result3[0].operation {
+            UnalignedWindowOperation::Expand { windows, .. } => {
+                assert_eq!(windows.len(), 2);
+                let old_window = &windows[0];
+                let new_window = &windows[1];
+                assert_eq!(old_window.start_time, now);
+                assert_eq!(old_window.end_time, now + chrono::Duration::seconds(90));
+                assert_eq!(new_window.start_time, now - chrono::Duration::seconds(10));
+                assert_eq!(new_window.end_time, now + chrono::Duration::seconds(90));
+            }
+            _ => panic!("Expected Expand operation, got {:?}", result3[0].operation),
+        }
+
+        // Scenario 4: Test with a new key to create a separate window
+        let key2: Arc<[String]> = Arc::from(vec!["different_key".to_string()]);
+        let msg4 = Message {
+            typ: Default::default(),
+            keys: Arc::clone(&key2),
+            tags: None,
+            value: "msg4".as_bytes().to_vec().into(),
+            offset: Default::default(),
+            event_time: now + chrono::Duration::seconds(20),
+            ..Default::default()
+        };
+
+        let result4 = windower.assign_windows(msg4);
+        assert_eq!(result4.len(), 1);
+        match &result4[0].operation {
+            UnalignedWindowOperation::Open { window, .. } => {
+                assert_eq!(window.start_time, now + chrono::Duration::seconds(20));
+                assert_eq!(window.end_time, now + chrono::Duration::seconds(80));
+                assert_eq!(window.keys, key2);
+            }
+            _ => panic!("Expected Open operation for different key"),
+        }
     }
 }

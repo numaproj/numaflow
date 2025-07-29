@@ -44,7 +44,7 @@ impl SourceWatermarkPublisher {
     pub(crate) async fn publish_source_watermark(
         &mut self,
         partition: u16,
-        watermark: i64,
+        mut watermark: i64,
         idle: bool,
     ) {
         // for source, we do partition-based watermark publishing rather than pod-based, hence
@@ -66,6 +66,12 @@ impl SourceWatermarkPublisher {
             self.publishers.insert(processor_name.clone(), publisher);
         }
 
+        // subtract the max delay from the watermark, since we are publishing from source itself
+        // if the watermark is not idle.
+        if !idle && watermark != -1 {
+            watermark -= self.max_delay.as_millis() as i64
+        };
+
         self.publishers
             .get_mut(&processor_name)
             .expect("Publisher not found")
@@ -82,7 +88,7 @@ impl SourceWatermarkPublisher {
                     partition: 0,
                 },
                 Utc::now().timestamp_micros(), // we don't care about the offsets
-                watermark - self.max_delay.as_millis() as i64, // consider the max delay configured by the user while publishing source watermark
+                watermark,
                 idle,
             )
             .await;

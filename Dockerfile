@@ -32,6 +32,22 @@ COPY ./rust/ .
 RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS rust-builder
+
+COPY --from=planner /numaflow/recipe.json recipe.json
+
+# Build to cache dependencies
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    case ${TARGETPLATFORM} in \
+        "linux/amd64") TARGET="x86_64-unknown-linux-gnu" ;; \
+        "linux/arm64") TARGET="aarch64-unknown-linux-gnu" ;; \
+    *) echo "Unsupported platform: ${TARGETPLATFORM}" && exit 1 ;; \
+    esac && \
+    RUSTFLAGS='-C target-feature=+crt-static' cargo chef cook --workspace --release --target ${TARGET} --recipe-path recipe.json
+
+# Copy the actual source code files of the main project and the subprojects
+COPY ./rust/ .
+
 ARG TARGETPLATFORM
 ARG ARCH
 ARG VERSION=latest
@@ -48,21 +64,6 @@ ARG GIT_TREE_STATE
 ENV GIT_TREE_STATE=$GIT_TREE_STATE
 ARG GIT_TAG
 ENV GIT_TAG=$GIT_TAG
-
-COPY --from=planner /numaflow/recipe.json recipe.json
-
-# Build to cache dependencies
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/usr/local/cargo/git \
-    case ${TARGETPLATFORM} in \
-        "linux/amd64") TARGET="x86_64-unknown-linux-gnu" ;; \
-        "linux/arm64") TARGET="aarch64-unknown-linux-gnu" ;; \
-    *) echo "Unsupported platform: ${TARGETPLATFORM}" && exit 1 ;; \
-    esac && \
-    RUSTFLAGS='-C target-feature=+crt-static' cargo chef cook --workspace --release --target ${TARGET} --recipe-path recipe.json
-
-# Copy the actual source code files of the main project and the subprojects
-COPY ./rust/ .
 
 # Build the real binaries
 RUN --mount=type=cache,target=/usr/local/cargo/registry \

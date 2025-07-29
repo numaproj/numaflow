@@ -127,7 +127,9 @@ async fn start_source_forwarder(
     } else {
         None
     };
-    let tracker_handle = TrackerHandle::new(None, serving_callback_handler);
+
+    let tracker_handle = TrackerHandle::new(serving_callback_handler);
+
     let buffer_writer = JetstreamWriter::new(ISBWriterConfig {
         config: config.to_vertex_config.clone(),
         js_ctx: js_context,
@@ -135,7 +137,7 @@ async fn start_source_forwarder(
         tracker_handle: tracker_handle.clone(),
         cancel_token: cln_token.clone(),
         watermark_handle: source_watermark_handle.clone().map(WatermarkHandle::Source),
-        vertex_type: config.vertex_type.to_string(),
+        vertex_type: config.vertex_type,
         isb_config: config.isb_config.clone(),
     });
 
@@ -197,24 +199,6 @@ async fn start_map_forwarder(
     config: PipelineConfig,
     map_vtx_config: MapVtxConfig,
 ) -> Result<()> {
-    // create watermark handle, if watermark is enabled
-    let watermark_handle =
-        create_components::create_edge_watermark_handle(&config, &js_context, &cln_token, None)
-            .await?;
-
-    // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
-    // to a common buffer, in the case of a join.
-    let reader_config = &config
-        .from_vertex_config
-        .first()
-        .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
-        .reader_config;
-
-    // Create buffer writers and buffer readers
-    let mut forwarder_components = vec![];
-    let mut mapper_handle = None;
-    let mut isb_lag_readers = vec![];
-
     let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
         Some(
             CallbackHandler::new(
@@ -230,8 +214,31 @@ async fn start_map_forwarder(
     };
 
     // create tracker and buffer writer, they can be shared across all forwarders
-    let tracker_handle =
-        TrackerHandle::new(watermark_handle.clone(), serving_callback_handler.clone());
+    let tracker_handle = TrackerHandle::new(serving_callback_handler.clone());
+
+    // create watermark handle, if watermark is enabled
+    let watermark_handle = create_components::create_edge_watermark_handle(
+        &config,
+        &js_context,
+        &cln_token,
+        None,
+        tracker_handle.clone(),
+    )
+    .await?;
+
+    // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
+    // to a common buffer, in the case of a join.
+    let reader_config = &config
+        .from_vertex_config
+        .first()
+        .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
+        .reader_config;
+
+    // Create buffer writers and buffer readers
+    let mut forwarder_components = vec![];
+    let mut mapper_handle = None;
+    let mut isb_lag_readers = vec![];
+
     let buffer_writer = JetstreamWriter::new(ISBWriterConfig {
         config: config.to_vertex_config.clone(),
         js_ctx: js_context.clone(),
@@ -239,7 +246,7 @@ async fn start_map_forwarder(
         tracker_handle: tracker_handle.clone(),
         cancel_token: cln_token.clone(),
         watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
-        vertex_type: config.vertex_type.to_string(),
+        vertex_type: config.vertex_type,
         isb_config: config.isb_config.clone(),
     });
 
@@ -446,6 +453,9 @@ async fn start_aligned_reduce_forwarder(
     reduce_vtx_config: ReduceVtxConfig,
     aligned_config: AlignedReducerConfig,
 ) -> Result<()> {
+    // for reduce we do not pass serving callback handler to tracker.
+    let tracker_handle = TrackerHandle::new(None);
+
     // Create aligned window manager based on window type
     let window_manager = match &aligned_config.window_config.window_type {
         AlignedWindowType::Fixed(fixed_config) => {
@@ -477,6 +487,7 @@ async fn start_aligned_reduce_forwarder(
         &js_context,
         &cln_token,
         Some(WindowManager::Aligned(window_manager.clone())),
+        tracker_handle.clone(),
     )
     .await?;
 
@@ -493,9 +504,6 @@ async fn start_aligned_reduce_forwarder(
         .cloned()
         .ok_or_else(|| error::Error::Config("No stream found for reduce vertex".to_string()))?;
 
-    // we don't need to pass the watermark handle to the tracker because in reduce windower is
-    // responsible for identifying the lowest watermark in the pod.
-    let tracker_handle = TrackerHandle::new(None, None);
     // Create buffer reader
     let buffer_reader = JetStreamReader::new(ISBReaderConfig {
         vertex_type: config.vertex_type.to_string(),
@@ -518,7 +526,7 @@ async fn start_aligned_reduce_forwarder(
         tracker_handle: tracker_handle.clone(),
         cancel_token: cln_token.clone(),
         watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
-        vertex_type: config.vertex_type.to_string(),
+        vertex_type: config.vertex_type,
         isb_config: config.isb_config.clone(),
     });
 
@@ -583,7 +591,9 @@ async fn start_aligned_reduce_forwarder(
     let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
     // Create user-defined aligned reducer client
-    let reducer_client = create_components::create_aligned_reducer(aligned_config.clone()).await?;
+    let reducer_client =
+        create_components::create_aligned_reducer(aligned_config.clone(), cln_token.clone())
+            .await?;
 
     // Start the metrics server with one of the clients
     start_metrics_server(
@@ -592,10 +602,12 @@ async fn start_aligned_reduce_forwarder(
             health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
                 UserDefinedReduce::Aligned(reducer_client.clone()),
             ))),
-            watermark_fetcher_state: watermark_handle.map(|handle| WatermarkFetcherState {
-                watermark_handle: WatermarkHandle::ISB(handle),
-                partition_count: 1, // Reduce vertices always read from single partition (partition 0)
-            }),
+            watermark_fetcher_state: watermark_handle
+                .clone()
+                .map(|handle| WatermarkFetcherState {
+                    watermark_handle: WatermarkHandle::ISB(handle),
+                    partition_count: 1, // Reduce vertices always read from single partition (partition 0)
+                }),
         },
     )
     .await;
@@ -608,7 +620,9 @@ async fn start_aligned_reduce_forwarder(
             gc_wal,
             aligned_config.window_config.allowed_lateness,
             config.graceful_shutdown_time,
+            config.read_timeout,
             reduce_vtx_config.keyed,
+            watermark_handle,
         )
         .await,
     );
@@ -627,6 +641,9 @@ async fn start_unaligned_reduce_forwarder(
     reduce_vtx_config: ReduceVtxConfig,
     unaligned_config: UnalignedReducerConfig,
 ) -> Result<()> {
+    // for reduce we do not pass serving callback handler to tracker.
+    let tracker_handle = TrackerHandle::new(None);
+
     // Create unaligned window manager based on window type
     let window_manager = match &unaligned_config.window_config.window_type {
         UnalignedWindowType::Accumulator(accumulator_config) => {
@@ -645,6 +662,7 @@ async fn start_unaligned_reduce_forwarder(
         &js_context,
         &cln_token,
         Some(WindowManager::Unaligned(window_manager.clone())),
+        tracker_handle.clone(),
     )
     .await?;
 
@@ -661,9 +679,6 @@ async fn start_unaligned_reduce_forwarder(
         .cloned()
         .ok_or_else(|| error::Error::Config("No stream found for reduce vertex".to_string()))?;
 
-    // we don't need to pass the watermark handle to the tracker because in reduce windower is
-    // responsible for identifying the lowest watermark in the pod.
-    let tracker_handle = TrackerHandle::new(None, None);
     // Create buffer reader
     let buffer_reader = JetStreamReader::new(ISBReaderConfig {
         vertex_type: config.vertex_type.to_string(),
@@ -685,7 +700,7 @@ async fn start_unaligned_reduce_forwarder(
         tracker_handle: tracker_handle.clone(),
         cancel_token: cln_token.clone(),
         watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
-        vertex_type: config.vertex_type.to_string(),
+        vertex_type: config.vertex_type,
         isb_config: config.isb_config.clone(),
     });
 
@@ -751,7 +766,8 @@ async fn start_unaligned_reduce_forwarder(
 
     // Create user-defined unaligned reducer client
     let reducer_client =
-        create_components::create_unaligned_reducer(unaligned_config.clone()).await?;
+        create_components::create_unaligned_reducer(unaligned_config.clone(), cln_token.clone())
+            .await?;
 
     start_metrics_server(
         config.metrics_config.clone(),
@@ -759,10 +775,12 @@ async fn start_unaligned_reduce_forwarder(
             health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
                 UserDefinedReduce::Unaligned(reducer_client.clone()),
             ))),
-            watermark_fetcher_state: watermark_handle.map(|handle| WatermarkFetcherState {
-                watermark_handle: WatermarkHandle::ISB(handle),
-                partition_count: 1, // Reduce vertices always read from single partition (partition 0)
-            }),
+            watermark_fetcher_state: watermark_handle
+                .clone()
+                .map(|handle| WatermarkFetcherState {
+                    watermark_handle: WatermarkHandle::ISB(handle),
+                    partition_count: 1, // Reduce vertices always read from single partition (partition 0)
+                }),
         },
     )
     .await;
@@ -775,7 +793,9 @@ async fn start_unaligned_reduce_forwarder(
             unaligned_config.window_config.allowed_lateness,
             gc_wal,
             config.graceful_shutdown_time,
+            config.read_timeout,
             reduce_vtx_config.keyed,
+            watermark_handle,
         )
         .await,
     );
@@ -793,19 +813,6 @@ async fn start_sink_forwarder(
     config: PipelineConfig,
     sink: SinkVtxConfig,
 ) -> Result<()> {
-    // create watermark handle, if watermark is enabled
-    let watermark_handle =
-        create_components::create_edge_watermark_handle(&config, &js_context, &cln_token, None)
-            .await?;
-
-    // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
-    // to a common buffer, in the case of a join.
-    let reader_config = &config
-        .from_vertex_config
-        .first()
-        .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
-        .reader_config;
-
     let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
         Some(
             CallbackHandler::new(
@@ -819,6 +826,26 @@ async fn start_sink_forwarder(
     } else {
         None
     };
+
+    let tracker_handle = TrackerHandle::new(serving_callback_handler.clone());
+
+    // create watermark handle, if watermark is enabled
+    let watermark_handle = create_components::create_edge_watermark_handle(
+        &config,
+        &js_context,
+        &cln_token,
+        None,
+        tracker_handle.clone(),
+    )
+    .await?;
+
+    // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
+    // to a common buffer, in the case of a join.
+    let reader_config = &config
+        .from_vertex_config
+        .first()
+        .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
+        .reader_config;
 
     let serving_store = match &sink.serving_store_config {
         Some(serving_store_config) => match serving_store_config {
@@ -839,9 +866,6 @@ async fn start_sink_forwarder(
     let mut sink_writers = vec![];
     let mut buffer_readers = vec![];
     for stream in reader_config.streams.clone() {
-        let tracker_handle =
-            TrackerHandle::new(watermark_handle.clone(), serving_callback_handler.clone());
-
         let buffer_reader = JetStreamReader::new(ISBReaderConfig {
             vertex_type: config.vertex_type.to_string(),
             stream,
@@ -862,7 +886,7 @@ async fn start_sink_forwarder(
             config.read_timeout,
             sink.sink_config.clone(),
             sink.fb_sink_config.clone(),
-            tracker_handle,
+            tracker_handle.clone(),
             serving_store.clone(),
             &cln_token,
         )

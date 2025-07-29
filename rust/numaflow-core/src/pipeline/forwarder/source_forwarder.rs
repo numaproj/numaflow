@@ -162,7 +162,7 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_source_forwarder() {
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
 
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
@@ -282,7 +282,7 @@ mod tests {
             tracker_handle: tracker_handle.clone(),
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Source".to_string(),
+            vertex_type: VertexType::Source,
             isb_config: None,
         });
 

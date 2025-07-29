@@ -11,7 +11,7 @@
 //!   - The oldest Watermark is tracked
 //!   - Callbacks for Serving is triggered in the tracker.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
@@ -23,7 +23,6 @@ use tracing::error;
 use crate::Result;
 use crate::error::Error;
 use crate::message::{Message, Offset, ReadAck};
-use crate::watermark::isb::ISBWatermarkHandle;
 
 /// TrackerEntry represents the state of a tracked message.
 #[derive(Debug)]
@@ -35,11 +34,13 @@ struct TrackerEntry {
     count: usize,
     /// end of stream for this offset (not expecting any more streaming data).
     eof: bool,
+    /// Callback info for serving
     serving_callback_info: Option<ServingCallbackInfo>,
+    /// Watermark for the message
+    watermark: Option<DateTime<Utc>>,
 }
 
 /// ActorMessage represents the messages that can be sent to the Tracker actor.
-#[derive(Debug)]
 enum ActorMessage {
     Insert {
         offset: Offset,
@@ -72,15 +73,17 @@ enum ActorMessage {
     IsEmpty {
         respond_to: oneshot::Sender<bool>,
     },
+    LowestWatermark {
+        respond_to: oneshot::Sender<DateTime<Utc>>,
+    },
 }
 
 /// Tracker is responsible for managing the state of messages being processed.
 /// It keeps track of message offsets and their completeness, and sends acknowledgments.
 struct Tracker {
-    /// number of entries in the tracker
-    entries: HashMap<Offset, TrackerEntry>,
+    /// entries organized by partition, each partition has its own BTreeMap of offsets
+    entries: HashMap<u16, BTreeMap<Offset, TrackerEntry>>,
     receiver: mpsc::Receiver<ActorMessage>,
-    watermark_handle: Option<ISBWatermarkHandle>,
     serving_callback_handler: Option<CallbackHandler>,
 }
 
@@ -135,7 +138,8 @@ impl TryFrom<&Message> for ServingCallbackInfo {
 
 impl Drop for Tracker {
     fn drop(&mut self) {
-        if !self.entries.is_empty() {
+        let total_entries: usize = self.entries.values().map(|partition| partition.len()).sum();
+        if total_entries > 0 {
             error!("Tracker dropped with non-empty entries: {:?}", self.entries);
         }
     }
@@ -145,13 +149,11 @@ impl Tracker {
     /// Creates a new Tracker instance with the given receiver for actor messages.
     fn new(
         receiver: mpsc::Receiver<ActorMessage>,
-        watermark_handle: Option<ISBWatermarkHandle>,
         serving_callback_handler: Option<CallbackHandler>,
     ) -> Self {
         Self {
             entries: HashMap::new(),
             receiver,
-            watermark_handle,
             serving_callback_handler,
         }
     }
@@ -193,9 +195,14 @@ impl Tracker {
             ActorMessage::Refresh { offset } => {
                 self.handle_refresh(offset);
             }
+            ActorMessage::LowestWatermark { respond_to } => {
+                let watermark = self.get_lowest_watermark();
+                let _ = respond_to
+                    .send(watermark.unwrap_or(DateTime::from_timestamp_millis(-1).unwrap()));
+            }
             #[cfg(test)]
             ActorMessage::IsEmpty { respond_to } => {
-                let is_empty = self.entries.is_empty();
+                let is_empty = self.entries.values().all(|partition| partition.is_empty());
                 let _ = respond_to.send(is_empty);
             }
         }
@@ -209,24 +216,27 @@ impl Tracker {
         watermark: Option<DateTime<Utc>>,
         respond_to: oneshot::Sender<ReadAck>,
     ) {
-        self.entries.insert(
+        let partition = offset.partition_idx();
+        let partition_entries = self.entries.entry(partition).or_default();
+        partition_entries.insert(
             offset.clone(),
             TrackerEntry {
                 ack_send: respond_to,
                 count: 0,
                 eof: true,
                 serving_callback_info: callback_info,
+                watermark,
             },
         );
-
-        if let Some(watermark_handle) = self.watermark_handle.as_mut() {
-            watermark_handle.insert_offset(offset, watermark).await;
-        }
     }
 
     /// Updates an existing entry in the tracker with the number of expected messages for this offset.
     fn handle_update(&mut self, offset: Offset, responses: Vec<Option<Vec<String>>>) {
-        let Some(entry) = self.entries.get_mut(&offset) else {
+        let partition = offset.partition_idx();
+        let Some(partition_entries) = self.entries.get_mut(&partition) else {
+            return;
+        };
+        let Some(entry) = partition_entries.get_mut(&offset) else {
             return;
         };
 
@@ -238,7 +248,11 @@ impl Tracker {
 
     /// Appends a response to the serving callback info for the given offset.
     fn handle_append(&mut self, offset: Offset, response: Option<Vec<String>>) {
-        let Some(entry) = self.entries.get_mut(&offset) else {
+        let partition = offset.partition_idx();
+        let Some(partition_entries) = self.entries.get_mut(&partition) else {
+            return;
+        };
+        let Some(entry) = partition_entries.get_mut(&offset) else {
             return;
         };
 
@@ -250,7 +264,11 @@ impl Tracker {
 
     /// Update whether we have seen the eof (end of stream) for this offset.
     async fn handle_eof(&mut self, offset: Offset) {
-        let Some(entry) = self.entries.get_mut(&offset) else {
+        let partition = offset.partition_idx();
+        let Some(partition_entries) = self.entries.get_mut(&partition) else {
+            return;
+        };
+        let Some(entry) = partition_entries.get_mut(&offset) else {
             return;
         };
         entry.eof = true;
@@ -258,17 +276,22 @@ impl Tracker {
         // this is case where map-stream will send eof true after
         // receiving all the messages.
         if entry.count == 0 {
-            let entry = self.entries.remove(&offset).unwrap();
-            self.completed_successfully(offset, entry).await;
+            let entry = partition_entries.remove(&offset).unwrap();
+            self.completed_successfully(entry).await;
         }
     }
 
     /// Removes an entry from the tracker and sends an acknowledgment if the count is zero
-    /// and the entry is marked as EOF.
+    /// and the entry is marked as EOF. Publishes watermarks if watermark_info is provided.
     async fn handle_delete(&mut self, offset: Offset) {
-        let Some(mut entry) = self.entries.remove(&offset) else {
+        let partition = offset.partition_idx();
+        let Some(partition_entries) = self.entries.get_mut(&partition) else {
             return;
         };
+        let Some(mut entry) = partition_entries.remove(&offset) else {
+            return;
+        };
+
         if entry.count > 0 {
             entry.count -= 1;
         }
@@ -277,30 +300,35 @@ impl Tracker {
         // In map-streaming this won't happen because eof is not tied to the message, rather it is
         // tied to channel-close.
         if entry.count == 0 && entry.eof {
-            self.completed_successfully(offset, entry).await;
+            self.completed_successfully(entry).await;
         } else {
             // add it back because we removed it
-            self.entries.insert(offset, entry);
+            partition_entries.insert(offset, entry);
         }
     }
 
     /// Discards an entry from the tracker and sends a nak.
     async fn handle_discard(&mut self, offset: Offset) {
-        let Some(entry) = self.entries.remove(&offset) else {
+        let partition = offset.partition_idx();
+        let Some(partition_entries) = self.entries.get_mut(&partition) else {
+            return;
+        };
+        let Some(entry) = partition_entries.remove(&offset) else {
             return;
         };
         entry
             .ack_send
             .send(ReadAck::Nak)
             .expect("Failed to send nak");
-        if let Some(watermark_handle) = self.watermark_handle.as_mut() {
-            watermark_handle.remove_offset(offset).await;
-        }
     }
 
     /// Resets the count and eof status for an offset in the tracker.
     fn handle_refresh(&mut self, offset: Offset) {
-        let Some(mut entry) = self.entries.remove(&offset) else {
+        let partition = offset.partition_idx();
+        let Some(partition_entries) = self.entries.get_mut(&partition) else {
+            return;
+        };
+        let Some(mut entry) = partition_entries.remove(&offset) else {
             return;
         };
         entry.count = 0;
@@ -308,7 +336,20 @@ impl Tracker {
         if let Some(serving_info) = &mut entry.serving_callback_info {
             serving_info.responses = vec![];
         }
-        self.entries.insert(offset, entry);
+        partition_entries.insert(offset, entry);
+    }
+
+    /// Returns the lowest watermark among all the tracked offsets across all partitions.
+    fn get_lowest_watermark(&self) -> Option<DateTime<Utc>> {
+        // Get the lowest watermark across all partitions
+        self.entries
+            .values()
+            .filter_map(|partition_entries| {
+                partition_entries
+                    .first_key_value()
+                    .and_then(|(_, entry)| entry.watermark)
+            })
+            .min()
     }
 
     /// This function is called once the message has been successfully processed. This is where
@@ -316,7 +357,7 @@ impl Tracker {
     /// - ack back
     /// - call serving callbacks
     /// - watermark progression
-    async fn completed_successfully(&mut self, offset: Offset, entry: TrackerEntry) {
+    async fn completed_successfully(&mut self, entry: TrackerEntry) {
         let TrackerEntry {
             ack_send,
             serving_callback_info: callback_info,
@@ -324,10 +365,6 @@ impl Tracker {
         } = entry;
 
         ack_send.send(ReadAck::Ack).expect("Failed to send ack");
-
-        if let Some(watermark_handle) = self.watermark_handle.as_mut() {
-            watermark_handle.remove_offset(offset).await;
-        }
 
         let Some(ref callback_handler) = self.serving_callback_handler else {
             return;
@@ -362,13 +399,10 @@ pub(crate) struct TrackerHandle {
 
 impl TrackerHandle {
     /// Creates a new TrackerHandle instance and spawns the Tracker.
-    pub(crate) fn new(
-        watermark_handle: Option<ISBWatermarkHandle>,
-        callback_handler: Option<CallbackHandler>,
-    ) -> Self {
+    pub(crate) fn new(callback_handler: Option<CallbackHandler>) -> Self {
         let enable_callbacks = callback_handler.is_some();
         let (sender, receiver) = mpsc::channel(1000);
-        let tracker = Tracker::new(receiver, watermark_handle, callback_handler);
+        let tracker = Tracker::new(receiver, callback_handler);
         tokio::spawn(tracker.run());
         Self {
             sender,
@@ -484,10 +518,19 @@ impl TrackerHandle {
         self.sender
             .send(message)
             .await
-            .map_err(|e| Error::Tracker(format!("{:?}", e)))?;
-        response
+            .map_err(|e| Error::Tracker(format!("{e:?}")))?;
+        response.await.map_err(|e| Error::Tracker(format!("{e:?}")))
+    }
+
+    /// Returns the lowest watermark among all the tracked offsets.
+    pub(crate) async fn lowest_watermark(&self) -> Result<DateTime<Utc>> {
+        let (respond_to, response) = oneshot::channel();
+        let message = ActorMessage::LowestWatermark { respond_to };
+        self.sender
+            .send(message)
             .await
-            .map_err(|e| Error::Tracker(format!("{:?}", e)))
+            .map_err(|e| Error::Tracker(format!("{e:?}")))?;
+        response.await.map_err(|e| Error::Tracker(format!("{e:?}")))
     }
 }
 
@@ -497,6 +540,7 @@ mod tests {
     use async_nats::jetstream::kv::Config;
     use bytes::Bytes;
     use futures::StreamExt;
+    use std::collections::HashMap;
     use std::sync::Arc;
     use tokio::sync::oneshot;
     use tokio::time::{Duration, timeout};
@@ -550,7 +594,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_insert_update_delete() {
-        let handle = TrackerHandle::new(None, None);
+        let handle = TrackerHandle::new(None);
         let (ack_send, ack_recv) = oneshot::channel();
 
         let message = Message {
@@ -593,7 +637,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_with_multiple_deletes() {
-        let handle = TrackerHandle::new(None, None);
+        let handle = TrackerHandle::new(None);
         let (ack_send, ack_recv) = oneshot::channel();
         let message = Message {
             typ: Default::default(),
@@ -616,7 +660,7 @@ mod tests {
         // Insert a new message
         handle.insert(&message, ack_send).await.unwrap();
 
-        let messages: Vec<Message> = std::iter::repeat(message.clone()).take(3).collect();
+        let messages: Vec<Message> = std::iter::repeat_n(message.clone(), 3).collect();
         // Update the message with a count of 3
         for message in messages {
             handle
@@ -639,7 +683,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_discard() {
-        let handle = TrackerHandle::new(None, None);
+        let handle = TrackerHandle::new(None);
         let (ack_send, ack_recv) = oneshot::channel();
 
         let message = Message {
@@ -675,7 +719,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_discard_after_update_with_higher_count() {
-        let handle = TrackerHandle::new(None, None);
+        let handle = TrackerHandle::new(None);
         let (ack_send, ack_recv) = oneshot::channel();
 
         let message = Message {
@@ -699,7 +743,7 @@ mod tests {
         // Insert a new message
         handle.insert(&message, ack_send).await.unwrap();
 
-        let messages: Vec<Message> = std::iter::repeat(message.clone()).take(3).collect();
+        let messages: Vec<Message> = std::iter::repeat_n(message.clone(), 3).collect();
         for message in messages {
             handle
                 .update(message.offset.clone(), vec![message.tags.clone()])
@@ -737,7 +781,7 @@ mod tests {
         let callback_handler =
             CallbackHandler::new("test".into(), js_context.clone(), store_name, 10).await;
 
-        let handle = TrackerHandle::new(None, Some(callback_handler));
+        let handle = TrackerHandle::new(Some(callback_handler));
         let (ack_send, ack_recv) = oneshot::channel();
 
         let mut headers = HashMap::new();
@@ -780,7 +824,7 @@ mod tests {
         let result = timeout(Duration::from_secs(1), async {
             loop {
                 let mut keys = callback_bucket.keys().await.unwrap();
-                if let Some(_) = keys.next().await {
+                if keys.next().await.is_some() {
                     break;
                 }
                 tokio::time::sleep(Duration::from_millis(10)).await;

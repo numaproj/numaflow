@@ -5,10 +5,6 @@ metadata:
 spec:
   vertices:
     - name: in
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       scale:
         min: 1
       source:
@@ -17,14 +13,10 @@ spec:
             # A simple user-defined source for e2e testing
             # See https://github.com/numaproj/numaflow-python/tree/main/examples/source/simple_source
             image: quay.io/numaio/numaflow-python/simple-source:stable
-            imagePullPolicy: Always
+            imagePullPolicy: IfNotPresent
       limits:
         readBatchSize: 500
     - name: out
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       sink:
         log: {}
   edges:

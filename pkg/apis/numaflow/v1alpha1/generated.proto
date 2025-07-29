@@ -845,13 +845,25 @@ message JetStreamSource {
   // +optional
   optional string consumer = 3;
 
+  // The point in the stream from which to receive messages.
+  // https://docs.nats.io/nats-concepts/jetstream/consumers#deliverpolicy
+  // Valid options are: "all", "new", "last", "last_per_subject", "by_start_sequence 42", "by_start_time 1753428483000".
+  // The second value to "by_start_time" is unix epoch time in milliseconds.
+  // +optional
+  optional string deliver_policy = 4;
+
+  // A set of subjects that overlap with the subjects bound to the stream to filter delivery to subscribers.
+  // https://docs.nats.io/nats-concepts/jetstream/consumers#filtesubjects
+  // +optional
+  repeated string filter_subjects = 5;
+
   // TLS configuration for the nats client.
   // +optional
-  optional TLS tls = 4;
+  optional TLS tls = 6;
 
   // Auth information
   // +optional
-  optional NatsAuth auth = 5;
+  optional NatsAuth auth = 7;
 }
 
 message JobTemplate {

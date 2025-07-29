@@ -110,18 +110,26 @@ impl source::SourceAcker for KafkaSource {
                     "Invalid Kafka offset format. Expected format: <topic>:<partition>:<offset>. offset={offset:?}"
                 )));
             }
-            let topic = parts[0].to_string();
-            let partition = parts[1].parse::<i32>().map_err(|e| {
-                Error::Source(format!(
-                    "invalid partition id. kafka_offset={offset}, error={e:?}"
-                ))
-            })?;
+            let topic = (*parts.first().expect("should have topic part")).to_string();
+            let partition = parts
+                .get(1)
+                .expect("should have partition part")
+                .parse::<i32>()
+                .map_err(|e| {
+                    Error::Source(format!(
+                        "invalid partition id. kafka_offset={offset}, error={e:?}"
+                    ))
+                })?;
 
-            let partition_offset = parts[2].parse::<i64>().map_err(|e| {
-                Error::Source(format!(
-                    "invalid offset id. kafka_offset={offset}, error={e:?}"
-                ))
-            })?;
+            let partition_offset = parts
+                .get(2)
+                .expect("should have offset part")
+                .parse::<i64>()
+                .map_err(|e| {
+                    Error::Source(format!(
+                        "invalid offset id. kafka_offset={offset}, error={e:?}"
+                    ))
+                })?;
             kafka_offsets.push(numaflow_kafka::source::KafkaOffset {
                 topic,
                 partition,

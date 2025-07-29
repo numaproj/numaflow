@@ -5,10 +5,6 @@ metadata:
 spec:
   vertices:
     - name: in
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       scale:
         min: 2
       source:
@@ -21,19 +17,11 @@ spec:
           subject: test-subject
           queue: my-queue
     - name: p1
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       udf:
         container:
           image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
           imagePullPolicy: Always
     - name: out
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       sink:
         udsink:
           container:

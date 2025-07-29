@@ -652,7 +652,7 @@ mod tests {
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
         };
-        let tracker = TrackerHandle::new(None, None);
+        let tracker = TrackerHandle::new(None);
         let js_reader = JetStreamReader::new(ISBReaderConfig {
             vertex_type: "Map".to_string(),
             stream: stream.clone(),
@@ -728,7 +728,7 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
 
         let js_stream = Stream::new("test-ack", "test", 0);
         // Delete stream if it exists
@@ -909,7 +909,7 @@ mod tests {
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
         };
-        let tracker = TrackerHandle::new(None, None);
+        let tracker = TrackerHandle::new(None);
         let js_reader = JetStreamReader::new(ISBReaderConfig {
             vertex_type: "Map".to_string(),
             stream: stream.clone(),

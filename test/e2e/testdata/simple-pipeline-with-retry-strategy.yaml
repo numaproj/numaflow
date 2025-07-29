@@ -5,19 +5,11 @@ metadata:
 spec:
   vertices:
     - name: input
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       source:
         generator:
           rpu: 1
           duration: 1s
     - name: output
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       sink:
         retryStrategy:
           backoff:
@@ -30,7 +22,7 @@ spec:
         udsink:
           container:
             image: quay.io/numaio/numaflow-go/sink-failure:stable
-            imagePullPolicy: Always
+            imagePullPolicy: IfNotPresent
   edges:
     - from: input
       to: output

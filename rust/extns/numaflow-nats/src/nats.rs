@@ -1,12 +1,14 @@
-use crate::{Error, NatsAuth, Result, TlsConfig, tls};
+use std::time::Duration;
+
 use async_nats::ConnectOptions;
 use bytes::Bytes;
 use chrono::DateTime;
-use std::time::Duration;
 use tokio::sync::{mpsc, oneshot};
 use tokio_stream::StreamExt;
 use tracing::debug;
 use uuid::Uuid;
+
+use crate::{Error, NatsAuth, Result, TlsConfig, tls};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct NatsSourceConfig {
@@ -29,7 +31,7 @@ impl TryFrom<async_nats::Message> for NatsMessage {
     type Error = Error;
     fn try_from(msg: async_nats::Message) -> Result<Self> {
         Ok(NatsMessage {
-            value: Bytes::from(msg.payload),
+            value: msg.payload,
             id: Uuid::new_v4().to_string(),
             event_time: chrono::Utc::now(),
         })

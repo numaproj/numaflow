@@ -22,7 +22,7 @@ pub(crate) mod source {
     use numaflow_kafka::source::KafkaSourceConfig;
     use numaflow_models::models::{GeneratorSource, PulsarSource, SqsSource};
     use numaflow_nats::NatsAuth;
-    use numaflow_nats::jetstream::JetstreamSourceConfig;
+    use numaflow_nats::jetstream::{ConsumerDeliverPolicy, JetstreamSourceConfig};
     use numaflow_nats::nats::NatsSourceConfig;
     use numaflow_pulsar::{PulsarAuth, source::PulsarSourceConfig};
     use numaflow_sqs::source::SqsSourceConfig;
@@ -232,10 +232,19 @@ pub(crate) mod source {
                 )
             }
 
+            let mut deliver_policy = ConsumerDeliverPolicy::ALL;
+            if let Some(policy) = value.spec.deliver_policy
+                && !policy.is_empty()
+            {
+                deliver_policy = policy.as_str().try_into()?;
+            }
+
             let js_config = JetstreamSourceConfig {
                 addr: value.spec.url,
                 consumer,
                 stream: value.spec.stream,
+                deliver_policy,
+                filter_subjects: value.spec.filter_subjects.unwrap_or_default(),
                 auth,
                 tls,
             };
@@ -290,7 +299,12 @@ pub(crate) mod source {
                     .split('\n')
                     .map(|s| s.split(':').collect::<Vec<&str>>())
                     .filter(|parts| parts.len() == 2)
-                    .map(|parts| (parts[0].trim().to_string(), parts[1].trim().to_string()))
+                    .map(|parts| {
+                        (
+                            parts.first().unwrap().trim().to_string(),
+                            parts.get(1).unwrap().trim().to_string(),
+                        )
+                    })
                     .collect::<HashMap<String, String>>(),
             };
             Ok(SourceType::Kafka(Box::new(kafka_config)))
@@ -620,7 +634,20 @@ pub(crate) mod sink {
                     .split('\n')
                     .map(|s| s.split(':').collect::<Vec<&str>>())
                     .filter(|parts| parts.len() == 2)
-                    .map(|parts| (parts[0].trim().to_string(), parts[1].trim().to_string()))
+                    .map(|parts| {
+                        (
+                            parts
+                                .first()
+                                .expect("should have first part")
+                                .trim()
+                                .to_string(),
+                            parts
+                                .get(1)
+                                .expect("should have second part")
+                                .trim()
+                                .to_string(),
+                        )
+                    })
                     .collect::<HashMap<String, String>>(),
             })))
         }
@@ -2177,7 +2204,7 @@ mod jetstream_tests {
     use k8s_openapi::api::core::v1::SecretKeySelector;
     use numaflow_models::models::BasicAuth;
     use numaflow_models::models::{JetStreamSource, Tls};
-    use numaflow_nats::NatsAuth;
+    use numaflow_nats::{NatsAuth, jetstream::ConsumerDeliverPolicy};
 
     use crate::config::components::source::JetstreamSourceSpec;
 
@@ -2225,6 +2252,8 @@ mod jetstream_tests {
             })),
             stream: "test-stream".to_string(),
             consumer: Some("numaflow-test-stream".to_string()),
+            deliver_policy: Some("by_start_sequence 10".into()),
+            filter_subjects: None,
             tls: None,
             url: "nats://localhost:4222".to_string(),
         };
@@ -2243,6 +2272,10 @@ mod jetstream_tests {
             assert_eq!(password, "test-pass");
             assert_eq!(config.consumer, "numaflow-test-stream");
             assert_eq!(config.addr, "nats://localhost:4222");
+            assert_eq!(
+                config.deliver_policy,
+                ConsumerDeliverPolicy::by_start_sequence(10)
+            );
         } else {
             panic!("Expected SourceType::Jetstream");
         }
@@ -2264,6 +2297,8 @@ mod jetstream_tests {
             auth: None,
             stream: "test-stream".to_string(),
             consumer: None,
+            deliver_policy: None,
+            filter_subjects: None,
             tls: Some(Box::new(Tls {
                 ca_cert_secret: Some(SecretKeySelector {
                     name: ca_cert_name.clone(),
@@ -2319,6 +2354,8 @@ mod jetstream_tests {
             consumer: None,
             tls: None,
             url: "nats://localhost:4222".to_string(),
+            deliver_policy: None,
+            filter_subjects: None,
         };
 
         let result = SourceType::try_from(JetstreamSourceSpec::new(

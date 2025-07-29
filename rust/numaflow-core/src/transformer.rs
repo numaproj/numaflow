@@ -371,7 +371,7 @@ mod tests {
 
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
 
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
         let transformer = Transformer::new(
@@ -449,7 +449,7 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
         let transformer = Transformer::new(
             500,
@@ -537,7 +537,7 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
 
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await?);
         let transformer = Transformer::new(
             500,

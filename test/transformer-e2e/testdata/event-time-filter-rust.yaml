@@ -5,40 +5,24 @@ metadata:
 spec:
   vertices:
     - name: in
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       source:
         http: {}
         transformer:
           container:
             image: quay.io/numaio/numaflow-rs/mapt-event-time-filter:stable
-            imagePullPolicy: Always
+            imagePullPolicy: IfNotPresent
     - name: sink-within-2022
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       partitions: 2
       scale:
         min: 1
       sink:
         log: {}
     - name: sink-after-2022
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       scale:
         min: 1
       sink:
         log: {}
     - name: sink-all
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       scale:
         min: 1
       sink:

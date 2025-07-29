@@ -1,11 +1,14 @@
+use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
 use crate::message::Message;
+use crate::metrics::{pipeline_drop_metric_labels, pipeline_metrics};
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
 use crate::reduce::reducer::aligned::windower::{
     AlignedWindowManager, AlignedWindowMessage, AlignedWindowOperation, Window,
 };
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
+use crate::watermark::isb::ISBWatermarkHandle;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use numaflow_pb::objects::wal::GcEvent;
@@ -19,6 +22,7 @@ use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
+
 const DEFAULT_KEY_FOR_NON_KEYED_STREAM: &str = "NON_KEYED_STREAM";
 
 /// Represents an active reduce stream for a window.
@@ -292,16 +296,24 @@ impl AlignedReduceActor {
     }
 
     /// sends the message to the reduce task for the window.
-    async fn window_append(&mut self, window_msg: AlignedWindowMessage) {
+    async fn window_append(&mut self, mut window_msg: AlignedWindowMessage) {
         let window_id = &window_msg.pnf_slot;
 
-        // Get the existing stream or log error if not found create a new one.
+        // Get the existing stream or log error if not found create a new one. This is due to replay,
+        // during normal operation there will be an explicit open message before the append message.
         let Some(active_stream) = self.active_streams.get(window_id) else {
-            // windows may not be found during replay, because the windower doesn't send the open
+            // windows may not be found during replay, because the window-manager doesn't send the open
             // message for the active windows that got replayed, hence we create a new one.
-            // this happens because of out-of-order messages and we have to ensure that the (t+1)th
+            // this happens because of out-of-order messages, and we have to ensure that the (t+1)th
             // message is sent to the window that could be created by (t)th message iff (t+1)th message
             // belongs to that window created by (t)th message.
+            // update the operation of the window message to open.
+            match window_msg.operation {
+                AlignedWindowOperation::Append { message, window } => {
+                    window_msg.operation = AlignedWindowOperation::Open { message, window };
+                }
+                _ => panic!("Expected Append operation in window_append"),
+            }
             self.window_open(window_msg).await;
             return;
         };
@@ -362,9 +374,14 @@ pub(crate) struct AlignedReducer {
     keyed: bool,
     /// Graceful shutdown timeout duration.
     graceful_timeout: Duration,
+    idle_timeout: Duration,
+    /// Watermark handle for fetching head idle wmb to check if any windows can be closed,
+    /// when there is no data.
+    watermark_handle: Option<ISBWatermarkHandle>,
 }
 
 impl AlignedReducer {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn new(
         client: UserDefinedAlignedReduce,
         window_manager: AlignedWindowManager,
@@ -372,19 +389,23 @@ impl AlignedReducer {
         gc_wal: Option<AppendOnlyWal>,
         allowed_lateness: Duration,
         graceful_timeout: Duration,
+        idle_timeout: Duration,
         keyed: bool,
+        watermark_handle: Option<ISBWatermarkHandle>,
     ) -> Self {
         Self {
             client,
             window_manager,
             js_writer,
-            final_result: Ok(()),
-            shutting_down_on_err: false,
             gc_wal,
             allowed_lateness,
             current_watermark: DateTime::from_timestamp_millis(-1).expect("Invalid timestamp"),
             keyed,
             graceful_timeout,
+            idle_timeout,
+            watermark_handle,
+            shutting_down_on_err: false,
+            final_result: Ok(()),
         }
     }
 
@@ -446,52 +467,37 @@ impl AlignedReducer {
                         self.handle_error(err, &cln_token);
                     }
 
-                    // Process input messages
-                    read_msg = input_stream.next() => {
-                        let Some(mut msg) = read_msg else {
-                            break;
-                        };
+                    // read input messages with timeout
+                    read_msg = tokio::time::timeout(self.idle_timeout, input_stream.next()) => {
+                        match read_msg {
+                            Ok(Some(mut msg)) => {
+                                // If shutting down, drain the stream
+                                if self.shutting_down_on_err {
+                                    info!("Reduce component is shutting down due to an error, not accepting the message");
+                                    continue;
+                                }
 
-                        // if the stream is not keyed, then we need to set all the messages to have the same key
-                        // so that all the messages go to the same reduce task.
-                        if !keyed {
-                            msg.keys = Arc::new([DEFAULT_KEY_FOR_NON_KEYED_STREAM.to_string()]);
-                        }
+                                // If the stream is not keyed, set all messages to have the same key
+                                if !keyed {
+                                    msg.keys = Arc::new([DEFAULT_KEY_FOR_NON_KEYED_STREAM.to_string()]);
+                                }
 
-                        // If shutting down, drain the stream
-                        if self.shutting_down_on_err {
-                            info!("Reduce component is shutting down due to an error, not accepting the message");
-                            continue;
-                        }
+                                // Update the watermark - use max to ensure it never regresses
+                                self.current_watermark = self
+                                    .current_watermark
+                                    .max(msg.watermark.unwrap_or_default());
 
-                        // update the watermark.
-                        // we cannot simply assign incoming message's watermark as the current watermark,
-                        // because it can be -1. watermark will never regress, so use max.
-                        self.current_watermark = self.current_watermark.max(msg.watermark.unwrap_or_default());
-
-                        // only drop the message if it is late and the event time is before the watermark - allowed lateness
-                        if msg.is_late && msg.event_time < self.current_watermark.sub(self.allowed_lateness) {
-                            // TODO(ajain): add a metric for this
-                            continue;
-                        }
-
-                        if self.current_watermark > msg.event_time {
-                            error!(current_watermark=?self.current_watermark.timestamp_millis(), message_event_time=?msg.event_time.timestamp_millis(), is_late=?msg.is_late, offset=?msg.offset, "Old message popped up, Watermark is behind the event time");
-                            continue;
-                        }
-
-                        // check if any windows can be closed
-                        let window_messages = self.window_manager.close_windows(self.current_watermark.sub(self.allowed_lateness));
-                        for window_msg in window_messages {
-                            actor_tx.send(window_msg).await.expect("Receiver dropped");
-                        }
-
-                        // assign windows to the message
-                        let window_messages = self.window_manager.assign_windows(msg);
-
-                        // Send each window message to the actor for processing
-                        for window_msg in window_messages {
-                            actor_tx.send(window_msg).await.expect("Receiver dropped");
+                                self.assign_and_close_windows(msg, &actor_tx).await;
+                            }
+                            Ok(None) => {
+                                // Stream ended
+                                break;
+                            }
+                            Err(_timeout) => {
+                                // watermark can still progress when there is no data, because of idle watermark
+                                // so we need to check if any windows can be closed based on the idle watermark.
+                                self.close_windows_by_idle_wm(&actor_tx).await;
+                            }
                         }
                     }
                 }
@@ -516,6 +522,8 @@ impl AlignedReducer {
                 }
             }
 
+            // abort the shutdown handle since we are done processing, no need to wait for the
+            // hard shutdown.
             shutdown_handle.abort();
 
             info!(status=?self.final_result, "Aligned Reduce component successfully completed");
@@ -545,6 +553,98 @@ impl AlignedReducer {
             cln_token.cancel();
             self.final_result = Err(error);
             self.shutting_down_on_err = true;
+        }
+    }
+
+    /// Closes windows based on the provided watermark and sends close messages to the actor.
+    async fn close_windows_with_watermark(
+        &self,
+        watermark: DateTime<Utc>,
+        actor_tx: &mpsc::Sender<AlignedWindowMessage>,
+    ) {
+        let window_messages = self
+            .window_manager
+            .close_windows(watermark.sub(self.allowed_lateness));
+
+        for window_msg in window_messages {
+            actor_tx.send(window_msg).await.expect("Receiver dropped");
+        }
+    }
+
+    /// Assigns windows to the message and sends the messages to the actor, also closes any windows
+    /// that can be closed based on the current watermark.
+    async fn assign_and_close_windows(
+        &mut self,
+        msg: Message,
+        actor_tx: &mpsc::Sender<AlignedWindowMessage>,
+    ) {
+        // Drop late messages
+        if msg.is_late && msg.event_time < self.current_watermark.sub(self.allowed_lateness) {
+            debug!(event_time = ?msg.event_time.timestamp_millis(), watermark = ?self.current_watermark.timestamp_millis(), "Late message detected, dropping");
+            pipeline_metrics()
+                .forwarder
+                .drop_total
+                .get_or_create(&pipeline_drop_metric_labels(
+                    get_vertex_name(),
+                    get_vertex_replica().to_string().as_str(),
+                    "late-message",
+                ))
+                .inc();
+
+            return;
+        }
+
+        // Validate message event time against current watermark
+        if self.current_watermark > msg.event_time {
+            error!(
+                current_watermark = ?self.current_watermark.timestamp_millis(),
+                message_event_time = ?msg.event_time.timestamp_millis(),
+                is_late = ?msg.is_late,
+                offset = ?msg.offset,
+                "Old message popped up, Watermark is behind the event time"
+            );
+            pipeline_metrics()
+                .forwarder
+                .drop_total
+                .get_or_create(&pipeline_drop_metric_labels(
+                    get_vertex_name(),
+                    get_vertex_replica().to_string().as_str(),
+                    "old-message-popped-up",
+                ))
+                .inc();
+            return;
+        }
+
+        // Close windows based on current watermark
+        self.close_windows_with_watermark(self.current_watermark, actor_tx)
+            .await;
+
+        // Assign windows to the message
+        let window_messages = self.window_manager.assign_windows(msg);
+
+        // Send each window message to the actor for processing
+        for window_msg in window_messages {
+            actor_tx.send(window_msg).await.expect("Receiver dropped");
+        }
+    }
+
+    /// Closes windows based on the idle watermark.
+    async fn close_windows_by_idle_wm(&mut self, actor_tx: &mpsc::Sender<AlignedWindowMessage>) {
+        if self.shutting_down_on_err {
+            return;
+        }
+
+        let Some(watermark_handle) = self.watermark_handle.as_mut() else {
+            return;
+        };
+
+        let idle_watermark = watermark_handle.fetch_head_idle_watermark().await;
+
+        // Only close windows if the idle watermark is greater than the current watermark
+        if idle_watermark > self.current_watermark {
+            self.current_watermark = idle_watermark;
+            self.close_windows_with_watermark(idle_watermark, actor_tx)
+                .await;
         }
     }
 }
@@ -676,7 +776,7 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         use crate::pipeline::isb::jetstream::writer::ISBWriterConfig;
         let js_writer = JetstreamWriter::new(ISBWriterConfig {
             config: vec![ToVertexConfig {
@@ -694,7 +794,7 @@ mod tests {
             tracker_handle: tracker_handle.clone(),
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Reduce".to_string(),
+            vertex_type: VertexType::ReduceUDF,
             isb_config: None,
         });
 
@@ -706,7 +806,9 @@ mod tests {
             None, // No GC WAL for testing
             Duration::from_secs(0),
             Duration::from_millis(50),
+            Duration::from_secs(1),
             true,
+            None,
         )
         .await;
 
@@ -923,7 +1025,7 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         use crate::pipeline::isb::jetstream::writer::ISBWriterConfig;
         let js_writer = JetstreamWriter::new(ISBWriterConfig {
             config: vec![ToVertexConfig {
@@ -941,7 +1043,7 @@ mod tests {
             tracker_handle: tracker_handle.clone(),
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Reduce".to_string(),
+            vertex_type: VertexType::ReduceUDF,
             isb_config: None,
         });
 
@@ -953,7 +1055,9 @@ mod tests {
             None, // No GC WAL for testing
             Duration::from_secs(0),
             Duration::from_millis(50),
+            Duration::from_secs(1),
             true,
+            None,
         )
         .await;
 
@@ -1173,7 +1277,7 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         use crate::pipeline::isb::jetstream::writer::ISBWriterConfig;
         let js_writer = JetstreamWriter::new(ISBWriterConfig {
             config: vec![ToVertexConfig {
@@ -1191,7 +1295,7 @@ mod tests {
             tracker_handle: tracker_handle.clone(),
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Reduce".to_string(),
+            vertex_type: VertexType::ReduceUDF,
             isb_config: None,
         });
 
@@ -1203,7 +1307,9 @@ mod tests {
             None, // No GC WAL for testing
             Duration::from_secs(0),
             Duration::from_millis(50),
+            Duration::from_secs(1),
             true,
+            None,
         )
         .await;
 

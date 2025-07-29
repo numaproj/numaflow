@@ -1,14 +1,24 @@
 import React from "react";
 import Box from "@mui/material/Box";
-import { IconsStatusMap, StatusString } from "../../../../../utils";
+import {
+  IconsStatusMap,
+  HTMLlTooltip,
+  StatusString,
+} from "../../../../../utils";
 
 import "./style.css";
 
 export interface MonoVertexStatusProps {
   status: any;
+  healthStatus: string;
+  healthData: any;
 }
 
-export function MonoVertexStatus({ status }: MonoVertexStatusProps) {
+export function MonoVertexStatus({
+  status,
+  healthStatus,
+  healthData,
+}: MonoVertexStatusProps) {
   return (
     <Box
       sx={{
@@ -32,8 +42,8 @@ export function MonoVertexStatus({ status }: MonoVertexStatusProps) {
                 className={"pipeline-logo"}
               />
               <img
-                src={IconsStatusMap["healthy"]}
-                alt={"healthy"}
+                src={IconsStatusMap[healthStatus]}
+                alt={healthStatus}
                 className={"pipeline-logo"}
               />
             </Box>
@@ -45,10 +55,32 @@ export function MonoVertexStatus({ status }: MonoVertexStatusProps) {
               }}
             >
               <span className="pipeline-logo-text">{StatusString[status]}</span>
-
-              <span className="pipeline-logo-text">
-                {StatusString["healthy"]}
-              </span>
+              <HTMLlTooltip
+                title={
+                  <Box>
+                    <Box className={"health-tooltip-text"}>
+                      <Box style={{ fontWeight: 600 }}>
+                        Resource Health (
+                        {healthData.resourceHealthStatus.toUpperCase()}) :
+                      </Box>
+                      <Box>{healthData.resourceHealthMessage}</Box>
+                    </Box>
+                    <Box className={"health-tooltip-text"}>
+                      <Box style={{ fontWeight: 600 }}>
+                        Data Flow Health (
+                        {healthData.dataHealthStatus.toUpperCase()}) :
+                      </Box>
+                      <Box>{healthData.dataHealthMessage}</Box>
+                    </Box>
+                  </Box>
+                }
+                placement="right-end"
+                arrow
+              >
+                <span className="pipeline-logo-text">
+                  {StatusString[healthStatus]}
+                </span>
+              </HTMLlTooltip>
             </Box>
           </Box>
         </Box>

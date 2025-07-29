@@ -148,6 +148,7 @@ impl PBQ {
         // acknowledge the successfully written wal messages by listening on the offset stream.
         tokio::spawn(async move {
             while let Some(offset) = offset_stream.next().await {
+                // no watermark publishing here, since we are just acknowledging the write to WAL
                 tracker_handle
                     .delete(offset)
                     .await
@@ -234,7 +235,7 @@ mod tests {
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
         };
-        let tracker = TrackerHandle::new(None, None);
+        let tracker = TrackerHandle::new(None);
         use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;
         let js_reader = JetStreamReader::new(ISBReaderConfig {
             vertex_type: "test".to_string(),
@@ -348,7 +349,7 @@ mod tests {
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
         };
-        let tracker = TrackerHandle::new(None, None);
+        let tracker = TrackerHandle::new(None);
         use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;
         let js_reader = JetStreamReader::new(ISBReaderConfig {
             vertex_type: "test".to_string(),
@@ -583,7 +584,7 @@ mod tests {
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
         };
-        let tracker = TrackerHandle::new(None, None);
+        let tracker = TrackerHandle::new(None);
         use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;
         let js_reader = JetStreamReader::new(ISBReaderConfig {
             vertex_type: "test".to_string(),

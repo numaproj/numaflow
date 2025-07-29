@@ -6,6 +6,8 @@ members = [
     "numaflow-core",
     "numaflow",
     "numaflow-monitor",
+    "numaflow-sideinput",
+    "numaflow-shared",
     # extensions
     "extns/numaflow-pulsar",
     "extns/numaflow-sqs",
@@ -14,7 +16,7 @@ members = [
     "extns/numaflow-http",
     # generated
     "numaflow-pb",
-    "numaflow-models", "numaflow-sideinput", "numaflow-shared",
+    "numaflow-models", 
 ]
 
 [workspace.lints.rust]
@@ -34,7 +36,7 @@ exit = "warn"
 filter_map_next = "warn"
 fn_params_excessive_bools = "warn"
 inefficient_to_string = "warn"
-match_on_vec_items = "warn"
+indexing_slicing = "warn"
 match_wildcard_for_single_variants = "warn"
 needless_continue = "warn"
 option_option = "warn"
