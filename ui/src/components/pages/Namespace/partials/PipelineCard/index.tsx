@@ -192,40 +192,6 @@ export function PipelineCard({
     }
   }, [healthError]);
 
-  const getHealth = useCallback(
-    (pipelineStatus: string) => {
-      if (healthData) {
-        const { resourceHealthStatus, dataHealthStatus } = healthData;
-        const consolidated =  GetConsolidatedHealthStatus(
-          pipelineStatus,
-          resourceHealthStatus,
-          dataHealthStatus
-        );
-        setPipelineHealthMap((prev) => ({
-        ...prev,
-        [data.name]: consolidated,
-        }));
-        return consolidated;
-      }
-      setPipelineHealthMap((prev) => ({
-        ...prev,
-        [data.name]: UNKNOWN,
-        }));
-      return UNKNOWN;
-    },
-    [healthData]
-  );
-
-  const isbType = GetISBType(isbData?.isbService?.spec) || UNKNOWN;
-  const isbSize =
-    isbType !== UNKNOWN && isbData?.isbService?.spec[isbType]
-      ? isbData?.isbService?.spec[isbType].replicas
-        ? isbData?.isbService?.spec[isbType].replicas
-        : 3
-      : UNKNOWN;
-  const isbStatus = isbData?.isbService?.status?.phase || UNKNOWN;
-  const isbHealthStatus = isbData?.status || UNKNOWN;
-  const pipelineStatus = statusData?.pipeline?.status?.phase || UNKNOWN;
   const handleTimer = useCallback(() => {
     const dateString = new Date().toISOString();
     const time = timeAgo(dateString);
@@ -258,6 +224,43 @@ export function PipelineCard({
       },
     });
   }, []);
+
+  const isbType = GetISBType(isbData?.isbService?.spec) || UNKNOWN;
+  const isbSize =
+    isbType !== UNKNOWN && isbData?.isbService?.spec[isbType]
+      ? isbData?.isbService?.spec[isbType].replicas
+        ? isbData?.isbService?.spec[isbType].replicas
+        : 3
+      : UNKNOWN;
+  const isbStatus = isbData?.isbService?.status?.phase || UNKNOWN;
+  const isbHealthStatus = isbData?.status || UNKNOWN;
+  const pipelineStatus = statusData?.pipeline?.status?.phase || UNKNOWN;
+
+  const getHealth = useCallback(
+    (pipelineStatus: string) => {
+      if (healthData) {
+        const { resourceHealthStatus, dataHealthStatus } = healthData;
+        return GetConsolidatedHealthStatus(
+          pipelineStatus,
+          resourceHealthStatus,
+          dataHealthStatus
+        );
+      }
+      return UNKNOWN;
+    },
+    [healthData]
+  );
+  
+  // Set health status in map when healthData changes
+  useEffect(() => {
+    if (data?.name && setPipelineHealthMap) {
+      const healthStatus = getHealth(pipelineStatus);
+      setPipelineHealthMap((prev) => ({
+        ...prev,
+        [data.name]: healthStatus,
+      }));
+    }
+  }, [healthData, pipelineStatus, data?.name, setPipelineHealthMap, getHealth]);
 
   useEffect(() => {
     const patchStatus = async () => {

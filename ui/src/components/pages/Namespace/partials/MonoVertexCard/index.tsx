@@ -143,7 +143,6 @@ export function MonoVertexCard({
     setDeleteProps(undefined);
   }, []);
 
-  const pipelineStatus = statusData?.monoVertex?.status?.phase || UNKNOWN;
   const handleTimer = useCallback(() => {
     const dateString = new Date().toISOString();
     const time = timeAgo(dateString);
@@ -243,29 +242,32 @@ export function MonoVertexCard({
     }
   }, [healthError]);
   
+  const pipelineStatus = statusData?.monoVertex?.status?.phase || UNKNOWN;
   const getHealth = useCallback(
     (pipelineStatus: string) => {
       if (healthData) {
         const { resourceHealthStatus, dataHealthStatus } = healthData;
-        const consolidated =  GetConsolidatedHealthStatus(
+        return GetConsolidatedHealthStatus(
           pipelineStatus,
           resourceHealthStatus,
           dataHealthStatus
         );
-        setMonoVertexHealthMap((prev) => ({
-        ...prev,
-        [data.name]: consolidated,
-        }));
-        return consolidated;
       }
-      setMonoVertexHealthMap((prev) => ({
-        ...prev,
-        [data.name]: UNKNOWN,
-        }));
       return UNKNOWN;
     },
     [healthData]
   );
+
+  // Set health status in map when healthData changes
+  useEffect(() => {
+    if (data?.name && setMonoVertexHealthMap) {
+      const healthStatus = getHealth(pipelineStatus);
+      setMonoVertexHealthMap((prev) => ({
+        ...prev,
+        [data.name]: healthStatus,
+      }));
+    }
+  }, [healthData, pipelineStatus, data?.name, setMonoVertexHealthMap, getHealth]);
 
   return (
     <>
