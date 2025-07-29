@@ -982,7 +982,7 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let js_writer = JetstreamWriter::new(ISBWriterConfig {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
@@ -999,7 +999,7 @@ mod tests {
             tracker_handle: tracker_handle.clone(),
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Reduce".to_string(),
+            vertex_type: VertexType::ReduceUDF,
             isb_config: None,
         });
 
@@ -1207,7 +1207,7 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let js_writer = JetstreamWriter::new(ISBWriterConfig {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
@@ -1224,7 +1224,7 @@ mod tests {
             tracker_handle: tracker_handle.clone(),
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Reduce".to_string(),
+            vertex_type: VertexType::ReduceUDF,
             isb_config: None,
         });
 
@@ -1489,7 +1489,7 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let js_writer = JetstreamWriter::new(ISBWriterConfig {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
@@ -1506,7 +1506,7 @@ mod tests {
             tracker_handle: tracker_handle.clone(),
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Reduce".to_string(),
+            vertex_type: VertexType::ReduceUDF,
             isb_config: None,
         });
 
@@ -1691,7 +1691,7 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let js_writer = JetstreamWriter::new(ISBWriterConfig {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
@@ -1708,7 +1708,7 @@ mod tests {
             tracker_handle: tracker_handle.clone(),
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Reduce".to_string(),
+            vertex_type: VertexType::ReduceUDF,
             isb_config: None,
         });
 
@@ -1925,7 +1925,7 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let js_writer = JetstreamWriter::new(ISBWriterConfig {
             config: vec![ToVertexConfig {
                 name: "test-vertex",
@@ -1942,7 +1942,7 @@ mod tests {
             tracker_handle: tracker_handle.clone(),
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Reduce".to_string(),
+            vertex_type: VertexType::ReduceUDF,
             isb_config: None,
         });
 

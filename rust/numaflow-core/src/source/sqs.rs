@@ -191,7 +191,7 @@ pub mod tests {
 
         // create SQS source with test client
         use crate::tracker::TrackerHandle;
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let source = Source::new(
             1,
             SourceType::Sqs(sqs_source),

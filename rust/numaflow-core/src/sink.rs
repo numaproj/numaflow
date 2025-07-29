@@ -494,7 +494,7 @@ impl SinkWriter {
                             for offset in offsets {
                                 // Delete the message from the tracker
                                 self.tracker_handle
-                                    .delete(offset, None)
+                                    .delete(offset)
                                     .await
                                     .expect("tracker delete should never fail");
                             }
@@ -1137,7 +1137,7 @@ mod tests {
             10,
             Duration::from_secs(1),
             SinkClientType::Log,
-            TrackerHandle::new(None, None),
+            TrackerHandle::new(None),
         )
         .build()
         .await
@@ -1170,7 +1170,7 @@ mod tests {
     #[tokio::test]
     async fn test_streaming_write() {
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let sink_writer = SinkWriterBuilder::new(
             10,
             Duration::from_millis(100),
@@ -1226,7 +1226,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_streaming_write_error() {
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         // start the server
         let (_shutdown_tx, shutdown_rx) = oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
@@ -1313,7 +1313,7 @@ mod tests {
     #[tokio::test]
     async fn test_fallback_write() {
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
 
         // start the server
         let (_shutdown_tx, shutdown_rx) = oneshot::channel();
@@ -1413,7 +1413,7 @@ mod tests {
             .await
             .unwrap();
 
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let serving_store = ServingStore::Nats(Box::new(
             NatsServingStore::new(
                 context.clone(),

@@ -1,5 +1,7 @@
+use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
 use crate::message::Message;
+use crate::metrics::{pipeline_drop_metric_labels, pipeline_metrics};
 use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
 use crate::reduce::reducer::aligned::windower::{
@@ -294,16 +296,24 @@ impl AlignedReduceActor {
     }
 
     /// sends the message to the reduce task for the window.
-    async fn window_append(&mut self, window_msg: AlignedWindowMessage) {
+    async fn window_append(&mut self, mut window_msg: AlignedWindowMessage) {
         let window_id = &window_msg.pnf_slot;
 
-        // Get the existing stream or log error if not found create a new one.
+        // Get the existing stream or log error if not found create a new one. This is due to replay,
+        // during normal operation there will be an explicit open message before the append message.
         let Some(active_stream) = self.active_streams.get(window_id) else {
-            // windows may not be found during replay, because the windower doesn't send the open
+            // windows may not be found during replay, because the window-manager doesn't send the open
             // message for the active windows that got replayed, hence we create a new one.
             // this happens because of out-of-order messages, and we have to ensure that the (t+1)th
             // message is sent to the window that could be created by (t)th message iff (t+1)th message
             // belongs to that window created by (t)th message.
+            // update the operation of the window message to open.
+            match window_msg.operation {
+                AlignedWindowOperation::Append { message, window } => {
+                    window_msg.operation = AlignedWindowOperation::Open { message, window };
+                }
+                _ => panic!("Expected Append operation in window_append"),
+            }
             self.window_open(window_msg).await;
             return;
         };
@@ -570,7 +580,17 @@ impl AlignedReducer {
     ) {
         // Drop late messages
         if msg.is_late && msg.event_time < self.current_watermark.sub(self.allowed_lateness) {
-            // TODO(ajain): add a metric for this
+            debug!(event_time = ?msg.event_time.timestamp_millis(), watermark = ?self.current_watermark.timestamp_millis(), "Late message detected, dropping");
+            pipeline_metrics()
+                .forwarder
+                .drop_total
+                .get_or_create(&pipeline_drop_metric_labels(
+                    get_vertex_name(),
+                    get_vertex_replica().to_string().as_str(),
+                    "late-message",
+                ))
+                .inc();
+
             return;
         }
 
@@ -583,6 +603,15 @@ impl AlignedReducer {
                 offset = ?msg.offset,
                 "Old message popped up, Watermark is behind the event time"
             );
+            pipeline_metrics()
+                .forwarder
+                .drop_total
+                .get_or_create(&pipeline_drop_metric_labels(
+                    get_vertex_name(),
+                    get_vertex_replica().to_string().as_str(),
+                    "old-message-popped-up",
+                ))
+                .inc();
             return;
         }
 
@@ -747,7 +776,7 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         use crate::pipeline::isb::jetstream::writer::ISBWriterConfig;
         let js_writer = JetstreamWriter::new(ISBWriterConfig {
             config: vec![ToVertexConfig {
@@ -765,7 +794,7 @@ mod tests {
             tracker_handle: tracker_handle.clone(),
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Reduce".to_string(),
+            vertex_type: VertexType::ReduceUDF,
             isb_config: None,
         });
 
@@ -996,7 +1025,7 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         use crate::pipeline::isb::jetstream::writer::ISBWriterConfig;
         let js_writer = JetstreamWriter::new(ISBWriterConfig {
             config: vec![ToVertexConfig {
@@ -1014,7 +1043,7 @@ mod tests {
             tracker_handle: tracker_handle.clone(),
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Reduce".to_string(),
+            vertex_type: VertexType::ReduceUDF,
             isb_config: None,
         });
 
@@ -1248,7 +1277,7 @@ mod tests {
 
         // Create JetstreamWriter
         let cln_token = CancellationToken::new();
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         use crate::pipeline::isb::jetstream::writer::ISBWriterConfig;
         let js_writer = JetstreamWriter::new(ISBWriterConfig {
             config: vec![ToVertexConfig {
@@ -1266,7 +1295,7 @@ mod tests {
             tracker_handle: tracker_handle.clone(),
             cancel_token: cln_token.clone(),
             watermark_handle: None,
-            vertex_type: "Reduce".to_string(),
+            vertex_type: VertexType::ReduceUDF,
             isb_config: None,
         });
 

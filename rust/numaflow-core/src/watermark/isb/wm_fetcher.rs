@@ -100,10 +100,12 @@ impl ISBWatermarkFetcher {
             // if the epoch is not i64::MAX, update the last processed watermark for this particular edge and the partition
             // while fetching watermark we need to consider the smallest last processed watermark among all the partitions
             if epoch != i64::MAX {
-                self.last_processed_wm
+                *self
+                    .last_processed_wm
                     .get_mut(edge)
                     .unwrap_or_else(|| panic!("invalid vertex {edge}"))
-                    [partition_idx as usize] = epoch;
+                    .get_mut(partition_idx as usize)
+                    .expect("should have partition index") = epoch;
             }
         }
 
@@ -191,10 +193,12 @@ impl ISBWatermarkFetcher {
             if epoch < i64::MAX {
                 min_wm = min_wm.min(epoch);
                 // update the last processed watermark for this particular edge and the specific partition
-                self.last_processed_wm
+                *self
+                    .last_processed_wm
                     .get_mut(edge)
                     .unwrap_or_else(|| panic!("invalid vertex {edge}"))
-                    [partition_idx as usize] = epoch;
+                    .get_mut(partition_idx as usize)
+                    .expect("should have partition index") = epoch;
             }
         }
 

@@ -194,7 +194,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_forwarder() {
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
 
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
@@ -257,7 +257,7 @@ mod tests {
             .await
             .map_err(|e| panic!("failed to create source reader: {:?}", e))
             .unwrap();
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let source = Source::new(
             5,
             SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
@@ -332,7 +332,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_flatmap_operation() {
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
 

@@ -76,6 +76,10 @@ pub(crate) struct SlidingWindowManager {
     slide: Duration,
     /// Active windows sorted by end time. The state is saved to a file on shutdown and loaded on
     /// startup.
+    /// NOTE: During replay we will assume that these windows are opened when we get the first message.
+    /// Since we do not differentiate between the first message and subsequent messages, we does an
+    /// "append" and in the "append" we "open" the stream if stream doesn't exist.
+    /// TODO: perhaps we can differentiate between replayed window vs new window during normal operation.
     active_windows: Arc<RwLock<BTreeSet<Window>>>,
     /// Closed windows sorted by end time. We need to keep track of closed windows so that we can
     /// find the oldest window computed and forwarded. The watermark is progressed based on the latest
