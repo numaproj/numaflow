@@ -410,8 +410,12 @@ func (r *Rater) updateDynamicLookbackSecs() {
 		if len(counts) <= 1 {
 			return
 		}
+		// We will calculate the processing time for a time window = 3 * currentLookback
+		// This ensures that we have enough data to capture one complete processing cycle
 		currentLookback := r.lookBackSeconds[vertexName].Load()
 		startIndex := findStartIndex(3*int64(currentLookback), counts)
+		// we consider the last but one element as the end index because the last element might be incomplete
+		// we can be sure that the last but one element in the queue is complete.
 		endIndex := len(counts) - 2
 		if startIndex == indexNotFound {
 			return
@@ -421,12 +425,20 @@ func (r *Rater) updateDynamicLookbackSecs() {
 			return
 		}
 		calculatedProcessingTime := CalculateLookback(counts, startIndex, endIndex)
+		// round up to the nearest minute, also ensure that while going up and down we have the consistent value for
+		// a given processingTimeSeconds, then convert back to seconds
 		roundedCalculatedLookback := 60.0 * (math.Ceil(float64(calculatedProcessingTime) / 60.0))
+		// Based on the value received we can have two cases
+		// 1. Step up case (value is > than current):
+		// 	  Do not allow the value to be increased more than the MaxLookback allowed (10mins)
+		// 2. Step Down (value is <= than current)
+		//    Do not allow the value to be lower the lookback value specified in the spec
 		if roundedCalculatedLookback > currentLookback {
 			roundedCalculatedLookback = math.Min(roundedCalculatedLookback, float64(v1alpha1.MaxLookbackSeconds))
 		} else {
 			roundedCalculatedLookback = math.Max(roundedCalculatedLookback, float64(v.Scale.GetLookbackSeconds()))
 		}
+		// If the value has changed, update it
 		if roundedCalculatedLookback != currentLookback {
 			r.lookBackSeconds[vertexName].Store(roundedCalculatedLookback)
 			r.log.Debugf("Lookback period updated for vertex: %s, Current: %f Updated: %f", vertexName, currentLookback, roundedCalculatedLookback)

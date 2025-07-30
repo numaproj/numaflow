@@ -206,13 +206,18 @@ type partitionMaxDuration struct {
 	maxUnchangedDuration map[string]int64
 }
 
-// CalculateLookback computes the maximum duration (in seconds) for which the count of messages processed by any partition
-// remained unchanged within a specified range of indices in a queue of TimestampedCounts. It does this by analyzing each
-// data point between the startIndex and endIndex, checking the count changes for each partition, and noting the durations
-// during which these counts stay consistent. The metric is updated when data is read.
-// This would encapsulate the lookback for two scenarios
-// 1. Slow processing vertex
-// 2. Slow data source - data arrives after long intervals
+// CalculateLookback computes the maximum duration (in seconds) for which the count of messages processed across
+// all the partitions of a given vertex remain unchanged. This helps determine how long the system should
+// look back when calculating processing rates.
+//
+// The function analyzes timestamped count data to find the longest period during which any partition
+// had no change in its processed message count. This is useful for two scenarios:
+// 1. Slow processing vertices - where a vertex takes a long time to process messages
+// 2. Slow data sources - where data arrives infrequently, causing long gaps between count changes
+//
+// The returned duration represents the maximum "unchanged period" across all partitions, which
+// helps the system adjust its lookback window to ensure it captures enough data for accurate
+// rate calculations.
 func CalculateLookback(counts []*TimestampedCounts, startIndex, endIndex int) int64 {
 	lookBackData := partitionMaxDuration{
 		lastSeen:             make(map[string]partitionLastSeen),
@@ -223,57 +228,76 @@ func CalculateLookback(counts []*TimestampedCounts, startIndex, endIndex int) in
 	return findGlobalMaxDuration(lookBackData.maxUnchangedDuration)
 }
 
-// processTimeline processes the timeline of counts and updates the maxUnchangedDuration for each partition.
+// processTimeline analyzes the timeline of count data to track how long each partition's count
+// remained unchanged. It processes each timestamped count entry and updates the maximum
+// unchanged duration for each partition when their counts change.
 func processTimeline(counts []*TimestampedCounts, startIndex, endIndex int, data *partitionMaxDuration) {
 	for i := startIndex; i <= endIndex; i++ {
 		podPartitionCountMap := counts[i].PodPartitionCountSnapshot()
 		curTime := counts[i].PodTimestamp()
 
-		// For each partition, create a mapping to count(aggregating across all pods)
+		// Aggregate counts across all pods for each partition at this timestamp
+		// This gives us the total count for each partition at this point in time
 		partitionAggMap := make(map[string]float64)
-
 		for _, partitionCountsMap := range podPartitionCountMap {
 			for partitionName, count := range partitionCountsMap {
 				partitionAggMap[partitionName] += count
 			}
 		}
 
+		// Process each partition's aggregated count
 		for partitionName, aggCount := range partitionAggMap {
 			lastSeenData, found := data.lastSeen[partitionName]
+
+			// Skip if the count hasn't changed since we last saw it
 			if found && lastSeenData.count == aggCount {
 				continue
 			}
-			// If the read count data has updated
+
+			// If we've seen this partition before and the count has increased,
+			// calculate how long it remained unchanged and update the max duration
 			if found && aggCount > lastSeenData.count {
 				duration := curTime - lastSeenData.seenTime
 				if currentMax, ok := data.maxUnchangedDuration[partitionName]; !ok || duration > currentMax {
 					data.maxUnchangedDuration[partitionName] = duration
 				}
 			}
-			// The value is updated in the lastSeen for 3 cases
-			// 1. If this is the first time seeing the partition entry or
-			// 2. in case of a value increase,
-			// 3. In case of a value decrease which is treated as a new entry for partition
+
+			// Update the last seen data for this partition. This happens in three cases:
+			// 1. First time seeing this partition
+			// 2. Count increased
+			// 3. Count decreased (treated as a new entry)
 			data.lastSeen[partitionName] = partitionLastSeen{aggCount, curTime}
 		}
 	}
 }
 
-// Check for partitions that did not change at all during the iteration,
-// and update their maxUnchangedDuration to the full period from first seen to lastTime.
+// finalizeDurations calculates the final unchanged durations for partitions that remained
+// unchanged until the end of the analysis period.
 func finalizeDurations(lastCount *TimestampedCounts, data *partitionMaxDuration) {
 	endVals := lastCount.PodPartitionCountSnapshot()
 	lastTime := lastCount.PodTimestamp()
 
-	// Aggregate across all pods for each partition
+	// Aggregate counts across all pods for each partition at the final timestamp
+	// This gives us the total count for each partition at the end of the analysis period
 	partitionAggMap := make(map[string]float64)
 	for _, partitionCounts := range endVals {
 		for partitionName, count := range partitionCounts {
 			partitionAggMap[partitionName] += count
 		}
 	}
+
+	// For each partition check if it remained unchanged until the end and
+	// update the max unchanged duration accordingly
 	for partitionName, lastSeenData := range data.lastSeen {
+		// Calculate how long this partition's count remained unchanged from when it was
+		// last seen until the final timestamp
 		endDuration := lastTime - lastSeenData.seenTime
+
+		// Only update the max unchanged duration if:
+		// 1. The partition still exists in the final data (hasn't been removed)
+		// 2. The partition had a non-zero count when it was last seen
+		// 3. The calculated duration is longer than any previously recorded duration for this partition
 		if _, exists := partitionAggMap[partitionName]; exists && lastSeenData.count != 0 {
 			if currentMax, ok := data.maxUnchangedDuration[partitionName]; !ok || endDuration > currentMax {
 				data.maxUnchangedDuration[partitionName] = endDuration
@@ -282,7 +306,9 @@ func finalizeDurations(lastCount *TimestampedCounts, data *partitionMaxDuration)
 	}
 }
 
-// Calculate the maximum duration found across all partitions.
+// findGlobalMaxDuration finds the maximum unchanged duration across all partitions.
+// This represents the longest period during which any partition had no change in its
+// processed message count.
 func findGlobalMaxDuration(maxUnchangedDuration map[string]int64) int64 {
 	globalMaxSecs := int64(0)
 	for _, duration := range maxUnchangedDuration {
