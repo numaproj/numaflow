@@ -4,7 +4,7 @@ use tracing::info;
 use crate::config::is_mono_vertex;
 use crate::config::monovertex::MonovertexConfig;
 use crate::error::{self};
-use crate::metrics::{LagReader, PendingReaderTasks_};
+use crate::metrics::{LagReader, PendingReaderTasks};
 use crate::shared::create_components;
 use crate::sink::SinkWriter;
 use crate::source::Source;
@@ -90,17 +90,14 @@ async fn start(
     // Store the pending reader handle outside, so it doesn't get dropped immediately.
 
     // only check the pending and lag for source for pod_id = 0
-    let _pending_reader_handle: Option<PendingReaderTasks_> = if mvtx_config.replica == 0 {
+    let _pending_reader_handle: Option<PendingReaderTasks> = if mvtx_config.replica == 0 {
         // start the pending reader to publish pending metrics
         let pending_reader = shared::metrics::create_pending_reader(
             &mvtx_config.metrics_config,
             LagReader::Source(Box::new(source.clone())),
         )
         .await;
-        // TODO(lookback) - using new implementation for monovertex right now,
-        // deprecate old implementation and use this for pipeline as well once
-        // corresponding changes are completed.
-        Some(pending_reader.start_(is_mono_vertex()).await)
+        Some(pending_reader.start(is_mono_vertex()).await)
     } else {
         None
     };

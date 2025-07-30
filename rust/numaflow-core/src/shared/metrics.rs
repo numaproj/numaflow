@@ -36,9 +36,5 @@ pub(crate) async fn create_pending_reader(
         .lag_checking_interval(Duration::from_secs(
             metrics_config.lag_check_interval_in_secs.into(),
         ))
-        .refresh_interval(Duration::from_secs(
-            metrics_config.lag_refresh_interval_in_secs.into(),
-        ))
-        .lookback_seconds(metrics_config.lookback_window_in_secs)
         .build()
 }
