@@ -270,7 +270,7 @@ func (r *Rater) getPodMetrics(vertexName, podName string) map[string]*dto.Metric
 	textParser := expfmt.TextParser{}
 	result, err := textParser.TextToMetricFamilies(resp.Body)
 	if err != nil {
-		r.log.Errorf("[Pod name %s]:  failed parsing to prometheus metric families, %v", podName, err.Error())
+		r.log.Errorf("[Pod name %s]: failed parsing to prometheus metric families, %v", podName, err)
 		return nil
 	}
 	return result
@@ -429,7 +429,7 @@ func (r *Rater) updateDynamicLookbackSecs() {
 		}
 		if roundedCalculatedLookback != currentLookback {
 			r.lookBackSeconds[vertexName].Store(roundedCalculatedLookback)
-			r.log.Infof("Lookback period updated for vertex %s, Current: %f Updated %f", vertexName, currentLookback, roundedCalculatedLookback)
+			r.log.Debugf("Lookback period updated for vertex: %s, Current: %f Updated: %f", vertexName, currentLookback, roundedCalculatedLookback)
 			metrics.VertexLookBackSecs.WithLabelValues(vertexName, string(vertexType)).Set(roundedCalculatedLookback)
 		}
 	}

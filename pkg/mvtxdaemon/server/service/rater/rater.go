@@ -199,7 +199,7 @@ func (r *Rater) getPodMetrics(podName string) map[string]*dto.MetricFamily {
 	textParser := expfmt.TextParser{}
 	result, err := textParser.TextToMetricFamilies(resp.Body)
 	if err != nil {
-		r.log.Errorf("[Pod name %s]:  failed parsing to prometheus metric families, %v", podName, err.Error())
+		r.log.Errorf("[Pod name %s]: failed parsing to prometheus metric families, %v", podName, err)
 		return nil
 	}
 	return result
@@ -396,7 +396,7 @@ func (r *Rater) updateDynamicLookbackSecs() {
 	// If the value has changed, update it
 	if roundedMaxLookback != currentLookback {
 		r.lookBackSeconds.Store(roundedMaxLookback)
-		r.log.Infof("Lookback updated for mvtx %s, Current: %f Updated %f", r.monoVertex.Name, currentLookback, roundedMaxLookback)
+		r.log.Debugf("Lookback updated for mvtx: %s, Current: %f Updated: %f", r.monoVertex.Name, currentLookback, roundedMaxLookback)
 		// update the metric value for the lookback window
 		metrics.MonoVertexLookBackSecs.WithLabelValues(r.monoVertex.Name).Set(roundedMaxLookback)
 	}
