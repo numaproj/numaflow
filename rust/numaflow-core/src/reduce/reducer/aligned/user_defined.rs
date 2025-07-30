@@ -191,9 +191,13 @@ impl UserDefinedAlignedReduce {
         let mut response_stream = tokio::select! {
             // Wait for the gRPC call to complete
             result = self.client.reduce_fn(ReceiverStream::new(req_rx)) => {
-                result
-                    .map_err(|e| crate::Error::Grpc(Box::new(e)))?
-                    .into_inner()
+                match result {
+                    Ok(response) => response.into_inner(),
+                    Err(e) => {
+                        request_handle.abort();
+                        return Err(crate::Error::Grpc(Box::new(e)));
+                    }
+                }
             }
 
             // Check for cancellation
