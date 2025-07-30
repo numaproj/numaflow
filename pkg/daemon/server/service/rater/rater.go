@@ -351,9 +351,9 @@ func (r *Rater) GetRates(vertexName, partitionName string) map[string]*wrappersp
 	r.log.Debugf("Current timestampedPodCounts for vertex %s is: %v", vertexName, r.timestampedPodCounts[vertexName])
 	var result = make(map[string]*wrapperspb.DoubleValue)
 	// calculate rates for each lookback seconds
-	for n, i := range r.buildLookbackSecondsMap(vertexName) {
-		r := CalculateRate(r.timestampedPodCounts[vertexName], i, partitionName)
-		result[n] = wrapperspb.Double(r)
+	for windowLabel, lookbackSeconds := range r.buildLookbackSecondsMap(vertexName) {
+		r := CalculateRate(r.timestampedPodCounts[vertexName], lookbackSeconds, partitionName)
+		result[windowLabel] = wrapperspb.Double(r)
 	}
 	r.log.Debugf("Got rates for vertex %s, partition %s: %v", vertexName, partitionName, result)
 	return result
@@ -364,12 +364,12 @@ func (r *Rater) GetPending(pipelineName, vertexName, vertexType, partitionName s
 	r.log.Debugf("Current timestampedPendingCount for vertex %s is: %v", vertexName, r.timestampedPendingCount[vertexName])
 	var result = make(map[string]*wrapperspb.Int64Value)
 	// calculate pending for each lookback seconds
-	for n, i := range r.buildLookbackSecondsMap(vertexName) {
-		pending := CalculatePending(r.timestampedPendingCount[vertexName], i, partitionName)
-		result[n] = wrapperspb.Int64(pending)
+	for windowLabel, lookbackSeconds := range r.buildLookbackSecondsMap(vertexName) {
+		pending := CalculatePending(r.timestampedPendingCount[vertexName], lookbackSeconds, partitionName)
+		result[windowLabel] = wrapperspb.Int64(pending)
 		// Expose the metric for pending
 		if pending != isb.PendingNotAvailable {
-			metrics.VertexPendingMessages.WithLabelValues(pipelineName, vertexName, vertexType, partitionName, n).Set(float64(pending))
+			metrics.VertexPendingMessages.WithLabelValues(pipelineName, vertexName, vertexType, partitionName, windowLabel).Set(float64(pending))
 		}
 	}
 	return result
@@ -404,6 +404,7 @@ func (r *Rater) startDynamicLookBack(ctx context.Context) {
 // updateDynamicLookbackSecs updates the dynamic lookback seconds for each vertex
 func (r *Rater) updateDynamicLookbackSecs() {
 	for _, v := range r.pipeline.Spec.Vertices {
+		vertexType := v.GetVertexType()
 		vertexName := v.Name
 		counts := r.timestampedPodCounts[vertexName].Items()
 		if len(counts) <= 1 {
@@ -429,7 +430,7 @@ func (r *Rater) updateDynamicLookbackSecs() {
 		if roundedCalculatedLookback != currentLookback {
 			r.lookBackSeconds[vertexName].Store(roundedCalculatedLookback)
 			r.log.Infof("Lookback period updated for vertex %s, Current: %f Updated %f", vertexName, currentLookback, roundedCalculatedLookback)
-			metrics.VertexLookBackSecs.WithLabelValues(vertexName).Set(roundedCalculatedLookback)
+			metrics.VertexLookBackSecs.WithLabelValues(vertexName, string(vertexType)).Set(roundedCalculatedLookback)
 		}
 	}
 }

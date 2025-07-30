@@ -239,12 +239,12 @@ func (r *Rater) GetPending() map[string]*wrapperspb.Int64Value {
 	r.log.Debugf("Current timestampedPendingCount for MonoVertex %s is: %v", r.monoVertex.Name, r.timestampedPendingCount)
 	var result = make(map[string]*wrapperspb.Int64Value)
 	// calculate pending for each lookback seconds
-	for n, i := range r.buildLookbackSecondsMap() {
-		pending := CalculatePending(r.timestampedPendingCount, i)
-		result[n] = wrapperspb.Int64(pending)
+	for windowLabel, lookbackSeconds := range r.buildLookbackSecondsMap() {
+		pending := CalculatePending(r.timestampedPendingCount, lookbackSeconds)
+		result[windowLabel] = wrapperspb.Int64(pending)
 		// Expose the metric for pending
 		if pending != isb.PendingNotAvailable {
-			metrics.MonoVertexPendingMessages.WithLabelValues(r.monoVertex.Name, n).Set(float64(pending))
+			metrics.MonoVertexPendingMessages.WithLabelValues(r.monoVertex.Name, windowLabel).Set(float64(pending))
 		}
 	}
 	r.log.Debugf("Got Pending for MonoVertex %s: %v", r.monoVertex.Name, result)
@@ -257,9 +257,9 @@ func (r *Rater) GetRates() map[string]*wrapperspb.DoubleValue {
 	r.log.Debugf("Current timestampedPodCounts for MonoVertex %s is: %v", r.monoVertex.Name, r.timestampedPodCounts)
 	var result = make(map[string]*wrapperspb.DoubleValue)
 	// calculate rates for each lookback seconds
-	for n, i := range r.buildLookbackSecondsMap() {
-		rate := CalculateRate(r.timestampedPodCounts, i)
-		result[n] = wrapperspb.Double(rate)
+	for windowLabel, lookbackSeconds := range r.buildLookbackSecondsMap() {
+		rate := CalculateRate(r.timestampedPodCounts, lookbackSeconds)
+		result[windowLabel] = wrapperspb.Double(rate)
 	}
 	r.log.Debugf("Got rates for MonoVertex %s: %v", r.monoVertex.Name, result)
 	return result

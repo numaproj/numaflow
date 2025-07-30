@@ -38,6 +38,7 @@ const (
 	LabelSDKVersion         = "version"
 	LabelSDKType            = "type" // container type, e.g sourcer, sourcetransformer, sinker, etc. see serverinfo.ContainerType
 	LabelReason             = "reason"
+	LabelPeriod             = "period"
 )
 
 var (
