@@ -57,7 +57,6 @@ const (
 	deprecatedFinalizerName = dfv1.ControllerPipeline
 
 	pauseTimestampPath = `/metadata/annotations/numaflow.numaproj.io~1pause-timestamp`
-	specReplicasPath   = `/spec/replicas`
 )
 
 // pipelineReconciler reconciles a pipeline object.
