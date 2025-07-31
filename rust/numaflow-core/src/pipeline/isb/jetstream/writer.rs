@@ -584,6 +584,31 @@ impl JetstreamWriter {
                                 ?ack,
                                 "Duplicate message detected"
                             );
+                            // Increment drop metric for duplicate messages
+                            pipeline_metrics()
+                                .forwarder
+                                .drop_total
+                                .get_or_create(&pipeline_drop_metric_labels(
+                                    this.vertex_type.as_str(),
+                                    stream.name,
+                                    "Duplicate ID",
+                                ))
+                                .inc();
+                            pipeline_metrics()
+                                .forwarder
+                                .drop_bytes_total
+                                .get_or_create(&pipeline_drop_metric_labels(
+                                    this.vertex_type.as_str(),
+                                    stream.name,
+                                    "Duplicate ID",
+                                ))
+                                .inc_by(message.value.len() as u64);
+                            // Delete from tracker to ACK the duplicate message
+                            this.tracker_handle
+                                .delete(message.offset.clone())
+                                .await
+                                .expect("Failed to delete offset from tracker");
+                            return;
                         }
                         offsets.push((
                             stream.clone(),
