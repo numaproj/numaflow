@@ -2716,8 +2716,16 @@
 <p>When pausing a pipeline, it will shutdown the source vertex pods first, and then wait for the other vertices to finish the backlog before terminating them. However, it will not wait forever and will terminate the pods after <code>pauseGracePeriodSeconds</code>. This is default set to 30 and can be customized by setting <code>spec.lifecycle.pauseGracePeriodSeconds</code>.</p>
 <p>If there's a <a href="../../user-defined-functions/reduce/reduce/">reduce</a> vertex in the pipeline, please make sure it uses <a href="../../user-defined-functions/reduce/reduce/#persistent-volume-claim-pvc">Persistent Volume Claim</a> for storage, otherwise the data will be lost.</p>
 <h2 id="resume-a-pipeline">Resume a Pipeline<a class="headerlink" href="#resume-a-pipeline" title="Permanent link">&para;</a></h2>
-<p>The command below will bring the pipeline back to <code>Running</code> status.</p>
-<div class="highlight"><pre><span></span><code><span class="w">  </span>kubectl<span class="w"> </span>patch<span class="w"> </span>pl<span class="w"> </span>my-pipeline<span class="w"> </span>--type<span class="o">=</span>merge<span class="w"> </span>--patch<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;: {&quot;lifecycle&quot;: {&quot;desiredPhase&quot;: &quot;Running&quot;}}}&#39;</span>
+<p>The command below will bring the pipeline back to <code>Running</code> status.
+This will resume all vertices with the same number of pods when they were running before pausing
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>patch<span class="w"> </span>pl<span class="w"> </span>my-pipeline<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--type<span class="o">=</span>merge<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--patch<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;:{&quot;lifecycle&quot;:{&quot;desiredPhase&quot;:&quot;Running&quot;}},&quot;metadata&quot;:{&quot;annotations&quot;:{&quot;numaflow.numaproj.io/resume-strategy&quot;:&quot;fast&quot;}}}&#39;</span>
+</code></pre></div></p>
+<p>Run the following command if you would like to resume the Pipeline vertices with the minimal number of pods (the number defined in <code>spec.scale.min</code>, otherwise 1).</p>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>patch<span class="w"> </span>pl<span class="w"> </span>my-pipeline<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--type<span class="o">=</span>merge<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--patch<span class="w"> </span><span class="s1">&#39;{&quot;spec&quot;:{&quot;lifecycle&quot;:{&quot;desiredPhase&quot;:&quot;Running&quot;}},&quot;metadata&quot;:{&quot;annotations&quot;:{&quot;numaflow.numaproj.io/resume-strategy&quot;:&quot;slow&quot;}}}&#39;</span>
 </code></pre></div>
 <h2 id="delete-a-pipeline">Delete a Pipeline<a class="headerlink" href="#delete-a-pipeline" title="Permanent link">&para;</a></h2>
 <p>When deleting a pipeline, before terminating all the pods, it will try to wait for all the backlog messages that have already been ingested into the pipeline to be processed. However, it will not wait forever, if the backlog is too large, it will terminate the pods after <code>deletionGracePeriodSeconds</code>, which defaults to 30, and can be customized by setting <code>spec.lifecycle.deletionGracePeriodSeconds</code>.</p>
