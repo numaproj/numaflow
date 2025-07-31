@@ -29,9 +29,11 @@ If there's a [reduce](../user-defined-functions/reduce/reduce.md) vertex in the 
 ## Resume a Pipeline
 
 The command below will bring the pipeline back to `Running` status.
-
+This will resume all vertices with the same number of pods when they were running before pausing
 ```bash
-  kubectl patch pl my-pipeline --type=merge --patch '{"spec": {"lifecycle": {"desiredPhase": "Running"}}}'
+kubectl patch pl my-pipeline \
+  --type=merge \
+  --patch '{"spec":{"lifecycle":{"desiredPhase":"Running"}},"metadata":{"annotations":{"numaflow.numaproj.io/resume-strategy":"fast"}}}'
 ```
 
 Run the following command if you would like to resume the Pipeline vertices with the minimal number of pods (the number defined in `spec.scale.min`, otherwise 1).
