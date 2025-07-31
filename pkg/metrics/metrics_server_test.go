@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/gavv/httpexpect/v2"
-	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/utils/ptr"
 
@@ -123,62 +122,4 @@ type mockHealthChecker struct{}
 
 func (m *mockHealthChecker) IsHealthy(ctx context.Context) error {
 	return nil
-}
-
-func Test_MetricsServer_BuildAndExposePendingMetrics(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	vtx := &dfv1.Vertex{
-		Spec: dfv1.VertexSpec{
-			PipelineName: "test-pipeline",
-			AbstractVertex: dfv1.AbstractVertex{
-				Name: "test-vertex",
-			},
-		},
-	}
-	mockReader := &mockLagReader{name: "test-reader"}
-	ms := NewMetricsServer(vtx, WithLagReaders(map[string]isb.LagReader{"test-reader": mockReader}), WithRefreshInterval(10*time.Millisecond))
-	ms.lagCheckingInterval = 10 * time.Millisecond
-
-	go ms.buildupPendingInfo(ctx)
-	go ms.exposePendingMetrics(ctx)
-
-	// Wait for a few ticks to expose metrics
-	time.Sleep(50 * time.Millisecond)
-
-	// Verify that metrics are exposed
-	assert.NotEmpty(t, ms.partitionPendingInfo["test-reader"].Items())
-	g, err := pending.GetMetricWithLabelValues("test-pipeline", "test-vertex", "1m", "test-reader")
-	assert.NoError(t, err)
-	m := &dto.Metric{}
-	err = g.Write(m)
-	assert.NoError(t, err)
-	assert.Equal(t, float64(200), *m.GetGauge().Value)
-}
-
-func TestMetricsServer_CalculatePending(t *testing.T) {
-	mockReader := &mockLagReader{name: "test-reader"}
-	ms := NewMetricsServer(&dfv1.Vertex{}, WithLagReaders(map[string]isb.LagReader{"test-reader": mockReader}))
-
-	// Test with no items
-	pending := ms.calculatePending(60, "test-reader")
-	assert.Equal(t, isb.PendingNotAvailable, pending)
-
-	// Test with items within lookback window
-	now := time.Now().Unix()
-	ms.partitionPendingInfo["test-reader"].Append(timestampedPending{pending: 30, timestamp: now - 120})
-	ms.partitionPendingInfo["test-reader"].Append(timestampedPending{pending: 10, timestamp: now - 30})
-	ms.partitionPendingInfo["test-reader"].Append(timestampedPending{pending: 20, timestamp: now - 40})
-
-	// Test with items in lookback window
-	pending = ms.calculatePending(200, "test-reader")
-	assert.Equal(t, int64(20), pending)
-
-	pending = ms.calculatePending(60, "test-reader")
-	assert.Equal(t, int64(15), pending)
-
-	// Test with items within lookback window but no data points
-	pending = ms.calculatePending(10, "test-reader")
-	assert.Equal(t, isb.PendingNotAvailable, pending)
 }

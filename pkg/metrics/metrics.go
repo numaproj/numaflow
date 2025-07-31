@@ -38,6 +38,7 @@ const (
 	LabelSDKVersion         = "version"
 	LabelSDKType            = "type" // container type, e.g sourcer, sourcetransformer, sinker, etc. see serverinfo.ContainerType
 	LabelReason             = "reason"
+	LabelPeriod             = "period"
 )
 
 var (
@@ -367,4 +368,18 @@ var (
 		Name:      "pending",
 		Help:      "A Gauge to keep track of the total number of pending messages for the monovtx",
 	}, []string{LabelMonoVertexName, LabelPeriod})
+
+	// Vertex Pending Messages is a gauge used to represent pending messages for a given vertex
+	VertexPendingMessages = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "vertex",
+		Name:      "pending_messages",
+		Help:      "A Gauge to keep track of the total number of pending messages for the vertex",
+	}, []string{LabelPipeline, LabelVertex, LabelVertexType, LabelPartitionName, LabelPeriod})
+
+	VertexLookBackSecs = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: "vertex",
+		Name:      "lookback_window_seconds",
+		Help: "A metric to show what is the lookback window value being used by a given vertex. " +
+			"Look back Seconds is critical in autoscaling calculations",
+	}, []string{LabelVertex, LabelVertexType})
 )

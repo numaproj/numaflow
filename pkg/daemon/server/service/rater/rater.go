@@ -20,14 +20,19 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"maps"
+	"math"
 	"net/http"
 	"time"
 
+	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
+	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
@@ -36,6 +41,7 @@ import (
 type Ratable interface {
 	Start(ctx context.Context) error
 	GetRates(vertexName, partitionName string) map[string]*wrapperspb.DoubleValue
+	GetPending(pipelineName, vertexName, vertexType, partitionName string) map[string]*wrapperspb.Int64Value
 }
 
 var _ Ratable = (*Rater)(nil)
@@ -64,9 +70,26 @@ type Rater struct {
 	podTracker *PodTracker
 	// timestampedPodCounts is a map between vertex name and a queue of timestamped counts for that vertex
 	timestampedPodCounts map[string]*sharedqueue.OverflowQueue[*TimestampedCounts]
-	// userSpecifiedLookBackSeconds is a map between vertex name and the user-specified lookback seconds for that vertex
-	userSpecifiedLookBackSeconds map[string]int64
-	options                      *options
+	// timestampedPendingCount is a map between vertex name and a queue of timestamped counts for pending messages
+	timestampedPendingCount map[string]*sharedqueue.OverflowQueue[*TimestampedCounts]
+	// this can be updated dynamically, defaults to user-specified value in the spec
+	lookBackSeconds map[string]*atomic.Float64
+	options         *options
+}
+
+type PodPendingCount struct {
+	// pod name
+	name string
+	// key represents partition name, value represents the count of messages pending in the corresponding partition
+	partitionPendingCounts map[string]float64
+}
+
+func (p *PodPendingCount) Name() string {
+	return p.name
+}
+
+func (p *PodPendingCount) PartitionPendingCounts() map[string]float64 {
+	return p.partitionPendingCounts
 }
 
 // PodReadCount is a struct to maintain count of messages read from each partition by a pod
@@ -94,17 +117,22 @@ func NewRater(ctx context.Context, p *v1alpha1.Pipeline, opts ...Option) *Rater 
 			},
 			Timeout: time.Second * 1,
 		},
-		log:                          logging.FromContext(ctx).Named("Rater"),
-		timestampedPodCounts:         make(map[string]*sharedqueue.OverflowQueue[*TimestampedCounts]),
-		userSpecifiedLookBackSeconds: make(map[string]int64),
-		options:                      defaultOptions(),
+		log:                     logging.FromContext(ctx).Named("Rater"),
+		timestampedPodCounts:    make(map[string]*sharedqueue.OverflowQueue[*TimestampedCounts]),
+		timestampedPendingCount: make(map[string]*sharedqueue.OverflowQueue[*TimestampedCounts]),
+		lookBackSeconds:         make(map[string]*atomic.Float64),
+		options:                 defaultOptions(),
 	}
 
 	rater.podTracker = NewPodTracker(ctx, p)
 	for _, v := range p.Spec.Vertices {
 		// maintain the total counts of the last 30 minutes(1800 seconds) since we support 1m, 5m, 15m lookback seconds.
 		rater.timestampedPodCounts[v.Name] = sharedqueue.New[*TimestampedCounts](int(1800 / CountWindow.Seconds()))
-		rater.userSpecifiedLookBackSeconds[v.Name] = int64(v.Scale.GetLookbackSeconds())
+		// maintain the pending counts of the last 30 minutes(1800 seconds) since we support 1m, 5m, 15m lookback seconds.
+		rater.timestampedPendingCount[v.Name] = sharedqueue.New[*TimestampedCounts](int(1800 / CountWindow.Seconds()))
+		rater.lookBackSeconds[v.Name] = atomic.NewFloat64(float64(v.Scale.GetLookbackSeconds()))
+		// initialise the metric value for the lookback window for each vertex
+		metrics.VertexLookBackSecs.WithLabelValues(v.Name, string(v.GetVertexType())).Set(float64(rater.lookBackSeconds[v.Name].Load()))
 	}
 
 	for _, opt := range opts {
@@ -136,20 +164,31 @@ func (r *Rater) monitorOnePod(ctx context.Context, key string, worker int) error
 	log := logging.FromContext(ctx).With("worker", fmt.Sprint(worker)).With("podKey", key)
 	log.Debugf("Working on key: %s", key)
 	podInfo, err := r.podTracker.GetPodInfo(key)
+	vtx := r.pipeline.GetVertex(podInfo.vertexName)
+	isReduce := vtx.IsReduceUDF()
 	if err != nil {
 		return err
 	}
 	var podReadCount *PodReadCount
+	var podPendingCount *PodPendingCount
+	now := time.Now().Add(CountWindow).Truncate(CountWindow).Unix()
 	if r.podTracker.IsActive(key) {
-		podReadCount = r.getPodReadCounts(podInfo.vertexName, podInfo.podName)
+		podMetrics := r.getPodMetrics(podInfo.vertexName, podInfo.podName)
+		podReadCount = r.getPodReadCounts(podInfo.vertexName, podInfo.podName, podMetrics)
 		if podReadCount == nil {
 			log.Debugf("Failed retrieving total podReadCount for pod %s", podInfo.podName)
 		}
+		// Only maintain the timestamped pending counts if pod is a Reduce or if it is the 0th replica of any other vertex type.
+		if isReduce || podInfo.replica == 0 {
+			podPendingCount = r.getPodPendingCounts(podInfo.vertexName, podInfo.podName, podMetrics)
+			if podPendingCount == nil {
+				log.Debugf("Failed retrieving pending counts for pod %s vertex %s", podInfo.podName, podInfo.vertexName)
+			}
+			UpdatePendingCount(r.timestampedPendingCount[podInfo.vertexName], now, podPendingCount)
+		}
 	} else {
 		log.Debugf("Pod %s does not exist, updating it with nil...", podInfo.podName)
-		podReadCount = nil
 	}
-	now := time.Now().Add(CountWindow).Truncate(CountWindow).Unix()
 	UpdateCount(r.timestampedPodCounts[podInfo.vertexName], now, podReadCount)
 	return nil
 }
@@ -166,6 +205,10 @@ func (r *Rater) Start(ctx context.Context) error {
 			r.log.Errorw("Failed to start pod tracker", zap.Error(err))
 		}
 	}()
+
+	// start the dynamic lookback check which will be
+	// updating the lookback period based on the data read time.
+	go r.startDynamicLookBack(ctx)
 
 	// Worker group
 	for i := 1; i <= r.options.workers; i++ {
@@ -214,11 +257,8 @@ func sleep(ctx context.Context, duration time.Duration) {
 	}
 }
 
-// getPodReadCounts returns the total number of messages read by the pod
-// since a pod can read from multiple partitions, we will return a map of partition to read count.
-func (r *Rater) getPodReadCounts(vertexName, podName string) *PodReadCount {
-	readTotalMetricName := "forwarder_data_read_total"
-	// scrape the read total metric from pod metric port
+// getPodMetrics Fetches the metrics for a given pod from the Prometheus metrics endpoint.
+func (r *Rater) getPodMetrics(vertexName, podName string) map[string]*dto.MetricFamily {
 	url := fmt.Sprintf("https://%s.%s.%s.svc:%v/metrics", podName, r.pipeline.Name+"-"+vertexName+"-headless", r.pipeline.Namespace, v1alpha1.VertexMetricsPort)
 	resp, err := r.httpClient.Get(url)
 	if err != nil {
@@ -230,11 +270,51 @@ func (r *Rater) getPodReadCounts(vertexName, podName string) *PodReadCount {
 	textParser := expfmt.TextParser{}
 	result, err := textParser.TextToMetricFamilies(resp.Body)
 	if err != nil {
-		r.log.Errorf("[vertex name %s, pod name %s]: failed parsing to prometheus metric families, %v", vertexName, podName, err.Error())
+		r.log.Errorf("[Pod name %s]: failed parsing to prometheus metric families, %v", podName, err)
 		return nil
 	}
+	return result
+}
 
-	if value, ok := result[readTotalMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
+// getPodPendingCounts returns the partition pending counts for a given pod
+func (r *Rater) getPodPendingCounts(vertexName, podName string, metricsData map[string]*dto.MetricFamily) *PodPendingCount {
+	pendingMetricName := "vertex_pending_messages_raw"
+	if value, ok := metricsData[pendingMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
+		metricsList := value.GetMetric()
+		partitionPendingCount := make(map[string]float64)
+		for _, ele := range metricsList {
+			var partitionName string
+			for _, label := range ele.Label {
+				if label.GetName() == metrics.LabelPartitionName {
+					partitionName = label.GetValue()
+					break
+				}
+			}
+			if partitionName == "" {
+				r.log.Warnf("[vertex name %s, pod name %s]: Partition name is not found for metric %s", vertexName, podName, pendingMetricName)
+			} else {
+				gaugeVal := ele.Gauge.GetValue()
+				untypedVal := ele.Untyped.GetValue()
+				// Prefer Gauge, fallback to Untyped if Gauge is 0 but Untyped is not 0
+				if gaugeVal == 0 && untypedVal != 0 {
+					gaugeVal = untypedVal
+				}
+				partitionPendingCount[partitionName] = gaugeVal
+			}
+		}
+		podPendingCount := &PodPendingCount{podName, partitionPendingCount}
+		return podPendingCount
+	} else {
+		r.log.Warnf("[vertex name %s, pod name %s]: Metric %q is unavailable, the pod might haven't started processing data", vertexName, podName, pendingMetricName)
+		return nil
+	}
+}
+
+// getPodReadCounts returns the total number of messages read by the pod
+// since a pod can read from multiple partitions, we will return a map of partition to read count.
+func (r *Rater) getPodReadCounts(vertexName, podName string, metricsData map[string]*dto.MetricFamily) *PodReadCount {
+	readTotalMetricName := "forwarder_data_read_total"
+	if value, ok := metricsData[readTotalMetricName]; ok && value != nil && len(value.GetMetric()) > 0 {
 		metricsList := value.GetMetric()
 		partitionReadCount := make(map[string]float64)
 		for _, ele := range metricsList {
@@ -271,18 +351,98 @@ func (r *Rater) GetRates(vertexName, partitionName string) map[string]*wrappersp
 	r.log.Debugf("Current timestampedPodCounts for vertex %s is: %v", vertexName, r.timestampedPodCounts[vertexName])
 	var result = make(map[string]*wrapperspb.DoubleValue)
 	// calculate rates for each lookback seconds
-	for n, i := range r.buildLookbackSecondsMap(vertexName) {
-		r := CalculateRate(r.timestampedPodCounts[vertexName], i, partitionName)
-		result[n] = wrapperspb.Double(r)
+	for windowLabel, lookbackSeconds := range r.buildLookbackSecondsMap(vertexName) {
+		r := CalculateRate(r.timestampedPodCounts[vertexName], lookbackSeconds, partitionName)
+		result[windowLabel] = wrapperspb.Double(r)
 	}
 	r.log.Debugf("Got rates for vertex %s, partition %s: %v", vertexName, partitionName, result)
 	return result
 }
 
-func (r *Rater) buildLookbackSecondsMap(vertexName string) map[string]int64 {
-	lookbackSecondsMap := map[string]int64{"default": r.userSpecifiedLookBackSeconds[vertexName]}
-	for k, v := range fixedLookbackSeconds {
-		lookbackSecondsMap[k] = v
+// GetPending returns the pending count for the vertex partition in the format of lookback second to pending mappings
+func (r *Rater) GetPending(pipelineName, vertexName, vertexType, partitionName string) map[string]*wrapperspb.Int64Value {
+	r.log.Debugf("Current timestampedPendingCount for vertex %s is: %v", vertexName, r.timestampedPendingCount[vertexName])
+	var result = make(map[string]*wrapperspb.Int64Value)
+	// calculate pending for each lookback seconds
+	for windowLabel, lookbackSeconds := range r.buildLookbackSecondsMap(vertexName) {
+		pending := CalculatePending(r.timestampedPendingCount[vertexName], lookbackSeconds, partitionName)
+		result[windowLabel] = wrapperspb.Int64(pending)
+		// Expose the metric for pending
+		if pending != isb.PendingNotAvailable {
+			metrics.VertexPendingMessages.WithLabelValues(pipelineName, vertexName, vertexType, partitionName, windowLabel).Set(float64(pending))
+		}
 	}
+	return result
+}
+
+// buildLookbackSecondsMap builds a map of lookback seconds for the given vertex
+func (r *Rater) buildLookbackSecondsMap(vertexName string) map[string]int64 {
+	// as the default lookback value can be changing dynamically,
+	// load the current value for the lookback seconds
+	lbValue := r.lookBackSeconds[vertexName].Load()
+	lookbackSecondsMap := map[string]int64{"default": int64(lbValue)}
+	maps.Copy(lookbackSecondsMap, fixedLookbackSeconds)
 	return lookbackSecondsMap
+}
+
+// startDynamicLookBack starts the dynamic lookback adjustment process
+func (r *Rater) startDynamicLookBack(ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second)
+	// Ensure the ticker is stopped to prevent a resource leak.
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			r.updateDynamicLookbackSecs()
+		case <-ctx.Done():
+			// If the context is canceled or expires exit
+			return
+		}
+	}
+}
+
+// updateDynamicLookbackSecs updates the dynamic lookback seconds for each vertex
+func (r *Rater) updateDynamicLookbackSecs() {
+	for _, v := range r.pipeline.Spec.Vertices {
+		vertexType := v.GetVertexType()
+		vertexName := v.Name
+		counts := r.timestampedPodCounts[vertexName].Items()
+		if len(counts) <= 1 {
+			return
+		}
+		// We will calculate the processing time for a time window = 3 * currentLookback
+		// This ensures that we have enough data to capture one complete processing cycle
+		currentLookback := r.lookBackSeconds[vertexName].Load()
+		startIndex := findStartIndex(3*int64(currentLookback), counts)
+		// we consider the last but one element as the end index because the last element might be incomplete
+		// we can be sure that the last but one element in the queue is complete.
+		endIndex := len(counts) - 2
+		if startIndex == indexNotFound {
+			return
+		}
+		timeDiff := counts[endIndex].timestamp - counts[startIndex].timestamp
+		if timeDiff == 0 {
+			return
+		}
+		calculatedProcessingTime := CalculateLookback(counts, startIndex, endIndex)
+		// round up to the nearest minute, also ensure that while going up and down we have the consistent value for
+		// a given processingTimeSeconds, then convert back to seconds
+		roundedCalculatedLookback := 60.0 * (math.Ceil(float64(calculatedProcessingTime) / 60.0))
+		// Based on the value received we can have two cases
+		// 1. Step up case (value is > than current):
+		// 	  Do not allow the value to be increased more than the MaxLookback allowed (10mins)
+		// 2. Step Down (value is <= than current)
+		//    Do not allow the value to be lower the lookback value specified in the spec
+		if roundedCalculatedLookback > currentLookback {
+			roundedCalculatedLookback = math.Min(roundedCalculatedLookback, float64(v1alpha1.MaxLookbackSeconds))
+		} else {
+			roundedCalculatedLookback = math.Max(roundedCalculatedLookback, float64(v.Scale.GetLookbackSeconds()))
+		}
+		// If the value has changed, update it
+		if roundedCalculatedLookback != currentLookback {
+			r.lookBackSeconds[vertexName].Store(roundedCalculatedLookback)
+			r.log.Debugf("Lookback period updated for vertex: %s, Current: %f Updated: %f", vertexName, currentLookback, roundedCalculatedLookback)
+			metrics.VertexLookBackSecs.WithLabelValues(vertexName, string(vertexType)).Set(roundedCalculatedLookback)
+		}
+	}
 }
