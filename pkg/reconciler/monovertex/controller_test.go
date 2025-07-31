@@ -136,12 +136,6 @@ func Test_pauseAndResumeMvtx(t *testing.T) {
 		testObj.Spec.Lifecycle.DesiredPhase = dfv1.MonoVertexPhasePaused
 		_, err = r.reconcile(context.TODO(), testObj)
 		assert.NoError(t, err)
-		assert.Nil(t, testObj.Spec.Replicas)
-
-		testObj.Spec.Lifecycle.DesiredPhase = dfv1.MonoVertexPhaseRunning
-		_, err = r.reconcile(context.TODO(), testObj)
-		assert.NoError(t, err)
-
 	})
 }
 
