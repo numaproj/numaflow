@@ -187,15 +187,11 @@ impl UserDefinedSessionReduce {
 
         // Start a background task to process responses
         let handle = tokio::spawn(async move {
-            // Call the gRPC reduce_fn with the stream
-            let mut response_stream = match client.session_reduce_fn(stream).await {
-                Ok(response) => response.into_inner(),
-                Err(e) => {
-                    return Err(crate::Error::Reduce(format!(
-                        "failed to call session reduce_fn: {e}"
-                    )));
-                }
-            };
+            let mut response_stream = client
+                .session_reduce_fn(stream)
+                .await
+                .map_err(|e| crate::Error::Grpc(Box::new(e)))?
+                .into_inner();
 
             // Track response indices per window key combination which will be used for constructing
             // message id which is required for dedup.
@@ -211,10 +207,8 @@ impl UserDefinedSessionReduce {
 
                     // Process next response
                     response = response_stream.message() => {
-                        let response = match response {
-                            Ok(r) => r,
-                            Err(e) => return Err(crate::Error::Reduce(format!("failed to receive response: {e}"))),
-                        };
+                        let response = response
+                            .map_err(|e| crate::Error::Grpc(Box::new(e)))?;
 
                         let Some(response) = response else {
                             break;

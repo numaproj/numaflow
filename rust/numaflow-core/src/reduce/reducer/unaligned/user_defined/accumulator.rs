@@ -137,14 +137,11 @@ impl UserDefinedAccumulator {
         // Start a background task to process responses
         let handle = tokio::spawn(async move {
             // Call the gRPC reduce_fn with the stream
-            let mut response_stream = match client.accumulate_fn(stream).await {
-                Ok(response) => response.into_inner(),
-                Err(e) => {
-                    return Err(crate::Error::Reduce(format!(
-                        "failed to call reduce_fn: {e}"
-                    )));
-                }
-            };
+            let mut response_stream = client
+                .accumulate_fn(stream)
+                .await
+                .map_err(|e| crate::Error::Grpc(Box::new(e)))?
+                .into_inner();
 
             loop {
                 tokio::select! {
@@ -156,11 +153,7 @@ impl UserDefinedAccumulator {
 
                     // Process next response
                     response = response_stream.message() => {
-                        let response = match response {
-                            Ok(r) => r,
-                            Err(e) => return Err(crate::Error::Reduce(format!("failed to receive response: {e}"))),
-                        };
-
+                        let response = response.map_err(|e| crate::Error::Grpc(Box::new(e)))?;
                         let Some(response) = response else {
                             break;
                         };

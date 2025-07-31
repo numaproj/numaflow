@@ -252,7 +252,6 @@ impl UserDefinedAlignedReduce {
             }
         }
 
-        // The guard will automatically abort the request handle when this function returns
         Ok(())
     }
 
