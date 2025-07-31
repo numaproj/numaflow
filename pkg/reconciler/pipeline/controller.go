@@ -902,22 +902,15 @@ func (r *pipelineReconciler) vertexResumeHandler(ctx context.Context, pl *dfv1.P
 			return fmt.Errorf("failed to patch vertex %q: %w", vertex.Name, err)
 		}
 
-		// Log and record the patch event
-		log.Infow("Patched vertex spec",
-			zap.String("vertex", vertex.Name),
-			zap.Bool("replicasRemoved", removeReplicas),
-			zap.Bool("phaseChanged", needsPhasePatch),
-			zap.String("desiredPhase", string(newDesiredPhase)),
-		)
-
-		eventMsg := fmt.Sprintf(
-			"Vertex %q desired phase updated from %q to %q; removeReplicas=%t",
+		msg := fmt.Sprintf(
+			"Resumed vertex %q: desired phase changed from %q to %q, removeReplicas=%t",
 			vertex.Name,
 			currentPhase,
 			newDesiredPhase,
 			removeReplicas,
 		)
-		r.recorder.Eventf(pl, corev1.EventTypeNormal, "ResumeVertexLifecycle", eventMsg)
+		log.Infow(msg)
+		r.recorder.Eventf(pl, corev1.EventTypeNormal, "ResumeVertexLifecycle", msg)
 	}
 	return nil
 }
