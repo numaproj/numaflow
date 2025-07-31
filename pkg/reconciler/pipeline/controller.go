@@ -886,25 +886,22 @@ func (r *pipelineReconciler) vertexResumeHandler(
 			continue
 		}
 
-		// Determine whether the `replicas` field needs to be removed
-		needsReplicasPatch := removeReplicas && vertex.Spec.Replicas != nil
-
 		// Determine whether the desired phase needs to be updated
 		currentPhase := vertex.Spec.Lifecycle.GetDesiredPhase()
 		needsPhasePatch := currentPhase != newDesiredPhase
 
 		// If neither condition is true, skip patching this vertex
-		if !needsReplicasPatch && !needsPhasePatch {
+		if !removeReplicas && !needsPhasePatch {
 			continue
 		}
 
 		var patchJson string
 
 		// Construct the patch JSON string based on what needs to change
-		if needsReplicasPatch && needsPhasePatch {
+		if removeReplicas && needsPhasePatch {
 			// Remove replicas and update the desired phase
 			patchJson = fmt.Sprintf(`{"spec":{"replicas":null,"lifecycle":{"desiredPhase":"%s"}}}`, newDesiredPhase)
-		} else if needsReplicasPatch {
+		} else if removeReplicas {
 			// Only remove replicas
 			patchJson = `{"spec":{"replicas":null}}`
 		} else {
@@ -920,12 +917,12 @@ func (r *pipelineReconciler) vertexResumeHandler(
 		// Log and record the patch event
 		log.Infow("Patched vertex spec",
 			zap.String("vertex", vertex.Name),
-			zap.Bool("replicasRemoved", needsReplicasPatch),
+			zap.Bool("replicasRemoved", removeReplicas),
 			zap.Bool("phaseChanged", needsPhasePatch),
 			zap.String("desiredPhase", string(newDesiredPhase)),
 		)
 
-		if needsReplicasPatch {
+		if removeReplicas {
 			r.recorder.Eventf(
 				pl,
 				corev1.EventTypeNormal,
@@ -945,8 +942,6 @@ func (r *pipelineReconciler) vertexResumeHandler(
 				currentPhase,
 				newDesiredPhase,
 			)
-
-			r.recorder.Eventf(pl, corev1.EventTypeNormal, "PatchVertexSpec", "Patched vertex %q spec", vertex.Name)
 		}
 	}
 	return nil
