@@ -34,6 +34,15 @@ The command below will bring the pipeline back to `Running` status.
   kubectl patch pl my-pipeline --type=merge --patch '{"spec": {"lifecycle": {"desiredPhase": "Running"}}}'
 ```
 
+Run the following command if you would like to resume the Pipeline vertices with the minimal number of pods (the number defined in `spec.scale.min`, otherwise 1).
+
+```bash
+kubectl patch pl my-pipeline \
+  --type=merge \
+  --patch '{"spec":{"lifecycle":{"desiredPhase":"Running"}},"metadata":{"annotations":{"numaflow.numaproj.io/resume-strategy":"slow"}}}'
+```
+
+
 ## Delete a Pipeline
 
 When deleting a pipeline, before terminating all the pods, it will try to wait for all the backlog messages that have already been ingested into the pipeline to be processed. However, it will not wait forever, if the backlog is too large, it will terminate the pods after `deletionGracePeriodSeconds`, which defaults to 30, and can be customized by setting `spec.lifecycle.deletionGracePeriodSeconds`.
