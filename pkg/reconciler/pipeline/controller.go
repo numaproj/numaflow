@@ -860,14 +860,10 @@ func (r *pipelineReconciler) updateDesiredState(ctx context.Context, pl *dfv1.Pi
 	}
 }
 
-func (r *pipelineReconciler) vertexResumeHandler(
-	ctx context.Context,
-	pl *dfv1.Pipeline,
-	filter vertexFilterFunc,
-	newDesiredPhase dfv1.VertexPhase,
-) error {
+func (r *pipelineReconciler) vertexResumeHandler(ctx context.Context, pl *dfv1.Pipeline) error {
 	log := logging.FromContext(ctx)
 
+	newDesiredPhase := dfv1.VertexPhaseRunning
 	// Check if the pipeline's resume strategy is set to "slow"
 	// If so, we want to remove the `.spec.replicas` field during resume,
 	// which will let the vertex fall back to its minReplicas setting.
@@ -881,29 +877,21 @@ func (r *pipelineReconciler) vertexResumeHandler(
 
 	// Loop over each vertex and apply patches as needed
 	for _, vertex := range existingVertices {
-		// Only act on vertices that match the provided filter function
-		if !filter(vertex) {
-			continue
-		}
-
 		// Determine whether the desired phase needs to be updated
 		currentPhase := vertex.Spec.Lifecycle.GetDesiredPhase()
 		needsPhasePatch := currentPhase != newDesiredPhase
 
-		// If neither condition is true, skip patching this vertex
-		if !removeReplicas && !needsPhasePatch {
+		// if phase condition is not true, skip patching this vertex
+		if !needsPhasePatch {
 			continue
 		}
 
 		var patchJson string
 
 		// Construct the patch JSON string based on what needs to change
-		if removeReplicas && needsPhasePatch {
+		if removeReplicas {
 			// Remove replicas and update the desired phase
 			patchJson = fmt.Sprintf(`{"spec":{"replicas":null,"lifecycle":{"desiredPhase":"%s"}}}`, newDesiredPhase)
-		} else if removeReplicas {
-			// Only remove replicas
-			patchJson = `{"spec":{"replicas":null}}`
 		} else {
 			// Only update the desired phase
 			patchJson = fmt.Sprintf(`{"spec":{"lifecycle":{"desiredPhase":"%s"}}}`, newDesiredPhase)
@@ -922,27 +910,14 @@ func (r *pipelineReconciler) vertexResumeHandler(
 			zap.String("desiredPhase", string(newDesiredPhase)),
 		)
 
-		if removeReplicas {
-			r.recorder.Eventf(
-				pl,
-				corev1.EventTypeNormal,
-				"RemoveVertexReplicas",
-				"Vertex %q replicas field was removed to allow resume from minReplicas",
-				vertex.Name,
-			)
-		}
-
-		if needsPhasePatch {
-			r.recorder.Eventf(
-				pl,
-				corev1.EventTypeNormal,
-				"UpdateVertexDesiredPhase",
-				"Vertex %q desired phase updated from %q to %q",
-				vertex.Name,
-				currentPhase,
-				newDesiredPhase,
-			)
-		}
+		eventMsg := fmt.Sprintf(
+			"Vertex %q desired phase updated from %q to %q; removeReplicas=%t",
+			vertex.Name,
+			currentPhase,
+			newDesiredPhase,
+			removeReplicas,
+		)
+		r.recorder.Eventf(pl, corev1.EventTypeNormal, "ResumeVertexLifecycle", eventMsg)
 	}
 	return nil
 }
@@ -963,7 +938,7 @@ func (r *pipelineReconciler) resumePipeline(ctx context.Context, pl *dfv1.Pipeli
 	// Resume all vertices of the pipeline that match the given filter (e.g., allVertexFilter)
 	// by updating their desired phase to "Running" and optionally removing the replicas field
 	// if the pipeline is configured with the "slow" resume strategy.
-	err := r.vertexResumeHandler(ctx, pl, allVertexFilter, dfv1.VertexPhaseRunning)
+	err := r.vertexResumeHandler(ctx, pl)
 	if err != nil {
 		// If patching any vertex fails, return the error and stop further processing
 		return false, err
