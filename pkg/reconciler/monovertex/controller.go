@@ -47,8 +47,6 @@ import (
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
 
-const specReplicasPath = `/spec/replicas`
-
 // monoVertexReconciler reconciles a MonoVertex object.
 type monoVertexReconciler struct {
 	client client.Client
@@ -107,17 +105,6 @@ func (mr *monoVertexReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	return result, err
 }
 
-func (mr *monoVertexReconciler) patchMonoVertexReplicas(ctx context.Context, monoVtx *dfv1.MonoVertex) error {
-	log := logging.FromContext(ctx)
-	if monoVtx.Spec.Replicas != nil {
-		if err := mr.client.Patch(ctx, monoVtx, client.RawPatch(types.JSONPatchType, []byte(`[{"op": "remove", "path": "`+specReplicasPath+`"}]`))); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("failed to patch monoVtx replicas, %w", err)
-		}
-		log.Infow("Updated - mono vertex replicas removed.", zap.String("namespace", monoVtx.Namespace), zap.String("mvtx", monoVtx.Name))
-	}
-	return nil
-}
-
 // reconcile does the real logic.
 func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.MonoVertex) (ctrl.Result, error) {
 	log := logging.FromContext(ctx)
@@ -172,19 +159,11 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 	originalPhase := monoVtx.Status.Phase
 	desiredPhase := monoVtx.Spec.Lifecycle.GetDesiredPhase()
 	// If the phase has changed, log the event
+	monoVtx.Status.MarkPhase(desiredPhase, "", "")
 	if desiredPhase != originalPhase {
-		if desiredPhase == dfv1.MonoVertexPhasePaused {
-			// If we are unpausing the Mvtx then we want to start the replicas from min
-			err := mr.patchMonoVertexReplicas(ctx, monoVtx)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-		}
 		log.Infow("Updated MonoVertex phase", zap.String("originalPhase", string(originalPhase)), zap.String("desiredPhase", string(desiredPhase)))
 		mr.recorder.Eventf(monoVtx, corev1.EventTypeNormal, "UpdateMonoVertexPhase", "Updated MonoVertex phase from %s to %s", string(originalPhase), string(desiredPhase))
 	}
-	monoVtx.Status.MarkPhase(desiredPhase, "", "")
-
 	// Check children resource status
 	if err := mr.checkChildrenResourceStatus(ctx, monoVtx); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to check mono vertex children resource status, %w", err)
