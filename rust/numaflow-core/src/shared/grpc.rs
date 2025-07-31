@@ -167,3 +167,38 @@ pub(crate) async fn create_multi_rpc_channel(endpoints: Vec<String>) -> error::R
 
     Ok(channel)
 }
+
+/// Macro to create a guard that automatically aborts a task handle when dropped.
+#[macro_export]
+macro_rules! jh_abort_guard {
+    ($handle:expr) => {{
+        struct AbortGuard<T> {
+            handle: Option<JoinHandle<T>>,
+        }
+
+        impl<T> AbortGuard<T> {
+            fn new(handle: JoinHandle<T>) -> Self {
+                Self {
+                    handle: Some(handle),
+                }
+            }
+
+            // consume the handle and abort the task
+            fn abort(mut self) {
+                if let Some(handle) = self.handle.take() {
+                    handle.abort();
+                }
+            }
+        }
+
+        impl<T> Drop for AbortGuard<T> {
+            fn drop(&mut self) {
+                if let Some(handle) = self.handle.take() {
+                    handle.abort();
+                }
+            }
+        }
+
+        AbortGuard::new($handle)
+    }};
+}
