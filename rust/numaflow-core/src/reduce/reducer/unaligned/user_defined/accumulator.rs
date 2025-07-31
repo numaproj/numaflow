@@ -140,9 +140,7 @@ impl UserDefinedAccumulator {
             let mut response_stream = match client.accumulate_fn(stream).await {
                 Ok(response) => response.into_inner(),
                 Err(e) => {
-                    return Err(crate::Error::Reduce(format!(
-                        "failed to call reduce_fn: {e}"
-                    )));
+                    return Err(crate::Error::Grpc(Box::new(e)));
                 }
             };
 
@@ -158,7 +156,7 @@ impl UserDefinedAccumulator {
                     response = response_stream.message() => {
                         let response = match response {
                             Ok(r) => r,
-                            Err(e) => return Err(crate::Error::Reduce(format!("failed to receive response: {e}"))),
+                            Err(e) => return Err(crate::Error::Grpc(Box::new(e))),
                         };
 
                         let Some(response) = response else {

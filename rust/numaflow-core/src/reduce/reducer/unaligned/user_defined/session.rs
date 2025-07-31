@@ -191,9 +191,7 @@ impl UserDefinedSessionReduce {
             let mut response_stream = match client.session_reduce_fn(stream).await {
                 Ok(response) => response.into_inner(),
                 Err(e) => {
-                    return Err(crate::Error::Reduce(format!(
-                        "failed to call session reduce_fn: {e}"
-                    )));
+                    return Err(crate::Error::Grpc(Box::new(e)));
                 }
             };
 
@@ -213,7 +211,7 @@ impl UserDefinedSessionReduce {
                     response = response_stream.message() => {
                         let response = match response {
                             Ok(r) => r,
-                            Err(e) => return Err(crate::Error::Reduce(format!("failed to receive response: {e}"))),
+                            Err(e) => return Err(crate::Error::Grpc(Box::new(e))),
                         };
 
                         let Some(response) = response else {
