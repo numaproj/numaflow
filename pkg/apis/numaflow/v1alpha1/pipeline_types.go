@@ -33,6 +33,8 @@ import (
 // +kubebuilder:validation:Enum="";Running;Failed;Pausing;Paused;Deleting
 type PipelinePhase string
 
+type PipelineResumeStrategy string
+
 const (
 	PipelinePhaseUnknown  PipelinePhase = ""
 	PipelinePhaseRunning  PipelinePhase = "Running"
@@ -52,6 +54,9 @@ const (
 	PipelineConditionDaemonServiceHealthy      ConditionType = "DaemonServiceHealthy"
 	PipelineConditionSideInputsManagersHealthy ConditionType = "SideInputsManagersHealthy"
 	PipelineConditionVerticesHealthy           ConditionType = "VerticesHealthy"
+
+	ResumeStrategySlow PipelineResumeStrategy = "slow"
+	ResumeStrategyFast PipelineResumeStrategy = "fast"
 )
 
 func (pp PipelinePhase) Code() int {

@@ -8341,6 +8341,17 @@ PipelinePhase (<code>string</code> alias)
 
 </p>
 
+<h3 id="numaflow.numaproj.io/v1alpha1.PipelineResumeStrategy">
+
+PipelineResumeStrategy (<code>string</code> alias)
+</p>
+
+</h3>
+
+<p>
+
+</p>
+
 <h3 id="numaflow.numaproj.io/v1alpha1.PipelineSpec">
 
 PipelineSpec
