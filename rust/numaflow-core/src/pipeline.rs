@@ -1232,6 +1232,7 @@ mod tests {
                 reader_config: BufferReaderConfig {
                     streams: streams.clone(),
                     wip_ack_interval: Duration::from_secs(1),
+                    ..Default::default()
                 },
                 partitions: 0,
             }],
@@ -1470,6 +1471,7 @@ mod tests {
                 reader_config: BufferReaderConfig {
                     streams: input_streams.clone(),
                     wip_ack_interval: Duration::from_secs(1),
+                    ..Default::default()
                 },
                 partitions: 0,
             }],

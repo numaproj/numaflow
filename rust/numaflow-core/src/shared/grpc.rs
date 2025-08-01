@@ -184,6 +184,7 @@ macro_rules! jh_abort_guard {
             }
 
             // consume the handle and abort the task
+            #[allow(dead_code)]
             fn abort(mut self) {
                 if let Some(handle) = self.handle.take() {
                     handle.abort();

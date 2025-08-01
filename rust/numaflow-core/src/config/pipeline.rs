@@ -43,6 +43,7 @@ const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM
 const ENV_NUMAFLOW_WATERMARK_DELAY: &str = "NUMAFLOW_WATERMARK_DELAY_IN_MS";
 const ENV_PAF_BATCH_SIZE: &str = "PAF_BATCH_SIZE";
 const ENV_NUMAFLOW_GRACEFUL_TIMEOUT_SECS: &str = "NUMAFLOW_GRACEFUL_TIMEOUT_SECS";
+const ENV_MAX_ACK_PENDING: &str = "MAX_ACK_PENDING";
 const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
 const DEFAULT_MAP_SOCKET: &str = "/var/run/numaflow/map.sock";
 pub(crate) const DEFAULT_BATCH_MAP_SOCKET: &str = "/var/run/numaflow/batchmap.sock";
@@ -55,6 +56,7 @@ pub(crate) const VERTEX_TYPE_SOURCE: &str = "Source";
 pub(crate) const VERTEX_TYPE_SINK: &str = "Sink";
 pub(crate) const VERTEX_TYPE_MAP_UDF: &str = "MapUDF";
 pub(crate) const VERTEX_TYPE_REDUCE_UDF: &str = "ReduceUDF";
+pub(crate) const DEFAULT_MAX_ACK_PENDING: usize = 25000;
 
 pub(crate) mod isb;
 pub(crate) mod watermark;
@@ -518,6 +520,14 @@ impl PipelineConfig {
             password: get_var(ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD).ok(),
         };
 
+        let max_ack_pending: usize = get_var(ENV_MAX_ACK_PENDING)
+            .and_then(|s| {
+                s.parse().map_err(|e| {
+                    Error::Config(format!("Parsing value of {ENV_MAX_ACK_PENDING}: {e:?}"))
+                })
+            })
+            .unwrap_or(DEFAULT_MAX_ACK_PENDING);
+
         let mut from_vertex_config = vec![];
         for edge in from_edges {
             let partition_count = edge.to_vertex_partition_count.unwrap_or_default() as u16;
@@ -537,6 +547,7 @@ impl PipelineConfig {
                 name: Box::leak(edge.from.clone().into_boxed_str()),
                 reader_config: BufferReaderConfig {
                     streams,
+                    max_ack_pending,
                     ..Default::default()
                 },
                 partitions: partition_count,
@@ -929,6 +940,7 @@ mod tests {
                 reader_config: BufferReaderConfig {
                     streams: vec![Stream::new("default-simple-pipeline-out-0", "out", 0)],
                     wip_ack_interval: Duration::from_secs(1),
+                    ..Default::default()
                 },
                 partitions: 1,
             }],
@@ -1265,6 +1277,7 @@ mod tests {
                 reader_config: BufferReaderConfig {
                     streams: vec![Stream::new("default-simple-pipeline-map-0", "map", 0)],
                     wip_ack_interval: Duration::from_secs(1),
+                    ..Default::default()
                 },
                 partitions: 1,
             }],
