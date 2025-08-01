@@ -210,11 +210,11 @@ func (s *FunctionalSuite) TestDropOnFull() {
 	w.SendMessageTo(pipelineName, "in", NewHttpPostRequest().WithBody([]byte("3")))
 
 	// If messages were sent to different partitions
-	expectedDropMetricOne := `forwarder_drop_total{vertex="in",pipeline="drop-on-full",vertex_type="Source",replica="0",partition_name="numaflow-system-drop-on-full-out-0",reason="Buffer full"} 1`
-	expectedDropMetricTwo := `forwarder_drop_total{vertex="in",pipeline="drop-on-full",vertex_type="Source",replica="0",partition_name="numaflow-system-drop-on-full-out-1",reason="Buffer full"} 1`
+	expectedDropMetricOne := `forwarder_drop_total{vertex="in",pipeline="drop-on-full",vertex_type="Source",replica="0",partition_name="numaflow-system-drop-on-full-out-0",reason="buffer-full"} 1`
+	expectedDropMetricTwo := `forwarder_drop_total{vertex="in",pipeline="drop-on-full",vertex_type="Source",replica="0",partition_name="numaflow-system-drop-on-full-out-1",reason="buffer-full"} 1`
 	// If messages were sent to the same partition
-	expectedDropMetricThree := `forwarder_drop_total{vertex="in",pipeline="drop-on-full",vertex_type="Source",replica="0",partition_name="numaflow-system-drop-on-full-out-0",reason="Buffer full"} 2`
-	expectedDropMetricFour := `forwarder_drop_total{vertex="in",pipeline="drop-on-full",vertex_type="Source",replica="0",partition_name="numaflow-system-drop-on-full-out-1",reason="Buffer full"} 2`
+	expectedDropMetricThree := `forwarder_drop_total{vertex="in",pipeline="drop-on-full",vertex_type="Source",replica="0",partition_name="numaflow-system-drop-on-full-out-0",reason="buffer-full"} 2`
+	expectedDropMetricFour := `forwarder_drop_total{vertex="in",pipeline="drop-on-full",vertex_type="Source",replica="0",partition_name="numaflow-system-drop-on-full-out-1",reason="buffer-full"} 2`
 	// wait for the drop metric to be updated, time out after 10 seconds.
 	timeoutChan := time.After(time.Second * 10)
 	ticker := time.NewTicker(time.Second * 2)

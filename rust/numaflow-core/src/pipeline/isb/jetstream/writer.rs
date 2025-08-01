@@ -449,7 +449,7 @@ impl JetstreamWriter {
                                 .get_or_create(&pipeline_drop_metric_labels(
                                     self.vertex_type.as_str(),
                                     stream.name,
-                                    "Buffer full",
+                                    "buffer-full",
                                 ))
                                 .inc();
                             pipeline_metrics()
@@ -458,7 +458,7 @@ impl JetstreamWriter {
                                 .get_or_create(&pipeline_drop_metric_labels(
                                     self.vertex_type.as_str(),
                                     stream.name,
-                                    "Buffer full",
+                                    "buffer-full",
                                 ))
                                 .inc_by(msg_bytes as u64);
                             return None;
