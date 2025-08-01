@@ -1,5 +1,36 @@
 # Changelog
 
+## v1.5.2 (2025-08-01)
+
+ * [27e8e0ca](https://github.com/numaproj/numaflow/commit/27e8e0cac1a4820110d7e9e2d886bf27e66c3ccb) Update manifests to v1.5.2
+ * [b5962c78](https://github.com/numaproj/numaflow/commit/b5962c7832373da5bf34e05cb514295e736e37f5) feat: unpause pipelines vertices and mvtx from min replicas (#2840)
+
+### Contributors
+
+ * Derek Wang
+ * Sidhant Kohli
+
+## v1.5.1 (2025-07-09)
+
+ * [4f70d50e](https://github.com/numaproj/numaflow/commit/4f70d50eab6b066c831025e5d494f3c5b6e3f69c) Update manifests to v1.5.1
+ * [b43ad840](https://github.com/numaproj/numaflow/commit/b43ad8406e4f0b13d96de7ea45c091ba789425de) fix: drain input channel during batch map shutdown (#2793)
+ * [018a4e60](https://github.com/numaproj/numaflow/commit/018a4e608172615e45ca42efe9a262710c7526d2) fix: publish larger watermark when offset is same
+ * [e17b4d0c](https://github.com/numaproj/numaflow/commit/e17b4d0c9d74dfdc012c4174fc3958c9c29a7d00) fix: exit code conditional rendering (#2789)
+ * [79f9a756](https://github.com/numaproj/numaflow/commit/79f9a7568ada48f74b67f7d51d2b4ca191649ead) fix: add `-mv-` in mvtx name for pod memory/cpu metrics (#2784)
+ * [bce5f53a](https://github.com/numaproj/numaflow/commit/bce5f53a15675a9f577e7c628fcaa07136ce5fb9) fix: use kafka timestamp as event time (#2781)
+ * [3108bf94](https://github.com/numaproj/numaflow/commit/3108bf94705b0375ca98848adfff1560efd2262a) Fix: Jetstream source - Unlimited reconnects (#2772)
+ * [737b7041](https://github.com/numaproj/numaflow/commit/737b704172ac5b03c7556ba50dd5de5bb92c469e) fix: Generator source - Base64 decode user specified blob (#2757)
+ * [94329c32](https://github.com/numaproj/numaflow/commit/94329c32636b1f198437749a4e0faac608fb9d3c) fix: revert golang to 1.23.1
+ * [0eda460c](https://github.com/numaproj/numaflow/commit/0eda460c3e7ca6a274832c620ecafacb5c81232a) fix: jetstream source should use published timestamp (#2777)
+
+### Contributors
+
+ * Adarsh Jain
+ * Sreekanth
+ * Vedant Gupta
+ * Vigith Maurice
+ * Yashash H L
+
 ## v1.5.0 (2025-06-18)
 
  * [96790b95](https://github.com/numaproj/numaflow/commit/96790b95a604da675133b4432dc14240ead7ec9a) Update manifests to v1.5.0
@@ -1338,7 +1369,7 @@
 
 ## v0.9.0-rc2 (2023-07-13)
 
- * [d0df669a](https://github.com/numaproj/numaflow/commit/d0df669a8bb9f07fffe1d5add792444ebfb33835) Update manifests to v0.9.0-rc2
+ * [d0df669a8](https://github.com/numaproj/numaflow/commit/d0df669a8bb9f07fffe1d5add792444ebfb33835) Update manifests to v0.9.0-rc2
  * [c8aaeff8](https://github.com/numaproj/numaflow/commit/c8aaeff8ca796b43279d9b784883d632bf4b8d32) fix: use windower to fetch next window yet to be closed (#850)
  * [bcda8dcf](https://github.com/numaproj/numaflow/commit/bcda8dcfcdbde7821c201b37f5d5ce99148a341c) feat: implement optional validation webhook. Fixes #817. (#832)
  * [e605504d](https://github.com/numaproj/numaflow/commit/e605504d40fce533c64569d0d30a8533df62299d) chore(deps): bump semver from 6.3.0 to 6.3.1 in /ui (#845)
