@@ -603,12 +603,6 @@ impl JetstreamWriter {
                                     "Duplicate ID",
                                 ))
                                 .inc_by(message.value.len() as u64);
-                            // Delete from tracker to ACK the duplicate message
-                            this.tracker_handle
-                                .delete(message.offset.clone())
-                                .await
-                                .expect("Failed to delete offset from tracker");
-                            return;
                         }
                         offsets.push((
                             stream.clone(),
@@ -679,6 +673,7 @@ impl JetstreamWriter {
         cln_token: CancellationToken,
     ) -> Result<PublishAck> {
         let start_time = Instant::now();
+        let message_length = message.value.len();
         let payload: BytesMut = message
             .try_into()
             .expect("message serialization should not fail");
@@ -693,6 +688,25 @@ impl JetstreamWriter {
                     Ok(ack) => {
                         if ack.duplicate {
                             warn!(?ack, "Duplicate message detected, ignoring");
+                            // Increment drop metric for duplicate messages
+                            pipeline_metrics()
+                                .forwarder
+                                .drop_total
+                                .get_or_create(&pipeline_drop_metric_labels(
+                                    self.vertex_type.as_str(),
+                                    stream.name,
+                                    "Duplicate ID",
+                                ))
+                                .inc();
+                            pipeline_metrics()
+                                .forwarder
+                                .drop_bytes_total
+                                .get_or_create(&pipeline_drop_metric_labels(
+                                    self.vertex_type.as_str(),
+                                    stream.name,
+                                    "Duplicate ID",
+                                ))
+                                .inc_by(message_length as u64);
                         }
                         debug!(
                             elapsed_ms = start_time.elapsed().as_millis(),
