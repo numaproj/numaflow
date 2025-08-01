@@ -600,7 +600,7 @@ impl JetstreamWriter {
                                 .get_or_create(&pipeline_drop_metric_labels(
                                     this.vertex_type.as_str(),
                                     stream.name,
-                                    "Duplicate ID",
+                                    "duplicate-id",
                                 ))
                                 .inc_by(message.value.len() as u64);
                         }
@@ -695,7 +695,7 @@ impl JetstreamWriter {
                                 .get_or_create(&pipeline_drop_metric_labels(
                                     self.vertex_type.as_str(),
                                     stream.name,
-                                    "Duplicate ID",
+                                    "duplicate-id",
                                 ))
                                 .inc();
                             pipeline_metrics()
@@ -704,7 +704,7 @@ impl JetstreamWriter {
                                 .get_or_create(&pipeline_drop_metric_labels(
                                     self.vertex_type.as_str(),
                                     stream.name,
-                                    "Duplicate ID",
+                                    "duplicate-id",
                                 ))
                                 .inc_by(message_length as u64);
                         }
