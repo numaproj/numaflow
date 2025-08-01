@@ -73,11 +73,16 @@ impl SessionWindowManager {
         let event_time = msg.event_time;
         let keys = Arc::clone(&msg.keys);
 
-        let new_window = Window::new(
-            event_time,
-            event_time + chrono::Duration::from_std(self.timeout).unwrap(),
-            keys,
-        );
+        // truncate the event time to nearest millisecond, watermark precision is in milliseconds.
+        let start_time_millis = event_time.timestamp_millis();
+        let start_time = chrono::DateTime::from_timestamp_millis(start_time_millis).unwrap();
+
+        // Calculate end time as start + timeout (in milliseconds)
+        let timeout_millis = self.timeout.as_millis() as i64;
+        let end_time =
+            chrono::DateTime::from_timestamp_millis(start_time_millis + timeout_millis).unwrap();
+
+        let new_window = Window::new(start_time, end_time, keys);
 
         let mut active_windows = self.active_windows.write().expect("Poisoned lock");
         let window_set = active_windows.entry(combined_key).or_default();
