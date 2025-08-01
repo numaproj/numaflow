@@ -47,7 +47,6 @@ use crate::watermark::isb::ISBWatermarkHandle;
 
 const ACK_RETRY_INTERVAL: u64 = 100;
 const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
-const MAX_ACK_PENDING: usize = 25000;
 
 /// The JetStreamReader is a handle to the background actor that continuously fetches messages from JetStream.
 /// It can be used to cancel the background task and stop reading from JetStream.
@@ -205,6 +204,12 @@ impl JetStreamReader {
         ));
         buffer_config.wip_ack_interval = wip_ack_interval;
 
+        // Consider the minimum of the max ack pending and the consumer's max ack pending.
+        buffer_config.max_ack_pending = std::cmp::min(
+            buffer_config.max_ack_pending,
+            consumer_info.config.max_ack_pending as usize,
+        );
+
         Ok(Self {
             vertex_type: reader_config.vertex_type,
             stream: reader_config.stream,
@@ -232,6 +237,7 @@ impl JetStreamReader {
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
         let batch_size = self.batch_size;
         let read_timeout = self.read_timeout;
+        let max_ack_pending = self.config.max_ack_pending;
 
         let (messages_tx, messages_rx) = mpsc::channel(batch_size);
         let handle: JoinHandle<Result<()>> = tokio::spawn({
@@ -242,7 +248,7 @@ impl JetStreamReader {
                     self.stream.name.to_string(),
                 ));
 
-                let semaphore = Arc::new(Semaphore::new(MAX_ACK_PENDING));
+                let semaphore = Arc::new(Semaphore::new(max_ack_pending));
                 let mut processed_msgs_count: usize = 0;
                 let mut last_logged_at = Instant::now();
 
@@ -304,6 +310,12 @@ impl JetStreamReader {
         labels: &[(String, String)],
         cancel_token: &CancellationToken,
     ) -> Result<Vec<Message>> {
+        // try acquiring the batch size number of permits before fetching messages.
+        let mut permits = Arc::clone(semaphore)
+            .acquire_many_owned(batch_size as u32)
+            .await
+            .map_err(|e| Error::ISB(format!("Failed to acquire semaphore permit: {e}")))?;
+
         let start = Instant::now();
         let jetstream_messages = match self
             .consumer
@@ -379,11 +391,9 @@ impl JetStreamReader {
             // Insert into tracker and start work in progress
             let (ack_tx, ack_rx) = oneshot::channel();
             self.tracker_handle.insert(&message, ack_tx).await?;
-            let permit = Arc::clone(semaphore)
-                .acquire_owned()
-                .await
-                .expect("Failed to acquire semaphore permit");
 
+            // get one permit from the acquired permits to release after acking the offsets.
+            let permit = permits.split(1).expect("Failed to split permit");
             tokio::spawn(Self::start_work_in_progress(
                 labels.to_vec(),
                 message.offset.clone(),
@@ -405,7 +415,7 @@ impl JetStreamReader {
     async fn wait_for_ack_completion(&self, semaphore: Arc<Semaphore>) {
         info!(stream=?self.stream, "Jetstream reader stopped, waiting for ack tasks to complete");
         let _permit = Arc::clone(&semaphore)
-            .acquire_many_owned(MAX_ACK_PENDING as u32)
+            .acquire_many_owned(self.config.max_ack_pending as u32)
             .await
             .expect("Failed to acquire semaphore permit");
         info!(stream=?self.stream, "All inflight messages are successfully acked/nacked");
@@ -599,6 +609,33 @@ mod tests {
     use super::*;
     use crate::message::{Message, MessageID};
 
+    #[tokio::test]
+    async fn simple_permit_test() {
+        let sem = Arc::new(Semaphore::new(20));
+        let mut permit = Arc::clone(&sem).acquire_many_owned(10).await.unwrap();
+        assert_eq!(sem.available_permits(), 10);
+
+        assert_eq!(permit.num_permits(), 10);
+        let first_split = permit.split(5).unwrap();
+        assert_eq!(first_split.num_permits(), 5);
+        assert_eq!(permit.num_permits(), 5);
+
+        let second_split = permit.split(3).unwrap();
+        assert_eq!(second_split.num_permits(), 3);
+        assert_eq!(permit.num_permits(), 2);
+
+        assert_eq!(sem.available_permits(), 10);
+
+        drop(first_split);
+        assert_eq!(sem.available_permits(), 15);
+
+        drop(second_split);
+        assert_eq!(sem.available_permits(), 18);
+
+        drop(permit);
+        assert_eq!(sem.available_permits(), 20);
+    }
+
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_jetstream_read() {
@@ -635,6 +672,7 @@ mod tests {
         let buf_reader_config = BufferReaderConfig {
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
+            ..Default::default()
         };
         let tracker = TrackerHandle::new(None, None);
         let js_reader = JetStreamReader::new(ISBReaderConfig {
@@ -742,6 +780,7 @@ mod tests {
         let buf_reader_config = BufferReaderConfig {
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
+            ..Default::default()
         };
         let js_reader = JetStreamReader::new(ISBReaderConfig {
             vertex_type: "Map".to_string(),
@@ -892,6 +931,7 @@ mod tests {
         let buf_reader_config = BufferReaderConfig {
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
+            ..Default::default()
         };
         let tracker = TrackerHandle::new(None, None);
         let js_reader = JetStreamReader::new(ISBReaderConfig {
