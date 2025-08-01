@@ -335,6 +335,7 @@ impl PipelineConfig {
                     ENV_NUMAFLOW_SERVING_CALLBACK_STORE,
                     ENV_NUMAFLOW_SERVING_RESPONSE_STORE,
                     ENV_NUMAFLOW_GRACEFUL_TIMEOUT_SECS,
+                    ENV_MAX_ACK_PENDING,
                 ]
                 .contains(&key.as_str())
             })

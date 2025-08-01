@@ -235,9 +235,19 @@ impl JetStreamReader {
         mut self,
         cancel_token: CancellationToken,
     ) -> Result<(ReceiverStream<Message>, JoinHandle<Result<()>>)> {
-        let batch_size = self.batch_size;
         let read_timeout = self.read_timeout;
         let max_ack_pending = self.config.max_ack_pending;
+
+        let batch_size = if max_ack_pending < self.batch_size {
+            warn!(
+                "max_ack_pending ({}) should be greater than or equal to batch_size ({}). \
+                Setting batch_size to max_ack_pending",
+                max_ack_pending, self.batch_size
+            );
+            max_ack_pending
+        } else {
+            self.batch_size
+        };
 
         let (messages_tx, messages_rx) = mpsc::channel(batch_size);
         let handle: JoinHandle<Result<()>> = tokio::spawn({
