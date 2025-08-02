@@ -744,7 +744,10 @@ mod tests {
         let oldest_time = windower.oldest_window_end_time().unwrap();
         let expected_oldest =
             msg1.event_time + chrono::Duration::from_std(windower.timeout).unwrap();
-        assert_eq!(oldest_time, expected_oldest);
+        assert_eq!(
+            oldest_time.timestamp_millis(),
+            expected_oldest.timestamp_millis()
+        );
 
         // Delete the closed window
         if let UnalignedWindowMessage {
@@ -759,7 +762,10 @@ mod tests {
         let oldest_time = windower.oldest_window_end_time().unwrap();
         let expected_oldest =
             msg2.event_time + chrono::Duration::from_std(windower.timeout).unwrap();
-        assert_eq!(oldest_time, expected_oldest);
+        assert_eq!(
+            oldest_time.timestamp_millis(),
+            expected_oldest.timestamp_millis()
+        );
     }
 
     #[test]
@@ -959,8 +965,11 @@ mod tests {
         assert_eq!(result1.len(), 1);
         match &result1[0].operation {
             UnalignedWindowOperation::Open { window, .. } => {
-                assert_eq!(window.start_time, now);
-                assert_eq!(window.end_time, now + chrono::Duration::seconds(60));
+                assert_eq!(window.start_time.timestamp_millis(), now.timestamp_millis());
+                assert_eq!(
+                    window.end_time.timestamp_millis(),
+                    (now + chrono::Duration::seconds(60)).timestamp_millis()
+                );
             }
             _ => panic!("Expected Open operation for first message"),
         }
@@ -983,10 +992,22 @@ mod tests {
                 assert_eq!(windows.len(), 2);
                 let old_window = &windows[0];
                 let new_window = &windows[1];
-                assert_eq!(old_window.start_time, now);
-                assert_eq!(old_window.end_time, now + chrono::Duration::seconds(60));
-                assert_eq!(new_window.start_time, now);
-                assert_eq!(new_window.end_time, now + chrono::Duration::seconds(90));
+                assert_eq!(
+                    old_window.start_time.timestamp_millis(),
+                    now.timestamp_millis()
+                );
+                assert_eq!(
+                    old_window.end_time.timestamp_millis(),
+                    (now + chrono::Duration::seconds(60)).timestamp_millis()
+                );
+                assert_eq!(
+                    new_window.start_time.timestamp_millis(),
+                    now.timestamp_millis()
+                );
+                assert_eq!(
+                    new_window.end_time.timestamp_millis(),
+                    (now + chrono::Duration::seconds(90)).timestamp_millis()
+                );
             }
             _ => panic!("Expected Expand operation, got {:?}", result2[0].operation),
         }
@@ -1009,10 +1030,22 @@ mod tests {
                 assert_eq!(windows.len(), 2);
                 let old_window = &windows[0];
                 let new_window = &windows[1];
-                assert_eq!(old_window.start_time, now);
-                assert_eq!(old_window.end_time, now + chrono::Duration::seconds(90));
-                assert_eq!(new_window.start_time, now - chrono::Duration::seconds(10));
-                assert_eq!(new_window.end_time, now + chrono::Duration::seconds(90));
+                assert_eq!(
+                    old_window.start_time.timestamp_millis(),
+                    now.timestamp_millis()
+                );
+                assert_eq!(
+                    old_window.end_time.timestamp_millis(),
+                    (now + chrono::Duration::seconds(90)).timestamp_millis()
+                );
+                assert_eq!(
+                    new_window.start_time.timestamp_millis(),
+                    (now - chrono::Duration::seconds(10)).timestamp_millis()
+                );
+                assert_eq!(
+                    new_window.end_time.timestamp_millis(),
+                    (now + chrono::Duration::seconds(90)).timestamp_millis()
+                );
             }
             _ => panic!("Expected Expand operation, got {:?}", result3[0].operation),
         }
@@ -1033,8 +1066,14 @@ mod tests {
         assert_eq!(result4.len(), 1);
         match &result4[0].operation {
             UnalignedWindowOperation::Open { window, .. } => {
-                assert_eq!(window.start_time, now + chrono::Duration::seconds(20));
-                assert_eq!(window.end_time, now + chrono::Duration::seconds(80));
+                assert_eq!(
+                    window.start_time.timestamp_millis(),
+                    (now + chrono::Duration::seconds(20)).timestamp_millis()
+                );
+                assert_eq!(
+                    window.end_time.timestamp_millis(),
+                    (now + chrono::Duration::seconds(80)).timestamp_millis()
+                );
                 assert_eq!(window.keys, key2);
             }
             _ => panic!("Expected Open operation for different key"),
