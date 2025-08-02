@@ -20,10 +20,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	errors2 "github.com/numaproj/numaflow/pkg/sources/errors"
 	"os"
 	"sync/atomic"
 	"time"
+
+	errors2 "github.com/numaproj/numaflow/pkg/sources/errors"
 
 	natslib "github.com/nats-io/nats.go"
 	jetstreamlib "github.com/nats-io/nats.go/jetstream"
