@@ -1198,12 +1198,12 @@ mod tests {
 
         let source_idle_config = IdleConfig {
             threshold: Duration::from_millis(2000), // set higher value so that the source won't be idling
-            step_interval: Duration::from_millis(5),
+            step_interval: Duration::from_millis(3),
             increment_by: Duration::from_millis(1),
         };
 
         let mut handle = SourceWatermarkHandle::new(
-            Duration::from_millis(5),
+            Duration::from_millis(3),
             js_context.clone(),
             &to_vertex_configs,
             &SourceWatermarkConfig {

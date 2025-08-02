@@ -10,6 +10,7 @@ use crate::reduce::reducer::unaligned::windower::{
 use crate::reduce::wal::segment::append::{AppendOnlyWal, SegmentWriteMessage};
 use crate::watermark::isb::ISBWatermarkHandle;
 
+use crate::jh_abort_guard;
 use chrono::{DateTime, Utc};
 use numaflow_pb::clients::accumulator::AccumulatorRequest;
 use numaflow_pb::clients::sessionreduce::SessionReduceRequest;
@@ -103,14 +104,14 @@ impl ReduceTask {
             .await?;
 
         // Spawn a task to convert UnalignedWindowMessages to ReduceRequests and send them to req_tx
-        let _request_handle = tokio::spawn(async move {
+        let _jh_guard = jh_abort_guard!(tokio::spawn(async move {
             while let Some(window_msg) = message_stream.next().await {
                 let reduce_req: AccumulatorRequest = window_msg.into();
                 if request_tx.send(reduce_req).await.is_err() {
                     break;
                 }
             }
-        });
+        }));
 
         let mut client_clone = client.clone();
         let (mut response_stream, handle) = client_clone
@@ -223,14 +224,14 @@ impl ReduceTask {
             .streaming_write(writer_stream, cln_token.clone())
             .await?;
 
-        let _request_handle = tokio::spawn(async move {
+        let _jh_guard = jh_abort_guard!(tokio::spawn(async move {
             while let Some(window_msg) = message_stream.next().await {
                 let reduce_req: SessionReduceRequest = window_msg.into();
                 if request_tx.send(reduce_req).await.is_err() {
                     break;
                 }
             }
-        });
+        }));
 
         let mut client_clone = client.clone();
         let (mut response_stream, handle) = client_clone

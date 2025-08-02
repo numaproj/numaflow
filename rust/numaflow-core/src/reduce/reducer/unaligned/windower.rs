@@ -59,11 +59,7 @@ impl Display for Window {
 
 impl Debug for Window {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Window")
-            .field("start_time", &self.start_time.timestamp_millis())
-            .field("end_time", &self.end_time.timestamp_millis())
-            .field("keys", &self.keys)
-            .finish()
+        write!(f, "{self}")
     }
 }
 

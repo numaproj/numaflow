@@ -234,6 +234,7 @@ mod tests {
         let buf_reader_config = BufferReaderConfig {
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
+            ..Default::default()
         };
         let tracker = TrackerHandle::new(None);
         use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;
@@ -348,6 +349,7 @@ mod tests {
         let buf_reader_config = BufferReaderConfig {
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
+            ..Default::default()
         };
         let tracker = TrackerHandle::new(None);
         use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;
@@ -583,6 +585,7 @@ mod tests {
         let buf_reader_config = BufferReaderConfig {
             streams: vec![],
             wip_ack_interval: Duration::from_millis(5),
+            ..Default::default()
         };
         let tracker = TrackerHandle::new(None);
         use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;

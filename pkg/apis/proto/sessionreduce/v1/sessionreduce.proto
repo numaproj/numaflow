@@ -72,7 +72,6 @@ message SessionReduceRequest {
   WindowOperation operation = 2;
 }
 
-
 // SessionReduceResponse represents a response element.
 message SessionReduceResponse {
   // Result represents a result element. It contains the result of the reduce function.
@@ -90,7 +89,6 @@ message SessionReduceResponse {
   // EOF represents the end of the response for a window.
   bool EOF = 3;
 }
-
 
 // ReadyResponse is the health check result.
 message ReadyResponse {

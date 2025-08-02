@@ -1,12 +1,13 @@
-use crate::Result;
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::message::{IntOffset, Message, MessageID, Offset};
 use crate::reduce::reducer::aligned::windower::{AlignedWindowMessage, AlignedWindowOperation};
 use crate::shared::grpc::{prost_timestamp_from_utc, utc_from_timestamp};
+use crate::{Result, jh_abort_guard};
 use numaflow_pb::clients::reduce::reduce_client::ReduceClient;
 use numaflow_pb::clients::reduce::{ReduceRequest, ReduceResponse, reduce_request};
 use std::ops::Sub;
 use std::sync::Arc;
+use tokio::task::JoinHandle;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
@@ -187,19 +188,24 @@ impl UserDefinedAlignedReduce {
             }
         });
 
+        // Create a guard that will automatically abort the request handle when this function returns
+        let _guard = jh_abort_guard!(request_handle);
+
         // Call the gRPC reduce_fn with the converted stream, but also watch for cancellation
         let mut response_stream = tokio::select! {
             // Wait for the gRPC call to complete
             result = self.client.reduce_fn(ReceiverStream::new(req_rx)) => {
-                result
-                    .map_err(|e| crate::Error::Grpc(Box::new(e)))?
-                    .into_inner()
+                match result {
+                    Ok(response) => response.into_inner(),
+                    Err(e) => {
+                        return Err(crate::Error::Grpc(Box::new(e)));
+                    }
+                }
             }
 
             // Check for cancellation
             _ = cln_token.cancelled() => {
                 info!("Cancellation detected while waiting for reduce_fn response");
-                request_handle.abort();
                 return Err(crate::Error::Cancelled());
             }
         };
@@ -213,7 +219,6 @@ impl UserDefinedAlignedReduce {
                 // Check for cancellation
                 _ = cln_token.cancelled() => {
                     info!("Cancellation detected while processing responses, stopping");
-                    request_handle.abort();
                     return Err(crate::Error::Cancelled());
                 }
 
@@ -247,10 +252,7 @@ impl UserDefinedAlignedReduce {
             }
         }
 
-        // wait for the tokio task to complete
-        request_handle
-            .await
-            .map_err(|e| crate::Error::Reduce(format!("conversion task failed: {e}")))
+        Ok(())
     }
 
     pub(crate) async fn ready(&mut self) -> bool {

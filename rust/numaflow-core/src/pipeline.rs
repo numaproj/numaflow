@@ -133,7 +133,7 @@ async fn start_source_forwarder(
     let buffer_writer = JetstreamWriter::new(ISBWriterConfig {
         config: config.to_vertex_config.clone(),
         js_ctx: js_context,
-        paf_concurrency: config.paf_concurrency,
+        paf_concurrency: config.writer_concurrency,
         tracker_handle: tracker_handle.clone(),
         cancel_token: cln_token.clone(),
         watermark_handle: source_watermark_handle.clone().map(WatermarkHandle::Source),
@@ -242,7 +242,7 @@ async fn start_map_forwarder(
     let buffer_writer = JetstreamWriter::new(ISBWriterConfig {
         config: config.to_vertex_config.clone(),
         js_ctx: js_context.clone(),
-        paf_concurrency: config.paf_concurrency,
+        paf_concurrency: config.writer_concurrency,
         tracker_handle: tracker_handle.clone(),
         cancel_token: cln_token.clone(),
         watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
@@ -522,7 +522,7 @@ async fn start_aligned_reduce_forwarder(
     let buffer_writer = JetstreamWriter::new(ISBWriterConfig {
         config: config.to_vertex_config.clone(),
         js_ctx: js_context.clone(),
-        paf_concurrency: config.paf_concurrency,
+        paf_concurrency: config.writer_concurrency,
         tracker_handle: tracker_handle.clone(),
         cancel_token: cln_token.clone(),
         watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
@@ -696,7 +696,7 @@ async fn start_unaligned_reduce_forwarder(
     let buffer_writer = JetstreamWriter::new(ISBWriterConfig {
         config: config.to_vertex_config.clone(),
         js_ctx: js_context.clone(),
-        paf_concurrency: config.paf_concurrency,
+        paf_concurrency: config.writer_concurrency,
         tracker_handle: tracker_handle.clone(),
         cancel_token: cln_token.clone(),
         watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
@@ -1050,7 +1050,7 @@ mod tests {
             vertex_name: "in",
             replica: 0,
             batch_size: 1000,
-            paf_concurrency: 30000,
+            writer_concurrency: 30000,
             read_timeout: Duration::from_secs(1),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
@@ -1219,7 +1219,7 @@ mod tests {
             vertex_name: "in",
             replica: 0,
             batch_size: 1000,
-            paf_concurrency: 1000,
+            writer_concurrency: 1000,
             read_timeout: Duration::from_secs(1),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
@@ -1232,6 +1232,7 @@ mod tests {
                 reader_config: BufferReaderConfig {
                     streams: streams.clone(),
                     wip_ack_interval: Duration::from_secs(1),
+                    ..Default::default()
                 },
                 partitions: 0,
             }],
@@ -1446,7 +1447,7 @@ mod tests {
             vertex_name: "in",
             replica: 0,
             batch_size: 1000,
-            paf_concurrency: 1000,
+            writer_concurrency: 1000,
             read_timeout: Duration::from_secs(1),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
@@ -1470,6 +1471,7 @@ mod tests {
                 reader_config: BufferReaderConfig {
                     streams: input_streams.clone(),
                     wip_ack_interval: Duration::from_secs(1),
+                    ..Default::default()
                 },
                 partitions: 0,
             }],

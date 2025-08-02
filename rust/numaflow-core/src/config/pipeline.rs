@@ -41,8 +41,9 @@ const ENV_NUMAFLOW_SERVING_JETSTREAM_URL: &str = "NUMAFLOW_ISBSVC_JETSTREAM_URL"
 const ENV_NUMAFLOW_SERVING_JETSTREAM_USER: &str = "NUMAFLOW_ISBSVC_JETSTREAM_USER";
 const ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD: &str = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD";
 const ENV_NUMAFLOW_WATERMARK_DELAY: &str = "NUMAFLOW_WATERMARK_DELAY_IN_MS";
-const ENV_PAF_BATCH_SIZE: &str = "PAF_BATCH_SIZE";
+const ENV_WRITE_CONCURRENCY_SIZE: &str = "WRITE_CONCURRENCY_SIZE";
 const ENV_NUMAFLOW_GRACEFUL_TIMEOUT_SECS: &str = "NUMAFLOW_GRACEFUL_TIMEOUT_SECS";
+const ENV_MAX_ACK_PENDING: &str = "MAX_ACK_PENDING";
 const DEFAULT_GRPC_MAX_MESSAGE_SIZE: usize = 64 * 1024 * 1024; // 64 MB
 const DEFAULT_MAP_SOCKET: &str = "/var/run/numaflow/map.sock";
 pub(crate) const DEFAULT_BATCH_MAP_SOCKET: &str = "/var/run/numaflow/batchmap.sock";
@@ -55,6 +56,7 @@ pub(crate) const VERTEX_TYPE_SOURCE: &str = "Source";
 pub(crate) const VERTEX_TYPE_SINK: &str = "Sink";
 pub(crate) const VERTEX_TYPE_MAP_UDF: &str = "MapUDF";
 pub(crate) const VERTEX_TYPE_REDUCE_UDF: &str = "ReduceUDF";
+pub(crate) const DEFAULT_MAX_ACK_PENDING: usize = 25000;
 
 pub(crate) mod isb;
 pub(crate) mod watermark;
@@ -65,7 +67,7 @@ pub(crate) struct PipelineConfig {
     pub(crate) vertex_name: &'static str,
     pub(crate) replica: u16,
     pub(crate) batch_size: usize,
-    pub(crate) paf_concurrency: usize,
+    pub(crate) writer_concurrency: usize,
     pub(crate) read_timeout: Duration,
     pub(crate) graceful_shutdown_time: Duration,
     pub(crate) js_client_config: isb::jetstream::ClientConfig, // TODO: make it enum, since we can have different ISB implementations
@@ -138,7 +140,7 @@ impl Default for PipelineConfig {
             vertex_name: Default::default(),
             replica: 0,
             batch_size: DEFAULT_BATCH_SIZE as usize,
-            paf_concurrency: DEFAULT_BATCH_SIZE as usize,
+            writer_concurrency: DEFAULT_BATCH_SIZE as usize,
             read_timeout: Duration::from_secs(DEFAULT_TIMEOUT_IN_MS as u64),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig::default(),
@@ -335,13 +337,14 @@ impl PipelineConfig {
                     ENV_NUMAFLOW_SERVING_JETSTREAM_URL,
                     ENV_NUMAFLOW_SERVING_JETSTREAM_USER,
                     ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD,
-                    ENV_PAF_BATCH_SIZE,
+                    ENV_WRITE_CONCURRENCY_SIZE,
                     ENV_CALLBACK_ENABLED,
                     ENV_CALLBACK_CONCURRENCY,
                     ENV_NUMAFLOW_SERVING_SPEC,
                     ENV_NUMAFLOW_SERVING_CALLBACK_STORE,
                     ENV_NUMAFLOW_SERVING_RESPONSE_STORE,
                     ENV_NUMAFLOW_GRACEFUL_TIMEOUT_SECS,
+                    ENV_MAX_ACK_PENDING,
                 ]
                 .contains(&key.as_str())
             })
@@ -518,6 +521,14 @@ impl PipelineConfig {
             password: get_var(ENV_NUMAFLOW_SERVING_JETSTREAM_PASSWORD).ok(),
         };
 
+        let max_ack_pending: usize = get_var(ENV_MAX_ACK_PENDING)
+            .and_then(|s| {
+                s.parse().map_err(|e| {
+                    Error::Config(format!("Parsing value of {ENV_MAX_ACK_PENDING}: {e:?}"))
+                })
+            })
+            .unwrap_or(DEFAULT_MAX_ACK_PENDING);
+
         let mut from_vertex_config = vec![];
         for edge in from_edges {
             let partition_count = edge.to_vertex_partition_count.unwrap_or_default() as u16;
@@ -537,6 +548,7 @@ impl PipelineConfig {
                 name: Box::leak(edge.from.clone().into_boxed_str()),
                 reader_config: BufferReaderConfig {
                     streams,
+                    max_ack_pending,
                     ..Default::default()
                 },
                 partitions: partition_count,
@@ -675,10 +687,12 @@ impl PipelineConfig {
 
         Ok(PipelineConfig {
             batch_size: batch_size as usize,
-            paf_concurrency: get_var(ENV_PAF_BATCH_SIZE)
+            writer_concurrency: get_var(ENV_WRITE_CONCURRENCY_SIZE)
                 .and_then(|s| {
                     s.parse().map_err(|e| {
-                        Error::Config(format!("Parsing value of {ENV_PAF_BATCH_SIZE}: {e:?}"))
+                        Error::Config(format!(
+                            "Parsing value of {ENV_WRITE_CONCURRENCY_SIZE}: {e:?}"
+                        ))
                     })
                 })
                 .unwrap_or(batch_size as usize),
@@ -835,7 +849,7 @@ mod tests {
             vertex_name: Default::default(),
             replica: 0,
             batch_size: DEFAULT_BATCH_SIZE as usize,
-            paf_concurrency: DEFAULT_BATCH_SIZE as usize,
+            writer_concurrency: DEFAULT_BATCH_SIZE as usize,
             read_timeout: Duration::from_secs(DEFAULT_TIMEOUT_IN_MS as u64),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig::default(),
@@ -916,7 +930,7 @@ mod tests {
             vertex_name: "out",
             replica: 0,
             batch_size: 500,
-            paf_concurrency: 500,
+            writer_concurrency: 500,
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig {
@@ -929,6 +943,7 @@ mod tests {
                 reader_config: BufferReaderConfig {
                     streams: vec![Stream::new("default-simple-pipeline-out-0", "out", 0)],
                     wip_ack_interval: Duration::from_secs(1),
+                    ..Default::default()
                 },
                 partitions: 1,
             }],
@@ -1086,7 +1101,7 @@ mod tests {
             vertex_name: "in",
             replica: 0,
             batch_size: 1000,
-            paf_concurrency: 1000,
+            writer_concurrency: 1000,
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig {
@@ -1143,7 +1158,7 @@ mod tests {
             vertex_name: "in",
             replica: 0,
             batch_size: 50,
-            paf_concurrency: 50,
+            writer_concurrency: 50,
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig {
@@ -1252,7 +1267,7 @@ mod tests {
             vertex_name: "map",
             replica: 0,
             batch_size: 500,
-            paf_concurrency: 500,
+            writer_concurrency: 500,
             read_timeout: Duration::from_secs(1),
             graceful_shutdown_time: Duration::from_secs(DEFAULT_GRACEFUL_SHUTDOWN_TIME_SECS),
             js_client_config: isb::jetstream::ClientConfig {
@@ -1265,6 +1280,7 @@ mod tests {
                 reader_config: BufferReaderConfig {
                     streams: vec![Stream::new("default-simple-pipeline-map-0", "map", 0)],
                     wip_ack_interval: Duration::from_secs(1),
+                    ..Default::default()
                 },
                 partitions: 1,
             }],

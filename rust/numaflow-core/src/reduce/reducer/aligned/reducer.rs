@@ -106,7 +106,7 @@ impl ReduceTask {
 
                 // For other errors, log and send to error channel to signal the reduce actor to stop
                 // consuming new messages and exit with error.
-                error!(?e, "Error while doing reduce operation");
+                error!(?e, window = ?self.window, "Error while doing reduce operation");
                 let _ = self.error_tx.send(e).await;
                 return;
             }
@@ -416,7 +416,7 @@ impl AlignedReducer {
         cln_token: CancellationToken,
     ) -> crate::Result<JoinHandle<crate::Result<()>>> {
         // Set up error and GC channels
-        let (error_tx, mut error_rx) = mpsc::channel(10);
+        let (error_tx, mut error_rx) = mpsc::channel(500);
         let gc_wal_handle = self.setup_gc_wal().await?;
 
         let parent_cln_token = cln_token.clone();
