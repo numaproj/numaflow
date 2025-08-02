@@ -153,8 +153,6 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	go ds.exposeMetrics(ctx)
 
 	version := numaflow.GetVersion()
-	// TODO: clean it up in v1.6
-	metrics.DeprecatedPipelineInfo.WithLabelValues(version.Version, version.Platform, ds.pipeline.Name).Set(1)
 	metrics.BuildInfo.WithLabelValues(v1alpha1.ComponentDaemon, ds.pipeline.Name, version.Version, version.Platform).Set(1)
 
 	log.Infof("Daemon server started successfully on %s", address)

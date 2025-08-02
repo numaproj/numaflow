@@ -67,13 +67,6 @@ var (
 )
 
 var (
-	// Deprecated: Use pkg/metrics.BuildInfo instead.
-	DeprecatedPipelineInfo = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Subsystem: "pipeline",
-		Name:      "build_info",
-		Help:      "A metric with a constant value '1', labeled by Numaflow binary version and platform, as well as the pipeline name. Deprecated: Use build_info instead",
-	}, []string{LabelVersion, LabelPlatform, LabelPipeline})
-
 	// Pipeline processing lag, max(watermark) - min(watermark)
 	PipelineProcessingLag = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "pipeline",
