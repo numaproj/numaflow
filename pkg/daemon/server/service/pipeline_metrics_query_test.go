@@ -33,7 +33,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	nats2 "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 type mockGetType func(url string) (*http.Response, error)
@@ -68,10 +67,6 @@ func (ms *mockIsbSvcClient) DeleteBuffersAndBuckets(ctx context.Context, buffers
 
 func (ms *mockIsbSvcClient) ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string, servingSourceStore string) error {
 	return nil
-}
-
-func (ms *mockIsbSvcClient) CreateWatermarkStores(ctx context.Context, bucketName string, partitions int, isReduce bool) ([]store.WatermarkStore, error) {
-	return nil, nil
 }
 
 // mock rater

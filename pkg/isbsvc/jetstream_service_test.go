@@ -79,28 +79,3 @@ func TestJetstreamSvc_GetBufferInfo(t *testing.T) {
 	assert.Equal(t, int64(0), info.AckPendingCount)
 	assert.Equal(t, int64(0), info.TotalMessages)
 }
-
-func TestJetstreamSvc_CreateWatermarkStores(t *testing.T) {
-	ctx := context.Background()
-	s := test.RunJetStreamServer(t)
-	defer test.ShutdownJetStreamServer(t, s)
-
-	conn, err := nats.Connect(s.ClientURL())
-	assert.NoError(t, err)
-	defer conn.Close()
-
-	client := nats2.NewTestClient(t, s.ClientURL())
-	defer client.Close()
-
-	isbSvc, err := NewISBJetStreamSvc(client)
-	assert.NoError(t, err)
-
-	bucketName := "test-bucket"
-	partitions := 3
-
-	err = isbSvc.CreateBuffersAndBuckets(ctx, []string{"test-buffer"}, []string{"test-bucket"}, "test-side-input-store", "test-serving-store")
-	assert.NoError(t, err)
-
-	_, err = isbSvc.CreateWatermarkStores(ctx, bucketName, partitions, false)
-	assert.NoError(t, err)
-}

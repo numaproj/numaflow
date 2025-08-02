@@ -31,7 +31,6 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
@@ -243,7 +242,7 @@ func (r *Rater) GetPending() map[string]*wrapperspb.Int64Value {
 		pending := CalculatePending(r.timestampedPendingCount, lookbackSeconds)
 		result[windowLabel] = wrapperspb.Int64(pending)
 		// Expose the metric for pending
-		if pending != isb.PendingNotAvailable {
+		if pending != v1alpha1.PendingNotAvailable {
 			metrics.MonoVertexPendingMessages.WithLabelValues(r.monoVertex.Name, windowLabel).Set(float64(pending))
 		}
 	}

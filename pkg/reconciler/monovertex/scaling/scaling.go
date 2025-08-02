@@ -32,7 +32,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/isb"
 	mvtxdaemonclient "github.com/numaproj/numaflow/pkg/mvtxdaemon/client"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
@@ -228,7 +227,7 @@ func (s *Scaler) scaleOneMonoVertex(ctx context.Context, key string, worker int)
 		totalRate = rate.GetValue()
 	}
 	pending, existing := vMetrics.Pendings["default"]
-	if !existing || pending.GetValue() < 0 || pending.GetValue() == isb.PendingNotAvailable {
+	if !existing || pending.GetValue() < 0 || pending.GetValue() == dfv1.PendingNotAvailable {
 		// Pending not available, we don't do anything
 		log.Infof("MonoVertex %s has no pending messages information, skip scaling.", monoVtxName)
 		return nil

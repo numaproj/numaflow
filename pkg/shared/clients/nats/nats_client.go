@@ -30,7 +30,6 @@ import (
 	"go.uber.org/zap"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
@@ -158,7 +157,7 @@ func (c *Client) PendingForStream(consumer string, stream string) (int64, error)
 
 	cInfo, err = c.jsCtx.ConsumerInfo(consumer, stream)
 	if err != nil {
-		return isb.PendingNotAvailable, fmt.Errorf("failed to get consumer info, %w", err)
+		return dfv1.PendingNotAvailable, fmt.Errorf("failed to get consumer info, %w", err)
 	}
 	return int64(cInfo.NumPending) + int64(cInfo.NumAckPending), nil
 }
