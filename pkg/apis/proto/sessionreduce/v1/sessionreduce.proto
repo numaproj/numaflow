@@ -42,7 +42,7 @@ message KeyedWindow {
   repeated string keys = 4;
 }
 
-//SessionReduceRequest represents a request element.
+// SessionReduceRequest represents a request element.
 message SessionReduceRequest {
   // WindowOperation represents a window operation.
   // For Aligned window values can be one of OPEN, CLOSE, EXPAND, MERGE and APPEND.
