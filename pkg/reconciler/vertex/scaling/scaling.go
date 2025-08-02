@@ -33,7 +33,6 @@ import (
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	daemonclient "github.com/numaproj/numaflow/pkg/daemon/client"
-	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 )
 
@@ -288,7 +287,7 @@ func (s *Scaler) scaleOneVertex(ctx context.Context, key string, worker int) err
 		totalRate += rate.GetValue()
 
 		pending, existing := m.Pendings["default"]
-		if !existing || pending.GetValue() < 0 || pending.GetValue() == isb.PendingNotAvailable {
+		if !existing || pending.GetValue() < 0 || pending.GetValue() == dfv1.PendingNotAvailable {
 			// Pending not available, we don't do anything
 			log.Infof("Vertex %s has no pending messages information, skip scaling.", vertex.Name)
 			return nil
