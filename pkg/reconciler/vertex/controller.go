@@ -192,13 +192,15 @@ func (r *vertexReconciler) reconcile(ctx context.Context, vertex *dfv1.Vertex) (
 		readyPods = desiredReplicas
 	}
 	vertex.Status.ReadyReplicas = uint32(readyPods)
-	if healthy, reason, msg := reconciler.CheckPodsStatus(&podList); healthy {
+	if healthy, reason, msg, transientUnhealthy := reconciler.CheckPodsStatus(&podList); healthy {
 		vertex.Status.MarkPodHealthy(reason, msg)
 	} else {
-		// Do not need to explicitly requeue, since the it keeps watching the status change of the pods
 		vertex.Status.MarkPodNotHealthy(reason, msg)
+		if transientUnhealthy {
+			// If it's unhealthy caused by restart in the last N mins, need to explicitly requeue.
+			return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
+		}
 	}
-
 	return ctrl.Result{}, nil
 }
 
