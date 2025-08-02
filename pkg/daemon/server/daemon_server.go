@@ -45,7 +45,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
-	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedtls "github.com/numaproj/numaflow/pkg/shared/tls"
 )
@@ -73,8 +72,6 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	)
 
 	switch ds.isbSvcType {
-	case v1alpha1.ISBSvcTypeRedis:
-		isbSvcClient = isbsvc.NewISBRedisSvc(redisclient.NewInClusterRedisClient())
 	case v1alpha1.ISBSvcTypeJetStream:
 		natsClientPool, err = jsclient.NewClientPool(ctx, jsclient.WithClientPoolSize(1))
 		if err != nil {
@@ -156,8 +153,6 @@ func (ds *daemonServer) Run(ctx context.Context) error {
 	go ds.exposeMetrics(ctx)
 
 	version := numaflow.GetVersion()
-	// TODO: clean it up in v1.6
-	deprecatedPipelineInfo.WithLabelValues(version.Version, version.Platform, ds.pipeline.Name).Set(1)
 	metrics.BuildInfo.WithLabelValues(v1alpha1.ComponentDaemon, ds.pipeline.Name, version.Version, version.Platform).Set(1)
 
 	log.Infof("Daemon server started successfully on %s", address)
@@ -294,20 +289,20 @@ func (ds *daemonServer) exposeMetrics(ctx context.Context) {
 
 			//exposing pipeline processing lag metric.
 			if minWM < 0 {
-				pipelineProcessingLag.WithLabelValues(ds.pipeline.Name).Set(-1)
+				metrics.PipelineProcessingLag.WithLabelValues(ds.pipeline.Name).Set(-1)
 			} else {
 				if maxWM < minWM {
-					pipelineProcessingLag.WithLabelValues(ds.pipeline.Name).Set(-1)
+					metrics.PipelineProcessingLag.WithLabelValues(ds.pipeline.Name).Set(-1)
 				} else {
-					pipelineProcessingLag.WithLabelValues(ds.pipeline.Name).Set(float64(maxWM - minWM))
+					metrics.PipelineProcessingLag.WithLabelValues(ds.pipeline.Name).Set(float64(maxWM - minWM))
 				}
 			}
 
 			// exposing the watermark delay to current time metric.
 			if maxWM == math.MinInt64 {
-				watermarkCmpNow.WithLabelValues(ds.pipeline.Name).Set(-1)
+				metrics.WatermarkCmpNow.WithLabelValues(ds.pipeline.Name).Set(-1)
 			} else {
-				watermarkCmpNow.WithLabelValues(ds.pipeline.Name).Set(float64(time.Now().UnixMilli() - maxWM))
+				metrics.WatermarkCmpNow.WithLabelValues(ds.pipeline.Name).Set(float64(time.Now().UnixMilli() - maxWM))
 			}
 
 			//exposing Pipeline data processing health metric.
@@ -319,13 +314,13 @@ func (ds *daemonServer) exposeMetrics(ctx context.Context) {
 			}
 			switch pipelineDataHealth.Status.Status {
 			case v1alpha1.PipelineStatusHealthy:
-				dataProcessingHealth.WithLabelValues(ds.pipeline.Name).Set(1)
+				metrics.DataProcessingHealth.WithLabelValues(ds.pipeline.Name).Set(1)
 			case v1alpha1.PipelineStatusWarning:
-				dataProcessingHealth.WithLabelValues(ds.pipeline.Name).Set(-1)
+				metrics.DataProcessingHealth.WithLabelValues(ds.pipeline.Name).Set(-1)
 			case v1alpha1.PipelineStatusCritical:
-				dataProcessingHealth.WithLabelValues(ds.pipeline.Name).Set(-2)
+				metrics.DataProcessingHealth.WithLabelValues(ds.pipeline.Name).Set(-2)
 			default:
-				dataProcessingHealth.WithLabelValues(ds.pipeline.Name).Set(0)
+				metrics.DataProcessingHealth.WithLabelValues(ds.pipeline.Name).Set(0)
 			}
 
 		case <-ctx.Done():
