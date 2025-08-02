@@ -37,7 +37,7 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 				}},
 			}},
 		}
-		done, reason, message := CheckPodsStatus(&pods)
+		done, reason, message, _ := CheckPodsStatus(&pods)
 		assert.Equal(t, "All pods are healthy", message)
 		assert.Equal(t, "Running", reason)
 		assert.True(t, done)
@@ -53,17 +53,18 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 				},
 			},
 		}
-		done, reason, message := CheckPodsStatus(&pods)
+		done, reason, message, transient := CheckPodsStatus(&pods)
 		assert.Equal(t, "Pod test-pod is unhealthy", message)
 		assert.Equal(t, "PodCrashLoopBackOff", reason)
 		assert.False(t, done)
+		assert.False(t, transient)
 	})
 
 	t.Run("Test Vertex status as false with no pods", func(t *testing.T) {
 		pods := corev1.PodList{
 			Items: []corev1.Pod{},
 		}
-		done, reason, message := CheckPodsStatus(&pods)
+		done, reason, message, _ := CheckPodsStatus(&pods)
 		assert.Equal(t, "No Pods found", message)
 		assert.Equal(t, "NoPodsFound", reason)
 		assert.True(t, done)
@@ -86,7 +87,7 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 				}},
 			}},
 		}
-		done, reason, message := CheckPodsStatus(&pods)
+		done, reason, message, _ := CheckPodsStatus(&pods)
 		assert.Equal(t, "All pods are healthy", message)
 		assert.Equal(t, "Running", reason)
 		assert.True(t, done)
@@ -110,10 +111,11 @@ func TestCheckVertexPodsStatus(t *testing.T) {
 				}},
 			}},
 		}
-		done, reason, message := CheckPodsStatus(&pods)
+		done, reason, message, transient := CheckPodsStatus(&pods)
 		assert.Equal(t, "Pod test-pod is unhealthy", message)
 		assert.Equal(t, "PodRecentRestart", reason)
 		assert.False(t, done)
+		assert.True(t, transient)
 	})
 }
 
