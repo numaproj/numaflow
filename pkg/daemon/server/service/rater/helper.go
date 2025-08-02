@@ -20,7 +20,7 @@ import (
 	"math"
 	"time"
 
-	"github.com/numaproj/numaflow/pkg/isb"
+	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
 )
 
@@ -71,13 +71,13 @@ func UpdateCount(q *sharedqueue.OverflowQueue[*TimestampedCounts], time int64, p
 func CalculatePending(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookbackSeconds int64, partitionName string) int64 {
 	counts := q.Items()
 	if len(counts) <= 1 {
-		return isb.PendingNotAvailable
+		return v1alpha1.PendingNotAvailable
 	}
 	startIndex := findStartIndex(lookbackSeconds, counts)
 	// we consider the last element as the end index
 	endIndex := len(counts) - 1
 	if startIndex == indexNotFound {
-		return isb.PendingNotAvailable
+		return v1alpha1.PendingNotAvailable
 	}
 	sum := int64(0)
 	num := int64(0)
@@ -113,7 +113,7 @@ func CalculatePending(q *sharedqueue.OverflowQueue[*TimestampedCounts], lookback
 		}
 	}
 	if num == 0 {
-		return isb.PendingNotAvailable
+		return v1alpha1.PendingNotAvailable
 	}
 	return sum / num
 }

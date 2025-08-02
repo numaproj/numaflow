@@ -316,3 +316,5 @@ var (
 	MessageTagDrop = fmt.Sprintf("%U__DROP__", '\\') // U+005C__DROP__
 	MessageTagAll  = fmt.Sprintf("%U__ALL__", '\\')  // U+005C__ALL__
 )
+
+const PendingNotAvailable = int64(math.MinInt64)

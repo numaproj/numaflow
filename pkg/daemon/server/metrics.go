@@ -14,39 +14,3 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 package server
-
-import (
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
-
-	"github.com/numaproj/numaflow/pkg/metrics"
-)
-
-var (
-	// Deprecated: Use pkg/metrics.BuildInfo instead.
-	deprecatedPipelineInfo = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Subsystem: "pipeline",
-		Name:      "build_info",
-		Help:      "A metric with a constant value '1', labeled by Numaflow binary version and platform, as well as the pipeline name. Deprecated: Use build_info instead",
-	}, []string{metrics.LabelVersion, metrics.LabelPlatform, metrics.LabelPipeline})
-
-	// Pipeline processing lag, max(watermark) - min(watermark)
-	pipelineProcessingLag = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Subsystem: "pipeline",
-		Name:      "processing_lag",
-		Help:      "Pipeline processing lag in milliseconds (max watermark - min watermark)",
-	}, []string{metrics.LabelPipeline})
-
-	// Now - max(watermark)
-	watermarkCmpNow = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Subsystem: "pipeline",
-		Name:      "watermark_cmp_now",
-		Help:      "Max source watermark compared with current time in milliseconds",
-	}, []string{metrics.LabelPipeline})
-
-	dataProcessingHealth = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Subsystem: "pipeline",
-		Name:      "data_processing_health",
-		Help:      "Pipeline data processing health status. 1: Healthy, 0: Unknown, -1: Warning, -2: Critical",
-	}, []string{metrics.LabelPipeline})
-)
