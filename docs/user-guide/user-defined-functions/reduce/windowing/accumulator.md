@@ -163,4 +163,4 @@ Note: Setting `readBatchSize: 1` helps maintain the ordering of events in the in
 Check the links below to see the UDF examples for different languages:
 
 - [Golang](https://github.com/numaproj/numaflow-go/tree/main/pkg/accumulator)
-
+- [Python](https://github.com/numaproj/numaflow-python/tree/main/examples/accumulator)
