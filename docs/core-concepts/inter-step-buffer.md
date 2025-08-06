@@ -15,7 +15,6 @@ Inter-Step Buffer can be implemented by a variety of data buffering technologies
 - Fast (high throughput low latency)
 - Ability to query buffer information
 
-Currently, there are 2 Inter-Step Buffer implementations:
+Supported Inter-Step Buffer implementations:
 
 - [Nats JetStream](https://docs.nats.io/nats-concepts/jetstream)
-- [Redis Stream](https://redis.io/topics/streams-intro)

@@ -61,17 +61,6 @@ func (v *isbsvcValidator) ValidateUpdate(_ context.Context) *admissionv1.Admissi
 		if !equality.Semantic.DeepEqual(v.oldISBService.Spec.JetStream.Persistence, v.newISBService.Spec.JetStream.Persistence) {
 			return DeniedResponse("can not change persistence of Jetstream ISB Service")
 		}
-	case dfv1.ISBSvcTypeRedis:
-		// nil check for Redis Native, if one of them is nil and the other is not, it is NOT allowed
-		if oldRedisNative, newRedisNative := v.oldISBService.Spec.Redis.Native, v.newISBService.Spec.Redis.Native; oldRedisNative != nil && newRedisNative == nil {
-			return DeniedResponse("can not remove Redis Native from Redis ISB Service")
-		} else if oldRedisNative == nil && newRedisNative != nil {
-			return DeniedResponse("can not add Redis Native to Redis ISB Service")
-		}
-		// check the persistence of ISB Service is not changed
-		if oldRedisNative, newRedisNative := v.oldISBService.Spec.Redis.Native, v.newISBService.Spec.Redis.Native; oldRedisNative != nil && newRedisNative != nil && !equality.Semantic.DeepEqual(oldRedisNative.Persistence, newRedisNative.Persistence) {
-			return DeniedResponse("can not change persistence of Redis ISB Service")
-		}
 	default:
 	}
 	return AllowedResponse()

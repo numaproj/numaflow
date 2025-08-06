@@ -19,8 +19,6 @@ limitations under the License.
 package sideinput_e2e
 
 import (
-	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -40,10 +38,6 @@ func (s *SideInputUDSSuite) setUpTests(pipeLineFile string) *When {
 }
 
 func (s *SideInputUDSSuite) TestSinkWithSideInput() {
-	// the side inputs feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		s.T().SkipNow()
-	}
 
 	w := s.setUpTests("@testdata/sideinput-sink.yaml")
 	defer w.DeletePipelineAndWait()
@@ -51,10 +45,6 @@ func (s *SideInputUDSSuite) TestSinkWithSideInput() {
 }
 
 func (s *SideInputUDSSuite) TestSourceWithSideInput() {
-	// the side inputs feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		s.T().SkipNow()
-	}
 
 	w := s.setUpTests("@testdata/sideinput-source.yaml")
 	defer w.DeletePipelineAndWait()

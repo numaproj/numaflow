@@ -20,7 +20,6 @@ package e2e
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -179,11 +178,6 @@ func (s *FunctionalSuite) TestUDFFiltering() {
 
 func (s *FunctionalSuite) TestDropOnFull() {
 
-	// the drop on full feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		s.T().SkipNow()
-	}
-
 	w := s.Given().Pipeline("@testdata/drop-on-full.yaml").
 		When().
 		CreatePipelineAndWait()
@@ -235,11 +229,6 @@ func (s *FunctionalSuite) TestDropOnFull() {
 }
 
 func (s *FunctionalSuite) TestWatermarkEnabled() {
-
-	// the watermark feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		s.T().SkipNow()
-	}
 
 	w := s.Given().Pipeline("@testdata/watermark.yaml").
 		When().

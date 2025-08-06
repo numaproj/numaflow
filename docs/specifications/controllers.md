@@ -12,7 +12,7 @@ The source code of the controllers is located at `./pkg/reconciler/`.
 
 ## Inter-Step Buffer Service Controller
 
-`Inter-Step Buffer Service Controller` is used to watch `InterStepBufferService` object, depending on the spec of the object, it might install services (such as JetStream, or Redis) in the namespace, or simply provide the configuration of the `InterStepBufferService` (for example, when an `external` redis ISB Service is given).
+`Inter-Step Buffer Service Controller` is used to watch `InterStepBufferService` object, and manage generated resources.
 
 ## Pipeline Controller
 

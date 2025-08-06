@@ -34,7 +34,7 @@ func contextWithLogger(t *testing.T) context.Context {
 
 func TestGetValidator(t *testing.T) {
 	t.Run("test get InterStepBufferService validator", func(t *testing.T) {
-		bytes, err := json.Marshal(fakeRedisISBSvc())
+		bytes, err := json.Marshal(fakeJetStreamISBSvc())
 		assert.NoError(t, err)
 		assert.NotNil(t, bytes)
 		v, err := GetValidator(contextWithLogger(t), &fakeNumaClient, metav1.GroupVersionKind{Group: "numaflow.numaproj.io", Version: "v1alpha1", Kind: "InterStepBufferService"}, nil, bytes)

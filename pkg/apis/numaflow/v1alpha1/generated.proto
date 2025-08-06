@@ -61,7 +61,7 @@ message AbstractPodTemplate {
   // +patchStrategy=merge
   repeated .k8s.io.api.core.v1.LocalObjectReference imagePullSecrets = 5;
 
-  // If specified, indicates the Redis pod's priority. "system-node-critical"
+  // If specified, indicates the pod's priority. "system-node-critical"
   // and "system-cluster-critical" are two special keywords which indicate the
   // highest priorities with the former being the highest priority. Any other
   // name must be defined by creating a PriorityClass object with that name.
@@ -72,7 +72,7 @@ message AbstractPodTemplate {
   optional string priorityClassName = 6;
 
   // The priority value. Various system components use this field to find the
-  // priority of the Redis pod. When Priority Admission Controller is enabled,
+  // priority of the pod. When Priority Admission Controller is enabled,
   // it prevents users from setting this field. The admission controller populates
   // this field from PriorityClassName.
   // The higher the value, the higher the priority.
@@ -281,8 +281,6 @@ message Blackhole {
 }
 
 message BufferServiceConfig {
-  optional RedisConfig redis = 1;
-
   optional JetStreamConfig jetstream = 2;
 }
 
@@ -580,48 +578,6 @@ message GetMonoVertexPodSpecReq {
   optional .k8s.io.api.core.v1.ResourceRequirements defaultResources = 4;
 }
 
-message GetRedisServiceSpecReq {
-  map<string, string> labels = 1;
-
-  optional int32 redisContainerPort = 2;
-
-  optional int32 sentinelContainerPort = 3;
-}
-
-message GetRedisStatefulSetSpecReq {
-  optional string serviceName = 1;
-
-  map<string, string> labels = 2;
-
-  optional string redisImage = 3;
-
-  optional string sentinelImage = 4;
-
-  optional string metricsExporterImage = 5;
-
-  optional string initContainerImage = 6;
-
-  optional int32 redisContainerPort = 7;
-
-  optional int32 sentinelContainerPort = 8;
-
-  optional int32 redisMetricsContainerPort = 9;
-
-  optional string credentialSecretName = 10;
-
-  optional bool tlsEnabled = 11;
-
-  optional string pvcNameIfNeeded = 12;
-
-  optional string confConfigMapName = 13;
-
-  optional string scriptsConfigMapName = 14;
-
-  optional string healthConfigMapName = 15;
-
-  optional .k8s.io.api.core.v1.ResourceRequirements defaultResources = 16;
-}
-
 message GetServingPipelineResourceReq {
   optional BufferServiceConfig isbSvcConfig = 1;
 
@@ -741,8 +697,6 @@ message InterStepBufferServiceList {
 }
 
 message InterStepBufferServiceSpec {
-  optional RedisBufferService redis = 1;
-
   optional JetStreamBufferService jetstream = 2;
 }
 
@@ -1126,40 +1080,6 @@ message MonoVertexStatus {
   optional string updateHash = 15;
 }
 
-message NativeRedis {
-  // Redis version, such as "6.0.16"
-  optional string version = 1;
-
-  // Redis StatefulSet size
-  // +kubebuilder:default=3
-  optional int32 replicas = 2;
-
-  // RedisContainerTemplate contains customized spec for Redis container
-  // +optional
-  optional ContainerTemplate redisContainerTemplate = 3;
-
-  // SentinelContainerTemplate contains customized spec for Redis container
-  // +optional
-  optional ContainerTemplate sentinelContainerTemplate = 4;
-
-  // MetricsContainerTemplate contains customized spec for metrics container
-  // +optional
-  optional ContainerTemplate metricsContainerTemplate = 5;
-
-  // +optional
-  optional ContainerTemplate initContainerTemplate = 6;
-
-  // +optional
-  optional PersistenceStrategy persistence = 7;
-
-  // +optional
-  optional AbstractPodTemplate abstractPodTemplate = 8;
-
-  // Redis configuration, if not specified, global settings in numaflow-controller-config will be used.
-  // +optional
-  optional RedisSettings settings = 9;
-}
-
 // NatsAuth defines how to authenticate the nats access
 message NatsAuth {
   // Basic auth which contains a username and a password
@@ -1446,58 +1366,6 @@ message PulsarSource {
   // Auth information
   // +optional
   optional PulsarAuth auth = 6;
-}
-
-message RedisBufferService {
-  // Native brings up a native Redis service
-  optional NativeRedis native = 1;
-
-  // External holds an External Redis config
-  optional RedisConfig external = 2;
-}
-
-message RedisConfig {
-  // Redis URL
-  // +optional
-  optional string url = 1;
-
-  // Sentinel URL, will be ignored if Redis URL is provided
-  // +optional
-  optional string sentinelUrl = 2;
-
-  // Only required when Sentinel is used
-  // +optional
-  optional string masterName = 3;
-
-  // Redis user
-  // +optional
-  optional string user = 4;
-
-  // Redis password secret selector
-  // +optional
-  optional .k8s.io.api.core.v1.SecretKeySelector password = 5;
-
-  // Sentinel password secret selector
-  // +optional
-  optional .k8s.io.api.core.v1.SecretKeySelector sentinelPassword = 6;
-}
-
-message RedisSettings {
-  // Redis settings shared by both master and slaves, will override the global settings from controller config
-  // +optional
-  optional string redis = 1;
-
-  // Special settings for Redis master node, will override the global settings from controller config
-  // +optional
-  optional string master = 2;
-
-  // Special settings for Redis replica nodes, will override the global settings from controller config
-  // +optional
-  optional string replica = 3;
-
-  // Sentinel settings, will override the global settings from controller config
-  // +optional
-  optional string sentinel = 4;
 }
 
 // The RetryStrategy struct defines the configuration for handling operation retries in case of failures.

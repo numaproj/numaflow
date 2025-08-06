@@ -20,15 +20,10 @@ limitations under the License.
 pub struct InterStepBufferServiceSpec {
     #[serde(rename = "jetstream", skip_serializing_if = "Option::is_none")]
     pub jetstream: Option<Box<crate::models::JetStreamBufferService>>,
-    #[serde(rename = "redis", skip_serializing_if = "Option::is_none")]
-    pub redis: Option<Box<crate::models::RedisBufferService>>,
 }
 
 impl InterStepBufferServiceSpec {
     pub fn new() -> InterStepBufferServiceSpec {
-        InterStepBufferServiceSpec {
-            jetstream: None,
-            redis: None,
-        }
+        InterStepBufferServiceSpec { jetstream: None }
     }
 }

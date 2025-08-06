@@ -67,8 +67,6 @@ These metrics can be used to determine if there are any errors in the pipeline.
 | `kafka_sink_write_timeout_total`           | Counter     | `pipeline=<pipeline-name>` <br> `vertex=<vertex-name>`                                                                                                        | Provides the write timeouts while writing to the Kafka sink                                     |
 | `isb_jetstream_read_error_total`           | Counter     | `buffer=<buffer-name>`                                                                                                                                        | Indicates any read errors with NATS Jetstream ISB                                               |
 | `isb_jetstream_write_error_total`          | Counter     | `buffer=<buffer-name>`                                                                                                                                        | Indicates any write errors with NATS Jetstream ISB                                              |
-| `isb_redis_read_error_total`               | Counter     | `buffer=<buffer-name>`                                                                                                                                        | Indicates any read errors with Redis ISB                                                        |
-| `isb_redis_write_error_total`              | Counter     | `buffer=<buffer-name>`                                                                                                                                        | Indicates any write errors with Redis ISB                                                       |
 
 ### Saturation
 
@@ -81,14 +79,6 @@ These metrics can be used to determine if there are any errors in the pipeline.
 | `isb_jetstream_buffer_solid_usage` | Gauge       | `buffer=<buffer-name>` | Indicates the solid usage of a NATS Jetstream ISB                                                                                            |
 | `isb_jetstream_buffer_pending`     | Gauge       | `buffer=<buffer-name>` | Indicate the number of pending messages at a given point in time.                                                                            |
 | `isb_jetstream_buffer_ack_pending` | Gauge       | `buffer=<buffer-name>` | Indicates the number of messages pending acknowledge at a given point in time                                                                |
-
-#### Redis ISB
-
-| Metric name              | Metric type | Labels                 | Description                                                                                                                                  |
-| ------------------------ | ----------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `isb_redis_isFull_total` | Counter     | `buffer=<buffer-name>` | Indicates if the ISB is full. Continual increase of this counter metric indicates a potential backpressure that can be built on the pipeline |
-| `isb_redis_buffer_usage` | Gauge       | `buffer=<buffer-name>` | Indicates the usage/utilization of a Redis ISB                                                                                               |
-| `isb_redis_consumer_lag` | Gauge       | `buffer=<buffer-name>` | Indicates the the consumer lag of a Redis ISB                                                                                                |
 
 ### Others
 

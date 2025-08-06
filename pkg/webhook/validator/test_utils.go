@@ -17,25 +17,6 @@ var (
 	testStorageClassName = "test-sc"
 )
 
-func fakeRedisISBSvc() *dfv1.InterStepBufferService {
-	return &dfv1.InterStepBufferService{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: testNamespace,
-			Name:      dfv1.DefaultISBSvcName,
-		},
-		Spec: dfv1.InterStepBufferServiceSpec{
-			Redis: &dfv1.RedisBufferService{
-				Native: &dfv1.NativeRedis{
-					Version: "6.2.6",
-					Persistence: &dfv1.PersistenceStrategy{
-						StorageClassName: &testStorageClassName,
-					},
-				},
-			},
-		},
-	}
-}
-
 func fakeJetStreamISBSvc() *dfv1.InterStepBufferService {
 	return &dfv1.InterStepBufferService{
 		ObjectMeta: metav1.ObjectMeta{

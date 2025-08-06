@@ -20,9 +20,7 @@ package e2e
 
 import (
 	"fmt"
-	"os"
 	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -37,10 +35,6 @@ type TransformerSuite struct {
 }
 
 func (s *TransformerSuite) TestSourceTransformer() {
-	// the transformer feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		s.T().SkipNow()
-	}
 
 	var wg sync.WaitGroup
 	wg.Add(4)
