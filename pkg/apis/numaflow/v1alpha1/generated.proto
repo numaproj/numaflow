@@ -1138,7 +1138,7 @@ message PersistenceStrategy {
   // +optional
   optional string storageClassName = 1;
 
-  // Available access modes such as ReadWriteOnce, ReadWriteMany
+  // Available access modes such as ReadWriteOncePod, ReadWriteOnce, ReadWriteMany
   // https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
   // +optional
   optional string accessMode = 2;

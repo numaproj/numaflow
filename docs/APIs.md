@@ -7315,7 +7315,8 @@ Kubernetes core/v1.PersistentVolumeAccessMode </a> </em>
 <em>(Optional)</em>
 <p>
 
-Available access modes such as ReadWriteOnce, ReadWriteMany
+Available access modes such as ReadWriteOncePod, ReadWriteOnce,
+ReadWriteMany
 <a href="https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes">https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes</a>
 </p>
 

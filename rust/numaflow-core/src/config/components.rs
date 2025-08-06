@@ -3557,7 +3557,7 @@ mod reducer_tests {
 
         let pbq_storage = PbqStorage {
             persistent_volume_claim: Some(Box::new(PersistenceStrategy {
-                access_mode: Some("ReadWriteOnce".to_string()),
+                access_mode: Some("ReadWriteOncePod".to_string()),
                 storage_class_name: Some("standard".to_string()),
                 volume_size: None,
             })),
