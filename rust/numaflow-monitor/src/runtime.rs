@@ -55,21 +55,31 @@ impl From<(&Status, &str, i64)> for RuntimeErrorEntry {
 
         // Extract metadata from gRPC Status
         let metadata = grpc_status.metadata();
-        let mut metadata_str = String::new();
+        let mut metadata_map = std::collections::HashMap::new();
         for key_value in metadata.iter() {
             match key_value {
                 tonic::metadata::KeyAndValueRef::Ascii(key, value) => {
-                    metadata_str.push_str(&format!("{}={}, ", key.as_str(), value.to_str().unwrap_or("invalid_utf8")));
+                    metadata_map.insert(
+                        key.as_str().to_string(),
+                        value.to_str().unwrap_or("invalid_utf8").to_string(),
+                    );
                 }
                 tonic::metadata::KeyAndValueRef::Binary(key, value) => {
-                    metadata_str.push_str(&format!("{}={:?}, ", key.as_str(), value));
+                    metadata_map.insert(key.as_str().to_string(), format!("{:?}", value));
                 }
             }
         }
-        // Remove trailing comma and space
-        if metadata_str.ends_with(", ") {
-            metadata_str.truncate(metadata_str.len() - 2);
-        }
+
+        // Convert HashMap to string for storage
+        let metadata_str = if metadata_map.is_empty() {
+            String::new()
+        } else {
+            metadata_map
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, v))
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
 
         // Combine details and metadata for comprehensive error information
         let combined_details = if metadata_str.is_empty() {
@@ -552,25 +562,29 @@ mod tests {
         let mut metadata = MetadataMap::new();
         metadata.insert("error-type", "udf-execution".parse().unwrap());
         metadata.insert("retry-count", "3".parse().unwrap());
-        metadata.insert_bin("binary-data-bin", tonic::metadata::MetadataValue::from_bytes(b"some binary data"));
+        metadata.insert_bin(
+            "binary-data-bin",
+            tonic::metadata::MetadataValue::from_bytes(b"some binary data"),
+        );
 
         let status_with_metadata = Status::with_details_and_metadata(
             tonic::Code::Internal,
             "Test error message with metadata",
             "test details".into(),
-            metadata
+            metadata,
         );
 
         let container_name = "test-container";
         let timestamp = 1234567890i64;
 
         // Convert to RuntimeErrorEntry
-        let error_entry = RuntimeErrorEntry::from((&status_with_metadata, container_name, timestamp));
+        let error_entry =
+            RuntimeErrorEntry::from((&status_with_metadata, container_name, timestamp));
 
         // Verify that metadata is included in the details
         assert_eq!(error_entry.container, "test-container");
         assert_eq!(error_entry.timestamp, 1234567890);
-        assert_eq!(error_entry.code, "Internal error");  // This is how tonic::Code::Internal formats as string
+        assert_eq!(error_entry.code, "Internal error"); // This is how tonic::Code::Internal formats as string
         assert_eq!(error_entry.message, "Test error message with metadata");
 
         // Check that details contains both original details and metadata
