@@ -53,12 +53,39 @@ impl From<(&Status, &str, i64)> for RuntimeErrorEntry {
         // Convert status details from bytes to a string
         let details_str = String::from_utf8_lossy(details_bytes);
 
+        // Extract metadata from gRPC Status
+        let metadata = grpc_status.metadata();
+        let mut metadata_str = String::new();
+        for key_value in metadata.iter() {
+            match key_value {
+                tonic::metadata::KeyAndValueRef::Ascii(key, value) => {
+                    metadata_str.push_str(&format!("{}={}, ", key.as_str(), value.to_str().unwrap_or("invalid_utf8")));
+                }
+                tonic::metadata::KeyAndValueRef::Binary(key, value) => {
+                    metadata_str.push_str(&format!("{}={:?}, ", key.as_str(), value));
+                }
+            }
+        }
+        // Remove trailing comma and space
+        if metadata_str.ends_with(", ") {
+            metadata_str.truncate(metadata_str.len() - 2);
+        }
+
+        // Combine details and metadata for comprehensive error information
+        let combined_details = if metadata_str.is_empty() {
+            details_str.to_string()
+        } else if details_str.is_empty() {
+            format!("metadata: {}", metadata_str)
+        } else {
+            format!("{} | metadata: {}", details_str, metadata_str)
+        };
+
         RuntimeErrorEntry {
             container: container_name.to_string(),
             timestamp,
             code,
             message,
-            details: details_str.to_string(),
+            details: combined_details,
         }
     }
 }
@@ -73,6 +100,12 @@ impl From<RuntimeErrorEntry> for String {
 /// It organizes error files in a directory structure based on container names and ensures that the
 /// number of error files per container (files may be written from udf) does not exceed a specified limit.
 /// If the limit is exceeded, the oldest file is removed to make room for new entry. This function runs only once.
+///
+/// The persisted error includes comprehensive information from the gRPC Status:
+/// - Error code (e.g., "Internal error", "Unavailable", etc.)
+/// - Error message
+/// - Details (raw bytes converted to string)
+/// - Metadata (key-value pairs with additional context)
 ///
 /// # Parameters:
 /// - `grpc_status`: The gRPC error (`tonic::Status`) to be persisted.
@@ -509,5 +542,42 @@ mod tests {
         let result: Result<()> = process_file_entry(&file_entry, &mut errors);
         assert!(result.is_err());
         assert_eq!(errors.len(), 0);
+    }
+
+    #[test]
+    fn test_runtime_error_entry_with_metadata() {
+        use tonic::metadata::MetadataMap;
+
+        // Add some metadata to the status
+        let mut metadata = MetadataMap::new();
+        metadata.insert("error-type", "udf-execution".parse().unwrap());
+        metadata.insert("retry-count", "3".parse().unwrap());
+        metadata.insert_bin("binary-data-bin", tonic::metadata::MetadataValue::from_bytes(b"some binary data"));
+
+        let status_with_metadata = Status::with_details_and_metadata(
+            tonic::Code::Internal,
+            "Test error message with metadata",
+            "test details".into(),
+            metadata
+        );
+
+        let container_name = "test-container";
+        let timestamp = 1234567890i64;
+
+        // Convert to RuntimeErrorEntry
+        let error_entry = RuntimeErrorEntry::from((&status_with_metadata, container_name, timestamp));
+
+        // Verify that metadata is included in the details
+        assert_eq!(error_entry.container, "test-container");
+        assert_eq!(error_entry.timestamp, 1234567890);
+        assert_eq!(error_entry.code, "Internal error");  // This is how tonic::Code::Internal formats as string
+        assert_eq!(error_entry.message, "Test error message with metadata");
+
+        // Check that details contains both original details and metadata
+        assert!(error_entry.details.contains("test details"));
+        assert!(error_entry.details.contains("metadata:"));
+        assert!(error_entry.details.contains("error-type=udf-execution"));
+        assert!(error_entry.details.contains("retry-count=3"));
+        assert!(error_entry.details.contains("binary-data-bin="));
     }
 }
