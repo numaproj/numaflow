@@ -2370,13 +2370,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#redis-isb" class="md-nav__link">
-    Redis ISB
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -2763,13 +2756,6 @@
   
 </li>
         
-          <li class="md-nav__item">
-  <a href="#redis-isb" class="md-nav__link">
-    Redis ISB
-  </a>
-  
-</li>
-        
       </ul>
     </nav>
   
@@ -3122,18 +3108,6 @@
 <td><code>buffer=&lt;buffer-name&gt;</code></td>
 <td>Indicates any write errors with NATS Jetstream ISB</td>
 </tr>
-<tr>
-<td><code>isb_redis_read_error_total</code></td>
-<td>Counter</td>
-<td><code>buffer=&lt;buffer-name&gt;</code></td>
-<td>Indicates any read errors with Redis ISB</td>
-</tr>
-<tr>
-<td><code>isb_redis_write_error_total</code></td>
-<td>Counter</td>
-<td><code>buffer=&lt;buffer-name&gt;</code></td>
-<td>Indicates any write errors with Redis ISB</td>
-</tr>
 </tbody>
 </table>
 <h3 id="saturation">Saturation<a class="headerlink" href="#saturation" title="Permanent link">&para;</a></h3>
@@ -3177,37 +3151,6 @@
 <td>Gauge</td>
 <td><code>buffer=&lt;buffer-name&gt;</code></td>
 <td>Indicates the number of messages pending acknowledge at a given point in time</td>
-</tr>
-</tbody>
-</table>
-<h4 id="redis-isb">Redis ISB<a class="headerlink" href="#redis-isb" title="Permanent link">&para;</a></h4>
-<table>
-<thead>
-<tr>
-<th>Metric name</th>
-<th>Metric type</th>
-<th>Labels</th>
-<th>Description</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>isb_redis_isFull_total</code></td>
-<td>Counter</td>
-<td><code>buffer=&lt;buffer-name&gt;</code></td>
-<td>Indicates if the ISB is full. Continual increase of this counter metric indicates a potential backpressure that can be built on the pipeline</td>
-</tr>
-<tr>
-<td><code>isb_redis_buffer_usage</code></td>
-<td>Gauge</td>
-<td><code>buffer=&lt;buffer-name&gt;</code></td>
-<td>Indicates the usage/utilization of a Redis ISB</td>
-</tr>
-<tr>
-<td><code>isb_redis_consumer_lag</code></td>
-<td>Gauge</td>
-<td><code>buffer=&lt;buffer-name&gt;</code></td>
-<td>Indicates the the consumer lag of a Redis ISB</td>
 </tr>
 </tbody>
 </table>

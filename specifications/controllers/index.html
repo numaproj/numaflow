@@ -2694,7 +2694,7 @@
 <p>The source code of the controllers is located at <code>./pkg/reconciler/</code>.</p>
 <p><img alt="Architecture" src="../../assets/architecture.png" /></p>
 <h2 id="inter-step-buffer-service-controller">Inter-Step Buffer Service Controller<a class="headerlink" href="#inter-step-buffer-service-controller" title="Permanent link">&para;</a></h2>
-<p><code>Inter-Step Buffer Service Controller</code> is used to watch <code>InterStepBufferService</code> object, depending on the spec of the object, it might install services (such as JetStream, or Redis) in the namespace, or simply provide the configuration of the <code>InterStepBufferService</code> (for example, when an <code>external</code> redis ISB Service is given).</p>
+<p><code>Inter-Step Buffer Service Controller</code> is used to watch <code>InterStepBufferService</code> object, and manage generated resources.</p>
 <h2 id="pipeline-controller">Pipeline Controller<a class="headerlink" href="#pipeline-controller" title="Permanent link">&para;</a></h2>
 <p>Pipeline Controller is used to watch <code>Pipeline</code> objects, it does following major things when there's a pipeline object created.</p>
 <ul>

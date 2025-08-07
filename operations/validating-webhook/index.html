@@ -2677,22 +2677,24 @@ The user sees an error immediately returned by the server explaining why the req
 <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>apply<span class="w"> </span>-n<span class="w"> </span>numaflow-system<span class="w"> </span>-f<span class="w"> </span>https://raw.githubusercontent.com/numaproj/numaflow/stable/config/validating-webhook-install.yaml
 </code></pre></div>
 <h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h2>
-<p>Currently, the validating webhook prevents updating the type of an InterStepBufferService from JetStream to Redis for example.</p>
-<p>Example spec:
+<p>Currently, the validating webhook prevents updating the pvc storage size, for example.</p>
+<p>Example spec:</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">InterStepBufferService</span>
 <span class="nt">metadata</span><span class="p">:</span>
 <span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">default</span>
 <span class="nt">spec</span><span class="p">:</span>
-<span class="w">  </span><span class="nt">jetstream</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">// change to redis and reapply will cause below error</span>
-<span class="w">    </span><span class="l l-Scalar l-Scalar-Plain">version</span><span class="p p-Indicator">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">latest</span>
-</code></pre></div></p>
+<span class="w">  </span><span class="nt">jetstream</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">latest</span>
+<span class="w">    </span><span class="nt">persistence</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">volumeSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3Gi // Update it will cause the error below</span>
+</code></pre></div>
 <div class="highlight"><pre><span></span><code>Error<span class="w"> </span>from<span class="w"> </span>server<span class="w"> </span><span class="o">(</span>BadRequest<span class="o">)</span>:<span class="w"> </span>error<span class="w"> </span>when<span class="w"> </span>applying<span class="w"> </span>patch:
-<span class="o">{</span><span class="s2">&quot;metadata&quot;</span>:<span class="o">{</span><span class="s2">&quot;annotations&quot;</span>:<span class="o">{</span><span class="s2">&quot;kubectl.kubernetes.io/last-applied-configuration&quot;</span>:<span class="s2">&quot;{\&quot;apiVersion\&quot;:\&quot;numaflow.numaproj.io/v1alpha1\&quot;,\&quot;kind\&quot;:\&quot;InterStepBufferService\&quot;,\&quot;metadata\&quot;:{\&quot;annotations\&quot;:{},\&quot;name\&quot;:\&quot;default\&quot;,\&quot;namespace\&quot;:\&quot;numaflow-system\&quot;},\&quot;spec\&quot;:{\&quot;redis\&quot;:{\&quot;native\&quot;:{\&quot;version\&quot;:\&quot;7.0.11\&quot;}}}}\n&quot;</span><span class="o">}}</span>,<span class="s2">&quot;spec&quot;</span>:<span class="o">{</span><span class="s2">&quot;jetstream&quot;</span>:null,<span class="s2">&quot;redis&quot;</span>:<span class="o">{</span><span class="s2">&quot;native&quot;</span>:<span class="o">{</span><span class="s2">&quot;version&quot;</span>:<span class="s2">&quot;7.0.11&quot;</span><span class="o">}}}}</span>
+<span class="o">{</span><span class="s2">&quot;metadata&quot;</span>:<span class="o">{</span><span class="s2">&quot;annotations&quot;</span>:<span class="o">{</span><span class="s2">&quot;kubectl.kubernetes.io/last-applied-configuration&quot;</span>:<span class="s2">&quot;{\&quot;apiVersion\&quot;:\&quot;numaflow.numaproj.io/v1alpha1\&quot;,\&quot;kind\&quot;:\&quot;InterStepBufferService\&quot;,\&quot;metadata\&quot;:{\&quot;annotations\&quot;:{},\&quot;name\&quot;:\&quot;default\&quot;,\&quot;namespace\&quot;:\&quot;numaflow-system\&quot;},\&quot;spec\&quot;:{\&quot;jetstream\&quot;:{\&quot;persistence\&quot;:{\&quot;volumeSize\&quot;:\&quot;5Gi\&quot;},\&quot;version\&quot;:\&quot;latest\&quot;}}}\n&quot;</span><span class="o">}}</span>,<span class="s2">&quot;spec&quot;</span>:<span class="o">{</span><span class="s2">&quot;jetstream&quot;</span>:<span class="o">{</span><span class="s2">&quot;persistence&quot;</span>:<span class="o">{</span><span class="s2">&quot;volumeSize&quot;</span>:<span class="s2">&quot;5Gi&quot;</span><span class="o">}}}}</span>
 to:
 Resource:<span class="w"> </span><span class="s2">&quot;numaflow.numaproj.io/v1alpha1, Resource=interstepbufferservices&quot;</span>,<span class="w"> </span>GroupVersionKind:<span class="w"> </span><span class="s2">&quot;numaflow.numaproj.io/v1alpha1, Kind=InterStepBufferService&quot;</span>
 Name:<span class="w"> </span><span class="s2">&quot;default&quot;</span>,<span class="w"> </span>Namespace:<span class="w"> </span><span class="s2">&quot;numaflow-system&quot;</span>
-<span class="k">for</span>:<span class="w"> </span><span class="s2">&quot;redis.yaml&quot;</span>:<span class="w"> </span>error<span class="w"> </span>when<span class="w"> </span>patching<span class="w"> </span><span class="s2">&quot;redis.yaml&quot;</span>:<span class="w"> </span>admission<span class="w"> </span>webhook<span class="w"> </span><span class="s2">&quot;webhook.numaflow.numaproj.io&quot;</span><span class="w"> </span>denied<span class="w"> </span>the<span class="w"> </span>request:<span class="w"> </span>Can<span class="w"> </span>not<span class="w"> </span>change<span class="w"> </span>ISB<span class="w"> </span>Service<span class="w"> </span><span class="nb">type</span><span class="w"> </span>from<span class="w"> </span>Jetstream<span class="w"> </span>to<span class="w"> </span>Redis
+<span class="k">for</span>:<span class="w"> </span><span class="s2">&quot;examples/0-isbsvc-jetstream.yaml&quot;</span>:<span class="w"> </span>error<span class="w"> </span>when<span class="w"> </span>patching<span class="w"> </span><span class="s2">&quot;examples/0-isbsvc-jetstream.yaml&quot;</span>:<span class="w"> </span>admission<span class="w"> </span>webhook<span class="w"> </span><span class="s2">&quot;webhook.numaflow.numaproj.io&quot;</span><span class="w"> </span>denied<span class="w"> </span>the<span class="w"> </span>request:<span class="w"> </span>can<span class="w"> </span>not<span class="w"> </span>change<span class="w"> </span>persistence<span class="w"> </span>of<span class="w"> </span>Jetstream<span class="w"> </span>ISB<span class="w"> </span>Service
 </code></pre></div>
 <p>There is also validation that prevents the <code>interStepBufferServiceName</code> of a Pipeline from being updated.</p>
 <div class="highlight"><pre><span></span><code>Error<span class="w"> </span>from<span class="w"> </span>server<span class="w"> </span><span class="o">(</span>BadRequest<span class="o">)</span>:<span class="w"> </span>error<span class="w"> </span>when<span class="w"> </span>applying<span class="w"> </span>patch:
@@ -2705,7 +2707,7 @@ Name:<span class="w"> </span><span class="s2">&quot;simple-pipeline&quot;</span>
 <p>Other validations include:</p>
 <p>Pipeline:</p>
 <ol>
-<li>cannot change the type of an existing vertex </li>
+<li>cannot change the type of an existing vertex</li>
 <li>cannot change the partition count of a reduce vertex</li>
 <li>cannot change the storage class of a reduce vertex</li>
 <li>etc.</li>
