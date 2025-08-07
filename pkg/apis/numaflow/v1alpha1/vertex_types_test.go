@@ -214,7 +214,7 @@ func TestGetHeadlessServiceName(t *testing.T) {
 
 func TestGetPodSpec(t *testing.T) {
 	req := GetVertexPodSpecReq{
-		ISBSvcType: ISBSvcTypeRedis,
+		ISBSvcType: ISBSvcTypeJetStream,
 		Image:      testFlowImage,
 		PullPolicy: corev1.PullIfNotPresent,
 		Env: []corev1.EnvVar{
@@ -672,7 +672,7 @@ func Test_VertexIsSink(t *testing.T) {
 
 func Test_VertexGetInitContainers(t *testing.T) {
 	req := GetVertexPodSpecReq{
-		ISBSvcType: ISBSvcTypeRedis,
+		ISBSvcType: ISBSvcTypeJetStream,
 		Image:      testFlowImage,
 		PullPolicy: corev1.PullIfNotPresent,
 		Env: []corev1.EnvVar{

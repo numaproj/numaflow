@@ -146,17 +146,7 @@ describe("index", () => {
         },
       },
     };
-    const isbSpecRedis = {
-      redis: {
-        version: "latest",
-        replicas: 3,
-        persistence: {
-          volumeSize: "3Gi",
-        },
-      },
-    };
     expect(GetISBType(isbSpec)).toEqual("jetstream");
-    expect(GetISBType(isbSpecRedis)).toEqual("redis");
   });
 
   it("DurationString", () => {

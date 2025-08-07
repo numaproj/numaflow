@@ -45,9 +45,6 @@ const (
 
 	DefaultISBSvcName = "default"
 
-	DefaultRedisSentinelMasterName = "mymaster"
-	RedisAuthSecretKey             = "redis-password" // Redis password secret key
-
 	JetStreamServerSecretAuthKey         = "auth"                 // key for auth server secret
 	JetStreamServerSecretEncryptionKey   = "encryption"           // key for encryption server secret
 	JetStreamServerPrivateKeyKey         = "private-key"          // key for server private key
@@ -119,13 +116,6 @@ const (
 	EnvSideInputObject                  = "NUMAFLOW_SIDE_INPUT_OBJECT"
 	EnvImage                            = "NUMAFLOW_IMAGE"
 	EnvImagePullPolicy                  = "NUMAFLOW_IMAGE_PULL_POLICY"
-	EnvISBSvcRedisSentinelURL           = "NUMAFLOW_ISBSVC_REDIS_SENTINEL_URL"
-	EnvISBSvcSentinelMaster             = "NUMAFLOW_ISBSVC_REDIS_SENTINEL_MASTER"
-	EnvISBSvcRedisURL                   = "NUMAFLOW_ISBSVC_REDIS_URL"
-	EnvISBSvcRedisUser                  = "NUMAFLOW_ISBSVC_REDIS_USER"
-	EnvISBSvcRedisPassword              = "NUMAFLOW_ISBSVC_REDIS_PASSWORD"
-	EnvISBSvcRedisSentinelPassword      = "NUMAFLOW_ISBSVC_REDIS_SENTINEL_PASSWORD"
-	EnvISBSvcRedisClusterMaxRedirects   = "NUMAFLOW_ISBSVC_REDIS_CLUSTER_MAX_REDIRECTS"
 	EnvISBSvcJetStreamUser              = "NUMAFLOW_ISBSVC_JETSTREAM_USER"
 	EnvISBSvcJetStreamPassword          = "NUMAFLOW_ISBSVC_JETSTREAM_PASSWORD"
 	EnvISBSvcJetStreamURL               = "NUMAFLOW_ISBSVC_JETSTREAM_URL"

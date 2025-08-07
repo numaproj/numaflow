@@ -82,13 +82,6 @@ var (
 		Help:      "A metric indicates the replicas of a JetStream ISB Service",
 	}, []string{metrics.LabelNamespace, metrics.LabelISBService})
 
-	// RedisISBSvcReplicas indicates the replicas of a Redis ISB Service.
-	RedisISBSvcReplicas = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Subsystem: "controller",
-		Name:      "isbsvc_redis_replicas",
-		Help:      "A metric indicates the replicas of a Redis ISB Service",
-	}, []string{metrics.LabelNamespace, metrics.LabelISBService})
-
 	// VertexDesiredReplicas indicates the desired replicas of a Vertex.
 	VertexDesiredReplicas = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Subsystem: "controller",
@@ -149,7 +142,7 @@ var (
 func init() {
 	ctrlmetrics.Registry.MustRegister(BuildInfo, ISBSvcHealth, PipelineHealth,
 		PipelineDesiredPhase, PipelineCurrentPhase, MonoVertexDesiredPhase, MonoVertexCurrentPhase,
-		MonoVertexHealth, JetStreamISBSvcReplicas, RedisISBSvcReplicas,
+		MonoVertexHealth, JetStreamISBSvcReplicas,
 		VertexDesiredReplicas, VertexCurrentReplicas, VertexMinReplicas,
 		VertexMaxReplicas, MonoVertexDesiredReplicas, MonoVertexCurrentReplicas,
 		MonoVertexMinReplicas, MonoVertexMaxReplicas)

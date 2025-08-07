@@ -20,9 +20,7 @@ package reduce_two_e2e
 import (
 	"context"
 	"fmt"
-	"os"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -44,11 +42,6 @@ func (r *ReduceSuite) TestReduceStreamJava() {
 }
 
 func (r *ReduceSuite) testReduceStream(lang string) {
-
-	// the reduce feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		r.T().SkipNow()
-	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -96,10 +89,6 @@ func (r *ReduceSuite) TestSimpleSessionKeyedPipelineJava() {
 }
 
 func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
-	// the reduce feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		r.T().SkipNow()
-	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -147,10 +136,6 @@ func (r *ReduceSuite) testSimpleSessionKeyedPipeline(lang string) {
 }
 
 func (r *ReduceSuite) TestSimpleSessionPipelineFailOverUsingWAL() {
-	// the reduce feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		r.T().SkipNow()
-	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -217,10 +202,6 @@ func (r *ReduceSuite) TestStreamSorterJava() {
 }
 
 func (r *ReduceSuite) testStreamSorter(lang string) {
-	// the reduce feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		r.T().SkipNow()
-	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()

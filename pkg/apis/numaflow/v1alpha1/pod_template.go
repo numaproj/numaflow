@@ -43,7 +43,7 @@ type AbstractPodTemplate struct {
 	// +patchMergeKey=name
 	// +patchStrategy=merge
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty" patchStrategy:"merge" patchMergeKey:"name" protobuf:"bytes,5,rep,name=imagePullSecrets"`
-	// If specified, indicates the Redis pod's priority. "system-node-critical"
+	// If specified, indicates the pod's priority. "system-node-critical"
 	// and "system-cluster-critical" are two special keywords which indicate the
 	// highest priorities with the former being the highest priority. Any other
 	// name must be defined by creating a PriorityClass object with that name.
@@ -53,7 +53,7 @@ type AbstractPodTemplate struct {
 	// +optional
 	PriorityClassName string `json:"priorityClassName,omitempty" protobuf:"bytes,6,opt,name=priorityClassName"`
 	// The priority value. Various system components use this field to find the
-	// priority of the Redis pod. When Priority Admission Controller is enabled,
+	// priority of the pod. When Priority Admission Controller is enabled,
 	// it prevents users from setting this field. The admission controller populates
 	// this field from PriorityClassName.
 	// The higher the value, the higher the priority.

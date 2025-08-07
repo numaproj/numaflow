@@ -32,24 +32,8 @@ func ValidateInterStepBufferService(isbsvc *dfv1.InterStepBufferService) error {
 	if errs := k8svalidation.IsDNS1035Label(isbsvc.Name); len(errs) > 0 {
 		return fmt.Errorf("invalid ISB Service name %q, %v", isbsvc.Name, errs)
 	}
-	if isbsvc.Spec.Redis != nil && isbsvc.Spec.JetStream != nil {
-		return fmt.Errorf(`invalid spec: "spec.redis" and "spec.jetstream" can not be defined together`)
-	}
-	if isbsvc.Spec.Redis == nil && isbsvc.Spec.JetStream == nil {
-		return fmt.Errorf(`invalid spec: either "spec.redis" or "spec.jetstream" needs to be specified`)
-	}
-	if isbsvc.Spec.Redis != nil {
-		if isbsvc.Spec.Redis.Native != nil && isbsvc.Spec.Redis.External != nil {
-			return fmt.Errorf(`"native" and "external" can not be defined together`)
-		}
-		if isbsvc.Spec.Redis.Native == nil && isbsvc.Spec.Redis.External == nil {
-			return fmt.Errorf(`either "native" or "external" must be defined`)
-		}
-		if native := isbsvc.Spec.Redis.Native; native != nil {
-			if native.Version == "" {
-				return fmt.Errorf(`invalid spec: "spec.redis.native.version" is not defined`)
-			}
-		}
+	if isbsvc.Spec.JetStream == nil {
+		return fmt.Errorf(`invalid spec: "spec.jetstream" needs to be specified`)
 	}
 	if x := isbsvc.Spec.JetStream; x != nil {
 		if x.Version == "" {

@@ -19,9 +19,7 @@ package sideinput_e2e
 
 import (
 	"context"
-	"os"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -35,10 +33,6 @@ type SideInputSuite struct {
 }
 
 func (s *SideInputSuite) TestSimpleMapSideInputPipeline() {
-	// the side inputs feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		s.T().SkipNow()
-	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -76,10 +70,6 @@ func (s *SideInputSuite) TestSimpleMapSideInputPipeline() {
 }
 
 func (s *SideInputSuite) TestSimpleReduceSideInputPipeline() {
-	// the side inputs feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		s.T().SkipNow()
-	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()

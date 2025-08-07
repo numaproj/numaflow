@@ -34,33 +34,16 @@ import (
 )
 
 const (
-	testISBSName           = "test-isb"
-	testNamespace          = "test-ns"
-	testVersion            = "6.2.6"
-	testImage              = "test-image"
-	testSImage             = "test-s-image"
-	testRedisExporterImage = "test-r-exporter-image"
-	testJSImage            = "test-nats-image"
-	testJSReloaderImage    = "test-nats-rl-image"
-	testJSMetricsImage     = "test-nats-m-image"
+	testISBSName        = "test-isb"
+	testNamespace       = "test-ns"
+	testVersion         = "6.2.6"
+	testJSImage         = "test-nats-image"
+	testJSReloaderImage = "test-nats-rl-image"
+	testJSMetricsImage  = "test-nats-m-image"
 )
 
 var (
 	testLabels = map[string]string{"a": "b"}
-
-	testNativeRedisIsbSvc = &dfv1.InterStepBufferService{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: testNamespace,
-			Name:      testISBSName,
-		},
-		Spec: dfv1.InterStepBufferServiceSpec{
-			Redis: &dfv1.RedisBufferService{
-				Native: &dfv1.NativeRedis{
-					Version: testVersion,
-				},
-			},
-		},
-	}
 
 	testJetStreamIsbSvc = &dfv1.InterStepBufferService{
 		ObjectMeta: metav1.ObjectMeta{
@@ -74,32 +57,7 @@ var (
 		},
 	}
 
-	testExternalRedisIsbSvc = &dfv1.InterStepBufferService{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: testNamespace,
-			Name:      testISBSName,
-		},
-		Spec: dfv1.InterStepBufferServiceSpec{
-
-			Redis: &dfv1.RedisBufferService{
-				External: &dfv1.RedisConfig{
-					URL: "xxxxx",
-				},
-			},
-		},
-	}
-
 	fakeGlobalISBSvcConfig = &reconciler.ISBSvcConfig{
-		Redis: &reconciler.RedisConfig{
-			Versions: []reconciler.RedisVersion{
-				{
-					Version:            testVersion,
-					RedisImage:         testImage,
-					SentinelImage:      testSImage,
-					RedisExporterImage: testRedisExporterImage,
-				},
-			},
-		},
 		JetStream: &reconciler.JetStreamConfig{
 			Versions: []reconciler.JetStreamVersion{
 				{
@@ -123,14 +81,6 @@ func TestGetInstaller(t *testing.T) {
 
 	fakeConfig := reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig)
 
-	t.Run("get native redis installer", func(t *testing.T) {
-		installer, err := getInstaller(testNativeRedisIsbSvc, nil, nil, fakeConfig, zaptest.NewLogger(t).Sugar(), nil)
-		assert.NoError(t, err)
-		assert.NotNil(t, installer)
-		_, ok := installer.(*redisInstaller)
-		assert.True(t, ok)
-	})
-
 	t.Run("get jetstream installer", func(t *testing.T) {
 		installer, err := getInstaller(testJetStreamIsbSvc, nil, nil, fakeConfig, zaptest.NewLogger(t).Sugar(), nil)
 		assert.NoError(t, err)
@@ -139,17 +89,9 @@ func TestGetInstaller(t *testing.T) {
 		assert.True(t, ok)
 	})
 
-	t.Run("get external redis installer", func(t *testing.T) {
-		installer, err := getInstaller(testExternalRedisIsbSvc, nil, nil, fakeConfig, zaptest.NewLogger(t).Sugar(), nil)
-		assert.NoError(t, err)
-		assert.NotNil(t, installer)
-		_, ok := installer.(*externalRedisInstaller)
-		assert.True(t, ok)
-	})
-
 	t.Run("test error", func(t *testing.T) {
-		testObj := testNativeRedisIsbSvc.DeepCopy()
-		testObj.Spec.Redis = nil
+		testObj := testJetStreamIsbSvc.DeepCopy()
+		testObj.Spec.JetStream = nil
 		_, err := getInstaller(testObj, nil, nil, fakeConfig, zaptest.NewLogger(t).Sugar(), nil)
 		assert.Error(t, err)
 	})
@@ -160,27 +102,6 @@ func TestInstall(t *testing.T) {
 	kubeClient := k8sfake.NewSimpleClientset()
 	fakeConfig := reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig)
 	ctx := context.TODO()
-	t.Run("test redis error", func(t *testing.T) {
-		testObj := testNativeRedisIsbSvc.DeepCopy()
-		testObj.Spec.Redis = nil
-		err := Install(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
-		assert.Error(t, err)
-		assert.Equal(t, "invalid isb service spec", err.Error())
-	})
-
-	t.Run("test redis install ok", func(t *testing.T) {
-		testObj := testNativeRedisIsbSvc.DeepCopy()
-		err := Install(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
-		assert.NoError(t, err)
-		testObj.Status.MarkChildrenResourceHealthy("RolloutFinished", "partitioned roll out complete: 3 new pods have been updated...")
-		assert.True(t, testObj.Status.IsReady())
-		assert.True(t, testObj.Status.IsHealthy())
-		assert.NotNil(t, testObj.Status.Config.Redis)
-		assert.NotEmpty(t, testObj.Status.Config.Redis.SentinelURL)
-		assert.NotEmpty(t, testObj.Status.Config.Redis.MasterName)
-		assert.NotEmpty(t, testObj.Status.Config.Redis.User)
-		assert.NotNil(t, testObj.Status.Config.Redis.Password)
-	})
 
 	t.Run("test jetstream error", func(t *testing.T) {
 		testObj := testJetStreamIsbSvc.DeepCopy()
@@ -223,19 +144,6 @@ func TestUnInstall(t *testing.T) {
 	kubeClient := k8sfake.NewSimpleClientset()
 	fakeConfig := reconciler.FakeGlobalConfig(t, fakeGlobalISBSvcConfig)
 	ctx := context.TODO()
-	t.Run("test redis error", func(t *testing.T) {
-		testObj := testNativeRedisIsbSvc.DeepCopy()
-		testObj.Spec.Redis = nil
-		err := Uninstall(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
-		assert.Error(t, err)
-		assert.Equal(t, "invalid isb service spec", err.Error())
-	})
-
-	t.Run("test redis uninstall ok", func(t *testing.T) {
-		testObj := testNativeRedisIsbSvc.DeepCopy()
-		err := Uninstall(ctx, testObj, cl, kubeClient, fakeConfig, zaptest.NewLogger(t).Sugar(), record.NewFakeRecorder(64))
-		assert.NoError(t, err)
-	})
 
 	t.Run("test jetstream error", func(t *testing.T) {
 		testObj := testJetStreamIsbSvc.DeepCopy()

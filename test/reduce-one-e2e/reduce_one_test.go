@@ -19,9 +19,7 @@ package reduce_one_e2e
 
 import (
 	"context"
-	"os"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
@@ -36,10 +34,7 @@ type ReduceSuite struct {
 
 // one reduce vertex (keyed)
 func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
-	// the reduce feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		r.T().SkipNow()
-	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	w := r.Given().Pipeline("@testdata/simple-keyed-reduce-pipeline.yaml").
@@ -80,10 +75,6 @@ func (r *ReduceSuite) TestSimpleKeyedReducePipeline() {
 
 // one reduce vertex(non keyed)
 func (r *ReduceSuite) TestSimpleNonKeyedReducePipeline() {
-	// the reduce feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		r.T().SkipNow()
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 
 	defer cancel()
@@ -123,10 +114,6 @@ func (r *ReduceSuite) TestSimpleNonKeyedReducePipeline() {
 
 // two reduce vertex(keyed and non keyed)
 func (r *ReduceSuite) TestComplexReducePipelineKeyedNonKeyed() {
-	// the reduce feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		r.T().SkipNow()
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 
 	defer cancel()
@@ -165,10 +152,6 @@ func (r *ReduceSuite) TestComplexReducePipelineKeyedNonKeyed() {
 }
 
 func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
-	// the reduce feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		r.T().SkipNow()
-	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 
@@ -225,10 +208,6 @@ func (r *ReduceSuite) TestSimpleReducePipelineFailOverUsingWAL() {
 
 // two reduce vertices (keyed and non-keyed) followed by a sliding window vertex
 func (r *ReduceSuite) TestComplexSlidingWindowPipeline() {
-	// the reduce feature is not supported with redis ISBSVC
-	if strings.ToUpper(os.Getenv("ISBSVC")) == "REDIS" {
-		r.T().SkipNow()
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 
 	defer cancel()

@@ -68,14 +68,7 @@ func getInstaller(isbSvc *dfv1.InterStepBufferService, client client.Client, kub
 		dfv1.KeyComponent:  dfv1.ComponentISBSvc,
 		dfv1.KeyISBSvcName: isbSvc.Name,
 	}
-	if redis := isbSvc.Spec.Redis; redis != nil {
-		labels[dfv1.KeyISBSvcType] = string(dfv1.ISBSvcTypeRedis)
-		if redis.External != nil {
-			return NewExternalRedisInstaller(isbSvc, logger), nil
-		} else if redis.Native != nil {
-			return NewNativeRedisInstaller(client, kubeClient, isbSvc, config, labels, logger, recorder), nil
-		}
-	} else if js := isbSvc.Spec.JetStream; js != nil {
+	if js := isbSvc.Spec.JetStream; js != nil {
 		labels[dfv1.KeyISBSvcType] = string(dfv1.ISBSvcTypeJetStream)
 		return NewJetStreamInstaller(client, kubeClient, isbSvc, config, labels, logger, recorder), nil
 	}
