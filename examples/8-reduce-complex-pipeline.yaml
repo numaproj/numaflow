@@ -32,7 +32,7 @@ spec:
           storage:
             persistentVolumeClaim:
               volumeSize: 2Gi
-              accessMode: ReadWriteOnce
+              accessMode: ReadWriteOncePod
     - name: non-keyed-fixed-sum
       udf:
         container:
@@ -46,7 +46,7 @@ spec:
           storage:
             persistentVolumeClaim:
               volumeSize: 2Gi
-              accessMode: ReadWriteOnce
+              accessMode: ReadWriteOncePod
     - name: non-keyed-sliding-sum
       udf:
         container:
@@ -61,7 +61,7 @@ spec:
           storage:
             persistentVolumeClaim:
               volumeSize: 2Gi
-              accessMode: ReadWriteOnce
+              accessMode: ReadWriteOncePod
     - name: sink
       scale:
         min: 1

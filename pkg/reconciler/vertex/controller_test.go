@@ -599,7 +599,7 @@ func Test_reconcile(t *testing.T) {
 				},
 				Storage: &dfv1.PBQStorage{
 					PersistentVolumeClaim: &dfv1.PersistenceStrategy{
-						AccessMode: ptr.To[corev1.PersistentVolumeAccessMode](corev1.ReadWriteOnce),
+						AccessMode: ptr.To[corev1.PersistentVolumeAccessMode](corev1.ReadWriteOncePod),
 					},
 				},
 			},
