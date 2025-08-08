@@ -16,10 +16,10 @@ use std::sync::OnceLock;
 use tonic::Status;
 use tracing::error;
 
-// Define a simple DebugInfo struct that matches the google.rpc.DebugInfo protobuf structure
-// https://github.com/googleapis/googleapis/blob/c5334a83d6966439a2273a4ef64e6779ffba97a1/google/rpc/error_details.proto#L98
-// tonic_types::DebugInfo doesn't implement the prost Message trait
-// prost-types doesn't have the DebugInfo protobuf message, so we need to define our own
+/// Define a simple DebugInfo struct that matches the google.rpc.DebugInfo protobuf structure
+/// https://github.com/googleapis/googleapis/blob/c5334a83d6966439a2273a4ef64e6779ffba97a1/google/rpc/error_details.proto#L98
+/// tonic_types::DebugInfo doesn't implement the prost Message trait
+/// prost-types doesn't have the DebugInfo protobuf message, so we need to define our own
 #[derive(prost::Message)]
 pub struct DebugInfo {
     /// The stack trace entries indicating where the error occurred.
