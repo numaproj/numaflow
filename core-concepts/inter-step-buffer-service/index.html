@@ -2911,7 +2911,7 @@ fixed version in your real workload.</p>
 <span class="w">    </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">latest</span><span class="w"> </span><span class="c1"># Do NOT use &quot;latest&quot; but a specific version in your real deployment</span>
 <span class="w">    </span><span class="nt">persistence</span><span class="p">:</span>
 <span class="w">      </span><span class="nt">storageClassName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">standard</span><span class="w"> </span><span class="c1"># Optional, will use K8s cluster default storage class if not specified</span>
-<span class="w">      </span><span class="nt">accessMode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ReadWriteOnce</span><span class="w"> </span><span class="c1"># Optional, defaults to ReadWriteOnce</span>
+<span class="w">      </span><span class="nt">accessMode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ReadWriteOncePod</span><span class="w"> </span><span class="c1"># Optional, defaults to ReadWriteOncePod</span>
 <span class="w">      </span><span class="nt">volumeSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10Gi</span><span class="w"> </span><span class="c1"># Optional, defaults to 20Gi</span>
 </code></pre></div>
 <h3 id="anti-affinity">Anti-Affinity<a class="headerlink" href="#anti-affinity" title="Permanent link">&para;</a></h3>
