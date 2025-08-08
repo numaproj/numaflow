@@ -288,12 +288,21 @@ export function Pods(props: PodsProps) {
     );
   }
 
-  if (podsErr || !pods?.length) {
+  if (podsErr) {
     return (
       <Box
         data-testid={"pods-error"}
         sx={{ mx: 2, my: 2 }}
       >{`Failed to get pods details`}</Box>
+    );
+  }
+
+  if (!pods?.length) {
+    return (
+      <Box
+        data-testid={"pods-empty"}
+        sx={{ mx: 2, my: 2 }}
+      >{`No pods found for this vertex`}</Box>
     );
   }
 
