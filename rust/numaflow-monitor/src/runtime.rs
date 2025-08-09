@@ -64,7 +64,9 @@ impl From<(&Status, &str, i64)> for RuntimeErrorEntry {
                         value.to_str().unwrap_or("invalid_utf8").to_string(),
                     );
                 }
-                tonic::metadata::KeyAndValueRef::Binary(_, _) => {}
+                tonic::metadata::KeyAndValueRef::Binary(_, _) => {
+                    // Skip binary metadata as it's not readable and doesn't add debugging value
+                }
             }
         }
 
@@ -590,6 +592,7 @@ mod tests {
         assert!(error_entry.details.contains("metadata:"));
         assert!(error_entry.details.contains("error-type=udf-execution"));
         assert!(error_entry.details.contains("retry-count=3"));
-        assert!(error_entry.details.contains("binary-data-bin="));
+        // Binary metadata should NOT be included as per review feedback
+        assert!(!error_entry.details.contains("binary-data-bin="));
     }
 }
