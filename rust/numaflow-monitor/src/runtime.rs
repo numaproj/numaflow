@@ -64,9 +64,7 @@ impl From<(&Status, &str, i64)> for RuntimeErrorEntry {
                         value.to_str().unwrap_or("invalid_utf8").to_string(),
                     );
                 }
-                tonic::metadata::KeyAndValueRef::Binary(key, value) => {
-                    metadata_map.insert(key.as_str().to_string(), format!("{:?}", value));
-                }
+                tonic::metadata::KeyAndValueRef::Binary(_, _) => {}
             }
         }
 
@@ -87,7 +85,7 @@ impl From<(&Status, &str, i64)> for RuntimeErrorEntry {
         } else if details_str.is_empty() {
             format!("metadata: {}", metadata_str)
         } else {
-            format!("{} | metadata: {}", details_str, metadata_str)
+            format!("metadata: {} | details: {}", metadata_str, details_str)
         };
 
         RuntimeErrorEntry {
