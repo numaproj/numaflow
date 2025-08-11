@@ -33,3 +33,4 @@ SDK and Numaflow compatibility version matrix.  (● - Released, ○ - Future Re
 | __0.3.0__ (next) |   ○    |   ○    |        |        |        |        |        |
 | __0.2.0__        |   ●    |   ●    |   ●    |        |        |        |        |
 | __0.1.0__        |        |        |        |   ●    |        |        |        |
+
