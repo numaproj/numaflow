@@ -1,6 +1,16 @@
 # SDK Compatibility
 
-SDK and Numaflow compatibility version matrix.  (● - Released, ○ - Future Release)
+SDK and Numaflow compatibility version matrix. Please refer to features matrix in [SDK Features](./features.md) for the 
+features supported by each SDK version.
+
+Numaflow ensures backwards compatibility for SDKs. SDKs are expected to work with the current and previous minor versions
+of Numaflow. 
+
+To upgrade SDKs, first upgrade Numaflow to the latest version supported by the SDK, then upgrade the SDKs. If your
+SDK and Numaflow versions are a couple of versions apart, you may need to upgrade Numaflow multiple times to reach the
+latest version supported by the SDK.
+
+(● - Released, ○ - Future Release)
 
 ## Python
 

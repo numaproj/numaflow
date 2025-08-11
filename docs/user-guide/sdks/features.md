@@ -1,6 +1,8 @@
 # SDK Features
 
-The features supported by SDKs. These features are about whether each SDK support writing User Defined Functions.
+The features supported by SDKs. These features are about whether each SDK support writing User Defined Functions. 
+Please refer to the [SDK Compatibility](./compatibility.md) for SDK and Numaflow compatibility.
+
 (● - Released, ○ - Future Release)
 
 ## Python
