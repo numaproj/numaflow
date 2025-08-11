@@ -1,14 +1,14 @@
 # SDK Compatibility
 
-SDK and Numaflow compatibility version matrix. Please refer to features matrix in [SDK Features](./features.md) for the 
-features supported by each SDK version.
+SDK and Numaflow compatibility version matrix. 
+Please refer to features matrix in [SDK Features](./features.md) for the features supported by each SDK version.
 
-Numaflow ensures backwards compatibility for SDKs. SDKs are expected to work with the current and previous minor versions
-of Numaflow. 
+Numaflow ensures at least one version backward compatibility for SDKs, i.e., SDKs are expected to work with the current 
+and previous version of Numaflow. 
+To upgrade SDKs, first upgrade Numaflow to the latest version supported by the SDK, then upgrade the SDK. 
 
-To upgrade SDKs, first upgrade Numaflow to the latest version supported by the SDK, then upgrade the SDKs. If your
-SDK and Numaflow versions are a couple of versions apart, you may need to upgrade Numaflow multiple times to reach the
-latest version supported by the SDK.
+**NOTE**: If your Numaflow version (and your SDK) are quite old, to upgrade to the latest SDK, you may need to upgrade 
+Numaflow (and SDK) multiple times to reach the latest version.
 
 (● - Released, ○ - Future Release)
 
