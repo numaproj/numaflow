@@ -35,5 +35,5 @@ Please refer to the [SDK Compatibility](./compatibility.md) for SDK and Numaflow
 |                  | Source | Transformer | Map | Batch Map | Streaming Map | Reduce | Reduce Streaming | Reduce Sessions | Accumulator | Sink |
 |:-----------------|:------:|:-----------:|:---:|:---------:|:-------------:|:------:|:----------------:|:---------------:|:-----------:|:----:|
 | __0.3.0 (next)__ |   ●    |      ●      |  ●  |     ●     |       ●       |   ●    |        ●         |        ○        |      ○      |  ●   |
-| __0.2.0__        |   ●    |      ●      |  ●  |     ●     |       ●       |   ●    |        ●         |        ●        |             |  ●   |
-| __0.1.0__        |   ●    |      ●      |  ●  |     ●     |       ●       |   ●    |        ●         |        ●        |             |  ●   |
+| __0.2.0__        |   ●    |      ●      |  ●  |     ●     |       ●       |   ●    |        ●         |                 |             |  ●   |
+| __0.1.0__        |   ●    |      ●      |  ●  |     ●     |       ●       |   ●    |        ●         |                 |             |  ●   |
