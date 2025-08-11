@@ -126,13 +126,12 @@ describe("index", () => {
     });
   });
   it("timeAgo", () => {
-    // flaky test
-    // expect(timeAgo(new Date().toISOString())).toEqual("Just now");
     expect(timeAgo(new Date(Date.now() - 10000).toISOString())).toEqual(
       "10 seconds ago"
     );
-    expect(timeAgo(new Date(Date.now() + 1000).toISOString())).toEqual(
-      "1 seconds from now"
+    // Use a larger time difference to avoid flaky test due to execution time
+    expect(timeAgo(new Date(Date.now() + 5000).toISOString())).toEqual(
+      "5 seconds from now"
     );
   });
 
