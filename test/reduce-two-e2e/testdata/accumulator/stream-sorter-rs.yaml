@@ -1,39 +1,34 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: simple-session-counter-java
+  name: stream-sorter-rs
 spec:
-  watermark:
-    maxDelay: 30s
+  limits:
+    readBatchSize: 1
   vertices:
-    - name: in
+    - name: input-one
       scale:
         min: 1
       source:
         http: {}
-    - name: even-odd
+    - name: input-two
       scale:
         min: 1
+      source:
+        http: {}
+    - name: accum
       udf:
         container:
-          image: quay.io/numaio/numaflow-java/even-odd:stable
-          imagePullPolicy: IfNotPresent
-    - name: compute-count
-      partitions: 1
-      udf:
-        container:
-          # see https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/reducesession/counter
-          image: quay.io/numaio/numaflow-java/session-reduce-count:stable
-          imagePullPolicy: Always
+          # sort the incoming stream 
+          image: quay.io/numaio/numaflow-rs/stream-sorter:stable
         groupBy:
           window:
-            session:
+            accumulator:
               timeout: 10s
           keyed: true
           storage:
             persistentVolumeClaim:
               volumeSize: 1Gi
-              accessMode: ReadWriteOnce
     - name: sink
       scale:
         min: 1
@@ -46,11 +41,15 @@ spec:
             env:
               - name: SINK_HASH_KEY
                 # The key is set in the format of "pipeline_name-vertex_name"
-                value: "simple-session-counter-java-sink"
+                value: "stream-sorter-rs-sink"
+              - name: MESSAGE_COUNT
+                value: "100"
+              - name: CHECK_ORDER
+                value: "true"
   edges:
-    - from: in
-      to: even-odd
-    - from: even-odd
-      to: compute-count
-    - from: compute-count
+    - from: input-one
+      to: accum
+    - from: input-two
+      to: accum
+    - from: accum
       to: sink

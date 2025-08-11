@@ -468,7 +468,7 @@ impl MessageProcessingTracker {
             fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
 
         let ack_msg = async || {
-            if let Err(err) = msg.ack().await {
+            if let Err(err) = msg.double_ack().await {
                 tracing::error!(?err, "Failed to Ack message");
                 return Err(format!("Acknowledging Jetstream message: {err:?}"));
             }
