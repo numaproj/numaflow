@@ -411,16 +411,16 @@ impl Source {
 
                 // attempt to publish idle watermark since we are not able to read any message from
                 // the source.
-                if msgs_len == 0 {
-                    if let Some(watermark_handle) = self.watermark_handle.as_mut() {
-                        watermark_handle
-                            .publish_source_idle_watermark(
-                                Self::partitions(self.sender.clone())
-                                    .await
-                                    .unwrap_or_default(),
-                            )
-                            .await;
-                    }
+                if msgs_len == 0
+                    && let Some(watermark_handle) = self.watermark_handle.as_mut()
+                {
+                    watermark_handle
+                        .publish_source_idle_watermark(
+                            Self::partitions(self.sender.clone())
+                                .await
+                                .unwrap_or_default(),
+                        )
+                        .await;
                 }
 
                 let mut offsets = vec![];

@@ -21,8 +21,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
 use crate::Result;
-use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
-use crate::config::pipeline::isb_config::{CompressionType, ISBConfig};
+use crate::config::pipeline::isb::{BufferFullStrategy, CompressionType, ISBConfig, Stream};
 use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::Error;
 
@@ -1636,7 +1635,7 @@ mod tests {
     // Unit tests for the compress function
     mod compress_tests {
         use super::*;
-        use crate::config::pipeline::isb_config::CompressionType;
+        use crate::config::pipeline::isb::CompressionType;
         use flate2::read::GzDecoder;
         use lz4::Decoder;
         use std::io::Read;
