@@ -575,21 +575,27 @@ impl JetStreamReader {
                     _ => msg.ack_with(ack_kind).await,
                 };
 
-                if result.is_err() && cancel_token.is_cancelled() {
-                    error!(
-                        ?result,
-                        ?offset,
-                        "Cancellation token received, stopping the {:?} retry loop",
-                        ack_kind
-                    );
-                    return Ok(());
-                }
-
                 result.map_err(|e| {
                     Error::Connection(format!("Failed to send {ack_kind:?} to Jetstream: {e}"))
                 })
             },
-            |_: &Error| true,
+            |e: &Error| {
+                if cancel_token.is_cancelled() {
+                    error!(
+                        ?e,
+                        ?offset,
+                        "Cancellation token received, stopping the {ack_kind:?} retry loop",
+                    );
+                    return false;
+                }
+
+                warn!(
+                    ?e,
+                    ?offset,
+                    "Failed to send {ack_kind:?} Ack to Jetstream for message, retrying...",
+                );
+                true
+            },
         )
         .await;
     }
