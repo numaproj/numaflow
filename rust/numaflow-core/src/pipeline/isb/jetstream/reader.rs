@@ -5,8 +5,7 @@ use std::time::Duration;
 
 use crate::Result;
 use crate::config::get_vertex_name;
-use crate::config::pipeline::isb::{BufferReaderConfig, Stream};
-use crate::config::pipeline::isb_config::{CompressionType, ISBConfig};
+use crate::config::pipeline::isb::{BufferReaderConfig, CompressionType, ISBConfig, Stream};
 use crate::error::Error;
 use crate::message::{IntOffset, Message, MessageID, MessageType, Metadata, Offset, ReadAck};
 use crate::metrics::{
@@ -949,7 +948,7 @@ mod tests {
 
         // Create ISB config with gzip compression
         let isb_config = ISBConfig {
-            compression: crate::config::pipeline::isb_config::Compression {
+            compression: crate::config::pipeline::isb::Compression {
                 compress_type: CompressionType::Gzip,
             },
         };
@@ -1040,7 +1039,7 @@ mod tests {
     // Unit tests for the decompress function
     mod decompress_tests {
         use super::*;
-        use crate::config::pipeline::isb_config::CompressionType;
+        use crate::config::pipeline::isb::CompressionType;
         use flate2::write::GzEncoder;
         use lz4::EncoderBuilder;
         use std::io::Write;

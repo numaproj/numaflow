@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
-use numaflow_models::models::{ForwardConditions, Vertex, Watermark};
+use numaflow_models::models::{ForwardConditions, Vertex};
 use serde::Deserialize;
 use serde_json::from_slice;
 use tracing::info;
@@ -29,8 +29,6 @@ use crate::config::pipeline::isb::{BufferReaderConfig, BufferWriterConfig, Strea
 use crate::config::pipeline::map::MapMode;
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::watermark::WatermarkConfig;
-use crate::config::pipeline::watermark::{BucketConfig, EdgeWatermarkConfig};
-use crate::config::pipeline::watermark::{IdleConfig, SourceWatermarkConfig};
 use crate::error::Error;
 
 const DEFAULT_BATCH_SIZE: u64 = 500;
@@ -78,53 +76,7 @@ pub(crate) struct PipelineConfig {
     pub(crate) metrics_config: MetricsConfig,
     pub(crate) watermark_config: Option<WatermarkConfig>,
     pub(crate) callback_config: Option<ServingCallbackConfig>,
-    pub(crate) isb_config: Option<isb_config::ISBConfig>,
-}
-
-pub(crate) mod isb_config {
-    #[derive(Debug, Clone, PartialEq)]
-    pub(crate) struct ISBConfig {
-        pub(crate) compression: Compression,
-    }
-
-    #[derive(Debug, Clone, PartialEq)]
-    pub(crate) struct Compression {
-        pub(crate) compress_type: CompressionType,
-    }
-
-    #[derive(Debug, Copy, Clone, PartialEq)]
-    pub(crate) enum CompressionType {
-        None,
-        Gzip,
-        Zstd,
-        LZ4,
-    }
-
-    impl TryFrom<numaflow_models::models::Compression> for Compression {
-        type Error = String;
-        fn try_from(value: numaflow_models::models::Compression) -> Result<Self, Self::Error> {
-            match value.r#type {
-                None => Ok(Compression {
-                    compress_type: CompressionType::None,
-                }),
-                Some(t) => match t.as_str() {
-                    "gzip" => Ok(Compression {
-                        compress_type: CompressionType::Gzip,
-                    }),
-                    "zstd" => Ok(Compression {
-                        compress_type: CompressionType::Zstd,
-                    }),
-                    "lz4" => Ok(Compression {
-                        compress_type: CompressionType::LZ4,
-                    }),
-                    "none" => Ok(Compression {
-                        compress_type: CompressionType::None,
-                    }),
-                    _ => Err(format!("Invalid compression type: {t}")),
-                },
-            }
-        }
-    }
+    pub(crate) isb_config: Option<isb::ISBConfig>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -610,7 +562,7 @@ impl PipelineConfig {
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(DEFAULT_WATERMARK_DELAY_IN_MILLIS);
 
-            Self::create_watermark_config(
+            WatermarkConfig::new(
                 vertex_obj.spec.watermark.clone(),
                 &namespace,
                 &pipeline_name,
@@ -654,31 +606,30 @@ impl PipelineConfig {
             });
         }
 
-        let isb_config: Option<isb_config::ISBConfig> =
-            match vertex_obj.spec.inter_step_buffer.as_ref() {
-                None => None,
-                Some(isb_spec) => {
-                    let compress_type = match isb_spec.compression.as_ref() {
-                        None => isb_config::CompressionType::None,
-                        Some(t) => match &t.r#type {
-                            None => isb_config::CompressionType::None,
-                            Some(t) => match t.as_str() {
-                                "gzip" => isb_config::CompressionType::Gzip,
-                                "zstd" => isb_config::CompressionType::Zstd,
-                                "lz4" => isb_config::CompressionType::LZ4,
-                                _ => {
-                                    return Err(Error::Config(format!(
-                                        "Invalid compression type setting: {t}"
-                                    )));
-                                }
-                            },
+        let isb_config: Option<isb::ISBConfig> = match vertex_obj.spec.inter_step_buffer.as_ref() {
+            None => None,
+            Some(isb_spec) => {
+                let compress_type = match isb_spec.compression.as_ref() {
+                    None => isb::CompressionType::None,
+                    Some(t) => match &t.r#type {
+                        None => isb::CompressionType::None,
+                        Some(t) => match t.as_str() {
+                            "gzip" => isb::CompressionType::Gzip,
+                            "zstd" => isb::CompressionType::Zstd,
+                            "lz4" => isb::CompressionType::LZ4,
+                            _ => {
+                                return Err(Error::Config(format!(
+                                    "Invalid compression type setting: {t}"
+                                )));
+                            }
                         },
-                    };
-                    Some(isb_config::ISBConfig {
-                        compression: isb_config::Compression { compress_type },
-                    })
-                }
-            };
+                    },
+                };
+                Some(isb::ISBConfig {
+                    compression: isb::Compression { compress_type },
+                })
+            }
+        };
 
         let graceful_shutdown_time_secs = env_vars
             .get(ENV_NUMAFLOW_GRACEFUL_TIMEOUT_SECS)
@@ -712,123 +663,6 @@ impl PipelineConfig {
             isb_config,
         })
     }
-
-    #[allow(clippy::too_many_arguments)]
-    fn create_watermark_config(
-        watermark_spec: Option<Box<Watermark>>,
-        namespace: &str,
-        pipeline_name: &str,
-        vertex_name: &str,
-        vertex: &VertexConfig,
-        from_vertex_config: &[FromVertexConfig],
-        to_vertex_config: &[ToVertexConfig],
-        delay_in_millis: u64,
-    ) -> Option<WatermarkConfig> {
-        let max_delay = watermark_spec
-            .as_ref()
-            .and_then(|w| w.max_delay.map(|x| Duration::from(x).as_millis() as u64))
-            .unwrap_or(0);
-
-        let idle_config = watermark_spec
-            .as_ref()
-            .and_then(|w| w.idle_source.as_ref())
-            .map(|idle| IdleConfig {
-                increment_by: idle.increment_by.map(Duration::from).unwrap_or_default(),
-                step_interval: idle.step_interval.map(Duration::from).unwrap_or_default(),
-                threshold: idle.threshold.map(Duration::from).unwrap_or_default(),
-            });
-
-        // Helper function to create bucket config for to_vertex
-        let create_to_vertex_bucket_config = |to: &ToVertexConfig| BucketConfig {
-            vertex: to.name,
-            partitions: to.partitions,
-            ot_bucket: Box::leak(
-                format!(
-                    "{}-{}-{}-{}_OT",
-                    namespace, pipeline_name, vertex_name, &to.name
-                )
-                .into_boxed_str(),
-            ),
-            hb_bucket: Box::leak(
-                format!(
-                    "{}-{}-{}-{}_PROCESSORS",
-                    namespace, pipeline_name, vertex_name, &to.name
-                )
-                .into_boxed_str(),
-            ),
-            delay: Some(Duration::from_millis(delay_in_millis)),
-        };
-
-        // Helper function to create bucket config for from_vertex
-        let create_from_vertex_bucket_config =
-            |from: &FromVertexConfig, partitions: u16| BucketConfig {
-                vertex: from.name,
-                partitions,
-                ot_bucket: Box::leak(
-                    format!(
-                        "{}-{}-{}-{}_OT",
-                        namespace, pipeline_name, &from.name, vertex_name
-                    )
-                    .into_boxed_str(),
-                ),
-                hb_bucket: Box::leak(
-                    format!(
-                        "{}-{}-{}-{}_PROCESSORS",
-                        namespace, pipeline_name, &from.name, vertex_name
-                    )
-                    .into_boxed_str(),
-                ),
-                delay: Some(Duration::from_millis(delay_in_millis)),
-            };
-
-        match vertex {
-            VertexConfig::Source(_) => Some(WatermarkConfig::Source(SourceWatermarkConfig {
-                max_delay: Duration::from_millis(max_delay),
-                source_bucket_config: BucketConfig {
-                    vertex: Box::leak(vertex_name.to_string().into_boxed_str()),
-                    partitions: 1, // source will have only one partition
-                    ot_bucket: Box::leak(
-                        format!("{namespace}-{pipeline_name}-{vertex_name}_SOURCE_OT")
-                            .into_boxed_str(),
-                    ),
-                    hb_bucket: Box::leak(
-                        format!("{namespace}-{pipeline_name}-{vertex_name}_SOURCE_PROCESSORS")
-                            .into_boxed_str(),
-                    ),
-                    delay: Some(Duration::from_millis(delay_in_millis)),
-                },
-                to_vertex_bucket_config: to_vertex_config
-                    .iter()
-                    .map(create_to_vertex_bucket_config)
-                    .collect(),
-                idle_config,
-            })),
-            VertexConfig::Sink(_) | VertexConfig::Map(_) => {
-                Some(WatermarkConfig::Edge(EdgeWatermarkConfig {
-                    from_vertex_config: from_vertex_config
-                        .iter()
-                        .map(|from| create_from_vertex_bucket_config(from, from.partitions))
-                        .collect(),
-                    to_vertex_config: to_vertex_config
-                        .iter()
-                        .map(create_to_vertex_bucket_config)
-                        .collect(),
-                }))
-            }
-            VertexConfig::Reduce(_) => {
-                Some(WatermarkConfig::Edge(EdgeWatermarkConfig {
-                    from_vertex_config: from_vertex_config
-                        .iter()
-                        .map(|from| create_from_vertex_bucket_config(from, 1)) // reduce will have only one partition
-                        .collect(),
-                    to_vertex_config: to_vertex_config
-                        .iter()
-                        .map(create_to_vertex_bucket_config)
-                        .collect(),
-                }))
-            }
-        }
-    }
 }
 
 #[cfg(test)]
@@ -841,6 +675,9 @@ mod tests {
     use crate::config::components::sink::{BlackholeConfig, LogConfig, RetryConfig, SinkType};
     use crate::config::components::source::{GeneratorConfig, SourceType};
     use crate::config::pipeline::map::{MapType, UserDefinedConfig};
+    use crate::config::pipeline::watermark::{
+        BucketConfig, EdgeWatermarkConfig, SourceWatermarkConfig,
+    };
 
     #[test]
     fn test_default_pipeline_config() {

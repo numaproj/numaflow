@@ -307,28 +307,27 @@ impl MapHandle {
 
                         let offsets: Vec<Offset> =
                             batch.iter().map(|msg| msg.offset.clone()).collect();
-                        if !batch.is_empty() {
-                            if let Err(e) = Self::batch(
+                        if !batch.is_empty()
+                            && let Err(e) = Self::batch(
                                 map_handle.clone(),
                                 batch,
                                 output_tx.clone(),
                                 self.tracker.clone(),
                             )
                             .await
-                            {
-                                error!(?e, "error received while performing batch map operation");
-                                // if there is an error, discard all the messages in the tracker and
-                                // return the error.
-                                for offset in offsets {
-                                    self.tracker
-                                        .discard(offset)
-                                        .await
-                                        .expect("failed to discard message");
-                                }
-                                cln_token.cancel();
-                                self.shutting_down_on_err = true;
-                                self.final_result = Err(e);
+                        {
+                            error!(?e, "error received while performing batch map operation");
+                            // if there is an error, discard all the messages in the tracker and
+                            // return the error.
+                            for offset in offsets {
+                                self.tracker
+                                    .discard(offset)
+                                    .await
+                                    .expect("failed to discard message");
                             }
+                            cln_token.cancel();
+                            self.shutting_down_on_err = true;
+                            self.final_result = Err(e);
                         }
                     }
                 }
