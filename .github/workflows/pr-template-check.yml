@@ -1,0 +1,34 @@
+name: PR template check
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  enforce-template:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR body for required sections
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          echo "Checking PR body..."
+          missing=0
+          reqs=(
+            "Summary"
+          )
+          for r in "${reqs[@]}"; do
+            echo "$PR_BODY" | grep -qi "^###[[:space:]]*$r" || {
+              echo "Missing section: $r"; missing=1; }
+          done
+          # Accept any of these testing headings (case-insensitive):
+          # - "How has this been tested?"
+          # - "Testing"
+          # - "Testing/Preview"
+          echo "$PR_BODY" | grep -qiE '^[[:space:]]*###[[:space:]]*(How has this been tested\?|Testing(/Preview)?)' || {
+            echo "Missing section: Testing (accepts: 'How has this been tested?', 'Testing', or 'Testing/Preview')"; missing=1; }
+          if [ $missing -ne 0 ]; then
+            echo "PR description is missing required sections. Please use the PR template." >&2
+            exit 1
+          fi
+

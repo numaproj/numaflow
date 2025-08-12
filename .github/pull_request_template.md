@@ -1,4 +1,31 @@
-Explain what this PR does.
+### Summary
+Explain what this PR does in 1–3 sentences.
+
+### Linked Issues
+Reference issues to auto-close, e.g., Fixes #123, Closes #456.
+
+### Type of change
+- [ ] Feature
+- [ ] Bug fix
+- [ ] Docs
+- [ ] Chore/Refactor
+- [ ] Performance
+- [ ] CI/CD
+- [ ] Other
+
+### Breaking change?
+- [ ] No
+- [ ] Yes (describe impact and migration steps)
+
+### How has this been tested?
+- [ ] Unit tests
+- [ ] Integration/e2e tests
+- [ ] Manual verification
+- [ ] Screenshots/logs attached (if UI/UX)
+Describe test coverage, commands, and environments used.
+
+### Additional context
+Optional: screenshots, design notes, or follow-ups.
 
 <!--
 
