@@ -14,8 +14,10 @@ pub(crate) mod reduce;
 fn parse_kafka_auth_config(
     auth_config: Option<Box<numaflow_models::models::Sasl>>,
     tls_config: Option<Box<numaflow_models::models::Tls>>,
-) -> crate::Result<(Option<numaflow_kafka::KafkaSaslAuth>, Option<numaflow_kafka::TlsConfig>)> {
-
+) -> crate::Result<(
+    Option<numaflow_kafka::KafkaSaslAuth>,
+    Option<numaflow_kafka::TlsConfig>,
+)> {
     let auth: Option<numaflow_kafka::KafkaSaslAuth> = match auth_config {
         Some(sasl) => {
             let mechanism = sasl.mechanism.to_uppercase();
