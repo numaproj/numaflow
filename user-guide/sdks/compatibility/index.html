@@ -2699,47 +2699,58 @@
 
 
 <h1 id="sdk-compatibility">SDK Compatibility<a class="headerlink" href="#sdk-compatibility" title="Permanent link">&para;</a></h1>
-<p>SDK and Numaflow compatibility version matrix. </p>
+<p>SDK and Numaflow compatibility version matrix. 
+Please refer to features matrix in <a href="../features/">SDK Features</a> for the features supported by each SDK version.</p>
+<p>Numaflow ensures at least one version backward compatibility for SDKs, i.e., SDKs are expected to work with the current 
+and previous version of Numaflow. 
+To upgrade SDKs, first upgrade Numaflow to the latest version supported by the SDK, then upgrade the SDK. </p>
+<p><strong>NOTE</strong>: If your Numaflow version (and your SDK) are quite old, to upgrade to the latest SDK, you may need to upgrade 
+Numaflow (and SDK) multiple times to reach the latest version.</p>
+<p>(● - Released, ○ - Future Release)</p>
 <h2 id="python">Python<a class="headerlink" href="#python" title="Permanent link">&para;</a></h2>
 <table>
 <thead>
 <tr>
 <th style="text-align: left;">Python \ Numaflow</th>
-<th style="text-align: center;">v1.0.0</th>
-<th style="text-align: center;">v1.1.0</th>
-<th style="text-align: center;">v1.2.0</th>
-<th style="text-align: center;">v1.3.0</th>
+<th style="text-align: center;">v1.6.0</th>
+<th style="text-align: center;">v1.5.0</th>
 <th style="text-align: center;">v1.4.0</th>
-<th style="text-align: center;">v1.5.0 (next)</th>
+<th style="text-align: center;">v1.3.0</th>
+<th style="text-align: center;">v1.2.0</th>
+<th style="text-align: center;">v1.1.0</th>
+<th style="text-align: center;">v1.0.0</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td style="text-align: left;"><strong>v0.8.0</strong></td>
+<td style="text-align: left;"><strong>v0.10.0</strong></td>
 <td style="text-align: center;">●</td>
 <td style="text-align: center;">●</td>
-<td style="text-align: center;">●</td>
-<td style="text-align: center;">●</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
 <td style="text-align: center;"></td>
 <td style="text-align: center;"></td>
 </tr>
 <tr>
 <td style="text-align: left;"><strong>v0.9.0</strong></td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
 <td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>v0.8.0</strong></td>
 <td style="text-align: center;"></td>
 <td style="text-align: center;"></td>
 <td style="text-align: center;"></td>
 <td style="text-align: center;">●</td>
-<td style="text-align: center;">○</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>v0.10.0 (next)</strong></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;">○</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
 </tr>
 </tbody>
 </table>
@@ -2748,41 +2759,45 @@
 <thead>
 <tr>
 <th style="text-align: left;">Golang  \ Numaflow</th>
-<th style="text-align: center;">v1.0.0</th>
-<th style="text-align: center;">v1.1.0</th>
-<th style="text-align: center;">v1.2.0</th>
-<th style="text-align: center;">v1.3.0</th>
+<th style="text-align: center;">v1.6.0</th>
+<th style="text-align: center;">v1.5.0</th>
 <th style="text-align: center;">v1.4.0</th>
-<th style="text-align: center;">v1.5.0 (next)</th>
+<th style="text-align: center;">v1.3.0</th>
+<th style="text-align: center;">v1.2.0</th>
+<th style="text-align: center;">v1.1.0</th>
+<th style="text-align: center;">v1.0.0</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td style="text-align: left;"><strong>v0.8.0</strong></td>
+<td style="text-align: left;"><strong>v0.10.0</strong></td>
 <td style="text-align: center;">●</td>
 <td style="text-align: center;">●</td>
-<td style="text-align: center;">●</td>
-<td style="text-align: center;">●</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
 <td style="text-align: center;"></td>
 <td style="text-align: center;"></td>
 </tr>
 <tr>
 <td style="text-align: left;"><strong>v0.9.0</strong></td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
 <td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>v0.8.0</strong></td>
 <td style="text-align: center;"></td>
 <td style="text-align: center;"></td>
 <td style="text-align: center;"></td>
 <td style="text-align: center;">●</td>
-<td style="text-align: center;">○</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>v0.10.0 (next)</strong></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;">○</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
 </tr>
 </tbody>
 </table>
@@ -2791,41 +2806,45 @@
 <thead>
 <tr>
 <th style="text-align: left;">Java \ Numaflow</th>
-<th style="text-align: center;">v1.0.0</th>
-<th style="text-align: center;">v1.1.0</th>
-<th style="text-align: center;">v1.2.0</th>
-<th style="text-align: center;">v1.3.0</th>
+<th style="text-align: center;">v1.6.0</th>
+<th style="text-align: center;">v1.5.0</th>
 <th style="text-align: center;">v1.4.0</th>
-<th style="text-align: center;">v1.5.0 (next)</th>
+<th style="text-align: center;">v1.3.0</th>
+<th style="text-align: center;">v1.2.0</th>
+<th style="text-align: center;">v1.1.0</th>
+<th style="text-align: center;">v1.0.0</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td style="text-align: left;"><strong>v0.8.0</strong></td>
+<td style="text-align: left;"><strong>v0.10.0</strong></td>
 <td style="text-align: center;">●</td>
 <td style="text-align: center;">●</td>
-<td style="text-align: center;">●</td>
-<td style="text-align: center;">●</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
 <td style="text-align: center;"></td>
 <td style="text-align: center;"></td>
 </tr>
 <tr>
 <td style="text-align: left;"><strong>v0.9.0</strong></td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
 <td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>v0.8.0</strong></td>
 <td style="text-align: center;"></td>
 <td style="text-align: center;"></td>
 <td style="text-align: center;"></td>
 <td style="text-align: center;">●</td>
-<td style="text-align: center;">○</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>v0.10.0 (next)</strong></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;">○</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
 </tr>
 </tbody>
 </table>
@@ -2834,15 +2853,36 @@
 <thead>
 <tr>
 <th style="text-align: left;">Rust \ Numaflow</th>
-<th style="text-align: center;">v1.0.0</th>
-<th style="text-align: center;">v1.1.0</th>
-<th style="text-align: center;">v1.2.0</th>
-<th style="text-align: center;">v1.3.0</th>
+<th style="text-align: center;">v1.6.0</th>
+<th style="text-align: center;">v1.5.0</th>
 <th style="text-align: center;">v1.4.0</th>
-<th style="text-align: center;">v1.5.0 (next)</th>
+<th style="text-align: center;">v1.3.0</th>
+<th style="text-align: center;">v1.2.0</th>
+<th style="text-align: center;">v1.1.0</th>
+<th style="text-align: center;">v1.0.0</th>
 </tr>
 </thead>
 <tbody>
+<tr>
+<td style="text-align: left;"><strong>0.3.0</strong> (next)</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;">○</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>0.2.0</strong></td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;">●</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+</tr>
 <tr>
 <td style="text-align: left;"><strong>0.1.0</strong></td>
 <td style="text-align: center;"></td>
@@ -2851,24 +2891,7 @@
 <td style="text-align: center;">●</td>
 <td style="text-align: center;"></td>
 <td style="text-align: center;"></td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>0.2.0</strong></td>
 <td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;">●</td>
-<td style="text-align: center;">○</td>
-</tr>
-<tr>
-<td style="text-align: left;"><strong>0.3.0 (next)</strong></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;"></td>
-<td style="text-align: center;">○</td>
 </tr>
 </tbody>
 </table>
