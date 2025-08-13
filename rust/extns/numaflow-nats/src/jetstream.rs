@@ -14,7 +14,7 @@ use bytes::Bytes;
 use chrono::DateTime;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
-use tokio::time::{self, Instant};
+use tokio::time::{self, Instant, sleep};
 use tokio_stream::StreamExt;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, warn};
@@ -334,10 +334,8 @@ impl JetstreamActor {
             let message = match message {
                 Ok(msg) => msg,
                 Err(e) => {
-                    warn!(
-                        ?e,
-                        "Failed to fetch a message from batch (ignoring, will be retried)"
-                    );
+                    warn!(?e, "Failed to fetch a message from batch, retrying...");
+                    sleep(Duration::from_millis(RETRY_INTERVAL)).await;
                     continue;
                 }
             };
@@ -465,8 +463,8 @@ struct MessageProcessingTracker {
 }
 
 // same as rust/numaflow-core/src/pipeline/isb/jestream/reader.rs
-const ACK_RETRY_INTERVAL: u64 = 100;
-const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
+const RETRY_INTERVAL: u64 = 100;
+const RETRY_ATTEMPTS: usize = usize::MAX;
 
 impl MessageProcessingTracker {
     async fn start(msg: JetstreamMessage, tick: Duration, cancel_token: CancellationToken) -> Self {
@@ -500,7 +498,7 @@ impl MessageProcessingTracker {
             }
             let ack_result = msg.ack_with(AckKind::Progress).await;
             if let Err(e) = ack_result {
-                tracing::error!(?e, "Failed to send InProgress Ack to Jetstream for message");
+                error!(?e, "Failed to send InProgress Ack to Jetstream for message");
             }
         };
 
@@ -518,7 +516,7 @@ impl MessageProcessingTracker {
             };
 
             if let Err(e) = ack {
-                tracing::error!(error=?e, "Received error while waiting for Ack on oneshot channel");
+                error!(error=?e, "Received error while waiting for Ack on oneshot channel");
                 Self::invoke_ack_with_retry(&msg, AckKind::Nak(None), &cancel_token).await;
             } else {
                 Self::invoke_ack_with_retry(&msg, AckKind::Ack, &cancel_token).await;
@@ -533,7 +531,7 @@ impl MessageProcessingTracker {
         ack_kind: AckKind,
         cancel_token: &CancellationToken,
     ) {
-        let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
+        let interval = fixed::Interval::from_millis(RETRY_INTERVAL).take(RETRY_ATTEMPTS);
         let _ = Retry::new(
             interval,
             async || {
