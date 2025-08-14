@@ -24,6 +24,7 @@ rustls.workspace = true
 http.workspace = true
 prost.workspace = true
 prost-types.workspace = true
+tonic-types.workspace = true
 
 [dev-dependencies]
 tempfile = "3.5"
