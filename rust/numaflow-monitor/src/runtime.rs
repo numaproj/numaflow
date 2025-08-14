@@ -3,7 +3,6 @@ use crate::config::RuntimeInfoConfig;
 use crate::error::{Error, Result};
 use chrono::Utc;
 use prost::Message;
-use prost_types::Any;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::fs;
@@ -14,21 +13,8 @@ use std::path::Path;
 use std::str;
 use std::sync::OnceLock;
 use tonic::Status;
+use tonic_types::pb::{DebugInfo, Status as RpcStatus};
 use tracing::error;
-
-/// Define a simple DebugInfo struct that matches the google.rpc.DebugInfo protobuf structure
-/// https://github.com/googleapis/googleapis/blob/c5334a83d6966439a2273a4ef64e6779ffba97a1/google/rpc/error_details.proto#L98
-/// tonic_types::DebugInfo doesn't implement the prost Message trait
-/// prost-types doesn't have the DebugInfo protobuf message, so we need to define our own
-#[derive(prost::Message)]
-pub struct DebugInfo {
-    /// The stack trace entries indicating where the error occurred.
-    #[prost(string, repeated, tag = "1")]
-    pub stack_entries: Vec<String>,
-    /// Additional debugging information provided by the server.
-    #[prost(string, tag = "2")]
-    pub detail: String,
-}
 
 static PERSIST_APPLICATION_ERROR_ONCE: OnceLock<()> = OnceLock::new();
 const CURRENT_FILE: &str = "current-numa.json";
@@ -363,19 +349,8 @@ fn extract_error_details(details_bytes: &[u8]) -> Option<String> {
         return None;
     }
 
-    // Define a simple Status message for decoding
-    #[derive(prost::Message)]
-    struct StatusMessage {
-        #[prost(int32, tag = "1")]
-        code: i32,
-        #[prost(string, tag = "2")]
-        message: String,
-        #[prost(message, repeated, tag = "3")]
-        details: Vec<Any>,
-    }
-
     // The bytes represent a complete gRPC Status message
-    if let Ok(status) = StatusMessage::decode(details_bytes) {
+    if let Ok(status) = RpcStatus::decode(details_bytes) {
         // Look for known error detail types in the status details
         for detail in &status.details {
             match detail.type_url.as_str() {
