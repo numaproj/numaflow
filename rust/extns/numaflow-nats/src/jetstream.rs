@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
+use crate::{Error, NatsAuth, Result, TlsConfig, tls};
 use async_nats::jetstream::consumer::{AckPolicy, DeliverPolicy};
 use async_nats::jetstream::{AckKind, Message as JetstreamMessage, consumer};
 use async_nats::{
@@ -13,10 +14,10 @@ use bytes::Bytes;
 use chrono::DateTime;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
-use tokio::time::{self, Instant};
+use tokio::time::{self, Instant, sleep};
 use tokio_stream::StreamExt;
-
-use crate::{Error, NatsAuth, Result, TlsConfig, tls};
+use tokio_util::sync::CancellationToken;
+use tracing::{error, warn};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ConsumerDeliverPolicy(DeliverPolicy);
@@ -178,6 +179,7 @@ struct JetstreamActor {
     batch_size: usize,
     in_progress_messages: HashMap<u64, MessageProcessingTracker>,
     handler_rx: mpsc::Receiver<JetstreamActorMessage>,
+    cancel_token: CancellationToken,
 }
 
 impl JetstreamActor {
@@ -186,6 +188,7 @@ impl JetstreamActor {
         batch_size: usize,
         read_timeout: Duration,
         handler_rx: mpsc::Receiver<JetstreamActorMessage>,
+        cancel_token: CancellationToken,
     ) -> Result<()> {
         let mut conn_opts = ConnectOptions::new()
             .max_reconnects(None) // unlimited reconnects
@@ -270,6 +273,7 @@ impl JetstreamActor {
                 batch_size,
                 in_progress_messages: HashMap::new(),
                 handler_rx,
+                cancel_token,
             };
             tracing::info!("Starting Jetstream...");
             actor.run().await;
@@ -307,21 +311,38 @@ impl JetstreamActor {
     /// Reads messages in batch from the Jetstream with honoring timeouts.
     async fn read_messages(&mut self) -> Result<Vec<Message>> {
         let mut messages: Vec<Message> = Vec::with_capacity(self.batch_size);
-        let mut batch = self
+
+        let mut batch = match self
             .consumer
             .batch()
             .max_messages(self.batch_size)
             .expires(self.read_timeout)
             .messages()
             .await
-            .map_err(|e| Error::Jetstream(format!("Failed to fetch batch from consumer: {e:?}")))?;
+        {
+            Ok(batch) => batch,
+            Err(e) => {
+                warn!(
+                    ?e,
+                    "Failed to get message batch from Jetstream (ignoring, will be retried)"
+                );
+                return Ok(Vec::new());
+            }
+        };
+
         while let Some(message) = batch.next().await {
-            let message = message.map_err(|e| {
-                Error::Jetstream(format!("Failed to fetch message from batch: {e:?}"))
-            })?;
-            let message = self.process_message(message).await?;
-            messages.push(message);
+            let message = match message {
+                Ok(msg) => msg,
+                Err(e) => {
+                    warn!(?e, "Failed to fetch a message from batch, retrying...");
+                    sleep(Duration::from_millis(RETRY_INTERVAL)).await;
+                    continue;
+                }
+            };
+
+            messages.push(self.process_message(message).await?);
         }
+
         tracing::debug!(msg_count = messages.len(), "Read batch from Jetstream");
         Ok(messages)
     }
@@ -332,7 +353,7 @@ impl JetstreamActor {
         for offset in offsets {
             let msg_task = self.in_progress_messages.remove(&offset);
             let Some(msg_task) = msg_task else {
-                tracing::warn!(offset, "Received ACK request for unknown offset");
+                warn!(offset, "Received ACK request for unknown offset");
                 continue;
             };
 
@@ -364,7 +385,9 @@ impl JetstreamActor {
         // we need to start WIP ack because some processing can be quite slow and we have to avoid
         // redelivery.
         let tick_interval = self.consumer.cached_info().config.ack_wait / 2;
-        let message_tracker = MessageProcessingTracker::start(js_message, tick_interval).await;
+        let message_tracker =
+            MessageProcessingTracker::start(js_message, tick_interval, self.cancel_token.clone())
+                .await;
         self.in_progress_messages
             .insert(message.stream_sequence, message_tracker);
 
@@ -392,9 +415,10 @@ impl JetstreamSource {
         config: JetstreamSourceConfig,
         batch_size: usize,
         read_timeout: Duration,
+        cancel_token: CancellationToken,
     ) -> Result<Self> {
         let (tx, rx) = mpsc::channel(10);
-        JetstreamActor::start(config, batch_size, read_timeout, rx).await?;
+        JetstreamActor::start(config, batch_size, read_timeout, rx, cancel_token).await?;
         Ok(Self { actor_tx: tx })
     }
 
@@ -439,13 +463,18 @@ struct MessageProcessingTracker {
 }
 
 // same as rust/numaflow-core/src/pipeline/isb/jestream/reader.rs
-const ACK_RETRY_INTERVAL: u64 = 100;
-const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
+const RETRY_INTERVAL: u64 = 100;
+const RETRY_ATTEMPTS: usize = usize::MAX;
 
 impl MessageProcessingTracker {
-    async fn start(msg: JetstreamMessage, tick: Duration) -> Self {
+    async fn start(msg: JetstreamMessage, tick: Duration, cancel_token: CancellationToken) -> Self {
         let (ack_signal_tx, ack_signal_rx) = oneshot::channel();
-        let task = tokio::spawn(Self::start_work_in_progress(msg, tick, ack_signal_rx));
+        let task = tokio::spawn(Self::start_work_in_progress(
+            msg,
+            tick,
+            ack_signal_rx,
+            cancel_token,
+        ));
         Self {
             in_progress_task: task,
             ack_signal_tx,
@@ -458,44 +487,20 @@ impl MessageProcessingTracker {
         msg: JetstreamMessage,
         tick: Duration,
         ack_signal_rx: oneshot::Receiver<()>,
+        cancel_token: CancellationToken,
     ) {
         let start = Instant::now();
         let mut interval = time::interval_at(start + tick, tick);
 
-        let ack_retry_interval =
-            fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
-        let nack_retry_interval =
-            fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
-
-        let ack_msg = async || {
-            if let Err(err) = msg.ack().await {
-                tracing::error!(?err, "Failed to Ack message");
-                return Err(format!("Acknowledging Jetstream message: {err:?}"));
-            }
-            Ok(())
-        };
-
-        let ack_with_retry = Retry::new(ack_retry_interval, ack_msg, |_: &String| true);
-
         let ack_in_progress = async || {
+            if cancel_token.is_cancelled() {
+                return;
+            }
             let ack_result = msg.ack_with(AckKind::Progress).await;
             if let Err(e) = ack_result {
-                tracing::error!(?e, "Failed to send InProgress Ack to Jetstream for message");
+                error!(?e, "Failed to send InProgress Ack to Jetstream for message");
             }
         };
-
-        let nack_msg = async || {
-            let ack_result = msg.ack_with(AckKind::Nak(None)).await;
-            if let Err(e) = ack_result {
-                tracing::error!(?e, "Failed to send InProgress Ack to Jetstream for message");
-                return Err(format!(
-                    "Sending Negative Ack to Jetstream for the message: {e:?}"
-                ));
-            }
-            Ok(())
-        };
-
-        let nack_with_retry = Retry::new(nack_retry_interval, nack_msg, |_: &String| true);
 
         tokio::pin!(ack_signal_rx);
 
@@ -511,16 +516,51 @@ impl MessageProcessingTracker {
             };
 
             if let Err(e) = ack {
-                tracing::error!(error=?e, "Received error while waiting for Ack on oneshot channel");
-                if let Err(e) = nack_with_retry.await {
-                    tracing::error!(error=?e, "Failed to send Negative Ack for the jetstream message even after retries");
-                }
+                error!(error=?e, "Received error while waiting for Ack on oneshot channel");
+                Self::invoke_ack_with_retry(&msg, AckKind::Nak(None), &cancel_token).await;
+            } else {
+                Self::invoke_ack_with_retry(&msg, AckKind::Ack, &cancel_token).await;
             }
             break;
         }
-        if let Err(e) = ack_with_retry.await {
-            tracing::error!(error=?e, "Failed to ACK jetstream message even after retries");
-        }
+    }
+
+    // invokes the ack with infinite retries until the cancellation token is cancelled.
+    async fn invoke_ack_with_retry(
+        msg: &JetstreamMessage,
+        ack_kind: AckKind,
+        cancel_token: &CancellationToken,
+    ) {
+        let interval = fixed::Interval::from_millis(RETRY_INTERVAL).take(RETRY_ATTEMPTS);
+        let _ = Retry::new(
+            interval,
+            async || {
+                let result = match ack_kind {
+                    AckKind::Ack => msg.double_ack().await, // double ack is used for exactly once semantics
+                    _ => msg.ack_with(ack_kind).await,
+                };
+
+                result.map_err(|e| {
+                    Error::Jetstream(format!("Failed to send {ack_kind:?} to Jetstream: {e:?}"))
+                })
+            },
+            |e: &Error| {
+                if cancel_token.is_cancelled() {
+                    error!(
+                        ?e,
+                        "Cancellation token received, stopping the {ack_kind:?} retry loop"
+                    );
+                    return false;
+                }
+
+                warn!(
+                    ?e,
+                    "Failed to send {ack_kind:?} Ack to Jetstream for message, retrying..."
+                );
+                true
+            },
+        )
+        .await;
     }
 
     async fn ack(self) {
@@ -694,7 +734,8 @@ mod tests {
             auth: None,
             tls: None,
         };
-        let source = JetstreamSource::connect(config, 30, Duration::from_secs(1))
+        let cancel_token = CancellationToken::new();
+        let source = JetstreamSource::connect(config, 30, Duration::from_secs(1), cancel_token)
             .await
             .unwrap();
 
@@ -717,7 +758,8 @@ mod tests {
             auth: None,
             tls: None,
         };
-        let source = JetstreamSource::connect(config, 30, Duration::from_secs(1))
+        let cancel_token = CancellationToken::new();
+        let source = JetstreamSource::connect(config, 30, Duration::from_secs(1), cancel_token)
             .await
             .unwrap();
 

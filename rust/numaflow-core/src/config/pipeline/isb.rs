@@ -194,3 +194,47 @@ mod tests {
         assert!(BufferFullStrategy::try_from("invalidStrategy".to_string()).is_err());
     }
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct ISBConfig {
+    pub(crate) compression: Compression,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Compression {
+    pub(crate) compress_type: CompressionType,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub(crate) enum CompressionType {
+    None,
+    Gzip,
+    Zstd,
+    LZ4,
+}
+
+impl TryFrom<numaflow_models::models::Compression> for Compression {
+    type Error = String;
+    fn try_from(value: numaflow_models::models::Compression) -> Result<Self, Self::Error> {
+        match value.r#type {
+            None => Ok(Compression {
+                compress_type: CompressionType::None,
+            }),
+            Some(t) => match t.as_str() {
+                "gzip" => Ok(Compression {
+                    compress_type: CompressionType::Gzip,
+                }),
+                "zstd" => Ok(Compression {
+                    compress_type: CompressionType::Zstd,
+                }),
+                "lz4" => Ok(Compression {
+                    compress_type: CompressionType::LZ4,
+                }),
+                "none" => Ok(Compression {
+                    compress_type: CompressionType::None,
+                }),
+                _ => Err(format!("Invalid compression type: {t}")),
+            },
+        }
+    }
+}

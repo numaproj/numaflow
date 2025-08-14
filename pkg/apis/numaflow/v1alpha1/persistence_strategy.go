@@ -23,7 +23,7 @@ import (
 )
 
 var DefaultVolumeSize = apiresource.MustParse("20Gi")
-var DefaultAccessMode = corev1.ReadWriteOnce
+var DefaultAccessMode = corev1.ReadWriteOncePod
 
 // PersistenceStrategy defines the strategy of persistence
 type PersistenceStrategy struct {
@@ -31,7 +31,7 @@ type PersistenceStrategy struct {
 	// More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#class-1
 	// +optional
 	StorageClassName *string `json:"storageClassName,omitempty" protobuf:"bytes,1,opt,name=storageClassName"`
-	// Available access modes such as ReadWriteOnce, ReadWriteMany
+	// Available access modes such as ReadWriteOncePod, ReadWriteOnce, ReadWriteMany
 	// https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
 	// +optional
 	AccessMode *corev1.PersistentVolumeAccessMode `json:"accessMode,omitempty" protobuf:"bytes,2,opt,name=accessMode,casttype=k8s.io/api/core/v1.PersistentVolumeAccessMode"`
@@ -46,7 +46,7 @@ func (ps PersistenceStrategy) GetPVCSpec(name string) corev1.PersistentVolumeCla
 	if ps.VolumeSize != nil {
 		volSize = *ps.VolumeSize
 	}
-	// Default to ReadWriteOnce
+	// Default to ReadWriteOncePod
 	accessMode := DefaultAccessMode
 	if ps.AccessMode != nil {
 		accessMode = *ps.AccessMode

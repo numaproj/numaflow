@@ -355,8 +355,7 @@ impl KafkaActor {
                 tpl.add_partition_offset(&topic, partition, Offset::Offset(offset + 1))
                     .map_err(|e| {
                         Error::Kafka(format!(
-                            "Failed to add partition offset for acknowledging messages: {}",
-                            e
+                            "Failed to add partition offset for acknowledging messages: {e}",
                         ))
                     })?;
             }

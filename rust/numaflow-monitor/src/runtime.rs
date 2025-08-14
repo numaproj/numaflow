@@ -2,6 +2,8 @@
 use crate::config::RuntimeInfoConfig;
 use crate::error::{Error, Result};
 use chrono::Utc;
+use prost::Message;
+use prost_types::Any;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
 use std::fs;
@@ -13,6 +15,20 @@ use std::str;
 use std::sync::OnceLock;
 use tonic::Status;
 use tracing::error;
+
+/// Define a simple DebugInfo struct that matches the google.rpc.DebugInfo protobuf structure
+/// https://github.com/googleapis/googleapis/blob/c5334a83d6966439a2273a4ef64e6779ffba97a1/google/rpc/error_details.proto#L98
+/// tonic_types::DebugInfo doesn't implement the prost Message trait
+/// prost-types doesn't have the DebugInfo protobuf message, so we need to define our own
+#[derive(prost::Message)]
+pub struct DebugInfo {
+    /// The stack trace entries indicating where the error occurred.
+    #[prost(string, repeated, tag = "1")]
+    pub stack_entries: Vec<String>,
+    /// Additional debugging information provided by the server.
+    #[prost(string, tag = "2")]
+    pub detail: String,
+}
 
 static PERSIST_APPLICATION_ERROR_ONCE: OnceLock<()> = OnceLock::new();
 const CURRENT_FILE: &str = "current-numa.json";
@@ -45,20 +61,61 @@ impl From<(&Status, &str, i64)> for RuntimeErrorEntry {
     fn from(value: (&Status, &str, i64)) -> RuntimeErrorEntry {
         let (grpc_status, container_name, timestamp) = value;
 
-        // Extract code, message, and details from gRPC Status
+        // Extract code, message, and  binary opaque details
         let code = grpc_status.code().to_string();
         let message = grpc_status.message().to_string();
+        // grpc_status.details() is binary opaque details, found in the `grpc-status-details-bin` header from gRPC Status
+        // contains the entire Status message
         let details_bytes = grpc_status.details();
 
-        // Convert status details from bytes to a string
-        let details_str = String::from_utf8_lossy(details_bytes);
+        // Try to extract structured error details first, fall back to raw bytes if needed
+        // implemented in SDKs for eg: https://github.com/numaproj/numaflow-go/blob/21b573a34817370bfdd435d7be4dd78ed82e9082/pkg/sourcetransformer/service.go#L168
+        let details_str = extract_error_details(details_bytes)
+            .unwrap_or_else(|| String::from_utf8_lossy(details_bytes).to_string());
+
+        // Extract metadata from gRPC Status
+        let metadata = grpc_status.metadata();
+        let mut metadata_map = std::collections::HashMap::new();
+        for key_value in metadata.iter() {
+            match key_value {
+                tonic::metadata::KeyAndValueRef::Ascii(key, value) => {
+                    metadata_map.insert(
+                        key.as_str().to_string(),
+                        value.to_str().unwrap_or("invalid_utf8").to_string(),
+                    );
+                }
+                tonic::metadata::KeyAndValueRef::Binary(_, _) => {
+                    // Skip binary metadata as it's not readable and doesn't add debugging value
+                }
+            }
+        }
+
+        // Convert HashMap to string for storage
+        let metadata_str = if metadata_map.is_empty() {
+            String::new()
+        } else {
+            metadata_map
+                .iter()
+                .map(|(k, v)| format!("{}={}", k, v))
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+
+        // Combine details and metadata for comprehensive error information
+        let combined_details = if metadata_str.is_empty() {
+            details_str.to_string()
+        } else if details_str.is_empty() {
+            format!("metadata: {}", metadata_str)
+        } else {
+            format!("metadata: {} | details: {}", metadata_str, details_str)
+        };
 
         RuntimeErrorEntry {
             container: container_name.to_string(),
             timestamp,
             code,
             message,
-            details: details_str.to_string(),
+            details: combined_details,
         }
     }
 }
@@ -73,6 +130,12 @@ impl From<RuntimeErrorEntry> for String {
 /// It organizes error files in a directory structure based on container names and ensures that the
 /// number of error files per container (files may be written from udf) does not exceed a specified limit.
 /// If the limit is exceeded, the oldest file is removed to make room for new entry. This function runs only once.
+///
+/// The persisted error includes comprehensive information from the gRPC Status:
+/// - Error code (e.g., "Internal error", "Unavailable", etc.)
+/// - Error message
+/// - Details (raw bytes converted to string)
+/// - Metadata (key-value pairs with additional context)
 ///
 /// # Parameters:
 /// - `grpc_status`: The gRPC error (`tonic::Status`) to be persisted.
@@ -290,6 +353,51 @@ fn extract_container_name(error_message: &str) -> String {
     String::from("numa")
 }
 
+/// Extracts structured error details from protobuf-encoded gRPC status.
+/// This function deserializes known error detail types from the gRPC status.
+/// Currently supports DebugInfo, but can be extended for other types like
+/// QuotaFailure, BadRequest, etc. Note: grpc_status.details() returns the entire
+/// Status message, not just the details field.
+fn extract_error_details(details_bytes: &[u8]) -> Option<String> {
+    if details_bytes.is_empty() {
+        return None;
+    }
+
+    // Define a simple Status message for decoding
+    #[derive(prost::Message)]
+    struct StatusMessage {
+        #[prost(int32, tag = "1")]
+        code: i32,
+        #[prost(string, tag = "2")]
+        message: String,
+        #[prost(message, repeated, tag = "3")]
+        details: Vec<Any>,
+    }
+
+    // The bytes represent a complete gRPC Status message
+    if let Ok(status) = StatusMessage::decode(details_bytes) {
+        // Look for known error detail types in the status details
+        for detail in &status.details {
+            match detail.type_url.as_str() {
+                "type.googleapis.com/google.rpc.DebugInfo" => {
+                    if let Ok(debug_info) = DebugInfo::decode(&detail.value[..]) {
+                        return Some(debug_info.detail);
+                    }
+                }
+                // Future error types can be added here:
+                // "type.googleapis.com/google.rpc.QuotaFailure" => { ... }
+                // "type.googleapis.com/google.rpc.BadRequest" => { ... }
+                // "type.googleapis.com/google.rpc.PreconditionFailure" => { ... }
+                _ => {
+                    // Unknown error detail type, skip
+                    continue;
+                }
+            }
+        }
+    }
+
+    None
+}
 ///  Processes a single file entry, deserializing its content into a `RuntimeErrorEntry` and adding it
 ///  to the provided vector of errors.
 fn process_file_entry(
@@ -509,5 +617,47 @@ mod tests {
         let result: Result<()> = process_file_entry(&file_entry, &mut errors);
         assert!(result.is_err());
         assert_eq!(errors.len(), 0);
+    }
+
+    #[test]
+    fn test_runtime_error_entry_with_metadata() {
+        use tonic::metadata::MetadataMap;
+
+        // Add some metadata to the status
+        let mut metadata = MetadataMap::new();
+        metadata.insert("error-type", "udf-execution".parse().unwrap());
+        metadata.insert("retry-count", "3".parse().unwrap());
+        metadata.insert_bin(
+            "binary-data-bin",
+            tonic::metadata::MetadataValue::from_bytes(b"some binary data"),
+        );
+
+        let status_with_metadata = Status::with_details_and_metadata(
+            tonic::Code::Internal,
+            "Test error message with metadata",
+            "test details".into(),
+            metadata,
+        );
+
+        let container_name = "test-container";
+        let timestamp = 1234567890i64;
+
+        // Convert to RuntimeErrorEntry
+        let error_entry =
+            RuntimeErrorEntry::from((&status_with_metadata, container_name, timestamp));
+
+        // Verify that metadata is included in the details
+        assert_eq!(error_entry.container, "test-container");
+        assert_eq!(error_entry.timestamp, 1234567890);
+        assert_eq!(error_entry.code, "Internal error"); // This is how tonic::Code::Internal formats as string
+        assert_eq!(error_entry.message, "Test error message with metadata");
+
+        // Check that details contains both original details and metadata
+        assert!(error_entry.details.contains("test details"));
+        assert!(error_entry.details.contains("metadata:"));
+        assert!(error_entry.details.contains("error-type=udf-execution"));
+        assert!(error_entry.details.contains("retry-count=3"));
+        // Binary metadata should NOT be included as per review feedback
+        assert!(!error_entry.details.contains("binary-data-bin="));
     }
 }
