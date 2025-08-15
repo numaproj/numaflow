@@ -48,8 +48,8 @@ export const usePodsViewFetch = (
       );
       if (response.ok) {
         const json = await response.json();
-        if (json?.data) {
-          let data = json?.data;
+        if (json?.data !== undefined) {
+          let data = json?.data || []; // Handle null data as empty array
           data = data.filter(
             (pod: any) => !pod?.metadata?.name.includes("-daemon-")
           );
@@ -106,7 +106,8 @@ export const usePodsViewFetch = (
               containerSpecMap,
             };
           });
-          setPods(pList);
+          setPods(pList || []); // Ensure we always set an array
+          setPodsErr(undefined); // Clear any previous errors
         } else if (json?.errMsg) {
           setPodsErr([
             {
@@ -155,7 +156,7 @@ export const usePodsViewFetch = (
   }, [pods]);
 
   // call to get pods details (metrics)
-  // to do: deprecate this and gather all metrics from pods-info
+  // TODO: deprecate this and gather all metrics from pods-info
   const fetchPodDetails = async () => {
     try {
       const response = await fetch(
@@ -262,8 +263,9 @@ export const usePodsViewFetch = (
   }, [podsDetailsErr, lastRetryTime]);
 
   // return false if pods/podsDetails are still undefined
+  // pods can be an empty array (valid response), so check for undefined specifically
   const checkPodDetailsResponse = () => {
-    if (!pods || !podsDetails) return false;
+    if (pods === undefined || !podsDetails) return false;
     return true;
   };
 
