@@ -1804,9 +1804,60 @@
         
       
       
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          Maximum Message Size
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
       <a href="./" class="md-nav__link md-nav__link--active">
         Maximum Message Size
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#enable-compression" class="md-nav__link">
+    Enable Compression
+  </a>
+  
+    <nav class="md-nav" aria-label="Enable Compression">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#performance-numbers" class="md-nav__link">
+    Performance Numbers
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    Configuration
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
       
     </li>
   
@@ -2596,6 +2647,41 @@
     
   
   
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#enable-compression" class="md-nav__link">
+    Enable Compression
+  </a>
+  
+    <nav class="md-nav" aria-label="Enable Compression">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#performance-numbers" class="md-nav__link">
+    Performance Numbers
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    Configuration
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
 </nav>
                   </div>
                 </div>
@@ -2613,13 +2699,15 @@
 
 
 <h1 id="maximum-message-size">Maximum Message Size<a class="headerlink" href="#maximum-message-size" title="Permanent link">&para;</a></h1>
-<p>The default maximum message size is <code>1MB</code>. There's a way to increase this limit in case you want to, but please think it through before doing so.</p>
+<p>The default maximum message size is <code>1MB</code>. There's a way to increase this limit in case you want to, but please think it
+through before doing so. The safest action might be to <a href="#enable-compression">enable compression</a>.</p>
 <p>The max message size is determined by:</p>
 <ul>
 <li>Max messages size supported by gRPC (default value is <code>64MB</code> in Numaflow).</li>
 <li>Max messages size supported by the Inter-Step Buffer implementation.</li>
 </ul>
-<p>If <code>JetStream</code> is used as the Inter-Step Buffer implementation, the default max message size for it is configured as <code>1MB</code>. You can change it by setting the <code>spec.jetstream.settings</code> in the <code>InterStepBufferService</code> specification.</p>
+<p>If <code>JetStream</code> is used as the Inter-Step Buffer implementation, the default max message size for it is configured as <code>1MB</code>.
+You can change it by setting the <code>spec.jetstream.settings</code> in the <code>InterStepBufferService</code> specification.</p>
 <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
 <span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">InterStepBufferService</span>
 <span class="nt">metadata</span><span class="p">:</span>
@@ -2630,7 +2718,69 @@
 <span class="w">      </span><span class="no">max_payload: 8388608 # 8MB</span>
 </code></pre></div>
 <p>It's not recommended to use values over <code>8388608</code> (8MB) but <code>max_payload</code> can be set up to <code>67108864</code> (64MB).</p>
-<p>Please be aware that if you increase the max message size of the <code>InterStepBufferService</code>, you probably will also need to change some other limits. For example, if the size of each messages is as large as 8MB, then 100 messages flowing in the pipeline will make each of the Inter-Step Buffer need at least 800MB of disk space to store the messages, and the memory consumption will also be high, that will probably cause the Inter-Step Buffer Service to crash. In that case, you might need to update the retention policy in the Inter-Step Buffer Service to make sure the messages are not stored for too long. Check out the <a href="../../../../core-concepts/inter-step-buffer-service/#buffer-configuration">Inter-Step Buffer Service</a> for more details.</p>
+<p>Please be aware that if you increase the max message size of the <code>InterStepBufferService</code>, you probably will also need to
+change some other limits. For example, if the size of each messages is as large as 8MB, then 100 messages flowing in the 
+pipeline will make each of the Inter-Step Buffer need at least 800MB of disk space to store the messages, and the memory
+consumption will also be high, that will probably cause the Inter-Step Buffer Service to crash. In that case, you might 
+need to update the retention policy in the Inter-Step Buffer Service to make sure the messages are not stored for too long.
+Check out the <a href="../../../../core-concepts/inter-step-buffer-service/#buffer-configuration">Inter-Step Buffer Service</a> for more details.</p>
+<h2 id="enable-compression">Enable Compression<a class="headerlink" href="#enable-compression" title="Permanent link">&para;</a></h2>
+<p>Numaflow supports automatic compression while writing and reading the messages to and from the Inter-Step Buffer, this can help to 
+reduce the storage and network cost to ISB. Enabling compression will help in ISB stability and should be used if the 
+payload is large (e.g, &gt; 1MB). This is transparent to the user-defined functions, compression and decompression is 
+taken care by Numaflow before writing to the ISB and after reading from the ISB.</p>
+<p>Available compression types are:
+- <code>none</code> (default)
+- <code>gzip</code>
+- <code>zstd</code>
+- <code>lz4</code></p>
+<h3 id="performance-numbers">Performance Numbers<a class="headerlink" href="#performance-numbers" title="Permanent link">&para;</a></h3>
+<p>The tests were run with fixed CPU <code>300m</code> CPU using random <code>1KB</code> payload.</p>
+<table>
+<thead>
+<tr>
+<th>Compression</th>
+<th>Throughput (msg/s)</th>
+<th>Disk Usage by ISB (GB)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>None</td>
+<td>1000</td>
+<td>7 ~ 7.2</td>
+</tr>
+<tr>
+<td>GZIP</td>
+<td>132</td>
+<td>1.2 ~ 1.4</td>
+</tr>
+<tr>
+<td>ZSTD</td>
+<td>900</td>
+<td>4.5 ~ 4.7</td>
+</tr>
+<tr>
+<td>LZ4</td>
+<td>1000</td>
+<td>2.8 ~ 3</td>
+</tr>
+</tbody>
+</table>
+<p>Clearly the best compression (least disk usage) is <code>gzip</code>, but it has the lowest throughput. <code>lz4</code> has the best
+throughput and <code>zstd</code> is in the middle. If you want to use <code>gzip</code>, you might need to increase the CPU of <code>numa</code> container
+to get better performance.</p>
+<h3 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h3>
+<p>You can enable it by setting the <code>compression</code> field in the <code>Pipeline</code> specification.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">numaflow.numaproj.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Pipeline</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-pipeline</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">interStepBuffer</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">compression</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">COMPRESSION_TYPE</span>
+</code></pre></div>
 
               
             </article>
