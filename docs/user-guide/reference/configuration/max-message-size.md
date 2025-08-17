@@ -1,7 +1,7 @@
 # Maximum Message Size
 
 The default maximum message size is `1MB`. There's a way to increase this limit in case you want to, but please think it
-through before doing so.
+through before doing so. The safest action might be to [enable compression](#enable-compression).
 
 The max message size is determined by:
 
@@ -33,10 +33,10 @@ Check out the [Inter-Step Buffer Service](../../../core-concepts/inter-step-buff
 
 ## Enable Compression
 
-Numaflow supports compression for the messages in the Inter-Step Buffer, this can help to reduce the storage and network
-cost to ISB. Enabling compression will help ISB stability and should be used if the payload is large (e.g, > 1MB).
-This is transparent to the user-defined functions, compression and decompression is taken care by Numaflow before writing
-to the ISB and after reading from the ISB.
+Numaflow supports automatic compression while writing and reading the messages to and from the Inter-Step Buffer, this can help to 
+reduce the storage and network cost to ISB. Enabling compression will help in ISB stability and should be used if the 
+payload is large (e.g, > 1MB). This is transparent to the user-defined functions, compression and decompression is 
+taken care by Numaflow before writing to the ISB and after reading from the ISB.
 
 Available compression types are:
 - `none` (default)
@@ -46,16 +46,18 @@ Available compression types are:
 
 ### Performance Numbers
 
-The tests were run with fixed CPU 300m CPU. Clearly the best compression (least disk usage) is `gzip`, but it has the
-lowest throughput. `lz4` has the best throughput and `zstd` is in the middle. If you want to use `gzip`, you might need to
-increase the CPU to get better performance.
+The tests were run with fixed CPU `300m` CPU using random `1KB` payload.
 
-| Compression | Throughput (msg/s) | Disk Usage by ISB in GB | 
-|-------------|--------------------|-------------------------|
-| None        | 1000               | 7 to 7.2                |
-| GZIP        | 132                | 1.2 to 1.4              |
-| ZSTD        | 900                | 4.5 to 4.7              |
-| LZ4         | 1000               | 2.8 to 3                |
+| Compression | Throughput (msg/s) | Disk Usage by ISB (GB) | 
+|-------------|--------------------|------------------------|
+| None        | 1000               | 7 ~ 7.2                |
+| GZIP        | 132                | 1.2 ~ 1.4              |
+| ZSTD        | 900                | 4.5 ~ 4.7              |
+| LZ4         | 1000               | 2.8 ~ 3                |
+
+Clearly the best compression (least disk usage) is `gzip`, but it has the lowest throughput. `lz4` has the best
+throughput and `zstd` is in the middle. If you want to use `gzip`, you might need to increase the CPU of `numa` container
+to get better performance.
 
 ### Configuration
 
