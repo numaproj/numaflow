@@ -17,9 +17,7 @@ level.
 * `to_drop` need not (optional) affect the throttle limit (rationale: to_drop might not hit the critical resource)
 * Throughput should not be affected if DT is not enabled
 * Should support external store (e.g., Redis, etc.)
-* Users might combine DT with libraries
-  like [bucket4j](https://github.com/bucket4j/bucket4j), [pyratelimiter](https://pyratelimiter.readthedocs.io/en/latest/),
-  etc.
+* Users might combine DT with libraries like [bucket4j](https://github.com/bucket4j/bucket4j), [pyratelimiter](https://pyratelimiter.readthedocs.io/en/latest/), etc.
 * Avoid querying external store for every message (use background task).
 * Optionally remove external store (use pod count to throttle)
 
@@ -31,18 +29,19 @@ level.
 
 ## Assumptions
 
+* Since Numaflow throttling is a client-side throttler, we do not have to implement realtime reconfiguration
 * UDF is considered as a black-box and as a single critical resource
 * All UDFs processes at the same rate, tokens are evenly distributed across all the pods in the vertex
 
 ## Open Issues
 
 * What should happen if the external store is unavailable?
-* Total tokens are distributed across all the pods in the vertex, how do we detect dead pods?
 * How to distribute the initial burst tokens?
 
 ## Closed Issues
 
-* Use Background thread to update the current tokens.
+* Use Background thread to update the current token which is dependent on the pool-size
+* Total tokens are distributed across all the pods in the vertex, to detect dead pods, we use stale heartbeats
 
 # Design Details
 
@@ -50,11 +49,12 @@ To achieve high TPS, during happy path the decisions are made locally and all th
 
 ## High Level Design
 
-* Local bucket will have enough information to decide if the request should be throttled or not.
-* Local bucket if not updated by the background thread will be considered as unavailable and will be forced to query the
+* The distributed state stores only the pool-size and tokens are calculated locally based on the pool-size.
+* Local store (using pool-size) will have enough information to decide if the request should be throttled or not.
+* Local store if not updated by the background thread will be considered as unavailable and will be forced to query the
   external store. This should not happen during happy path.
-* Background thread will update the local bucket every X ms and there will be at least Y seconds worth of data in the
-  local bucket.
+* Background thread will update the local store (from the external store) every X ms and there will be at least Y seconds
+* worth of data in the local store.
 
 ### Consensus on Active Candidates (consumers of tokens)
 
