@@ -1,0 +1,21 @@
+[package]
+name = "distributed-throttling"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio-stream.workspace = true
+tokio-util.workspace = true
+tokio.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+trait-variant = "0.1.2"
+redis = { version = "0.32.5", features = ["sentinel", "tokio-comp", "connection-manager", "script"] }
+
+[lints]
+workspace = true
+
+# redis test feature
+[features]
+redis-tests = []
+

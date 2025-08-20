@@ -16,7 +16,7 @@ members = [
     "extns/numaflow-http",
     # generated
     "numaflow-pb",
-    "numaflow-models", 
+    "numaflow-models", "numaflow-throttling", 
 ]
 
 [workspace.lints.rust]
