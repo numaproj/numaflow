@@ -21379,7 +21379,7 @@
       "description": "PersistenceStrategy defines the strategy of persistence",
       "properties": {
         "accessMode": {
-          "description": "Available access modes such as ReadWriteOnce, ReadWriteMany https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes",
+          "description": "Available access modes such as ReadWriteOncePod, ReadWriteOnce, ReadWriteMany https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes",
           "type": "string"
         },
         "storageClassName": {

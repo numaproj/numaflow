@@ -72,7 +72,7 @@ spec:
     version: latest # Do NOT use "latest" but a specific version in your real deployment
     persistence:
       storageClassName: standard # Optional, will use K8s cluster default storage class if not specified
-      accessMode: ReadWriteOnce # Optional, defaults to ReadWriteOnce
+      accessMode: ReadWriteOncePod # Optional, defaults to ReadWriteOncePod
       volumeSize: 10Gi # Optional, defaults to 20Gi
 ```
 

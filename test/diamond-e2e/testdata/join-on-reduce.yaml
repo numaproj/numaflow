@@ -43,7 +43,7 @@ spec:
           storage:
             persistentVolumeClaim:
               volumeSize: 2Gi
-              accessMode: ReadWriteOnce
+              accessMode: ReadWriteOncePod
     - name: sink
       scale:
         min: 1

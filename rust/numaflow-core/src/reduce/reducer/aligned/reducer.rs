@@ -283,15 +283,15 @@ impl AlignedReduceActor {
         );
 
         // Send the open command with the first message
-        if let Err(e) = message_tx.send(window_msg).await {
-            if !self.cln_token.is_cancelled() {
-                self.error_tx
-                    .send(Error::Reduce(format!(
-                        "Failed to send message to reduce task: {e}"
-                    )))
-                    .await
-                    .expect("Failed to send error");
-            }
+        if let Err(e) = message_tx.send(window_msg).await
+            && !self.cln_token.is_cancelled()
+        {
+            self.error_tx
+                .send(Error::Reduce(format!(
+                    "Failed to send message to reduce task: {e}"
+                )))
+                .await
+                .expect("Failed to send error");
         }
     }
 
@@ -319,15 +319,15 @@ impl AlignedReduceActor {
         };
 
         // Send the append message
-        if let Err(e) = active_stream.message_tx.send(window_msg).await {
-            if !self.cln_token.is_cancelled() {
-                self.error_tx
-                    .send(Error::Reduce(format!(
-                        "Failed to send message to reduce task: {e}"
-                    )))
-                    .await
-                    .expect("Failed to send error");
-            }
+        if let Err(e) = active_stream.message_tx.send(window_msg).await
+            && !self.cln_token.is_cancelled()
+        {
+            self.error_tx
+                .send(Error::Reduce(format!(
+                    "Failed to send message to reduce task: {e}"
+                )))
+                .await
+                .expect("Failed to send error");
         }
     }
 
@@ -516,10 +516,10 @@ impl AlignedReducer {
 
             // For sliding: we need to make sure to store the window manager state before exiting
             // from the reducer component
-            if let AlignedWindowManager::Sliding(manager) = self.window_manager {
-                if let Err(e) = manager.save_state() {
-                    error!("Failed to save window state: {:?}", e);
-                }
+            if let AlignedWindowManager::Sliding(manager) = self.window_manager
+                && let Err(e) = manager.save_state()
+            {
+                error!("Failed to save window state: {:?}", e);
             }
 
             // abort the shutdown handle since we are done processing, no need to wait for the

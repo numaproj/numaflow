@@ -1,4 +1,14 @@
-Explain what this PR does.
+### What this PR does / why we need it
+Briefly describe the problem and the solution.
+
+### Related issues
+Fixes #
+
+### Testing
+How was this tested (unit/integration/manual)? Include commands, links, or screenshots if applicable.
+
+### Special notes for reviewers
+Anything notable for review (risk, rollout, follow-ups).
 
 <!--
 

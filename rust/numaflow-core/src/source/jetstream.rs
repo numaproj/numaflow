@@ -1,9 +1,9 @@
-use std::sync::Arc;
-use std::time::Duration;
-
 use numaflow_nats::jetstream::{
     JetstreamSource, JetstreamSourceConfig, Message as JetstreamMessage,
 };
+use std::sync::Arc;
+use std::time::Duration;
+use tokio_util::sync::CancellationToken;
 
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::message::{IntOffset, MessageID, Metadata, Offset};
@@ -53,8 +53,9 @@ pub(crate) async fn new_jetstream_source(
     cfg: JetstreamSourceConfig,
     batch_size: usize,
     timeout: Duration,
+    cancel_token: CancellationToken,
 ) -> Result<JetstreamSource> {
-    Ok(JetstreamSource::connect(cfg, batch_size, timeout).await?)
+    Ok(JetstreamSource::connect(cfg, batch_size, timeout, cancel_token).await?)
 }
 
 impl SourceReader for JetstreamSource {
@@ -191,9 +192,11 @@ mod tests {
         };
 
         let read_timeout = Duration::from_secs(1);
-        let mut source: JetstreamSource = super::new_jetstream_source(config, 20, read_timeout)
-            .await
-            .unwrap();
+        let cancel_token = tokio_util::sync::CancellationToken::new();
+        let mut source: JetstreamSource =
+            super::new_jetstream_source(config, 20, read_timeout, cancel_token)
+                .await
+                .unwrap();
 
         assert_eq!(source.partitions().await.unwrap(), vec![0]);
 

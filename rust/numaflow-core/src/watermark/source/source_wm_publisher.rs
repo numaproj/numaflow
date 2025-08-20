@@ -56,7 +56,7 @@ impl SourceWatermarkPublisher {
             let publisher = ISBWatermarkPublisher::new(
                 processor_name.clone(),
                 self.js_context.clone(),
-                &[self.source_config.clone()],
+                std::slice::from_ref(&self.source_config),
             )
             .await
             .expect("Failed to create publisher");

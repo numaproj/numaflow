@@ -117,7 +117,7 @@ vertices:
 
 `persistentVolumeClaim` supports the following fields, `volumeSize`, `storageClassName`, and`accessMode`.
 As name suggests,`volumeSize` specifies the size of the volume. `accessMode` can be of many types, but for
-reduce use case we need only `ReadWriteOnce`. `storageClassName` can also be provided, more info on storage class
+reduce use case we need only `ReadWriteOncePod`. `storageClassName` can also be provided, more info on storage class
 can be found [here](https://kubernetes.io/docs/concepts/storage/persistent-volumes#class-1). The default
 value of `storageClassName` is `default` which is default StorageClass may be deployed to a Kubernetes
 cluster by addon manager during installation.
@@ -132,7 +132,7 @@ vertices:
         storage:
           persistentVolumeClaim:
             volumeSize: 10Gi
-            accessMode: ReadWriteOnce
+            accessMode: ReadWriteOncePod
 ```
 
 ### EmptyDir

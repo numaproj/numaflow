@@ -135,6 +135,6 @@ fn get_rust_version() -> Result<String, Box<dyn std::error::Error>> {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let version = get_version()?;
-    println!("cargo:rustc-env=NUMAFLOW_VERSION_INFO={}", version);
+    println!("cargo:rustc-env=NUMAFLOW_VERSION_INFO={version}");
     Ok(())
 }

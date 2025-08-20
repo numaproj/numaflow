@@ -29,13 +29,13 @@ pub enum MapMode {
     Stream,
 }
 
-impl MapMode {
-    pub fn from_str(s: &str) -> Option<MapMode> {
+impl From<&str> for MapMode {
+    fn from(s: &str) -> Self {
         match s {
-            "unary-map" => Some(MapMode::Unary),
-            "stream-map" => Some(MapMode::Stream),
-            "batch-map" => Some(MapMode::Batch),
-            _ => None,
+            "unary-map" => MapMode::Unary,
+            "stream-map" => MapMode::Stream,
+            "batch-map" => MapMode::Batch,
+            _ => MapMode::Unary,
         }
     }
 }
@@ -131,7 +131,7 @@ impl ServerInfo {
         if let Some(metadata) = &self.metadata
             && let Some(map_mode) = metadata.get(MAP_MODE_KEY)
         {
-            return MapMode::from_str(map_mode);
+            return Some(map_mode.as_str().into());
         }
         None
     }

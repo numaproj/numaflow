@@ -37,7 +37,7 @@ spec:
           storage:
             persistentVolumeClaim:
               volumeSize: 2Gi
-              accessMode: ReadWriteOnce
+              accessMode: ReadWriteOncePod
       sideInputs:
         - myticker
     - name: sink

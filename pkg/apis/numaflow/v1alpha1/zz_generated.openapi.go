@@ -3676,7 +3676,7 @@ func schema_pkg_apis_numaflow_v1alpha1_PersistenceStrategy(ref common.ReferenceC
 					},
 					"accessMode": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Available access modes such as ReadWriteOnce, ReadWriteMany https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes",
+							Description: "Available access modes such as ReadWriteOncePod, ReadWriteOnce, ReadWriteMany https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes",
 							Type:        []string{"string"},
 							Format:      "",
 						},
