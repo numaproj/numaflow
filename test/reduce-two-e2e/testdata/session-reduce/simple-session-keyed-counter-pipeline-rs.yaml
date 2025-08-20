@@ -1,12 +1,14 @@
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
-  name: simple-session-counter-java
+  name: simple-session-counter-rs
 spec:
   watermark:
     maxDelay: 30s
   vertices:
     - name: in
+      limits:
+        readBatchSize: 1
       scale:
         min: 1
       source:
@@ -16,15 +18,15 @@ spec:
         min: 1
       udf:
         container:
-          image: quay.io/numaio/numaflow-java/even-odd:stable
+          image: quay.io/numaio/numaflow-rs/map-even-odd:stable
           imagePullPolicy: IfNotPresent
     - name: compute-count
       partitions: 1
       udf:
         container:
-          # see https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/reducesession/counter
-          image: quay.io/numaio/numaflow-java/session-reduce-count:stable
-          imagePullPolicy: Always
+          # see https://github.com/numaproj/numaflow-go/tree/main/pkg/sessionreducer/examples/counter
+          image: quay.io/numaio/numaflow-rs/session-counter:stable
+          imagePullPolicy: IfNotPresent
         groupBy:
           window:
             session:
@@ -32,8 +34,8 @@ spec:
           keyed: true
           storage:
             persistentVolumeClaim:
-              volumeSize: 1Gi
-              accessMode: ReadWriteOncePod
+              volumeSize: 2Gi
+              accessMode: ReadWriteOnce
     - name: sink
       scale:
         min: 1
@@ -46,7 +48,7 @@ spec:
             env:
               - name: SINK_HASH_KEY
                 # The key is set in the format of "pipeline_name-vertex_name"
-                value: "simple-session-counter-java-sink"
+                value: "simple-session-counter-rs-sink"
   edges:
     - from: in
       to: even-odd
