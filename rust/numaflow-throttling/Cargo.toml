@@ -1,15 +1,14 @@
 [package]
-name = "distributed-throttling"
+name = "numaflow-throttling"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-tokio-stream.workspace = true
 tokio-util.workspace = true
 tokio.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
-trait-variant = "0.1.2"
+trait-variant.workspace = true
 redis = { version = "0.32.5", features = ["sentinel", "tokio-comp", "connection-manager", "script"] }
 
 [lints]

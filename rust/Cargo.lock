@@ -1198,19 +1198,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "distributed-throttling"
-version = "0.1.0"
-dependencies = [
- "redis",
- "thiserror 2.0.16",
- "tokio",
- "tokio-stream",
- "tokio-util",
- "tracing",
- "trait-variant",
-]
-
-[[package]]
 name = "dtoa"
 version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2709,6 +2696,18 @@ dependencies = [
  "thiserror 2.0.16",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "numaflow-throttling"
+version = "0.1.0"
+dependencies = [
+ "redis",
+ "thiserror 2.0.16",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "trait-variant",
 ]
 
 [[package]]
