@@ -682,6 +682,9 @@ type VertexLimits struct {
 	// It overrides the settings from pipeline limits.
 	// +optional
 	BufferUsageLimit *uint32 `json:"bufferUsageLimit,omitempty" protobuf:"varint,4,opt,name=bufferUsageLimit"`
+	// RateLimit is used to define the rate limit for the vertex, it overrides the settings from pipeline limits.
+	// +optional
+	RateLimit *RateLimit `json:"rateLimit,omitempty" protobuf:"bytes,5,opt,name=rateLimit"`
 }
 
 func (v VertexSpec) getType() containerSupplier {

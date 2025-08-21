@@ -21062,6 +21062,10 @@
     "io.numaproj.numaflow.v1alpha1.MonoVertexLimits": {
       "type": "object",
       "properties": {
+        "rateLimit": {
+          "description": "RateLimit is used to define the rate limit for the mono vertex.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimit"
+        },
         "readBatchSize": {
           "description": "Read batch size from the source.",
           "type": "integer",
@@ -21426,6 +21430,10 @@
           "type": "integer",
           "format": "int64"
         },
+        "rateLimit": {
+          "description": "RateLimit is used to define the rate limit for all the vertices in the pipeline, it could be overridden by the vertex's limit settings.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimit"
+        },
         "readBatchSize": {
           "description": "Read batch size for all the vertices in the pipeline, can be overridden by the vertex's limit settings.",
           "type": "integer",
@@ -21689,6 +21697,38 @@
           "type": "string"
         },
         "topic": {
+          "type": "string"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.RateLimit": {
+      "type": "object",
+      "properties": {
+        "burst": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "duration": {
+          "$ref": "#/definitions/io.k8s.apimachinery.pkg.apis.meta.v1.Duration"
+        },
+        "max": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "store": {
+          "description": "Store is used to define the store for the rate limit.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.Store"
+        }
+      }
+    },
+    "io.numaproj.numaflow.v1alpha1.RedisStore": {
+      "type": "object",
+      "required": [
+        "url"
+      ],
+      "properties": {
+        "url": {
+          "description": "URL of the persistent store to write the rate limit data.",
           "type": "string"
         }
       }
@@ -22403,6 +22443,15 @@
         }
       }
     },
+    "io.numaproj.numaflow.v1alpha1.Store": {
+      "type": "object",
+      "properties": {
+        "redisStore": {
+          "description": "RedisStore is used to define the redis store for the rate limit.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RedisStore"
+        }
+      }
+    },
     "io.numaproj.numaflow.v1alpha1.TLS": {
       "type": "object",
       "properties": {
@@ -22583,6 +22632,10 @@
           "description": "BufferUsageLimit is used to define the percentage of the buffer usage limit, a valid value should be less than 100, for example, 85. It overrides the settings from pipeline limits.",
           "type": "integer",
           "format": "int64"
+        },
+        "rateLimit": {
+          "description": "RateLimit is used to define the rate limit for the vertex, it overrides the settings from pipeline limits.",
+          "$ref": "#/definitions/io.numaproj.numaflow.v1alpha1.RateLimit"
         },
         "readBatchSize": {
           "description": "Read batch size from the source or buffer. It overrides the settings from pipeline limits.",

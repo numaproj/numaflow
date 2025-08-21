@@ -669,6 +669,32 @@ type PipelineLimits struct {
 	// +kubebuilder:default= "1s"
 	// +optional
 	ReadTimeout *metav1.Duration `json:"readTimeout,omitempty" protobuf:"bytes,4,opt,name=readTimeout"`
+	// RateLimit is used to define the rate limit for all the vertices in the pipeline, it could be overridden by the vertex's limit settings.
+	// +optional
+	RateLimit *RateLimit `json:"rateLimit,omitempty" protobuf:"bytes,5,opt,name=rateLimit"`
+}
+
+type RateLimit struct {
+	// +kubebuilder:default=10
+	Max *uint64 `json:"max,omitempty" protobuf:"varint,1,opt,name=max"`
+	// +kubebuilder:default=1
+	Burst *uint64 `json:"burst,omitempty" protobuf:"varint,2,opt,name=burst"`
+	// +kubebuilder:default= "1s"
+	Duration *metav1.Duration `json:"duration,omitempty" protobuf:"bytes,3,opt,name=period"`
+	// Store is used to define the store for the rate limit.
+	// +optional
+	Store *Store `json:"store,omitempty" protobuf:"bytes,4,opt,name=store"`
+}
+
+type Store struct {
+	// RedisStore is used to define the redis store for the rate limit.
+	// +optional
+	RedisStore *RedisStore `json:"redisStore,omitempty" protobuf:"bytes,1,opt,name=redisStore"`
+}
+
+type RedisStore struct {
+	// URL of the persistent store to write the rate limit data.
+	URL *string `json:"url" protobuf:"bytes,1,opt,name=url"`
 }
 
 type PipelineStatus struct {

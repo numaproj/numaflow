@@ -542,6 +542,9 @@ type MonoVertexLimits struct {
 	// +kubebuilder:default= "1s"
 	// +optional
 	ReadTimeout *metav1.Duration `json:"readTimeout,omitempty" protobuf:"bytes,2,opt,name=readTimeout"`
+	// RateLimit is used to define the rate limit for the mono vertex.
+	// +optional
+	RateLimit *RateLimit `json:"rateLimit,omitempty" protobuf:"bytes,3,opt,name=rateLimit"`
 }
 
 func (mvl MonoVertexLimits) GetReadBatchSize() uint64 {

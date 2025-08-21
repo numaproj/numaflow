@@ -13,6 +13,7 @@ use super::{
 };
 use crate::Result;
 use crate::config::components::metrics::MetricsConfig;
+use crate::config::components::ratelimit::RateLimitConfig;
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::source::{GeneratorConfig, SourceConfig, SourceSpec, SourceType};
 use crate::config::components::transformer::{
@@ -42,6 +43,7 @@ pub(crate) struct MonovertexConfig {
     pub(crate) fb_sink_config: Option<SinkConfig>,
     pub(crate) metrics_config: MetricsConfig,
     pub(crate) callback_config: Option<ServingCallbackConfig>,
+    pub(crate) rate_limit: Option<RateLimitConfig>,
 }
 
 impl Default for MonovertexConfig {
@@ -64,6 +66,7 @@ impl Default for MonovertexConfig {
             fb_sink_config: None,
             metrics_config: MetricsConfig::default(),
             callback_config: None,
+            rate_limit: None,
         }
     }
 }
@@ -99,6 +102,13 @@ impl MonovertexConfig {
                     .map(|x| Duration::from(x).as_millis() as u32)
             })
             .unwrap_or(DEFAULT_TIMEOUT_IN_MS);
+
+        let rate_limit: Option<RateLimitConfig> = mono_vertex_obj
+            .spec
+            .limits
+            .as_ref()
+            .and_then(|limits| limits.rate_limit.clone())
+            .map(RateLimitConfig::from);
 
         let mono_vertex_name = mono_vertex_obj
             .metadata
@@ -201,6 +211,7 @@ impl MonovertexConfig {
             transformer_config,
             fb_sink_config,
             callback_config,
+            rate_limit,
         })
     }
 }

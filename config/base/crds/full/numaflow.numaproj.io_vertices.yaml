@@ -786,6 +786,30 @@ spec:
                         bufferUsageLimit:
                           format: int32
                           type: integer
+                        rateLimit:
+                          properties:
+                            burst:
+                              default: 1
+                              format: int64
+                              type: integer
+                            duration:
+                              default: 1s
+                              type: string
+                            max:
+                              default: 10
+                              format: int64
+                              type: integer
+                            store:
+                              properties:
+                                redisStore:
+                                  properties:
+                                    url:
+                                      type: string
+                                  required:
+                                  - url
+                                  type: object
+                              type: object
+                          type: object
                         readBatchSize:
                           format: int64
                           type: integer
@@ -812,6 +836,30 @@ spec:
                         bufferUsageLimit:
                           format: int32
                           type: integer
+                        rateLimit:
+                          properties:
+                            burst:
+                              default: 1
+                              format: int64
+                              type: integer
+                            duration:
+                              default: 1s
+                              type: string
+                            max:
+                              default: 10
+                              format: int64
+                              type: integer
+                            store:
+                              properties:
+                                redisStore:
+                                  properties:
+                                    url:
+                                      type: string
+                                  required:
+                                  - url
+                                  type: object
+                              type: object
+                          type: object
                         readBatchSize:
                           format: int64
                           type: integer
@@ -1788,6 +1836,30 @@ spec:
                   bufferUsageLimit:
                     format: int32
                     type: integer
+                  rateLimit:
+                    properties:
+                      burst:
+                        default: 1
+                        format: int64
+                        type: integer
+                      duration:
+                        default: 1s
+                        type: string
+                      max:
+                        default: 10
+                        format: int64
+                        type: integer
+                      store:
+                        properties:
+                          redisStore:
+                            properties:
+                              url:
+                                type: string
+                            required:
+                            - url
+                            type: object
+                        type: object
+                    type: object
                   readBatchSize:
                     format: int64
                     type: integer
@@ -5475,6 +5547,30 @@ spec:
                         bufferUsageLimit:
                           format: int32
                           type: integer
+                        rateLimit:
+                          properties:
+                            burst:
+                              default: 1
+                              format: int64
+                              type: integer
+                            duration:
+                              default: 1s
+                              type: string
+                            max:
+                              default: 10
+                              format: int64
+                              type: integer
+                            store:
+                              properties:
+                                redisStore:
+                                  properties:
+                                    url:
+                                      type: string
+                                  required:
+                                  - url
+                                  type: object
+                              type: object
+                          type: object
                         readBatchSize:
                           format: int64
                           type: integer
@@ -5501,6 +5597,30 @@ spec:
                         bufferUsageLimit:
                           format: int32
                           type: integer
+                        rateLimit:
+                          properties:
+                            burst:
+                              default: 1
+                              format: int64
+                              type: integer
+                            duration:
+                              default: 1s
+                              type: string
+                            max:
+                              default: 10
+                              format: int64
+                              type: integer
+                            store:
+                              properties:
+                                redisStore:
+                                  properties:
+                                    url:
+                                      type: string
+                                  required:
+                                  - url
+                                  type: object
+                              type: object
+                          type: object
                         readBatchSize:
                           format: int64
                           type: integer
