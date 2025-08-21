@@ -148,8 +148,7 @@ impl RateLimit<WithoutDistributedState> {
             Ok(previous) => {
                 let acquired = match n {
                     None => previous,
-                    Some(requested) if previous >= requested => requested,
-                    Some(_) => previous,
+                    Some(requested) => previous.min(requested),
                 };
                 TokenAvailability::Available(acquired)
             }
@@ -216,7 +215,7 @@ impl RateLimit<WithoutDistributedState> {
 impl RateLimiter for RateLimit<WithoutDistributedState> {
     /// Acquire `n` tokens. If `n` is not provided, it will acquire all the tokens.
     /// If timeout is None, returns immediately with available tokens (non-blocking).
-    /// If timeout is Some, will wait up to the specified duration for tokens to become available.
+    /// If timeout is Some, will wait up to the specified duration for some tokens to be available.
     async fn acquire_n(&self, n: Option<usize>, timeout: Option<Duration>) -> usize {
         // First attempt - try to get tokens immediately
         let tokens = self.try_acquire_n_once(n).await;
@@ -287,9 +286,9 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimit<WithDistributedState<S>
 }
 
 impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithDistributedState<S>> {
-    /// Acquire `n` tokens with distributed consensus.
+    /// Acquire `n` tokens. If `n` is not provided, it will acquire all the tokens.
     /// If timeout is None, returns immediately with available tokens (non-blocking).
-    /// If timeout is Some, will block up to the specified duration for some tokens to become available.
+    /// If timeout is Some, will wait up to the specified duration for some tokens to be available.
     async fn acquire_n(&self, n: Option<usize>, timeout: Option<Duration>) -> usize {
         // First attempt - try to get tokens immediately
         let tokens = self.try_acquire_n_once(n).await;
@@ -394,26 +393,26 @@ impl<S: Store> RateLimit<WithDistributedState<S>> {
                 // Divide by pool size to get appropriate tokens for this processor
                 let processor_tokens = current / pool;
                 if processor_tokens == 0 {
-                    return None; // No tokens available
+                    return None;
                 }
 
-                // since the current tokens are for the entire pool, we need to subtract
-                // the tokens by multiplying by pool size
-                match n {
-                    None => Some(current - (processor_tokens * pool)),
-                    Some(requested) if processor_tokens >= requested => {
-                        Some(current - (requested * pool))
-                    }
-                    Some(_) => Some(current - (processor_tokens * pool)),
-                }
+                // if n is not provided, acquire all available tokens, else min of requested and
+                // available tokens.
+                let tokens_to_acquire = match n {
+                    None => processor_tokens,
+                    Some(requested) => processor_tokens.min(requested),
+                };
+
+                // since the tokens are not stored at processor level, we need to subtract the tokens
+                // by pool size to get the right number.
+                current.checked_sub(tokens_to_acquire * pool)
             },
         ) {
             Ok(previous) => {
                 let available_for_pod = previous / pool;
                 let acquired = match n {
                     None => available_for_pod,
-                    Some(requested) if available_for_pod >= requested => requested,
-                    Some(_) => available_for_pod,
+                    Some(requested) => available_for_pod.min(requested),
                 };
                 TokenAvailability::Available(acquired)
             }
@@ -431,8 +430,6 @@ pub struct TokenCalcBounds {
     max: usize,
     /// Minimum number of tokens available at t=0 (origin)
     min: usize,
-    /// Unit of time for the slope in seconds.
-    duration: Duration,
 }
 
 impl Default for TokenCalcBounds {
@@ -441,7 +438,6 @@ impl Default for TokenCalcBounds {
             slope: 1.0,
             max: 1,
             min: 1,
-            duration: Duration::from_secs(1),
         }
     }
 }
@@ -454,7 +450,6 @@ impl TokenCalcBounds {
             slope: (max - min) as f32 / duration.as_secs_f32(),
             max,
             min,
-            duration,
         }
     }
 }
@@ -475,7 +470,7 @@ mod tests {
             let redis_url = "redis://127.0.0.1:6379";
 
             // Check if Redis is available
-            if redis::Client::open(redis_url).is_err() {
+            if let Err(_) = redis::Client::open(redis_url) {
                 println!(
                     "Skipping Redis test - Redis server not available at {}",
                     redis_url
@@ -740,16 +735,16 @@ mod tests {
         let tokens = rate_limiter.acquire_n(Some(1), None).await;
         assert_eq!(tokens, 0);
 
-        // Test 3: Timeout when tokens not available (use very short timeout to avoid epoch transition)
+        // Test 3: Timeout when tokens not available
         let start = std::time::Instant::now();
         let tokens = rate_limiter
-            .acquire_n(Some(1), Some(Duration::from_millis(50)))
+            .acquire_n(Some(1), Some(Duration::from_millis(200)))
             .await;
         let elapsed = start.elapsed();
 
         assert_eq!(tokens, 0);
-        assert!(elapsed >= Duration::from_millis(40));
-        assert!(elapsed < Duration::from_millis(100));
+        assert!(elapsed >= Duration::from_millis(180));
+        assert!(elapsed < Duration::from_millis(300));
 
         // Test 4: Success when tokens become available within timeout
         // Force epoch reset to simulate time passage
