@@ -17,6 +17,7 @@ use crate::Result;
 use crate::config::ENV_NUMAFLOW_SERVING_CALLBACK_STORE;
 use crate::config::ENV_NUMAFLOW_SERVING_SPEC;
 use crate::config::components::metrics::MetricsConfig;
+use crate::config::components::ratelimit::RateLimitConfig;
 use crate::config::components::reduce::{ReducerConfig, StorageConfig};
 use crate::config::components::sink::SinkConfig;
 use crate::config::components::sink::SinkType;
@@ -77,6 +78,7 @@ pub(crate) struct PipelineConfig {
     pub(crate) watermark_config: Option<WatermarkConfig>,
     pub(crate) callback_config: Option<ServingCallbackConfig>,
     pub(crate) isb_config: Option<isb::ISBConfig>,
+    pub(crate) rate_limit: Option<RateLimitConfig>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -107,6 +109,7 @@ impl Default for PipelineConfig {
             watermark_config: None,
             callback_config: None,
             isb_config: None,
+            rate_limit: None,
         }
     }
 }
@@ -335,6 +338,13 @@ impl PipelineConfig {
             .as_ref()
             .and_then(|limits| limits.read_batch_size.map(|x| x as u64))
             .unwrap_or(DEFAULT_BATCH_SIZE);
+
+        let rate_limit: Option<RateLimitConfig> = vertex_obj
+            .spec
+            .limits
+            .as_ref()
+            .and_then(|limits| limits.rate_limit.clone())
+            .map(RateLimitConfig::from);
 
         let timeout_in_ms = vertex_obj
             .spec
@@ -661,6 +671,7 @@ impl PipelineConfig {
             watermark_config,
             callback_config,
             isb_config,
+            rate_limit,
         })
     }
 }
@@ -701,6 +712,7 @@ mod tests {
             watermark_config: None,
             callback_config: None,
             isb_config: None,
+            rate_limit: None,
         };
 
         let config = PipelineConfig::default();

@@ -966,6 +966,10 @@ message MonoVertexLimits {
   // +kubebuilder:default= "1s"
   // +optional
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration readTimeout = 2;
+
+  // RateLimit is used to define the rate limit for the mono vertex.
+  // +optional
+  optional RateLimit rateLimit = 3;
 }
 
 // +kubebuilder:object:root=true
@@ -1195,6 +1199,10 @@ message PipelineLimits {
   // +kubebuilder:default= "1s"
   // +optional
   optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration readTimeout = 4;
+
+  // RateLimit is used to define the rate limit for all the vertices in the pipeline, it could be overridden by the vertex's limit settings.
+  // +optional
+  optional RateLimit rateLimit = 5;
 }
 
 // +kubebuilder:object:root=true
@@ -1366,6 +1374,26 @@ message PulsarSource {
   // Auth information
   // +optional
   optional PulsarAuth auth = 6;
+}
+
+message RateLimit {
+  // +kubebuilder:default=10
+  optional uint64 max = 1;
+
+  // +kubebuilder:default=1
+  optional uint64 burst = 2;
+
+  // +kubebuilder:default= "1s"
+  optional .k8s.io.apimachinery.pkg.apis.meta.v1.Duration period = 3;
+
+  // Store is used to define the store for the rate limit.
+  // +optional
+  optional Store store = 4;
+}
+
+message RedisStore {
+  // URL of the persistent store to write the rate limit data.
+  optional string url = 1;
 }
 
 // The RetryStrategy struct defines the configuration for handling operation retries in case of failures.
@@ -1777,6 +1805,12 @@ message Status {
   repeated .k8s.io.apimachinery.pkg.apis.meta.v1.Condition conditions = 1;
 }
 
+message Store {
+  // RedisStore is used to define the redis store for the rate limit.
+  // +optional
+  optional RedisStore redisStore = 1;
+}
+
 message TLS {
   // +optional
   optional bool insecureSkipVerify = 1;
@@ -1916,6 +1950,10 @@ message VertexLimits {
   // It overrides the settings from pipeline limits.
   // +optional
   optional uint32 bufferUsageLimit = 4;
+
+  // RateLimit is used to define the rate limit for the vertex, it overrides the settings from pipeline limits.
+  // +optional
+  optional RateLimit rateLimit = 5;
 }
 
 // +kubebuilder:object:root=true
