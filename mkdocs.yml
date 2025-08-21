@@ -119,6 +119,7 @@ nav:
               - user-guide/reference/configuration/pipeline-customization.md
               - user-guide/reference/configuration/dra.md
               - user-guide/reference/configuration/istio.md
+              - user-guide/reference/configuration/read-batch-size.md
               - user-guide/reference/configuration/max-message-size.md
               - user-guide/reference/configuration/update-strategy.md
           - user-guide/reference/kustomize/kustomize.md

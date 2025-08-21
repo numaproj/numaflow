@@ -5,15 +5,25 @@ In a data processing [pipeline](../../core-concepts/pipeline.md), certain parame
 ## Vertex Tuning
 
 Each [vertex](../../core-concepts/vertex.md) keeps running the cycle of reading data from an Inter-Step Buffer (or data source),
-processing the data, and writing to the next Inter-Step Buffers (or sinks). There are some parameters can be adjusted for this data
+processing the data, and writing to the next Inter-Step Buffers (or sinks). There are some parameters that can be adjusted for this data
 processing cycle.
 
-- `readBatchSize` - The number of messages to read in each cycle, with a default value of `500`. It works together with `readTimeout` during a read operation, concluding when either limit is reached first.
-- `readTimeout` - Read timeout from the source or Inter-Step Buffer, defaults to `1s`. It works in conjunction with `readBatchSize`.
-- `bufferMaxLength` - How many unprocessed messages can be existing in the Inter-Step Buffer, defaults to `30000`.
-- `bufferUsageLimit` - The percentage of the buffer usage limit, a valid number should be less than 100. Default value is `80`, which means `80%`.
+- **`readBatchSize`** — Maximum number of messages **each vertex replica** reads **per cycle**.
+  *Default:* `500`. A cycle ends when either this cap is reached **or** `readTimeout` expires.
+  
+**NOTE**: If you are working with [Multi-Partitioned edges](multi-partition.md), please refer to the advanced
+  [configuration](./configuration/read-batch-size.md) for `readBatchSize`.
 
-These parameters can be customized under `spec.limits` as below, once defined, they apply to all the vertices and Inter-Step Buffers of the pipeline.
+- **`readTimeout`** — Read timeout from the source or Inter-Step Buffer.
+  *Default:* `1s`. Works in conjunction with `readBatchSize` (whichever condition is met first ends the cycle).
+
+- **`bufferMaxLength`** — How many unprocessed messages can exist in the Inter-Step Buffer.
+  *Default:* `30000`.
+
+- **`bufferUsageLimit`** — The percentage threshold for buffer usage; must be `< 100`.
+  *Default:* `80` (i.e., `80%`).
+
+These parameters can be customized under `spec.limits` as below; once defined, they apply to all the vertices and Inter-Step Buffers of the pipeline.
 
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
