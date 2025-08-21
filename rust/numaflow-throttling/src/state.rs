@@ -1,4 +1,4 @@
-use crate::state::store::Store;
+pub use crate::state::store::Store;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize};
 use std::time::Duration;
