@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
-use tracing::warn;
+use tracing::{info, warn};
 
 pub(crate) mod error;
 
@@ -14,10 +14,13 @@ pub(crate) use error::Result;
 
 /// State module contains the implementation of the [RateLimiterDistributedState] which has the
 /// holds distributed consensus state required to compute the available tokens.
-pub(crate) mod state;
+pub mod state;
 
-pub(crate) struct WithoutDistributedState;
-pub(crate) struct WithDistributedState<S>(RateLimiterDistributedState<S>);
+#[derive(Clone)]
+pub struct WithoutDistributedState;
+
+#[derive(Clone)]
+pub struct WithDistributedState<S>(RateLimiterDistributedState<S>);
 
 /// RateLimiter will expose methods to query the tokens available per unit time
 #[trait_variant::make(Send)]
@@ -95,7 +98,7 @@ impl<W> RateLimit<W> {
 
 impl RateLimit<WithoutDistributedState> {
     /// Create a new [RateLimit] without a distributed state.
-    pub(crate) fn new(token_calc_bounds: TokenCalcBounds) -> Result<Self> {
+    pub fn new(token_calc_bounds: TokenCalcBounds) -> Result<Self> {
         let burst = token_calc_bounds.min;
         Ok(RateLimit {
             token_calc_bounds,
@@ -235,7 +238,7 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithDis
 
 impl<S: Store> RateLimit<WithDistributedState<S>> {
     /// Create a new [RateLimit] with a distributed state.
-    pub(crate) async fn new(
+    pub async fn new(
         token_calc_bounds: TokenCalcBounds,
         store: S,
         processor_id: &str,
@@ -414,14 +417,14 @@ mod tests {
         /// Cleans up Redis keys after a test
         pub fn cleanup_redis_keys(test_name: &str) {
             let redis_url = "redis://127.0.0.1:6379";
-            if let Ok(client) = redis::Client::open(redis_url) {
-                if let Ok(mut conn) = client.get_connection() {
-                    let test_key_prefix = format!("test_{}_{}", test_name, std::process::id());
-                    let _: Result<(), _> = redis::cmd("DEL")
-                        .arg(format!("{}:heartbeats", test_key_prefix))
-                        .arg(format!("{}:poolsize", test_key_prefix))
-                        .query(&mut conn);
-                }
+            if let Ok(client) = redis::Client::open(redis_url)
+                && let Ok(mut conn) = client.get_connection()
+            {
+                let test_key_prefix = format!("test_{}_{}", test_name, std::process::id());
+                let _: Result<(), _> = redis::cmd("DEL")
+                    .arg(format!("{}:heartbeats", test_key_prefix))
+                    .arg(format!("{}:poolsize", test_key_prefix))
+                    .query(&mut conn);
             }
         }
     }
@@ -541,7 +544,7 @@ mod tests {
 
         // Spawn 5 tasks trying to acquire 2 tokens each
         for _ in 0..5 {
-            let limiter = rate_limiter.clone();
+            let limiter = Arc::clone(&rate_limiter);
             join_set.spawn(async move { limiter.acquire_n(Some(2), None).await });
         }
 

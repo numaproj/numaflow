@@ -1,8 +1,8 @@
 use crate::state::Consensus;
 use tokio_util::sync::CancellationToken;
 
-pub(crate) mod in_memory_store;
-pub(crate) mod redis_store;
+pub mod in_memory_store;
+pub mod redis_store;
 
 /// Store is the trait that defines the interface for the external store. It is
 /// responsible updating the [RateLimiterDistributedState] and for publishing the heartbeats.

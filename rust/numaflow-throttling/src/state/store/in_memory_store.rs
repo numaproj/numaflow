@@ -17,7 +17,7 @@ use tracing::info;
 /// - AGREE(K) if all active processors reported the same pool size K and K == active_count
 /// - Otherwise DISAGREE(max_reported) for conservative behavior
 #[derive(Clone)]
-pub(crate) struct InMemoryStore {
+pub struct InMemoryStore {
     inner: Arc<Mutex<ProcessorsTimeline>>,
     stale_age: Duration,
 }
@@ -37,7 +37,7 @@ impl Default for InMemoryStore {
 }
 
 impl InMemoryStore {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self::with_ttl(Duration::from_secs(180))
     }
 

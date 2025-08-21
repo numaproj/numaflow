@@ -6,7 +6,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
 /// Store module contains the implementation of the external store.
-pub(crate) mod store;
+pub mod store;
 
 /// Consensus represents the consensus reached by the distributed processors.
 #[derive(Debug)]
@@ -36,7 +36,7 @@ pub struct RateLimiterDistributedState<S> {
 /// Defines what is the optimistic forward-looking updates we can make to the [RateLimiterDistributedState].
 /// This should be tweaked based on the refresh-interval.
 #[derive(Clone)]
-pub(crate) struct OptimisticValidityUpdateSecs {
+pub struct OptimisticValidityUpdateSecs {
     /// on agree, how many runway slots we should update.
     on_agree: u8,
     /// On disagree, how many runway slots we should update. It usually will be less that `on_agree`.

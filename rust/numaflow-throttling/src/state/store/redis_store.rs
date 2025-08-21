@@ -3,6 +3,7 @@ use crate::state::store::Store;
 use redis::sentinel::{SentinelClient, SentinelNodeConnectionInfo, SentinelServerType};
 use redis::{Client, RedisError, Script};
 use tokio_util::sync::CancellationToken;
+use tracing::info;
 
 // Embed Lua scripts at compile time
 const REGISTER_SCRIPT: &str = include_str!("lua/register.lua");
@@ -10,7 +11,7 @@ const DEREGISTER_SCRIPT: &str = include_str!("lua/deregister.lua");
 const SYNC_POOL_SIZE_SCRIPT: &str = include_str!("lua/sync_pool_size.lua");
 
 #[derive(Clone)]
-pub(crate) struct RedisStore {
+pub struct RedisStore {
     /// Prefix for all keys used by this store
     key_prefix: &'static str,
     client: redis::aio::ConnectionManager,
@@ -20,7 +21,7 @@ pub(crate) struct RedisStore {
     sync_pool_size_script: Script,
 }
 
-pub(crate) enum RedisMode {
+pub enum RedisMode {
     SingleUrl {
         url: String,
     },
@@ -32,7 +33,7 @@ pub(crate) enum RedisMode {
 }
 
 impl RedisStore {
-    pub(crate) async fn new(key_prefix: &'static str, mode: RedisMode) -> Result<Self, RedisError> {
+    pub async fn new(key_prefix: &'static str, mode: RedisMode) -> Result<Self, RedisError> {
         let client = Self::make_client(mode).await?;
 
         // Create script objects
@@ -146,9 +147,8 @@ impl Store for RedisStore {
         if cancel.is_cancelled() {
             return Err(crate::Error::Cancellation);
         }
-
         let pool_size: usize = self
-            .exec_lua_script(&self.register_script, &[&self.key_prefix], &[processor_id])
+            .exec_lua_script(&self.register_script, &[self.key_prefix], &[processor_id])
             .await
             .map_err(|e| crate::Error::Redis(e.to_string()))?;
 
@@ -161,11 +161,7 @@ impl Store for RedisStore {
         }
 
         let _: String = self
-            .exec_lua_script(
-                &self.deregister_script,
-                &[&self.key_prefix],
-                &[processor_id],
-            )
+            .exec_lua_script(&self.deregister_script, &[self.key_prefix], &[processor_id])
             .await
             .map_err(|e| crate::Error::Redis(e.to_string()))?;
 
@@ -193,7 +189,7 @@ impl Store for RedisStore {
         let result: Vec<String> = self
             .exec_lua_script(
                 &self.sync_pool_size_script,
-                &[&self.key_prefix],
+                &[self.key_prefix],
                 &[processor_id, &timestamp, &pool_size_str],
             )
             .await
