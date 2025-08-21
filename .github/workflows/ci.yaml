@@ -70,6 +70,9 @@ jobs:
       - name: Start Kafka container
         run: docker run -d -p 9092:9092 --name kafka-broker apache/kafka:4.0.0
 
+      - name: Start Redis standalone container
+        run: docker run -d -p 6379:6379 --name redis-server redis:8-alpine
+
       - name: Set up Go 1.x
         uses: actions/setup-go@v5
         with:
