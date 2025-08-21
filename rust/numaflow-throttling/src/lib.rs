@@ -168,15 +168,15 @@ async fn sleep_until_next_sec() {
     let next_sec = since_epoch.as_secs() + 1;
     let next_sec_duration = Duration::from_secs(next_sec);
 
-    // Calculate how long to sleep
-    if let Some(sleep_duration) = next_sec_duration.checked_sub(since_epoch) {
-        tokio::time::sleep(sleep_duration).await;
-    }
+    tokio::time::sleep_until(tokio::time::Instant::from_std(
+        std::time::Instant::now() + (next_sec_duration - since_epoch),
+    ))
+    .await;
 }
 
 impl RateLimit<WithoutDistributedState> {
     /// Tries to acquire tokens once in a non-blocking manner.
-    async fn try_acquire_n_once(&self, n: Option<usize>) -> usize {
+    async fn try_acquire_n(&self, n: Option<usize>) -> usize {
         // let's try to acquire the tokens
         match self.get_tokens(n) {
             TokenAvailability::Available(t) => return t,
@@ -216,9 +216,10 @@ impl RateLimiter for RateLimit<WithoutDistributedState> {
     /// Acquire `n` tokens. If `n` is not provided, it will acquire all the tokens.
     /// If timeout is None, returns immediately with available tokens (non-blocking).
     /// If timeout is Some, will wait up to the specified duration for some tokens to be available.
+    /// Timeout is only considered when token size is zero.
     async fn acquire_n(&self, n: Option<usize>, timeout: Option<Duration>) -> usize {
         // First attempt - try to get tokens immediately
-        let tokens = self.try_acquire_n_once(n).await;
+        let tokens = self.try_acquire_n(n).await;
         if tokens > 0 {
             return tokens;
         }
@@ -233,7 +234,7 @@ impl RateLimiter for RateLimit<WithoutDistributedState> {
             loop {
                 // Wait for the next epoch to try again
                 sleep_until_next_sec().await;
-                let tokens = self.try_acquire_n_once(n).await;
+                let tokens = self.try_acquire_n(n).await;
                 if tokens > 0 {
                     return tokens;
                 }
@@ -248,7 +249,7 @@ impl RateLimiter for RateLimit<WithoutDistributedState> {
 
 impl<S: Store + Send + Sync + Clone + 'static> RateLimit<WithDistributedState<S>> {
     /// Tries to acquire tokens once in a non-blocking manner.
-    async fn try_acquire_n_once(&self, n: Option<usize>) -> usize {
+    async fn try_acquire_n(&self, n: Option<usize>) -> usize {
         // Try the hot-path first: consume from the current window.
         match self.get_tokens(n) {
             TokenAvailability::Available(t) => return t,
@@ -289,9 +290,10 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithDis
     /// Acquire `n` tokens. If `n` is not provided, it will acquire all the tokens.
     /// If timeout is None, returns immediately with available tokens (non-blocking).
     /// If timeout is Some, will wait up to the specified duration for some tokens to be available.
+    /// Timeout is only considered when token size is zero.
     async fn acquire_n(&self, n: Option<usize>, timeout: Option<Duration>) -> usize {
         // First attempt - try to get tokens immediately
-        let tokens = self.try_acquire_n_once(n).await;
+        let tokens = self.try_acquire_n(n).await;
         if tokens > 0 {
             return tokens;
         }
@@ -306,7 +308,7 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithDis
             loop {
                 // Wait for the next epoch to try again
                 sleep_until_next_sec().await;
-                let tokens = self.try_acquire_n_once(n).await;
+                let tokens = self.try_acquire_n(n).await;
                 if tokens > 0 {
                     return tokens;
                 }
