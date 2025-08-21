@@ -12,36 +12,23 @@ spec:
         generator:
           rpu: 1
           duration: 1s
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_DEBUG
-            value: !!str "true"
     - name: cat1
       partitions: 2
       udf:
-        builtin:
-          name: cat # A builtin UDF which simply cats the message
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_DEBUG
-            value: !!str "true"
+        container:
+          image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
+          imagePullPolicy: IfNotPresent
     - name: cat2
       udf:
-        builtin:
-          name: cat # A builtin UDF which simply cats the message
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_DEBUG
-            value: !!str "true"
+        container:
+          image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
+          imagePullPolicy: IfNotPresent
     - name: cat3
       partitions: 3
       udf:
-        builtin:
-          name: cat # A builtin UDF which simply cats the message
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_DEBUG
-            value: !!str "true"
+        container:
+          image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
+          imagePullPolicy: IfNotPresent
     - name: output1
       sink:
         # A simple log printing sink

@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strconv"
 
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -77,21 +76,32 @@ type ServingSpec struct {
 	// Whether to create a ClusterIP Service
 	// +optional
 	Service bool `json:"service" protobuf:"bytes,2,opt,name=service"`
+	// Ports to listen on, default we will use 8443 for HTTPS. To start http server
+	// the http port should be explicitly set.
+	// +optional
+	Ports *Ports `json:"ports,omitempty" protobuf:"bytes,3,opt,name=ports"`
 	// The header key from which the message id will be extracted
-	MsgIDHeaderKey *string `json:"msgIDHeaderKey" protobuf:"bytes,3,opt,name=msgIDHeaderKey"`
+	MsgIDHeaderKey *string `json:"msgIDHeaderKey" protobuf:"bytes,4,opt,name=msgIDHeaderKey"`
 	// Request timeout in seconds. Default value is 120 seconds.
 	// +optional
-	RequestTimeoutSecs *uint32 `json:"requestTimeoutSeconds,omitempty" protobuf:"varint,4,opt,name=requestTimeoutSeconds"`
+	RequestTimeoutSecs *uint32 `json:"requestTimeoutSeconds,omitempty" protobuf:"varint,5,opt,name=requestTimeoutSeconds"`
 	// +optional
-	ServingStore *ServingStore `json:"store,omitempty" protobuf:"bytes,5,rep,name=store"`
+	ServingStore *ServingStore `json:"store,omitempty" protobuf:"bytes,6,rep,name=store"`
 	// Container template for the serving container.
 	// +optional
-	ContainerTemplate *ContainerTemplate `json:"containerTemplate,omitempty" protobuf:"bytes,6,opt,name=containerTemplate"`
+	ContainerTemplate *ContainerTemplate `json:"containerTemplate,omitempty" protobuf:"bytes,7,opt,name=containerTemplate"`
 	// Initial replicas of the serving server deployment.
 	// +optional
-	Replicas *int32 `json:"replicas,omitempty" protobuf:"varint,7,opt,name=replicas"`
+	Replicas *int32 `json:"replicas,omitempty" protobuf:"varint,8,opt,name=replicas"`
 	// +optional
-	AbstractPodTemplate `json:",inline" protobuf:"bytes,8,opt,name=abstractPodTemplate"`
+	AbstractPodTemplate `json:",inline" protobuf:"bytes,9,opt,name=abstractPodTemplate"`
+}
+
+type Ports struct {
+	// +optional
+	HTTPS *int32 `json:"https,omitempty" protobuf:"varint,1,opt,name=https"`
+	// +optional
+	HTTP *int32 `json:"http,omitempty" protobuf:"varint,2,opt,name=http"`
 }
 
 // ServingStore defines information of a Serving Store used in a pipeline
@@ -117,6 +127,25 @@ func (sp ServingSpec) GetRequestTimeoutSecs() uint32 {
 		return 120
 	}
 	return *sp.RequestTimeoutSecs
+}
+
+func (sp ServingSpec) GetHttpsPort() int32 {
+	if sp.Ports == nil || sp.Ports.HTTPS == nil {
+		return ServingServiceHttpsPort
+	}
+	return *sp.Ports.HTTPS
+}
+
+func (sp ServingSpec) GetHttpPort() int32 {
+	if sp.Ports == nil || sp.Ports.HTTP == nil {
+		return ServingServiceHttpPort
+	}
+	return *sp.Ports.HTTP
+}
+
+// IsHttpConfigured returns true if HTTP port is explicitly configured by the user
+func (sp ServingSpec) IsHttpConfigured() bool {
+	return sp.Ports != nil && sp.Ports.HTTP != nil
 }
 
 // Generate the stream name in JetStream used for serving source
@@ -150,6 +179,17 @@ func (sp ServingPipeline) GetServingServiceObj() *corev1.Service {
 		KeyComponent:           ComponentServingServer,
 		KeyServingPipelineName: sp.Name,
 	}
+
+	// Build service ports - always include HTTPS, only include HTTP if configured
+	servicePorts := []corev1.ServicePort{
+		{Name: "https", Port: ServingServiceHttpsPort, TargetPort: intstr.FromInt32(sp.Spec.Serving.GetHttpsPort())},
+	}
+	if sp.Spec.Serving.IsHttpConfigured() {
+		servicePorts = append(servicePorts, corev1.ServicePort{
+			Name: "http", Port: ServingServiceHttpPort, TargetPort: intstr.FromInt32(sp.Spec.Serving.GetHttpPort()),
+		})
+	}
+
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: sp.Namespace,
@@ -160,9 +200,7 @@ func (sp ServingPipeline) GetServingServiceObj() *corev1.Service {
 			Labels: labels,
 		},
 		Spec: corev1.ServiceSpec{
-			Ports: []corev1.ServicePort{
-				{Name: "tcp", Port: ServingServicePort, TargetPort: intstr.FromInt32(ServingServicePort)},
-			},
+			Ports:    servicePorts,
 			Selector: labels,
 		},
 	}
@@ -181,20 +219,19 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 	}
 	encodedPipelineSpec := base64.StdEncoding.EncodeToString(pipelineSpecBytes)
 
-	servingSourceSettings, err := json.Marshal(sp.Spec.Serving)
+	servingSpec, err := json.Marshal(sp.Spec.Serving)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal serving source settings: %w", err)
 	}
-	encodedServingSourceSettings := base64.StdEncoding.EncodeToString(servingSourceSettings)
+	encodedServingSpec := base64.StdEncoding.EncodeToString(servingSpec)
 	envVars := []corev1.EnvVar{
 		{Name: EnvNamespace, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.namespace"}}},
 		{Name: EnvPod, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
 		{Name: EnvServingMinPipelineSpec, Value: encodedPipelineSpec},
-		{Name: EnvServingSettings, Value: encodedServingSourceSettings},
+		{Name: EnvServingSpec, Value: encodedServingSpec},
 		{Name: EnvServingCallbackStore, Value: fmt.Sprintf("%s_SERVING_CALLBACK_STORE", sp.GetServingStoreName())},
 		{Name: EnvServingResponseStore, Value: fmt.Sprintf("%s_SERVING_RESPONSE_STORE", sp.GetServingStoreName())},
 		{Name: EnvServingStatusStore, Value: fmt.Sprintf("%s_SERVING_STATUS_STORE", sp.GetServingStoreName())},
-		{Name: EnvServingPort, Value: strconv.Itoa(ServingServicePort)},
 		{Name: EnvReplica, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + KeyReplica + "']"}}},
 	}
 	envVars = append(envVars, req.Env...)
@@ -215,15 +252,24 @@ func (sp ServingPipeline) GetServingDeploymentObj(req GetServingPipelineResource
 		},
 	}
 	volumeMounts := []corev1.VolumeMount{{Name: varVolumeName, MountPath: PathVarRun}}
+
+	// Build container ports - always include HTTPS, only include HTTP if configured
+	containerPorts := []corev1.ContainerPort{
+		{ContainerPort: sp.Spec.Serving.GetHttpsPort()},
+	}
+	if sp.Spec.Serving.IsHttpConfigured() {
+		containerPorts = append(containerPorts, corev1.ContainerPort{ContainerPort: sp.Spec.Serving.GetHttpPort()})
+	}
+
 	c := corev1.Container{
-		Ports:           []corev1.ContainerPort{{ContainerPort: ServingServicePort}},
+		Ports:           containerPorts,
 		Name:            CtrMain,
 		Image:           req.Image,
 		ImagePullPolicy: req.PullPolicy,
 		Resources:       req.DefaultResources,
 		Env:             envVars,
 		Command:         []string{NumaflowRustBinary},
-		Args:            []string{"--serving"},
+		Args:            []string{"serving"},
 		VolumeMounts:    volumeMounts,
 	}
 	if ct := sp.Spec.Serving.ContainerTemplate; ct != nil {
@@ -322,7 +368,7 @@ func (sp ServingPipeline) GetPipelineObj(req GetServingPipelineResourceReq) Pipe
 		plSpec.Vertices[i].ContainerTemplate.Env = append(
 			plSpec.Vertices[i].ContainerTemplate.Env,
 			corev1.EnvVar{Name: EnvCallbackEnabled, Value: "true"},
-			corev1.EnvVar{Name: EnvServingSettings, Value: encodedServingSourceSettings},
+			corev1.EnvVar{Name: EnvServingSpec, Value: encodedServingSourceSettings},
 			corev1.EnvVar{Name: EnvServingCallbackStore, Value: fmt.Sprintf("%s_SERVING_CALLBACK_STORE", sp.GetServingStoreName())},
 			corev1.EnvVar{Name: EnvServingResponseStore, Value: fmt.Sprintf("%s_SERVING_RESPONSE_STORE", sp.GetServingStoreName())},
 			corev1.EnvVar{Name: EnvServingStatusStore, Value: fmt.Sprintf("%s_SERVING_STATUS_STORE", sp.GetServingStoreName())},

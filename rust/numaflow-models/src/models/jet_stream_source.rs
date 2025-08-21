@@ -20,6 +20,15 @@ limitations under the License.
 pub struct JetStreamSource {
     #[serde(rename = "auth", skip_serializing_if = "Option::is_none")]
     pub auth: Option<Box<crate::models::NatsAuth>>,
+    /// Consumer represents the name of the consumer of the stream If not specified, a consumer with name `numaflow-pipeline_name-vertex_name-stream_name` will be created. If a consumer name is specified, a consumer with that name will be created if it doesn't exist on the stream.
+    #[serde(rename = "consumer", skip_serializing_if = "Option::is_none")]
+    pub consumer: Option<String>,
+    /// The point in the stream from which to receive messages. https://docs.nats.io/nats-concepts/jetstream/consumers#deliverpolicy Valid options are: \"all\", \"new\", \"last\", \"last_per_subject\", \"by_start_sequence 42\", \"by_start_time 1753428483000\". The second value to \"by_start_time\" is unix epoch time in milliseconds.
+    #[serde(rename = "deliver_policy", skip_serializing_if = "Option::is_none")]
+    pub deliver_policy: Option<String>,
+    /// A set of subjects that overlap with the subjects bound to the stream to filter delivery to subscribers. https://docs.nats.io/nats-concepts/jetstream/consumers#filtesubjects
+    #[serde(rename = "filter_subjects", skip_serializing_if = "Option::is_none")]
+    pub filter_subjects: Option<Vec<String>>,
     /// Stream represents the name of the stream.
     #[serde(rename = "stream")]
     pub stream: String,
@@ -34,6 +43,9 @@ impl JetStreamSource {
     pub fn new(stream: String, url: String) -> JetStreamSource {
         JetStreamSource {
             auth: None,
+            consumer: None,
+            deliver_policy: None,
+            filter_subjects: None,
             stream,
             tls: None,
             url,

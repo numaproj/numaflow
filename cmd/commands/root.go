@@ -36,20 +36,14 @@ func Execute() {
 
 func init() {
 	rootCmd.AddCommand(NewControllerCommand())
-	rootCmd.AddCommand(NewProcessorCommand())
 	rootCmd.AddCommand(NewISBSvcCreateCommand())
 	rootCmd.AddCommand(NewISBSvcDeleteCommand())
 	rootCmd.AddCommand(NewISBSvcValidateCommand())
-	rootCmd.AddCommand(NewBuiltinUDFCommand())
-	rootCmd.AddCommand(NewBuiltinTransformerCommand())
 	rootCmd.AddCommand(NewDaemonServerCommand())
 	rootCmd.AddCommand(NewServerCommand())
 	rootCmd.AddCommand(NewServerInitCommand())
 	rootCmd.AddCommand(NewServerSecretsInitCommand())
 	rootCmd.AddCommand(NewWebhookCommand())
-	rootCmd.AddCommand(NewSideInputsInitCommand())
-	rootCmd.AddCommand(NewSideInputsManagerCommand())
-	rootCmd.AddCommand(NewSideInputsSynchronizerCommand())
 	rootCmd.AddCommand(NewDexServerInitCommand())
 	rootCmd.AddCommand(NewMonoVtxDaemonServerCommand())
 }

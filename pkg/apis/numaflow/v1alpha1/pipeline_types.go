@@ -33,6 +33,8 @@ import (
 // +kubebuilder:validation:Enum="";Running;Failed;Pausing;Paused;Deleting
 type PipelinePhase string
 
+type PipelineResumeStrategy string
+
 const (
 	PipelinePhaseUnknown  PipelinePhase = ""
 	PipelinePhaseRunning  PipelinePhase = "Running"
@@ -52,6 +54,9 @@ const (
 	PipelineConditionDaemonServiceHealthy      ConditionType = "DaemonServiceHealthy"
 	PipelineConditionSideInputsManagersHealthy ConditionType = "SideInputsManagersHealthy"
 	PipelineConditionVerticesHealthy           ConditionType = "VerticesHealthy"
+
+	ResumeStrategySlow PipelineResumeStrategy = "slow"
+	ResumeStrategyFast PipelineResumeStrategy = "fast"
 )
 
 func (pp PipelinePhase) Code() int {
@@ -247,7 +252,7 @@ func (p Pipeline) GetSideInputsManagerDeployments(req GetSideInputDeploymentReq)
 			deployment.Spec.Template.Spec.Containers[i].Env = append(deployment.Spec.Template.Spec.Containers[i].Env, commonEnvVars...)
 		}
 		deployment.Spec.Template.Spec.InitContainers[0].Env = append(deployment.Spec.Template.Spec.InitContainers[0].Env, corev1.EnvVar{Name: EnvGoDebug, Value: os.Getenv(EnvGoDebug)})
-		deployment.Spec.Template.Spec.Containers[0].Env = append(deployment.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{Name: EnvGoDebug, Value: os.Getenv(EnvGoDebug)})
+		deployment.Spec.Template.Spec.Containers[0].Env = append(deployment.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{Name: EnvNumaflowRuntime, Value: "rust"})
 		deployments = append(deployments, deployment)
 	}
 	return deployments, nil
@@ -479,6 +484,7 @@ func (p Pipeline) GetPauseGracePeriodSeconds() int64 {
 }
 
 type PipelineSpec struct {
+	// InterStepBufferServiceName is the name of the InterStepBufferService to be used by the pipeline
 	// +optional
 	InterStepBufferServiceName string `json:"interStepBufferServiceName,omitempty" protobuf:"bytes,1,opt,name=interStepBufferServiceName"`
 	// +patchStrategy=merge
@@ -504,7 +510,40 @@ type PipelineSpec struct {
 	// SideInputs defines the Side Inputs of a pipeline.
 	// +optional
 	SideInputs []SideInput `json:"sideInputs,omitempty" protobuf:"bytes,8,rep,name=sideInputs"`
+	// InterStepBuffer configuration specific to this pipeline.
+	// +optional
+	InterStepBuffer *InterStepBuffer `json:"interStepBuffer,omitempty" protobuf:"bytes,9,opt,name=interStepBuffer"`
 }
+
+// InterStepBuffer configuration specifically for the pipeline.
+type InterStepBuffer struct {
+	// Compression is the compression settings for the InterStepBufferService
+	// +optional
+	Compression *Compression `json:"compression,omitempty" protobuf:"bytes,2,opt,name=compression"`
+}
+
+// Compression is the compression settings for the messages in the InterStepBuffer
+type Compression struct {
+	// Type is the type of compression to be used
+	// +kubebuilder:validation:Enum:None;GZIP;ZSTD;LZ4
+	// +kubebuilder:default:=None
+	// +optional
+	Type CompressionType `json:"type,omitempty" protobuf:"bytes,1,opt,name=type"`
+}
+
+// CompressionType is a string enumeration type that enumerates all possible compression types.
+type CompressionType string
+
+const (
+	// CompressionTypeNone is the default compression type, no compression is used.
+	CompressionTypeNone CompressionType = "None"
+	// CompressionTypeGZIP is the GZIP compression type.
+	CompressionTypeGZIP CompressionType = "GZIP"
+	// CompressionTypeZSTD is the ZSTD compression type.
+	CompressionTypeZSTD CompressionType = "ZSTD"
+	// CompressionTypeLZ4 is the LZ4 compression type.
+	CompressionTypeLZ4 CompressionType = "LZ4"
+)
 
 func (pipeline PipelineSpec) GetMatchingVertices(f func(AbstractVertex) bool) map[string]*AbstractVertex {
 	mappedVertices := make(map[string]*AbstractVertex)

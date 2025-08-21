@@ -1,3 +1,4 @@
+use crate::config::pipeline::DEFAULT_MAX_ACK_PENDING;
 /// JetStream ISB related configurations.
 use std::fmt;
 use std::fmt::Display;
@@ -101,7 +102,7 @@ impl TryFrom<String> for BufferFullStrategy {
     }
 }
 
-impl fmt::Display for BufferFullStrategy {
+impl Display for BufferFullStrategy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             BufferFullStrategy::RetryUntilSuccess => write!(f, "retryUntilSuccess"),
@@ -114,6 +115,7 @@ impl fmt::Display for BufferFullStrategy {
 pub(crate) struct BufferReaderConfig {
     pub(crate) streams: Vec<Stream>,
     pub(crate) wip_ack_interval: Duration,
+    pub(crate) max_ack_pending: usize,
 }
 
 impl Default for BufferReaderConfig {
@@ -121,6 +123,7 @@ impl Default for BufferReaderConfig {
         BufferReaderConfig {
             streams: vec![Stream::new("default-0", "default", DEFAULT_PARTITION_IDX)],
             wip_ack_interval: Duration::from_millis(DEFAULT_WIP_ACK_INTERVAL_MILLIS),
+            max_ack_pending: DEFAULT_MAX_ACK_PENDING,
         }
     }
 }
@@ -172,6 +175,7 @@ mod tests {
         let expected = BufferReaderConfig {
             streams: vec![Stream::new("default-0", "default", DEFAULT_PARTITION_IDX)],
             wip_ack_interval: Duration::from_millis(DEFAULT_WIP_ACK_INTERVAL_MILLIS),
+            ..Default::default()
         };
         let config = BufferReaderConfig::default();
         assert_eq!(config, expected);
@@ -188,5 +192,49 @@ mod tests {
             BufferFullStrategy::DiscardLatest
         );
         assert!(BufferFullStrategy::try_from("invalidStrategy".to_string()).is_err());
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct ISBConfig {
+    pub(crate) compression: Compression,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Compression {
+    pub(crate) compress_type: CompressionType,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub(crate) enum CompressionType {
+    None,
+    Gzip,
+    Zstd,
+    LZ4,
+}
+
+impl TryFrom<numaflow_models::models::Compression> for Compression {
+    type Error = String;
+    fn try_from(value: numaflow_models::models::Compression) -> Result<Self, Self::Error> {
+        match value.r#type {
+            None => Ok(Compression {
+                compress_type: CompressionType::None,
+            }),
+            Some(t) => match t.as_str() {
+                "gzip" => Ok(Compression {
+                    compress_type: CompressionType::Gzip,
+                }),
+                "zstd" => Ok(Compression {
+                    compress_type: CompressionType::Zstd,
+                }),
+                "lz4" => Ok(Compression {
+                    compress_type: CompressionType::LZ4,
+                }),
+                "none" => Ok(Compression {
+                    compress_type: CompressionType::None,
+                }),
+                _ => Err(format!("Invalid compression type: {t}")),
+            },
+        }
     }
 }

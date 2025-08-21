@@ -5,8 +5,6 @@ metadata:
 spec:
   watermark:
     maxDelay: 30s
-  limits:
-    readBatchSize: 50
   vertices:
     - name: in
       scale:
@@ -20,7 +18,7 @@ spec:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
           image: quay.io/numaio/numaflow-go/map-even-odd:stable
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
     - name: compute-sum
       partitions: 1
       udf:
@@ -28,7 +26,7 @@ spec:
           # compute the sum, see https://github.com/numaproj/numaflow-java/tree/main/examples/src/main/java/io/numaproj/numaflow/examples/reduce/sum
           # this also serves as a Java reduce sdk test case
           image: quay.io/numaio/numaflow-java/reduce-sum:stable
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
         groupBy:
           window:
             fixed:
@@ -36,8 +34,8 @@ spec:
           keyed: true
           storage:
             persistentVolumeClaim:
-              volumeSize: 10Gi
-              accessMode: ReadWriteOnce
+              volumeSize: 1Gi
+              accessMode: ReadWriteOncePod
     - name: sink
       scale:
         min: 1
@@ -46,7 +44,7 @@ spec:
           container:
             # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis_sink
             image: quay.io/numaio/numaflow-go/redis-sink:stable
-            imagePullPolicy: Always
+            imagePullPolicy: IfNotPresent
             env:
               - name: SINK_HASH_KEY
                 # The key is set in the format of "pipeline_name-vertex_name"

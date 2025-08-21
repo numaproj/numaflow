@@ -43,58 +43,58 @@ import (
 )
 
 const (
-	testNamespace          = "test-ns"
-	testVersion            = "6.2.6"
-	testImage              = "test-image"
-	testSImage             = "test-s-image"
-	testRedisExporterImage = "test-r-exporter-image"
-	testFlowImage          = "test-d-iamge"
+	testNamespace     = "test-ns"
+	testVersion       = "6.2.6"
+	testNatsImage     = "my-n-image"
+	testExporterImage = "my-e-image"
+	testReloaderImage = "test-re-iamge"
+	testFlowImage     = "test-d-iamge"
 )
 
 var (
-	testNativeRedisIsbSvc = &dfv1.InterStepBufferService{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: testNamespace,
-			Name:      dfv1.DefaultISBSvcName,
-		},
-		Spec: dfv1.InterStepBufferServiceSpec{
-			Redis: &dfv1.RedisBufferService{
-				Native: &dfv1.NativeRedis{
-					Version: testVersion,
-				},
-			},
-		},
-	}
-
 	fakeGlobalISBSvcConfig = &reconciler.ISBSvcConfig{
-		Redis: &reconciler.RedisConfig{
-			Versions: []reconciler.RedisVersion{
+		JetStream: &reconciler.JetStreamConfig{
+			Versions: []reconciler.JetStreamVersion{
 				{
-					Version:            testVersion,
-					RedisImage:         testImage,
-					SentinelImage:      testSImage,
-					RedisExporterImage: testRedisExporterImage,
+					Version:              testVersion,
+					NatsImage:            testNatsImage,
+					MetricsExporterImage: testExporterImage,
+					ConfigReloaderImage:  testReloaderImage,
 				},
 			},
 		},
 	}
 	fakeIsbSvcConfig = dfv1.BufferServiceConfig{
-		Redis: &dfv1.RedisConfig{
-			URL:         "xxx",
-			SentinelURL: "xxxxxxx",
-			MasterName:  "mymaster",
-			User:        "test-user",
-			Password: &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: "test-name",
+		JetStream: &dfv1.JetStreamConfig{
+			URL:        "xxx",
+			TLSEnabled: false,
+			Auth: &dfv1.NatsAuth{
+				Basic: &dfv1.BasicAuth{
+					User: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: "test-uname",
+						},
+						Key: "test-ukey",
+					},
+					Password: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: "test-name",
+						},
+						Key: "test-key",
+					},
 				},
-				Key: "test-key",
 			},
-			SentinelPassword: &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: "test-name",
-				},
-				Key: "test-key",
+		},
+	}
+
+	testJetStreamIsbSvc = &dfv1.InterStepBufferService{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: testNamespace,
+			Name:      "default",
+		},
+		Spec: dfv1.InterStepBufferServiceSpec{
+			JetStream: &dfv1.JetStreamBufferService{
+				Version: testVersion,
 			},
 		},
 	}
@@ -110,13 +110,13 @@ var (
 					Name: "input",
 					Source: &dfv1.Source{
 						UDTransformer: &dfv1.UDTransformer{
-							Builtin: &dfv1.Transformer{Name: "filter"},
+							Container: &dfv1.Container{Image: "my-image"},
 						}},
 				},
 				{
 					Name: "p1",
 					UDF: &dfv1.UDF{
-						Builtin: &dfv1.Function{Name: "cat"},
+						Container: &dfv1.Container{Image: "test-image"},
 					},
 				},
 				{
@@ -146,13 +146,13 @@ var (
 					Name: "input",
 					Source: &dfv1.Source{
 						UDTransformer: &dfv1.UDTransformer{
-							Builtin: &dfv1.Transformer{Name: "filter"},
+							Container: &dfv1.Container{Image: "my-image"},
 						}},
 				},
 				{
 					Name: "p1",
 					UDF: &dfv1.UDF{
-						Builtin: &dfv1.Function{Name: "cat"},
+						Container: &dfv1.Container{Image: "test-image"},
 					},
 					SideInputs: []string{"my-sideinput"},
 				},
@@ -376,7 +376,7 @@ func Test_reconcile(t *testing.T) {
 	ctx := context.TODO()
 
 	t.Run("test reconcile", func(t *testing.T) {
-		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc := testJetStreamIsbSvc.DeepCopy()
 		testIsbSvc.Status.MarkConfigured()
 		testIsbSvc.Status.MarkDeployed()
 		cl := fake.NewClientBuilder().Build()
@@ -398,7 +398,7 @@ func Test_reconcile(t *testing.T) {
 	})
 
 	t.Run("test reconcile deleting", func(t *testing.T) {
-		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc := testJetStreamIsbSvc.DeepCopy()
 		testIsbSvc.Status.MarkConfigured()
 		testIsbSvc.Status.MarkDeployed()
 		cl := fake.NewClientBuilder().Build()
@@ -421,7 +421,7 @@ func Test_reconcile(t *testing.T) {
 	})
 
 	t.Run("test reconcile - isbsvc unhealthy", func(t *testing.T) {
-		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc := testJetStreamIsbSvc.DeepCopy()
 		testIsbSvc.Status.MarkConfigured()
 		cl := fake.NewClientBuilder().Build()
 		_ = cl.Create(ctx, testIsbSvc)
@@ -433,7 +433,7 @@ func Test_reconcile(t *testing.T) {
 	})
 
 	t.Run("test reconcile - invalid name", func(t *testing.T) {
-		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc := testJetStreamIsbSvc.DeepCopy()
 		testIsbSvc.Status.MarkConfigured()
 		testIsbSvc.Status.MarkDeployed()
 		cl := fake.NewClientBuilder().Build()
@@ -452,7 +452,7 @@ func Test_reconcile(t *testing.T) {
 	})
 
 	t.Run("test reconcile - duplicate vertex", func(t *testing.T) {
-		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc := testJetStreamIsbSvc.DeepCopy()
 		testIsbSvc.Status.MarkConfigured()
 		testIsbSvc.Status.MarkDeployed()
 		cl := fake.NewClientBuilder().Build()
@@ -494,27 +494,33 @@ func Test_pauseAndResumePipeline(t *testing.T) {
 	t.Run("test normal pipeline", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		ctx := context.TODO()
-		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc := testJetStreamIsbSvc.DeepCopy()
 		testIsbSvc.Status.MarkConfigured()
 		testIsbSvc.Status.MarkDeployed()
 		err := cl.Create(ctx, testIsbSvc)
 		assert.Nil(t, err)
 		r := fakeReconciler(t, cl)
 		testObj := testPipeline.DeepCopy()
-		testObj.Spec.Vertices[0].Scale.Min = ptr.To[int32](3)
+		testObj.Spec.Vertices[0].Scale.Min = ptr.To[int32](2)
+		testObj.Spec.Vertices[1].Scale.Min = ptr.To[int32](3)
 		_, err = r.reconcile(ctx, testObj)
 		assert.NoError(t, err)
+
+		// Pause the pipeline
 		_, err = r.pausePipeline(ctx, testObj)
 		assert.NoError(t, err)
+
 		v, err := r.findExistingVertices(ctx, testObj)
 		assert.NoError(t, err)
 		assert.Equal(t, dfv1.VertexPhasePaused, v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Lifecycle.GetDesiredPhase())
+
+		// resume the pipleine
 		_, err = r.resumePipeline(ctx, testObj)
 		assert.NoError(t, err)
+
 		v, err = r.findExistingVertices(ctx, testObj)
 		assert.NoError(t, err)
-		// when auto-scaling is enabled, while resuming the pipeline, instead of setting the replicas to Scale.Min,
-		// we set it to one and let auto-scaling to scale up
+		// when auto-scaling is enabled, while resuming the pipeline, in fast mode we set replicas to same as replicas before pausing
 		assert.Equal(t, v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Scale.GetMinReplicas(), *v[testObj.Name+"-"+testObj.Spec.Vertices[0].Name].Spec.Replicas)
 		assert.NoError(t, err)
 	})
@@ -522,7 +528,7 @@ func Test_pauseAndResumePipeline(t *testing.T) {
 	t.Run("test reduce pipeline", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		ctx := context.TODO()
-		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc := testJetStreamIsbSvc.DeepCopy()
 		testIsbSvc.Status.MarkConfigured()
 		testIsbSvc.Status.MarkDeployed()
 		err := cl.Create(ctx, testIsbSvc)
@@ -640,12 +646,9 @@ func Test_buildISBBatchJob(t *testing.T) {
 		for _, e := range j.Spec.Template.Spec.Containers[0].Env {
 			envNames = append(envNames, e.Name)
 		}
-		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisPassword)
-		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisSentinelURL)
-		assert.Contains(t, envNames, dfv1.EnvISBSvcSentinelMaster)
-		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisSentinelPassword)
-		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisUser)
-		assert.Contains(t, envNames, dfv1.EnvISBSvcRedisURL)
+		assert.Contains(t, envNames, dfv1.EnvISBSvcJetStreamTLSEnabled)
+		assert.Contains(t, envNames, dfv1.EnvISBSvcJetStreamURL)
+		assert.Contains(t, envNames, dfv1.EnvISBSvcConfig)
 	})
 
 	t.Run("test build ISB batch job with pipeline overrides", func(t *testing.T) {
@@ -738,7 +741,7 @@ func Test_cleanupBuffers(t *testing.T) {
 
 	t.Run("test create cleanup buffer job with isbsvc", func(t *testing.T) {
 		testObj := testPipeline.DeepCopy()
-		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc := testJetStreamIsbSvc.DeepCopy()
 		testIsbSvc.Status.MarkConfigured()
 		testIsbSvc.Status.MarkDeployed()
 		err := cl.Create(ctx, testIsbSvc)
@@ -1093,7 +1096,7 @@ func Test_checkChildrenResourceStatus(t *testing.T) {
 	t.Run("test check children resource status", func(t *testing.T) {
 		cl := fake.NewClientBuilder().Build()
 		ctx := context.TODO()
-		testIsbSvc := testNativeRedisIsbSvc.DeepCopy()
+		testIsbSvc := testJetStreamIsbSvc.DeepCopy()
 		testIsbSvc.Status.MarkConfigured()
 		testIsbSvc.Status.MarkDeployed()
 		err := cl.Create(ctx, testIsbSvc)

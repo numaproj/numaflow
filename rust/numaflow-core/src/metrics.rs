@@ -1,9 +1,3 @@
-use std::collections::{BTreeMap, HashMap};
-use std::net::SocketAddr;
-use std::sync::{Arc, OnceLock};
-use std::time::Duration;
-use std::{env, iter};
-
 use axum::body::Body;
 use axum::extract::State;
 use axum::http::{Response, StatusCode};
@@ -17,7 +11,13 @@ use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::metrics::histogram::Histogram;
 use prometheus_client::registry::Registry;
 use rcgen::{CertifiedKey, generate_simple_self_signed};
-use tokio::sync::Mutex;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::net::SocketAddr;
+use std::sync::OnceLock;
+use std::sync::atomic::AtomicU64;
+use std::time::Duration;
+use std::{env, iter};
 use tokio::task::JoinHandle;
 use tokio::time;
 use tracing::{debug, error, info};
@@ -27,9 +27,11 @@ use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_pipeline_name, get_vertex_name, get_vertex_replica};
 use crate::mapper::map::MapHandle;
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
-use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
+use crate::reduce::reducer::unaligned::user_defined::UserDefinedUnalignedReduce;
+use crate::reduce::reducer::user_defined::UserDefinedReduce;
 use crate::sink::SinkWriter;
 use crate::source::Source;
+use crate::watermark::WatermarkHandle;
 
 // SDK information
 const SDK_INFO: &str = "sdk_info";
@@ -43,8 +45,6 @@ const SDK_TYPE: &str = "type";
 // Note: Please keep consistent with the definitions in MonoVertex daemon
 const MVTX_NAME_LABEL: &str = "mvtx_name";
 const REPLICA_LABEL: &str = "mvtx_replica";
-const PENDING_PERIOD_LABEL: &str = "period";
-
 const PIPELINE_NAME_LABEL: &str = "pipeline";
 const PIPELINE_REPLICA_LABEL: &str = "replica";
 pub(crate) const PIPELINE_PARTITION_NAME_LABEL: &str = "partition_name";
@@ -99,12 +99,26 @@ const TRANSFORMER_READ_TOTAL: &str = "transformer_read";
 const TRANSFORMER_WRITE_TOTAL: &str = "transformer_write";
 const PIPELINE_TRANSFORMER_DROP_TOTAL: &str = "transformer_drop";
 
+// jetstream isb counters
+const JETSTREAM_ISB_ISFULL_ERROR_TOTAL: &str = "isFull_error";
+const JETSTREAM_ISB_ISFULL_TOTAL: &str = "isFull";
+const JETSTREAM_ISB_WRITE_TIMEOUT_TOTAL: &str = "write_timeout";
+const JETSTREAM_ISB_WRITE_ERROR_TOTAL: &str = "write_error";
+const JETSTREAM_ISB_READ_ERROR_TOTAL: &str = "read_error";
+
 // pending as gauge for mvtx (these metric names are hardcoded in the auto-scaler)
-const PENDING: &str = "pending";
 const PENDING_RAW: &str = "pending_raw";
 // pending as gauge for pipeline
-const VERTEX_PENDING: &str = "pending_messages";
 const VERTEX_PENDING_RAW: &str = "pending_messages_raw";
+
+// read batch size as gauge
+const READ_BATCH_SIZE: &str = "read_batch_size";
+
+// jetstream isb gauges
+const JETSTREAM_ISB_BUFFER_SOFT_USAGE: &str = "buffer_soft_usage";
+const JETSTREAM_ISB_BUFFER_SOLID_USAGE: &str = "buffer_solid_usage";
+const JETSTREAM_ISB_BUFFER_PENDING: &str = "buffer_pending";
+const JETSTREAM_ISB_BUFFER_ACK_PENDING: &str = "buffer_ack_pending";
 
 // processing times as timers
 const E2E_TIME: &str = "processing_time";
@@ -113,7 +127,6 @@ const READ_PROCESSING_TIME: &str = "read_processing_time";
 const WRITE_PROCESSING_TIME: &str = "write_processing_time";
 const ACK_PROCESSING_TIME: &str = "ack_processing_time";
 const TRANSFORMER_PROCESSING_TIME: &str = "transformer_processing_time";
-const FORWARD_CHUNK_PROCESSING_TIME: &str = "forward_chunk_processing_time";
 const UDF_PROCESSING_TIME: &str = "udf_processing_time";
 const FALLBACK_SINK_WRITE_PROCESSING_TIME: &str = "fbsink_write_processing_time";
 const TRANSFORM_TIME: &str = "time";
@@ -121,12 +134,17 @@ const ACK_TIME: &str = "ack_time";
 const SINK_TIME: &str = "time";
 const FALLBACK_SINK_TIME: &str = "time";
 
+// jetstream isb processing times
+const JETSTREAM_ISB_READ_TIME_TOTAL: &str = "read_time_total";
+const JETSTREAM_ISB_WRITE_TIME_TOTAL: &str = "write_time_total";
+const JETSTREAM_ISB_ACK_TIME_TOTAL: &str = "ack_time_total";
+
 /// A deep healthcheck for components. Each component should implement IsReady for both builtins and
 /// user-defined containers.
 #[derive(Clone)]
 pub(crate) enum ComponentHealthChecks {
-    Monovertex(MonovertexComponents),
-    Pipeline(PipelineComponents),
+    Monovertex(Box<MonovertexComponents>),
+    Pipeline(Box<PipelineComponents>),
 }
 
 /// MonovertexComponents is used to store all the components required for running mvtx. Transformer
@@ -141,10 +159,36 @@ pub(crate) struct MonovertexComponents {
 /// and Fallback Sink is missing because they are internally referenced by Source and Sink.
 #[derive(Clone)]
 pub(crate) enum PipelineComponents {
-    Source(Source),
-    Sink(SinkWriter),
+    Source(Box<Source>),
+    Sink(Box<SinkWriter>),
     Map(MapHandle),
-    Reduce(UserDefinedAlignedReduce),
+    Reduce(UserDefinedReduce),
+}
+
+/// WatermarkFetcherState holds watermark handle and partition count for fetching watermarks
+#[derive(Clone)]
+pub(crate) struct WatermarkFetcherState {
+    pub(crate) watermark_handle: WatermarkHandle,
+    pub(crate) partition_count: u16,
+}
+
+/// MetricsState holds both component health checks and optional watermark fetcher state
+/// for serving metrics and watermark endpoints
+#[derive(Clone)]
+pub(crate) struct MetricsState {
+    pub(crate) health_checks: ComponentHealthChecks,
+    pub(crate) watermark_fetcher_state: Option<WatermarkFetcherState>,
+}
+
+/// WatermarkResponse represents the response structure for the /watermark endpoint
+/// Simple map of partition -> watermark value
+#[derive(Serialize, Deserialize, Debug)]
+pub(crate) struct WatermarkResponse {
+    /// The flatten attribute merges the HashMap's key-value pairs directly into the parent JSON object.
+    /// Without flatten: {"partitions": {"0": 123, "1": 456}}
+    /// With flatten: {"0": 123, "1": 456}
+    #[serde(flatten)]
+    pub(crate) partitions: HashMap<String, i64>,
 }
 
 /// The global register of all metrics.
@@ -214,11 +258,8 @@ pub(crate) struct MonoVtxMetrics {
     pub(crate) dropped_total: Family<Vec<(String, String)>, Counter>,
 
     // gauge
-    pub(crate) pending: Family<Vec<(String, String)>, Gauge>,
-    // TODO(lookback) - using new implementation for monovertex right now,
-    // deprecate old metric and use only this as well once
-    // corresponding changes are completed.
     pub(crate) pending_raw: Family<Vec<(String, String)>, Gauge>,
+    pub(crate) read_batch_size: Family<Vec<(String, String)>, Gauge>,
 
     // timers
     pub(crate) e2e_time: Family<Vec<(String, String)>, Histogram>,
@@ -238,11 +279,7 @@ pub(crate) struct PipelineMetrics {
     pub(crate) source_forwarder: SourceForwarderMetrics,
     // sink forwarder specific metrics
     pub(crate) sink_forwarder: SinkForwarderMetrics,
-    pub(crate) isb: PipelineISBMetrics,
-    pub(crate) pending: Family<Vec<(String, String)>, Gauge>,
-    // TODO(lookback) - using new implementation only for monovertex right now,
-    // deprecate old metric and use only this as well once
-    // corresponding changes are completed.
+    pub(crate) jetstream_isb: JetStreamISBMetrics,
     pub(crate) pending_raw: Family<Vec<(String, String)>, Gauge>,
 }
 
@@ -304,10 +341,51 @@ pub(crate) struct PipelineForwarderMetrics {
     pub(crate) ack_processing_time: Family<Vec<(String, String)>, Histogram>,
 
     // forwarder histograms
-    pub(crate) forward_chunk_processing_time: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) e2e_time: Family<Vec<(String, String)>, Histogram>,
 
     // udf histograms
     pub(crate) udf_processing_time: Family<Vec<(String, String)>, Histogram>,
+
+    // batch size as gauge
+    pub(crate) read_batch_size: Family<Vec<(String, String)>, Gauge>,
+}
+
+impl PipelineForwarderMetrics {
+    pub(crate) fn new() -> Self {
+        Self {
+            read_total: Family::<Vec<(String, String)>, Counter>::default(),
+            data_read_total: Family::<Vec<(String, String)>, Counter>::default(),
+            read_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
+            data_read_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
+            read_error_total: Family::<Vec<(String, String)>, Counter>::default(),
+            write_total: Family::<Vec<(String, String)>, Counter>::default(),
+            write_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
+            write_error_total: Family::<Vec<(String, String)>, Counter>::default(),
+            drop_total: Family::<Vec<(String, String)>, Counter>::default(),
+            drop_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
+            ack_total: Family::<Vec<(String, String)>, Counter>::default(),
+            udf_read_total: Family::<Vec<(String, String)>, Counter>::default(),
+            udf_drop_total: Family::<Vec<(String, String)>, Counter>::default(),
+            udf_error_total: Family::<Vec<(String, String)>, Counter>::default(),
+            udf_write_total: Family::<Vec<(String, String)>, Counter>::default(),
+            read_batch_size: Family::<Vec<(String, String)>, Gauge>::default(),
+            read_processing_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
+                || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 10.0, 10)),
+            ),
+            write_processing_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
+                || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10)),
+            ),
+            ack_processing_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
+                || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 10.0, 10)),
+            ),
+            udf_processing_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
+                || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10)),
+            ),
+            e2e_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10))
+            }),
+        }
+    }
 }
 
 pub(crate) struct SourceForwarderMetrics {
@@ -321,6 +399,21 @@ pub(crate) struct SourceForwarderMetrics {
     pub(crate) transformer_processing_time: Family<Vec<(String, String)>, Histogram>,
 }
 
+impl SourceForwarderMetrics {
+    pub(crate) fn new() -> Self {
+        Self {
+            transformer_read_total: Family::<Vec<(String, String)>, Counter>::default(),
+            transformer_write_total: Family::<Vec<(String, String)>, Counter>::default(),
+            transformer_error_total: Family::<Vec<(String, String)>, Counter>::default(),
+            transformer_drop_total: Family::<Vec<(String, String)>, Counter>::default(),
+            transformer_processing_time:
+                Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                    Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
+                }),
+        }
+    }
+}
+
 pub(crate) struct SinkForwarderMetrics {
     // fallback sink counters
     pub(crate) fbsink_write_total: Family<Vec<(String, String)>, Counter>,
@@ -331,8 +424,62 @@ pub(crate) struct SinkForwarderMetrics {
     pub(crate) fbsink_write_processing_time: Family<Vec<(String, String)>, Histogram>,
 }
 
-pub(crate) struct PipelineISBMetrics {
-    pub(crate) paf_resolution_time: Family<Vec<(String, String)>, Histogram>,
+impl SinkForwarderMetrics {
+    pub(crate) fn new() -> Self {
+        Self {
+            fbsink_write_total: Family::<Vec<(String, String)>, Counter>::default(),
+            fbsink_write_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
+            fbsink_write_error_total: Family::<Vec<(String, String)>, Counter>::default(),
+            fbsink_write_processing_time:
+                Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
+                    Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10))
+                }),
+        }
+    }
+}
+
+pub(crate) struct JetStreamISBMetrics {
+    pub(crate) read_error_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) isfull_error_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) isfull_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) write_error_total: Family<Vec<(String, String)>, Counter>,
+    pub(crate) write_timeout_total: Family<Vec<(String, String)>, Counter>,
+
+    pub(crate) buffer_soft_usage: Family<Vec<(String, String)>, Gauge<f64, AtomicU64>>,
+    pub(crate) buffer_solid_usage: Family<Vec<(String, String)>, Gauge<f64, AtomicU64>>,
+    pub(crate) buffer_pending: Family<Vec<(String, String)>, Gauge>,
+    pub(crate) buffer_ack_pending: Family<Vec<(String, String)>, Gauge>,
+
+    pub(crate) write_time_total: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) read_time_total: Family<Vec<(String, String)>, Histogram>,
+    pub(crate) ack_time_total: Family<Vec<(String, String)>, Histogram>,
+}
+
+impl JetStreamISBMetrics {
+    pub(crate) fn new() -> Self {
+        Self {
+            read_error_total: Family::<Vec<(String, String)>, Counter>::default(),
+            isfull_error_total: Family::<Vec<(String, String)>, Counter>::default(),
+            isfull_total: Family::<Vec<(String, String)>, Counter>::default(),
+            write_error_total: Family::<Vec<(String, String)>, Counter>::default(),
+            write_timeout_total: Family::<Vec<(String, String)>, Counter>::default(),
+
+            buffer_soft_usage: Family::<Vec<(String, String)>, Gauge<f64, AtomicU64>>::default(),
+            buffer_solid_usage: Family::<Vec<(String, String)>, Gauge<f64, AtomicU64>>::default(),
+            buffer_pending: Family::<Vec<(String, String)>, Gauge>::default(),
+            buffer_ack_pending: Family::<Vec<(String, String)>, Gauge>::default(),
+
+            write_time_total: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
+                || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 2.0, 10)),
+            ),
+            read_time_total: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
+                || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 2.0, 10)),
+            ),
+            ack_time_total: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(
+                || Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 2.0, 10)),
+            ),
+        }
+    }
 }
 
 /// Exponential bucket distribution with range.
@@ -365,11 +512,8 @@ impl MonoVtxMetrics {
             ack_total: Family::<Vec<(String, String)>, Counter>::default(),
             dropped_total: Family::<Vec<(String, String)>, Counter>::default(),
             // gauge
-            pending: Family::<Vec<(String, String)>, Gauge>::default(),
-            // TODO(lookback) - using new implementation only for monovertex right now,
-            // deprecate old metric and use only this as well once
-            // corresponding changes are completed.
             pending_raw: Family::<Vec<(String, String)>, Gauge>::default(),
+            read_batch_size: Family::<Vec<(String, String)>, Gauge>::default(),
             // timers
             // exponential buckets in the range 100 microseconds to 15 minutes
             e2e_time: Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
@@ -433,16 +577,14 @@ impl MonoVtxMetrics {
 
         // gauges
         registry.register(
-            PENDING,
-            "A Gauge to keep track of the total number of pending messages for the monovtx",
-            metrics.pending.clone(),
-        );
-
-        // gauges
-        registry.register(
             PENDING_RAW,
             "A Gauge to keep track of the total number of source pending messages for the monovtx",
             metrics.pending_raw.clone(),
+        );
+        registry.register(
+            READ_BATCH_SIZE,
+            "A Gauge to keep track of the read batch size for monovtx",
+            metrics.read_batch_size.clone(),
         );
         // timers
         registry.register(
@@ -515,77 +657,22 @@ impl MonoVtxMetrics {
 impl PipelineMetrics {
     fn new() -> Self {
         let metrics = Self {
-            forwarder: PipelineForwarderMetrics {
-                read_total: Family::<Vec<(String, String)>, Counter>::default(),
-                data_read_total: Family::<Vec<(String, String)>, Counter>::default(),
-                read_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
-                data_read_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
-                read_error_total: Family::<Vec<(String, String)>, Counter>::default(),
-                write_total: Family::<Vec<(String, String)>, Counter>::default(),
-                write_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
-                write_error_total: Family::<Vec<(String, String)>, Counter>::default(),
-                drop_total: Family::<Vec<(String, String)>, Counter>::default(),
-                drop_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
-                ack_total: Family::<Vec<(String, String)>, Counter>::default(),
-                udf_read_total: Family::<Vec<(String, String)>, Counter>::default(),
-                udf_drop_total: Family::<Vec<(String, String)>, Counter>::default(),
-                udf_error_total: Family::<Vec<(String, String)>, Counter>::default(),
-                udf_write_total: Family::<Vec<(String, String)>, Counter>::default(),
-                read_processing_time:
-                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 10.0, 10))
-                    }),
-                write_processing_time:
-                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10))
-                    }),
-                ack_processing_time:
-                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 10.0, 10))
-                    }),
-                udf_processing_time:
-                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
-                    }),
-                forward_chunk_processing_time:
-                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10))
-                    }),
-            },
-            source_forwarder: SourceForwarderMetrics {
-                transformer_read_total: Family::<Vec<(String, String)>, Counter>::default(),
-                transformer_write_total: Family::<Vec<(String, String)>, Counter>::default(),
-                transformer_drop_total: Family::<Vec<(String, String)>, Counter>::default(),
-                transformer_error_total: Family::<Vec<(String, String)>, Counter>::default(),
-                transformer_processing_time:
-                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
-                    }),
-            },
-            sink_forwarder: SinkForwarderMetrics {
-                fbsink_write_total: Family::<Vec<(String, String)>, Counter>::default(),
-                fbsink_write_bytes_total: Family::<Vec<(String, String)>, Counter>::default(),
-                fbsink_write_error_total: Family::<Vec<(String, String)>, Counter>::default(),
-                fbsink_write_processing_time:
-                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 20.0, 10))
-                    }),
-            },
-            isb: PipelineISBMetrics {
-                paf_resolution_time:
-                    Family::<Vec<(String, String)>, Histogram>::new_with_constructor(|| {
-                        Histogram::new(exponential_buckets_range(100.0, 60000000.0 * 15.0, 10))
-                    }),
-            },
-            pending: Family::<Vec<(String, String)>, Gauge>::default(),
-            // TODO(lookback) - using new implementation only for monovertex right now,
-            // deprecate old metric and use only this as well once
-            // corresponding changes are completed.
+            forwarder: PipelineForwarderMetrics::new(),
+            source_forwarder: SourceForwarderMetrics::new(),
+            sink_forwarder: SinkForwarderMetrics::new(),
+            jetstream_isb: JetStreamISBMetrics::new(),
             pending_raw: Family::<Vec<(String, String)>, Gauge>::default(),
         };
         let mut registry = global_registry().registry.lock();
+        Self::register_forwarder_metrics(&metrics, &mut registry);
+        Self::register_source_forwarder_metrics(&metrics, &mut registry);
+        Self::register_sink_forwarder_metrics(&metrics, &mut registry);
+        Self::register_jetstream_isb_metrics(&metrics, &mut registry);
+        Self::register_vertex_metrics(&metrics, &mut registry);
+        metrics
+    }
 
-        // Pipeline forwarder sub-registry
+    fn register_forwarder_metrics(metrics: &Self, registry: &mut Registry) {
         let forwarder_registry = registry.sub_registry_with_prefix("forwarder");
         forwarder_registry.register(
             READ_TOTAL,
@@ -663,9 +750,9 @@ impl PipelineMetrics {
             metrics.forwarder.udf_error_total.clone(),
         );
         forwarder_registry.register(
-            FORWARD_CHUNK_PROCESSING_TIME,
-            "Processing times of the entire forward a chunk (100 microseconds to 20 minutes)",
-            metrics.forwarder.forward_chunk_processing_time.clone(),
+            E2E_TIME,
+            "Processing times (100 microseconds to 20 minutes)",
+            metrics.forwarder.e2e_time.clone(),
         );
         forwarder_registry.register(
             UDF_PROCESSING_TIME,
@@ -687,7 +774,14 @@ impl PipelineMetrics {
             "Total messages dropped by the user",
             metrics.forwarder.udf_drop_total.clone(),
         );
+        forwarder_registry.register(
+            READ_BATCH_SIZE,
+            "A Gauge to keep track of the read batch size for source vtx",
+            metrics.forwarder.read_batch_size.clone(),
+        );
+    }
 
+    fn register_source_forwarder_metrics(metrics: &Self, registry: &mut Registry) {
         // Pipeline source forwarder sub-registry
         let source_forwarder_registry = registry.sub_registry_with_prefix("source_forwarder");
 
@@ -716,7 +810,9 @@ impl PipelineMetrics {
             "Processing times of source transformer (100 microseconds to 15 minutes)",
             metrics.source_forwarder.transformer_processing_time.clone(),
         );
+    }
 
+    fn register_sink_forwarder_metrics(metrics: &Self, registry: &mut Registry) {
         // Pipeline sink forwarder sub-registry
         let sink_forwarder_registry = registry.sub_registry_with_prefix("forwarder");
 
@@ -740,19 +836,83 @@ impl PipelineMetrics {
             "Processing times of write operations to a fallback sink (100 microseconds to 20 minutes)",
             metrics.sink_forwarder.fbsink_write_processing_time.clone(),
         );
+    }
 
-        let vertex_registry = registry.sub_registry_with_prefix("vertex");
-        vertex_registry.register(
-            VERTEX_PENDING,
-            "Total number of pending messages",
-            metrics.pending.clone(),
+    fn register_jetstream_isb_metrics(metrics: &Self, registry: &mut Registry) {
+        // Pipeline JetStream ISB sub-registry
+        let jetstream_isb_registry = registry.sub_registry_with_prefix("isb_jetstream");
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_READ_ERROR_TOTAL,
+            "Total number of jetstream read errors",
+            metrics.jetstream_isb.read_error_total.clone(),
         );
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_ISFULL_ERROR_TOTAL,
+            "Total number of jetstream isFull errors",
+            metrics.jetstream_isb.isfull_error_total.clone(),
+        );
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_ISFULL_TOTAL,
+            "Total number of IsFull",
+            metrics.jetstream_isb.isfull_total.clone(),
+        );
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_WRITE_ERROR_TOTAL,
+            "Total number of jetstream write errors",
+            metrics.jetstream_isb.write_error_total.clone(),
+        );
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_WRITE_TIMEOUT_TOTAL,
+            "Total number of jetstream write timeouts",
+            metrics.jetstream_isb.write_timeout_total.clone(),
+        );
+        // isbSoftUsage is indicative of the buffer that is used up, it is calculated based on the messages in pending + ack pending
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_BUFFER_SOFT_USAGE,
+            "Percentage of buffer soft usage",
+            metrics.jetstream_isb.buffer_soft_usage.clone(),
+        );
+        // isbSolidUsage is indicative of buffer that is used up, it is calculated based on the messages remaining in the stream (if it's not Limits retention policy)
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_BUFFER_SOLID_USAGE,
+            "Percentage of buffer solid usage",
+            metrics.jetstream_isb.buffer_solid_usage.clone(),
+        );
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_BUFFER_PENDING,
+            "Number of pending messages",
+            metrics.jetstream_isb.buffer_pending.clone(),
+        );
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_BUFFER_ACK_PENDING,
+            "Number of messages pending ack",
+            metrics.jetstream_isb.buffer_ack_pending.clone(),
+        );
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_WRITE_TIME_TOTAL,
+            "Processing times of Writes for jetstream",
+            metrics.jetstream_isb.write_time_total.clone(),
+        );
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_READ_TIME_TOTAL,
+            "Processing times of Reads for jetstream",
+            metrics.jetstream_isb.read_time_total.clone(),
+        );
+        jetstream_isb_registry.register(
+            JETSTREAM_ISB_ACK_TIME_TOTAL,
+            "Processing times of Acks for jetstream",
+            metrics.jetstream_isb.ack_time_total.clone(),
+        );
+    }
+
+    fn register_vertex_metrics(metrics: &Self, registry: &mut Registry) {
+        // Pipeline vertex sub-registry
+        let vertex_registry = registry.sub_registry_with_prefix("vertex");
         vertex_registry.register(
             VERTEX_PENDING_RAW,
             "Total number of pending messages",
             metrics.pending_raw.clone(),
         );
-        metrics
     }
 }
 
@@ -862,29 +1022,21 @@ pub(crate) fn pipeline_drop_metric_labels(
     ]
 }
 
-static PIPELINE_ISB_METRICS_LABELS: OnceLock<Vec<(String, String)>> = OnceLock::new();
-
-pub(crate) fn pipeline_isb_metric_labels() -> &'static Vec<(String, String)> {
-    PIPELINE_ISB_METRICS_LABELS.get_or_init(|| {
-        vec![
-            (
-                PIPELINE_NAME_LABEL.to_string(),
-                get_pipeline_name().to_string(),
-            ),
-            (
-                PIPELINE_REPLICA_LABEL.to_string(),
-                get_vertex_replica().to_string(),
-            ),
-            (
-                PIPELINE_VERTEX_LABEL.to_string(),
-                get_vertex_name().to_string(),
-            ),
-        ]
-    })
+pub(crate) fn jetstream_isb_metrics_labels(buffer_name: &str) -> Vec<(String, String)> {
+    vec![("buffer".to_string(), buffer_name.to_string())]
+}
+pub(crate) fn jetstream_isb_error_metrics_labels(
+    buffer_name: &str,
+    reason: String,
+) -> Vec<(String, String)> {
+    vec![
+        ("buffer".to_string(), buffer_name.to_string()),
+        ("reason".to_string(), reason),
+    ]
 }
 
-// metrics_handler is used to generate and return a snapshot of the
-// current state of the metrics in the global registry
+/// metrics_handler is used to generate and return a snapshot of the
+/// current state of the metrics in the global registry
 pub async fn metrics_handler() -> impl IntoResponse {
     let state = global_registry().registry.lock();
     let mut buffer = String::new();
@@ -900,35 +1052,84 @@ pub async fn metrics_handler() -> impl IntoResponse {
         .unwrap()
 }
 
+// watermark_handler is used to fetch and return watermark information
+// for all partitions based on available watermark handles
+pub async fn watermark_handler(State(state): State<MetricsState>) -> impl IntoResponse {
+    let Some(watermark_fetcher_state) = &state.watermark_fetcher_state else {
+        return Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .header(axum::http::header::CONTENT_TYPE, "application/json")
+            .body(Body::from(
+                r#"{"error": "Watermark not available for this vertex type"}"#,
+            ))
+            .unwrap();
+    };
+
+    let mut partitions = HashMap::new();
+    match &watermark_fetcher_state.watermark_handle {
+        // For source watermark handle, always fetch only partition 0
+        WatermarkHandle::Source(source_handle) => {
+            let mut handle_clone = source_handle.clone();
+            let watermark = handle_clone.fetch_head_watermark(0).await;
+            partitions.insert("0".to_string(), watermark.timestamp_millis());
+        }
+
+        // For every other vertex type, fetch watermarks for all partitions (0 to partition_count-1)
+        WatermarkHandle::ISB(isb_handle) => {
+            let mut handle_clone = isb_handle.clone();
+
+            // For reduce vertices, only return partition 0 since they read from single partition
+            // For other vertex types, fetch watermarks for all partitions
+            // watermark_fetcher_state.partition_count will already be set to 1 for reduce vertex
+            for partition_idx in 0..watermark_fetcher_state.partition_count {
+                let watermark = handle_clone.fetch_head_watermark(partition_idx).await;
+                partitions.insert(partition_idx.to_string(), watermark.timestamp_millis());
+            }
+        }
+    }
+
+    let response = WatermarkResponse { partitions };
+    let json_response = serde_json::to_string(&response)
+        .unwrap_or_else(|_| r#"{"error": "Failed to serialize watermark response"}"#.to_string());
+
+    debug!(?json_response, "Watermark response");
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(axum::http::header::CONTENT_TYPE, "application/json")
+        .body(Body::from(json_response))
+        .unwrap()
+}
+
 pub(crate) async fn start_metrics_https_server(
     addr: SocketAddr,
-    metrics_state: ComponentHealthChecks,
+    metrics_state: MetricsState,
 ) -> crate::Result<()> {
     // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     // Generate a self-signed certificate
-    let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
-        .map_err(|e| Error::Metrics(format!("Generating self-signed certificate: {}", e)))?;
+    let CertifiedKey { cert, signing_key } = generate_simple_self_signed(vec!["localhost".into()])
+        .map_err(|e| Error::Metrics(format!("Generating self-signed certificate: {e}")))?;
 
-    let tls_config = RustlsConfig::from_pem(cert.pem().into(), key_pair.serialize_pem().into())
+    let tls_config = RustlsConfig::from_pem(cert.pem().into(), signing_key.serialize_pem().into())
         .await
-        .map_err(|e| Error::Metrics(format!("Creating tlsConfig from pem: {}", e)))?;
+        .map_err(|e| Error::Metrics(format!("Creating tlsConfig from pem: {e}")))?;
 
     let metrics_app = metrics_router(metrics_state);
 
     axum_server::bind_rustls(addr, tls_config)
         .serve(metrics_app.into_make_service())
         .await
-        .map_err(|e| Error::Metrics(format!("Starting web server for metrics: {}", e)))?;
+        .map_err(|e| Error::Metrics(format!("Starting web server for metrics: {e}")))?;
 
     Ok(())
 }
 
 /// router for metrics and k8s health endpoints
-fn metrics_router(metrics_state: ComponentHealthChecks) -> Router {
+fn metrics_router(metrics_state: MetricsState) -> Router {
     Router::new()
         .route("/metrics", get(metrics_handler))
+        .route("/runtime/watermark", get(watermark_handler))
         .route("/livez", get(livez))
         .route("/readyz", get(sidecar_livez))
         .route("/sidecar-livez", get(sidecar_livez))
@@ -939,7 +1140,7 @@ async fn livez() -> impl IntoResponse {
     StatusCode::NO_CONTENT
 }
 
-async fn sidecar_livez(State(state): State<ComponentHealthChecks>) -> impl IntoResponse {
+async fn sidecar_livez(State(state): State<MetricsState>) -> impl IntoResponse {
     // Check if health checks are disabled via the environment variable
     if env::var("NUMAFLOW_HEALTH_CHECK_DISABLED")
         .map(|v| v.eq_ignore_ascii_case("true"))
@@ -947,7 +1148,7 @@ async fn sidecar_livez(State(state): State<ComponentHealthChecks>) -> impl IntoR
     {
         return StatusCode::NO_CONTENT;
     }
-    match state {
+    match state.health_checks {
         ComponentHealthChecks::Monovertex(mut monovertex_state) => {
             // this call also check the health of transformer if it is configured in the Source.
             if !monovertex_state.source.ready().await {
@@ -959,7 +1160,7 @@ async fn sidecar_livez(State(state): State<ComponentHealthChecks>) -> impl IntoR
                 return StatusCode::INTERNAL_SERVER_ERROR;
             }
         }
-        ComponentHealthChecks::Pipeline(pipeline_state) => match pipeline_state {
+        ComponentHealthChecks::Pipeline(pipeline_state) => match *pipeline_state {
             PipelineComponents::Source(mut source) => {
                 if !source.ready().await {
                     error!("Pipeline source component is not ready");
@@ -979,49 +1180,48 @@ async fn sidecar_livez(State(state): State<ComponentHealthChecks>) -> impl IntoR
                     return StatusCode::INTERNAL_SERVER_ERROR;
                 }
             }
-            PipelineComponents::Reduce(mut reducer) => {
-                if !reducer.ready().await {
-                    error!("Pipeline reduce component is not ready");
-                    return StatusCode::INTERNAL_SERVER_ERROR;
+            PipelineComponents::Reduce(reducer) => match reducer {
+                UserDefinedReduce::Aligned(mut reducer) => {
+                    if !reducer.ready().await {
+                        error!("Pipeline aligned reduce is not ready");
+                        return StatusCode::INTERNAL_SERVER_ERROR;
+                    }
                 }
-            }
+                UserDefinedReduce::Unaligned(reducer) => match reducer {
+                    UserDefinedUnalignedReduce::Accumulator(mut reducer) => {
+                        if !reducer.ready().await {
+                            error!("Pipeline accumulator reduce component is not ready");
+                            return StatusCode::INTERNAL_SERVER_ERROR;
+                        }
+                    }
+                    UserDefinedUnalignedReduce::Session(mut reducer) => {
+                        if !reducer.ready().await {
+                            error!("Pipeline session reduce component is not ready");
+                            return StatusCode::INTERNAL_SERVER_ERROR;
+                        }
+                    }
+                },
+            },
         },
     }
     StatusCode::NO_CONTENT
 }
 
-const MAX_PENDING_STATS: usize = 1800;
-
-// Pending info with timestamp
-struct TimestampedPending {
-    pending: i64,
-    timestamp: std::time::Instant,
-}
-
 #[derive(Clone)]
 pub(crate) enum LagReader {
-    Source(Source),
+    Source(Box<Source>),
     #[allow(clippy::upper_case_acronyms)]
     ISB(Vec<JetStreamReader>), // multiple partitions
 }
 
 /// PendingReader is responsible for periodically checking the lag of the reader
-/// and exposing the metrics. It maintains a list of pending stats and ensures that
-/// only the most recent entries are kept.
+/// and exposing the metrics.
 pub(crate) struct PendingReader {
     lag_reader: LagReader,
     lag_checking_interval: Duration,
-    refresh_interval: Duration,
-    pending_stats: Arc<Mutex<HashMap<String, Vec<TimestampedPending>>>>,
-    lookback_seconds: u16,
 }
 
 pub(crate) struct PendingReaderTasks {
-    buildup_handle: JoinHandle<()>,
-    expose_handle: JoinHandle<()>,
-}
-
-pub(crate) struct PendingReaderTasks_ {
     expose_handle: JoinHandle<()>,
 }
 
@@ -1029,8 +1229,6 @@ pub(crate) struct PendingReaderTasks_ {
 pub(crate) struct PendingReaderBuilder {
     lag_reader: LagReader,
     lag_checking_interval: Option<Duration>,
-    refresh_interval: Option<Duration>,
-    lookback_seconds: Option<u16>,
 }
 
 impl PendingReaderBuilder {
@@ -1038,8 +1236,6 @@ impl PendingReaderBuilder {
         Self {
             lag_reader,
             lag_checking_interval: None,
-            refresh_interval: None,
-            lookback_seconds: None,
         }
     }
 
@@ -1047,101 +1243,27 @@ impl PendingReaderBuilder {
         self.lag_checking_interval = Some(interval);
         self
     }
-
-    pub(crate) fn refresh_interval(mut self, interval: Duration) -> Self {
-        self.refresh_interval = Some(interval);
-        self
-    }
-
-    pub(crate) fn lookback_seconds(mut self, seconds: u16) -> Self {
-        self.lookback_seconds = Some(seconds);
-        self
-    }
-
     pub(crate) fn build(self) -> PendingReader {
-        let mut pending_map = HashMap::new();
-        match &self.lag_reader {
-            LagReader::Source(_) => {
-                pending_map.insert("source".to_string(), Vec::with_capacity(MAX_PENDING_STATS));
-            }
-            LagReader::ISB(readers) => {
-                // need a lag reader per partition
-                for reader in readers {
-                    pending_map.insert(
-                        reader.name().to_string(),
-                        Vec::with_capacity(MAX_PENDING_STATS),
-                    );
-                }
-            }
-        }
-
         PendingReader {
             lag_reader: self.lag_reader,
             lag_checking_interval: self
                 .lag_checking_interval
                 .unwrap_or_else(|| Duration::from_secs(3)),
-            refresh_interval: self
-                .refresh_interval
-                .unwrap_or_else(|| Duration::from_secs(5)),
-            lookback_seconds: self.lookback_seconds.unwrap_or(120),
-            pending_stats: Arc::new(Mutex::new(pending_map)),
         }
     }
 }
 
 impl PendingReader {
-    /// Starts the lag reader by spawning tasks to build up pending info and expose pending metrics.
-    ///
-    /// This method spawns two asynchronous tasks:
-    /// - One to periodically check the lag and update the pending stats.
-    /// - Another to periodically expose the pending metrics.
-    ///
+    /// Starts the lag reader by spawning task to expose pending metrics for daemon server.
     /// Dropping the PendingReaderTasks will abort the background tasks.
     pub async fn start(&self, is_mono_vertex: bool) -> PendingReaderTasks {
         let lag_checking_interval = self.lag_checking_interval;
-        let refresh_interval = self.refresh_interval;
-        let pending_stats = Arc::clone(&self.pending_stats);
-        let lookback_seconds = self.lookback_seconds;
-
-        let lag_reader = self.lag_reader.clone();
-        let buildup_handle = tokio::spawn(async move {
-            build_pending_info(lag_reader, lag_checking_interval, pending_stats).await;
-        });
-
-        let pending_stats = Arc::clone(&self.pending_stats);
-        let expose_handle = tokio::spawn(async move {
-            expose_pending_metrics(
-                is_mono_vertex,
-                refresh_interval,
-                pending_stats,
-                lookback_seconds,
-            )
-            .await;
-        });
-        PendingReaderTasks {
-            buildup_handle,
-            expose_handle,
-        }
-    }
-    // TODO(lookback) - using new implementation for monovertex right now,
-    // deprecate old implementation and use this for pipeline as well once
-    // corresponding changes are completed.
-
-    /// Starts the lag reader by spawning tasks to build up pending info and expose pending metrics.
-    ///
-    /// This method spawns two asynchronous tasks:
-    /// - One to periodically check the lag and update the pending stats.
-    /// - Another to periodically expose the pending metrics.
-    ///
-    /// Dropping the PendingReaderTasks will abort the background tasks.
-    pub async fn start_(&self, is_mono_vertex: bool) -> PendingReaderTasks_ {
-        let lag_checking_interval = self.lag_checking_interval;
 
         let lag_reader = self.lag_reader.clone();
         let expose_handle = tokio::spawn(async move {
-            expose_pending_metrics_(lag_reader, lag_checking_interval, is_mono_vertex).await;
+            expose_pending_metrics(lag_reader, lag_checking_interval, is_mono_vertex).await;
         });
-        PendingReaderTasks_ { expose_handle }
+        PendingReaderTasks { expose_handle }
     }
 }
 
@@ -1149,28 +1271,12 @@ impl PendingReader {
 impl Drop for PendingReaderTasks {
     fn drop(&mut self) {
         self.expose_handle.abort();
-        self.buildup_handle.abort();
-        info!("Stopped the Lag-Reader Expose and Builder tasks");
-    }
-}
-
-// TODO(lookback) - using new implementation for monovertex right now,
-// deprecate old implementation and use this for pipeline as well once
-// corresponding changes are completed.
-/// When the PendingReaderTasks_ is dropped, we need to clean up the pending exposer and the pending builder tasks.
-impl Drop for PendingReaderTasks_ {
-    fn drop(&mut self) {
-        self.expose_handle.abort();
         info!("Stopped the Lag-Reader Expose tasks");
     }
 }
 
-// TODO(lookback) - using new implementation for monovertex right now,
-// deprecate old implementation and use this for pipeline as well once
-// corresponding changes are completed.
-
 // Periodically exposes the pending metrics by calculating the average pending messages over different intervals.
-async fn expose_pending_metrics_(
+async fn expose_pending_metrics(
     mut lag_reader: LagReader,
     lag_checking_interval: Duration,
     is_mono_vertex: bool,
@@ -1234,79 +1340,9 @@ async fn expose_pending_metrics_(
                                     reader.name().to_string(),
                                 ));
                                 pipeline_metrics()
-                                    .pending
+                                    .pending_raw
                                     .get_or_create(&metric_labels)
                                     .set(pending);
-                            }
-                        }
-                        Err(err) => {
-                            error!("Failed to get pending messages: {:?}", err);
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Periodically checks the pending messages from the source client and build the pending stats.
-async fn build_pending_info(
-    mut lag_reader: LagReader,
-    lag_checking_interval: Duration,
-    pending_stats: Arc<Mutex<HashMap<String, Vec<TimestampedPending>>>>,
-) {
-    let mut ticker = time::interval(lag_checking_interval);
-
-    loop {
-        ticker.tick().await;
-
-        match &mut lag_reader {
-            LagReader::Source(source) => {
-                match fetch_source_pending(source).await {
-                    Ok(pending) => {
-                        if pending != -1 {
-                            let mut stats = pending_stats.lock().await;
-                            stats.get_mut("source").unwrap().push(TimestampedPending {
-                                pending,
-                                timestamp: std::time::Instant::now(),
-                            });
-                            let n = stats.len();
-                            // Ensure only the most recent MAX_PENDING_STATS entries are kept
-                            if n >= MAX_PENDING_STATS {
-                                stats
-                                    .get_mut("source")
-                                    .unwrap()
-                                    .drain(0..(n - MAX_PENDING_STATS));
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        error!("Failed to get pending messages: {:?}", err);
-                    }
-                }
-            }
-
-            LagReader::ISB(readers) => {
-                for reader in readers {
-                    match fetch_isb_pending(reader).await {
-                        Ok(pending) => {
-                            if pending != -1 {
-                                let mut stats = pending_stats.lock().await;
-                                stats
-                                    .get_mut(reader.name())
-                                    .unwrap()
-                                    .push(TimestampedPending {
-                                        pending,
-                                        timestamp: std::time::Instant::now(),
-                                    });
-                                let n = stats.len();
-                                // Ensure only the most recent MAX_PENDING_STATS entries are kept
-                                if n >= MAX_PENDING_STATS {
-                                    stats
-                                        .get_mut(reader.name())
-                                        .unwrap()
-                                        .drain(0..(n - MAX_PENDING_STATS));
-                                }
                             }
                         }
                         Err(err) => {
@@ -1329,95 +1365,9 @@ async fn fetch_isb_pending(reader: &mut JetStreamReader) -> crate::error::Result
     Ok(response)
 }
 
-// Periodically exposes the pending metrics by calculating the average pending messages over different intervals.
-async fn expose_pending_metrics(
-    is_mono_vertex: bool,
-    refresh_interval: Duration,
-    pending_map: Arc<Mutex<HashMap<String, Vec<TimestampedPending>>>>,
-    lookback_seconds: u16,
-) {
-    let mut ticker = time::interval(refresh_interval);
-
-    // store the pending info in a sorted way for deterministic display
-    // string concat is more efficient?
-    let mut pending_info: BTreeMap<&str, i64> = BTreeMap::new();
-
-    let lookback_seconds_map: [(&str, u16); 4] = [
-        ("1m", 60),
-        ("default", lookback_seconds),
-        ("5m", 300),
-        ("15m", 900),
-    ];
-
-    let mut last_logged = std::time::Instant::now();
-
-    loop {
-        ticker.tick().await;
-        for (name, pending_stats) in pending_map.lock().await.iter() {
-            for (label, seconds) in lookback_seconds_map {
-                let pending = calculate_pending(seconds as i64, pending_stats).await;
-                if pending != -1 {
-                    pending_info.insert(label, pending);
-                    if is_mono_vertex {
-                        let mut metric_labels = mvtx_forward_metric_labels().clone();
-                        metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
-                        monovertex_metrics()
-                            .pending
-                            .get_or_create(&metric_labels)
-                            .set(pending);
-                    } else {
-                        let mut metric_labels = pipeline_metric_labels(name).clone();
-                        metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
-                        metric_labels
-                            .push((PIPELINE_PARTITION_NAME_LABEL.to_string(), name.to_string()));
-                        pipeline_metrics()
-                            .pending
-                            .get_or_create(&metric_labels)
-                            .set(pending);
-                    }
-                }
-            }
-            // skip for those the pending is not implemented
-            if !pending_info.is_empty() {
-                if last_logged.elapsed().as_secs() >= 60 {
-                    info!("Pending messages {:?}", pending_info);
-                    last_logged = std::time::Instant::now();
-                } else {
-                    debug!("Pending messages {:?}", pending_info);
-                }
-                pending_info.clear();
-            }
-        }
-    }
-}
-
-/// Calculate the average pending messages over the last `seconds` seconds.
-async fn calculate_pending(seconds: i64, pending_stats: &[TimestampedPending]) -> i64 {
-    let mut result = -1;
-    let mut total = 0;
-    let mut num = 0;
-    let now = std::time::Instant::now();
-
-    for item in pending_stats.iter().rev() {
-        if now.duration_since(item.timestamp).as_secs() < seconds as u64 {
-            total += item.pending;
-            num += 1;
-        } else {
-            break;
-        }
-    }
-
-    if num > 0 {
-        result = total / num;
-    }
-
-    result
-}
-
 #[cfg(test)]
 mod tests {
     use std::net::SocketAddr;
-    use std::time::Instant;
 
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source, sourcetransform};
@@ -1546,10 +1496,10 @@ mod tests {
                 .await
                 .expect("Failed to create source reader");
 
-        let tracker = TrackerHandle::new(None, None);
+        let tracker = TrackerHandle::new(None);
         let source = Source::new(
             5,
-            SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
+            SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
             tracker.clone(),
             true,
             None,
@@ -1571,10 +1521,13 @@ mod tests {
         .await
         .expect("failed to create sink writer");
 
-        let metrics_state = ComponentHealthChecks::Monovertex(MonovertexComponents {
-            source,
-            sink: sink_writer,
-        });
+        let metrics_state = MetricsState {
+            health_checks: ComponentHealthChecks::Monovertex(Box::new(MonovertexComponents {
+                source,
+                sink: sink_writer,
+            })),
+            watermark_fetcher_state: None,
+        };
 
         let addr: SocketAddr = "127.0.0.1:9091".parse().unwrap();
         let metrics_state_clone = metrics_state.clone();
@@ -1606,171 +1559,6 @@ mod tests {
         sink_server_handle.await.unwrap();
         fb_sink_server_handle.await.unwrap();
         transformer_handle.await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn test_expose_pending_metrics_for_source() {
-        let mut pending_map = HashMap::new();
-        pending_map.insert("source".to_string(), Vec::with_capacity(MAX_PENDING_STATS));
-
-        let pending_stats = Arc::new(Mutex::new(pending_map));
-        let refresh_interval = Duration::from_secs(1);
-        let lookback_seconds = 120;
-
-        // Populate pending_stats with some values.
-        // The array will be sorted by the timestamp with the most recent last.
-        {
-            let mut pending_stats = pending_stats.lock().await;
-            let pending_vec = pending_stats.get_mut("source").unwrap();
-            pending_vec.push(TimestampedPending {
-                pending: 15,
-                timestamp: Instant::now() - Duration::from_secs(150),
-            });
-            pending_vec.push(TimestampedPending {
-                pending: 30,
-                timestamp: Instant::now() - Duration::from_secs(70),
-            });
-            pending_vec.push(TimestampedPending {
-                pending: 20,
-                timestamp: Instant::now() - Duration::from_secs(30),
-            });
-            pending_vec.push(TimestampedPending {
-                pending: 10,
-                timestamp: Instant::now(),
-            });
-        }
-
-        tokio::spawn({
-            let pending_stats = Arc::clone(&pending_stats);
-            async move {
-                expose_pending_metrics(true, refresh_interval, pending_stats, lookback_seconds)
-                    .await;
-            }
-        });
-        // We use tokio::time::interval() as the ticker in the expose_pending_metrics() function.
-        // The first tick happens immediately, so we don't need to wait for the refresh_interval for the first iteration to complete.
-        tokio::time::sleep(Duration::from_millis(50)).await;
-
-        let lookback_seconds_map: [(&str, u16); 4] =
-            [("1m", 60), ("default", 120), ("5m", 300), ("15m", 900)];
-
-        // Get the stored values for all time intervals
-        // We will store the values corresponding to the labels (from lookback_seconds_map) "1m", "default", "5m", "15" in the same order in this array
-        let mut stored_values: [i64; 4] = [0; 4];
-        {
-            for (i, (label, _)) in lookback_seconds_map.iter().enumerate() {
-                let mut metric_labels = mvtx_forward_metric_labels().clone();
-                metric_labels.push((PENDING_PERIOD_LABEL.to_string(), (*label).to_string()));
-                let guage = monovertex_metrics()
-                    .pending
-                    .get_or_create(&metric_labels)
-                    .get();
-                stored_values[i] = guage;
-            }
-        }
-        assert_eq!(stored_values, [15, 20, 18, 18]);
-    }
-
-    #[tokio::test]
-    async fn test_expose_pending_metrics_for_isb() {
-        let mut pending_map = HashMap::new();
-        pending_map.insert("stream1".to_string(), Vec::with_capacity(MAX_PENDING_STATS));
-        pending_map.insert("stream2".to_string(), Vec::with_capacity(MAX_PENDING_STATS));
-
-        let pending_stats = Arc::new(Mutex::new(pending_map));
-        let refresh_interval = Duration::from_secs(1);
-        let lookback_seconds = 120;
-
-        // Populate pending_stats with some values.
-        // The array will be sorted by the timestamp with the most recent last.
-        {
-            let mut pending_stats = pending_stats.lock().await;
-            let pending_vec = pending_stats.get_mut("stream1").unwrap();
-            pending_vec.push(TimestampedPending {
-                pending: 15,
-                timestamp: Instant::now() - Duration::from_secs(150),
-            });
-            pending_vec.push(TimestampedPending {
-                pending: 30,
-                timestamp: Instant::now() - Duration::from_secs(70),
-            });
-            pending_vec.push(TimestampedPending {
-                pending: 20,
-                timestamp: Instant::now() - Duration::from_secs(30),
-            });
-            pending_vec.push(TimestampedPending {
-                pending: 10,
-                timestamp: Instant::now(),
-            });
-
-            let pending_vec = pending_stats.get_mut("stream2").unwrap();
-            pending_vec.push(TimestampedPending {
-                pending: 15,
-                timestamp: Instant::now() - Duration::from_secs(150),
-            });
-            pending_vec.push(TimestampedPending {
-                pending: 30,
-                timestamp: Instant::now() - Duration::from_secs(70),
-            });
-            pending_vec.push(TimestampedPending {
-                pending: 20,
-                timestamp: Instant::now() - Duration::from_secs(30),
-            });
-            pending_vec.push(TimestampedPending {
-                pending: 10,
-                timestamp: Instant::now(),
-            });
-        }
-
-        tokio::spawn({
-            let pending_stats = Arc::clone(&pending_stats);
-            async move {
-                expose_pending_metrics(false, refresh_interval, pending_stats, lookback_seconds)
-                    .await;
-            }
-        });
-
-        // We use tokio::time::interval() as the ticker in the expose_pending_metrics() function.
-        // The first tick happens immediately, so we don't need to wait for the refresh_interval for the first iteration to complete.
-        tokio::time::sleep(Duration::from_millis(50)).await;
-
-        let lookback_seconds_map: [(&str, u16); 4] =
-            [("1m", 60), ("default", 120), ("5m", 300), ("15m", 900)];
-
-        // Get the stored values for all time intervals
-        // We will store the values corresponding to the labels (from lookback_seconds_map) "1m", "default", "5m", "15" in the same order in this array
-        let mut stored_values_stream_one: [i64; 4] = [0; 4];
-        let mut stored_values_stream_two: [i64; 4] = [0; 4];
-
-        {
-            for (i, (label, _)) in lookback_seconds_map.iter().enumerate() {
-                let mut metric_labels = pipeline_metric_labels("stream1").clone();
-                metric_labels.push((PENDING_PERIOD_LABEL.to_string(), label.to_string()));
-                metric_labels.push((
-                    PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                    "stream1".to_string(),
-                ));
-                let guage = pipeline_metrics()
-                    .pending
-                    .get_or_create(&metric_labels)
-                    .get();
-                stored_values_stream_one[i] = guage;
-
-                let mut metric_labels = pipeline_metric_labels("stream2").clone();
-                metric_labels.push((PENDING_PERIOD_LABEL.to_string(), (*label).to_string()));
-                metric_labels.push((
-                    PIPELINE_PARTITION_NAME_LABEL.to_string(),
-                    "stream2".to_string(),
-                ));
-                let guage = pipeline_metrics()
-                    .pending
-                    .get_or_create(&metric_labels)
-                    .get();
-                stored_values_stream_two[i] = guage;
-            }
-        }
-        assert_eq!(stored_values_stream_one, [15, 20, 18, 18]);
-        assert_eq!(stored_values_stream_two, [15, 20, 18, 18]);
     }
 
     #[test]
@@ -1833,9 +1621,27 @@ mod tests {
             "version".to_string(),
             "container_type".to_string(),
         );
+        let jetstream_isb_labels = jetstream_isb_metrics_labels("test_jetstream_isb");
+        let jetstream_isb_error_labels =
+            jetstream_isb_error_metrics_labels("test_jetstream_isb", "test_error".to_string());
         global_metrics.sdk_info.get_or_create(&sdk_labels).set(1);
 
         let metrics = monovertex_metrics();
+        let pipeline_metrics = pipeline_metrics();
+
+        let common_pipeline_labels = vec![
+            (PIPELINE_NAME_LABEL.to_string(), "test-pipeline".to_string()),
+            (PIPELINE_VERTEX_LABEL.to_string(), "test-vertex".to_string()),
+            (
+                PIPELINE_VERTEX_TYPE_LABEL.to_string(),
+                "test-vertex-type".to_string(),
+            ),
+            (
+                PIPELINE_REPLICA_LABEL.to_string(),
+                "test-replica".to_string(),
+            ),
+        ];
+
         // Use a fixed set of labels instead of the ones from mvtx_forward_metric_labels() since other test functions may also set it.
         let common_labels = vec![
             (
@@ -1849,7 +1655,6 @@ mod tests {
         metrics.read_bytes_total.get_or_create(&common_labels).inc();
         metrics.ack_total.get_or_create(&common_labels).inc();
         metrics.dropped_total.get_or_create(&common_labels).inc();
-        metrics.pending.get_or_create(&common_labels).set(10);
         metrics.e2e_time.get_or_create(&common_labels).observe(10.0);
         metrics.read_time.get_or_create(&common_labels).observe(3.0);
         metrics.ack_time.get_or_create(&common_labels).observe(2.0);
@@ -1889,6 +1694,36 @@ mod tests {
             .get_or_create(&common_labels)
             .observe(5.0);
 
+        // pipeline forwarder metrics
+        pipeline_metrics
+            .forwarder
+            .read_total
+            .get_or_create(&common_pipeline_labels)
+            .inc_by(10);
+
+        pipeline_metrics
+            .forwarder
+            .ack_processing_time
+            .get_or_create(&common_pipeline_labels)
+            .observe(5.0);
+
+        // populate jetstream isb metrics
+        pipeline_metrics
+            .jetstream_isb
+            .buffer_pending
+            .get_or_create(&jetstream_isb_labels)
+            .set(5);
+        pipeline_metrics
+            .jetstream_isb
+            .buffer_soft_usage
+            .get_or_create(&jetstream_isb_labels)
+            .set(0.22);
+        pipeline_metrics
+            .jetstream_isb
+            .write_error_total
+            .get_or_create(&jetstream_isb_error_labels)
+            .inc();
+
         // Validate the metric names
         let state = global_registry().registry.lock();
         let mut buffer = String::new();
@@ -1900,7 +1735,6 @@ mod tests {
             r#"monovtx_ack_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_read_bytes_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_dropped_total{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
-            r#"monovtx_pending{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 10"#,
             r#"monovtx_processing_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 10.0"#,
             r#"monovtx_processing_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_processing_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
@@ -1924,6 +1758,13 @@ mod tests {
             r#"monovtx_fallback_sink_time_sum{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 5.0"#,
             r#"monovtx_fallback_sink_time_count{mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
             r#"monovtx_fallback_sink_time_bucket{le="100.0",mvtx_name="test-monovertex-metric-names",mvtx_replica="3"} 1"#,
+            r#"forwarder_read_total{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 10"#,
+            r#"forwarder_ack_processing_time_sum{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 5.0"#,
+            r#"forwarder_ack_processing_time_count{pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
+            r#"forwarder_ack_processing_time_bucket{le="100.0",pipeline="test-pipeline",vertex="test-vertex",vertex_type="test-vertex-type",replica="test-replica"} 1"#,
+            r#"isb_jetstream_write_error_total{buffer="test_jetstream_isb",reason="test_error"} 1"#,
+            r#"isb_jetstream_buffer_soft_usage{buffer="test_jetstream_isb"} 0.22"#,
+            r#"isb_jetstream_buffer_pending{buffer="test_jetstream_isb"} 5"#,
         ];
 
         let got = buffer

@@ -1,0 +1,27 @@
+[package]
+name = "numaflow-shared"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+serde.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+serde_json.workspace = true
+async-nats.workspace = true
+backoff.workspace = true
+futures.workspace = true
+pep440_rs = "0.7.3"
+semver = "1.0.26"
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile = "3.20.0"
+
+[lints]
+workspace = true
+
+[features]
+nats-tests = []
+all-tests = ["nats-tests"]

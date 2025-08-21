@@ -33,7 +33,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	nats2 "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/clients/nats/test"
-	"github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 type mockGetType func(url string) (*http.Response, error)
@@ -49,7 +48,7 @@ func (m *mockHttpClient) Get(url string) (*http.Response, error) {
 type mockIsbSvcClient struct {
 }
 
-func (ms *mockIsbSvcClient) GetBufferInfo(ctx context.Context, buffer string) (*isbsvc.BufferInfo, error) {
+func (ms *mockIsbSvcClient) GetBufferInfo(_ context.Context, buffer string) (*isbsvc.BufferInfo, error) {
 	return &isbsvc.BufferInfo{
 		Name:            buffer,
 		PendingCount:    10,
@@ -70,10 +69,6 @@ func (ms *mockIsbSvcClient) ValidateBuffersAndBuckets(ctx context.Context, buffe
 	return nil
 }
 
-func (ms *mockIsbSvcClient) CreateWatermarkStores(ctx context.Context, bucketName string, partitions int, isReduce bool) ([]store.WatermarkStore, error) {
-	return nil, nil
-}
-
 // mock rater
 type mockRater_TestGetVertexMetrics struct {
 }
@@ -88,6 +83,15 @@ func (mr *mockRater_TestGetVertexMetrics) GetRates(vertexName string, partitionN
 	res["1m"] = wrapperspb.Double(5.084745762711864)
 	res["5m"] = wrapperspb.Double(4.894736842105263)
 	res["15m"] = wrapperspb.Double(4.894736842105263)
+	return res
+}
+
+func (mr *mockRater_TestGetVertexMetrics) GetPending(pipelinename, vertexName, vertexType, partitionName string) map[string]*wrapperspb.Int64Value {
+	res := make(map[string]*wrapperspb.Int64Value)
+	res["default"] = wrapperspb.Int64(7)
+	res["1m"] = wrapperspb.Int64(5)
+	res["5m"] = wrapperspb.Int64(6)
+	res["15m"] = wrapperspb.Int64(4)
 	return res
 }
 
@@ -110,7 +114,7 @@ func TestGetVertexMetrics(t *testing.T) {
 		Spec:       v1alpha1.PipelineSpec{Vertices: []v1alpha1.AbstractVertex{{Name: vertexName, Partitions: &vertexPartition}}},
 	}
 	client, _ := isbsvc.NewISBJetStreamSvc(jsc)
-	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(client, pipeline, nil, &mockRater_TestGetVertexMetrics{}, nil)
+	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(context.Background(), client, pipeline, &mockRater_TestGetVertexMetrics{}, nil)
 	assert.NoError(t, err)
 
 	metricsResponse := `# HELP vertex_pending_messages Average pending messages in the last period of seconds. It is the pending messages of a vertex, not a pod.
@@ -133,7 +137,7 @@ vertex_pending_messages{period="default",partition_name="-simple-pipeline-cat-0"
 
 	vertex := "cat"
 
-	req := &daemon.GetVertexMetricsRequest{Vertex: vertex}
+	req := &daemon.GetVertexMetricsRequest{Pipeline: pipelineName, Vertex: vertex}
 
 	resp, err := pipelineMetricsQueryService.GetVertexMetrics(context.Background(), req)
 	assert.NoError(t, err)
@@ -178,7 +182,7 @@ func TestGetBuffer(t *testing.T) {
 	}
 
 	ms := &mockIsbSvcClient{}
-	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(ms, pipeline, nil, nil, nil)
+	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(context.Background(), ms, pipeline, nil, nil)
 	assert.NoError(t, err)
 
 	bufferName := "numaflow-system-simple-pipeline-cat-0"
@@ -219,7 +223,7 @@ func TestListBuffers(t *testing.T) {
 	}
 
 	ms := &mockIsbSvcClient{}
-	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(ms, pipeline, nil, nil, nil)
+	pipelineMetricsQueryService, err := NewPipelineMetadataQuery(context.Background(), ms, pipeline, nil, nil)
 	assert.NoError(t, err)
 
 	req := &daemon.ListBuffersRequest{Pipeline: pipelineName}

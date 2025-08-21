@@ -48,7 +48,7 @@ fi
 
 # Build based on the provided argument
 case "$1" in
-    "aarch64")
+    "aarch64" | "arm64")
         build_aarch64
         ;;
     "amd64")
@@ -59,7 +59,7 @@ case "$1" in
         build_x86_64
         ;;
     *)
-        echo "Invalid architecture. Use aarch64, amd64, or all"
+        echo "Invalid architecture. Use aarch64 (or arm64), amd64, or all"
         exit 1
         ;;
 esac

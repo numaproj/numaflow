@@ -91,7 +91,7 @@ pub fn new_sink(config: KafkaSinkConfig) -> crate::Result<KafkaSink> {
 
     let producer: FutureProducer = client_config
         .create()
-        .map_err(|e| crate::Error::Kafka(format!("Failed to create producer: {}", e)))?;
+        .map_err(|e| crate::Error::Kafka(format!("Failed to create producer: {e}")))?;
 
     Ok(KafkaSink {
         producer,
@@ -132,10 +132,10 @@ impl KafkaSink {
                 // The partition key for a message is constructed by message.keys.join(":").
                 // Messages with same partition key will always go to the same partition on Kafka.
                 // If the partition key is not provided, the message will be sent to a random partition.
-                if self.set_partition_key {
-                    if let Some(ref partition_key) = partition_key {
-                        record = record.key(partition_key);
-                    }
+                if self.set_partition_key
+                    && let Some(ref partition_key) = partition_key
+                {
+                    record = record.key(partition_key);
                 }
                 match self.producer.send(record, Duration::from_secs(1)).await {
                     Ok(_) => KafkaSinkResponse { id, status: Ok(()) },

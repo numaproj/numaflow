@@ -8,9 +8,9 @@ spec:
       container:
         # see https://github.com/numaproj/numaflow-go/tree/main/pkg/sideinput/examples/sideinput_function
         image: quay.io/numaio/numaflow-go/sideinput-function:stable
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
       trigger:
-        schedule: "@every 5s"
+        schedule: "*/5 * * * * *"
         # timezone: America/Los_Angeles
   vertices:
     - name: in
@@ -21,7 +21,7 @@ spec:
           container:
             # see https://github.com/numaproj/numaflow-go/tree/main/pkg/sideinput/examples/simple_source_with_sideinput
             image: quay.io/numaio/numaflow-go/simple-source-with-sideinput:stable
-            imagePullPolicy: Always
+            imagePullPolicy: IfNotPresent
       sideInputs:
         - myticker
     - name: redis-uds
@@ -30,7 +30,7 @@ spec:
           container:
             # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis_sink
             image: quay.io/numaio/numaflow-go/redis-sink:stable
-            imagePullPolicy: Always
+            imagePullPolicy: IfNotPresent
             env:
               - name: SINK_HASH_KEY
                 value: "sideinput-source-test-redis-uds"

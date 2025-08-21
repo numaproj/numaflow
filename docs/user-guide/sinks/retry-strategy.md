@@ -6,11 +6,11 @@ The `RetryStrategy` is used to configure the behavior for a sink after encounter
 This structure allows the user to specify how Numaflow should respond to different fail-over scenarios for Sinks, ensuring that the writing can be resilient and handle
 unexpected issues efficiently.
 
-`RetryStrategy` ONLY gets applied to failed messages. To return a failed messages, use the methods provided by the SDKs.
+`RetryStrategy` ONLY gets applied to failed messages. To return a failed message, use the methods provided by the SDKs.
 
-- `ResponseFailure`for [Golang](https://github.com/numaproj/numaflow-go/blob/main/pkg/sinker/types.go)
-- `responseFailure` for [Java](https://github.com/numaproj/numaflow-java/blob/main/src/main/java/io/numaproj/numaflow/sinker/Response.java#L40)
-- `as_fallback` for [Python](https://github.com/numaproj/numaflow-python/blob/main/pynumaflow/sinker/_dtypes.py)
+- `ResponseFailure`for [Golang](https://github.com/numaproj/numaflow-go/blob/47460a1854b8f58a0e918056ef4d169949193ebe/pkg/sinker/types.go#L45)
+- `responseFailure` for [Java](https://github.com/numaproj/numaflow-java/blob/25fe5e2eb1926c938a15e68ade82f0654bf66c97/src/main/java/io/numaproj/numaflow/sinker/Response.java#L37)
+- `as_failure` for [Python](https://github.com/numaproj/numaflow-python/blob/0d87b8f7603401a646d3ee5a1204077d4207ed27/pynumaflow/sinker/_dtypes.py#L41)
 
 ### Retry Strategy Configuration
 

@@ -30,10 +30,7 @@ impl SourceForwarder {
         let (reader_result, sink_writer_result) = tokio::try_join!(reader_handle, writer_handle)
             .map_err(|e| {
                 error!(?e, "Error while joining reader and sink writer");
-                Error::Forwarder(format!(
-                    "Error while joining reader and sink writer: {:?}",
-                    e
-                ))
+                Error::Forwarder(format!("Error while joining reader and sink writer: {e}"))
             })?;
 
         sink_writer_result.inspect_err(|e| {
@@ -70,8 +67,8 @@ mod tests {
     use tokio_util::sync::CancellationToken;
 
     use crate::Result;
-    use crate::config::pipeline::ToVertexConfig;
     use crate::config::pipeline::isb::{BufferWriterConfig, Stream};
+    use crate::config::pipeline::{ToVertexConfig, VertexType};
     use crate::pipeline::forwarder::source_forwarder::SourceForwarder;
     use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
     use crate::shared::grpc::create_rpc_channel;
@@ -165,7 +162,7 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_source_forwarder() {
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
 
         // create the source which produces x number of messages
         let cln_token = CancellationToken::new();
@@ -190,9 +187,15 @@ mod tests {
         // wait for the server to start
         tokio::time::sleep(Duration::from_millis(100)).await;
         let client = SourceTransformClient::new(create_rpc_channel(sock_file).await.unwrap());
-        let transformer = Transformer::new(10, 10, client, tracker_handle.clone())
-            .await
-            .unwrap();
+        let transformer = Transformer::new(
+            10,
+            10,
+            Duration::from_secs(10),
+            client,
+            tracker_handle.clone(),
+        )
+        .await
+        .unwrap();
 
         let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
         let tmp_dir = TempDir::new().unwrap();
@@ -224,7 +227,7 @@ mod tests {
 
         let source = Source::new(
             5,
-            SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
+            SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
             tracker_handle.clone(),
             true,
             Some(transformer),
@@ -262,8 +265,9 @@ mod tests {
             .await
             .unwrap();
 
-        let writer = JetstreamWriter::new(
-            vec![ToVertexConfig {
+        use crate::pipeline::isb::jetstream::writer::ISBWriterConfig;
+        let writer = JetstreamWriter::new(ISBWriterConfig {
+            config: vec![ToVertexConfig {
                 partitions: 1,
                 writer_config: BufferWriterConfig {
                     streams: vec![stream.clone()],
@@ -271,14 +275,16 @@ mod tests {
                 },
                 conditions: None,
                 name: "test-vertex",
+                to_vertex_type: VertexType::MapUDF,
             }],
-            context.clone(),
-            100,
-            tracker_handle.clone(),
-            cln_token.clone(),
-            None,
-            "Source".to_string(),
-        );
+            js_ctx: context.clone(),
+            paf_concurrency: 100,
+            tracker_handle: tracker_handle.clone(),
+            cancel_token: cln_token.clone(),
+            watermark_handle: None,
+            vertex_type: VertexType::Source,
+            isb_config: None,
+        });
 
         // create the forwarder with the source, transformer, and writer
         let forwarder = SourceForwarder::new(source.clone(), writer);

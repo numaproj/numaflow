@@ -17,7 +17,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -174,74 +173,4 @@ func Test_getTransformerContainer(t *testing.T) {
 		}
 		assert.Equal(t, envs[EnvUDContainerType], UDContainerTransformer)
 	})
-
-	t.Run("with built-in transformers", func(t *testing.T) {
-		x := Source{
-			HTTP: &HTTPSource{},
-			UDTransformer: &UDTransformer{
-				Container: &Container{
-					SecurityContext: &corev1.SecurityContext{},
-				},
-				Builtin: &Transformer{
-					Name: "filter",
-					KWArgs: map[string]string{
-						"expression": "json(payload).a > 1",
-					},
-				},
-			}}
-		c := x.getUDTransformerContainer(getContainerReq{
-			image:           "main-image",
-			imagePullPolicy: corev1.PullNever,
-			env: []corev1.EnvVar{
-				{Name: "a", Value: "b"},
-			},
-		})
-		assert.NotNil(t, c.SecurityContext)
-		assert.Equal(t, "main-image", c.Image)
-		assert.Equal(t, corev1.PullNever, c.ImagePullPolicy)
-		assert.Contains(t, c.Args, "--name=filter")
-		// log.Print(c.Args)
-		envNames := []string{}
-		for _, e := range c.Env {
-			envNames = append(envNames, e.Name)
-		}
-		assert.NotContains(t, envNames, "a")
-		assert.Contains(t, envNames, EnvUDContainerType)
-		assert.True(t, c.LivenessProbe != nil)
-	})
-
-	t.Run("with built-in transformers, with multiple KWArgs", func(t *testing.T) {
-		// This test verify when we have multiple KWArgs in map, after converting them to a single `--kwargs=a=x,b=y...` string, we maintain a consistent order.
-		x := Source{
-			HTTP: &HTTPSource{},
-			UDTransformer: &UDTransformer{
-				Builtin: &Transformer{
-					Name: "filter",
-					KWArgs: map[string]string{
-						"expression": "json(payload).time",
-						"format":     "2021-01-01",
-						"extra-arg1": "1",
-						"extra-arg2": "2",
-						"extra-arg3": "3",
-						"extra-arg4": "4",
-					},
-				},
-			}}
-		c1 := x.getUDTransformerContainer(getContainerReq{
-			image: "main-image",
-		})
-		c2 := x.getUDTransformerContainer(getContainerReq{
-			image: "main-image",
-		})
-		assert.Equal(t, getKWArgs(c1), getKWArgs(c2))
-	})
-}
-
-func getKWArgs(container corev1.Container) string {
-	for _, a := range container.Args {
-		if strings.HasPrefix(a, "--kwargs=") {
-			return a
-		}
-	}
-	return ""
 }

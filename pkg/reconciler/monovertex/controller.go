@@ -157,19 +157,19 @@ func (mr *monoVertexReconciler) reconcile(ctx context.Context, monoVtx *dfv1.Mon
 	// Update the phase based on the DesiredPhase from the lifecycle, this should encompass
 	// the Paused and running states.
 	originalPhase := monoVtx.Status.Phase
-	monoVtx.Status.MarkPhase(monoVtx.Spec.Lifecycle.GetDesiredPhase(), "", "")
+	desiredPhase := monoVtx.Spec.Lifecycle.GetDesiredPhase()
 	// If the phase has changed, log the event
-	if monoVtx.Status.Phase != originalPhase {
-		log.Infow("Updated MonoVertex phase", zap.String("originalPhase", string(originalPhase)), zap.String("originalPhase", string(monoVtx.Status.Phase)))
-		mr.recorder.Eventf(monoVtx, corev1.EventTypeNormal, "UpdateMonoVertexPhase", "Updated MonoVertex phase from %s to %s", string(originalPhase), string(monoVtx.Status.Phase))
+	monoVtx.Status.MarkPhase(desiredPhase, "", "")
+	if desiredPhase != originalPhase {
+		log.Infow("Updated MonoVertex phase", zap.String("originalPhase", string(originalPhase)), zap.String("desiredPhase", string(desiredPhase)))
+		mr.recorder.Eventf(monoVtx, corev1.EventTypeNormal, "UpdateMonoVertexPhase", "Updated MonoVertex phase from %s to %s", string(originalPhase), string(desiredPhase))
 	}
-
 	// Check children resource status
-	if err := mr.checkChildrenResourceStatus(ctx, monoVtx); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to check mono vertex children resource status, %w", err)
+	if ctrlResult, err := mr.checkChildrenResourceStatus(ctx, monoVtx); err != nil {
+		return ctrlResult, fmt.Errorf("failed to check mono vertex children resource status, %w", err)
+	} else {
+		return ctrl.Result{}, nil
 	}
-
-	return ctrl.Result{}, nil
 }
 
 // orchestrateFixedResources orchestrates fixed resources such as daemon service related objects for a mono vertex.
@@ -582,7 +582,7 @@ func (mr *monoVertexReconciler) buildPodSpec(monoVtx *dfv1.MonoVertex) (*corev1.
 }
 
 // checkChildrenResourceStatus checks the status of the children resources of the mono vertex
-func (mr *monoVertexReconciler) checkChildrenResourceStatus(ctx context.Context, monoVtx *dfv1.MonoVertex) error {
+func (mr *monoVertexReconciler) checkChildrenResourceStatus(ctx context.Context, monoVtx *dfv1.MonoVertex) (ctrl.Result, error) {
 	defer func() {
 		for _, c := range monoVtx.Status.Conditions {
 			if c.Status != metav1.ConditionTrue {
@@ -600,10 +600,11 @@ func (mr *monoVertexReconciler) checkChildrenResourceStatus(ctx context.Context,
 		if apierrors.IsNotFound(err) {
 			monoVtx.Status.MarkDaemonUnHealthy(
 				"GetDaemonServiceFailed", "Deployment not found, might be still under creation")
-			return nil
+			// Do not need to explicitly requeue, as the controller watches daemon objects anyways.
+			return ctrl.Result{}, nil
 		}
 		monoVtx.Status.MarkDaemonUnHealthy("GetDaemonServiceFailed", err.Error())
-		return err
+		return ctrl.Result{}, err
 	}
 	if status, reason, msg := reconciler.CheckDeploymentStatus(&daemonDeployment); status {
 		monoVtx.Status.MarkDaemonHealthy()
@@ -616,21 +617,24 @@ func (mr *monoVertexReconciler) checkChildrenResourceStatus(ctx context.Context,
 	var podList corev1.PodList
 	if err := mr.client.List(ctx, &podList, &client.ListOptions{Namespace: monoVtx.GetNamespace(), LabelSelector: selector}); err != nil {
 		monoVtx.Status.MarkPodNotHealthy("ListMonoVerticesPodsFailed", err.Error())
-		return fmt.Errorf("failed to get pods of a mono vertex: %w", err)
+		return ctrl.Result{}, fmt.Errorf("failed to get pods of a mono vertex: %w", err)
 	}
 	readyPods := reconciler.NumOfReadyPods(podList)
 	if readyPods > int(monoVtx.Status.Replicas) { // It might happen in some corner cases, such as during rollout
 		readyPods = int(monoVtx.Status.Replicas)
 	}
 	monoVtx.Status.ReadyReplicas = uint32(readyPods)
-	if healthy, reason, msg := reconciler.CheckPodsStatus(&podList); healthy {
+	if healthy, reason, msg, transientUnhealthy := reconciler.CheckPodsStatus(&podList); healthy {
 		monoVtx.Status.MarkPodHealthy(reason, msg)
 	} else {
-		// Do not need to explicitly requeue, since the it keeps watching the status change of the pods
 		monoVtx.Status.MarkPodNotHealthy(reason, msg)
+		if transientUnhealthy {
+			// If it's unhealthy caused by restart in the last N mins, need to explicitly requeue, otherwise there's no need
+			// as the controller keeps watching the status change of the pods.
+			return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
+		}
 	}
-
-	return nil
+	return ctrl.Result{}, nil
 }
 
 // Clean up metrics, should be called when corresponding mvtx is deleted

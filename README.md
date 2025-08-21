@@ -1,10 +1,11 @@
 # Numaflow
 
+[![Built with Rust](https://img.shields.io/badge/built_with-Rust-dca282.svg)](https://github.com/numaproj/numaflow)
 [![Go Report Card](https://goreportcard.com/badge/github.com/numaproj/numaflow)](https://goreportcard.com/report/github.com/numaproj/numaflow)
 [![slack](https://img.shields.io/badge/slack-numaproj-brightgreen.svg?logo=slack)](https://join.slack.com/t/numaproj/shared_invite/zt-19svuv47m-YKHhsQ~~KK9mBv1E7pNzfg)
 [![GoDoc](https://godoc.org/github.com/numaproj/numaflow?status.svg)](https://godoc.org/github.com/numaproj/numaflow/pkg/apis)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Release Version](https://img.shields.io/github/v/release/numaproj/numaflow?label=numaflow)](https://github.com/numaproj/numaflow/releases/latest)
+[![Release Version](https://img.shields.io/github/v/release/numaproj/numaflow?label=numaflow&color=dca282)](https://github.com/numaproj/numaflow/releases/latest)
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/6078/badge)](https://bestpractices.coreinfrastructure.org/projects/6078)
 
 Welcome to Numaflow! A Kubernetes-native, serverless platform for running scalable and reliable event-driven applications. Numaflow decouples event sources and sinks from the processing logic, allowing each component to independently auto-scale based on demand. With out-of-the-box sources and sinks, and built-in observability, developers can focus on their processing logic without worrying about event consumption, writing boilerplate code, or operational complexities. Each step of the pipeline can be written in any programming language, offering unparalleled flexibility in using the best programming language for each step and ease of using the languages you are most familiar with.
@@ -36,7 +37,7 @@ Numaflow, created by the Intuit Argo team to address community needs for continu
 
 ## Roadmap
 
-- Inbuilt Debugging Experience (1.5) 
+- Metadata propagation and Open Telemetry Tracing, Deprecate `monitor` container (1.7)
 
 ## Demo
 

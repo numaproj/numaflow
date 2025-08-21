@@ -148,40 +148,6 @@ data:
           memory: "128Mi"
           cpu: "100m"
     isbsvc:
-      redis:
-        # Default Redis settings, could be overridden by InterStepBufferService specs
-        settings:
-          # Redis config shared by both master and replicas
-          redis: |
-            min-replicas-to-write 1
-            # Disable RDB persistence, AOF persistence already enabled.
-            save ""
-            # Enable AOF https://redis.io/topics/persistence#append-only-file
-            appendonly yes
-            auto-aof-rewrite-percentage 100
-            auto-aof-rewrite-min-size 64mb
-            maxmemory 512mb
-            maxmemory-policy allkeys-lru
-          # Special config only used by master
-          master: ""
-          # Special config only used by replicas
-          replica: ""
-          # Sentinel config
-          sentinel: |
-            sentinel down-after-milliseconds mymaster 10000
-            sentinel failover-timeout mymaster 2000
-            sentinel parallel-syncs mymaster 1
-        versions:
-        - version: 7.0.11
-          redisImage: bitnami/redis:7.0.11-debian-11-r3
-          sentinelImage: bitnami/redis-sentinel:7.0.11-debian-11-r3
-          redisExporterImage: bitnami/redis-exporter:1.50.0-debian-11-r4
-          initContainerImage: debian:latest
-        - version: 7.0.15
-          redisImage: bitnami/redis:7.0.15-debian-11-r2
-          sentinelImage: bitnami/redis-sentinel:7.0.15-debian-11-r2
-          redisExporterImage: bitnami/redis-exporter:1.56.0-debian-11-r2
-          initContainerImage: debian:latest
       jetstream:
         # Default JetStream settings, could be overridden by InterStepBufferService specs
         settings: |
@@ -229,7 +195,7 @@ data:
             replicas: 3
         versions:
         - version: latest
-          natsImage: nats:2.10.17
+          natsImage: nats:2.10.29
           metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
           configReloaderImage: natsio/nats-server-config-reloader:0.7.0
           startCommand: /nats-server
@@ -290,6 +256,11 @@ data:
           startCommand: /nats-server
         - version: 2.10.17
           natsImage: nats:2.10.17
+          metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
+          configReloaderImage: natsio/nats-server-config-reloader:0.7.0
+          startCommand: /nats-server
+        - version: 2.10.29
+          natsImage: nats:2.10.29
           metricsExporterImage: natsio/prometheus-nats-exporter:0.9.1
           configReloaderImage: natsio/nats-server-config-reloader:0.7.0
           startCommand: /nats-server

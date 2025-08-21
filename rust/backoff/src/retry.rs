@@ -59,7 +59,7 @@ where
     O: Operation,
     C: Condition<O::Error>,
 {
-    pub fn retry<II: IntoIterator<IntoIter = I, Item = I::Item>>(
+    pub fn new<II: IntoIterator<IntoIter = I, Item = I::Item>>(
         backoff: II,
         mut operation: O,
         condition: C,
@@ -165,7 +165,7 @@ mod tests {
     #[tokio::test]
     async fn successful_first_attempt() {
         let interval = fixed::Interval::from_millis(1);
-        let fut = Retry::retry(interval, always_successful, |_: &()| true);
+        let fut = Retry::new(interval, always_successful, |_: &()| true);
         let result = fut.await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), 42);
@@ -175,7 +175,7 @@ mod tests {
     async fn non_retriable_failure() {
         let interval = fixed::Interval::from_millis(1);
 
-        let fut = Retry::retry(
+        let fut = Retry::new(
             interval,
             || future::ready(Err::<(), &str>("err")),
             false_cond,
@@ -192,7 +192,7 @@ mod tests {
         let counter = Arc::new(AtomicUsize::new(0));
         let cloned_counter = Arc::clone(&counter);
 
-        let fut = Retry::retry(
+        let fut = Retry::new(
             interval,
             move || {
                 let previous = cloned_counter.fetch_add(1, Ordering::SeqCst);
@@ -215,7 +215,7 @@ mod tests {
         let counter = Arc::new(AtomicUsize::new(0));
         let cloned_counter = Arc::clone(&counter);
 
-        let fut = Retry::retry(
+        let fut = Retry::new(
             interval,
             move || {
                 let previous = cloned_counter.fetch_add(1, Ordering::SeqCst);

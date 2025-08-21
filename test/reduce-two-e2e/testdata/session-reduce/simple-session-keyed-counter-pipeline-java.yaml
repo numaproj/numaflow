@@ -16,8 +16,8 @@ spec:
         min: 1
       udf:
         container:
-          image: quay.io/numaio/numaflow-go/map-even-odd:stable
-          imagePullPolicy: Always
+          image: quay.io/numaio/numaflow-java/even-odd:stable
+          imagePullPolicy: IfNotPresent
     - name: compute-count
       partitions: 1
       udf:
@@ -32,13 +32,8 @@ spec:
           keyed: true
           storage:
             persistentVolumeClaim:
-              volumeSize: 2Gi
-              accessMode: ReadWriteOnce
-    - name: log-sink
-      scale:
-        min: 1
-      sink:
-        log: {}
+              volumeSize: 1Gi
+              accessMode: ReadWriteOncePod
     - name: sink
       scale:
         min: 1
@@ -59,5 +54,3 @@ spec:
       to: compute-count
     - from: compute-count
       to: sink
-    - from: compute-count
-      to: log-sink

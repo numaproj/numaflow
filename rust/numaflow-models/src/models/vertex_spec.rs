@@ -46,6 +46,8 @@ pub struct VertexSpec {
     /// List of customized init containers belonging to the pod. More info: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
     #[serde(rename = "initContainers", skip_serializing_if = "Option::is_none")]
     pub init_containers: Option<Vec<k8s_openapi::api::core::v1::Container>>,
+    #[serde(rename = "interStepBuffer", skip_serializing_if = "Option::is_none")]
+    pub inter_step_buffer: Option<Box<crate::models::InterStepBuffer>>,
     #[serde(
         rename = "interStepBufferServiceName",
         skip_serializing_if = "Option::is_none"
@@ -67,10 +69,10 @@ pub struct VertexSpec {
     pub partitions: Option<i32>,
     #[serde(rename = "pipelineName")]
     pub pipeline_name: String,
-    /// The priority value. Various system components use this field to find the priority of the Redis pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
+    /// The priority value. Various system components use this field to find the priority of the pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
     #[serde(rename = "priority", skip_serializing_if = "Option::is_none")]
     pub priority: Option<i32>,
-    /// If specified, indicates the Redis pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
+    /// If specified, indicates the pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/
     #[serde(rename = "priorityClassName", skip_serializing_if = "Option::is_none")]
     pub priority_class_name: Option<String>,
     #[serde(rename = "replicas", skip_serializing_if = "Option::is_none")]
@@ -130,6 +132,7 @@ impl VertexSpec {
             image_pull_secrets: None,
             init_container_template: None,
             init_containers: None,
+            inter_step_buffer: None,
             inter_step_buffer_service_name: None,
             lifecycle: None,
             limits: None,

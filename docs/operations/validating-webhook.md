@@ -14,26 +14,29 @@ kubectl apply -n numaflow-system -f https://raw.githubusercontent.com/numaproj/n
 
 ## Examples
 
-Currently, the validating webhook prevents updating the type of an InterStepBufferService from JetStream to Redis for example.
+Currently, the validating webhook prevents updating the pvc storage size, for example.
 
 Example spec:
+
 ```yaml
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: InterStepBufferService
 metadata:
   name: default
 spec:
-  jetstream: // change to redis and reapply will cause below error
+  jetstream:
     version: latest
+    persistence:
+      volumeSize: 3Gi // Update it will cause the error below
 ```
 
 ```shell
 Error from server (BadRequest): error when applying patch:
-{"metadata":{"annotations":{"kubectl.kubernetes.io/last-applied-configuration":"{\"apiVersion\":\"numaflow.numaproj.io/v1alpha1\",\"kind\":\"InterStepBufferService\",\"metadata\":{\"annotations\":{},\"name\":\"default\",\"namespace\":\"numaflow-system\"},\"spec\":{\"redis\":{\"native\":{\"version\":\"7.0.11\"}}}}\n"}},"spec":{"jetstream":null,"redis":{"native":{"version":"7.0.11"}}}}
+{"metadata":{"annotations":{"kubectl.kubernetes.io/last-applied-configuration":"{\"apiVersion\":\"numaflow.numaproj.io/v1alpha1\",\"kind\":\"InterStepBufferService\",\"metadata\":{\"annotations\":{},\"name\":\"default\",\"namespace\":\"numaflow-system\"},\"spec\":{\"jetstream\":{\"persistence\":{\"volumeSize\":\"5Gi\"},\"version\":\"latest\"}}}\n"}},"spec":{"jetstream":{"persistence":{"volumeSize":"5Gi"}}}}
 to:
 Resource: "numaflow.numaproj.io/v1alpha1, Resource=interstepbufferservices", GroupVersionKind: "numaflow.numaproj.io/v1alpha1, Kind=InterStepBufferService"
 Name: "default", Namespace: "numaflow-system"
-for: "redis.yaml": error when patching "redis.yaml": admission webhook "webhook.numaflow.numaproj.io" denied the request: Can not change ISB Service type from Jetstream to Redis
+for: "examples/0-isbsvc-jetstream.yaml": error when patching "examples/0-isbsvc-jetstream.yaml": admission webhook "webhook.numaflow.numaproj.io" denied the request: can not change persistence of Jetstream ISB Service
 ```
 
 There is also validation that prevents the `interStepBufferServiceName` of a Pipeline from being updated.
@@ -51,7 +54,7 @@ Other validations include:
 
 Pipeline:
 
-1. cannot change the type of an existing vertex 
+1. cannot change the type of an existing vertex
 2. cannot change the partition count of a reduce vertex
 3. cannot change the storage class of a reduce vertex
 4. etc.

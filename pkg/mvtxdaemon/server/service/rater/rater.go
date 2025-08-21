@@ -31,7 +31,6 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-	"github.com/numaproj/numaflow/pkg/isb"
 	"github.com/numaproj/numaflow/pkg/metrics"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedqueue "github.com/numaproj/numaflow/pkg/shared/queue"
@@ -199,7 +198,7 @@ func (r *Rater) getPodMetrics(podName string) map[string]*dto.MetricFamily {
 	textParser := expfmt.TextParser{}
 	result, err := textParser.TextToMetricFamilies(resp.Body)
 	if err != nil {
-		r.log.Errorf("[Pod name %s]:  failed parsing to prometheus metric families, %v", podName, err.Error())
+		r.log.Errorf("[Pod name %s]: failed parsing to prometheus metric families, %v", podName, err)
 		return nil
 	}
 	return result
@@ -236,15 +235,15 @@ func (r *Rater) getPodPendingCounts(podName string, result map[string]*dto.Metri
 
 // GetPending returns the pending count for the mono vertex
 func (r *Rater) GetPending() map[string]*wrapperspb.Int64Value {
-	r.log.Debugf("Current timestampedPodCounts for MonoVertex %s is: %v", r.monoVertex.Name, r.timestampedPendingCount)
+	r.log.Debugf("Current timestampedPendingCount for MonoVertex %s is: %v", r.monoVertex.Name, r.timestampedPendingCount)
 	var result = make(map[string]*wrapperspb.Int64Value)
 	// calculate pending for each lookback seconds
-	for n, i := range r.buildLookbackSecondsMap() {
-		pending := CalculatePending(r.timestampedPendingCount, i)
-		result[n] = wrapperspb.Int64(pending)
+	for windowLabel, lookbackSeconds := range r.buildLookbackSecondsMap() {
+		pending := CalculatePending(r.timestampedPendingCount, lookbackSeconds)
+		result[windowLabel] = wrapperspb.Int64(pending)
 		// Expose the metric for pending
-		if pending != isb.PendingNotAvailable {
-			metrics.MonoVertexPendingMessages.WithLabelValues(r.monoVertex.Name, n).Set(float64(pending))
+		if pending != v1alpha1.PendingNotAvailable {
+			metrics.MonoVertexPendingMessages.WithLabelValues(r.monoVertex.Name, windowLabel).Set(float64(pending))
 		}
 	}
 	r.log.Debugf("Got Pending for MonoVertex %s: %v", r.monoVertex.Name, result)
@@ -257,9 +256,9 @@ func (r *Rater) GetRates() map[string]*wrapperspb.DoubleValue {
 	r.log.Debugf("Current timestampedPodCounts for MonoVertex %s is: %v", r.monoVertex.Name, r.timestampedPodCounts)
 	var result = make(map[string]*wrapperspb.DoubleValue)
 	// calculate rates for each lookback seconds
-	for n, i := range r.buildLookbackSecondsMap() {
-		rate := CalculateRate(r.timestampedPodCounts, i)
-		result[n] = wrapperspb.Double(rate)
+	for windowLabel, lookbackSeconds := range r.buildLookbackSecondsMap() {
+		rate := CalculateRate(r.timestampedPodCounts, lookbackSeconds)
+		result[windowLabel] = wrapperspb.Double(rate)
 	}
 	r.log.Debugf("Got rates for MonoVertex %s: %v", r.monoVertex.Name, result)
 	return result
@@ -396,7 +395,7 @@ func (r *Rater) updateDynamicLookbackSecs() {
 	// If the value has changed, update it
 	if roundedMaxLookback != currentLookback {
 		r.lookBackSeconds.Store(roundedMaxLookback)
-		r.log.Infof("Lookback updated for mvtx %s, Current: %f Updated %f", r.monoVertex.Name, currentLookback, roundedMaxLookback)
+		r.log.Debugf("Lookback updated for mvtx: %s, Current: %f Updated: %f", r.monoVertex.Name, currentLookback, roundedMaxLookback)
 		// update the metric value for the lookback window
 		metrics.MonoVertexLookBackSecs.WithLabelValues(r.monoVertex.Name).Set(roundedMaxLookback)
 	}

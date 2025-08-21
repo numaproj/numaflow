@@ -23,7 +23,7 @@ spec:
         container:
           # compute the sum
           image: quay.io/numaio/numaflow-go/stream-sorter:stable
-          imagePullPolicy: Never
+          imagePullPolicy: Always
         groupBy:
           window:
             accumulator:

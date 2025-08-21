@@ -8,26 +8,29 @@ spec:
       source:
         http: {}
     - name: even-or-odd
+
       udf:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
           image: quay.io/numaio/numaflow-go/map-even-odd:stable
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
     - name: even-cat
       udf:
-        builtin:
-          name: cat
+        container:
+          image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
+          imagePullPolicy: IfNotPresent
     - name: odd-cat
       udf:
-        builtin:
-          name: cat
+        container:
+          image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
+          imagePullPolicy: IfNotPresent
     - name: out
       sink:
         udsink:
           container:
             # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis_sink
             image: quay.io/numaio/numaflow-go/redis-sink:stable
-            imagePullPolicy: Always
+            imagePullPolicy: IfNotPresent
             env:
               - name: SINK_HASH_KEY
                 # The key is set in the format of "pipeline_name-vertex_name"

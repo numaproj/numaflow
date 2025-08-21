@@ -1,15 +1,17 @@
 use std::collections::HashMap;
-use std::hash::DefaultHasher;
+use std::io::Write;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use async_nats::jetstream::Context;
 use async_nats::jetstream::consumer::PullConsumer;
-use async_nats::jetstream::context::{Publish, PublishAckFuture};
+use async_nats::jetstream::context::{Publish, PublishAckFuture, PublishErrorKind};
 use async_nats::jetstream::publish::PublishAck;
 use async_nats::jetstream::stream::RetentionPolicy::Limits;
-use bytes::BytesMut;
+use bytes::{Bytes, BytesMut};
+use flate2::Compression;
+use flate2::write::GzEncoder;
 use tokio::sync::Semaphore;
 use tokio::task::JoinHandle;
 use tokio::time::{Instant, sleep};
@@ -19,17 +21,39 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, warn};
 
 use crate::Result;
-use crate::config::pipeline::ToVertexConfig;
-use crate::config::pipeline::isb::{BufferFullStrategy, Stream};
+use crate::config::pipeline::isb::{BufferFullStrategy, CompressionType, ISBConfig, Stream};
+use crate::config::pipeline::{ToVertexConfig, VertexType};
 use crate::error::Error;
+
 use crate::message::{IntOffset, Message, Offset};
 use crate::metrics::{
-    PIPELINE_PARTITION_NAME_LABEL, pipeline_isb_metric_labels, pipeline_metric_labels,
+    PIPELINE_PARTITION_NAME_LABEL, jetstream_isb_error_metrics_labels,
+    jetstream_isb_metrics_labels, pipeline_drop_metric_labels, pipeline_metric_labels,
     pipeline_metrics,
 };
 use crate::shared::forward;
 use crate::tracker::TrackerHandle;
 use crate::watermark::WatermarkHandle;
+
+#[derive(Debug)]
+pub struct BufferInfo {
+    pub soft_usage: f64,
+    pub solid_usage: f64,
+    pub num_pending: u64,
+    pub num_ack_pending: usize,
+}
+/// Configuration for creating a JetstreamWriter
+#[derive(Clone)]
+pub(crate) struct ISBWriterConfig {
+    pub config: Vec<ToVertexConfig>,
+    pub js_ctx: Context,
+    pub paf_concurrency: usize,
+    pub tracker_handle: TrackerHandle,
+    pub cancel_token: CancellationToken,
+    pub watermark_handle: Option<WatermarkHandle>,
+    pub vertex_type: VertexType,
+    pub isb_config: Option<ISBConfig>,
+}
 
 const DEFAULT_RETRY_INTERVAL_MILLIS: u64 = 10;
 const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
@@ -37,7 +61,7 @@ const DEFAULT_REFRESH_INTERVAL_SECS: u64 = 1;
 /// Writes to JetStream ISB. Exposes both write and blocking methods to write messages.
 /// It accepts a cancellation token to stop infinite retries during shutdown.
 /// JetstreamWriter is one to many mapping of streams to write messages to. It also
-/// maintains the buffer usage metrics for each stream.
+/// maintains the buffer usage metrics and pending metrics for each stream.
 ///
 /// Error handling and shutdown: Unlike udf components we will not have non retryable
 /// errors here all the failures are infinitely retried until the message is successfully
@@ -54,22 +78,16 @@ pub(crate) struct JetstreamWriter {
     sem: Arc<Semaphore>,
     watermark_handle: Option<WatermarkHandle>,
     paf_concurrency: usize,
-    vertex_type: String,
+    vertex_type: VertexType,
+    compression_type: Option<CompressionType>,
 }
 
 impl JetstreamWriter {
     /// Creates a JetStream Writer and a background task to make sure the Write futures (PAFs) are
     /// successful. Batch Size determines the maximum pending futures.
-    pub(crate) fn new(
-        config: Vec<ToVertexConfig>,
-        js_ctx: Context,
-        paf_concurrency: usize,
-        tracker_handle: TrackerHandle,
-        cancel_token: CancellationToken,
-        watermark_handle: Option<WatermarkHandle>,
-        vertex_type: String,
-    ) -> Self {
-        let to_vertex_streams = config
+    pub(crate) fn new(writer_config: ISBWriterConfig) -> Self {
+        let to_vertex_streams = writer_config
+            .config
             .iter()
             .flat_map(|c| c.writer_config.streams.clone())
             .collect::<Vec<Stream>>();
@@ -80,28 +98,31 @@ impl JetstreamWriter {
             .collect::<HashMap<_, _>>();
 
         let this = Self {
-            config: Arc::new(config),
-            js_ctx,
+            config: Arc::new(writer_config.config),
+            js_ctx: writer_config.js_ctx,
             is_full,
-            tracker_handle,
-            sem: Arc::new(Semaphore::new(paf_concurrency)),
-            watermark_handle,
-            paf_concurrency,
-            vertex_type,
+            tracker_handle: writer_config.tracker_handle,
+            sem: Arc::new(Semaphore::new(writer_config.paf_concurrency)),
+            watermark_handle: writer_config.watermark_handle,
+            paf_concurrency: writer_config.paf_concurrency,
+            vertex_type: writer_config.vertex_type,
+            compression_type: writer_config
+                .isb_config
+                .map(|c| c.compression.compress_type),
         };
 
         // spawn a task for checking whether buffer is_full
         tokio::task::spawn({
             let mut this = this.clone();
             async move {
-                this.check_stream_status(cancel_token).await;
+                this.check_stream_status(writer_config.cancel_token).await;
             }
         });
 
         this
     }
 
-    /// Checks the buffer usage metrics (soft and solid usage) for each stream in the streams vector.
+    /// Checks the buffer usage metrics (soft and solid usage) and pending metrics for each stream in the streams vector.
     /// If the usage is greater than the bufferUsageLimit, it sets the is_full flag to true.
     async fn check_stream_status(&mut self, cln_token: CancellationToken) {
         let mut interval =
@@ -112,18 +133,24 @@ impl JetstreamWriter {
                     for config in &*self.config {
                         for stream in &config.writer_config.streams {
                             let stream = stream.name;
-                            match Self::fetch_buffer_usage(self.js_ctx.clone(), stream, config.writer_config.max_length).await {
-                                Ok((soft_usage, solid_usage)) => {
-                                    if solid_usage >= config.writer_config.usage_limit && soft_usage >= config.writer_config.usage_limit {
+                            let buffer_labels = jetstream_isb_metrics_labels(stream);
+                            match Self::fetch_buffer_info(self.js_ctx.clone(), stream, config.writer_config.max_length).await {
+                                Ok(buffer_info) => {
+                                    if buffer_info.solid_usage >= config.writer_config.usage_limit && buffer_info.soft_usage >= config.writer_config.usage_limit {
                                         if let Some(is_full) = self.is_full.get(stream) {
                                             is_full.store(true, Ordering::Relaxed);
                                         }
                                     } else if let Some(is_full) = self.is_full.get(stream) {
                                         is_full.store(false, Ordering::Relaxed);
                                     }
+                                    pipeline_metrics().jetstream_isb.buffer_soft_usage.get_or_create(&buffer_labels).set(buffer_info.soft_usage);
+                                    pipeline_metrics().jetstream_isb.buffer_solid_usage.get_or_create(&buffer_labels).set(buffer_info.solid_usage);
+                                    pipeline_metrics().jetstream_isb.buffer_pending.get_or_create(&buffer_labels).set(buffer_info.num_pending as i64);
+                                    pipeline_metrics().jetstream_isb.buffer_ack_pending.get_or_create(&buffer_labels).set(buffer_info.num_ack_pending as i64);
                                 }
                                 Err(e) => {
-                                    error!(?e, "Failed to fetch buffer usage for stream {}, updating isFull to true", stream);
+                                    error!(?e, "Failed to fetch buffer info for stream {}, updating isFull to true", stream);
+                                    pipeline_metrics().jetstream_isb.isfull_error_total.get_or_create(&jetstream_isb_error_metrics_labels(stream, e.to_string())).inc();
                                     if let Some(is_full) = self.is_full.get(stream) {
                                         is_full.store(true, Ordering::Relaxed);
                                     }
@@ -139,7 +166,7 @@ impl JetstreamWriter {
         }
     }
 
-    /// Fetches the buffer usage metrics (soft and solid usage) for the given stream.
+    /// Fetches the buffer usage metrics (soft and solid usage) and pending metrics for the given stream.
     ///
     /// Soft Usage:
     /// Formula: (NumPending + NumAckPending) / maxLength
@@ -153,11 +180,11 @@ impl JetstreamWriter {
     /// - Otherwise: solidUsage = State.Msgs / maxLength
     /// - State.Msgs: The total number of messages in the stream.
     /// - maxLength: The maximum length of the buffer.
-    async fn fetch_buffer_usage(
+    async fn fetch_buffer_info(
         js_ctx: Context,
         stream_name: &str,
         max_length: usize,
-    ) -> Result<(f64, f64)> {
+    ) -> Result<BufferInfo> {
         let mut stream = js_ctx
             .get_stream(stream_name)
             .await
@@ -166,17 +193,17 @@ impl JetstreamWriter {
         let stream_info = stream
             .info()
             .await
-            .map_err(|e| Error::ISB(format!("Failed to get the stream info {:?}", e)))?;
+            .map_err(|e| Error::ISB(format!("Failed to get the stream info {e}")))?;
 
         let mut consumer: PullConsumer = js_ctx
             .get_consumer_from_stream(stream_name, stream_name)
             .await
-            .map_err(|e| Error::ISB(format!("Failed to get the consumer {:?}", e)))?;
+            .map_err(|e| Error::ISB(format!("Failed to get the consumer {e}")))?;
 
         let consumer_info = consumer
             .info()
             .await
-            .map_err(|e| Error::ISB(format!("Failed to get the consumer info {:?}", e)))?;
+            .map_err(|e| Error::ISB(format!("Failed to get the consumer info {e}")))?;
 
         let soft_usage = (consumer_info.num_pending as f64 + consumer_info.num_ack_pending as f64)
             / max_length as f64;
@@ -186,7 +213,12 @@ impl JetstreamWriter {
             stream_info.state.messages as f64 / max_length as f64
         };
 
-        Ok((soft_usage, solid_usage))
+        Ok(BufferInfo {
+            soft_usage,
+            solid_usage,
+            num_pending: consumer_info.num_pending,
+            num_ack_pending: consumer_info.num_ack_pending,
+        })
     }
 
     /// Starts reading messages from the stream and writes them to Jetstream ISB.
@@ -197,7 +229,6 @@ impl JetstreamWriter {
     ) -> Result<JoinHandle<Result<()>>> {
         let handle: JoinHandle<Result<()>> = tokio::spawn(async move {
             let mut messages_stream = messages_stream;
-            let mut hash = DefaultHasher::new();
 
             while let Some(message) = messages_stream.next().await {
                 let write_processing_start = Instant::now();
@@ -211,10 +242,14 @@ impl JetstreamWriter {
                     pipeline_metrics()
                         .forwarder
                         .udf_drop_total
-                        .get_or_create(pipeline_metric_labels(&self.vertex_type))
+                        .get_or_create(pipeline_metric_labels(self.vertex_type.as_str()))
                         .inc();
                     continue;
                 }
+
+                let mut message = message;
+                // if compression is enabled, then compress and sent
+                message.value = Self::compress(self.compression_type, message.value)?;
 
                 // List of PAFs(one message can be written to multiple streams)
                 let mut pafs = vec![];
@@ -224,12 +259,16 @@ impl JetstreamWriter {
                         continue;
                     }
 
+                    // if the to_vertex is a reduce vertex, we should use the keys as the shuffle key
+                    let shuffle_key = match vertex.to_vertex_type {
+                        VertexType::MapUDF | VertexType::Sink | VertexType::Source => {
+                            String::from_utf8_lossy(&message.id.offset).to_string()
+                        }
+                        VertexType::ReduceUDF => message.keys.join(":"),
+                    };
+
                     // check to which partition the message should be written
-                    let partition = forward::determine_partition(
-                        String::from_utf8_lossy(&message.id.offset).to_string(),
-                        vertex.partitions,
-                        &mut hash,
-                    );
+                    let partition = forward::determine_partition(shuffle_key, vertex.partitions);
 
                     // write the message to the corresponding stream
                     let stream = vertex
@@ -248,14 +287,7 @@ impl JetstreamWriter {
                         )
                         .await
                     {
-                        let partition_name = stream.name;
-                        Self::send_write_metrics(
-                            partition_name,
-                            &self.vertex_type,
-                            message.clone(),
-                            write_processing_start,
-                        );
-                        pafs.push((stream, paf));
+                        pafs.push((stream, write_processing_start, paf));
                     }
                 }
 
@@ -280,6 +312,50 @@ impl JetstreamWriter {
             Ok(())
         });
         Ok(handle)
+    }
+
+    /// Compress the message body based on the compression type.
+    fn compress(compression_type: Option<CompressionType>, message: Bytes) -> Result<Bytes> {
+        match compression_type {
+            Some(CompressionType::Gzip) => {
+                let mut encoder = GzEncoder::new(vec![], Compression::default());
+                encoder.write_all(message.as_ref()).map_err(|e| {
+                    Error::ISB(format!("Failed to compress message (write_all): {e}"))
+                })?;
+                Ok(Bytes::from(encoder.finish().map_err(|e| {
+                    Error::ISB(format!("Failed to compress message (finish): {e}"))
+                })?))
+            }
+            Some(CompressionType::Zstd) => {
+                // 3 is default if you specify 0
+                let mut encoder = zstd::Encoder::new(vec![], 3)
+                    .map_err(|e| Error::ISB(format!("Failed to create zstd encoder: {e:?}")))?;
+                encoder.write_all(message.as_ref()).map_err(|e| {
+                    Error::ISB(format!("Failed to compress message (write_all): {e}"))
+                })?;
+                Ok(Bytes::from(encoder.finish().map_err(|e| {
+                    Error::ISB(format!(
+                        "Failed to flush compressed message (encoder_shutdown): {e}"
+                    ))
+                })?))
+            }
+            Some(CompressionType::LZ4) => {
+                let mut encoder = lz4::EncoderBuilder::new()
+                    .build(vec![])
+                    .map_err(|e| Error::ISB(format!("Failed to create lz4 encoder: {e:?}")))?;
+                encoder.write_all(message.as_ref()).map_err(|e| {
+                    Error::ISB(format!("Failed to compress message (write_all): {e}"))
+                })?;
+                let (compressed, result) = encoder.finish();
+                if let Err(e) = result {
+                    return Err(Error::ISB(format!(
+                        "Failed to flush compressed message (encoder_shutdown): {e}"
+                    )));
+                };
+                Ok(Bytes::from(compressed))
+            }
+            None | Some(CompressionType::None) => Ok(message),
+        }
     }
 
     fn send_write_metrics(
@@ -307,6 +383,13 @@ impl JetstreamWriter {
             .forwarder
             .write_processing_time
             .get_or_create(&labels)
+            .observe(write_processing_start.elapsed().as_micros() as f64);
+
+        // jetstream write time histogram metric
+        pipeline_metrics()
+            .jetstream_isb
+            .write_time_total
+            .get_or_create(&jetstream_isb_metrics_labels(partition_name))
             .observe(write_processing_start.elapsed().as_micros() as f64);
     }
 
@@ -340,7 +423,11 @@ impl JetstreamWriter {
                 .map(|is_full| is_full.load(Ordering::Relaxed))
             {
                 Some(true) => {
-                    // FIXME: add metrics
+                    pipeline_metrics()
+                        .jetstream_isb
+                        .isfull_total
+                        .get_or_create(&jetstream_isb_metrics_labels(stream.name))
+                        .inc();
                     if log_counter >= 500 {
                         warn!(?stream, "stream is full (throttled logging)");
                         log_counter = 0;
@@ -358,12 +445,20 @@ impl JetstreamWriter {
                             pipeline_metrics()
                                 .forwarder
                                 .drop_total
-                                .get_or_create(pipeline_isb_metric_labels())
+                                .get_or_create(&pipeline_drop_metric_labels(
+                                    self.vertex_type.as_str(),
+                                    stream.name,
+                                    "buffer-full",
+                                ))
                                 .inc();
                             pipeline_metrics()
                                 .forwarder
                                 .drop_bytes_total
-                                .get_or_create(pipeline_isb_metric_labels())
+                                .get_or_create(&pipeline_drop_metric_labels(
+                                    self.vertex_type.as_str(),
+                                    stream.name,
+                                    "buffer-full",
+                                ))
                                 .inc_by(msg_bytes as u64);
                             return None;
                         }
@@ -381,7 +476,27 @@ impl JetstreamWriter {
                     .await
                 {
                     Ok(paf) => break paf,
-                    Err(e) => error!(?e, "publishing failed, retrying"),
+                    Err(e) => {
+                        pipeline_metrics()
+                            .jetstream_isb
+                            .write_error_total
+                            .get_or_create(&jetstream_isb_error_metrics_labels(
+                                stream.name,
+                                e.kind().to_string(),
+                            ))
+                            .inc();
+                        error!(?e, "publishing failed, retrying");
+                        if let PublishErrorKind::TimedOut = e.kind() {
+                            pipeline_metrics()
+                                .jetstream_isb
+                                .write_timeout_total
+                                .get_or_create(&jetstream_isb_error_metrics_labels(
+                                    stream.name,
+                                    e.kind().to_string(),
+                                ))
+                                .inc();
+                        }
+                    }
                 },
                 None => error!("Stream {} not found in is_full map", stream),
             }
@@ -404,11 +519,10 @@ impl JetstreamWriter {
     /// natural backpressure.
     pub(super) async fn resolve_pafs(
         &self,
-        pafs: Vec<(Stream, PublishAckFuture)>,
+        pafs: Vec<(Stream, Instant, PublishAckFuture)>,
         message: Message,
         cln_token: CancellationToken,
     ) -> Result<()> {
-        let start_time = Instant::now();
         let permit = Arc::clone(&self.sem)
             .acquire_owned()
             .await
@@ -421,14 +535,40 @@ impl JetstreamWriter {
             let mut offsets = Vec::new();
 
             // resolve the pafs
-            for (stream, paf) in pafs {
+            for (stream, write_processing_start, paf) in pafs {
                 let ack = match paf.await {
-                    Ok(ack) => Ok(ack),
+                    Ok(ack) => {
+                        Self::send_write_metrics(
+                            stream.name,
+                            this.vertex_type.as_str(),
+                            message.clone(),
+                            write_processing_start,
+                        );
+                        Ok(ack)
+                    }
                     Err(e) => {
                         error!(
                             ?e, stream = ?stream,
                             "Failed to resolve the future trying blocking write",
                         );
+                        pipeline_metrics()
+                            .jetstream_isb
+                            .write_error_total
+                            .get_or_create(&jetstream_isb_error_metrics_labels(
+                                stream.name,
+                                e.kind().to_string(),
+                            ))
+                            .inc();
+                        if let PublishErrorKind::TimedOut = e.kind() {
+                            pipeline_metrics()
+                                .jetstream_isb
+                                .write_timeout_total
+                                .get_or_create(&jetstream_isb_error_metrics_labels(
+                                    stream.name,
+                                    e.kind().to_string(),
+                                ))
+                                .inc();
+                        }
                         this.blocking_write(stream.clone(), message.clone(), cln_token.clone())
                             .await
                     }
@@ -443,6 +583,25 @@ impl JetstreamWriter {
                                 ?ack,
                                 "Duplicate message detected"
                             );
+                            // Increment drop metric for duplicate messages
+                            pipeline_metrics()
+                                .forwarder
+                                .drop_total
+                                .get_or_create(&pipeline_drop_metric_labels(
+                                    this.vertex_type.as_str(),
+                                    stream.name,
+                                    "duplicate-id",
+                                ))
+                                .inc();
+                            pipeline_metrics()
+                                .forwarder
+                                .drop_bytes_total
+                                .get_or_create(&pipeline_drop_metric_labels(
+                                    this.vertex_type.as_str(),
+                                    stream.name,
+                                    "duplicate-id",
+                                ))
+                                .inc_by(message.value.len() as u64);
                         }
                         offsets.push((
                             stream.clone(),
@@ -461,74 +620,23 @@ impl JetstreamWriter {
                 }
             }
 
-            // now the pafs have resolved, lets use the offsets to send watermark
-            for (stream, offset) in offsets {
-                if let Some(watermark_handle) = this.watermark_handle.as_mut() {
+            if let Some(watermark_handle) = this.watermark_handle.as_mut() {
+                // now the pafs have resolved, lets use the offsets to send watermark
+                for (stream, offset) in offsets {
                     JetstreamWriter::publish_watermark(watermark_handle, stream, offset, &message)
                         .await;
                 }
             }
 
+            // Now that the PAF is resolved, we can delete the entry from the tracker which will send
+            // an ACK to the reader.
             this.tracker_handle
                 .delete(message.offset.clone())
                 .await
                 .expect("Failed to delete offset from tracker");
-
-            pipeline_metrics()
-                .isb
-                .paf_resolution_time
-                .get_or_create(pipeline_isb_metric_labels())
-                .observe(start_time.elapsed().as_micros() as f64);
         });
 
         Ok(())
-    }
-    /// Writes the message to the JetStream ISB and returns the PublishAck. It will do
-    /// infinite retries until the message gets published successfully. If it returns
-    /// an error it means it is fatal non-retryable error.
-    pub(crate) async fn blocking_write(
-        &self,
-        stream: Stream,
-        message: Message,
-        cln_token: CancellationToken,
-    ) -> Result<PublishAck> {
-        let start_time = Instant::now();
-        let payload: BytesMut = message
-            .try_into()
-            .expect("message serialization should not fail");
-
-        loop {
-            match self
-                .js_ctx
-                .publish(stream.name, payload.clone().freeze())
-                .await
-            {
-                Ok(paf) => match paf.await {
-                    Ok(ack) => {
-                        if ack.duplicate {
-                            warn!(?ack, "Duplicate message detected, ignoring");
-                        }
-                        debug!(
-                            elapsed_ms = start_time.elapsed().as_millis(),
-                            "Blocking write successful in",
-                        );
-                        return Ok(ack);
-                    }
-                    Err(e) => {
-                        error!(?e, "awaiting publish ack failed, retrying");
-                        sleep(Duration::from_millis(10)).await;
-                    }
-                },
-                Err(e) => {
-                    error!(?e, "publishing failed, retrying");
-                    sleep(Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS)).await;
-                }
-            }
-
-            if cln_token.is_cancelled() {
-                return Err(Error::ISB("Shutdown signal received".to_string()));
-            }
-        }
     }
 
     /// publishes the watermark for the given stream and offset
@@ -553,6 +661,84 @@ impl JetstreamWriter {
             }
         }
     }
+
+    /// Writes the message to the JetStream ISB and returns the PublishAck. It will do
+    /// infinite retries until the message gets published successfully. If it returns
+    /// an error it means it is fatal non-retryable error.
+    pub(crate) async fn blocking_write(
+        &self,
+        stream: Stream,
+        message: Message,
+        cln_token: CancellationToken,
+    ) -> Result<PublishAck> {
+        let start_time = Instant::now();
+        let message_length = message.value.len();
+        let payload: BytesMut = message
+            .try_into()
+            .expect("message serialization should not fail");
+
+        loop {
+            match self
+                .js_ctx
+                .publish(stream.name, payload.clone().freeze())
+                .await
+            {
+                Ok(paf) => match paf.await {
+                    Ok(ack) => {
+                        if ack.duplicate {
+                            warn!(?ack, "Duplicate message detected, ignoring");
+                            // Increment drop metric for duplicate messages
+                            pipeline_metrics()
+                                .forwarder
+                                .drop_total
+                                .get_or_create(&pipeline_drop_metric_labels(
+                                    self.vertex_type.as_str(),
+                                    stream.name,
+                                    "duplicate-id",
+                                ))
+                                .inc();
+                            pipeline_metrics()
+                                .forwarder
+                                .drop_bytes_total
+                                .get_or_create(&pipeline_drop_metric_labels(
+                                    self.vertex_type.as_str(),
+                                    stream.name,
+                                    "duplicate-id",
+                                ))
+                                .inc_by(message_length as u64);
+                        }
+                        debug!(
+                            elapsed_ms = start_time.elapsed().as_millis(),
+                            "Blocking write successful in",
+                        );
+                        pipeline_metrics()
+                            .jetstream_isb
+                            .write_time_total
+                            .get_or_create(&jetstream_isb_metrics_labels(stream.name))
+                            .observe(start_time.elapsed().as_micros() as f64);
+                        return Ok(ack);
+                    }
+                    Err(e) => {
+                        error!(?e, "awaiting publish ack failed, retrying");
+                        sleep(Duration::from_millis(10)).await;
+                    }
+                },
+                Err(e) => {
+                    pipeline_metrics()
+                        .jetstream_isb
+                        .write_error_total
+                        .get_or_create(&jetstream_isb_metrics_labels(stream.name))
+                        .inc();
+                    error!(?e, "publishing failed, retrying");
+                    sleep(Duration::from_millis(DEFAULT_RETRY_INTERVAL_MILLIS)).await;
+                }
+            }
+
+            if cln_token.is_cancelled() {
+                return Err(Error::ISB("Shutdown signal received".to_string()));
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -574,7 +760,7 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_async_write() {
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let cln_token = CancellationToken::new();
         let js_url = "localhost:4222";
         // Create JetStream context
@@ -605,8 +791,8 @@ mod tests {
             .await
             .unwrap();
 
-        let writer = JetstreamWriter::new(
-            vec![ToVertexConfig {
+        let writer = JetstreamWriter::new(ISBWriterConfig {
+            config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
@@ -614,14 +800,16 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: VertexType::Sink,
             }],
-            context.clone(),
-            100,
+            js_ctx: context.clone(),
+            paf_concurrency: 100,
             tracker_handle,
-            cln_token.clone(),
-            None,
-            "Source".to_string(),
-        );
+            cancel_token: cln_token.clone(),
+            watermark_handle: None,
+            vertex_type: VertexType::Source,
+            isb_config: None,
+        });
 
         let message = Message {
             typ: Default::default(),
@@ -701,8 +889,8 @@ mod tests {
             ..Default::default()
         };
 
-        let writer = JetstreamWriter::new(
-            vec![ToVertexConfig {
+        let writer = JetstreamWriter::new(ISBWriterConfig {
+            config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
@@ -710,14 +898,16 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: VertexType::Sink,
             }],
-            context.clone(),
-            100,
-            TrackerHandle::new(None, None),
-            cln_token.clone(),
-            None,
-            "Source".to_string(),
-        );
+            js_ctx: context.clone(),
+            paf_concurrency: 100,
+            tracker_handle: TrackerHandle::new(None),
+            cancel_token: cln_token.clone(),
+            watermark_handle: None,
+            vertex_type: VertexType::Source,
+            isb_config: None,
+        });
 
         let result = writer
             .blocking_write(stream.clone(), message, cln_token.clone())
@@ -733,7 +923,7 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_write_with_cancellation() {
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let js_url = "localhost:4222";
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
@@ -766,8 +956,8 @@ mod tests {
 
         let cancel_token = CancellationToken::new();
 
-        let writer = JetstreamWriter::new(
-            vec![ToVertexConfig {
+        let writer = JetstreamWriter::new(ISBWriterConfig {
+            config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
@@ -775,14 +965,16 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: VertexType::MapUDF,
             }],
-            context.clone(),
-            100,
+            js_ctx: context.clone(),
+            paf_concurrency: 100,
             tracker_handle,
-            cancel_token.clone(),
-            None,
-            "Map".to_string(),
-        );
+            cancel_token: cancel_token.clone(),
+            watermark_handle: None,
+            vertex_type: VertexType::MapUDF,
+            isb_config: None,
+        });
 
         let mut result_receivers = Vec::new();
         // Publish 10 messages successfully
@@ -863,13 +1055,13 @@ mod tests {
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
-    async fn test_fetch_buffer_usage() {
+    async fn test_fetch_buffer_info() {
         let js_url = "localhost:4222";
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
 
-        let stream = Stream::new("test_fetch_buffer_usage", "temp", 0);
+        let stream = Stream::new("test_fetch_buffer_info", "temp", 0);
         // Delete stream if it exists
         let _ = context.delete_stream(stream.name).await;
         let _stream = context
@@ -918,15 +1110,16 @@ mod tests {
                 .unwrap();
         }
 
-        // Fetch buffer usage
-        let (soft_usage, _) =
-            JetstreamWriter::fetch_buffer_usage(context.clone(), stream.name, max_length)
+        // Fetch buffer info
+        let buffer_info =
+            JetstreamWriter::fetch_buffer_info(context.clone(), stream.name, max_length)
                 .await
                 .unwrap();
 
-        // Verify the buffer usage metrics
-        assert_eq!(soft_usage, 0.8);
-        assert_eq!(soft_usage, 0.8);
+        // Verify the buffer info metrics
+        assert_eq!(buffer_info.soft_usage, 0.8);
+        assert_eq!(buffer_info.solid_usage, 0.8);
+        assert_eq!(buffer_info.num_pending, 80);
 
         // Clean up
         context
@@ -939,7 +1132,7 @@ mod tests {
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_check_stream_status() {
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let js_url = "localhost:4222";
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
@@ -974,8 +1167,8 @@ mod tests {
             .unwrap();
 
         let cancel_token = CancellationToken::new();
-        let writer = JetstreamWriter::new(
-            vec![ToVertexConfig {
+        let writer = JetstreamWriter::new(ISBWriterConfig {
+            config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
@@ -984,14 +1177,16 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: VertexType::Sink,
             }],
-            context.clone(),
-            100,
+            js_ctx: context.clone(),
+            paf_concurrency: 100,
             tracker_handle,
-            cancel_token.clone(),
-            None,
-            "Source".to_string(),
-        );
+            cancel_token: cancel_token.clone(),
+            watermark_handle: None,
+            vertex_type: VertexType::Source,
+            isb_config: None,
+        });
 
         let mut js_writer = writer.clone();
         // Simulate the stream status check
@@ -1040,7 +1235,7 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
 
         let stream = Stream::new("test_publish_messages", "temp", 0);
         // Delete stream if it exists
@@ -1067,8 +1262,8 @@ mod tests {
             .await
             .unwrap();
 
-        let writer = JetstreamWriter::new(
-            vec![ToVertexConfig {
+        let writer = JetstreamWriter::new(ISBWriterConfig {
+            config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
@@ -1077,14 +1272,16 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: VertexType::Sink,
             }],
-            context.clone(),
-            100,
-            tracker_handle.clone(),
-            cln_token.clone(),
-            None,
-            "Source".to_string(),
-        );
+            js_ctx: context.clone(),
+            paf_concurrency: 100,
+            tracker_handle: tracker_handle.clone(),
+            cancel_token: cln_token.clone(),
+            watermark_handle: None,
+            vertex_type: VertexType::Source,
+            isb_config: None,
+        });
 
         let (messages_tx, messages_rx) = tokio::sync::mpsc::channel(500);
         let mut ack_rxs = vec![];
@@ -1133,7 +1330,7 @@ mod tests {
         // Create JetStream context
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
 
         let stream = Stream::new("test_publish_cancellation", "temp", 0);
         // Delete stream if it exists
@@ -1161,8 +1358,8 @@ mod tests {
             .unwrap();
 
         let cancel_token = CancellationToken::new();
-        let writer = JetstreamWriter::new(
-            vec![ToVertexConfig {
+        let writer = JetstreamWriter::new(ISBWriterConfig {
+            config: vec![ToVertexConfig {
                 name: "test-vertex",
                 partitions: 1,
                 writer_config: BufferWriterConfig {
@@ -1170,14 +1367,16 @@ mod tests {
                     ..Default::default()
                 },
                 conditions: None,
+                to_vertex_type: VertexType::Sink,
             }],
-            context.clone(),
-            100,
-            tracker_handle.clone(),
-            cancel_token.clone(),
-            None,
-            "Source".to_string(),
-        );
+            js_ctx: context.clone(),
+            paf_concurrency: 100,
+            tracker_handle: tracker_handle.clone(),
+            cancel_token: cancel_token.clone(),
+            watermark_handle: None,
+            vertex_type: VertexType::Source,
+            isb_config: None,
+        });
 
         let (tx, rx) = tokio::sync::mpsc::channel(500);
         let mut ack_rxs = vec![];
@@ -1256,7 +1455,7 @@ mod tests {
         let js_url = "localhost:4222";
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let cln_token = CancellationToken::new();
 
         let vertex1_streams = vec![
@@ -1276,8 +1475,8 @@ mod tests {
         let (_, consumers2) = create_streams_and_consumers(&context, &vertex2_streams).await;
         let (_, consumers3) = create_streams_and_consumers(&context, &vertex3_streams).await;
 
-        let writer = JetstreamWriter::new(
-            vec![
+        let writer = JetstreamWriter::new(ISBWriterConfig {
+            config: vec![
                 ToVertexConfig {
                     name: "vertex1",
                     partitions: 2,
@@ -1289,6 +1488,7 @@ mod tests {
                         operator: Some("and".to_string()),
                         values: vec!["tag1".to_string(), "tag2".to_string()],
                     }))),
+                    to_vertex_type: VertexType::Sink,
                 },
                 ToVertexConfig {
                     name: "vertex2",
@@ -1301,6 +1501,7 @@ mod tests {
                         operator: Some("or".to_string()),
                         values: vec!["tag2".to_string()],
                     }))),
+                    to_vertex_type: VertexType::Sink,
                 },
                 ToVertexConfig {
                     name: "vertex3",
@@ -1313,15 +1514,17 @@ mod tests {
                         operator: Some("not".to_string()),
                         values: vec!["tag1".to_string()],
                     }))),
+                    to_vertex_type: VertexType::Sink,
                 },
             ],
-            context.clone(),
-            100,
-            tracker_handle.clone(),
-            cln_token.clone(),
-            None,
-            "Source".to_string(),
-        );
+            js_ctx: context.clone(),
+            paf_concurrency: 100,
+            tracker_handle: tracker_handle.clone(),
+            cancel_token: cln_token.clone(),
+            watermark_handle: None,
+            vertex_type: VertexType::Source,
+            isb_config: None,
+        });
 
         let (messages_tx, messages_rx) = tokio::sync::mpsc::channel(500);
         let mut ack_rxs = vec![];
@@ -1427,5 +1630,81 @@ mod tests {
         }
 
         (streams, consumers)
+    }
+
+    // Unit tests for the compress function
+    mod compress_tests {
+        use super::*;
+        use crate::config::pipeline::isb::CompressionType;
+        use flate2::read::GzDecoder;
+        use lz4::Decoder;
+        use std::io::Read;
+        use zstd::Decoder as ZstdDecoder;
+
+        #[test]
+        fn test_compress_none_compression() {
+            let test_data = Bytes::from("Hello, World!");
+            let result = JetstreamWriter::compress(None, test_data.clone()).unwrap();
+            assert_eq!(result, test_data);
+        }
+
+        #[test]
+        fn test_compress_none_compression_type() {
+            let test_data = Bytes::from("Hello, World!");
+            let result =
+                JetstreamWriter::compress(Some(CompressionType::None), test_data.clone()).unwrap();
+            assert_eq!(result, test_data);
+        }
+
+        #[test]
+        fn test_compress_gzip() {
+            let test_data =
+                Bytes::from("Hello, World! This is a test message for gzip compression.");
+            let result =
+                JetstreamWriter::compress(Some(CompressionType::Gzip), test_data.clone()).unwrap();
+
+            // Verify the result is different from original (compressed)
+            assert_ne!(result, test_data);
+
+            // Verify we can decompress it back to original
+            let mut decoder = GzDecoder::new(result.as_ref());
+            let mut decompressed = Vec::new();
+            decoder.read_to_end(&mut decompressed).unwrap();
+            assert_eq!(decompressed, test_data.as_ref());
+        }
+
+        #[test]
+        fn test_compress_zstd() {
+            let test_data =
+                Bytes::from("Hello, World! This is a test message for zstd compression.");
+            let result =
+                JetstreamWriter::compress(Some(CompressionType::Zstd), test_data.clone()).unwrap();
+
+            // Verify the result is different from original (compressed)
+            assert_ne!(result, test_data);
+
+            // Verify we can decompress it back to original
+            let mut decoder = ZstdDecoder::new(result.as_ref()).unwrap();
+            let mut decompressed = Vec::new();
+            decoder.read_to_end(&mut decompressed).unwrap();
+            assert_eq!(decompressed, test_data.as_ref());
+        }
+
+        #[test]
+        fn test_compress_lz4() {
+            let test_data =
+                Bytes::from("Hello, World! This is a test message for lz4 compression.");
+            let result =
+                JetstreamWriter::compress(Some(CompressionType::LZ4), test_data.clone()).unwrap();
+
+            // Verify the result is different from original (compressed)
+            assert_ne!(result, test_data);
+
+            // Verify we can decompress it back to original
+            let mut decoder = Decoder::new(result.as_ref()).unwrap();
+            let mut decompressed = Vec::new();
+            decoder.read_to_end(&mut decompressed).unwrap();
+            assert_eq!(decompressed, test_data.as_ref());
+        }
     }
 }

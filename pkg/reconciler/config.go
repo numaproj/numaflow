@@ -46,28 +46,7 @@ type DefaultConfig struct {
 }
 
 type ISBSvcConfig struct {
-	Redis     *RedisConfig     `json:"redis"`
 	JetStream *JetStreamConfig `json:"jetstream"`
-}
-
-type RedisConfig struct {
-	Settings *RedisSettings `json:"settings"`
-	Versions []RedisVersion `json:"versions"`
-}
-
-type RedisSettings struct {
-	Redis    string `json:"redis"`
-	Master   string `json:"master"`
-	Replica  string `json:"replica"`
-	Sentinel string `json:"sentinel"`
-}
-
-type RedisVersion struct {
-	Version            string `json:"version"`
-	RedisImage         string `json:"redisImage"`
-	SentinelImage      string `json:"sentinelImage"`
-	InitContainerImage string `json:"initContainerImage"`
-	RedisExporterImage string `json:"redisExporterImage"`
 }
 
 type JetStreamConfig struct {
@@ -131,18 +110,6 @@ func (dc DefaultConfig) GetDefaultContainerResources() corev1.ResourceRequiremen
 	}
 
 	return resourceConfig
-}
-
-func (isc ISBSvcConfig) GetRedisVersion(version string) (*RedisVersion, error) {
-	if isc.Redis == nil || len(isc.Redis.Versions) == 0 {
-		return nil, fmt.Errorf("no redis configuration found")
-	}
-	for _, r := range isc.Redis.Versions {
-		if r.Version == version {
-			return &r, nil
-		}
-	}
-	return nil, fmt.Errorf("no redis configuration found for %q", version)
 }
 
 func (isc ISBSvcConfig) GetJetStreamVersion(version string) (*JetStreamVersion, error) {

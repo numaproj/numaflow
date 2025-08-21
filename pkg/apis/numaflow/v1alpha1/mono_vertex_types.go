@@ -313,12 +313,6 @@ func (mv MonoVertex) commonEnvs() []corev1.EnvVar {
 		{Name: EnvPod, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.name"}}},
 		{Name: EnvReplica, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + KeyReplica + "']"}}},
 		{Name: EnvMonoVertexName, Value: mv.Name},
-	}
-}
-
-// SidecarEnvs returns the envs for sidecar containers.
-func (mv MonoVertex) sidecarEnvs() []corev1.EnvVar {
-	return []corev1.EnvVar{
 		{Name: EnvCPULimit, ValueFrom: &corev1.EnvVarSource{
 			ResourceFieldRef: &corev1.ResourceFieldSelector{Resource: "limits.cpu"}}},
 		{Name: EnvCPURequest, ValueFrom: &corev1.EnvVarSource{
@@ -439,7 +433,6 @@ func (mv MonoVertex) GetPodSpec(req GetMonoVertexPodSpecReq) (*corev1.PodSpec, e
 
 	for i := 0; i < len(sidecarContainers); i++ { // udsink, udsource, udtransformer ...
 		sidecarContainers[i].Env = append(sidecarContainers[i].Env, mv.commonEnvs()...)
-		sidecarContainers[i].Env = append(sidecarContainers[i].Env, mv.sidecarEnvs()...)
 	}
 
 	initContainers := []corev1.Container{}
@@ -513,7 +506,7 @@ func (mvspec MonoVertexSpec) DeepCopyWithoutReplicas() MonoVertexSpec {
 
 func (mvspec MonoVertexSpec) getMainContainer(req getContainerReq) corev1.Container {
 	return containerBuilder{}.
-		init(req).command(NumaflowRustBinary).args("--rust").build()
+		init(req).command(NumaflowRustBinary).args("processor").build()
 }
 
 // buildContainers builds the sidecar containers and main containers for the mono vertex.

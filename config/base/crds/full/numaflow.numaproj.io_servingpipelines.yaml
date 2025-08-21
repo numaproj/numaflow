@@ -77,6 +77,15 @@ spec:
                       - to
                       type: object
                     type: array
+                  interStepBuffer:
+                    properties:
+                      compression:
+                        properties:
+                          type:
+                            default: None
+                            type: string
+                        type: object
+                    type: object
                   interStepBufferServiceName:
                     type: string
                   lifecycle:
@@ -8340,6 +8349,64 @@ spec:
                                   type: object
                                 log:
                                   type: object
+                                pulsar:
+                                  properties:
+                                    auth:
+                                      properties:
+                                        basicAuth:
+                                          properties:
+                                            password:
+                                              properties:
+                                                key:
+                                                  type: string
+                                                name:
+                                                  default: ""
+                                                  type: string
+                                                optional:
+                                                  type: boolean
+                                              required:
+                                              - key
+                                              type: object
+                                              x-kubernetes-map-type: atomic
+                                            username:
+                                              properties:
+                                                key:
+                                                  type: string
+                                                name:
+                                                  default: ""
+                                                  type: string
+                                                optional:
+                                                  type: boolean
+                                              required:
+                                              - key
+                                              type: object
+                                              x-kubernetes-map-type: atomic
+                                          type: object
+                                        token:
+                                          properties:
+                                            key:
+                                              type: string
+                                            name:
+                                              default: ""
+                                              type: string
+                                            optional:
+                                              type: boolean
+                                          required:
+                                          - key
+                                          type: object
+                                          x-kubernetes-map-type: atomic
+                                      type: object
+                                    producerName:
+                                      type: string
+                                    serverAddr:
+                                      type: string
+                                    topic:
+                                      type: string
+                                  required:
+                                  - producerName
+                                  - serverAddr
+                                  - topic
+                                  type: object
                                 serve:
                                   type: object
                                 sqs:
@@ -8925,6 +8992,64 @@ spec:
                               type: object
                             log:
                               type: object
+                            pulsar:
+                              properties:
+                                auth:
+                                  properties:
+                                    basicAuth:
+                                      properties:
+                                        password:
+                                          properties:
+                                            key:
+                                              type: string
+                                            name:
+                                              default: ""
+                                              type: string
+                                            optional:
+                                              type: boolean
+                                          required:
+                                          - key
+                                          type: object
+                                          x-kubernetes-map-type: atomic
+                                        username:
+                                          properties:
+                                            key:
+                                              type: string
+                                            name:
+                                              default: ""
+                                              type: string
+                                            optional:
+                                              type: boolean
+                                          required:
+                                          - key
+                                          type: object
+                                          x-kubernetes-map-type: atomic
+                                      type: object
+                                    token:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          default: ""
+                                          type: string
+                                        optional:
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                      x-kubernetes-map-type: atomic
+                                  type: object
+                                producerName:
+                                  type: string
+                                serverAddr:
+                                  type: string
+                                topic:
+                                  type: string
+                              required:
+                              - producerName
+                              - serverAddr
+                              - topic
+                              type: object
                             retryStrategy:
                               properties:
                                 backoff:
@@ -9368,6 +9493,14 @@ spec:
                                       type: object
                                       x-kubernetes-map-type: atomic
                                   type: object
+                                consumer:
+                                  type: string
+                                deliver_policy:
+                                  type: string
+                                filter_subjects:
+                                  items:
+                                    type: string
+                                  type: array
                                 stream:
                                   type: string
                                 tls:
@@ -9810,6 +9943,35 @@ spec:
                               properties:
                                 auth:
                                   properties:
+                                    basicAuth:
+                                      properties:
+                                        password:
+                                          properties:
+                                            key:
+                                              type: string
+                                            name:
+                                              default: ""
+                                              type: string
+                                            optional:
+                                              type: boolean
+                                          required:
+                                          - key
+                                          type: object
+                                          x-kubernetes-map-type: atomic
+                                        username:
+                                          properties:
+                                            key:
+                                              type: string
+                                            name:
+                                              default: ""
+                                              type: string
+                                            optional:
+                                              type: boolean
+                                          required:
+                                          - key
+                                          type: object
+                                          x-kubernetes-map-type: atomic
+                                      type: object
                                     token:
                                       properties:
                                         key:
@@ -9877,25 +10039,6 @@ spec:
                               type: object
                             transformer:
                               properties:
-                                builtin:
-                                  properties:
-                                    args:
-                                      items:
-                                        type: string
-                                      type: array
-                                    kwargs:
-                                      additionalProperties:
-                                        type: string
-                                      type: object
-                                    name:
-                                      enum:
-                                      - eventTimeExtractor
-                                      - filter
-                                      - timeExtractionFilter
-                                      type: string
-                                  required:
-                                  - name
-                                  type: object
                                 container:
                                   properties:
                                     args:
@@ -10507,24 +10650,6 @@ spec:
                           type: array
                         udf:
                           properties:
-                            builtin:
-                              properties:
-                                args:
-                                  items:
-                                    type: string
-                                  type: array
-                                kwargs:
-                                  additionalProperties:
-                                    type: string
-                                  type: object
-                                name:
-                                  enum:
-                                  - cat
-                                  - filter
-                                  type: string
-                              required:
-                              - name
-                              type: object
                             container:
                               properties:
                                 args:
@@ -12456,6 +12581,15 @@ spec:
                   nodeSelector:
                     additionalProperties:
                       type: string
+                    type: object
+                  ports:
+                    properties:
+                      http:
+                        format: int32
+                        type: integer
+                      https:
+                        format: int32
+                        type: integer
                     type: object
                   priority:
                     format: int32

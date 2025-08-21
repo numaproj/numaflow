@@ -10,7 +10,7 @@ use crate::error::{Error, Result};
 use crate::message::ReadAck;
 use crate::metrics::{
     PIPELINE_PARTITION_NAME_LABEL, monovertex_metrics, mvtx_forward_metric_labels,
-    pipeline_isb_metric_labels, pipeline_metric_labels, pipeline_metrics,
+    pipeline_metric_labels, pipeline_metrics,
 };
 use crate::source::http::CoreHttpSource;
 use crate::tracker::TrackerHandle;
@@ -18,9 +18,12 @@ use crate::{
     message::{Message, Offset},
     reader::LagReader,
 };
+use backoff::retry::Retry;
+use backoff::strategy::fixed;
 use chrono::Utc;
-use numaflow_jetstream::JetstreamSource;
 use numaflow_kafka::source::KafkaSource;
+use numaflow_nats::jetstream::JetstreamSource;
+use numaflow_nats::nats::NatsSource;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pulsar::source::PulsarSource;
 use numaflow_sqs::source::SqsSource;
@@ -52,6 +55,7 @@ pub(crate) mod generator;
 pub(crate) mod pulsar;
 
 pub(crate) mod jetstream;
+pub(crate) mod nats;
 
 pub(crate) mod sqs;
 
@@ -62,6 +66,8 @@ use crate::transformer::Transformer;
 use crate::watermark::source::SourceWatermarkHandle;
 
 const MAX_ACK_PENDING: usize = 10000;
+const ACK_RETRY_INTERVAL: u64 = 100;
+const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
 
 /// Set of Read related items that has to be implemented to become a Source.
 pub(crate) trait SourceReader {
@@ -83,8 +89,8 @@ pub(crate) trait SourceAcker {
 
 pub(crate) enum SourceType {
     UserDefinedSource(
-        user_defined::UserDefinedSourceRead,
-        user_defined::UserDefinedSourceAck,
+        Box<user_defined::UserDefinedSourceRead>,
+        Box<user_defined::UserDefinedSourceAck>,
         user_defined::UserDefinedSourceLagReader,
     ),
     Generator(
@@ -97,6 +103,7 @@ pub(crate) enum SourceType {
     Jetstream(JetstreamSource),
     Kafka(KafkaSource),
     Http(CoreHttpSource),
+    Nats(NatsSource),
 }
 
 enum ActorMessage {
@@ -212,7 +219,7 @@ impl Source {
             SourceType::UserDefinedSource(reader, acker, lag_reader) => {
                 health_checker = Some(reader.get_source_client());
                 tokio::spawn(async move {
-                    let actor = SourceActor::new(receiver, reader, acker, lag_reader);
+                    let actor = SourceActor::new(receiver, *reader, *acker, lag_reader);
                     actor.run().await;
                 });
             }
@@ -248,6 +255,12 @@ impl Source {
                 tokio::spawn(async move {
                     let actor =
                         SourceActor::new(receiver, jetstream.clone(), jetstream.clone(), jetstream);
+                    actor.run().await;
+                });
+            }
+            SourceType::Nats(nats) => {
+                tokio::spawn(async move {
+                    let actor = SourceActor::new(receiver, nats.clone(), nats.clone(), nats);
                     actor.run().await;
                 });
             }
@@ -398,16 +411,16 @@ impl Source {
 
                 // attempt to publish idle watermark since we are not able to read any message from
                 // the source.
-                if msgs_len == 0 {
-                    if let Some(watermark_handle) = self.watermark_handle.as_mut() {
-                        watermark_handle
-                            .publish_source_idle_watermark(
-                                Self::partitions(self.sender.clone())
-                                    .await
-                                    .unwrap_or_default(),
-                            )
-                            .await;
-                    }
+                if msgs_len == 0
+                    && let Some(watermark_handle) = self.watermark_handle.as_mut()
+                {
+                    watermark_handle
+                        .publish_source_idle_watermark(
+                            Self::partitions(self.sender.clone())
+                                .await
+                                .unwrap_or_default(),
+                        )
+                        .await;
                 }
 
                 let mut offsets = vec![];
@@ -432,6 +445,7 @@ impl Source {
                     self.sender.clone(),
                     ack_batch,
                     _permit,
+                    cln_token.clone(),
                 ));
 
                 // transform the batch if the transformer is present, this need not
@@ -511,6 +525,7 @@ impl Source {
         source_handle: mpsc::Sender<ActorMessage>,
         ack_rx_batch: Vec<(Offset, oneshot::Receiver<ReadAck>)>,
         _permit: OwnedSemaphorePermit, // permit to release after acking the offsets.
+        cancel_token: CancellationToken,
     ) -> Result<()> {
         let n = ack_rx_batch.len();
         let mut offsets_to_ack = Vec::with_capacity(n);
@@ -531,11 +546,39 @@ impl Source {
 
         let start = Instant::now();
         if !offsets_to_ack.is_empty() {
-            Self::ack(source_handle, offsets_to_ack).await?;
+            Self::ack_with_retry(source_handle, offsets_to_ack, &cancel_token).await;
         }
         Self::send_ack_metrics(e2e_start_time, n, start);
 
         Ok(())
+    }
+
+    /// Invokes ack with infinite retries until the cancellation token is cancelled.
+    async fn ack_with_retry(
+        source_handle: mpsc::Sender<ActorMessage>,
+        offsets: Vec<Offset>,
+        cancel_token: &CancellationToken,
+    ) {
+        let interval = fixed::Interval::from_millis(ACK_RETRY_INTERVAL).take(ACK_RETRY_ATTEMPTS);
+        let _ = Retry::new(
+            interval,
+            async || {
+                let result = Self::ack(source_handle.clone(), offsets.clone()).await;
+                if result.is_err() {
+                    error!(?result, "Failed to send ack to source, retrying...");
+                    if cancel_token.is_cancelled() {
+                        error!(
+                            ?result,
+                            "Cancellation token received, stopping the ack retry loop"
+                        );
+                        return Ok(());
+                    }
+                }
+                result
+            },
+            |_: &Error| !cancel_token.is_cancelled(),
+        )
+        .await;
     }
 
     fn send_read_metrics(
@@ -554,7 +597,16 @@ impl Source {
                 .read_time
                 .get_or_create(mvtx_labels)
                 .observe(read_start_time.elapsed().as_micros() as f64);
+            monovertex_metrics()
+                .read_batch_size
+                .get_or_create(mvtx_labels)
+                .set(n as i64);
         } else {
+            pipeline_metrics()
+                .forwarder
+                .read_batch_size
+                .get_or_create(pipeline_labels)
+                .set(n as i64);
             pipeline_metrics()
                 .forwarder
                 .read_total
@@ -585,37 +637,42 @@ impl Source {
 
     fn send_ack_metrics(e2e_start_time: Instant, n: usize, start: Instant) {
         if is_mono_vertex() {
+            let mvtx_labels = mvtx_forward_metric_labels();
             monovertex_metrics()
                 .ack_time
-                .get_or_create(mvtx_forward_metric_labels())
+                .get_or_create(mvtx_labels)
                 .observe(start.elapsed().as_micros() as f64);
 
             monovertex_metrics()
                 .ack_total
-                .get_or_create(mvtx_forward_metric_labels())
+                .get_or_create(mvtx_labels)
                 .inc_by(n as u64);
 
             monovertex_metrics()
                 .e2e_time
-                .get_or_create(mvtx_forward_metric_labels())
+                .get_or_create(mvtx_labels)
                 .observe(e2e_start_time.elapsed().as_micros() as f64);
         } else {
+            let mut pipeline_labels = pipeline_metric_labels(VERTEX_TYPE_SOURCE).clone();
+            pipeline_labels.push((
+                PIPELINE_PARTITION_NAME_LABEL.to_string(),
+                get_vertex_name().to_string(),
+            ));
             pipeline_metrics()
                 .forwarder
                 .ack_processing_time
-                .get_or_create(pipeline_isb_metric_labels())
+                .get_or_create(&pipeline_labels)
                 .observe(start.elapsed().as_micros() as f64);
 
             pipeline_metrics()
                 .forwarder
                 .ack_total
-                .get_or_create(pipeline_isb_metric_labels())
+                .get_or_create(&pipeline_labels)
                 .inc_by(n as u64);
-
             pipeline_metrics()
                 .forwarder
-                .forward_chunk_processing_time
-                .get_or_create(pipeline_isb_metric_labels())
+                .e2e_time
+                .get_or_create(&pipeline_labels)
                 .observe(e2e_start_time.elapsed().as_micros() as f64);
         }
     }
@@ -758,10 +815,10 @@ mod tests {
             .map_err(|e| panic!("failed to create source reader: {:?}", e))
             .unwrap();
 
-        let tracker = TrackerHandle::new(None, None);
+        let tracker = TrackerHandle::new(None);
         let source = Source::new(
             5,
-            SourceType::UserDefinedSource(src_read, src_ack, lag_reader),
+            SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
             tracker.clone(),
             true,
             None,

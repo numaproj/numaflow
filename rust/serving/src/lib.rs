@@ -9,11 +9,11 @@ use tracing::info;
 
 pub use self::error::{Error, Result};
 use crate::app::orchestrator::OrchestratorState as CallbackState;
-use crate::app::start_main_server;
 use crate::app::store::cbstore::jetstream_store::JetStreamCallbackStore;
 use crate::app::store::datastore::jetstream::JetStreamDataStore;
 use crate::app::store::datastore::user_defined::UserDefinedStore;
 use crate::app::tracker::MessageGraph;
+use crate::app::{start_main_server_http, start_main_server_https};
 use crate::config::StoreType;
 use crate::config::generate_certs;
 use crate::metrics::start_https_metrics_server;
@@ -60,7 +60,7 @@ where
 
     let tls_config = RustlsConfig::from_pem(cert.pem().into(), key.serialize_pem().into())
         .await
-        .map_err(|e| format!("Failed to create tls config {:?}", e))?;
+        .map_err(|e| format!("Failed to create tls config {e:?}"))?;
 
     info!(config = ?app.settings, "Starting server with config and pipeline spec");
 
@@ -75,10 +75,20 @@ where
     ));
 
     // Start the main server, which serves the application.
-    let app_server_handle = tokio::spawn(start_main_server(app, tls_config, cln_token));
+    let app_server_https_handle = tokio::spawn(start_main_server_https(
+        app.clone(),
+        tls_config,
+        cln_token.clone(),
+    ));
+
+    let app_server_http_handle = tokio::spawn(start_main_server_http(app, cln_token));
 
     // TODO: is try_join the best? we need to short-circuit at the first failure
-    tokio::try_join!(flatten(app_server_handle), flatten(metrics_server_handle))?;
+    tokio::try_join!(
+        flatten(app_server_https_handle),
+        flatten(app_server_http_handle),
+        flatten(metrics_server_handle)
+    )?;
 
     Ok(())
 }
@@ -127,10 +137,7 @@ async fn start(js_context: Context, settings: Arc<Settings>) -> Result<()> {
 
     // Create the message graph from the pipeline spec and the redis store
     let msg_graph = MessageGraph::from_pipeline(&settings.pipeline_spec).map_err(|e| {
-        Error::InitError(format!(
-            "Creating message graph from pipeline spec: {:?}",
-            e
-        ))
+        Error::InitError(format!("Creating message graph from pipeline spec: {e:?}"))
     })?;
 
     // Create a store (builtin or user-defined) to store the callbacks and the custom responses
@@ -207,7 +214,6 @@ mod tests {
 
         let env_vars = [
             ("NUMAFLOW_POD", "serving-serve-cbdf"),
-            ("NUMAFLOW_SERVING_APP_LISTEN_PORT", "32443"),
             (
                 "NUMAFLOW_SERVING_CALLBACK_STORE",
                 "serving-test-run-kv-store",
@@ -218,8 +224,8 @@ mod tests {
             ),
             ("NUMAFLOW_SERVING_STATUS_STORE", "serving-test-run-kv-store"),
             (
-                "NUMAFLOW_SERVING_SOURCE_SETTINGS",
-                "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQifQ==",
+                "NUMAFLOW_SERVING_SPEC",
+                "eyJhdXRoIjpudWxsLCJzZXJ2aWNlIjp0cnVlLCJtc2dJREhlYWRlcktleSI6IlgtTnVtYWZsb3ctSWQiLCJwb3J0cyI6eyJodHRwcyI6MzI0NDMsImh0dHAiOjMyNDQ1fX0=",
             ),
             (
                 "NUMAFLOW_SERVING_MIN_PIPELINE_SPEC",
@@ -271,6 +277,17 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+
+        let response = reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .build()
+            .unwrap()
+            .get("http://localhost:32445/health")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
         server_task.abort();
     }
 }

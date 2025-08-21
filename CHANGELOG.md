@@ -1,5 +1,209 @@
 # Changelog
 
+## v1.6.0 (2025-08-02)
+
+ * [e19334ed](https://github.com/numaproj/numaflow/commit/e19334ed78513f7e557ae545659ba247eea78ddd) Update manifests to v1.6.0
+ * [2fa2c81f](https://github.com/numaproj/numaflow/commit/2fa2c81faee1636908e1e24d1947eab28530c479) make lint
+ * [a3129bb3](https://github.com/numaproj/numaflow/commit/a3129bb30ad7b98e4ab4d5e7dce5fc1a5891ad4e) fix: revert golang to 1.23.1
+ * [f2d45fbc](https://github.com/numaproj/numaflow/commit/f2d45fbc2cc84b36f0260484c5f870d61b719057) fix: requeue reconciliation after seeing container restart (#2855)
+ * [d3643ceb](https://github.com/numaproj/numaflow/commit/d3643ceb6da68f2ef9a4f8929c6d1c90475750a8) fix: graceful shutdown during reduce udf panic (#2845)
+ * [839b42d0](https://github.com/numaproj/numaflow/commit/839b42d04c96b6581db9e6f4b39353fab882d3a2) feat: unpause pipelines vertices and mvtx from min replicas (#2840)
+ * [3d295bd5](https://github.com/numaproj/numaflow/commit/3d295bd5ecb24da966100fc84a1fee302c5f3d84) feat: adaptive lookback and pending metrics at daemon for pipeline (#2834)
+ * [2d33bb86](https://github.com/numaproj/numaflow/commit/2d33bb86987bef7d11dd639e51767d71c1d62a9f) fix: infinite render for pipeline/mvtx card (#2844)
+ * [11039b32](https://github.com/numaproj/numaflow/commit/11039b322c3a4fb11a757590822f1c9b792f0b3a) feat: enable rust runtime by default (#2833)
+ * [b15986d0](https://github.com/numaproj/numaflow/commit/b15986d0cb5964324303e6d9013ab944599d521f) feat: Filter subjects and deliver policy as user options (#2837)
+ * [fb90083d](https://github.com/numaproj/numaflow/commit/fb90083d48f61271e4a0472cb86733457b791e8b) fix: add serving pipeline transformer config (#2835)
+ * [50f0833f](https://github.com/numaproj/numaflow/commit/50f0833fecf640e1d45b61942eb73c85cf133d5d) fix: handle stream already existing when making consumer (#2832)
+ * [c9e44386](https://github.com/numaproj/numaflow/commit/c9e44386e5fa25f07d9ec7a7a330802fd7d6a03b) fix: Detect tokio worker threads (#2831)
+ * [101e6db7](https://github.com/numaproj/numaflow/commit/101e6db7e907b9b448bde012a536b729a7b43c57) chore(deps): bump form-data from 3.0.1 to 3.0.4 in /ui (#2829)
+ * [6d56a6d5](https://github.com/numaproj/numaflow/commit/6d56a6d58d7114e39a70e0d4cbaebaa3a9102cce) fix: aligned and unaligned reduce in Rust runtime (#2827)
+ * [afdd16f7](https://github.com/numaproj/numaflow/commit/afdd16f7adc9217430a505c779a36832f6273497) feat: nats source in rust (#2804)
+ * [e64424f9](https://github.com/numaproj/numaflow/commit/e64424f97f635081cd42d9d424924872435d6599) doc: User documentation for Jetstream source (#2826)
+ * [279e4ee5](https://github.com/numaproj/numaflow/commit/279e4ee5fc23e97e59fcb84a9ca3ca74cb308be5) fix: Jetstream source - Option to specify consumer name (#2805)
+ * [abb70d4c](https://github.com/numaproj/numaflow/commit/abb70d4cf7fd55c5d6a963d11b8d298f0a22fee5) fix: accumulator last seen time (#2825)
+ * [a8d15e49](https://github.com/numaproj/numaflow/commit/a8d15e49ec3ed9ad2f40fd7f6bc9a84506c883f1) chore(deps): bump golang.org/x/oauth2 from 0.25.0 to 0.27.0 (#2822)
+ * [7dec45fd](https://github.com/numaproj/numaflow/commit/7dec45fd6520e1c75e09cc579af4281bb69048be) feat(core): extended proto format for metadata (#2821)
+ * [100fa1cf](https://github.com/numaproj/numaflow/commit/100fa1cf19f3e6a1918ab3dd0d6c61588c5cd28d) feat: jetstream isb metrics in rust (#2813)
+ * [2824b210](https://github.com/numaproj/numaflow/commit/2824b210d194cacae75672e3054e916c28734fbd) fix: flaky fetch head watermark unit test (#2808)
+ * [2bcbabc7](https://github.com/numaproj/numaflow/commit/2bcbabc7805c6013174951aeccabd4ec20c5d6bc) fix(UI): health filter & support for mono-vertex health on pipeline listing page (#2761)
+ * [0d972a66](https://github.com/numaproj/numaflow/commit/0d972a6691a1c64361f822fb47ffb4fee9078c54) fix: `TestDropOnFull` e2e test (#2803)
+ * [0f847d83](https://github.com/numaproj/numaflow/commit/0f847d831a6126c474921672241223118d1050b8) feat: Daemon server to use http based watermark fetcher (#2798)
+ * [8fefa40f](https://github.com/numaproj/numaflow/commit/8fefa40f7efc57bc9b902d9f01157b1b87a39301) fix: kafka writes messages to same partition when setKey is not set (#2797)
+ * [013d03d5](https://github.com/numaproj/numaflow/commit/013d03d59435f6851b3cfe6079521f0a22152b34) chore(test): Improve testing for side-input (#2801)
+ * [258f9f47](https://github.com/numaproj/numaflow/commit/258f9f475bd8de75eea64ead2d3482ed6acc54a4) feat: e2e tests with rust runtime (#2693)
+ * [8b4ee04a](https://github.com/numaproj/numaflow/commit/8b4ee04a0e60393828441c541dcb4b8c2f376e30) fix: drain input channel during batch map shutdown (#2793)
+ * [a3fe0db5](https://github.com/numaproj/numaflow/commit/a3fe0db5ff382fc9fd8a2a6d6c243fc8ea15f08f) chore(doc): roadmap 1.6 (#2792)
+ * [f73a4e4c](https://github.com/numaproj/numaflow/commit/f73a4e4cf79800afa0ac2445184e6ddb3e711064) fix: failures in e2e tests ignored (#2791)
+ * [79156da4](https://github.com/numaproj/numaflow/commit/79156da4a085c08e8e53f1caa132225813634229) fix: cli opts and clap (#2788)
+ * [59b023aa](https://github.com/numaproj/numaflow/commit/59b023aa55c98bf8df69ac5496b2d56b937a0bb6) fix: exit code conditional rendering (#2789)
+ * [08257303](https://github.com/numaproj/numaflow/commit/082573039ec45a397dc2eb5659c935548079d7eb) fix: add `-mv-` in mvtx name for pod memory/cpu metrics (#2784)
+ * [8c606598](https://github.com/numaproj/numaflow/commit/8c60659848cf93ce004d5bee37dbf0cf30f23931) doc: Example PDB and Anti-Affinity config for ISB (#2787)
+ * [efd0ee9c](https://github.com/numaproj/numaflow/commit/efd0ee9cb6ada379352ddd46ea5c5e3e40e13e92) fix: jetstream source should use published timestamp (#2778)
+ * [10e5aec1](https://github.com/numaproj/numaflow/commit/10e5aec1aad9d84c43d651d990c68570e504466b) fix: use kafka timestamp as event time (#2781)
+ * [766a6a5a](https://github.com/numaproj/numaflow/commit/766a6a5a57e9d8ae817b29688cc312059ea16935) fix: allow subcommands other than monitor and serving in cli (#2776)
+ * [76e2b27b](https://github.com/numaproj/numaflow/commit/76e2b27bdb977149dac52c5f177adf09d93371ae) Fix: Jetstream source - Unlimited reconnects (#2772)
+ * [33bd2b93](https://github.com/numaproj/numaflow/commit/33bd2b93d4c641a9e7211bec752b20f89a4290b3) fix: vertex type to avoid panics in watermark manager (#2766)
+ * [d84980e2](https://github.com/numaproj/numaflow/commit/d84980e200c90c8dababba535752f0cec85fd408) fix: Generator source - Base64 decode user specified blob (#2757)
+ * [00027259](https://github.com/numaproj/numaflow/commit/0002725990ea71e26d95705bf95d4249609b0620) fix: potential deadlock in async data movement window manager implementation (#2755)
+ * [b404420b](https://github.com/numaproj/numaflow/commit/b404420bef1d5c6eb9835d7ec7d61547203472ce) feat: Unaligned Window for Async Data Movement (#2699)
+ * [6a62d8e7](https://github.com/numaproj/numaflow/commit/6a62d8e7a25eb23b6567ab39fd5b1213ce40ddde) feat: HTTP Basic auth support for Pulsar source/sink (#2749)
+ * [514ff0ed](https://github.com/numaproj/numaflow/commit/514ff0edc116ddb023b5516024566b609a02564d) fix(UI): pending and ackPending buffer info on Edges (#2746)
+ * [29eb00f7](https://github.com/numaproj/numaflow/commit/29eb00f70100bd34679a5e6351a7d3cf69eb5957) test(ui): partially fix UI test (#2726)
+ * [79733d9b](https://github.com/numaproj/numaflow/commit/79733d9b16c880ae58ef127f5be2743474a91038) feat: Pulsar Sink implementation (#2745)
+ * [71a3274e](https://github.com/numaproj/numaflow/commit/71a3274e60539c95f268cb0157a77b4d33684b6d) feat: insert id into generator payload (#2735)
+ * [dcd5a141](https://github.com/numaproj/numaflow/commit/dcd5a1412733114ab3810ea6539653643665750c) feat: http source should honor response status codes sent to clients (#2732)
+ * [296db5e7](https://github.com/numaproj/numaflow/commit/296db5e766d51f3b5ae81c823a27846daa40f414) feat(ci): enable lychee link checking for examples directory (#2729)
+ * [fabe1313](https://github.com/numaproj/numaflow/commit/fabe1313c0d18fe489136ef0396db281786d4e4f) fix: wait for inflight messages to be processed in transformer (#2731)
+ * [85579b63](https://github.com/numaproj/numaflow/commit/85579b63349f5c945795fba50c9d795206e83d6a) fix: revisit some metrics in rust (#2692)
+ * [13aff8f2](https://github.com/numaproj/numaflow/commit/13aff8f2ac2c319f3c10531418da6d69540b898b) feat: add serving http server (#2633)
+ * [c44e89ea](https://github.com/numaproj/numaflow/commit/c44e89eadafbaf9e001d1cfdb2d6f3f2ce133e21) fix: Wrong usage of get_consumer_from_stream (#2724)
+ * [1b1a0dac](https://github.com/numaproj/numaflow/commit/1b1a0dac016650808ef88f04926fe17f0193379b) fix: map udf metrics (#2588)
+ * [c026d4a1](https://github.com/numaproj/numaflow/commit/c026d4a12043150a4f836f59a84322e31d98b5ed) feat: Kafka Rust implementation - Oauth authentication (#2718)
+ * [3c7fc15f](https://github.com/numaproj/numaflow/commit/3c7fc15f940144d13bbe9ae68d6dd7e7c089a5c8) fix: mount runtime path for pipeline/vertex (#2716)
+ * [fd897c8d](https://github.com/numaproj/numaflow/commit/fd897c8dc9faf7db821580d3058d8fdc70c2c01b) chore(ci): lychee only for md files (#2713)
+ * [f6a42f25](https://github.com/numaproj/numaflow/commit/f6a42f2551f323b3dd7c0a8c7946ebf3d019719c) chore(ci): with more tests being added it is timing out (#2710)
+ * [3d4e7e77](https://github.com/numaproj/numaflow/commit/3d4e7e7733e2cfb244d701cf8a3fdab2462567d0) fix: source watermark publisher in async data movement (#2707)
+ * [811275f6](https://github.com/numaproj/numaflow/commit/811275f60012427a9c6196cad8bc0ab176664b6d) feat: optionally enable Wire compression to optimize network and ISB stability (#2709)
+ * [768ac947](https://github.com/numaproj/numaflow/commit/768ac9477e6531e145c01e609bf122dbe2cdbdfa) fix: flaky unit test (#2702)
+ * [f4334bac](https://github.com/numaproj/numaflow/commit/f4334bacad5580f94c4babce427bfe7af84775a8) fix: Rust HTTP source - More validations on HTTP headers (#2700)
+ * [2cab60c2](https://github.com/numaproj/numaflow/commit/2cab60c2a1ddde0f0272b6570144071a49c4e94b) fix: http port (#2697)
+ * [6d673fd3](https://github.com/numaproj/numaflow/commit/6d673fd3dc2769b5f3d10172fb74cb99bcbd960c) feat: Allow specifying JVM Kafka opts directly (#2689)
+ * [d14f685f](https://github.com/numaproj/numaflow/commit/d14f685ffd46e9772bb73c03fe731f623c0f9e7f) feat: http integration (#2691)
+ * [6bf5247a](https://github.com/numaproj/numaflow/commit/6bf5247a5c4c1189540c4860bdec5c732d075b63) fix: reduce UDF metrics (#2624)
+ * [ea48171e](https://github.com/numaproj/numaflow/commit/ea48171e193d1d4749b191c53284564989cb96c4) fix: typo in transformer config (#2688)
+ * [e6506094](https://github.com/numaproj/numaflow/commit/e6506094d20e9a51e442c34556525d6ecb1bbaa9) feat: extension for http source (#2687)
+ * [a1afdf15](https://github.com/numaproj/numaflow/commit/a1afdf15fc64c01fe3c68a15957346d0f5c3f24a) feat: Kafka sink implementation in Rust (#2672)
+ * [d4193580](https://github.com/numaproj/numaflow/commit/d4193580a223cb4b0505af9378b3cbebedb25124) fix: retry attempts calculation and logs in retry strategy (#2653)
+ * [07300118](https://github.com/numaproj/numaflow/commit/073001182180d91d20a94a40b836b85023a54b83) fix: return 400 if serving ID header contains '.' (#2669)
+ * [53a87ee7](https://github.com/numaproj/numaflow/commit/53a87ee7b2ab30ba60c7ec7b9293e6a32e3fc867) fix: conditional forwarding in Async Dataplane (#2668)
+ * [546561ab](https://github.com/numaproj/numaflow/commit/546561ab40f59d2e79d0ab2e9fee2402d594d9b1) feat: Rust pipeline metrics (#2666)
+ * [278a750d](https://github.com/numaproj/numaflow/commit/278a750da996311444e4efe5eb498c307d0ceead) feat: Aligned Window for Reduce Async Data Movement  (#2618)
+ * [af303896](https://github.com/numaproj/numaflow/commit/af3038961049b355a7c2a3793570abc93b1c3b83) feat: Kafka source - Rust implementation (#2636)
+ * [9c2e36ce](https://github.com/numaproj/numaflow/commit/9c2e36ce436c4a604441739b1acceac469cc1006) fix: potential incorrect k8s minor version (#2647)
+ * [54277d00](https://github.com/numaproj/numaflow/commit/54277d00ea25c22ebacfd6415d94ab371fac2fe6) feat: exponential backoff retry strategy for sink (#2614)
+ * [730c9ebc](https://github.com/numaproj/numaflow/commit/730c9ebc62b0306adbf2d9f7d2fc9a3e11eca0eb) fix: honour retry config in case of Pipeline in Rust (#2638)
+ * [39610720](https://github.com/numaproj/numaflow/commit/3961072057ccfc6b6b7c88f06ef7846aa5d48d6d) fix: broken retry strategy in sink (#2626)
+ * [2edbd0b0](https://github.com/numaproj/numaflow/commit/2edbd0b082508f46ba326e364d584f5c1904af35) fix: sink instantiation (#2627)
+ * [caab77bf](https://github.com/numaproj/numaflow/commit/caab77bfee2fc41822c59ee80cf4c8b74af151dd) feat: sqs sink (#2615)
+ * [9b341eff](https://github.com/numaproj/numaflow/commit/9b341effb6cd9bdb30e762e06250e826af03ac17) fix: source and transformer metrics (#2584)
+ * [5c2875ef](https://github.com/numaproj/numaflow/commit/5c2875ef2a79971ac9abf0b78e8f7f285c4affc3) feat: enable pod template support for serving deployment (#2620)
+ * [d5f22ec7](https://github.com/numaproj/numaflow/commit/d5f22ec73423bbf80baf32ced2d292e9607a6c93) fix: serving example (#2619)
+ * [76ecdc63](https://github.com/numaproj/numaflow/commit/76ecdc63b439e24b9acd025dfba5d47c47fed25b) fix: take only the base filename while sorting (#2616)
+ * [09742d25](https://github.com/numaproj/numaflow/commit/09742d25d18423c38cb2eecb70cb3297f3c73874) fix: idle watermark severity (#2613)
+ * [de8a98d6](https://github.com/numaproj/numaflow/commit/de8a98d6444b99cc47099c201572433c2ca43d91) doc: minor typo in accum doc (#2611)
+ * [d2a76cc0](https://github.com/numaproj/numaflow/commit/d2a76cc07386814981e496420c10ef0adcbff906) doc: accumulator doc (#2609)
+ * [2c055c0e](https://github.com/numaproj/numaflow/commit/2c055c0e38a155fb811f3bb53c04e09e24ce69ed) feat: PBQ for Reduce Async Data Movement (#2601)
+
+### Contributors
+
+ * Adarsh Jain
+ * Derek Wang
+ * Kyle Cooke
+ * Sidhant Kohli
+ * Sreekanth
+ * Takashi Menjo
+ * Vedant Gupta
+ * Vigith Maurice
+ * Yashash H L
+ * dependabot[bot]
+ * shrivardhan
+ * yogesh
+
+## v1.5.2 (2025-08-01)
+
+ * [27e8e0ca](https://github.com/numaproj/numaflow/commit/27e8e0cac1a4820110d7e9e2d886bf27e66c3ccb) Update manifests to v1.5.2
+ * [b5962c78](https://github.com/numaproj/numaflow/commit/b5962c7832373da5bf34e05cb514295e736e37f5) feat: unpause pipelines vertices and mvtx from min replicas (#2840)
+
+### Contributors
+
+ * Derek Wang
+ * Sidhant Kohli
+
+## v1.5.1 (2025-07-09)
+
+ * [4f70d50e](https://github.com/numaproj/numaflow/commit/4f70d50eab6b066c831025e5d494f3c5b6e3f69c) Update manifests to v1.5.1
+ * [b43ad840](https://github.com/numaproj/numaflow/commit/b43ad8406e4f0b13d96de7ea45c091ba789425de) fix: drain input channel during batch map shutdown (#2793)
+ * [018a4e60](https://github.com/numaproj/numaflow/commit/018a4e608172615e45ca42efe9a262710c7526d2) fix: publish larger watermark when offset is same
+ * [e17b4d0c](https://github.com/numaproj/numaflow/commit/e17b4d0c9d74dfdc012c4174fc3958c9c29a7d00) fix: exit code conditional rendering (#2789)
+ * [79f9a756](https://github.com/numaproj/numaflow/commit/79f9a7568ada48f74b67f7d51d2b4ca191649ead) fix: add `-mv-` in mvtx name for pod memory/cpu metrics (#2784)
+ * [bce5f53a](https://github.com/numaproj/numaflow/commit/bce5f53a15675a9f577e7c628fcaa07136ce5fb9) fix: use kafka timestamp as event time (#2781)
+ * [3108bf94](https://github.com/numaproj/numaflow/commit/3108bf94705b0375ca98848adfff1560efd2262a) Fix: Jetstream source - Unlimited reconnects (#2772)
+ * [737b7041](https://github.com/numaproj/numaflow/commit/737b704172ac5b03c7556ba50dd5de5bb92c469e) fix: Generator source - Base64 decode user specified blob (#2757)
+ * [94329c32](https://github.com/numaproj/numaflow/commit/94329c32636b1f198437749a4e0faac608fb9d3c) fix: revert golang to 1.23.1
+ * [0eda460c](https://github.com/numaproj/numaflow/commit/0eda460c3e7ca6a274832c620ecafacb5c81232a) fix: jetstream source should use published timestamp (#2777)
+
+### Contributors
+
+ * Adarsh Jain
+ * Sreekanth
+ * Vedant Gupta
+ * Vigith Maurice
+ * Yashash H L
+
+## v1.5.0 (2025-06-18)
+
+ * [96790b95](https://github.com/numaproj/numaflow/commit/96790b95a604da675133b4432dc14240ead7ec9a) Update manifests to v1.5.0
+ * [7dc6b95b](https://github.com/numaproj/numaflow/commit/7dc6b95b50e5bfcfb1bdb3bae1b96f0e8290b1c6) feat: insert id into generator payload (#2735)
+ * [cbcfe7a1](https://github.com/numaproj/numaflow/commit/cbcfe7a1e7d3e50396cc61743b0763f17eefc25c) feat: http source should honor response status codes sent to clients (#2732)
+ * [8c104a56](https://github.com/numaproj/numaflow/commit/8c104a56c9e655a616fa407973466109b12dbfd0) feat(ci): enable lychee link checking for examples directory (#2729)
+ * [06c011cb](https://github.com/numaproj/numaflow/commit/06c011cb22072dcbe3d81ae9a75ba23d840ca9f2) fix: wait for inflight messages to be processed in transformer (#2731)
+ * [2abd9d3d](https://github.com/numaproj/numaflow/commit/2abd9d3d193647e2bbdf61efa094aeba84acc1ae) fix: revisit some metrics in rust (#2692)
+ * [7b634dd9](https://github.com/numaproj/numaflow/commit/7b634dd955202afb7525fa1d2c328e202328d7f4) feat: add serving http server (#2633)
+ * [b85f6d33](https://github.com/numaproj/numaflow/commit/b85f6d33fbac2a3bbf827b0b918ac7bfa8351559) fix: Wrong usage of get_consumer_from_stream (#2724)
+ * [5dbf2fac](https://github.com/numaproj/numaflow/commit/5dbf2fac8be1a44358cac347cbbef7f0b02f863d) fix: map udf metrics (#2588)
+ * [74335a29](https://github.com/numaproj/numaflow/commit/74335a291f09b46bcc3bb118c0236d2bf39cb5b8) feat: Kafka Rust implementation - Oauth authentication (#2718)
+ * [565293ce](https://github.com/numaproj/numaflow/commit/565293ce1401f16a63acfafac2bd159971559ab9) fix: mount runtime path for pipeline/vertex (#2716)
+ * [0f8a461e](https://github.com/numaproj/numaflow/commit/0f8a461e14c73a4fb5a1a3d5868d2e4618cdb0a5) chore(ci): lychee only for md files (#2713)
+ * [3961e47e](https://github.com/numaproj/numaflow/commit/3961e47e88e1176e68987596f57f4142f2b349ee) chore(ci): with more tests being added it is timing out (#2710)
+ * [ca9ad694](https://github.com/numaproj/numaflow/commit/ca9ad694333920e7c18857ff07fa5a4aab6b9f49) fix: source watermark publisher in async data movement (#2707)
+ * [8c2b564f](https://github.com/numaproj/numaflow/commit/8c2b564f3a1f69d60d4058bce4aa4a819fdc85e7) feat: optionally enable Wire compression to optimize network and ISB stability (#2709)
+ * [435ea827](https://github.com/numaproj/numaflow/commit/435ea82718604be3084ea1c4cfcd46d3d0a48a63) fix: flaky unit test (#2702)
+ * [aee84310](https://github.com/numaproj/numaflow/commit/aee84310a65d8bd98defe7243f2d2d216830f3d5) fix: Rust HTTP source - More validations on HTTP headers (#2700)
+ * [652d4547](https://github.com/numaproj/numaflow/commit/652d454740b46ca57befc78593dc8af68ef2f3ff) fix: http port (#2697)
+ * [c3e45031](https://github.com/numaproj/numaflow/commit/c3e45031cf8ff7c2532b539135cfa73fadb907c5) feat: Allow specifying JVM Kafka opts directly (#2689)
+ * [10c041c8](https://github.com/numaproj/numaflow/commit/10c041c86d8de3793abdde1c5ad52b0b7d230af1) feat: http integration (#2691)
+ * [6b84334e](https://github.com/numaproj/numaflow/commit/6b84334e52a66bead10663a6be27fd187aa71f49) fix: reduce UDF metrics (#2624)
+ * [34a2c9a8](https://github.com/numaproj/numaflow/commit/34a2c9a81721c8639da549cb05c2751f1837795b) fix: typo in transformer config (#2688)
+ * [11a5b6cd](https://github.com/numaproj/numaflow/commit/11a5b6cde0f3d49aebdbca1e3b390cc0fa751882) feat: extension for http source (#2687)
+ * [046d1f7d](https://github.com/numaproj/numaflow/commit/046d1f7d3b25903b17f49f0697470a29d457fab3) feat: Kafka sink implementation in Rust (#2672)
+ * [770a7a29](https://github.com/numaproj/numaflow/commit/770a7a29af821a2a7472705474e4ce6c33e74ac4) fix: retry attempts calculation and logs in retry strategy (#2653)
+
+### Contributors
+
+ * Adarsh Jain
+ * Derek Wang
+ * Sreekanth
+ * Takashi Menjo
+ * Vigith Maurice
+ * Yashash H L
+ * shrivardhan
+ * yogesh
+
+## v1.5.0-rc5 (2025-05-24)
+
+ * [7a8d496a](https://github.com/numaproj/numaflow/commit/7a8d496a3acd375180ffe2023e373e418528441e) Update manifests to v1.5.0-rc5
+ * [4389a6f6](https://github.com/numaproj/numaflow/commit/4389a6f6fed4a31bec5802d2411a1e08ab95ac45) fix: return 400 if serving ID header contains '.' (#2669)
+ * [690ea0dd](https://github.com/numaproj/numaflow/commit/690ea0dd68da068b20fc53febccf6c62c67b387a) fix: conditional forwarding in Async Dataplane (#2668)
+ * [954cc5bb](https://github.com/numaproj/numaflow/commit/954cc5bb037dd354d698fdd1c59f4eb9385e5ce5) feat: Rust pipeline metrics (#2666)
+ * [e053a5ce](https://github.com/numaproj/numaflow/commit/e053a5cec6004cc9afee928fa5f752a0d889a1d5) feat: Aligned Window for Reduce Async Data Movement  (#2618)
+ * [5a3d3201](https://github.com/numaproj/numaflow/commit/5a3d320147ed84bcd30251cd15de6692e298d736) feat: Kafka source - Rust implementation (#2636)
+
+### Contributors
+
+ * Adarsh Jain
+ * Derek Wang
+ * Sreekanth
+ * Vigith Maurice
+ * Yashash H L
+
+## v1.5.0-rc4 (2025-05-20)
+
+ * [9f52ffc6](https://github.com/numaproj/numaflow/commit/9f52ffc6a4bba38f077fcaeb04b4e3080006935c) Update manifests to v1.5.0-rc4
+
+### Contributors
+
+ * Derek Wang
+
 ## v1.5.0-rc3 (2025-05-18)
 
  * [40839123](https://github.com/numaproj/numaflow/commit/408391237923536f482099a1040f02b104832375) Update manifests to v1.5.0-rc3
@@ -1274,7 +1478,7 @@
 
 ## v0.9.0-rc2 (2023-07-13)
 
- * [d0df669a](https://github.com/numaproj/numaflow/commit/d0df669a8bb9f07fffe1d5add792444ebfb33835) Update manifests to v0.9.0-rc2
+ * [d0df669a8](https://github.com/numaproj/numaflow/commit/d0df669a8bb9f07fffe1d5add792444ebfb33835) Update manifests to v0.9.0-rc2
  * [c8aaeff8](https://github.com/numaproj/numaflow/commit/c8aaeff8ca796b43279d9b784883d632bf4b8d32) fix: use windower to fetch next window yet to be closed (#850)
  * [bcda8dcf](https://github.com/numaproj/numaflow/commit/bcda8dcfcdbde7821c201b37f5d5ce99148a341c) feat: implement optional validation webhook. Fixes #817. (#832)
  * [e605504d](https://github.com/numaproj/numaflow/commit/e605504d40fce533c64569d0d30a8533df62299d) chore(deps): bump semver from 6.3.0 to 6.3.1 in /ui (#845)

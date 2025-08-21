@@ -126,14 +126,17 @@ describe("index", () => {
     });
   });
   it("timeAgo", () => {
-    // flaky test
-    // expect(timeAgo(new Date().toISOString())).toEqual("Just now");
-    expect(timeAgo(new Date(Date.now() - 10000).toISOString())).toEqual(
-      "10 seconds ago"
-    );
-    expect(timeAgo(new Date(Date.now() + 1000).toISOString())).toEqual(
-      "1 seconds from now"
-    );
+    // Use fake timers to eliminate flakiness and make tests deterministic
+    jest.useFakeTimers().setSystemTime(new Date("2025-01-01T00:00:00.000Z"));
+    
+    // Test future time
+    expect(timeAgo("2025-01-01T00:00:10.000Z")).toEqual("10 seconds from now");
+    
+    // Test past time
+    expect(timeAgo("2024-12-31T23:59:50.000Z")).toEqual("10 seconds ago");
+    
+    // Restore real timers
+    jest.useRealTimers();
   });
 
   it("getISB", () => {
@@ -146,17 +149,7 @@ describe("index", () => {
         },
       },
     };
-    const isbSpecRedis = {
-      redis: {
-        version: "latest",
-        replicas: 3,
-        persistence: {
-          volumeSize: "3Gi",
-        },
-      },
-    };
     expect(GetISBType(isbSpec)).toEqual("jetstream");
-    expect(GetISBType(isbSpecRedis)).toEqual("redis");
   });
 
   it("DurationString", () => {

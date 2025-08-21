@@ -52,6 +52,9 @@ type AbstractSink struct {
 	// SQS sink is used to write the data to the AWS SQS.
 	// +optional
 	Sqs *SqsSink `json:"sqs,omitempty" protobuf:"bytes,6,opt,name=sqs"`
+	// Pulsar sink is used to write the data to the Apache Pulsar.
+	// +optional
+	Pulsar *PulsarSink `json:"pulsar,omitempty" protobuf:"bytes,7,opt,name=pulsar"`
 }
 
 func (s Sink) getContainers(req getContainerReq) ([]corev1.Container, []corev1.Container, error) {
@@ -70,6 +73,8 @@ func (s Sink) getContainers(req getContainerReq) ([]corev1.Container, []corev1.C
 }
 
 func (s Sink) getMainContainer(req getContainerReq) corev1.Container {
+	// TODO: Default runtime is rust in 1.6, we will remove this env in 1.7
+	req.env = append(req.env, corev1.EnvVar{Name: EnvNumaflowRuntime, Value: "rust"})
 	return containerBuilder{}.init(req).args("processor", "--type="+string(VertexTypeSink), "--isbsvc-type="+string(req.isbSvcType)).build()
 }
 

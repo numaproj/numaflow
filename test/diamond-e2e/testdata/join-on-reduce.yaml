@@ -18,7 +18,7 @@ spec:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
           image: quay.io/numaio/numaflow-go/map-even-odd:stable
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
     - name: atoi-1
       partitions: 2
       scale:
@@ -27,14 +27,14 @@ spec:
         container:
           # Tell the input number is even or odd, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/even_odd
           image: quay.io/numaio/numaflow-go/map-even-odd:stable
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
     - name: compute-sum
       partitions: 2
       udf:
         container:
           # Compute the sum, see https://github.com/numaproj/numaflow-go/tree/main/pkg/reducer/examples/sum
           image: quay.io/numaio/numaflow-go/reduce-sum:stable
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
         groupBy:
           window:
             fixed:
@@ -43,7 +43,7 @@ spec:
           storage:
             persistentVolumeClaim:
               volumeSize: 2Gi
-              accessMode: ReadWriteOnce
+              accessMode: ReadWriteOncePod
     - name: sink
       scale:
         min: 1
@@ -52,7 +52,7 @@ spec:
           container:
             # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis_sink
             image: quay.io/numaio/numaflow-go/redis-sink:stable
-            imagePullPolicy: Always
+            imagePullPolicy: IfNotPresent
             env:
               - name: SINK_HASH_KEY
                 # The key is set in the format of "pipeline_name-vertex_name"

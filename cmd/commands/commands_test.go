@@ -18,8 +18,6 @@ package commands
 
 import (
 	"bytes"
-	"encoding/base64"
-	"encoding/json"
 	"io"
 	"os"
 	"testing"
@@ -27,8 +25,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func Test_Commands(t *testing.T) {
@@ -103,69 +99,4 @@ func Test_Commands(t *testing.T) {
 		assert.Equal(t, "string", cmd.Flag("managed-namespace").Value.Type())
 		assert.Equal(t, "bool", cmd.Flag("namespaced").Value.Type())
 	})
-
-	t.Run("BuiltinUDF", func(t *testing.T) {
-		cmd := NewBuiltinUDFCommand()
-		assert.True(t, cmd.HasLocalFlags())
-		assert.Equal(t, "builtin-udf", cmd.Use)
-		assert.Equal(t, "string", cmd.Flag("name").Value.Type())
-		assert.Equal(t, "stringSlice", cmd.Flag("args").Value.Type())
-		cmd.SetArgs([]string{"--name="})
-		err := cmd.Execute()
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "function name missing")
-	})
-
-	t.Run("processor", func(t *testing.T) {
-		cmd := NewProcessorCommand()
-		assert.True(t, cmd.HasLocalFlags())
-		assert.Equal(t, "processor", cmd.Use)
-		assert.Equal(t, "string", cmd.Flag("isbsvc-type").Value.Type())
-		assert.Equal(t, "string", cmd.Flag("type").Value.Type())
-		err := cmd.Execute()
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), dfv1.EnvVertexObject+"' not defined")
-		os.Setenv(dfv1.EnvVertexObject, "xxxxx")
-		err = cmd.Execute()
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to decode vertex string")
-		os.Setenv(dfv1.EnvVertexObject, generateEncodedVertexSpecs())
-		err = cmd.Execute()
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), dfv1.EnvPod+"' not defined")
-		os.Setenv(dfv1.EnvPod, "xxxxx")
-		err = cmd.Execute()
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), dfv1.EnvReplica+"' not defined")
-		os.Setenv(dfv1.EnvReplica, "$$$")
-		err = cmd.Execute()
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid replica")
-		os.Setenv(dfv1.EnvReplica, "2")
-		cmd.SetArgs([]string{"--type=nonono"})
-		err = cmd.Execute()
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "unrecognized processor type")
-	})
-}
-
-func generateEncodedVertexSpecs() string {
-	replicas := int32(1)
-	v := &dfv1.Vertex{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "test-ns",
-			Name:      "test-name",
-		},
-		Spec: dfv1.VertexSpec{
-			Replicas:     &replicas,
-			FromEdges:    []dfv1.CombinedEdge{{Edge: dfv1.Edge{From: "input", To: "name"}}},
-			ToEdges:      []dfv1.CombinedEdge{{Edge: dfv1.Edge{From: "name", To: "output"}}},
-			PipelineName: "test-pl",
-			AbstractVertex: dfv1.AbstractVertex{
-				Name: "name",
-			},
-		},
-	}
-	vertexBytes, _ := json.Marshal(v)
-	return base64.StdEncoding.EncodeToString(vertexBytes)
 }

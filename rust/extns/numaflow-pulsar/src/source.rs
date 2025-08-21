@@ -10,9 +10,10 @@ use tokio::{
     sync::{mpsc, oneshot},
     time,
 };
-use tonic::codegen::tokio_stream::StreamExt;
+use tokio_stream::StreamExt;
+use tracing::info;
 
-use crate::{Error, Result};
+use crate::{Error, PulsarAuth, Result};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PulsarSourceConfig {
@@ -22,21 +23,6 @@ pub struct PulsarSourceConfig {
     pub subscription: String,
     pub max_unack: usize,
     pub auth: Option<PulsarAuth>,
-}
-
-#[derive(Clone, PartialEq)]
-pub enum PulsarAuth {
-    JWT(String),
-}
-
-impl std::fmt::Debug for PulsarAuth {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PulsarAuth::JWT(token) => {
-                write!(f, "{}****{}", &token[..6], &token[token.len() - 6..])
-            }
-        }
-    }
 }
 
 enum ConsumerActorMessage {
@@ -80,12 +66,22 @@ impl ConsumerReaderActor {
         // Rustls doesn't allow accepting self-signed certs: https://github.com/streamnative/pulsar-rs/blob/715411cb365932c379d4b5d0a8fde2ac46c54055/src/connection.rs#L912
         // The `with_allow_insecure_connection()` option has no effect
         let mut pulsar = Pulsar::builder(&config.pulsar_server_addr, TokioExecutor);
-        if let Some(PulsarAuth::JWT(token)) = config.auth {
-            let auth_token = Authentication {
-                name: "token".into(),
-                data: token.into(),
-            };
-            pulsar = pulsar.with_auth(auth_token);
+        match config.auth {
+            Some(PulsarAuth::JWT(token)) => {
+                let auth_token = Authentication {
+                    name: "token".into(),
+                    data: token.into(),
+                };
+                pulsar = pulsar.with_auth(auth_token);
+            }
+            Some(PulsarAuth::HTTPBasic { username, password }) => {
+                let auth_token = Authentication {
+                    name: "basic".into(),
+                    data: format!("{username}:{password}").into(),
+                };
+                pulsar = pulsar.with_auth(auth_token);
+            }
+            None => info!("No authentication mechanism specified for Pulsar"),
         }
 
         let pulsar: Pulsar<_> = pulsar

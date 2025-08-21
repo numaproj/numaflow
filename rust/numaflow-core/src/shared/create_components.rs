@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::config::components::reduce::ReducerType;
+use crate::config::components::reduce::UnalignedWindowType;
 use crate::config::components::sink::{SinkConfig, SinkType};
 use crate::config::components::source::{SourceConfig, SourceType};
 use crate::config::components::transformer::TransformerConfig;
@@ -12,10 +12,12 @@ use crate::config::pipeline::{
 };
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
+use crate::reduce::reducer::WindowManager;
 use crate::reduce::reducer::aligned::user_defined::UserDefinedAlignedReduce;
-use crate::reduce::reducer::aligned::windower::WindowManager;
+use crate::reduce::reducer::unaligned::user_defined::UserDefinedUnalignedReduce;
+use crate::reduce::reducer::unaligned::user_defined::accumulator::UserDefinedAccumulator;
+use crate::reduce::reducer::unaligned::user_defined::session::UserDefinedSessionReduce;
 use crate::shared::grpc;
-use crate::shared::server_info::{ContainerType, Protocol, sdk_server_info};
 use crate::sink::serve::ServingStore;
 use crate::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
 use crate::source::Source;
@@ -23,6 +25,7 @@ use crate::source::generator::new_generator;
 use crate::source::http::CoreHttpSource;
 use crate::source::jetstream::new_jetstream_source;
 use crate::source::kafka::new_kafka_source;
+use crate::source::nats::new_nats_source;
 use crate::source::pulsar::new_pulsar_source;
 use crate::source::sqs::new_sqs_source;
 use crate::source::user_defined::new_source;
@@ -32,11 +35,16 @@ use crate::watermark::isb::ISBWatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
 use crate::{config, error, metrics, source};
 use async_nats::jetstream::Context;
+use numaflow_models::models::{NatsAuth, Tls};
+use numaflow_nats::{TlsClientAuthCerts, TlsConfig};
+use numaflow_pb::clients::accumulator::accumulator_client::AccumulatorClient;
 use numaflow_pb::clients::map::map_client::MapClient;
 use numaflow_pb::clients::reduce::reduce_client::ReduceClient;
+use numaflow_pb::clients::sessionreduce::session_reduce_client::SessionReduceClient;
 use numaflow_pb::clients::sink::sink_client::SinkClient;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
+use numaflow_shared::server_info::{ContainerType, Protocol, sdk_server_info};
 use numaflow_sqs::sink::SqsSinkBuilder;
 use tokio_util::sync::CancellationToken;
 
@@ -111,12 +119,21 @@ pub(crate) async fn create_sink_writer(
             )
         }
         SinkType::Kafka(sink_config) => {
-            let sink_config = *sink_config.clone();
+            let sink_config = *sink_config;
             let kafka_sink = numaflow_kafka::sink::new_sink(sink_config)?;
             SinkWriterBuilder::new(
                 batch_size,
                 read_timeout,
                 SinkClientType::Kafka(kafka_sink),
+                tracker_handle,
+            )
+        }
+        SinkType::Pulsar(pulsar_sink_config) => {
+            let pulsar_sink = numaflow_pulsar::sink::new_sink(*pulsar_sink_config).await?;
+            SinkWriterBuilder::new(
+                batch_size,
+                read_timeout,
+                SinkClientType::Pulsar(Box::new(pulsar_sink)),
                 tracker_handle,
             )
         }
@@ -181,6 +198,13 @@ pub(crate) async fn create_sink_writer(
                     .build()
                     .await?)
             }
+            SinkType::Pulsar(pulsar_sink_config) => {
+                let pulsar_sink = numaflow_pulsar::sink::new_sink(*pulsar_sink_config).await?;
+                Ok(sink_writer_builder
+                    .fb_sink_client(SinkClientType::Pulsar(Box::new(pulsar_sink)))
+                    .build()
+                    .await?)
+            }
         };
     }
 
@@ -194,47 +218,48 @@ pub(crate) async fn create_sink_writer(
 /// Creates a transformer if it is configured
 pub(crate) async fn create_transformer(
     batch_size: usize,
+    graceful_timeout: Duration,
     transformer_config: Option<TransformerConfig>,
     tracker_handle: TrackerHandle,
     cln_token: CancellationToken,
 ) -> error::Result<Option<Transformer>> {
-    if let Some(transformer_config) = transformer_config {
-        if let config::components::transformer::TransformerType::UserDefined(ud_transformer) =
+    if let Some(transformer_config) = transformer_config
+        && let config::components::transformer::TransformerType::UserDefined(ud_transformer) =
             &transformer_config.transformer_type
-        {
-            let server_info = sdk_server_info(
-                ud_transformer.server_info_path.clone().into(),
-                cln_token.clone(),
-            )
-            .await?;
-            let metric_labels = metrics::sdk_info_labels(
-                config::get_component_type().to_string(),
-                config::get_vertex_name().to_string(),
-                server_info.language,
-                server_info.version,
-                ContainerType::SourceTransformer.to_string(),
-            );
-            metrics::global_metrics()
-                .sdk_info
-                .get_or_create(&metric_labels)
-                .set(1);
+    {
+        let server_info = sdk_server_info(
+            ud_transformer.server_info_path.clone().into(),
+            cln_token.clone(),
+        )
+        .await?;
+        let metric_labels = metrics::sdk_info_labels(
+            config::get_component_type().to_string(),
+            config::get_vertex_name().to_string(),
+            server_info.language,
+            server_info.version,
+            ContainerType::SourceTransformer.to_string(),
+        );
+        metrics::global_metrics()
+            .sdk_info
+            .get_or_create(&metric_labels)
+            .set(1);
 
-            let mut transformer_grpc_client = SourceTransformClient::new(
-                grpc::create_rpc_channel(ud_transformer.socket_path.clone().into()).await?,
+        let mut transformer_grpc_client = SourceTransformClient::new(
+            grpc::create_rpc_channel(ud_transformer.socket_path.clone().into()).await?,
+        )
+        .max_encoding_message_size(ud_transformer.grpc_max_message_size)
+        .max_decoding_message_size(ud_transformer.grpc_max_message_size);
+        grpc::wait_until_transformer_ready(&cln_token, &mut transformer_grpc_client).await?;
+        return Ok(Some(
+            Transformer::new(
+                batch_size,
+                transformer_config.concurrency,
+                graceful_timeout,
+                transformer_grpc_client.clone(),
+                tracker_handle,
             )
-            .max_encoding_message_size(ud_transformer.grpc_max_message_size)
-            .max_decoding_message_size(ud_transformer.grpc_max_message_size);
-            grpc::wait_until_transformer_ready(&cln_token, &mut transformer_grpc_client).await?;
-            return Ok(Some(
-                Transformer::new(
-                    batch_size,
-                    transformer_config.concurrency,
-                    transformer_grpc_client.clone(),
-                    tracker_handle,
-                )
-                .await?,
-            ));
-        }
+            .await?,
+        ));
     }
     Ok(None)
 }
@@ -242,6 +267,7 @@ pub(crate) async fn create_transformer(
 pub(crate) async fn create_mapper(
     batch_size: usize,
     read_timeout: Duration,
+    graceful_timeout: Duration,
     map_config: MapVtxConfig,
     tracker_handle: TrackerHandle,
     cln_token: CancellationToken,
@@ -287,6 +313,7 @@ pub(crate) async fn create_mapper(
                         server_info.get_map_mode().unwrap_or(MapMode::Unary),
                         batch_size,
                         read_timeout,
+                        graceful_timeout,
                         map_config.concurrency,
                         map_grpc_client.clone(),
                         tracker_handle,
@@ -319,6 +346,7 @@ pub(crate) async fn create_mapper(
                         server_info.get_map_mode().unwrap_or(MapMode::Unary),
                         batch_size,
                         read_timeout,
+                        graceful_timeout,
                         map_config.concurrency,
                         map_grpc_client.clone(),
                         tracker_handle,
@@ -327,7 +355,6 @@ pub(crate) async fn create_mapper(
                 }
             }
         }
-        MapType::Builtin(_) => Err(Error::Mapper("Builtin mapper is not supported".to_string())),
     }
 }
 
@@ -385,7 +412,7 @@ pub async fn create_source(
                 new_source(source_grpc_client.clone(), batch_size, read_timeout).await?;
             Ok(Source::new(
                 batch_size,
-                source::SourceType::UserDefinedSource(ud_read, ud_ack, ud_lag),
+                source::SourceType::UserDefinedSource(Box::new(ud_read), Box::new(ud_ack), ud_lag),
                 tracker_handle,
                 source_config.read_ahead,
                 transformer,
@@ -427,11 +454,27 @@ pub async fn create_source(
             ))
         }
         SourceType::Jetstream(jetstream_config) => {
-            let jetstream =
-                new_jetstream_source(jetstream_config.clone(), batch_size, read_timeout).await?;
+            let jetstream = new_jetstream_source(
+                jetstream_config.clone(),
+                batch_size,
+                read_timeout,
+                cln_token.clone(),
+            )
+            .await?;
             Ok(Source::new(
                 batch_size,
                 source::SourceType::Jetstream(jetstream),
+                tracker_handle,
+                source_config.read_ahead,
+                transformer,
+                watermark_handle,
+            ))
+        }
+        SourceType::Nats(nats_config) => {
+            let nats = new_nats_source(nats_config.clone(), batch_size, read_timeout).await?;
+            Ok(Source::new(
+                batch_size,
+                source::SourceType::Nats(nats),
                 tracker_handle,
                 source_config.read_ahead,
                 transformer,
@@ -467,25 +510,201 @@ pub async fn create_source(
 
 /// Creates a user-defined aligned reducer client
 pub(crate) async fn create_aligned_reducer(
-    reducer_config: config::components::reduce::ReducerConfig,
+    reducer_config: config::components::reduce::AlignedReducerConfig,
+    cln_token: CancellationToken,
 ) -> crate::Result<UserDefinedAlignedReduce> {
-    // TODO: add server-info metric and check compatibility
-    match reducer_config.reducer_type {
-        ReducerType::UserDefined(config) => {
-            // Create gRPC channel
-            let channel = grpc::create_rpc_channel(config.socket_path.into()).await?;
+    let server_info = sdk_server_info(
+        reducer_config.user_defined_config.server_info_path.into(),
+        cln_token.clone(),
+    )
+    .await?;
 
-            // Create client
-            let client = UserDefinedAlignedReduce::new(
-                ReduceClient::new(channel)
-                    .max_encoding_message_size(config.grpc_max_message_size)
-                    .max_decoding_message_size(config.grpc_max_message_size),
+    let metric_labels = metrics::sdk_info_labels(
+        config::get_component_type().to_string(),
+        config::get_vertex_name().to_string(),
+        server_info.language,
+        server_info.version,
+        "aligned-reducer".to_string(),
+    );
+    metrics::global_metrics()
+        .sdk_info
+        .get_or_create(&metric_labels)
+        .set(1);
+
+    // Create gRPC channel
+    let channel =
+        grpc::create_rpc_channel(reducer_config.user_defined_config.socket_path.into()).await?;
+
+    // Create client
+    let client = UserDefinedAlignedReduce::new(
+        ReduceClient::new(channel)
+            .max_encoding_message_size(reducer_config.user_defined_config.grpc_max_message_size)
+            .max_decoding_message_size(reducer_config.user_defined_config.grpc_max_message_size),
+    )
+    .await;
+
+    Ok(client)
+}
+
+pub(crate) async fn create_unaligned_reducer(
+    reducer_config: config::components::reduce::UnalignedReducerConfig,
+    cln_token: CancellationToken,
+) -> crate::Result<UserDefinedUnalignedReduce> {
+    let server_info = sdk_server_info(
+        reducer_config.user_defined_config.server_info_path.into(),
+        cln_token.clone(),
+    )
+    .await?;
+
+    let metric_labels = metrics::sdk_info_labels(
+        config::get_component_type().to_string(),
+        config::get_vertex_name().to_string(),
+        server_info.language,
+        server_info.version,
+        "unaligned-reducer".to_string(),
+    );
+    metrics::global_metrics()
+        .sdk_info
+        .get_or_create(&metric_labels)
+        .set(1);
+
+    // Create gRPC channel
+    let channel =
+        grpc::create_rpc_channel(reducer_config.user_defined_config.socket_path.into()).await?;
+
+    match reducer_config.window_config.window_type {
+        UnalignedWindowType::Accumulator(_) => Ok(UserDefinedUnalignedReduce::Accumulator(
+            UserDefinedAccumulator::new(
+                AccumulatorClient::new(channel)
+                    .max_encoding_message_size(
+                        reducer_config.user_defined_config.grpc_max_message_size,
+                    )
+                    .max_decoding_message_size(
+                        reducer_config.user_defined_config.grpc_max_message_size,
+                    ),
             )
-            .await;
-
-            Ok(client)
-        }
+            .await,
+        )),
+        UnalignedWindowType::Session(_) => Ok(UserDefinedUnalignedReduce::Session(
+            UserDefinedSessionReduce::new(
+                SessionReduceClient::new(channel)
+                    .max_encoding_message_size(
+                        reducer_config.user_defined_config.grpc_max_message_size,
+                    )
+                    .max_decoding_message_size(
+                        reducer_config.user_defined_config.grpc_max_message_size,
+                    ),
+            )
+            .await,
+        )),
     }
+}
+
+pub(crate) fn parse_nats_auth(
+    auth: Option<Box<NatsAuth>>,
+) -> Result<Option<numaflow_nats::NatsAuth>, Error> {
+    match auth {
+        Some(auth) => {
+            if let Some(basic_auth) = auth.basic {
+                let user_secret_selector = &basic_auth.user.ok_or_else(|| {
+                    Error::Config("Username can not be empty for basic auth".into())
+                })?;
+                let username = get_secret_from_volume(
+                    &user_secret_selector.name,
+                    &user_secret_selector.key,
+                )
+                .map_err(|e| Error::Config(format!("Failed to get username secret: {e:?}")))?;
+
+                let password_secret_selector = &basic_auth.password.ok_or_else(|| {
+                    Error::Config("Password can not be empty for basic auth".into())
+                })?;
+                let password = get_secret_from_volume(
+                    &password_secret_selector.name,
+                    &password_secret_selector.key,
+                )
+                .map_err(|e| Error::Config(format!("Failed to get password secret: {e:?}")))?;
+
+                Ok(Some(numaflow_nats::NatsAuth::Basic { username, password }))
+            } else if let Some(nkey_auth) = auth.nkey {
+                let nkey = get_secret_from_volume(&nkey_auth.name, &nkey_auth.key)
+                    .map_err(|e| Error::Config(format!("Failed to get nkey secret: {e:?}")))?;
+                Ok(Some(numaflow_nats::NatsAuth::NKey(nkey)))
+            } else if let Some(token_auth) = auth.token {
+                let token = get_secret_from_volume(&token_auth.name, &token_auth.key)
+                    .map_err(|e| Error::Config(format!("Failed to get token secret: {e:?}")))?;
+                Ok(Some(numaflow_nats::NatsAuth::Token(token)))
+            } else {
+                Err(Error::Config(
+                    "Authentication is specified, but auth setting is empty".into(),
+                ))
+            }
+        }
+        None => Ok(None),
+    }
+}
+
+pub(crate) fn parse_tls_config(tls_config: Option<Box<Tls>>) -> Result<Option<TlsConfig>, Error> {
+    let Some(tls_config) = tls_config else {
+        return Ok(None);
+    };
+
+    let tls_skip_verify = tls_config.insecure_skip_verify.unwrap_or(false);
+    if tls_skip_verify {
+        return Ok(Some(TlsConfig {
+            insecure_skip_verify: true,
+            ca_cert: None,
+            client_auth: None,
+        }));
+    }
+
+    let ca_cert = tls_config
+        .ca_cert_secret
+        .map(|ca_cert_secret| {
+            crate::shared::create_components::get_secret_from_volume(
+                &ca_cert_secret.name,
+                &ca_cert_secret.key,
+            )
+            .map_err(|e| Error::Config(format!("Failed to get CA cert secret: {e:?}")))
+        })
+        .transpose()?;
+
+    let client_auth = match tls_config.cert_secret {
+        Some(client_cert_secret) => {
+            let client_cert = crate::shared::create_components::get_secret_from_volume(
+                &client_cert_secret.name,
+                &client_cert_secret.key,
+            )
+            .map_err(|e| Error::Config(format!("Failed to get client cert secret: {e:?}")))?;
+
+            let Some(private_key_secret) = tls_config.key_secret else {
+                return Err(Error::Config(
+                    "Client cert is specified for TLS authentication, but private key is not specified".into(),
+                ));
+            };
+
+            let client_cert_private_key = crate::shared::create_components::get_secret_from_volume(
+                &private_key_secret.name,
+                &private_key_secret.key,
+            )
+            .map_err(|e| {
+                Error::Config(format!(
+                    "Failed to get client cert private key secret: {e:?}"
+                ))
+            })?;
+
+            Some(TlsClientAuthCerts {
+                client_cert,
+                client_cert_private_key,
+            })
+        }
+        None => None,
+    };
+
+    Ok(Some(TlsConfig {
+        insecure_skip_verify: false,
+        ca_cert,
+        client_auth,
+    }))
 }
 
 #[cfg(test)]
@@ -501,6 +720,35 @@ pub(crate) fn get_secret_from_volume(name: &str, key: &str) -> Result<String, St
     let val = std::fs::read_to_string(path.clone())
         .map_err(|e| format!("Reading secret from file {path}: {e:?}"))?;
     Ok(val.trim().into())
+}
+
+/// Creates an ISBWatermarkHandle if watermark is enabled in the configuration
+pub async fn create_edge_watermark_handle(
+    config: &PipelineConfig,
+    js_context: &Context,
+    cln_token: &CancellationToken,
+    window_manager: Option<WindowManager>,
+    tracker_handle: TrackerHandle,
+) -> error::Result<Option<ISBWatermarkHandle>> {
+    match &config.watermark_config {
+        Some(WatermarkConfig::Edge(edge_config)) => {
+            let handle = ISBWatermarkHandle::new(
+                config.vertex_name,
+                config.replica,
+                config.vertex_type,
+                config.read_timeout,
+                js_context.clone(),
+                edge_config,
+                &config.to_vertex_config,
+                cln_token.clone(),
+                window_manager,
+                tracker_handle,
+            )
+            .await?;
+            Ok(Some(handle))
+        }
+        _ => Ok(None),
+    }
 }
 
 #[cfg(test)]
@@ -645,31 +893,5 @@ mod tests {
         source_server_handle.await.unwrap();
         sink_server_handle.await.unwrap();
         transformer_server_handle.await.unwrap();
-    }
-}
-
-/// Creates an ISBWatermarkHandle if watermark is enabled in the configuration
-pub async fn create_edge_watermark_handle(
-    config: &PipelineConfig,
-    js_context: &Context,
-    cln_token: &CancellationToken,
-    window_manager: Option<WindowManager>,
-) -> error::Result<Option<ISBWatermarkHandle>> {
-    match &config.watermark_config {
-        Some(WatermarkConfig::Edge(edge_config)) => {
-            let handle = ISBWatermarkHandle::new(
-                config.vertex_name,
-                config.replica,
-                config.read_timeout,
-                js_context.clone(),
-                edge_config,
-                &config.to_vertex_config,
-                cln_token.clone(),
-                window_manager,
-            )
-            .await?;
-            Ok(Some(handle))
-        }
-        _ => Ok(None),
     }
 }

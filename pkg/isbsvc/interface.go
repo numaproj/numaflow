@@ -18,8 +18,7 @@ package isbsvc
 
 import (
 	"context"
-
-	"github.com/numaproj/numaflow/pkg/watermark/store"
+	"fmt"
 )
 
 // ISBService is an interface used to do the operations on ISBSvc
@@ -32,8 +31,6 @@ type ISBService interface {
 	ValidateBuffersAndBuckets(ctx context.Context, buffers, buckets []string, sideInputsStore string, servingSourceStore string) error
 	// GetBufferInfo returns buffer info for the given buffer
 	GetBufferInfo(ctx context.Context, buffer string) (*BufferInfo, error)
-	// CreateWatermarkStores creates watermark stores
-	CreateWatermarkStores(ctx context.Context, bucketName string, partitions int, isReduce bool) ([]store.WatermarkStore, error)
 }
 
 // createOptions describes the options for creating buffers and buckets
@@ -58,4 +55,12 @@ type BufferInfo struct {
 	PendingCount    int64
 	AckPendingCount int64
 	TotalMessages   int64
+}
+
+func JetStreamProcessorKVName(bucketName string) string {
+	return fmt.Sprintf("%s_PROCESSORS", bucketName)
+}
+
+func JetStreamOTKVName(bucketName string) string {
+	return fmt.Sprintf("%s_OT", bucketName)
 }

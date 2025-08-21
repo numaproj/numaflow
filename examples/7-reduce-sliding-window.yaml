@@ -40,7 +40,7 @@ spec:
           storage:
             persistentVolumeClaim:
               volumeSize: 10Gi
-              accessMode: ReadWriteOnce
+              accessMode: ReadWriteOncePod
       containerTemplate:
         env:
           - name: NUMAFLOW_DEBUG

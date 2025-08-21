@@ -177,7 +177,7 @@ impl JetStreamCallbackStore {
         tx: mpsc::Sender<Arc<Callback>>,
         cln_token: CancellationToken,
     ) {
-        let key_pattern = format!("{}.{}.{}.*.*", CALLBACK_KEY_PREFIX, previous_pod_hash, id);
+        let key_pattern = format!("{CALLBACK_KEY_PREFIX}.{previous_pod_hash}.{id}.*.*");
         let mut latest_revision = 0;
 
         info!(request_id = ?id, ?previous_pod_hash, key_pattern, "Historical scan task started");

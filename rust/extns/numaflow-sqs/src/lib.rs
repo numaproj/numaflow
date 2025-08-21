@@ -92,10 +92,10 @@ pub async fn create_sqs_client(config: SqsConfig) -> Result<Client, Error> {
         aws_config::defaults(BehaviorVersion::v2025_01_17()).region(region_provider);
 
     // Apply endpoint URL if configured for source
-    if let SqsConfig::Source(cfg) = &config {
-        if let Some(endpoint_url) = &cfg.endpoint_url {
-            config_builder = config_builder.endpoint_url(endpoint_url);
-        }
+    if let SqsConfig::Source(cfg) = &config
+        && let Some(endpoint_url) = &cfg.endpoint_url
+    {
+        config_builder = config_builder.endpoint_url(endpoint_url);
     }
 
     // Load the shared config
@@ -108,7 +108,7 @@ pub async fn create_sqs_client(config: SqsConfig) -> Result<Client, Error> {
 #[cfg(test)]
 mod tests {
     use aws_config::BehaviorVersion;
-    use aws_smithy_mocks_experimental::{MockResponseInterceptor, RuleMode, mock};
+    use aws_smithy_mocks::{MockResponseInterceptor, RuleMode, mock};
     use aws_smithy_types::error::ErrorMetadata;
 
     use super::*;

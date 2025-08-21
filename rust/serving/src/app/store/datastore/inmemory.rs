@@ -39,8 +39,7 @@ impl super::DataStore for InMemoryDataStore {
         match data.get(&id) {
             Some(result) => Ok(result.to_vec()),
             None => Err(StoreError::InvalidRequestId(format!(
-                "No entry found for id: {}",
-                id
+                "No entry found for id: {id}"
             ))),
         }
     }

@@ -7,7 +7,8 @@ import { AppContext } from "../../App";
 
 const DATA_REFRESH_INTERVAL = 15000; // ms
 
-// fetch pipeline health status
+// fetch pipeline health status hook
+// this will help in refreshing health status at Pipeline page
 export const usePipelineHealthFetch = ({
   namespaceId,
   pipelineId,

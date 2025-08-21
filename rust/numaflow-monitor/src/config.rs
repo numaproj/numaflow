@@ -1,10 +1,10 @@
 //!  Config module for Sidecar monitor container
 use rcgen::{Certificate, CertifiedKey, KeyPair, generate_simple_self_signed};
 
-pub fn generate_certs() -> std::result::Result<(Certificate, KeyPair), String> {
-    let CertifiedKey { cert, key_pair } = generate_simple_self_signed(vec!["localhost".into()])
-        .map_err(|e| format!("Failed to generate cert {:?}", e))?;
-    Ok((cert, key_pair))
+pub fn generate_certs() -> Result<(Certificate, KeyPair), String> {
+    let CertifiedKey { cert, signing_key } = generate_simple_self_signed(vec!["localhost".into()])
+        .map_err(|e| format!("Failed to generate cert {e:?}"))?;
+    Ok((cert, signing_key))
 }
 
 const DEFAULT_METRICS_PORT: u16 = 2470;

@@ -1,6 +1,7 @@
-use numaflow_sqs::source::{SqsMessage, SqsSource, SqsSourceBuilder, SqsSourceConfig};
 use std::sync::Arc;
 use std::time::Duration;
+
+use numaflow_sqs::source::{SqsMessage, SqsSource, SqsSourceBuilder, SqsSourceConfig};
 
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::error::Error;
@@ -112,7 +113,7 @@ pub mod tests {
     use aws_sdk_sqs::Config;
     use aws_sdk_sqs::config::BehaviorVersion;
     use aws_sdk_sqs::types::MessageSystemAttributeName;
-    use aws_smithy_mocks_experimental::{MockResponseInterceptor, Rule, RuleMode, mock};
+    use aws_smithy_mocks::{MockResponseInterceptor, Rule, RuleMode, mock};
     use bytes::Bytes;
     use chrono::Utc;
     use numaflow_sqs::source::{SQS_DEFAULT_REGION, SqsSourceBuilder};
@@ -190,7 +191,7 @@ pub mod tests {
 
         // create SQS source with test client
         use crate::tracker::TrackerHandle;
-        let tracker_handle = TrackerHandle::new(None, None);
+        let tracker_handle = TrackerHandle::new(None);
         let source = Source::new(
             1,
             SourceType::Sqs(sqs_source),
@@ -258,7 +259,7 @@ pub mod tests {
     }
 
     fn get_queue_attributes_output() -> Rule {
-        let queue_attributes_output = mock!(aws_sdk_sqs::Client::get_queue_attributes)
+        mock!(aws_sdk_sqs::Client::get_queue_attributes)
             .match_requests(|inp| {
                 inp.queue_url().unwrap()
                     == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
@@ -270,20 +271,33 @@ pub mod tests {
                         "0",
                     )
                     .build()
-            });
-        queue_attributes_output
+            })
     }
 
     fn get_delete_message_output() -> Rule {
-        let delete_message_output = mock!(aws_sdk_sqs::Client::delete_message)
+        mock!(aws_sdk_sqs::Client::delete_message_batch)
             .match_requests(|inp| {
-                inp.queue_url().unwrap() == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
-                    && inp.receipt_handle().unwrap() == "AQEBaZ+j5qUoOAoxlmrCQPkBm9njMWXqemmIG6shMHCO6fV20JrQYg/AiZ8JELwLwOu5U61W+aIX5Qzu7GGofxJuvzymr4Ph53RiR0mudj4InLSgpSspYeTRDteBye5tV/txbZDdNZxsi+qqZA9xPnmMscKQqF6pGhnGIKrnkYGl45Nl6GPIZv62LrIRb6mSqOn1fn0yqrvmWuuY3w2UzQbaYunJWGxpzZze21EOBtywknU3Je/g7G9is+c6K9hGniddzhLkK1tHzZKjejOU4jokaiB4nmi0dF3JqLzDsQuPF0Gi8qffhEvw56nl8QCbluSJScFhJYvoagGnDbwOnd9z50L239qtFIgETdpKyirlWwl/NGjWJ45dqWpiW3d2Ws7q"
+                inp.queue_url().unwrap()
+                    == "https://sqs.us-west-2.amazonaws.com/926113353675/test-q/"
             })
             .then_output(|| {
-                aws_sdk_sqs::operation::delete_message::DeleteMessageOutput::builder().build()
-            });
-        delete_message_output
+                aws_sdk_sqs::operation::delete_message_batch::DeleteMessageBatchOutput::builder()
+                    .successful(
+                        aws_sdk_sqs::types::DeleteMessageBatchResultEntry::builder()
+                            .id("1")
+                            .build()
+                            .unwrap(),
+                    )
+                    .failed(
+                        aws_sdk_sqs::types::BatchResultErrorEntry::builder()
+                            .id("") // Empty string ID (minimal valid value)
+                            .code("") // Empty string code (minimal valid value)
+                            .build()
+                            .unwrap(),
+                    )
+                    .build()
+                    .unwrap()
+            })
     }
 
     fn get_receive_message_output() -> Rule {
@@ -307,14 +321,13 @@ pub mod tests {
     }
 
     fn get_queue_url_output() -> Rule {
-        let queue_url_output = mock!(aws_sdk_sqs::Client::get_queue_url)
+        mock!(aws_sdk_sqs::Client::get_queue_url)
             .match_requests(|inp| inp.queue_name().unwrap() == "test-q")
             .then_output(|| {
                 aws_sdk_sqs::operation::get_queue_url::GetQueueUrlOutput::builder()
                     .queue_url("https://sqs.us-west-2.amazonaws.com/926113353675/test-q/")
                     .build()
-            });
-        queue_url_output
+            })
     }
 
     fn get_test_config_with_interceptor(interceptor: MockResponseInterceptor) -> Config {

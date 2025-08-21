@@ -25,7 +25,6 @@ import (
 
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/apis/proto/mvtxdaemon"
-	"github.com/numaproj/numaflow/pkg/isb"
 )
 
 const (
@@ -168,7 +167,7 @@ func (hc *HealthChecker) getDesiredReplica(mvtxMetrics *mvtxdaemon.MonoVertexMet
 
 	// Extract the pending information from the metrics for the default lookback period
 	pending, existing := mvtxMetrics.Pendings["default"]
-	if !existing || pending.GetValue() < 0 || pending.GetValue() == isb.PendingNotAvailable {
+	if !existing || pending.GetValue() < 0 || pending.GetValue() == v1alpha1.PendingNotAvailable {
 		// Pending not available, we don't do anything
 		// send back error that we calculate the health status right now
 		return 0, fmt.Errorf("cannot check data health, MonoVertex %s has no pending information", mvtxMetrics.MonoVertex)

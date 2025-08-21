@@ -1,0 +1,39 @@
+[package]
+name = "numaflow-sideinput"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+base64.workspace = true
+tracing.workspace = true
+tokio-stream.workspace = true
+tokio-util.workspace = true
+tokio.workspace = true
+async-nats.workspace = true
+backoff.workspace = true
+thiserror.workspace = true
+bytes.workspace = true
+tower.workspace = true
+numaflow-pb.workspace = true
+numaflow-models.workspace = true
+numaflow-shared.workspace = true
+serde_json.workspace = true
+tonic.workspace = true
+chrono.workspace = true
+cron = "0.15.0"
+chrono-tz = "0.10.3"
+hyper-util = "0.1.14"
+
+
+
+[dev-dependencies]
+tempfile = "3.20.0"
+numaflow = { git = "https://github.com/numaproj/numaflow-rs.git", rev = "9a12a1d832d4fece830452044bd7706dc8b2a381" }
+base64.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+nats-tests = []
+all-tests = ["nats-tests"]

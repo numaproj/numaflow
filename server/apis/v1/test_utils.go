@@ -91,13 +91,15 @@ func fakePipeline() *dfv1.Pipeline {
 					Name: "input",
 					Source: &dfv1.Source{
 						UDTransformer: &dfv1.UDTransformer{
-							Builtin: &dfv1.Transformer{Name: "filter"},
+							Container: &dfv1.Container{Image: "test-image"},
 						}},
 				},
 				{
 					Name: "map",
 					UDF: &dfv1.UDF{
-						Builtin: &dfv1.Function{Name: "cat"},
+						Container: &dfv1.Container{
+							Image: "my-image",
+						},
 					},
 				},
 				{

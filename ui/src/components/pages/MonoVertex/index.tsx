@@ -10,12 +10,13 @@ import {
 } from "../../common/SummaryPageLayout";
 import { useMonoVertexSummaryFetch } from "../../../utils/fetchWrappers/monoVertexFetch";
 import { useMonoVertexViewFetch } from "../../../utils/fetcherHooks/monoVertexViewFetch";
+import { useMonoVertexHealthFetch } from "../../../utils/fetchWrappers/monoVertexHealthFetch";
 import { MonoVertexStatus } from "./partials/MonoVertexStatus";
 import { MonoVertexSummaryStatus } from "./partials/MonoVertexSummaryStatus";
 import { AppContextProps } from "../../../types/declarations/app";
 import { AppContext } from "../../../App";
 import { ErrorDisplay } from "../../common/ErrorDisplay";
-import { UNKNOWN } from "../../../utils";
+import { GetConsolidatedHealthStatus, UNKNOWN } from "../../../utils";
 import { SidebarType } from "../../common/SlidingSidebar";
 
 import "./style.css";
@@ -51,10 +52,22 @@ export function MonoVertex({ namespaceId: nsIdProp }: MonoVertexProps) {
     refresh: graphRefresh,
   } = useMonoVertexViewFetch(namespaceId, pipelineId, addError);
 
+  const {
+    data: healthData,
+    loading: healthLoading,
+    error: healthError,
+    refresh: healthRefresh,
+  } = useMonoVertexHealthFetch({
+    namespaceId,
+    monoVertexId: pipelineId,
+    addError,
+  });
+
   const refresh = useCallback(() => {
     graphRefresh();
     summaryRefresh();
-  }, [graphRefresh, summaryRefresh]);
+    healthRefresh();
+  }, [graphRefresh, summaryRefresh, healthRefresh]);
 
   const handleK8sEventsClick = useCallback(() => {
     if (!namespaceId || !pipelineId || !setSidebarProps) {
@@ -72,8 +85,23 @@ export function MonoVertex({ namespaceId: nsIdProp }: MonoVertexProps) {
     });
   }, [namespaceId, pipelineId, setSidebarProps, vertices]);
 
+  const getMonoVertexHealth = useCallback(
+    (monoVertexStatus: string) => {
+      if (healthData) {
+        const { resourceHealthStatus, dataHealthStatus } = healthData;
+        return GetConsolidatedHealthStatus(
+          monoVertexStatus,
+          resourceHealthStatus,
+          dataHealthStatus
+        );
+      }
+      return UNKNOWN;
+    },
+    [healthData]
+  );
+
   const summarySections: SummarySection[] = useMemo(() => {
-    if (summaryLoading) {
+    if (summaryLoading || healthLoading) {
       return [
         {
           type: SummarySectionType.CUSTOM,
@@ -86,7 +114,7 @@ export function MonoVertex({ namespaceId: nsIdProp }: MonoVertexProps) {
         },
       ];
     }
-    if (error) {
+    if (error || healthError) {
       return [
         {
           type: SummarySectionType.CUSTOM,
@@ -94,7 +122,7 @@ export function MonoVertex({ namespaceId: nsIdProp }: MonoVertexProps) {
             <ErrorDisplay
               key="pipeline-summary-error"
               title="Error loading pipeline summary"
-              message={error || ""}
+              message={error || healthError || ""}
             />
           ),
         },
@@ -105,12 +133,18 @@ export function MonoVertex({ namespaceId: nsIdProp }: MonoVertexProps) {
     }
     const pipelineData = data?.monoVertexData;
     const pipelineStatus = pipelineData?.monoVertex?.status?.phase || UNKNOWN;
+    const monoVertexHealthStatus = getMonoVertexHealth(pipelineStatus);
     return [
       // pipeline collection
       {
         type: SummarySectionType.CUSTOM,
         customComponent: (
-          <MonoVertexStatus status={pipelineStatus} key={"monoVertex-status"} />
+          <MonoVertexStatus 
+            status={pipelineStatus}
+            healthStatus={monoVertexHealthStatus}
+            healthData={healthData}
+            key={"monoVertex-status"} 
+          />
         ),
       },
       {
@@ -137,7 +171,7 @@ export function MonoVertex({ namespaceId: nsIdProp }: MonoVertexProps) {
         ),
       },
     ];
-  }, [summaryLoading, error, data, pipelineId, refresh]);
+  }, [summaryLoading, error, data, pipelineId, refresh, healthData, healthLoading, healthError]);
 
   const content = useMemo(() => {
     if (pipelineErr) {

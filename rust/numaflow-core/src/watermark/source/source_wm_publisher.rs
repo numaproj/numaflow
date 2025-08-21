@@ -44,7 +44,7 @@ impl SourceWatermarkPublisher {
     pub(crate) async fn publish_source_watermark(
         &mut self,
         partition: u16,
-        watermark: i64,
+        mut watermark: i64,
         idle: bool,
     ) {
         // for source, we do partition-based watermark publishing rather than pod-based, hence
@@ -56,15 +56,21 @@ impl SourceWatermarkPublisher {
             let publisher = ISBWatermarkPublisher::new(
                 processor_name.clone(),
                 self.js_context.clone(),
-                &[self.source_config.clone()],
+                std::slice::from_ref(&self.source_config),
             )
             .await
             .expect("Failed to create publisher");
-            info!(processor = ?processor_name, partittion = ?partition,
+            info!(processor = ?processor_name, partition = ?partition,
                 "Creating new publisher for source"
             );
             self.publishers.insert(processor_name.clone(), publisher);
         }
+
+        // subtract the max delay from the watermark, since we are publishing from source itself
+        // if the watermark is not idle.
+        if !idle && watermark != -1 {
+            watermark -= self.max_delay.as_millis() as i64
+        };
 
         self.publishers
             .get_mut(&processor_name)
@@ -73,10 +79,16 @@ impl SourceWatermarkPublisher {
                 &Stream {
                     name: "source",
                     vertex: self.source_config.vertex,
-                    partition,
+                    // in source, input partition is considered as a separate processor entity and this
+                    // partition represents the isb partition.
+                    // Since source has publish/fetch cycle, in the publish we have to associate the
+                    // source partition to an ISB partition (since this is within the source itself,
+                    // there will never be more than one ISB partition).
+                    // This partition is a pseudo partition sitting to proxy the source partitions.
+                    partition: 0,
                 },
                 Utc::now().timestamp_micros(), // we don't care about the offsets
-                watermark - self.max_delay.as_millis() as i64, // consider the max delay configured by the user while publishing source watermark
+                watermark,
                 idle,
             )
             .await;
@@ -142,6 +154,7 @@ mod tests {
             partitions: 2,
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
+            delay: None,
         };
 
         // create key value stores
@@ -218,6 +231,7 @@ mod tests {
             partitions: 2,
             ot_bucket: source_ot_bucket_name,
             hb_bucket: source_hb_bucket_name,
+            delay: None,
         };
 
         let edge_config = BucketConfig {
@@ -225,6 +239,7 @@ mod tests {
             partitions: 2,
             ot_bucket: edge_ot_bucket_name,
             hb_bucket: edge_hb_bucket_name,
+            delay: None,
         };
 
         // create key value stores for source
@@ -331,6 +346,7 @@ mod tests {
             partitions: 2,
             ot_bucket: ot_bucket_name,
             hb_bucket: hb_bucket_name,
+            delay: None,
         };
 
         // create key value stores
@@ -408,6 +424,7 @@ mod tests {
             partitions: 2,
             ot_bucket: source_ot_bucket_name,
             hb_bucket: source_hb_bucket_name,
+            delay: None,
         };
 
         let edge_config = BucketConfig {
@@ -415,6 +432,7 @@ mod tests {
             partitions: 2,
             ot_bucket: edge_ot_bucket_name,
             hb_bucket: edge_hb_bucket_name,
+            delay: None,
         };
 
         // create key value stores for source

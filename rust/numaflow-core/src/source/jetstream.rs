@@ -1,7 +1,9 @@
+use numaflow_nats::jetstream::{
+    JetstreamSource, JetstreamSourceConfig, Message as JetstreamMessage,
+};
 use std::sync::Arc;
 use std::time::Duration;
-
-use numaflow_jetstream::{JetstreamSource, JetstreamSourceConfig};
+use tokio_util::sync::CancellationToken;
 
 use crate::config::{get_vertex_name, get_vertex_replica};
 use crate::message::{IntOffset, MessageID, Metadata, Offset};
@@ -10,8 +12,8 @@ use crate::{Error, Result, message::Message};
 
 use super::SourceAcker;
 
-impl From<numaflow_jetstream::Message> for Message {
-    fn from(message: numaflow_jetstream::Message) -> Self {
+impl From<JetstreamMessage> for Message {
+    fn from(message: JetstreamMessage) -> Self {
         let offset = Offset::Int(IntOffset::new(
             message.stream_sequence as i64,
             *get_vertex_replica(),
@@ -23,7 +25,7 @@ impl From<numaflow_jetstream::Message> for Message {
             tags: None,
             value: message.value,
             offset: offset.clone(),
-            event_time: Default::default(),
+            event_time: message.published_timestamp,
             watermark: None,
             id: MessageID {
                 vertex_name: get_vertex_name().to_string().into(),
@@ -33,14 +35,16 @@ impl From<numaflow_jetstream::Message> for Message {
             headers: message.headers,
             metadata: Some(Metadata {
                 previous_vertex: get_vertex_name().to_string(),
+                sys_metadata: Default::default(),
+                user_metadata: Default::default(),
             }),
             is_late: false,
         }
     }
 }
 
-impl From<numaflow_jetstream::Error> for crate::Error {
-    fn from(value: numaflow_jetstream::Error) -> Self {
+impl From<numaflow_nats::Error> for Error {
+    fn from(value: numaflow_nats::Error) -> Self {
         Self::Source(format!("Jetstream source: {value:?}"))
     }
 }
@@ -49,8 +53,9 @@ pub(crate) async fn new_jetstream_source(
     cfg: JetstreamSourceConfig,
     batch_size: usize,
     timeout: Duration,
-) -> crate::Result<JetstreamSource> {
-    Ok(JetstreamSource::connect(cfg, batch_size, timeout).await?)
+    cancel_token: CancellationToken,
+) -> Result<JetstreamSource> {
+    Ok(JetstreamSource::connect(cfg, batch_size, timeout, cancel_token).await?)
 }
 
 impl SourceReader for JetstreamSource {
@@ -89,22 +94,28 @@ impl SourceAcker for JetstreamSource {
 }
 
 impl super::LagReader for JetstreamSource {
-    async fn pending(&mut self) -> crate::error::Result<Option<usize>> {
+    async fn pending(&mut self) -> Result<Option<usize>> {
         Ok(self.pending_messages().await?)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::reader::LagReader;
+
+    use std::collections::HashMap;
+
+    use bytes::Bytes;
+    use numaflow_nats::jetstream::ConsumerDeliverPolicy;
+    use numaflow_nats::jetstream::Message as JetstreamMessage;
 
     use super::*;
-    use bytes::Bytes;
-    use numaflow_jetstream::Message as JetstreamMessage;
-    use std::collections::HashMap;
 
     #[tokio::test]
     async fn test_try_from_jetstream_message_success() {
+        let test_timestamp = chrono::DateTime::parse_from_rfc3339("2023-01-01T12:30:45.123456789Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+
         let jetstream_message = JetstreamMessage {
             value: Bytes::from("test_value"),
             stream_sequence: 42,
@@ -113,6 +124,7 @@ mod tests {
                 headers.insert("key".to_string(), "value".to_string());
                 headers
             },
+            published_timestamp: test_timestamp,
         };
 
         let message: Message = jetstream_message.into();
@@ -121,11 +133,18 @@ mod tests {
         assert_eq!(message.offset.to_string(), "42-0");
         assert_eq!(message.headers.get("key"), Some(&"value".to_string()));
         assert_eq!(message.metadata.unwrap().previous_vertex, get_vertex_name());
+
+        // Verify that the published timestamp is correctly used as event_time
+        assert_eq!(message.event_time, test_timestamp);
+        assert_eq!(message.event_time.timestamp(), 1672576245);
+        assert_eq!(message.event_time.timestamp_subsec_nanos(), 123456789);
     }
 
     #[cfg(feature = "nats-tests")]
     #[tokio::test]
     async fn test_jetstream_source_reader_acker_lagreader() {
+        use crate::reader::LagReader;
+
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
         // Setup Jetstream context and stream
@@ -142,11 +161,12 @@ mod tests {
             .await
             .unwrap();
 
+        let consumer = format!("{}_consumer", stream_name);
         stream
             .get_or_create_consumer(
-                stream_name,
+                &consumer,
                 async_nats::jetstream::consumer::pull::Config {
-                    durable_name: Some(stream_name.to_string()),
+                    durable_name: Some(consumer.clone()),
                     ..Default::default()
                 },
             )
@@ -161,18 +181,22 @@ mod tests {
         }
 
         // Configure JetstreamSource
-        let config = numaflow_jetstream::JetstreamSourceConfig {
+        let config = numaflow_nats::jetstream::JetstreamSourceConfig {
             addr: "localhost".to_string(),
             stream: stream_name.to_string(),
-            consumer: stream_name.to_string(),
+            consumer,
+            filter_subjects: vec![],
+            deliver_policy: ConsumerDeliverPolicy::ALL,
             auth: None,
             tls: None,
         };
 
         let read_timeout = Duration::from_secs(1);
-        let mut source = super::new_jetstream_source(config, 20, read_timeout)
-            .await
-            .unwrap();
+        let cancel_token = tokio_util::sync::CancellationToken::new();
+        let mut source: JetstreamSource =
+            super::new_jetstream_source(config, 20, read_timeout, cancel_token)
+                .await
+                .unwrap();
 
         assert_eq!(source.partitions().await.unwrap(), vec![0]);
 
@@ -181,6 +205,15 @@ mod tests {
         assert_eq!(messages.len(), 20, "Should read 20 messages in a batch");
         assert_eq!(messages[0].value, Bytes::from("message 0"));
         assert_eq!(messages[19].value, Bytes::from("message 19"));
+
+        // Verify that event_time is set to the published timestamp, not default
+        for message in &messages {
+            assert_ne!(
+                message.event_time.timestamp(),
+                0,
+                "Event time should not be default value, should be set to published timestamp"
+            );
+        }
 
         // Test SourceAcker::ack
         let offsets: Vec<Offset> = messages.iter().map(|msg| msg.offset.clone()).collect();

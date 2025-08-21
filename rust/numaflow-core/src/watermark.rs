@@ -29,7 +29,7 @@ use crate::watermark::source::SourceWatermarkHandle;
 /// Responsible for fetch/publish cycle of watermark per offset for each stream in the ISB.
 pub(crate) mod isb;
 
-/// Manages the processors for watermark. Processor is specific to watermark.
+/// Manages the processors for watermark. Watermark is specific to each processor.
 mod processor;
 
 /// Responsible for fetching and publishing watermarks for the Source. A Source could have multiple

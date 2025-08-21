@@ -36,7 +36,7 @@ impl From<String> for OperatorType {
             "and" => OperatorType::And,
             "or" => OperatorType::Or,
             "not" => OperatorType::Not,
-            _ => panic!("Invalid operator type: {}", s),
+            _ => panic!("Invalid operator type: {s}"),
         }
     }
 }

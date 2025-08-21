@@ -29,7 +29,6 @@ import (
 
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
-	wmstore "github.com/numaproj/numaflow/pkg/watermark/store"
 )
 
 type jetStreamSvc struct {
@@ -191,6 +190,14 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 				return fmt.Errorf("failed to create stream %q and buffers, %w", streamName, err)
 			}
 			log.Infow("Succeeded to create a stream", zap.String("stream", streamName))
+		}
+
+		_, err = jss.js.ConsumerInfo(streamName, streamName)
+		if err != nil {
+			if !errors.Is(err, nats.ErrConsumerNotFound) {
+				return fmt.Errorf("failed to query information of consumer for stream %q, %w", streamName, err)
+			}
+
 			if _, err := jss.js.AddConsumer(streamName, &nats.ConsumerConfig{
 				Durable:       streamName,
 				DeliverPolicy: nats.DeliverAllPolicy,
@@ -207,7 +214,7 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 
 	for _, bucket := range buckets {
 		// Create offset-timeline KV
-		otKVName := wmstore.JetStreamOTKVName(bucket)
+		otKVName := JetStreamOTKVName(bucket)
 		if _, err := jss.js.KeyValue(otKVName); err != nil {
 			if !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
 				return fmt.Errorf("failed to query information of bucket %q during buffer creating, %w", otKVName, err)
@@ -226,7 +233,7 @@ func (jss *jetStreamSvc) CreateBuffersAndBuckets(ctx context.Context, buffers, b
 			}
 		}
 		// Create processor KV
-		procKVName := wmstore.JetStreamProcessorKVName(bucket)
+		procKVName := JetStreamProcessorKVName(bucket)
 		if _, err := jss.js.KeyValue(procKVName); err != nil {
 			if !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
 				return fmt.Errorf("failed to query information of bucket %q during buffer creating, %w", procKVName, err)
@@ -261,12 +268,12 @@ func (jss *jetStreamSvc) DeleteBuffersAndBuckets(ctx context.Context, buffers, b
 		log.Infow("Succeeded to delete a stream", zap.String("stream", streamName))
 	}
 	for _, bucket := range buckets {
-		otKVName := wmstore.JetStreamOTKVName(bucket)
+		otKVName := JetStreamOTKVName(bucket)
 		if err := jss.js.DeleteKeyValue(otKVName); err != nil && !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
 			return fmt.Errorf("failed to delete offset timeline KV %q, %w", otKVName, err)
 		}
 		log.Infow("Succeeded to delete an offset timeline KV", zap.String("kvName", otKVName))
-		procKVName := wmstore.JetStreamProcessorKVName(bucket)
+		procKVName := JetStreamProcessorKVName(bucket)
 		if err := jss.js.DeleteKeyValue(procKVName); err != nil && !errors.Is(err, nats.ErrBucketNotFound) && !errors.Is(err, nats.ErrStreamNotFound) {
 			return fmt.Errorf("failed to delete processor KV %q, %w", procKVName, err)
 		}
@@ -312,12 +319,12 @@ func (jss *jetStreamSvc) ValidateBuffersAndBuckets(ctx context.Context, buffers,
 		}
 	}
 	for _, bucket := range buckets {
-		otKVName := wmstore.JetStreamOTKVName(bucket)
+		otKVName := JetStreamOTKVName(bucket)
 		if _, err := jss.js.KeyValue(otKVName); err != nil {
 			return fmt.Errorf("failed to query OT KV %q, %w", otKVName, err)
 		}
 
-		procKVName := wmstore.JetStreamProcessorKVName(bucket)
+		procKVName := JetStreamProcessorKVName(bucket)
 		if _, err := jss.js.KeyValue(procKVName); err != nil {
 			return fmt.Errorf("failed to query processor KV %q, %w", procKVName, err)
 		}
@@ -366,26 +373,6 @@ func (jss *jetStreamSvc) GetBufferInfo(ctx context.Context, buffer string) (*Buf
 		TotalMessages:   totalMessages,
 	}
 	return bufferInfo, nil
-}
-
-// CreateWatermarkStores is used to create watermark stores.
-func (jss *jetStreamSvc) CreateWatermarkStores(ctx context.Context, bucketName string, fromBufferPartitionCount int, isReduce bool) ([]wmstore.WatermarkStore, error) {
-	log := logging.FromContext(ctx).With("bucket", bucketName)
-	ctx = logging.WithLogger(ctx, log)
-	var wmStores []wmstore.WatermarkStore
-	partitions := 1
-	if isReduce {
-		partitions = fromBufferPartitionCount
-	}
-	// if it's not a reduce vertex, we only need one store to store the watermark
-	for i := 0; i < partitions; i++ {
-		wmStore, err := wmstore.BuildJetStreamWatermarkStore(ctx, bucketName, jss.jsClient)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create new JetStream watermark store, %w", err)
-		}
-		wmStores = append(wmStores, wmStore)
-	}
-	return wmStores, nil
 }
 
 func JetStreamName(bufferName string) string {

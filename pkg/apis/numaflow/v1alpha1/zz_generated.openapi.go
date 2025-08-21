@@ -38,13 +38,13 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole":                        schema_pkg_apis_numaflow_v1alpha1_Blackhole(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.BufferServiceConfig":              schema_pkg_apis_numaflow_v1alpha1_BufferServiceConfig(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CombinedEdge":                     schema_pkg_apis_numaflow_v1alpha1_CombinedEdge(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Compression":                      schema_pkg_apis_numaflow_v1alpha1_Compression(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container":                        schema_pkg_apis_numaflow_v1alpha1_Container(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate":                schema_pkg_apis_numaflow_v1alpha1_ContainerTemplate(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.DaemonTemplate":                   schema_pkg_apis_numaflow_v1alpha1_DaemonTemplate(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge":                             schema_pkg_apis_numaflow_v1alpha1_Edge(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.FixedWindow":                      schema_pkg_apis_numaflow_v1alpha1_FixedWindow(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions":                schema_pkg_apis_numaflow_v1alpha1_ForwardConditions(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Function":                         schema_pkg_apis_numaflow_v1alpha1_Function(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GSSAPI":                           schema_pkg_apis_numaflow_v1alpha1_GSSAPI(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GeneratorSource":                  schema_pkg_apis_numaflow_v1alpha1_GeneratorSource(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetDaemonDeploymentReq":           schema_pkg_apis_numaflow_v1alpha1_GetDaemonDeploymentReq(ref),
@@ -52,14 +52,13 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetJetStreamStatefulSetSpecReq":   schema_pkg_apis_numaflow_v1alpha1_GetJetStreamStatefulSetSpecReq(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetMonoVertexDaemonDeploymentReq": schema_pkg_apis_numaflow_v1alpha1_GetMonoVertexDaemonDeploymentReq(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetMonoVertexPodSpecReq":          schema_pkg_apis_numaflow_v1alpha1_GetMonoVertexPodSpecReq(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetRedisServiceSpecReq":           schema_pkg_apis_numaflow_v1alpha1_GetRedisServiceSpecReq(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetRedisStatefulSetSpecReq":       schema_pkg_apis_numaflow_v1alpha1_GetRedisStatefulSetSpecReq(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetServingPipelineResourceReq":    schema_pkg_apis_numaflow_v1alpha1_GetServingPipelineResourceReq(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetSideInputDeploymentReq":        schema_pkg_apis_numaflow_v1alpha1_GetSideInputDeploymentReq(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GetVertexPodSpecReq":              schema_pkg_apis_numaflow_v1alpha1_GetVertexPodSpecReq(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GroupBy":                          schema_pkg_apis_numaflow_v1alpha1_GroupBy(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.HTTPSource":                       schema_pkg_apis_numaflow_v1alpha1_HTTPSource(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.IdleSource":                       schema_pkg_apis_numaflow_v1alpha1_IdleSource(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBuffer":                  schema_pkg_apis_numaflow_v1alpha1_InterStepBuffer(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBufferService":           schema_pkg_apis_numaflow_v1alpha1_InterStepBufferService(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBufferServiceList":       schema_pkg_apis_numaflow_v1alpha1_InterStepBufferServiceList(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBufferServiceSpec":       schema_pkg_apis_numaflow_v1alpha1_InterStepBufferServiceSpec(ref),
@@ -79,7 +78,6 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexList":                   schema_pkg_apis_numaflow_v1alpha1_MonoVertexList(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexSpec":                   schema_pkg_apis_numaflow_v1alpha1_MonoVertexSpec(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.MonoVertexStatus":                 schema_pkg_apis_numaflow_v1alpha1_MonoVertexStatus(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NativeRedis":                      schema_pkg_apis_numaflow_v1alpha1_NativeRedis(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsAuth":                         schema_pkg_apis_numaflow_v1alpha1_NatsAuth(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NatsSource":                       schema_pkg_apis_numaflow_v1alpha1_NatsSource(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NoStore":                          schema_pkg_apis_numaflow_v1alpha1_NoStore(ref),
@@ -90,12 +88,12 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineList":                     schema_pkg_apis_numaflow_v1alpha1_PipelineList(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineSpec":                     schema_pkg_apis_numaflow_v1alpha1_PipelineSpec(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineStatus":                   schema_pkg_apis_numaflow_v1alpha1_PipelineStatus(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Ports":                            schema_pkg_apis_numaflow_v1alpha1_Ports(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Probe":                            schema_pkg_apis_numaflow_v1alpha1_Probe(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarAuth":                       schema_pkg_apis_numaflow_v1alpha1_PulsarAuth(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarBasicAuth":                  schema_pkg_apis_numaflow_v1alpha1_PulsarBasicAuth(ref),
+		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarSink":                       schema_pkg_apis_numaflow_v1alpha1_PulsarSink(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarSource":                     schema_pkg_apis_numaflow_v1alpha1_PulsarSource(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisBufferService":               schema_pkg_apis_numaflow_v1alpha1_RedisBufferService(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisConfig":                      schema_pkg_apis_numaflow_v1alpha1_RedisConfig(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisSettings":                    schema_pkg_apis_numaflow_v1alpha1_RedisSettings(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RetryStrategy":                    schema_pkg_apis_numaflow_v1alpha1_RetryStrategy(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RollingUpdateStrategy":            schema_pkg_apis_numaflow_v1alpha1_RollingUpdateStrategy(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SASL":                             schema_pkg_apis_numaflow_v1alpha1_SASL(ref),
@@ -123,7 +121,6 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TLS":                              schema_pkg_apis_numaflow_v1alpha1_TLS(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TagConditions":                    schema_pkg_apis_numaflow_v1alpha1_TagConditions(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates":                        schema_pkg_apis_numaflow_v1alpha1_Templates(ref),
-		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Transformer":                      schema_pkg_apis_numaflow_v1alpha1_Transformer(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF":                              schema_pkg_apis_numaflow_v1alpha1_UDF(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink":                           schema_pkg_apis_numaflow_v1alpha1_UDSink(ref),
 		"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSource":                         schema_pkg_apis_numaflow_v1alpha1_UDSource(ref),
@@ -215,14 +212,14 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractPodTemplate(ref common.ReferenceC
 					},
 					"priorityClassName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "If specified, indicates the Redis pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Description: "If specified, indicates the pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"priority": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The priority value. Various system components use this field to find the priority of the Redis pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Description: "The priority value. Various system components use this field to find the priority of the pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -337,11 +334,17 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractSink(ref common.ReferenceCallback
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SqsSink"),
 						},
 					},
+					"pulsar": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Pulsar sink is used to write the data to the Apache Pulsar.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarSink"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServeSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SqsSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServeSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SqsSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"},
 	}
 }
 
@@ -449,14 +452,14 @@ func schema_pkg_apis_numaflow_v1alpha1_AbstractVertex(ref common.ReferenceCallba
 					},
 					"priorityClassName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "If specified, indicates the Redis pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Description: "If specified, indicates the pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"priority": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The priority value. Various system components use this field to find the priority of the Redis pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Description: "The priority value. Various system components use this field to find the priority of the pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -758,11 +761,6 @@ func schema_pkg_apis_numaflow_v1alpha1_BufferServiceConfig(ref common.ReferenceC
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
-					"redis": {
-						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisConfig"),
-						},
-					},
 					"jetstream": {
 						SchemaProps: spec.SchemaProps{
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamConfig"),
@@ -772,7 +770,7 @@ func schema_pkg_apis_numaflow_v1alpha1_BufferServiceConfig(ref common.ReferenceC
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamConfig", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisConfig"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamConfig"},
 	}
 }
 
@@ -856,6 +854,26 @@ func schema_pkg_apis_numaflow_v1alpha1_CombinedEdge(ref common.ReferenceCallback
 		},
 		Dependencies: []string{
 			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ForwardConditions", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_Compression(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "Compression is the compression settings for the messages in the InterStepBuffer",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"type": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Type is the type of compression to be used",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -1137,14 +1155,14 @@ func schema_pkg_apis_numaflow_v1alpha1_DaemonTemplate(ref common.ReferenceCallba
 					},
 					"priorityClassName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "If specified, indicates the Redis pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Description: "If specified, indicates the pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"priority": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The priority value. Various system components use this field to find the priority of the Redis pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Description: "The priority value. Various system components use this field to find the priority of the pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -1322,55 +1340,6 @@ func schema_pkg_apis_numaflow_v1alpha1_ForwardConditions(ref common.ReferenceCal
 		},
 		Dependencies: []string{
 			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.TagConditions"},
-	}
-}
-
-func schema_pkg_apis_numaflow_v1alpha1_Function(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"name": {
-						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
-						},
-					},
-					"args": {
-						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: "",
-										Type:    []string{"string"},
-										Format:  "",
-									},
-								},
-							},
-						},
-					},
-					"kwargs": {
-						SchemaProps: spec.SchemaProps{
-							Type: []string{"object"},
-							AdditionalProperties: &spec.SchemaOrBool{
-								Allows: true,
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: "",
-										Type:    []string{"string"},
-										Format:  "",
-									},
-								},
-							},
-						},
-					},
-				},
-				Required: []string{"name"},
-			},
-		},
 	}
 }
 
@@ -1829,182 +1798,6 @@ func schema_pkg_apis_numaflow_v1alpha1_GetMonoVertexPodSpecReq(ref common.Refere
 	}
 }
 
-func schema_pkg_apis_numaflow_v1alpha1_GetRedisServiceSpecReq(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"Labels": {
-						SchemaProps: spec.SchemaProps{
-							Type: []string{"object"},
-							AdditionalProperties: &spec.SchemaOrBool{
-								Allows: true,
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: "",
-										Type:    []string{"string"},
-										Format:  "",
-									},
-								},
-							},
-						},
-					},
-					"RedisContainerPort": {
-						SchemaProps: spec.SchemaProps{
-							Default: 0,
-							Type:    []string{"integer"},
-							Format:  "int32",
-						},
-					},
-					"SentinelContainerPort": {
-						SchemaProps: spec.SchemaProps{
-							Default: 0,
-							Type:    []string{"integer"},
-							Format:  "int32",
-						},
-					},
-				},
-				Required: []string{"Labels", "RedisContainerPort", "SentinelContainerPort"},
-			},
-		},
-	}
-}
-
-func schema_pkg_apis_numaflow_v1alpha1_GetRedisStatefulSetSpecReq(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"ServiceName": {
-						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
-						},
-					},
-					"Labels": {
-						SchemaProps: spec.SchemaProps{
-							Type: []string{"object"},
-							AdditionalProperties: &spec.SchemaOrBool{
-								Allows: true,
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: "",
-										Type:    []string{"string"},
-										Format:  "",
-									},
-								},
-							},
-						},
-					},
-					"RedisImage": {
-						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
-						},
-					},
-					"SentinelImage": {
-						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
-						},
-					},
-					"MetricsExporterImage": {
-						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
-						},
-					},
-					"InitContainerImage": {
-						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
-						},
-					},
-					"RedisContainerPort": {
-						SchemaProps: spec.SchemaProps{
-							Default: 0,
-							Type:    []string{"integer"},
-							Format:  "int32",
-						},
-					},
-					"SentinelContainerPort": {
-						SchemaProps: spec.SchemaProps{
-							Default: 0,
-							Type:    []string{"integer"},
-							Format:  "int32",
-						},
-					},
-					"RedisMetricsContainerPort": {
-						SchemaProps: spec.SchemaProps{
-							Default: 0,
-							Type:    []string{"integer"},
-							Format:  "int32",
-						},
-					},
-					"CredentialSecretName": {
-						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
-						},
-					},
-					"TLSEnabled": {
-						SchemaProps: spec.SchemaProps{
-							Default: false,
-							Type:    []string{"boolean"},
-							Format:  "",
-						},
-					},
-					"PvcNameIfNeeded": {
-						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
-						},
-					},
-					"ConfConfigMapName": {
-						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
-						},
-					},
-					"ScriptsConfigMapName": {
-						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
-						},
-					},
-					"HealthConfigMapName": {
-						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
-						},
-					},
-					"DefaultResources": {
-						SchemaProps: spec.SchemaProps{
-							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/api/core/v1.ResourceRequirements"),
-						},
-					},
-				},
-				Required: []string{"ServiceName", "Labels", "RedisImage", "SentinelImage", "MetricsExporterImage", "InitContainerImage", "RedisContainerPort", "SentinelContainerPort", "RedisMetricsContainerPort", "CredentialSecretName", "TLSEnabled", "PvcNameIfNeeded", "ConfConfigMapName", "ScriptsConfigMapName", "HealthConfigMapName", "DefaultResources"},
-			},
-		},
-		Dependencies: []string{
-			"k8s.io/api/core/v1.ResourceRequirements"},
-	}
-}
-
 func schema_pkg_apis_numaflow_v1alpha1_GetServingPipelineResourceReq(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -2290,6 +2083,27 @@ func schema_pkg_apis_numaflow_v1alpha1_IdleSource(ref common.ReferenceCallback) 
 	}
 }
 
+func schema_pkg_apis_numaflow_v1alpha1_InterStepBuffer(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "InterStepBuffer configuration specifically for the pipeline.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"compression": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Compression is the compression settings for the InterStepBufferService",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Compression"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Compression"},
+	}
+}
+
 func schema_pkg_apis_numaflow_v1alpha1_InterStepBufferService(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -2392,11 +2206,6 @@ func schema_pkg_apis_numaflow_v1alpha1_InterStepBufferServiceSpec(ref common.Ref
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
 				Properties: map[string]spec.Schema{
-					"redis": {
-						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisBufferService"),
-						},
-					},
 					"jetstream": {
 						SchemaProps: spec.SchemaProps{
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamBufferService"),
@@ -2406,7 +2215,7 @@ func schema_pkg_apis_numaflow_v1alpha1_InterStepBufferServiceSpec(ref common.Ref
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamBufferService", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisBufferService"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.JetStreamBufferService"},
 	}
 }
 
@@ -2581,14 +2390,14 @@ func schema_pkg_apis_numaflow_v1alpha1_JetStreamBufferService(ref common.Referen
 					},
 					"priorityClassName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "If specified, indicates the Redis pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Description: "If specified, indicates the pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"priority": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The priority value. Various system components use this field to find the priority of the Redis pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Description: "The priority value. Various system components use this field to find the priority of the pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -2765,6 +2574,37 @@ func schema_pkg_apis_numaflow_v1alpha1_JetStreamSource(ref common.ReferenceCallb
 							Format:      "",
 						},
 					},
+					"consumer": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Consumer represents the name of the consumer of the stream If not specified, a consumer with name `numaflow-pipeline_name-vertex_name-stream_name` will be created. If a consumer name is specified, a consumer with that name will be created if it doesn't exist on the stream.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"deliver_policy": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The point in the stream from which to receive messages. https://docs.nats.io/nats-concepts/jetstream/consumers#deliverpolicy Valid options are: \"all\", \"new\", \"last\", \"last_per_subject\", \"by_start_sequence 42\", \"by_start_time 1753428483000\". The second value to \"by_start_time\" is unix epoch time in milliseconds.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"filter_subjects": {
+						SchemaProps: spec.SchemaProps{
+							Description: "A set of subjects that overlap with the subjects bound to the stream to filter delivery to subscribers. https://docs.nats.io/nats-concepts/jetstream/consumers#filtesubjects",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: "",
+										Type:    []string{"string"},
+										Format:  "",
+									},
+								},
+							},
+						},
+					},
 					"tls": {
 						SchemaProps: spec.SchemaProps{
 							Description: "TLS configuration for the nats client.",
@@ -2856,14 +2696,14 @@ func schema_pkg_apis_numaflow_v1alpha1_JobTemplate(ref common.ReferenceCallback)
 					},
 					"priorityClassName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "If specified, indicates the Redis pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Description: "If specified, indicates the pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"priority": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The priority value. Various system components use this field to find the priority of the Redis pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Description: "The priority value. Various system components use this field to find the priority of the pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -3402,14 +3242,14 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexSpec(ref common.ReferenceCallba
 					},
 					"priorityClassName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "If specified, indicates the Redis pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Description: "If specified, indicates the pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"priority": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The priority value. Various system components use this field to find the priority of the Redis pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Description: "The priority value. Various system components use this field to find the priority of the pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -3695,204 +3535,6 @@ func schema_pkg_apis_numaflow_v1alpha1_MonoVertexStatus(ref common.ReferenceCall
 	}
 }
 
-func schema_pkg_apis_numaflow_v1alpha1_NativeRedis(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"version": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Redis version, such as \"6.0.16\"",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"replicas": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Redis StatefulSet size",
-							Type:        []string{"integer"},
-							Format:      "int32",
-						},
-					},
-					"redisContainerTemplate": {
-						SchemaProps: spec.SchemaProps{
-							Description: "RedisContainerTemplate contains customized spec for Redis container",
-							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
-						},
-					},
-					"sentinelContainerTemplate": {
-						SchemaProps: spec.SchemaProps{
-							Description: "SentinelContainerTemplate contains customized spec for Redis container",
-							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
-						},
-					},
-					"metricsContainerTemplate": {
-						SchemaProps: spec.SchemaProps{
-							Description: "MetricsContainerTemplate contains customized spec for metrics container",
-							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
-						},
-					},
-					"initContainerTemplate": {
-						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate"),
-						},
-					},
-					"persistence": {
-						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PersistenceStrategy"),
-						},
-					},
-					"metadata": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Metadata sets the pods's metadata, i.e. annotations and labels",
-							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata"),
-						},
-					},
-					"nodeSelector": {
-						SchemaProps: spec.SchemaProps{
-							Description: "NodeSelector is a selector which must be true for the pod to fit on a node. Selector which must match a node's labels for the pod to be scheduled on that node. More info: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/",
-							Type:        []string{"object"},
-							AdditionalProperties: &spec.SchemaOrBool{
-								Allows: true,
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: "",
-										Type:    []string{"string"},
-										Format:  "",
-									},
-								},
-							},
-						},
-					},
-					"tolerations": {
-						SchemaProps: spec.SchemaProps{
-							Description: "If specified, the pod's tolerations.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.Toleration"),
-									},
-								},
-							},
-						},
-					},
-					"securityContext": {
-						SchemaProps: spec.SchemaProps{
-							Description: "SecurityContext holds pod-level security attributes and common container settings. Optional: Defaults to empty.  See type description for default values of each field.",
-							Ref:         ref("k8s.io/api/core/v1.PodSecurityContext"),
-						},
-					},
-					"imagePullSecrets": {
-						VendorExtensible: spec.VendorExtensible{
-							Extensions: spec.Extensions{
-								"x-kubernetes-patch-merge-key": "name",
-								"x-kubernetes-patch-strategy":  "merge",
-							},
-						},
-						SchemaProps: spec.SchemaProps{
-							Description: "ImagePullSecrets is an optional list of references to secrets in the same namespace to use for pulling any of the images used by this PodSpec. If specified, these secrets will be passed to individual puller implementations for them to use. For example, in the case of docker, only DockerConfig type secrets are honored. More info: https://kubernetes.io/docs/concepts/containers/images#specifying-imagepullsecrets-on-a-pod",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.LocalObjectReference"),
-									},
-								},
-							},
-						},
-					},
-					"priorityClassName": {
-						SchemaProps: spec.SchemaProps{
-							Description: "If specified, indicates the Redis pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"priority": {
-						SchemaProps: spec.SchemaProps{
-							Description: "The priority value. Various system components use this field to find the priority of the Redis pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
-							Type:        []string{"integer"},
-							Format:      "int32",
-						},
-					},
-					"affinity": {
-						SchemaProps: spec.SchemaProps{
-							Description: "The pod's scheduling constraints More info: https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/",
-							Ref:         ref("k8s.io/api/core/v1.Affinity"),
-						},
-					},
-					"serviceAccountName": {
-						SchemaProps: spec.SchemaProps{
-							Description: "ServiceAccountName applied to the pod",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"runtimeClassName": {
-						SchemaProps: spec.SchemaProps{
-							Description: "RuntimeClassName refers to a RuntimeClass object in the node.k8s.io group, which should be used to run this pod.  If no RuntimeClass resource matches the named class, the pod will not be run. If unset or empty, the \"legacy\" RuntimeClass will be used, which is an implicit class with an empty definition that uses the default runtime handler. More info: https://git.k8s.io/enhancements/keps/sig-node/585-runtime-class",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"automountServiceAccountToken": {
-						SchemaProps: spec.SchemaProps{
-							Description: "AutomountServiceAccountToken indicates whether a service account token should be automatically mounted.",
-							Type:        []string{"boolean"},
-							Format:      "",
-						},
-					},
-					"dnsPolicy": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Set DNS policy for the pod. Defaults to \"ClusterFirst\". Valid values are 'ClusterFirstWithHostNet', 'ClusterFirst', 'Default' or 'None'. DNS parameters given in DNSConfig will be merged with the policy selected with DNSPolicy. To have DNS options set along with hostNetwork, you have to specify DNS policy explicitly to 'ClusterFirstWithHostNet'.",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"dnsConfig": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Specifies the DNS parameters of a pod. Parameters specified here will be merged to the generated DNS configuration based on DNSPolicy.",
-							Ref:         ref("k8s.io/api/core/v1.PodDNSConfig"),
-						},
-					},
-					"resourceClaims": {
-						VendorExtensible: spec.VendorExtensible{
-							Extensions: spec.Extensions{
-								"x-kubernetes-patch-merge-key": "name",
-								"x-kubernetes-patch-strategy":  "merge,retainKeys",
-							},
-						},
-						SchemaProps: spec.SchemaProps{
-							Description: "ResourceClaims defines which ResourceClaims must be allocated and reserved before the Pod is allowed to start. The resources will be made available to those containers which consume them by name.",
-							Type:        []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
-										Ref:     ref("k8s.io/api/core/v1.PodResourceClaim"),
-									},
-								},
-							},
-						},
-					},
-					"settings": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Redis configuration, if not specified, global settings in numaflow-controller-config will be used.",
-							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisSettings"),
-						},
-					},
-				},
-			},
-		},
-		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PersistenceStrategy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisSettings", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodResourceClaim", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration"},
-	}
-}
-
 func schema_pkg_apis_numaflow_v1alpha1_NatsAuth(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -4034,7 +3676,7 @@ func schema_pkg_apis_numaflow_v1alpha1_PersistenceStrategy(ref common.ReferenceC
 					},
 					"accessMode": {
 						SchemaProps: spec.SchemaProps{
-							Description: "Available access modes such as ReadWriteOnce, ReadWriteMany https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes",
+							Description: "Available access modes such as ReadWriteOncePod, ReadWriteOnce, ReadWriteMany https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes",
 							Type:        []string{"string"},
 							Format:      "",
 						},
@@ -4197,8 +3839,9 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineSpec(ref common.ReferenceCallback
 				Properties: map[string]spec.Schema{
 					"interStepBufferServiceName": {
 						SchemaProps: spec.SchemaProps{
-							Type:   []string{"string"},
-							Format: "",
+							Description: "InterStepBufferServiceName is the name of the InterStepBufferService to be used by the pipeline",
+							Type:        []string{"string"},
+							Format:      "",
 						},
 					},
 					"vertices": {
@@ -4274,11 +3917,17 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineSpec(ref common.ReferenceCallback
 							},
 						},
 					},
+					"interStepBuffer": {
+						SchemaProps: spec.SchemaProps{
+							Description: "InterStepBuffer configuration specific to this pipeline.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBuffer"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractVertex", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Lifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInput", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractVertex", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Edge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBuffer", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Lifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PipelineLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SideInput", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Templates", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark"},
 	}
 }
 
@@ -4383,6 +4032,30 @@ func schema_pkg_apis_numaflow_v1alpha1_PipelineStatus(ref common.ReferenceCallba
 	}
 }
 
+func schema_pkg_apis_numaflow_v1alpha1_Ports(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"https": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int32",
+						},
+					},
+					"http": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int32",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_numaflow_v1alpha1_Probe(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -4444,11 +4117,83 @@ func schema_pkg_apis_numaflow_v1alpha1_PulsarAuth(ref common.ReferenceCallback) 
 							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
 						},
 					},
+					"basicAuth": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Authentication using HTTP basic https://pulsar.apache.org/docs/4.0.x/security-basic-auth/",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarBasicAuth"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarBasicAuth", "k8s.io/api/core/v1.SecretKeySelector"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_PulsarBasicAuth(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"username": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/api/core/v1.SecretKeySelector"),
+						},
+					},
+					"password": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("k8s.io/api/core/v1.SecretKeySelector"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
 			"k8s.io/api/core/v1.SecretKeySelector"},
+	}
+}
+
+func schema_pkg_apis_numaflow_v1alpha1_PulsarSink(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"serverAddr": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"topic": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"producerName": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"auth": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Auth information",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarAuth"),
+						},
+					},
+				},
+				Required: []string{"serverAddr", "topic", "producerName"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarAuth"},
 	}
 }
 
@@ -4505,126 +4250,6 @@ func schema_pkg_apis_numaflow_v1alpha1_PulsarSource(ref common.ReferenceCallback
 		},
 		Dependencies: []string{
 			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarAuth"},
-	}
-}
-
-func schema_pkg_apis_numaflow_v1alpha1_RedisBufferService(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"native": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Native brings up a native Redis service",
-							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NativeRedis"),
-						},
-					},
-					"external": {
-						SchemaProps: spec.SchemaProps{
-							Description: "External holds an External Redis config",
-							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisConfig"),
-						},
-					},
-				},
-			},
-		},
-		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.NativeRedis", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RedisConfig"},
-	}
-}
-
-func schema_pkg_apis_numaflow_v1alpha1_RedisConfig(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"url": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Redis URL",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"sentinelUrl": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Sentinel URL, will be ignored if Redis URL is provided",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"masterName": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Only required when Sentinel is used",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"user": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Redis user",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"password": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Redis password secret selector",
-							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
-						},
-					},
-					"sentinelPassword": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Sentinel password secret selector",
-							Ref:         ref("k8s.io/api/core/v1.SecretKeySelector"),
-						},
-					},
-				},
-			},
-		},
-		Dependencies: []string{
-			"k8s.io/api/core/v1.SecretKeySelector"},
-	}
-}
-
-func schema_pkg_apis_numaflow_v1alpha1_RedisSettings(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"redis": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Redis settings shared by both master and slaves, will override the global settings from controller config",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"master": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Special settings for Redis master node, will override the global settings from controller config",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"replica": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Special settings for Redis replica nodes, will override the global settings from controller config",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"sentinel": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Sentinel settings, will override the global settings from controller config",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-				},
-			},
-		},
 	}
 }
 
@@ -5114,6 +4739,12 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingSpec(ref common.ReferenceCallback)
 							Format:      "",
 						},
 					},
+					"ports": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Ports to listen on, default we will use 8443 for HTTPS. To start http server the http port should be explicitly set.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Ports"),
+						},
+					},
 					"msgIDHeaderKey": {
 						SchemaProps: spec.SchemaProps{
 							Description: "The header key from which the message id will be extracted",
@@ -5210,14 +4841,14 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingSpec(ref common.ReferenceCallback)
 					},
 					"priorityClassName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "If specified, indicates the Redis pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Description: "If specified, indicates the pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"priority": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The priority value. Various system components use this field to find the priority of the Redis pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Description: "The priority value. Various system components use this field to find the priority of the pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -5287,7 +4918,7 @@ func schema_pkg_apis_numaflow_v1alpha1_ServingSpec(ref common.ReferenceCallback)
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Authorization", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingStore", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodResourceClaim", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Authorization", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Ports", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServingStore", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodResourceClaim", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration"},
 	}
 }
 
@@ -5482,14 +5113,14 @@ func schema_pkg_apis_numaflow_v1alpha1_SideInputsManagerTemplate(ref common.Refe
 					},
 					"priorityClassName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "If specified, indicates the Redis pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Description: "If specified, indicates the pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"priority": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The priority value. Various system components use this field to find the priority of the Redis pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Description: "The priority value. Various system components use this field to find the priority of the pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -5616,6 +5247,12 @@ func schema_pkg_apis_numaflow_v1alpha1_Sink(ref common.ReferenceCallback) common
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SqsSink"),
 						},
 					},
+					"pulsar": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Pulsar sink is used to write the data to the Apache Pulsar.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarSink"),
+						},
+					},
 					"fallback": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Fallback sink can be imagined as DLQ for primary Sink. The writes to Fallback sink will only be initiated if the ud-sink response field sets it.",
@@ -5633,7 +5270,7 @@ func schema_pkg_apis_numaflow_v1alpha1_Sink(ref common.ReferenceCallback) common
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RetryStrategy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServeSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SqsSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.AbstractSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Blackhole", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.KafkaSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Log", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.PulsarSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.RetryStrategy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ServeSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.SqsSink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDSink"},
 	}
 }
 
@@ -6014,55 +5651,6 @@ func schema_pkg_apis_numaflow_v1alpha1_Templates(ref common.ReferenceCallback) c
 	}
 }
 
-func schema_pkg_apis_numaflow_v1alpha1_Transformer(ref common.ReferenceCallback) common.OpenAPIDefinition {
-	return common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"name": {
-						SchemaProps: spec.SchemaProps{
-							Default: "",
-							Type:    []string{"string"},
-							Format:  "",
-						},
-					},
-					"args": {
-						SchemaProps: spec.SchemaProps{
-							Type: []string{"array"},
-							Items: &spec.SchemaOrArray{
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: "",
-										Type:    []string{"string"},
-										Format:  "",
-									},
-								},
-							},
-						},
-					},
-					"kwargs": {
-						SchemaProps: spec.SchemaProps{
-							Type: []string{"object"},
-							AdditionalProperties: &spec.SchemaOrBool{
-								Allows: true,
-								Schema: &spec.Schema{
-									SchemaProps: spec.SchemaProps{
-										Default: "",
-										Type:    []string{"string"},
-										Format:  "",
-									},
-								},
-							},
-						},
-					},
-				},
-				Required: []string{"name"},
-			},
-		},
-	}
-}
-
 func schema_pkg_apis_numaflow_v1alpha1_UDF(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -6074,11 +5662,6 @@ func schema_pkg_apis_numaflow_v1alpha1_UDF(ref common.ReferenceCallback) common.
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container"),
 						},
 					},
-					"builtin": {
-						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Function"),
-						},
-					},
 					"groupBy": {
 						SchemaProps: spec.SchemaProps{
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GroupBy"),
@@ -6088,7 +5671,7 @@ func schema_pkg_apis_numaflow_v1alpha1_UDF(ref common.ReferenceCallback) common.
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Function", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GroupBy"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.GroupBy"},
 	}
 }
 
@@ -6143,16 +5726,11 @@ func schema_pkg_apis_numaflow_v1alpha1_UDTransformer(ref common.ReferenceCallbac
 							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container"),
 						},
 					},
-					"builtin": {
-						SchemaProps: spec.SchemaProps{
-							Ref: ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Transformer"),
-						},
-					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Transformer"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Container"},
 	}
 }
 
@@ -6476,14 +6054,14 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 					},
 					"priorityClassName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "If specified, indicates the Redis pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Description: "If specified, indicates the pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"priority": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The priority value. Various system components use this field to find the priority of the Redis pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Description: "The priority value. Various system components use this field to find the priority of the pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},
@@ -6703,12 +6281,18 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexSpec(ref common.ReferenceCallback) 
 							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLifecycle"),
 						},
 					},
+					"interStepBuffer": {
+						SchemaProps: spec.SchemaProps{
+							Description: "InterStepBuffer configuration specific to this pipeline.",
+							Ref:         ref("github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBuffer"),
+						},
+					},
 				},
 				Required: []string{"name", "pipelineName"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CombinedEdge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodResourceClaim", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
+			"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.CombinedEdge", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.ContainerTemplate", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.InterStepBuffer", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Metadata", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Scale", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Sink", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Source", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UDF", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.UpdateStrategy", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLifecycle", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.VertexLimits", "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1.Watermark", "k8s.io/api/core/v1.Affinity", "k8s.io/api/core/v1.Container", "k8s.io/api/core/v1.LocalObjectReference", "k8s.io/api/core/v1.PodDNSConfig", "k8s.io/api/core/v1.PodResourceClaim", "k8s.io/api/core/v1.PodSecurityContext", "k8s.io/api/core/v1.Toleration", "k8s.io/api/core/v1.Volume"},
 	}
 }
 
@@ -6905,14 +6489,14 @@ func schema_pkg_apis_numaflow_v1alpha1_VertexTemplate(ref common.ReferenceCallba
 					},
 					"priorityClassName": {
 						SchemaProps: spec.SchemaProps{
-							Description: "If specified, indicates the Redis pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Description: "If specified, indicates the pod's priority. \"system-node-critical\" and \"system-cluster-critical\" are two special keywords which indicate the highest priorities with the former being the highest priority. Any other name must be defined by creating a PriorityClass object with that name. If not specified, the pod priority will be default or zero if there is no default. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"priority": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The priority value. Various system components use this field to find the priority of the Redis pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
+							Description: "The priority value. Various system components use this field to find the priority of the pod. When Priority Admission Controller is enabled, it prevents users from setting this field. The admission controller populates this field from PriorityClassName. The higher the value, the higher the priority. More info: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/",
 							Type:        []string{"integer"},
 							Format:      "int32",
 						},

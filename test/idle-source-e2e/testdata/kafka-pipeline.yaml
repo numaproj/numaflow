@@ -14,27 +14,21 @@ spec:
     - name: kafka-in
       source:
         kafka:
-          config: |
-            Consumer:
-              Offsets:
-                Initial: -2 # Start consuming from the earliest offset
           brokers:
             - kafka-broker:9092
           topic: kafka-topic
           consumerGroup: test-idle-source
         transformer:
-          builtin:
-            name: eventTimeExtractor
-            kwargs:
-              expression: json(payload).time
-              format: 2006-01-02T15:04:05Z07:00
+          container:
+            image: quay.io/numaio/numaflow-go/mapt-event-time-extractor-with-format:stable #expression: json(payload).time   format: 2006-01-02T15:04:05Z07:00
+            imagePullPolicy: IfNotPresent
       scale:
         min: 2
     - name: count-event
       udf:
         container:
           image: quay.io/numaio/numaflow-go/reduce-counter:stable
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
         groupBy:
           window:
             fixed:
@@ -42,8 +36,8 @@ spec:
           keyed: true
           storage:
             persistentVolumeClaim:
-              volumeSize: 10Gi
-              accessMode: ReadWriteOnce
+              volumeSize: 1Gi
+              accessMode: ReadWriteOncePod
     - name: sink
       scale:
         min: 1

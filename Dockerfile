@@ -22,7 +22,7 @@ RUN chmod +x /bin/entrypoint
 ####################################################################################################
 # Rust binary
 ####################################################################################################
-FROM lukemathwalker/cargo-chef:latest-rust-1.86 AS chef
+FROM lukemathwalker/cargo-chef:latest-rust-1.89 AS chef
 ARG TARGETPLATFORM
 WORKDIR /numaflow
 RUN apt-get update && apt-get install -y protobuf-compiler cmake
@@ -32,8 +32,7 @@ COPY ./rust/ .
 RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS rust-builder
-ARG TARGETPLATFORM
-ARG ARCH
+
 COPY --from=planner /numaflow/recipe.json recipe.json
 
 # Build to cache dependencies
@@ -48,6 +47,23 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 
 # Copy the actual source code files of the main project and the subprojects
 COPY ./rust/ .
+
+ARG TARGETPLATFORM
+ARG ARCH
+ARG VERSION=latest
+ENV VERSION=$VERSION
+ARG BUILD_DATE
+ENV BUILD_DATE=$BUILD_DATE
+ARG GIT_COMMIT
+ENV GIT_COMMIT=$GIT_COMMIT
+ARG GIT_BRANCH
+ENV GIT_BRANCH=$GIT_BRANCH
+ARG GIT_TAG
+ENV GIT_TAG=$GIT_TAG
+ARG GIT_TREE_STATE
+ENV GIT_TREE_STATE=$GIT_TREE_STATE
+ARG GIT_TAG
+ENV GIT_TAG=$GIT_TAG
 
 # Build the real binaries
 RUN --mount=type=cache,target=/usr/local/cargo/registry \

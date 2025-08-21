@@ -8,9 +8,9 @@ spec:
       container:
         # see https://github.com/numaproj/numaflow-go/tree/main/pkg/sideinput/examples/sideinput_function
         image: quay.io/numaio/numaflow-go/sideinput-function:stable
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
       trigger:
-        schedule: "@every 5s"
+        schedule: "*/5 * * * * *"
         # timezone: America/Los_Angeles
   vertices:
     - name: in
@@ -27,7 +27,7 @@ spec:
           container:
             # see https://github.com/numaproj/numaflow-go/tree/main/pkg/sideinput/examples/sink_sideinput
             image: quay.io/numaio/numaflow-go/redis-sink-with-sideinput:stable
-            imagePullPolicy: Always
+            imagePullPolicy: IfNotPresent
             env:
               - name: SINK_HASH_KEY
                 value: "sideinput-sink-test-redis-uds"

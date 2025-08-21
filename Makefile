@@ -29,7 +29,6 @@ GOPATH=$(shell go env GOPATH)
 endif
 
 DOCKER_PUSH?=false
-DOCKER_BUILD_ARGS?=
 IMAGE_NAMESPACE?=quay.io/numaproj
 VERSION?=latest
 BASE_VERSION:=latest
@@ -51,6 +50,9 @@ ifneq (${GIT_TAG},)
 VERSION=$(GIT_TAG)
 override LDFLAGS += -X ${PACKAGE}.gitTag=${GIT_TAG}
 endif
+
+DOCKER_BUILD_ARGS=--build-arg "VERSION=$(VERSION)" --build-arg "BUILD_DATE=$(BUILD_DATE)" --build-arg "GIT_COMMIT=$(GIT_COMMIT)" --build-arg "GIT_BRANCH=$(GIT_BRANCH)" --build-arg "GIT_TAG=$(GIT_TAG)" --build-arg "GIT_TREE_STATE=$(GIT_TREE_STATE)"
+DOCKER_ENV_ARGS=--env "VERSION=$(VERSION)" --env "BUILD_DATE=$(BUILD_DATE)" --env "GIT_COMMIT=$(GIT_COMMIT)" --env "GIT_BRANCH=$(GIT_BRANCH)" --env "GIT_TAG=$(GIT_TAG)" --env "GIT_TREE_STATE=$(GIT_TREE_STATE)"
 
 # Check Python
 PYTHON:=$(shell command -v python 2> /dev/null)
@@ -103,18 +105,8 @@ test:
 
 .PHONY: test-coverage
 test-coverage:
-	go test -covermode=atomic -coverprofile=test/profile.cov $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/ | grep -v /pkg/client/ | grep -v /pkg/proto/ | grep -v /hack/)
+	go test -v -timeout 7m -covermode=atomic -coverprofile=test/profile.cov $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/ | grep -v /pkg/client/ | grep -v /pkg/proto/ | grep -v /hack/)
 	go tool cover -func=test/profile.cov
-
-
-.PHONY: test-coverage-with-isb
-test-coverage-with-isb:
-	go test -v -timeout 7m -covermode=atomic -coverprofile=test/profile.cov -tags=isb_redis $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/ | grep -v /pkg/client/ | grep -v /pkg/proto/ | grep -v /hack/)
-	go tool cover -func=test/profile.cov
-
-.PHONY: test-code
-test-code:
-	go test -tags=isb_redis -race -v $(shell go list ./... | grep -v /vendor/ | grep -v /numaflow/test/) -timeout 120s
 
 test-e2e:
 test-kafka-e2e:
@@ -139,7 +131,7 @@ endif
 	$(MAKE) restart-control-plane-components
 	cat test/manifests/e2e-api-pod.yaml | sed 's@quay.io/numaproj/@$(IMAGE_NAMESPACE)/@' | sed 's/:latest/:$(VERSION)/' | kubectl -n numaflow-system apply -f -
 	go generate $(shell find ./test/$* -name '*.go')
-	-go test -v -timeout 15m -count 1 --tags test -p 1 ./test/$*
+	go test -v -timeout 15m -count 1 --tags test -p 1 ./test/$*
 	$(MAKE) cleanup-e2e
 
 image-restart:
@@ -205,11 +197,23 @@ build-rust-in-docker:
 .PHONY: build-rust-in-docker-multi
 build-rust-in-docker-multi:
 	mkdir -p dist
-	docker run -v ./dist/cargo:/root/.cargo -v ./rust/:/app/ -w /app --rm ubuntu:24.04 bash build.sh all
+	docker run $(DOCKER_ENV_ARGS) -v ./dist/cargo:/root/.cargo -v ./rust/:/app/ -w /app --rm ubuntu:24.04 bash build.sh all
 	cp -pv rust/target/aarch64-unknown-linux-gnu/release/numaflow dist/numaflow-rs-linux-arm64
 	cp -pv rust/target/x86_64-unknown-linux-gnu/release/numaflow dist/numaflow-rs-linux-amd64
 	cp -pv rust/target/aarch64-unknown-linux-gnu/release/entrypoint dist/entrypoint-linux-arm64
 	cp -pv rust/target/x86_64-unknown-linux-gnu/release/entrypoint dist/entrypoint-linux-amd64
+
+# Set Rust target triplet based on host architecture
+RUST_TARGET_TRIPLET := x86_64-unknown-linux-gnu
+ifeq ($(HOST_ARCH),arm64)
+	RUST_TARGET_TRIPLET := aarch64-unknown-linux-gnu
+endif
+
+
+.PHONY: build-rust-docker-ghactions
+build-rust-docker-ghactions:
+	mkdir -p dist
+	docker run $(DOCKER_ENV_ARGS) -v ./dist/cargo:/root/.cargo -v ./rust/:/app/ -w /app --rm ubuntu:24.04 bash build.sh $(HOST_ARCH)
 
 image-multi: ui-build set-qemu dist/$(BINARY_NAME)-linux-arm64.gz dist/$(BINARY_NAME)-linux-amd64.gz
 ifndef GITHUB_ACTIONS
@@ -295,7 +299,7 @@ ifeq (, $(shell which lychee))
 ifeq ($(shell uname),Darwin)
 	brew install lychee
 else
-	curl -sSfL https://github.com/lycheeverse/lychee/releases/download/v0.13.0/lychee-v0.13.0-$(shell uname -m)-unknown-linux-gnu.tar.gz | sudo tar xz -C /usr/local/bin/
+	curl -sSfL https://github.com/lycheeverse/lychee/releases/download/lychee-v0.19.1/lychee-$(shell uname -m)-unknown-linux-gnu.tar.gz | sudo tar xz -C /usr/local/bin/
 endif
 endif
 
@@ -311,7 +315,7 @@ docs-serve: docs
 
 .PHONY: docs-linkcheck
 docs-linkcheck: /usr/local/bin/lychee
-	lychee --exclude-path=CHANGELOG.md --exclude-path=./docs/APIs.md --exclude "https://localhost:*" --exclude "http://localhost:*" --exclude "http://127.0.0.1*" *.md $(shell find ./test -type f) $(shell find ./docs -name '*.md')
+	lychee --insecure --accept '100..=399,429' --exclude-path=CHANGELOG.md --exclude-path=USERS.md --exclude-path=./docs/APIs.md --exclude "https://localhost:*" --exclude "http://localhost:*" --exclude "http://127.0.0.1*" --exclude "https://kubernetes.io/" *.md $(shell find ./docs -name '*.md') $(shell find ./examples -name '*.yaml')
 
 # pre-push checks
 

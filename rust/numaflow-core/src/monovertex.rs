@@ -4,7 +4,7 @@ use tracing::info;
 use crate::config::is_mono_vertex;
 use crate::config::monovertex::MonovertexConfig;
 use crate::error::{self};
-use crate::metrics::{LagReader, PendingReaderTasks_};
+use crate::metrics::{LagReader, PendingReaderTasks};
 use crate::shared::create_components;
 use crate::sink::SinkWriter;
 use crate::source::Source;
@@ -23,10 +23,11 @@ pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
     config: &MonovertexConfig,
 ) -> error::Result<()> {
-    let tracker_handle = TrackerHandle::new(None, None);
+    let tracker_handle = TrackerHandle::new(None);
 
     let transformer = create_components::create_transformer(
         config.batch_size,
+        config.graceful_shutdown_time,
         config.transformer_config.clone(),
         tracker_handle.clone(),
         cln_token.clone(),
@@ -58,10 +59,15 @@ pub(crate) async fn start_forwarder(
     // Start the metrics server in a separate background async spawn,
     // This should be running throughout the lifetime of the application, hence the handle is not
     // joined.
-    let metrics_state = metrics::ComponentHealthChecks::Monovertex(metrics::MonovertexComponents {
-        source: source.clone(),
-        sink: sink_writer.clone(),
-    });
+    let metrics_state = metrics::MetricsState {
+        health_checks: metrics::ComponentHealthChecks::Monovertex(Box::new(
+            metrics::MonovertexComponents {
+                source: source.clone(),
+                sink: sink_writer.clone(),
+            },
+        )),
+        watermark_fetcher_state: None, // Monovertex doesn't have watermark handles
+    };
 
     // start the metrics server
     // FIXME: what to do with the handle
@@ -84,17 +90,14 @@ async fn start(
     // Store the pending reader handle outside, so it doesn't get dropped immediately.
 
     // only check the pending and lag for source for pod_id = 0
-    let _pending_reader_handle: Option<PendingReaderTasks_> = if mvtx_config.replica == 0 {
+    let _pending_reader_handle: Option<PendingReaderTasks> = if mvtx_config.replica == 0 {
         // start the pending reader to publish pending metrics
         let pending_reader = shared::metrics::create_pending_reader(
             &mvtx_config.metrics_config,
-            LagReader::Source(source.clone()),
+            LagReader::Source(Box::new(source.clone())),
         )
         .await;
-        // TODO(lookback) - using new implementation for monovertex right now,
-        // deprecate old implementation and use this for pipeline as well once
-        // corresponding changes are completed.
-        Some(pending_reader.start_(is_mono_vertex()).await)
+        Some(pending_reader.start(is_mono_vertex()).await)
     } else {
         None
     };
@@ -111,9 +114,6 @@ async fn start(
 
 #[cfg(test)]
 mod tests {
-    use std::fs::File;
-    use std::io::Write;
-
     use numaflow::source::{Message, Offset, SourceReadRequest};
     use numaflow::{sink, source};
     use tokio::sync::mpsc::Sender;
@@ -121,9 +121,7 @@ mod tests {
 
     use crate::config::components;
     use crate::config::monovertex::MonovertexConfig;
-    use crate::error;
     use crate::monovertex::start_forwarder;
-    use crate::shared::server_info::ServerInfo;
 
     struct SimpleSource;
     #[tonic::async_trait]
@@ -153,32 +151,12 @@ mod tests {
         }
     }
 
-    async fn write_server_info(file_path: &str, server_info: &ServerInfo) -> error::Result<()> {
-        let serialized = serde_json::to_string(server_info).unwrap();
-        let mut file = File::create(file_path).unwrap();
-        file.write_all(serialized.as_bytes()).unwrap();
-        file.write_all(b"U+005C__END__").unwrap();
-        Ok(())
-    }
-
     #[tokio::test]
     async fn run_forwarder() {
-        let server_info_obj = ServerInfo {
-            protocol: "uds".to_string(),
-            language: "rust".to_string(),
-            minimum_numaflow_version: "0.1.0".to_string(),
-            version: "0.1.0".to_string(),
-            metadata: None,
-        };
-
         let (src_shutdown_tx, src_shutdown_rx) = tokio::sync::oneshot::channel();
         let tmp_dir = tempfile::TempDir::new().unwrap();
         let src_sock_file = tmp_dir.path().join("source.sock");
         let src_info_file = tmp_dir.path().join("sourcer-server-info");
-
-        write_server_info(src_info_file.to_str().unwrap(), &server_info_obj)
-            .await
-            .unwrap();
 
         let server_info = src_info_file.clone();
         let server_socket = src_sock_file.clone();
@@ -195,10 +173,6 @@ mod tests {
         let tmp_dir = tempfile::TempDir::new().unwrap();
         let sink_sock_file = tmp_dir.path().join("sink.sock");
         let sink_info_file = tmp_dir.path().join("sinker-server-info");
-
-        write_server_info(sink_info_file.to_str().unwrap(), &server_info_obj)
-            .await
-            .unwrap();
 
         let server_socket = sink_sock_file.clone();
         let server_info = sink_info_file.clone();

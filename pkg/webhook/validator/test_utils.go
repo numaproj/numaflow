@@ -17,25 +17,6 @@ var (
 	testStorageClassName = "test-sc"
 )
 
-func fakeRedisISBSvc() *dfv1.InterStepBufferService {
-	return &dfv1.InterStepBufferService{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: testNamespace,
-			Name:      dfv1.DefaultISBSvcName,
-		},
-		Spec: dfv1.InterStepBufferServiceSpec{
-			Redis: &dfv1.RedisBufferService{
-				Native: &dfv1.NativeRedis{
-					Version: "6.2.6",
-					Persistence: &dfv1.PersistenceStrategy{
-						StorageClassName: &testStorageClassName,
-					},
-				},
-			},
-		},
-	}
-}
-
 func fakeJetStreamISBSvc() *dfv1.InterStepBufferService {
 	return &dfv1.InterStepBufferService{
 		ObjectMeta: metav1.ObjectMeta{
@@ -66,13 +47,15 @@ func fakePipeline() *dfv1.Pipeline {
 					Name: "input",
 					Source: &dfv1.Source{
 						UDTransformer: &dfv1.UDTransformer{
-							Builtin: &dfv1.Transformer{Name: "filter"},
+							Container: &dfv1.Container{Image: "test-image"},
 						}},
 				},
 				{
 					Name: "map",
 					UDF: &dfv1.UDF{
-						Builtin: &dfv1.Function{Name: "cat"},
+						Container: &dfv1.Container{
+							Image: "my-image",
+						},
 					},
 				},
 				{
@@ -118,7 +101,7 @@ func fakeMonoVertex() *dfv1.MonoVertex {
 		Spec: dfv1.MonoVertexSpec{
 			Source: &dfv1.Source{
 				UDTransformer: &dfv1.UDTransformer{
-					Builtin: &dfv1.Transformer{Name: "filter"},
+					Container: &dfv1.Container{Image: "my-transformer-image"},
 				},
 				UDSource: &dfv1.UDSource{
 					Container: &dfv1.Container{

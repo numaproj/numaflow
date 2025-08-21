@@ -1,4 +1,4 @@
-import { Edge, Node } from "reactflow";
+import { Edge, Node } from "@xyflow/react";
 
 export interface VertexMetrics {
   ratePerMin: string;
@@ -203,6 +203,22 @@ export interface PipelineHealthFetchResult {
   loading: boolean;
   error: any;
   refresh: () => void;
+}
+
+export interface MonoVertexHealthFetchResult {
+  data?: MonoVertexHealthData;
+  loading: boolean;
+  error: any;
+  refresh: () => void;
+}
+
+export interface MonoVertexHealthData {
+  dataHealthCode?: string;
+  dataHealthMessage: string;
+  dataHealthStatus: string;
+  resourceHealthCode0?: string;
+  resourceHealthMessage: string;
+  resourceHealthStatus: string;
 }
 
 export interface PipelineHealthData {

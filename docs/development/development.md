@@ -6,7 +6,7 @@ This doc explains how to set up a development environment for Numaflow.
 
 1. [`go`](https://golang.org/doc/install) 1.24+.
 1. [`git`](https://help.github.com/articles/set-up-git/).
-1. [`kubectl`](https://kubernetes.io/docs/tasks/tools/install-kubectl/).
+1. [`kubectl`](https://kubernetes.io/docs/tasks/tools/#kubectl).
 1. [`protoc`](https://github.com/protocolbuffers/protobuf) 3.19 for compiling protocol buffers.
 1. [`pandoc`](https://pandoc.org/installing.html) 3.2.1 for generating API markdown.
 1. [`Node.js®`](https://nodejs.org/en/) for running the UI.

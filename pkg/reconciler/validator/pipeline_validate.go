@@ -22,7 +22,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 
-	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	dfv1 "github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 )
 
@@ -278,24 +277,13 @@ func validateUDF(udf dfv1.UDF) error {
 }
 
 func validateMapUDF(udf dfv1.UDF) error {
-	if udf.Container != nil {
-		if udf.Container.Image == "" && udf.Builtin == nil {
-			return fmt.Errorf("invalid udf spec, either specify a builtin function, or a customized image")
-		}
-		if udf.Container.Image != "" && udf.Builtin != nil {
-			return fmt.Errorf("invalid udf, can not specify both builtin function, and a customized image")
-		}
-	} else if udf.Builtin == nil {
-		return fmt.Errorf("invalid udf, either specify a builtin function, or a customized image")
+	if udf.Container == nil || udf.Container.Image == "" {
+		return fmt.Errorf("invalid udf spec, a customized image is required")
 	}
 	return nil
 }
 
 func validateReduceUDF(udf dfv1.UDF) error {
-	if udf.Builtin != nil {
-		// No builtin function supported for reduce vertices.
-		return fmt.Errorf("invalid udf, there's no buildin function support in reduce vertices")
-	}
 	if udf.Container != nil {
 		if udf.Container.Image == "" {
 			return fmt.Errorf("invalid udf spec, a customized image is required")
@@ -586,15 +574,8 @@ func buildVisitedMap(vtxName string, visited map[string]struct{}, pl *dfv1.Pipel
 
 func validateSource(source dfv1.Source) error {
 	if transformer := source.UDTransformer; transformer != nil {
-		if transformer.Container != nil {
-			if transformer.Container.Image == "" && transformer.Builtin == nil {
-				return fmt.Errorf("invalid source transformer, either specify a builtin transformer, or a customized image")
-			}
-			if transformer.Container.Image != "" && transformer.Builtin != nil {
-				return fmt.Errorf("invalid source transformer, can not specify both builtin transformer, and a customized image")
-			}
-		} else if transformer.Builtin == nil {
-			return fmt.Errorf("invalid source transformer, either specify a builtin transformer, or a customized image")
+		if transformer.Container == nil || transformer.Container.Image == "" {
+			return fmt.Errorf("invalid source transformer, specify a customized image")
 		}
 	}
 	// TODO: add more validations for each source type
@@ -647,7 +628,7 @@ func hasValidSinkRetryStrategy(s dfv1.Sink) error {
 
 		// If cap is provided but interval isn't, cap must be greater than or equal to default interval value
 		if s.RetryStrategy.BackOff.Cap != nil && s.RetryStrategy.BackOff.Interval == nil {
-			if s.RetryStrategy.BackOff.Cap.Duration < v1alpha1.DefaultRetryInterval {
+			if s.RetryStrategy.BackOff.Cap.Duration < dfv1.DefaultRetryInterval {
 				return fmt.Errorf("cap in backoff strategy cannot be less than default interval value, if interval is not provided")
 			}
 		}

@@ -9,7 +9,7 @@ edition = "2024"
 
 [dependencies]
 tonic-build = "0.13.0"
-prost = "0.13.5"
-prost-types = "0.13.5"
-tonic = "0.13.0"
+prost.workspace = true
+prost-types.workspace = true
+tonic.workspace = true
 prost-build = "0.13.5"

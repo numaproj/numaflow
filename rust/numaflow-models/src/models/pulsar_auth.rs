@@ -20,6 +20,8 @@ limitations under the License.
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PulsarAuth {
+    #[serde(rename = "basicAuth", skip_serializing_if = "Option::is_none")]
+    pub basic_auth: Option<Box<crate::models::PulsarBasicAuth>>,
     #[serde(rename = "token", skip_serializing_if = "Option::is_none")]
     pub token: Option<k8s_openapi::api::core::v1::SecretKeySelector>,
 }
@@ -27,6 +29,9 @@ pub struct PulsarAuth {
 impl PulsarAuth {
     /// PulsarAuth defines how to authenticate with Pulsar
     pub fn new() -> PulsarAuth {
-        PulsarAuth { token: None }
+        PulsarAuth {
+            basic_auth: None,
+            token: None,
+        }
     }
 }

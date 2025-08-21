@@ -8,4 +8,4 @@ workspace = true
 
 [dependencies]
 tokio = {workspace = true, features = ["time"]}
-pin-project = "1.1.5"
+pin-project.workspace = true

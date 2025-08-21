@@ -1,0 +1,26 @@
+[package]
+name = "numaflow-nats"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+backoff.workspace = true
+async-nats.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+bytes.workspace = true
+rustls.workspace = true
+chrono.workspace = true
+tokio-stream.workspace = true
+rustls-pki-types = "1.11.0"
+rustls-native-certs = "0.8.1"
+uuid = { workspace = true, features = ["v4"] }
+
+[features]
+nats-tests = []
+all-tests = ["nats-tests"]
+
+[lints]
+workspace = true

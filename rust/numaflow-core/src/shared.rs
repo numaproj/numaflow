@@ -1,6 +1,3 @@
-/// All SDKs have to provide server info for all gRPC endpoints, so there is a lot of share.
-pub(crate) mod server_info;
-
 /// All utilities related to gRPC.
 pub(crate) mod grpc;
 

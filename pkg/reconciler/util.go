@@ -32,31 +32,32 @@ import (
 var unhealthyWaitingStatus = []string{"CrashLoopBackOff", "ImagePullBackOff"}
 
 // CheckPodsStatus checks the status by iterating over pods objects
-func CheckPodsStatus(pods *corev1.PodList) (healthy bool, reason string, message string) {
+func CheckPodsStatus(pods *corev1.PodList) (healthy bool, reason string, message string, transientUnhealthy bool) {
 	// TODO: Need to revisit later.
 	if len(pods.Items) == 0 {
-		return true, "NoPodsFound", "No Pods found"
+		return true, "NoPodsFound", "No Pods found", false
 	} else {
 		for _, pod := range pods.Items {
-			if podHealthy, msg := isPodHealthy(&pod); !podHealthy {
-				message = fmt.Sprintf("Pod %s is unhealthy", pod.Name)
-				reason = "Pod" + msg
-				healthy = false
-				return
+			if podHealthy, msg, transient := isPodHealthy(&pod); !podHealthy {
+				return false, "Pod" + msg, fmt.Sprintf("Pod %s is unhealthy", pod.Name), transient
 			}
 		}
 	}
-	return true, "Running", "All pods are healthy"
+	return true, "Running", "All pods are healthy", false
 }
 
-func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string) {
+// Check if a pod is healthy. If it's unhealthy, also tell if it's transient or not.
+// The reason of transient unhealthy status is because of the logic of checking RecentRestart,
+// which would not end up with another reconciliation when it reaches the time limit,
+// but we have to trigger it explicitly.
+func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string, isTransientUnhealthy bool) {
 	var lastRestartTime time.Time
 	for _, c := range pod.Status.ContainerStatuses {
 		if c.State.Waiting != nil && slices.Contains(unhealthyWaitingStatus, c.State.Waiting.Reason) {
-			return false, c.State.Waiting.Reason
+			return false, c.State.Waiting.Reason, false
 		}
 		if c.State.Terminated != nil && c.State.Terminated.Reason == "Error" {
-			return false, c.State.Terminated.Reason
+			return false, c.State.Terminated.Reason, false
 		}
 		if x := c.LastTerminationState.Terminated; x != nil && !x.FinishedAt.Time.IsZero() {
 			if lastRestartTime.IsZero() || x.FinishedAt.Time.After(lastRestartTime) {
@@ -70,9 +71,9 @@ func isPodHealthy(pod *corev1.Pod) (healthy bool, reason string) {
 	}
 	// Container restart happened in the last 2 mins
 	if !lastRestartTime.IsZero() && lastRestartTime.Add(2*time.Minute).After(time.Now()) {
-		return false, "RecentRestart"
+		return false, "RecentRestart", true
 	}
-	return true, ""
+	return true, "", false
 }
 
 func NumOfReadyPods(pods corev1.PodList) int {

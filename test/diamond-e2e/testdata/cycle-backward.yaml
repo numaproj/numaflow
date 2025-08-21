@@ -9,8 +9,9 @@ spec:
         http: {}
     - name: cat
       udf:
-        builtin:
-          name: cat
+        container:
+          image: quay.io/numaio/numaflow-go/map-cat:stable # A UDF which simply cats the message
+          imagePullPolicy: IfNotPresent
     - name: retry
       scale:
         disabled: true # don't scale this beyond one Pod since it doesn't make sense for this container
@@ -18,14 +19,14 @@ spec:
         container:
           # This will try each message up to 3 times before continuing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/mapper/examples/retry
           image: quay.io/numaio/numaflow-go/map-retry:stable
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
     - name: out
       sink:
         udsink:
           container:
             # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/redis_sink
             image: quay.io/numaio/numaflow-go/redis-sink:stable
-            imagePullPolicy: Always
+            imagePullPolicy: IfNotPresent
             env:
               - name: SINK_HASH_KEY
                 # The key is set in the format of "pipeline_name-vertex_name"

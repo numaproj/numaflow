@@ -1,32 +1,45 @@
+use std::path::PathBuf;
 use std::time::Duration;
 
 use async_nats::jetstream::Context;
 use async_nats::{ConnectOptions, jetstream};
 use futures::future::try_join_all;
 use serving::callback::CallbackHandler;
+use tokio::fs;
+use tokio::time::{interval, timeout};
 use tokio_util::sync::CancellationToken;
-use tracing::info;
+use tracing::{info, warn};
 
-use crate::config::components::reduce::WindowType;
-use crate::config::is_mono_vertex;
+use crate::config::components::reduce::{
+    AlignedReducerConfig, AlignedWindowType, ReducerConfig, UnalignedReducerConfig,
+    UnalignedWindowType,
+};
 use crate::config::pipeline;
-use crate::config::pipeline::isb::Stream;
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::{
     PipelineConfig, ReduceVtxConfig, ServingStoreType, SinkVtxConfig, SourceVtxConfig,
 };
-use crate::metrics::{ComponentHealthChecks, LagReader, PendingReaderTasks, PipelineComponents};
+use crate::config::{get_vertex_replica, is_mono_vertex};
+use crate::metrics::{
+    ComponentHealthChecks, LagReader, MetricsState, PendingReaderTasks, PipelineComponents,
+    WatermarkFetcherState,
+};
 use crate::pipeline::forwarder::reduce_forwarder::ReduceForwarder;
 use crate::pipeline::forwarder::source_forwarder;
-use crate::pipeline::isb::jetstream::reader::JetStreamReader;
-use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
-use crate::pipeline::pipeline::isb::BufferReaderConfig;
+use crate::pipeline::isb::jetstream::reader::{ISBReaderConfig, JetStreamReader};
+use crate::pipeline::isb::jetstream::writer::{ISBWriterConfig, JetstreamWriter};
 use crate::reduce::pbq::PBQBuilder;
 use crate::reduce::reducer::aligned::reducer::AlignedReducer;
-use crate::reduce::reducer::aligned::windower::WindowManager;
+use crate::reduce::reducer::aligned::windower::AlignedWindowManager;
 use crate::reduce::reducer::aligned::windower::fixed::FixedWindowManager;
 use crate::reduce::reducer::aligned::windower::sliding::SlidingWindowManager;
+use crate::reduce::reducer::unaligned::reducer::UnalignedReducer;
+use crate::reduce::reducer::unaligned::windower::UnalignedWindowManager;
+use crate::reduce::reducer::unaligned::windower::accumulator::AccumulatorWindowManager;
+use crate::reduce::reducer::unaligned::windower::session::SessionWindowManager;
+use crate::reduce::reducer::user_defined::UserDefinedReduce;
+use crate::reduce::reducer::{Reducer, WindowManager};
 use crate::reduce::wal::segment::WalType;
 use crate::reduce::wal::segment::append::AppendOnlyWal;
 use crate::reduce::wal::segment::compactor::{Compactor, WindowKind};
@@ -37,7 +50,6 @@ use crate::sink::serve::nats::NatsServingStore;
 use crate::sink::serve::user_defined::UserDefinedStore;
 use crate::tracker::TrackerHandle;
 use crate::watermark::WatermarkHandle;
-use crate::watermark::isb::ISBWatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
 use crate::{Result, error, shared};
 
@@ -51,8 +63,8 @@ pub(crate) async fn start_forwarder(
 ) -> Result<()> {
     let js_context = create_js_context(config.js_client_config.clone()).await?;
 
-    match &config.vertex_type_config {
-        pipeline::VertexType::Source(source) => {
+    match &config.vertex_config {
+        pipeline::VertexConfig::Source(source) => {
             info!("Starting source forwarder");
 
             // create watermark handle, if watermark is enabled
@@ -79,15 +91,15 @@ pub(crate) async fn start_forwarder(
             )
             .await?;
         }
-        pipeline::VertexType::Sink(sink) => {
+        pipeline::VertexConfig::Sink(sink) => {
             info!("Starting sink forwarder");
             start_sink_forwarder(cln_token, js_context, config.clone(), sink.clone()).await?;
         }
-        pipeline::VertexType::Map(map) => {
+        pipeline::VertexConfig::Map(map) => {
             info!("Starting map forwarder");
             start_map_forwarder(cln_token, js_context, config.clone(), map.clone()).await?;
         }
-        pipeline::VertexType::Reduce(reduce) => {
+        pipeline::VertexConfig::Reduce(reduce) => {
             info!("Starting reduce forwarder");
             start_reduce_forwarder(cln_token, js_context, config.clone(), reduce.clone()).await?;
         }
@@ -115,20 +127,23 @@ async fn start_source_forwarder(
     } else {
         None
     };
-    let tracker_handle = TrackerHandle::new(None, serving_callback_handler);
 
-    let buffer_writer = create_buffer_writer(
-        &config,
-        js_context.clone(),
-        tracker_handle.clone(),
-        cln_token.clone(),
-        source_watermark_handle.clone().map(WatermarkHandle::Source),
-        config.vertex_type_config.to_string(),
-    )
-    .await;
+    let tracker_handle = TrackerHandle::new(serving_callback_handler);
+
+    let buffer_writer = JetstreamWriter::new(ISBWriterConfig {
+        config: config.to_vertex_config.clone(),
+        js_ctx: js_context,
+        paf_concurrency: config.writer_concurrency,
+        tracker_handle: tracker_handle.clone(),
+        cancel_token: cln_token.clone(),
+        watermark_handle: source_watermark_handle.clone().map(WatermarkHandle::Source),
+        vertex_type: config.vertex_type,
+        isb_config: config.isb_config.clone(),
+    });
 
     let transformer = create_components::create_transformer(
         config.batch_size,
+        config.graceful_shutdown_time,
         source_config.transformer_config.clone(),
         tracker_handle.clone(),
         cln_token.clone(),
@@ -141,7 +156,7 @@ async fn start_source_forwarder(
         &source_config.source_config,
         tracker_handle,
         transformer,
-        source_watermark_handle,
+        source_watermark_handle.clone(),
         cln_token.clone(),
     )
     .await?;
@@ -150,7 +165,7 @@ async fn start_source_forwarder(
     let _pending_reader_handle: Option<PendingReaderTasks> = if config.replica == 0 {
         let pending_reader = shared::metrics::create_pending_reader(
             &config.metrics_config,
-            LagReader::Source(source.clone()),
+            LagReader::Source(Box::new(source.clone())),
         )
         .await;
         Some(pending_reader.start(is_mono_vertex()).await)
@@ -160,7 +175,15 @@ async fn start_source_forwarder(
 
     start_metrics_server(
         config.metrics_config.clone(),
-        ComponentHealthChecks::Pipeline(PipelineComponents::Source(source.clone())),
+        MetricsState {
+            health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Source(
+                Box::new(source.clone()),
+            ))),
+            watermark_fetcher_state: source_watermark_handle.map(|handle| WatermarkFetcherState {
+                watermark_handle: WatermarkHandle::Source(handle),
+                partition_count: 1, // Source vertices always have partition count = 1
+            }),
+        },
     )
     .await;
 
@@ -176,24 +199,6 @@ async fn start_map_forwarder(
     config: PipelineConfig,
     map_vtx_config: MapVtxConfig,
 ) -> Result<()> {
-    // create watermark handle, if watermark is enabled
-    let watermark_handle =
-        create_components::create_edge_watermark_handle(&config, &js_context, &cln_token, None)
-            .await?;
-
-    // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
-    // to a common buffer, in the case of a join.
-    let reader_config = &config
-        .from_vertex_config
-        .first()
-        .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
-        .reader_config;
-
-    // Create buffer writers and buffer readers
-    let mut forwarder_components = vec![];
-    let mut mapper_handle = None;
-    let mut isb_lag_readers = vec![];
-
     let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
         Some(
             CallbackHandler::new(
@@ -209,36 +214,62 @@ async fn start_map_forwarder(
     };
 
     // create tracker and buffer writer, they can be shared across all forwarders
-    let tracker_handle =
-        TrackerHandle::new(watermark_handle.clone(), serving_callback_handler.clone());
+    let tracker_handle = TrackerHandle::new(serving_callback_handler.clone());
 
-    let buffer_writer = create_buffer_writer(
+    // create watermark handle, if watermark is enabled
+    let watermark_handle = create_components::create_edge_watermark_handle(
         &config,
-        js_context.clone(),
+        &js_context,
+        &cln_token,
+        None,
         tracker_handle.clone(),
-        cln_token.clone(),
-        watermark_handle.clone().map(WatermarkHandle::ISB),
-        config.vertex_type_config.to_string(),
     )
-    .await;
+    .await?;
+
+    // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
+    // to a common buffer, in the case of a join.
+    let reader_config = &config
+        .from_vertex_config
+        .first()
+        .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
+        .reader_config;
+
+    // Create buffer writers and buffer readers
+    let mut forwarder_components = vec![];
+    let mut mapper_handle = None;
+    let mut isb_lag_readers = vec![];
+
+    let buffer_writer = JetstreamWriter::new(ISBWriterConfig {
+        config: config.to_vertex_config.clone(),
+        js_ctx: js_context.clone(),
+        paf_concurrency: config.writer_concurrency,
+        tracker_handle: tracker_handle.clone(),
+        cancel_token: cln_token.clone(),
+        watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
+        vertex_type: config.vertex_type,
+        isb_config: config.isb_config.clone(),
+    });
 
     for stream in reader_config.streams.clone() {
         info!("Creating buffer reader for stream {:?}", stream);
-        let buffer_reader = create_buffer_reader(
-            config.vertex_type_config.to_string(),
+        let buffer_reader = JetStreamReader::new(ISBReaderConfig {
+            vertex_type: config.vertex_type.to_string(),
             stream,
-            reader_config.clone(),
-            js_context.clone(),
-            tracker_handle.clone(),
-            config.batch_size,
-            watermark_handle.clone(),
-        )
+            js_ctx: js_context.clone(),
+            config: reader_config.clone(),
+            tracker_handle: tracker_handle.clone(),
+            batch_size: config.batch_size,
+            read_timeout: config.read_timeout,
+            watermark_handle: watermark_handle.clone(),
+            isb_config: config.isb_config.clone(),
+        })
         .await?;
 
         isb_lag_readers.push(buffer_reader.clone());
         let mapper = create_components::create_mapper(
             config.batch_size,
             config.read_timeout,
+            config.graceful_shutdown_time,
             map_vtx_config.clone(),
             tracker_handle.clone(),
             cln_token.clone(),
@@ -261,7 +292,15 @@ async fn start_map_forwarder(
 
     let metrics_server_handle = start_metrics_server(
         config.metrics_config.clone(),
-        ComponentHealthChecks::Pipeline(PipelineComponents::Map(mapper_handle.unwrap().clone())),
+        MetricsState {
+            health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Map(
+                mapper_handle.unwrap().clone(),
+            ))),
+            watermark_fetcher_state: watermark_handle.map(|handle| WatermarkFetcherState {
+                watermark_handle: WatermarkHandle::ISB(handle),
+                partition_count: reader_config.streams.len() as u16, // Number of partitions = number of streams
+            }),
+        },
     )
     .await;
 
@@ -293,17 +332,136 @@ async fn start_map_forwarder(
     Ok(())
 }
 
+/// Guard to manage the lifecycle of a fence file. Used when persistence is enabled for reduce.
+/// File will be deleted when the guard is dropped.
+struct FenceGuard {
+    fence_file_path: PathBuf,
+}
+
+impl FenceGuard {
+    /// Creates a new fence guard with the specified fence file path.
+    async fn new(fence_file_path: PathBuf) -> Result<Self> {
+        // Create the fence file
+        fs::write(&fence_file_path, "")
+            .await
+            .map_err(|e| error::Error::Config(format!("Failed to create fence file: {e}")))?;
+        Ok(FenceGuard { fence_file_path })
+    }
+}
+
+impl Drop for FenceGuard {
+    fn drop(&mut self) {
+        if let Err(e) = std::fs::remove_file(&self.fence_file_path) {
+            warn!(
+                "Failed to remove fence file {:?}: {}",
+                self.fence_file_path, e
+            );
+        }
+    }
+}
+
+/// Waits for a fence file to be available, checking every 5 seconds, up to a specified timeout.
+async fn wait_for_fence_availability(
+    fence_file_path: &PathBuf,
+    timeout_duration: Duration,
+) -> Result<()> {
+    let result = timeout(timeout_duration, async {
+        let mut check_interval = interval(Duration::from_secs(1));
+
+        loop {
+            check_interval.tick().await;
+
+            // Check if the fence file exists
+            match fs::metadata(fence_file_path).await {
+                Ok(_) => {
+                    info!(
+                        "Fence file {:?} exists, waiting for it to be deleted...",
+                        fence_file_path
+                    );
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    // File doesn't exist, fence is available
+                    info!("Fence file {:?} is now available", fence_file_path);
+                    return Ok(());
+                }
+                Err(e) => {
+                    // Other error occurred
+                    return Err(error::Error::Config(format!(
+                        "Error checking fence file {fence_file_path:?}: {e}"
+                    )));
+                }
+            }
+        }
+    })
+    .await;
+
+    result.map_err(|e| error::Error::Config(format!("Fence wait timed out: {e}")))?
+}
+
 async fn start_reduce_forwarder(
     cln_token: CancellationToken,
     js_context: Context,
     config: PipelineConfig,
     reduce_vtx_config: ReduceVtxConfig,
 ) -> Result<()> {
-    let window_manager = match &reduce_vtx_config.reducer_config.window_config.window_type {
-        WindowType::Fixed(fixed_config) => {
-            WindowManager::Fixed(FixedWindowManager::new(fixed_config.length))
+    // create fence guard if WAL is configured to make sure the previous WAL instance has exited gracefully
+    // before we start resuming from WAL.
+    let _fence_guard = if let Some(storage_config) = &reduce_vtx_config.wal_storage_config {
+        let fence_file_name = format!("{}-{}", config.vertex_name, config.replica);
+        let fence_file_path = storage_config.path.join(fence_file_name);
+
+        let fence_timeout = Duration::from_secs(300); // 5 minutes
+        if let Err(e) = wait_for_fence_availability(&fence_file_path, fence_timeout).await {
+            error!(
+                ?e,
+                "Timed out waiting for delete of fence file, creating a new file"
+            );
         }
-        WindowType::Sliding(sliding_config) => {
+        Some(FenceGuard::new(fence_file_path).await?)
+    } else {
+        None
+    };
+
+    match &reduce_vtx_config.reducer_config {
+        ReducerConfig::Aligned(aligned_config) => {
+            start_aligned_reduce_forwarder(
+                cln_token,
+                js_context,
+                config,
+                reduce_vtx_config.clone(),
+                aligned_config.clone(),
+            )
+            .await
+        }
+        ReducerConfig::Unaligned(unaligned_config) => {
+            start_unaligned_reduce_forwarder(
+                cln_token,
+                js_context,
+                config,
+                reduce_vtx_config.clone(),
+                unaligned_config.clone(),
+            )
+            .await
+        }
+    }
+}
+
+async fn start_aligned_reduce_forwarder(
+    cln_token: CancellationToken,
+    js_context: Context,
+    config: PipelineConfig,
+    reduce_vtx_config: ReduceVtxConfig,
+    aligned_config: AlignedReducerConfig,
+) -> Result<()> {
+    // for reduce we do not pass serving callback handler to tracker.
+    let tracker_handle = TrackerHandle::new(None);
+
+    // Create aligned window manager based on window type
+    let window_manager = match &aligned_config.window_config.window_type {
+        AlignedWindowType::Fixed(fixed_config) => {
+            AlignedWindowManager::Fixed(FixedWindowManager::new(fixed_config.length))
+        }
+        AlignedWindowType::Sliding(sliding_config) => {
             // sliding window needs to save state if WAL is configured to avoid duplicate processing
             // since a message can be part of multiple windows.
             let state_file_path =
@@ -315,14 +473,11 @@ async fn start_reduce_forwarder(
                     None
                 };
 
-            WindowManager::Sliding(SlidingWindowManager::new(
+            AlignedWindowManager::Sliding(SlidingWindowManager::new(
                 sliding_config.length,
                 sliding_config.slide,
                 state_file_path,
             ))
-        }
-        WindowType::Session(_) | WindowType::Accumulator(_) => {
-            panic!("Session and Accumulator windows are not supported yet");
         }
     };
 
@@ -331,7 +486,8 @@ async fn start_reduce_forwarder(
         &config,
         &js_context,
         &cln_token,
-        Some(window_manager.clone()),
+        Some(WindowManager::Aligned(window_manager.clone())),
+        tracker_handle.clone(),
     )
     .await?;
 
@@ -344,39 +500,35 @@ async fn start_reduce_forwarder(
     // reduce pod always reads from a single stream (pod per partition)
     let stream = reader_config
         .streams
-        .first()
+        .get(*get_vertex_replica() as usize)
         .cloned()
         .ok_or_else(|| error::Error::Config("No stream found for reduce vertex".to_string()))?;
 
-    // we don't need to pass the watermark handle to the tracker because in reduce windower is
-    // responsible for identifying the lowest watermark in the pod.
-    let tracker_handle = TrackerHandle::new(None, None);
     // Create buffer reader
-    let buffer_reader = create_buffer_reader(
-        config.vertex_type_config.to_string(),
+    let buffer_reader = JetStreamReader::new(ISBReaderConfig {
+        vertex_type: config.vertex_type.to_string(),
         stream,
-        reader_config.clone(),
-        js_context.clone(),
-        tracker_handle.clone(),
-        config.batch_size,
-        watermark_handle.clone(),
-    )
+        js_ctx: js_context.clone(),
+        config: reader_config.clone(),
+        tracker_handle: tracker_handle.clone(),
+        batch_size: config.batch_size,
+        read_timeout: config.read_timeout,
+        watermark_handle: watermark_handle.clone(),
+        isb_config: config.isb_config.clone(),
+    })
     .await?;
 
     // Create buffer writer
-    let buffer_writer = create_buffer_writer(
-        &config,
-        js_context.clone(),
-        tracker_handle.clone(),
-        cln_token.clone(),
-        watermark_handle.clone().map(WatermarkHandle::ISB),
-        config.vertex_type_config.to_string(),
-    )
-    .await;
-
-    // Create user-defined aligned reducer client
-    let reducer_client =
-        create_components::create_aligned_reducer(reduce_vtx_config.reducer_config.clone()).await?;
+    let buffer_writer = JetstreamWriter::new(ISBWriterConfig {
+        config: config.to_vertex_config.clone(),
+        js_ctx: js_context.clone(),
+        paf_concurrency: config.writer_concurrency,
+        tracker_handle: tracker_handle.clone(),
+        cancel_token: cln_token.clone(),
+        watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
+        vertex_type: config.vertex_type,
+        isb_config: config.isb_config.clone(),
+    });
 
     // Create WAL if configured
     let (wal, gc_wal) = if let Some(storage_config) = &reduce_vtx_config.wal_storage_config {
@@ -438,29 +590,220 @@ async fn start_reduce_forwarder(
     .await;
     let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
+    // Create user-defined aligned reducer client
+    let reducer_client =
+        create_components::create_aligned_reducer(aligned_config.clone(), cln_token.clone())
+            .await?;
+
     // Start the metrics server with one of the clients
     start_metrics_server(
         config.metrics_config.clone(),
-        ComponentHealthChecks::Pipeline(PipelineComponents::Reduce(reducer_client.clone())),
+        MetricsState {
+            health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
+                UserDefinedReduce::Aligned(reducer_client.clone()),
+            ))),
+            watermark_fetcher_state: watermark_handle
+                .clone()
+                .map(|handle| WatermarkFetcherState {
+                    watermark_handle: WatermarkHandle::ISB(handle),
+                    partition_count: 1, // Reduce vertices always read from single partition (partition 0)
+                }),
+        },
     )
     .await;
 
-    let reducer = AlignedReducer::new(
-        reducer_client,
-        window_manager,
-        buffer_writer,
-        gc_wal,
-        reduce_vtx_config
-            .reducer_config
-            .window_config
-            .allowed_lateness,
-    )
-    .await;
+    let reducer = Reducer::Aligned(
+        AlignedReducer::new(
+            reducer_client,
+            window_manager,
+            buffer_writer,
+            gc_wal,
+            aligned_config.window_config.allowed_lateness,
+            config.graceful_shutdown_time,
+            config.read_timeout,
+            reduce_vtx_config.keyed,
+            watermark_handle,
+        )
+        .await,
+    );
 
     let forwarder = ReduceForwarder::new(pbq, reducer);
     forwarder.start(cln_token).await?;
 
-    info!("Reduce forwarder has stopped successfully");
+    info!("Aligned reduce forwarder has stopped successfully");
+    Ok(())
+}
+
+async fn start_unaligned_reduce_forwarder(
+    cln_token: CancellationToken,
+    js_context: Context,
+    config: PipelineConfig,
+    reduce_vtx_config: ReduceVtxConfig,
+    unaligned_config: UnalignedReducerConfig,
+) -> Result<()> {
+    // for reduce we do not pass serving callback handler to tracker.
+    let tracker_handle = TrackerHandle::new(None);
+
+    // Create unaligned window manager based on window type
+    let window_manager = match &unaligned_config.window_config.window_type {
+        UnalignedWindowType::Accumulator(accumulator_config) => {
+            UnalignedWindowManager::Accumulator(AccumulatorWindowManager::new(
+                accumulator_config.timeout,
+            ))
+        }
+        UnalignedWindowType::Session(session_config) => {
+            UnalignedWindowManager::Session(SessionWindowManager::new(session_config.timeout))
+        }
+    };
+
+    // create watermark handle, if watermark is enabled
+    let watermark_handle = create_components::create_edge_watermark_handle(
+        &config,
+        &js_context,
+        &cln_token,
+        Some(WindowManager::Unaligned(window_manager.clone())),
+        tracker_handle.clone(),
+    )
+    .await?;
+
+    let reader_config = &config
+        .from_vertex_config
+        .first()
+        .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
+        .reader_config;
+
+    // reduce pod always reads from a single stream (pod per partition)
+    let stream = reader_config
+        .streams
+        .get(*get_vertex_replica() as usize)
+        .cloned()
+        .ok_or_else(|| error::Error::Config("No stream found for reduce vertex".to_string()))?;
+
+    // Create buffer reader
+    let buffer_reader = JetStreamReader::new(ISBReaderConfig {
+        vertex_type: config.vertex_type.to_string(),
+        stream,
+        js_ctx: js_context.clone(),
+        config: reader_config.clone(),
+        tracker_handle: tracker_handle.clone(),
+        batch_size: config.batch_size,
+        read_timeout: config.read_timeout,
+        watermark_handle: watermark_handle.clone(),
+        isb_config: config.isb_config.clone(),
+    })
+    .await?;
+
+    let buffer_writer = JetstreamWriter::new(ISBWriterConfig {
+        config: config.to_vertex_config.clone(),
+        js_ctx: js_context.clone(),
+        paf_concurrency: config.writer_concurrency,
+        tracker_handle: tracker_handle.clone(),
+        cancel_token: cln_token.clone(),
+        watermark_handle: watermark_handle.clone().map(WatermarkHandle::ISB),
+        vertex_type: config.vertex_type,
+        isb_config: config.isb_config.clone(),
+    });
+
+    // Create WAL if configured (use Unaligned WindowKind for unaligned reducers)
+    let (wal, gc_wal) = if let Some(storage_config) = &reduce_vtx_config.wal_storage_config {
+        let wal_path = storage_config.path.clone();
+
+        let append_only_wal = AppendOnlyWal::new(
+            WalType::Data,
+            wal_path.clone(),
+            storage_config.max_file_size_mb,
+            storage_config.flush_interval_ms,
+            storage_config.channel_buffer_size,
+            storage_config.max_segment_age_secs,
+        )
+        .await?;
+
+        let compactor = Compactor::new(
+            wal_path.clone(),
+            WindowKind::Unaligned,
+            storage_config.max_file_size_mb,
+            storage_config.flush_interval_ms,
+            storage_config.channel_buffer_size,
+            storage_config.max_segment_age_secs,
+        )
+        .await?;
+
+        let gc_wal = AppendOnlyWal::new(
+            WalType::Gc,
+            wal_path,
+            storage_config.max_file_size_mb,
+            storage_config.flush_interval_ms,
+            storage_config.channel_buffer_size,
+            storage_config.max_segment_age_secs,
+        )
+        .await?;
+
+        (
+            Some(crate::reduce::pbq::WAL {
+                append_only_wal,
+                compactor,
+            }),
+            Some(gc_wal),
+        )
+    } else {
+        (None, None)
+    };
+
+    // Create PBQ
+    let pbq_builder = PBQBuilder::new(buffer_reader.clone(), tracker_handle.clone());
+    let pbq = if let Some(wal) = wal {
+        pbq_builder.wal(wal).build()
+    } else {
+        pbq_builder.build()
+    };
+
+    let pending_reader = shared::metrics::create_pending_reader(
+        &config.metrics_config,
+        LagReader::ISB(vec![buffer_reader]),
+    )
+    .await;
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
+
+    // Create user-defined unaligned reducer client
+    let reducer_client =
+        create_components::create_unaligned_reducer(unaligned_config.clone(), cln_token.clone())
+            .await?;
+
+    start_metrics_server(
+        config.metrics_config.clone(),
+        MetricsState {
+            health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
+                UserDefinedReduce::Unaligned(reducer_client.clone()),
+            ))),
+            watermark_fetcher_state: watermark_handle
+                .clone()
+                .map(|handle| WatermarkFetcherState {
+                    watermark_handle: WatermarkHandle::ISB(handle),
+                    partition_count: 1, // Reduce vertices always read from single partition (partition 0)
+                }),
+        },
+    )
+    .await;
+
+    let reducer = Reducer::Unaligned(
+        UnalignedReducer::new(
+            reducer_client,
+            window_manager,
+            buffer_writer,
+            unaligned_config.window_config.allowed_lateness,
+            gc_wal,
+            config.graceful_shutdown_time,
+            config.read_timeout,
+            reduce_vtx_config.keyed,
+            watermark_handle,
+        )
+        .await,
+    );
+
+    let forwarder = ReduceForwarder::new(pbq, reducer);
+    forwarder.start(cln_token).await?;
+
+    info!("Unaligned reduce forwarder has stopped successfully");
     Ok(())
 }
 
@@ -470,19 +813,6 @@ async fn start_sink_forwarder(
     config: PipelineConfig,
     sink: SinkVtxConfig,
 ) -> Result<()> {
-    // create watermark handle, if watermark is enabled
-    let watermark_handle =
-        create_components::create_edge_watermark_handle(&config, &js_context, &cln_token, None)
-            .await?;
-
-    // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
-    // to a common buffer, in the case of a join.
-    let reader_config = &config
-        .from_vertex_config
-        .first()
-        .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
-        .reader_config;
-
     let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
         Some(
             CallbackHandler::new(
@@ -497,6 +827,26 @@ async fn start_sink_forwarder(
         None
     };
 
+    let tracker_handle = TrackerHandle::new(serving_callback_handler.clone());
+
+    // create watermark handle, if watermark is enabled
+    let watermark_handle = create_components::create_edge_watermark_handle(
+        &config,
+        &js_context,
+        &cln_token,
+        None,
+        tracker_handle.clone(),
+    )
+    .await?;
+
+    // Only the reader config of the first "from" vertex is needed, as all "from" vertices currently write
+    // to a common buffer, in the case of a join.
+    let reader_config = &config
+        .from_vertex_config
+        .first()
+        .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
+        .reader_config;
+
     let serving_store = match &sink.serving_store_config {
         Some(serving_store_config) => match serving_store_config {
             ServingStoreType::UserDefined(config) => {
@@ -506,7 +856,7 @@ async fn start_sink_forwarder(
             ServingStoreType::Nats(config) => {
                 let serving_store =
                     NatsServingStore::new(js_context.clone(), config.clone()).await?;
-                Some(ServingStore::Nats(serving_store))
+                Some(ServingStore::Nats(Box::new(serving_store)))
             }
         },
         None => None,
@@ -516,19 +866,19 @@ async fn start_sink_forwarder(
     let mut sink_writers = vec![];
     let mut buffer_readers = vec![];
     for stream in reader_config.streams.clone() {
-        let tracker_handle =
-            TrackerHandle::new(watermark_handle.clone(), serving_callback_handler.clone());
-
-        let buffer_reader = create_buffer_reader(
-            config.vertex_type_config.to_string(),
+        let buffer_reader = JetStreamReader::new(ISBReaderConfig {
+            vertex_type: config.vertex_type.to_string(),
             stream,
-            reader_config.clone(),
-            js_context.clone(),
-            tracker_handle.clone(),
-            config.batch_size,
-            watermark_handle.clone(),
-        )
+            js_ctx: js_context.clone(),
+            config: reader_config.clone(),
+            tracker_handle: tracker_handle.clone(),
+            batch_size: config.batch_size,
+            read_timeout: config.read_timeout,
+            watermark_handle: watermark_handle.clone(),
+            isb_config: config.isb_config.clone(),
+        })
         .await?;
+
         buffer_readers.push(buffer_reader);
 
         let sink_writer = create_components::create_sink_writer(
@@ -536,7 +886,7 @@ async fn start_sink_forwarder(
             config.read_timeout,
             sink.sink_config.clone(),
             sink.fb_sink_config.clone(),
-            tracker_handle,
+            tracker_handle.clone(),
             serving_store.clone(),
             &cln_token,
         )
@@ -555,7 +905,15 @@ async fn start_sink_forwarder(
     if let Some(sink_handle) = sink_writers.first() {
         start_metrics_server(
             config.metrics_config.clone(),
-            ComponentHealthChecks::Pipeline(PipelineComponents::Sink(sink_handle.clone())),
+            MetricsState {
+                health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Sink(
+                    Box::new(sink_handle.clone()),
+                ))),
+                watermark_fetcher_state: watermark_handle.map(|handle| WatermarkFetcherState {
+                    watermark_handle: WatermarkHandle::ISB(handle),
+                    partition_count: reader_config.streams.len() as u16, // Number of partitions = number of streams
+                }),
+            },
         )
         .await;
     }
@@ -587,48 +945,10 @@ async fn start_sink_forwarder(
     Ok(())
 }
 
-async fn create_buffer_writer(
-    config: &PipelineConfig,
-    js_context: Context,
-    tracker_handle: TrackerHandle,
-    cln_token: CancellationToken,
-    watermark_handle: Option<WatermarkHandle>,
-    vertex_type: String,
-) -> JetstreamWriter {
-    JetstreamWriter::new(
-        config.to_vertex_config.clone(),
-        js_context,
-        config.paf_concurrency,
-        tracker_handle,
-        cln_token,
-        watermark_handle,
-        vertex_type,
-    )
-}
-
-async fn create_buffer_reader(
-    vertex_type: String,
-    stream: Stream,
-    reader_config: BufferReaderConfig,
-    js_context: Context,
-    tracker_handle: TrackerHandle,
-    batch_size: usize,
-    watermark_handle: Option<ISBWatermarkHandle>,
-) -> Result<JetStreamReader> {
-    JetStreamReader::new(
-        vertex_type,
-        stream,
-        js_context,
-        reader_config,
-        tracker_handle,
-        batch_size,
-        watermark_handle,
-    )
-    .await
-}
-
 /// Creates a jetstream context based on the provided configuration
-async fn create_js_context(config: pipeline::isb::jetstream::ClientConfig) -> Result<Context> {
+pub(crate) async fn create_js_context(
+    config: pipeline::isb::jetstream::ClientConfig,
+) -> Result<Context> {
     // TODO: make these configurable. today this is hardcoded on Golang code too.
     let mut opts = ConnectOptions::new()
         .max_reconnects(None) // unlimited reconnects
@@ -664,9 +984,10 @@ mod tests {
     use crate::config::components::source::GeneratorConfig;
     use crate::config::components::source::SourceConfig;
     use crate::config::components::source::SourceType;
-    use crate::config::pipeline::PipelineConfig;
+    use crate::config::pipeline::isb::Stream;
     use crate::config::pipeline::map::{MapType, UserDefinedConfig};
-    use crate::pipeline::pipeline::VertexType;
+    use crate::config::pipeline::{PipelineConfig, VertexType};
+    use crate::pipeline::pipeline::VertexConfig;
     use crate::pipeline::pipeline::isb;
     use crate::pipeline::pipeline::isb::{BufferReaderConfig, BufferWriterConfig};
     use crate::pipeline::pipeline::map::MapMode;
@@ -729,7 +1050,7 @@ mod tests {
             vertex_name: "in",
             replica: 0,
             batch_size: 1000,
-            paf_concurrency: 30000,
+            writer_concurrency: 30000,
             read_timeout: Duration::from_secs(1),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
@@ -747,8 +1068,10 @@ mod tests {
                     buffer_full_strategy: RetryUntilSuccess,
                 },
                 conditions: None,
+                to_vertex_type: VertexType::Sink,
             }],
-            vertex_type_config: VertexType::Source(SourceVtxConfig {
+            vertex_type: VertexType::Source,
+            vertex_config: VertexConfig::Source(SourceVtxConfig {
                 source_config: SourceConfig {
                     read_ahead: false,
                     source_type: SourceType::Generator(GeneratorConfig {
@@ -769,8 +1092,7 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
-            watermark_config: None,
-            callback_config: None,
+            ..Default::default()
         };
 
         let cancellation_token = CancellationToken::new();
@@ -897,7 +1219,7 @@ mod tests {
             vertex_name: "in",
             replica: 0,
             batch_size: 1000,
-            paf_concurrency: 1000,
+            writer_concurrency: 1000,
             read_timeout: Duration::from_secs(1),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
@@ -910,10 +1232,12 @@ mod tests {
                 reader_config: BufferReaderConfig {
                     streams: streams.clone(),
                     wip_ack_interval: Duration::from_secs(1),
+                    ..Default::default()
                 },
                 partitions: 0,
             }],
-            vertex_type_config: VertexType::Sink(SinkVtxConfig {
+            vertex_type: VertexType::Sink,
+            vertex_config: VertexConfig::Sink(SinkVtxConfig {
                 sink_config: SinkConfig {
                     sink_type: SinkType::Blackhole(BlackholeConfig::default()),
                     retry_config: None,
@@ -927,8 +1251,7 @@ mod tests {
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
-            watermark_config: None,
-            callback_config: None,
+            ..Default::default()
         };
 
         let cancellation_token = CancellationToken::new();
@@ -1124,7 +1447,7 @@ mod tests {
             vertex_name: "in",
             replica: 0,
             batch_size: 1000,
-            paf_concurrency: 1000,
+            writer_concurrency: 1000,
             read_timeout: Duration::from_secs(1),
             js_client_config: isb::jetstream::ClientConfig {
                 url: "localhost:4222".to_string(),
@@ -1141,16 +1464,18 @@ mod tests {
                     buffer_full_strategy: RetryUntilSuccess,
                 },
                 conditions: None,
+                to_vertex_type: VertexType::Sink,
             }],
             from_vertex_config: vec![FromVertexConfig {
                 name: "map-in",
                 reader_config: BufferReaderConfig {
                     streams: input_streams.clone(),
                     wip_ack_interval: Duration::from_secs(1),
+                    ..Default::default()
                 },
                 partitions: 0,
             }],
-            vertex_type_config: VertexType::Map(MapVtxConfig {
+            vertex_config: VertexConfig::Map(MapVtxConfig {
                 concurrency: 10,
                 map_type: MapType::UserDefined(UserDefinedConfig {
                     grpc_max_message_size: 4 * 1024 * 1024,
@@ -1159,14 +1484,14 @@ mod tests {
                 }),
                 map_mode: MapMode::Unary,
             }),
+            vertex_type: VertexType::MapUDF,
             metrics_config: MetricsConfig {
                 metrics_server_listen_port: 2469,
                 lag_check_interval_in_secs: 5,
                 lag_refresh_interval_in_secs: 3,
                 lookback_window_in_secs: 120,
             },
-            watermark_config: None,
-            callback_config: None,
+            ..Default::default()
         };
 
         let cancellation_token = CancellationToken::new();
@@ -1206,5 +1531,45 @@ mod tests {
         for stream in input_streams.iter().chain(output_streams.iter()) {
             context.delete_stream(stream.name).await.unwrap();
         }
+    }
+
+    #[tokio::test]
+    async fn test_fence_guard_creation_and_cleanup() {
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let fence_file_path = tmp_dir.path().join("test-fence-file");
+
+        // Verify file doesn't exist initially
+        assert!(!fence_file_path.exists());
+
+        {
+            // Create fence guard
+            let _guard = FenceGuard::new(fence_file_path.clone()).await.unwrap();
+
+            // Verify file exists while guard is in scope
+            assert!(fence_file_path.exists());
+        } // Guard goes out of scope here
+
+        // Give a small delay for the Drop to execute
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        // Verify file is cleaned up after guard is dropped
+        assert!(!fence_file_path.exists());
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_fence_availability_timeout() {
+        let tmp_dir = tempfile::TempDir::new().unwrap();
+        let fence_file_path = tmp_dir.path().join("persistent-fence");
+
+        // Create the fence file and keep it
+        fs::write(&fence_file_path, "").await.unwrap();
+
+        // Should timeout since file is never removed
+        let result =
+            wait_for_fence_availability(&fence_file_path, Duration::from_millis(100)).await;
+        assert!(result.is_err());
+
+        // Clean up
+        fs::remove_file(&fence_file_path).await.unwrap();
     }
 }

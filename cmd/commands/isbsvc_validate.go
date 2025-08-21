@@ -28,7 +28,6 @@ import (
 	"github.com/numaproj/numaflow/pkg/apis/numaflow/v1alpha1"
 	"github.com/numaproj/numaflow/pkg/isbsvc"
 	jsclient "github.com/numaproj/numaflow/pkg/shared/clients/nats"
-	redisclient "github.com/numaproj/numaflow/pkg/shared/clients/redis"
 	"github.com/numaproj/numaflow/pkg/shared/logging"
 	sharedutil "github.com/numaproj/numaflow/pkg/shared/util"
 )
@@ -56,11 +55,6 @@ func NewISBSvcValidateCommand() *cobra.Command {
 			var err error
 			ctx := logging.WithLogger(context.Background(), logger)
 			switch v1alpha1.ISBSvcType(isbSvcType) {
-			case v1alpha1.ISBSvcTypeRedis:
-				rsClient := redisclient.NewInClusterRedisClient()
-				defer rsClient.Close()
-
-				isbsClient = isbsvc.NewISBRedisSvc(rsClient)
 			case v1alpha1.ISBSvcTypeJetStream:
 				client, err := jsclient.NewNATSClient(ctx)
 				if err != nil {

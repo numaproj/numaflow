@@ -21,7 +21,7 @@ spec:
         container:
           # sort the incoming stream 
           image: quay.io/numaio/numaflow-go/stream-sorter:stable
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
         groupBy:
           window:
             accumulator:

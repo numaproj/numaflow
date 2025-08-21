@@ -171,15 +171,6 @@ func TestInterStepBufferService_GetType(t *testing.T) {
 		want ISBSvcType
 	}{
 		{
-			name: "Redis type",
-			isbs: InterStepBufferService{
-				Spec: InterStepBufferServiceSpec{
-					Redis: &RedisBufferService{},
-				},
-			},
-			want: ISBSvcTypeRedis,
-		},
-		{
 			name: "JetStream type",
 			isbs: InterStepBufferService{
 				Spec: InterStepBufferServiceSpec{

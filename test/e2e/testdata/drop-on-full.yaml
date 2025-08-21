@@ -14,11 +14,11 @@ spec:
     - name: in
       source:
         http: {}
-    - name: sink
+    - name: out
       partitions: 2
       sink:
         log: {}
   edges:
     - from: in
-      to: sink
+      to: out
       onFull: discardLatest

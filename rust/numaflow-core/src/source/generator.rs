@@ -96,7 +96,7 @@ mod stream_generator {
             }
 
             // Generate all possible keys
-            let keys = (0..key_count).map(|i| format!("key-{}", i)).collect();
+            let keys = (0..key_count).map(|i| format!("key-{i}")).collect();
 
             Self {
                 content: cfg.content,
@@ -117,22 +117,29 @@ mod stream_generator {
         fn generate_payload(&self, value: i64) -> Vec<u8> {
             #[derive(serde::Serialize)]
             struct Data {
+                /// Unique ID for the message
+                id: String,
                 value: i64,
                 // only to ensure a desired message size
                 #[serde(skip_serializing_if = "Vec::is_empty")]
                 padding: Vec<u8>,
             }
 
-            let padding: Vec<u8> = (self.msg_size_bytes > 8)
-                .then(|| {
-                    let size = self.msg_size_bytes - 8;
-                    let mut bytes = vec![0; size as usize];
-                    rand::thread_rng().fill(&mut bytes[..]);
-                    bytes
-                })
-                .unwrap_or_default();
+            let padding: Vec<u8> = if self.msg_size_bytes > 8 {
+                let size = self.msg_size_bytes - 8;
+                let mut bytes = vec![0; size as usize];
+                rand::thread_rng().fill(&mut bytes[..]);
+                bytes
+            } else {
+                Default::default()
+            };
 
-            let data = Data { value, padding };
+            let id = chrono::Utc::now()
+                .timestamp_nanos_opt()
+                .unwrap_or(chrono::Utc::now().timestamp_micros());
+            let id = format!("{}-{}", id, get_vertex_replica());
+            let data = Data { id, value, padding };
+
             serde_json::to_vec(&data).unwrap()
         }
 
@@ -153,7 +160,9 @@ mod stream_generator {
 
         /// creates a single message that can be returned by the generator.
         fn create_message(&mut self) -> Message {
-            let id = chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default();
+            let id = chrono::Utc::now()
+                .timestamp_nanos_opt()
+                .unwrap_or(chrono::Utc::now().timestamp_micros());
 
             let offset = Offset::Int(IntOffset::new(id, *get_vertex_replica()));
 

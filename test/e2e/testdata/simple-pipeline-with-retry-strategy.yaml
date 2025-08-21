@@ -9,15 +9,7 @@ spec:
         generator:
           rpu: 1
           duration: 1s
-    - name: p1
-      udf:
-        builtin:
-          name: cat
     - name: output
-      containerTemplate:
-        env:
-          - name: NUMAFLOW_RUNTIME
-            value: "rust"
       sink:
         retryStrategy:
           backoff:
@@ -29,10 +21,8 @@ spec:
           onFailure: 'drop'
         udsink:
           container:
-            image: quay.io/numaio/numaflow-go/sink-retry-e2e:stable
-            imagePullPolicy: Always
+            image: quay.io/numaio/numaflow-go/sink-failure:stable
+            imagePullPolicy: IfNotPresent
   edges:
     - from: input
-      to: p1
-    - from: p1
       to: output

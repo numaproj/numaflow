@@ -17,11 +17,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"encoding/base64"
-	"fmt"
-	"sort"
-	"strings"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -65,6 +60,8 @@ func (s Source) getContainers(req getContainerReq) ([]corev1.Container, []corev1
 }
 
 func (s Source) getMainContainer(req getContainerReq) corev1.Container {
+	// TODO: Default runtime is rust in 1.6, we will remove this env in 1.7
+	req.env = append(req.env, corev1.EnvVar{Name: EnvNumaflowRuntime, Value: "rust"})
 	return containerBuilder{}.init(req).args("processor", "--type="+string(VertexTypeSource), "--isbsvc-type="+string(req.isbSvcType)).build()
 }
 
@@ -74,48 +71,28 @@ func (s Source) getUDTransformerContainer(mainContainerReq getContainerReq) core
 		imagePullPolicy(mainContainerReq.imagePullPolicy). // Use the same image pull policy as the main container
 		appendVolumeMounts(mainContainerReq.volumeMounts...).asSidecar()
 	c = c.appendEnv(corev1.EnvVar{Name: EnvUDContainerType, Value: UDContainerTransformer})
-	if x := s.UDTransformer.Container; x != nil && x.Image != "" { // customized image
-		c = c.image(x.Image)
-		if len(x.Command) > 0 {
-			c = c.command(x.Command...)
-		}
-		if len(x.Args) > 0 {
-			c = c.args(x.Args...)
-		}
-	} else { // built-in
-		args := []string{"builtin-transformer", "--name=" + s.UDTransformer.Builtin.Name}
-		for _, a := range s.UDTransformer.Builtin.Args {
-			args = append(args, "--args="+base64.StdEncoding.EncodeToString([]byte(a)))
-		}
-		var kwargs []string
-		for k, v := range s.UDTransformer.Builtin.KWArgs {
-			kwargs = append(kwargs, fmt.Sprintf("%s=%s", k, base64.StdEncoding.EncodeToString([]byte(v))))
-		}
-		if len(kwargs) > 0 {
-			// The order of the kwargs items is random because we construct it from an unordered map Builtin.KWArgs.
-			// We sort the kwargs first before converting it to a string argument to ensure consistency.
-			// This is important because in vertex controller we use hash on PodSpec to determine if a pod already exists, which requires the kwargs being consistent.
-			sort.Strings(kwargs)
-			args = append(args, "--kwargs="+strings.Join(kwargs, ","))
-		}
+	// At this point, x (the UDTransformer.Container) is guaranteed to be non-nil and x.Image is guaranteed to be a non-empty string due to prior validation.
+	x := s.UDTransformer.Container
+	c = c.image(x.Image)
+	if len(x.Command) > 0 {
+		c = c.command(x.Command...)
+	}
+	if len(x.Args) > 0 {
+		c = c.args(x.Args...)
+	}
+	c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...).appendPorts(x.Ports...)
+	if x.ImagePullPolicy != nil {
+		c = c.imagePullPolicy(*x.ImagePullPolicy)
+	}
 
-		c = c.image(mainContainerReq.image).args(args...) // Use the same image as the main container
-	}
-	if x := s.UDTransformer.Container; x != nil {
-		c = c.appendEnv(x.Env...).appendVolumeMounts(x.VolumeMounts...).resources(x.Resources).securityContext(x.SecurityContext).appendEnvFrom(x.EnvFrom...).appendPorts(x.Ports...)
-		if x.ImagePullPolicy != nil {
-			c = c.imagePullPolicy(*x.ImagePullPolicy)
-		}
-	}
 	container := c.build()
 
 	var initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold int32 = UDContainerLivezInitialDelaySeconds, UDContainerLivezPeriodSeconds, UDContainerLivezTimeoutSeconds, UDContainerLivezFailureThreshold
-	if x := s.UDTransformer.Container; x != nil {
-		initialDelaySeconds = GetProbeInitialDelaySecondsOr(x.LivenessProbe, initialDelaySeconds)
-		periodSeconds = GetProbePeriodSecondsOr(x.LivenessProbe, periodSeconds)
-		timeoutSeconds = GetProbeTimeoutSecondsOr(x.LivenessProbe, timeoutSeconds)
-		failureThreshold = GetProbeFailureThresholdOr(x.LivenessProbe, failureThreshold)
-	}
+	initialDelaySeconds = GetProbeInitialDelaySecondsOr(x.LivenessProbe, initialDelaySeconds)
+	periodSeconds = GetProbePeriodSecondsOr(x.LivenessProbe, periodSeconds)
+	timeoutSeconds = GetProbeTimeoutSecondsOr(x.LivenessProbe, timeoutSeconds)
+	failureThreshold = GetProbeFailureThresholdOr(x.LivenessProbe, failureThreshold)
+
 	container.LivenessProbe = &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{

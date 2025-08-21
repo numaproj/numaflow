@@ -9,5 +9,5 @@ Please add your company name and initial use case (optional) below.
 5. [Lockheed Martin](https://lockheedmartin.com/) Perform ELT processing on high and low volume data streams of sensor data as recieved from IOT type systems.
 6. [Seekr](https://www.seekr.com/) Numaflow coordinates multiple ML pipelines to rate and extract information from the pipeline input.
 7. [BEUMER Group](https://www.beumergroup.com/) - Signal processing for IoT-sensors, providing predictive maintenance solutions for the Intra-logistics sector.
-8. [NTT](https://www.rd.ntt/e/) - AI/ML pipeline for realizing Accelerator Chaining. Presented at KubeCon EU 25.
+8. [NTT](https://www.rd.ntt/) - AI/ML pipeline for realizing Accelerator Chaining. Presented at KubeCon EU 25.
 9. [QualiBooth](https://www.qualibooth.com/) - Accessibility-focused software. It leverages Numaflow pipelines to aggregate real-time data related to web accessibility issues.

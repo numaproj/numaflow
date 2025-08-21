@@ -180,7 +180,7 @@ pub(crate) async fn start_https_metrics_server(
         .handle(handle)
         .serve(metrics_app.into_make_service())
         .await
-        .map_err(|e| MetricsServer(format!("Starting web server for metrics: {}", e)))?;
+        .map_err(|e| MetricsServer(format!("Starting web server for metrics: {e}")))?;
 
     info!(?addr, "Metrics server stopped");
     Ok(())

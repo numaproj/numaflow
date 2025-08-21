@@ -1,4 +1,6 @@
-# Time Extraction Filter
+# Time Extraction Filter [Deprecated]
+
+  > ⚠️ Note: Builtins for transformer are deprecated. An example in Go for time extraction filter can be found [here.](https://github.com/numaproj/numaflow-go/tree/main/pkg/sourcetransformer/examples/time_extraction_filter) 
 
 A `timeExtractionFilter` built-in transformer implements both the `eventTimeExtractor` and `filter` built-in functions. It evaluates a message on a pipeline and if valid, extracts event time from the payload of the messsage.
 

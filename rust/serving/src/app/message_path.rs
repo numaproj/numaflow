@@ -65,7 +65,7 @@ mod tests {
     async fn test_message_path_not_present() {
         let data_store = InMemoryDataStore::new(None);
         let cb_store = InMemoryCallbackStore::new(None);
-        let store_name = "test_async_publish";
+        let store_name = "test_message_path_not_present";
         let js_url = "localhost:4222";
         let client = async_nats::connect(js_url).await.unwrap();
         let context = jetstream::new(client);

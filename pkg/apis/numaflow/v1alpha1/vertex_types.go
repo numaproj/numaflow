@@ -202,12 +202,6 @@ func (v Vertex) commonEnvs() []corev1.EnvVar {
 		{Name: EnvReplica, ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.annotations['" + KeyReplica + "']"}}},
 		{Name: EnvPipelineName, Value: v.Spec.PipelineName},
 		{Name: EnvVertexName, Value: v.Spec.Name},
-	}
-}
-
-// SidecarEnvs returns the envs for sidecar containers.
-func (v Vertex) sidecarEnvs() []corev1.EnvVar {
-	return []corev1.EnvVar{
 		{Name: EnvCPULimit, ValueFrom: &corev1.EnvVarSource{
 			ResourceFieldRef: &corev1.ResourceFieldSelector{Resource: "limits.cpu"}}},
 		{Name: EnvCPURequest, ValueFrom: &corev1.EnvVarSource{
@@ -277,7 +271,10 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 		},
 	}
 
-	volumeMounts := []corev1.VolumeMount{{Name: varVolumeName, MountPath: PathVarRun}}
+	volumeMounts := []corev1.VolumeMount{
+		{Name: varVolumeName, MountPath: PathVarRun},
+		{Name: RuntimeDirVolume, MountPath: RuntimeDirMountPath},
+	}
 	containerRequest := getContainerReq{
 		isbSvcType:      req.ISBSvcType,
 		env:             envVars,
@@ -336,7 +333,6 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 
 	for i := 0; i < len(sidecarContainers); i++ { // udf, udsink, udsource, or source vertex specifies a udtransformer
 		sidecarContainers[i].Env = append(sidecarContainers[i].Env, v.commonEnvs()...)
-		sidecarContainers[i].Env = append(sidecarContainers[i].Env, v.sidecarEnvs()...)
 	}
 
 	initContainers := v.getInitContainers(req)
@@ -354,9 +350,11 @@ func (v Vertex) GetPodSpec(req GetVertexPodSpecReq) (*corev1.PodSpec, error) {
 			Image:           req.Image,
 			ImagePullPolicy: req.PullPolicy,
 			Resources:       req.DefaultResources,
-			Args:            []string{"side-inputs-synchronizer", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.SideInputsStoreName, "--side-inputs=" + strings.Join(v.Spec.SideInputs, ",")},
+			Args:            []string{"side-input", "side-inputs-synchronizer", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.SideInputsStoreName, "--side-inputs=" + strings.Join(v.Spec.SideInputs, ",")},
 		}
 		sideInputsWatcher.Env = append(sideInputsWatcher.Env, v.commonEnvs()...)
+		sideInputsWatcher.Env = append(sideInputsWatcher.Env, corev1.EnvVar{Name: EnvNumaflowRuntime, Value: "rust"})
+
 		if x := v.Spec.SideInputsContainerTemplate; x != nil {
 			x.ApplyToContainer(&sideInputsWatcher)
 		}
@@ -412,13 +410,14 @@ func (v Vertex) getInitContainers(req GetVertexPodSpecReq) []corev1.Container {
 		},
 	}
 	if v.HasSideInputs() {
+		envVars = append(envVars, corev1.EnvVar{Name: EnvNumaflowRuntime, Value: "rust"})
 		initContainers = append(initContainers, corev1.Container{
 			Name:            CtrInitSideInputs,
 			Env:             envVars,
 			Image:           req.Image,
 			ImagePullPolicy: req.PullPolicy,
 			Resources:       req.DefaultResources,
-			Args:            []string{"side-inputs-init", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.SideInputsStoreName, "--side-inputs=" + strings.Join(v.Spec.SideInputs, ",")},
+			Args:            []string{"side-input", "side-inputs-init", "--isbsvc-type=" + string(req.ISBSvcType), "--side-inputs-store=" + req.SideInputsStoreName, "--side-inputs=" + strings.Join(v.Spec.SideInputs, ",")},
 		})
 	}
 
@@ -528,6 +527,9 @@ type VertexSpec struct {
 	// +kubebuilder:default={"desiredPhase": Running}
 	// +optional
 	Lifecycle VertexLifecycle `json:"lifecycle,omitempty" protobuf:"bytes,8,opt,name=lifecycle"`
+	// InterStepBuffer configuration specific to this pipeline.
+	// +optional
+	InterStepBuffer *InterStepBuffer `json:"interStepBuffer,omitempty" protobuf:"bytes,9,opt,name=interStepBuffer"`
 }
 
 type AbstractVertex struct {

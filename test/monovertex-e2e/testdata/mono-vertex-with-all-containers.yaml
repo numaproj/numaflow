@@ -9,23 +9,23 @@ spec:
     udsource:
       container:
         image: quay.io/numaio/numaflow-go/source-simple-source:stable
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
     transformer:
       container:
           image: quay.io/numaio/numaflow-go/mapt-assign-event-time:stable
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
   sink:
     udsink:
       container:
          # Sink which returns a fallback response, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker
         image: quay.io/numaio/numaflow-go/fb-sink-log:stable
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
     fallback:
         udsink:
           container:
             # A redis sink for e2e testing, see https://github.com/numaproj/numaflow-go/tree/main/pkg/sinker/examples/fallback
             image: quay.io/numaio/numaflow-go/redis-sink:stable
-            imagePullPolicy: Always
+            imagePullPolicy: IfNotPresent
             env:
               - name: SINK_HASH_KEY
                 value: "fallback-sink-key"

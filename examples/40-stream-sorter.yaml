@@ -1,0 +1,46 @@
+apiVersion: numaflow.numaproj.io/v1alpha1
+kind: Pipeline
+metadata:
+  name: stream-sorter
+spec:
+  limits:
+    readBatchSize: 1
+  vertices:
+    - name: input-one
+      scale:
+        min: 1
+      source:
+        generator:
+          rpu: 10
+          keyCount: 1
+    - name: input-two
+      scale:
+        min: 1
+      source:
+        generator:
+          rpu: 10
+          keyCount: 1
+    - name: accum
+      udf:
+        container:
+          image: quay.io/numaio/numaflow-rs/stream-sorter:stable
+        groupBy:
+          window:
+            accumulator:
+              timeout: 30s
+          keyed: true
+          storage:
+            persistentVolumeClaim:
+              volumeSize: 1Gi
+    - name: sink
+      scale:
+        min: 1
+      sink:
+        log: {}
+  edges:
+    - from: input-one
+      to: accum
+    - from: input-two
+      to: accum
+    - from: accum
+      to: sink
