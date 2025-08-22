@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize};
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
-use tracing::warn;
+use tracing::{info, warn};
 
 pub(crate) mod error;
 
@@ -148,7 +148,8 @@ impl RateLimit<WithoutDistributedState> {
             Ok(previous) => {
                 let acquired = match n {
                     None => previous,
-                    Some(requested) => previous.min(requested),
+                    Some(requested) if previous >= requested => requested,
+                    Some(_) => previous,
                 };
                 TokenAvailability::Available(acquired)
             }
@@ -157,26 +158,10 @@ impl RateLimit<WithoutDistributedState> {
     }
 }
 
-/// Helper to sleep until the start of the next second.
-async fn sleep_until_next_sec() {
-    let now = std::time::SystemTime::now();
-    let since_epoch = now
-        .duration_since(std::time::UNIX_EPOCH)
-        .expect("Time went backwards");
-
-    // Calculate the start of the next second
-    let next_sec = since_epoch.as_secs() + 1;
-    let next_sec_duration = Duration::from_secs(next_sec);
-
-    tokio::time::sleep_until(tokio::time::Instant::from_std(
-        std::time::Instant::now() + (next_sec_duration - since_epoch),
-    ))
-    .await;
-}
-
-impl RateLimit<WithoutDistributedState> {
-    /// Tries to acquire tokens once in a non-blocking manner.
-    async fn try_acquire_n(&self, n: Option<usize>) -> usize {
+impl RateLimiter for RateLimit<WithoutDistributedState> {
+    /// Acquire `n` tokens. If `n` is not provided, it will acquire all the tokens. For non-distributed
+    /// state, `timeout` is not used since there are no blocking calls.
+    async fn acquire_n(&self, n: Option<usize>, _timeout: Option<Duration>) -> usize {
         // let's try to acquire the tokens
         match self.get_tokens(n) {
             TokenAvailability::Available(t) => return t,
@@ -212,44 +197,9 @@ impl RateLimit<WithoutDistributedState> {
     }
 }
 
-impl RateLimiter for RateLimit<WithoutDistributedState> {
-    /// Acquire `n` tokens. If `n` is not provided, it will acquire all the tokens.
-    /// If timeout is None, returns immediately with available tokens (non-blocking).
-    /// If timeout is Some, will wait up to the specified duration for some tokens to be available.
-    /// Timeout is only considered when token size is zero.
-    async fn acquire_n(&self, n: Option<usize>, timeout: Option<Duration>) -> usize {
-        // First attempt - try to get tokens immediately
-        let tokens = self.try_acquire_n(n).await;
-        if tokens > 0 {
-            return tokens;
-        }
-
-        // If no timeout specified, return immediately (original behavior)
-        let Some(duration) = timeout else {
-            return 0;
-        };
-
-        // With timeout, wait for tokens to become available
-        let acquisition_loop = async {
-            loop {
-                // Wait for the next epoch to try again
-                sleep_until_next_sec().await;
-                let tokens = self.try_acquire_n(n).await;
-                if tokens > 0 {
-                    return tokens;
-                }
-            }
-        };
-
-        tokio::time::timeout(duration, acquisition_loop)
-            .await
-            .unwrap_or(0)
-    }
-}
-
-impl<S: Store + Send + Sync + Clone + 'static> RateLimit<WithDistributedState<S>> {
-    /// Tries to acquire tokens once in a non-blocking manner.
-    async fn try_acquire_n(&self, n: Option<usize>) -> usize {
+impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithDistributedState<S>> {
+    /// Acquire `n` tokens with distributed consensus (non-blocking, truncated-window semantics).
+    async fn acquire_n(&self, n: Option<usize>, _timeout: Option<Duration>) -> usize {
         // Try the hot-path first: consume from the current window.
         match self.get_tokens(n) {
             TokenAvailability::Available(t) => return t,
@@ -283,41 +233,6 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimit<WithDistributedState<S>
                 0
             }
         }
-    }
-}
-
-impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithDistributedState<S>> {
-    /// Acquire `n` tokens. If `n` is not provided, it will acquire all the tokens.
-    /// If timeout is None, returns immediately with available tokens (non-blocking).
-    /// If timeout is Some, will wait up to the specified duration for some tokens to be available.
-    /// Timeout is only considered when token size is zero.
-    async fn acquire_n(&self, n: Option<usize>, timeout: Option<Duration>) -> usize {
-        // First attempt - try to get tokens immediately
-        let tokens = self.try_acquire_n(n).await;
-        if tokens > 0 {
-            return tokens;
-        }
-
-        // If no timeout specified, return immediately (original behavior)
-        let Some(duration) = timeout else {
-            return 0;
-        };
-
-        // With timeout, wait for tokens to become available
-        let acquisition_loop = async {
-            loop {
-                // Wait for the next epoch to try again
-                sleep_until_next_sec().await;
-                let tokens = self.try_acquire_n(n).await;
-                if tokens > 0 {
-                    return tokens;
-                }
-            }
-        };
-
-        tokio::time::timeout(duration, acquisition_loop)
-            .await
-            .unwrap_or(0)
     }
 }
 
@@ -395,26 +310,26 @@ impl<S: Store> RateLimit<WithDistributedState<S>> {
                 // Divide by pool size to get appropriate tokens for this processor
                 let processor_tokens = current / pool;
                 if processor_tokens == 0 {
-                    return None;
+                    return None; // No tokens available
                 }
 
-                // if n is not provided, acquire all available tokens, else min of requested and
-                // available tokens.
-                let tokens_to_acquire = match n {
-                    None => processor_tokens,
-                    Some(requested) => processor_tokens.min(requested),
-                };
-
-                // since the tokens are not stored at processor level, we need to subtract the tokens
-                // by pool size to get the right number.
-                current.checked_sub(tokens_to_acquire * pool)
+                // since the current tokens are for the entire pool, we need to subtract
+                // the tokens by multiplying by pool size
+                match n {
+                    None => Some(current - (processor_tokens * pool)),
+                    Some(requested) if processor_tokens >= requested => {
+                        Some(current - (requested * pool))
+                    }
+                    Some(_) => Some(current - (processor_tokens * pool)),
+                }
             },
         ) {
             Ok(previous) => {
                 let available_for_pod = previous / pool;
                 let acquired = match n {
                     None => available_for_pod,
-                    Some(requested) => available_for_pod.min(requested),
+                    Some(requested) if available_for_pod >= requested => requested,
+                    Some(_) => available_for_pod,
                 };
                 TokenAvailability::Available(acquired)
             }
@@ -432,6 +347,8 @@ pub struct TokenCalcBounds {
     max: usize,
     /// Minimum number of tokens available at t=0 (origin)
     min: usize,
+    /// Unit of time for the slope in seconds.
+    duration: Duration,
 }
 
 impl Default for TokenCalcBounds {
@@ -440,6 +357,7 @@ impl Default for TokenCalcBounds {
             slope: 1.0,
             max: 1,
             min: 1,
+            duration: Duration::from_secs(1),
         }
     }
 }
@@ -452,6 +370,7 @@ impl TokenCalcBounds {
             slope: (max - min) as f32 / duration.as_secs_f32(),
             max,
             min,
+            duration,
         }
     }
 }
@@ -637,11 +556,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_timeout_with_available_tokens() {
+    async fn test_timeout_parameter_ignored() {
         let bounds = TokenCalcBounds::new(5, 3, Duration::from_secs(1));
         let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
 
-        // Should return immediately when tokens are available
+        // Timeout should be ignored for WithoutDistributedState
         let start = std::time::Instant::now();
         let tokens = rate_limiter
             .acquire_n(Some(2), Some(Duration::from_secs(1)))
@@ -650,118 +569,6 @@ mod tests {
 
         assert_eq!(tokens, 2);
         assert!(elapsed < Duration::from_millis(100)); // Should return immediately
-    }
-
-    #[tokio::test]
-    async fn test_timeout_when_tokens_exhausted() {
-        let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1));
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
-
-        // Consume all available tokens
-        let tokens = rate_limiter.acquire_n(None, None).await;
-        assert_eq!(tokens, 2);
-
-        // Try to acquire more tokens with a short timeout
-        let start = std::time::Instant::now();
-        let tokens = rate_limiter
-            .acquire_n(Some(1), Some(Duration::from_millis(100)))
-            .await;
-        let elapsed = start.elapsed();
-
-        assert_eq!(tokens, 0); // Should timeout and return 0
-        assert!(elapsed >= Duration::from_millis(90)); // Should respect timeout
-        assert!(elapsed < Duration::from_millis(200)); // But not wait too long
-    }
-
-    #[tokio::test]
-    async fn test_no_timeout_returns_immediately() {
-        let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1));
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
-
-        // Consume all available tokens
-        let tokens = rate_limiter.acquire_n(None, None).await;
-        assert_eq!(tokens, 2);
-
-        // Should return immediately with 0 tokens when none available and no timeout
-        let start = std::time::Instant::now();
-        let tokens = rate_limiter.acquire_n(Some(1), None).await;
-        let elapsed = start.elapsed();
-
-        assert_eq!(tokens, 0);
-        // Should return immediately
-        assert!(elapsed < Duration::from_millis(100));
-    }
-
-    #[tokio::test]
-    async fn test_timeout_waits_for_next_epoch() {
-        let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1));
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
-
-        // Consume all available tokens
-        let tokens = rate_limiter.acquire_n(None, None).await;
-        assert_eq!(tokens, 2);
-
-        // Force time passage by resetting epoch
-        rate_limiter
-            .last_queried_epoch
-            .store(0, std::sync::atomic::Ordering::Release);
-
-        // Should wait and get tokens from next epoch when timeout is provided
-        let start = std::time::Instant::now();
-        let tokens = rate_limiter
-            .acquire_n(Some(1), Some(Duration::from_secs(2)))
-            .await;
-        let elapsed = start.elapsed();
-
-        assert_eq!(tokens, 1);
-        // Should return quickly since we forced epoch reset
-        assert!(elapsed < Duration::from_millis(100));
-    }
-
-    #[tokio::test]
-    async fn test_timeout_functionality_comprehensive() {
-        let bounds = TokenCalcBounds::new(10, 5, Duration::from_secs(1));
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
-
-        // Test 1: Immediate return when tokens available
-        let tokens = rate_limiter
-            .acquire_n(Some(3), Some(Duration::from_millis(100)))
-            .await;
-        assert_eq!(tokens, 3);
-
-        // Consume remaining tokens
-        let tokens = rate_limiter.acquire_n(None, None).await;
-        assert_eq!(tokens, 2); // Should get the remaining 2 tokens
-
-        // Test 2: Immediate return when no timeout and no tokens
-        let tokens = rate_limiter.acquire_n(Some(1), None).await;
-        assert_eq!(tokens, 0);
-
-        // Test 3: Timeout when tokens not available
-        let start = std::time::Instant::now();
-        let tokens = rate_limiter
-            .acquire_n(Some(1), Some(Duration::from_millis(200)))
-            .await;
-        let elapsed = start.elapsed();
-
-        assert_eq!(tokens, 0);
-        assert!(elapsed >= Duration::from_millis(180));
-        assert!(elapsed < Duration::from_millis(300));
-
-        // Test 4: Success when tokens become available within timeout
-        // Force epoch reset to simulate time passage
-        rate_limiter
-            .last_queried_epoch
-            .store(0, std::sync::atomic::Ordering::Release);
-
-        let start = std::time::Instant::now();
-        let tokens = rate_limiter
-            .acquire_n(Some(2), Some(Duration::from_secs(1)))
-            .await;
-        let elapsed = start.elapsed();
-
-        assert_eq!(tokens, 2);
-        assert!(elapsed < Duration::from_millis(100)); // Should be immediate due to epoch reset
     }
 
     #[tokio::test]
@@ -1021,7 +828,7 @@ mod tests {
         println!("Total tokens phase 1: {}", total_phase1);
         println!("Total tokens phase 2: {}", total_phase2);
 
-        // Due to time-based truncation and distributed consensus, we can't expect exact values,
+        // Due to time-based truncation and distributed consensus, we can't expect exact values
         // but we should see reasonable token distribution
         assert!(total_phase1 > 0, "Should distribute some tokens in phase 1");
         assert!(total_phase2 > 0, "Should distribute some tokens in phase 2");

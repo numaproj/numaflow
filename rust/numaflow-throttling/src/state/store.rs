@@ -7,7 +7,7 @@ pub mod redis_store;
 /// Store is the trait that defines the interface for the external store. It is
 /// responsible updating the [RateLimiterDistributedState] and for publishing the heartbeats.
 #[trait_variant::make(Send)]
-pub trait Store: Clone + 'static {
+pub(crate) trait Store: Clone + 'static {
     /// Register the consumer with the external store. It increments the pool size by 1, and returns
     /// the initial pool size, consensus cannot be reached during registration.
     async fn register(&self, processor_id: &str, cancel: CancellationToken)
