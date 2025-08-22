@@ -1211,7 +1211,7 @@ async fn sidecar_livez(State(state): State<MetricsState>) -> impl IntoResponse {
 pub(crate) enum LagReader {
     Source(Box<Source>),
     #[allow(clippy::upper_case_acronyms)]
-    ISB(Vec<JetStreamReader>), // multiple partitions
+    ISB(Vec<JetStreamReader<numaflow_throttling::state::store::in_memory_store::InMemoryStore>>), // multiple partitions
 }
 
 /// PendingReader is responsible for periodically checking the lag of the reader
@@ -1360,7 +1360,7 @@ async fn fetch_source_pending(lag_reader: &Source) -> crate::error::Result<i64> 
     Ok(response)
 }
 
-async fn fetch_isb_pending(reader: &mut JetStreamReader) -> crate::error::Result<i64> {
+async fn fetch_isb_pending(reader: &mut JetStreamReader<numaflow_throttling::state::store::in_memory_store::InMemoryStore>) -> crate::error::Result<i64> {
     let response: i64 = reader.pending().await?.map_or(-1, |p| p as i64); // default to -1(unavailable)
     Ok(response)
 }

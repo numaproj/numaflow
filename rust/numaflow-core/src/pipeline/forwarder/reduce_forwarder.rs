@@ -8,13 +8,16 @@ use crate::reduce::reducer::Reducer;
 
 /// ReduceForwarder is a component which starts a PBQ reader and a reducer
 /// and manages the lifecycle of these components.
-pub(crate) struct ReduceForwarder {
-    pbq: PBQ,
+pub(crate) struct ReduceForwarder<S> {
+    pbq: PBQ<S>,
     reducer: Reducer,
 }
 
-impl ReduceForwarder {
-    pub(crate) fn new(pbq: PBQ, reducer: Reducer) -> Self {
+impl<S> ReduceForwarder<S>
+where
+    S: numaflow_throttling::state::Store + Sync,
+{
+    pub(crate) fn new(pbq: PBQ<S>, reducer: Reducer) -> Self {
         Self { pbq, reducer }
     }
 

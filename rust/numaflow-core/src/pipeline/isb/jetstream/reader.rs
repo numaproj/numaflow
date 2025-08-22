@@ -23,8 +23,7 @@ use backoff::strategy::fixed;
 use bytes::Bytes;
 use chrono::Utc;
 use flate2::read::GzDecoder;
-use futures::TryStreamExt;
-use numaflow_throttling::{RateLimit, WithDistributedState};
+use numaflow_throttling::{RateLimit, RateLimiter, WithDistributedState};
 use prost::Message as ProtoMessage;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -334,17 +333,31 @@ where
             .await
             .map_err(|e| Error::ISB(format!("Failed to acquire semaphore permit: {e}")))?;
 
+        // Apply rate limiting if configured
+        let effective_batch_size = if let Some(rate_limiter) = &self.rate_limiter {
+            // Try to acquire tokens from the rate limiter
+            let tokens_acquired = rate_limiter.acquire_n(Some(batch_size), None).await;
+            if tokens_acquired == 0 {
+                // No tokens available, return empty batch
+                return Ok(vec![]);
+            }
+            // Use the number of tokens acquired as the effective batch size
+            std::cmp::min(tokens_acquired, batch_size)
+        } else {
+            batch_size
+        };
+
         let start = Instant::now();
         let jetstream_messages = match self
             .consumer
             .batch()
-            .max_messages(batch_size)
+            .max_messages(effective_batch_size)
             .expires(read_timeout)
             .messages()
             .await
         {
             Ok(mut messages) => {
-                let mut batch = Vec::with_capacity(batch_size);
+                let mut batch = Vec::with_capacity(effective_batch_size);
                 while let Some(message) = messages.next().await {
                     match message {
                         Ok(msg) => batch.push(msg),
@@ -716,7 +729,9 @@ mod tests {
             ..Default::default()
         };
         let tracker = TrackerHandle::new(None);
-        let js_reader = JetStreamReader::new(
+        let js_reader: JetStreamReader<
+            numaflow_throttling::state::store::in_memory_store::InMemoryStore,
+        > = JetStreamReader::new(
             ISBReaderConfig {
                 vertex_type: "Map".to_string(),
                 stream: stream.clone(),
@@ -826,7 +841,9 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
             ..Default::default()
         };
-        let js_reader = JetStreamReader::new(
+        let js_reader: JetStreamReader<
+            numaflow_throttling::state::store::in_memory_store::InMemoryStore,
+        > = JetStreamReader::new(
             ISBReaderConfig {
                 vertex_type: "Map".to_string(),
                 stream: js_stream.clone(),
@@ -981,7 +998,9 @@ mod tests {
             ..Default::default()
         };
         let tracker = TrackerHandle::new(None);
-        let js_reader = JetStreamReader::new(
+        let js_reader: JetStreamReader<
+            numaflow_throttling::state::store::in_memory_store::InMemoryStore,
+        > = JetStreamReader::new(
             ISBReaderConfig {
                 vertex_type: "Map".to_string(),
                 stream: stream.clone(),

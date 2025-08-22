@@ -23,15 +23,18 @@ pub(crate) struct WAL {
 }
 
 /// PBQBuilder is a builder for PBQ.
-pub(crate) struct PBQBuilder {
-    isb_reader: JetStreamReader,
+pub(crate) struct PBQBuilder<S> {
+    isb_reader: JetStreamReader<S>,
     tracker_handle: TrackerHandle,
     wal: Option<WAL>,
 }
 
-impl PBQBuilder {
+impl<S> PBQBuilder<S>
+where
+    S: numaflow_throttling::state::Store + Sync,
+{
     /// Creates a new PBQBuilder.
-    pub(crate) fn new(isb_reader: JetStreamReader, tracker_handle: TrackerHandle) -> Self {
+    pub(crate) fn new(isb_reader: JetStreamReader<S>, tracker_handle: TrackerHandle) -> Self {
         Self {
             isb_reader,
             tracker_handle,
@@ -44,7 +47,7 @@ impl PBQBuilder {
         self
     }
 
-    pub(crate) fn build(self) -> PBQ {
+    pub(crate) fn build(self) -> PBQ<S> {
         PBQ {
             isb_reader: self.isb_reader,
             wal: self.wal,
@@ -55,13 +58,16 @@ impl PBQBuilder {
 
 /// PBQ is a persistent buffer queue.
 #[allow(clippy::upper_case_acronyms)]
-pub(crate) struct PBQ {
-    isb_reader: JetStreamReader,
+pub(crate) struct PBQ<S> {
+    isb_reader: JetStreamReader<S>,
     wal: Option<WAL>,
     tracker_handle: TrackerHandle,
 }
 
-impl PBQ {
+impl<S> PBQ<S>
+where
+    S: numaflow_throttling::state::Store + Sync,
+{
     /// Streaming read from PBQ, returns a ReceiverStream and a JoinHandle for monitoring errors.
     pub(crate) async fn streaming_read(
         self,
@@ -133,7 +139,7 @@ impl PBQ {
 
     /// Reads from ISB and writes to WAL.
     async fn read_isb_and_write_wal(
-        isb_reader: JetStreamReader,
+        isb_reader: JetStreamReader<S>,
         append_only_wal: AppendOnlyWal,
         tracker_handle: TrackerHandle,
         tx: Sender<Message>,
@@ -238,17 +244,22 @@ mod tests {
         };
         let tracker = TrackerHandle::new(None);
         use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;
-        let js_reader = JetStreamReader::new(ISBReaderConfig {
-            vertex_type: "test".to_string(),
-            stream: stream.clone(),
-            js_ctx: context.clone(),
-            config: buf_reader_config,
-            tracker_handle: tracker.clone(),
-            batch_size: 500,
-            read_timeout: Duration::from_millis(100),
-            watermark_handle: None,
-            isb_config: None,
-        })
+        let js_reader: JetStreamReader<
+            numaflow_throttling::state::store::in_memory_store::InMemoryStore,
+        > = JetStreamReader::new(
+            ISBReaderConfig {
+                vertex_type: "test".to_string(),
+                stream: stream.clone(),
+                js_ctx: context.clone(),
+                config: buf_reader_config,
+                tracker_handle: tracker.clone(),
+                batch_size: 500,
+                read_timeout: Duration::from_millis(100),
+                watermark_handle: None,
+                isb_config: None,
+            },
+            None,
+        )
         .await
         .unwrap();
 
@@ -353,17 +364,22 @@ mod tests {
         };
         let tracker = TrackerHandle::new(None);
         use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;
-        let js_reader = JetStreamReader::new(ISBReaderConfig {
-            vertex_type: "test".to_string(),
-            stream: stream.clone(),
-            js_ctx: context.clone(),
-            config: buf_reader_config,
-            tracker_handle: tracker.clone(),
-            batch_size: 500,
-            read_timeout: Duration::from_millis(100),
-            watermark_handle: None,
-            isb_config: None,
-        })
+        let js_reader: JetStreamReader<
+            numaflow_throttling::state::store::in_memory_store::InMemoryStore,
+        > = JetStreamReader::new(
+            ISBReaderConfig {
+                vertex_type: "test".to_string(),
+                stream: stream.clone(),
+                js_ctx: context.clone(),
+                config: buf_reader_config,
+                tracker_handle: tracker.clone(),
+                batch_size: 500,
+                read_timeout: Duration::from_millis(100),
+                watermark_handle: None,
+                isb_config: None,
+            },
+            None,
+        )
         .await
         .unwrap();
 
@@ -589,17 +605,22 @@ mod tests {
         };
         let tracker = TrackerHandle::new(None);
         use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;
-        let js_reader = JetStreamReader::new(ISBReaderConfig {
-            vertex_type: "test".to_string(),
-            stream: stream.clone(),
-            js_ctx: context.clone(),
-            config: buf_reader_config,
-            tracker_handle: tracker.clone(),
-            batch_size: 500,
-            read_timeout: Duration::from_millis(100),
-            watermark_handle: None,
-            isb_config: None,
-        })
+        let js_reader: JetStreamReader<
+            numaflow_throttling::state::store::in_memory_store::InMemoryStore,
+        > = JetStreamReader::new(
+            ISBReaderConfig {
+                vertex_type: "test".to_string(),
+                stream: stream.clone(),
+                js_ctx: context.clone(),
+                config: buf_reader_config,
+                tracker_handle: tracker.clone(),
+                batch_size: 500,
+                read_timeout: Duration::from_millis(100),
+                watermark_handle: None,
+                isb_config: None,
+            },
+            None,
+        )
         .await
         .unwrap();
 
