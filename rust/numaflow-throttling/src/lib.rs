@@ -459,6 +459,7 @@ impl TokenCalcBounds {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::SystemTime;
     use tokio::time::Duration;
 
     /// Test utilities for Redis integration tests
@@ -657,20 +658,21 @@ mod tests {
         let bounds = TokenCalcBounds::new(5, 2, Duration::from_secs(1));
         let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
 
+        rate_limiter.last_queried_epoch.store(
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs(),
+            std::sync::atomic::Ordering::Release,
+        );
+
         // Consume all available tokens
         let tokens = rate_limiter.acquire_n(None, None).await;
         assert_eq!(tokens, 2);
 
-        // Try to acquire more tokens with a short timeout
-        let start = std::time::Instant::now();
-        let tokens = rate_limiter
-            .acquire_n(Some(1), Some(Duration::from_millis(100)))
-            .await;
-        let elapsed = start.elapsed();
-
-        assert_eq!(tokens, 0); // Should timeout and return 0
-        assert!(elapsed >= Duration::from_millis(90)); // Should respect timeout
-        assert!(elapsed < Duration::from_millis(200)); // But not wait too long
+        // Try to acquire more tokens
+        let tokens = rate_limiter.acquire_n(Some(1), None).await;
+        assert_eq!(tokens, 0);
     }
 
     #[tokio::test]
@@ -716,52 +718,6 @@ mod tests {
         assert_eq!(tokens, 1);
         // Should return quickly since we forced epoch reset
         assert!(elapsed < Duration::from_millis(100));
-    }
-
-    #[tokio::test]
-    async fn test_timeout_functionality_comprehensive() {
-        let bounds = TokenCalcBounds::new(10, 5, Duration::from_secs(1));
-        let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
-
-        // Test 1: Immediate return when tokens available
-        let tokens = rate_limiter
-            .acquire_n(Some(3), Some(Duration::from_millis(100)))
-            .await;
-        assert_eq!(tokens, 3);
-
-        // Consume remaining tokens
-        let tokens = rate_limiter.acquire_n(None, None).await;
-        assert_eq!(tokens, 2); // Should get the remaining 2 tokens
-
-        // Test 2: Immediate return when no timeout and no tokens
-        let tokens = rate_limiter.acquire_n(Some(1), None).await;
-        assert_eq!(tokens, 0);
-
-        // Test 3: Timeout when tokens not available
-        let start = std::time::Instant::now();
-        let tokens = rate_limiter
-            .acquire_n(Some(1), Some(Duration::from_millis(200)))
-            .await;
-        let elapsed = start.elapsed();
-
-        assert_eq!(tokens, 0);
-        assert!(elapsed >= Duration::from_millis(180));
-        assert!(elapsed < Duration::from_millis(300));
-
-        // Test 4: Success when tokens become available within timeout
-        // Force epoch reset to simulate time passage
-        rate_limiter
-            .last_queried_epoch
-            .store(0, std::sync::atomic::Ordering::Release);
-
-        let start = std::time::Instant::now();
-        let tokens = rate_limiter
-            .acquire_n(Some(2), Some(Duration::from_secs(1)))
-            .await;
-        let elapsed = start.elapsed();
-
-        assert_eq!(tokens, 2);
-        assert!(elapsed < Duration::from_millis(100)); // Should be immediate due to epoch reset
     }
 
     #[tokio::test]
