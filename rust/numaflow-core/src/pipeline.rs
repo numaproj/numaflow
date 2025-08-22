@@ -252,17 +252,20 @@ async fn start_map_forwarder(
 
     for stream in reader_config.streams.clone() {
         info!("Creating buffer reader for stream {:?}", stream);
-        let buffer_reader = JetStreamReader::new(ISBReaderConfig {
-            vertex_type: config.vertex_type.to_string(),
-            stream,
-            js_ctx: js_context.clone(),
-            config: reader_config.clone(),
-            tracker_handle: tracker_handle.clone(),
-            batch_size: config.batch_size,
-            read_timeout: config.read_timeout,
-            watermark_handle: watermark_handle.clone(),
-            isb_config: config.isb_config.clone(),
-        })
+        let buffer_reader = JetStreamReader::new(
+            ISBReaderConfig {
+                vertex_type: config.vertex_type.to_string(),
+                stream,
+                js_ctx: js_context.clone(),
+                config: reader_config.clone(),
+                tracker_handle: tracker_handle.clone(),
+                batch_size: config.batch_size,
+                read_timeout: config.read_timeout,
+                watermark_handle: watermark_handle.clone(),
+                isb_config: config.isb_config.clone(),
+            },
+            None,
+        )
         .await?;
 
         isb_lag_readers.push(buffer_reader.clone());

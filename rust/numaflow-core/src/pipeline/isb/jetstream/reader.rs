@@ -24,6 +24,7 @@ use bytes::Bytes;
 use chrono::Utc;
 use flate2::read::GzDecoder;
 use futures::TryStreamExt;
+use numaflow_throttling::{RateLimit, WithDistributedState};
 use prost::Message as ProtoMessage;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -63,7 +64,7 @@ const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
 /// should stop reading messages. We just drop the tokio stream so that the downstream components can stop gracefully
 /// and before exiting we make sure all the work-in-progress(tasks) are completed.
 #[derive(Clone)]
-pub(crate) struct JetStreamReader {
+pub(crate) struct JetStreamReader<S> {
     stream: Stream,
     config: BufferReaderConfig,
     consumer: PullConsumer,
@@ -73,6 +74,7 @@ pub(crate) struct JetStreamReader {
     watermark_handle: Option<ISBWatermarkHandle>,
     vertex_type: String,
     compression_type: Option<CompressionType>,
+    rate_limiter: Option<RateLimit<WithDistributedState<S>>>,
 }
 
 /// JSWrappedMessage is a wrapper around the JetStream message that includes the
@@ -180,8 +182,14 @@ impl JSWrappedMessage {
     }
 }
 
-impl JetStreamReader {
-    pub(crate) async fn new(reader_config: ISBReaderConfig) -> Result<Self> {
+impl<S> JetStreamReader<S>
+where
+    S: numaflow_throttling::state::Store + Sync,
+{
+    pub(crate) async fn new(
+        reader_config: ISBReaderConfig,
+        rate_limiter: Option<RateLimit<WithDistributedState<S>>>,
+    ) -> Result<Self> {
         let mut buffer_config = reader_config.config;
 
         let mut consumer: PullConsumer = reader_config
@@ -221,6 +229,7 @@ impl JetStreamReader {
             compression_type: reader_config
                 .isb_config
                 .map(|c| c.compression.compress_type),
+            rate_limiter,
         })
     }
 
@@ -615,7 +624,7 @@ impl JetStreamReader {
     }
 }
 
-impl fmt::Display for JetStreamReader {
+impl<S> fmt::Display for JetStreamReader<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -707,17 +716,20 @@ mod tests {
             ..Default::default()
         };
         let tracker = TrackerHandle::new(None);
-        let js_reader = JetStreamReader::new(ISBReaderConfig {
-            vertex_type: "Map".to_string(),
-            stream: stream.clone(),
-            js_ctx: context.clone(),
-            config: buf_reader_config,
-            tracker_handle: tracker.clone(),
-            batch_size: 500,
-            read_timeout: Duration::from_millis(100),
-            watermark_handle: None,
-            isb_config: None,
-        })
+        let js_reader = JetStreamReader::new(
+            ISBReaderConfig {
+                vertex_type: "Map".to_string(),
+                stream: stream.clone(),
+                js_ctx: context.clone(),
+                config: buf_reader_config,
+                tracker_handle: tracker.clone(),
+                batch_size: 500,
+                read_timeout: Duration::from_millis(100),
+                watermark_handle: None,
+                isb_config: None,
+            },
+            None,
+        )
         .await
         .unwrap();
 
@@ -814,17 +826,20 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
             ..Default::default()
         };
-        let js_reader = JetStreamReader::new(ISBReaderConfig {
-            vertex_type: "Map".to_string(),
-            stream: js_stream.clone(),
-            js_ctx: context.clone(),
-            config: buf_reader_config,
-            tracker_handle: tracker_handle.clone(),
-            batch_size: 1,
-            read_timeout: Duration::from_millis(100),
-            watermark_handle: None,
-            isb_config: None,
-        })
+        let js_reader = JetStreamReader::new(
+            ISBReaderConfig {
+                vertex_type: "Map".to_string(),
+                stream: js_stream.clone(),
+                js_ctx: context.clone(),
+                config: buf_reader_config,
+                tracker_handle: tracker_handle.clone(),
+                batch_size: 1,
+                read_timeout: Duration::from_millis(100),
+                watermark_handle: None,
+                isb_config: None,
+            },
+            None,
+        )
         .await
         .unwrap();
 
@@ -966,17 +981,20 @@ mod tests {
             ..Default::default()
         };
         let tracker = TrackerHandle::new(None);
-        let js_reader = JetStreamReader::new(ISBReaderConfig {
-            vertex_type: "Map".to_string(),
-            stream: stream.clone(),
-            js_ctx: context.clone(),
-            config: buf_reader_config,
-            tracker_handle: tracker.clone(),
-            batch_size: 500,
-            read_timeout: Duration::from_millis(100),
-            watermark_handle: None,
-            isb_config: Some(isb_config.clone()),
-        })
+        let js_reader = JetStreamReader::new(
+            ISBReaderConfig {
+                vertex_type: "Map".to_string(),
+                stream: stream.clone(),
+                js_ctx: context.clone(),
+                config: buf_reader_config,
+                tracker_handle: tracker.clone(),
+                batch_size: 500,
+                read_timeout: Duration::from_millis(100),
+                watermark_handle: None,
+                isb_config: Some(isb_config.clone()),
+            },
+            None,
+        )
         .await
         .unwrap();
 
