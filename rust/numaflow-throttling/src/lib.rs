@@ -530,6 +530,15 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_sleep_until_next_sec() {
+        let start = std::time::Instant::now();
+        sleep_until_next_sec().await;
+        let elapsed = start.elapsed();
+        // < 5 to make tests are not flaky
+        assert!(elapsed < Duration::from_secs(5));
+    }
+
+    #[tokio::test]
     async fn test_acquire_specific_tokens() {
         let bounds = TokenCalcBounds::new(10, 5, Duration::from_secs(1));
         let rate_limiter = RateLimit::<WithoutDistributedState>::new(bounds).unwrap();
