@@ -1,4 +1,4 @@
-use crate::state::store::Store;
+pub use crate::state::store::Store;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize};
 use std::time::Duration;
@@ -10,7 +10,7 @@ pub mod store;
 
 /// Consensus represents the consensus reached by the distributed processors.
 #[derive(Debug)]
-pub(crate) enum Consensus {
+pub enum Consensus {
     /// All active processors agree on the pool size.
     Agree(usize),
     /// Active processors do not agree on the pool size.

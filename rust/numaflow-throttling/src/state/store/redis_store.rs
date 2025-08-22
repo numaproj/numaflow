@@ -3,7 +3,6 @@ use crate::state::store::Store;
 use redis::sentinel::{SentinelClient, SentinelNodeConnectionInfo, SentinelServerType};
 use redis::{Client, RedisError, Script};
 use tokio_util::sync::CancellationToken;
-use tracing::info;
 
 // Embed Lua scripts at compile time
 const REGISTER_SCRIPT: &str = include_str!("lua/register.lua");
@@ -201,8 +200,10 @@ impl Store for RedisStore {
             ));
         }
 
-        let consensus_type = &result[0];
-        let size: usize = result[1]
+        let consensus_type = &result.first().expect("should have consensus type");
+        let size: usize = result
+            .get(1)
+            .expect("should have pool size")
             .parse()
             .map_err(|_| crate::Error::Redis("Invalid pool size in response".to_string()))?;
 
