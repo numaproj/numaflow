@@ -130,7 +130,7 @@ impl RateLimit<WithoutDistributedState> {
             return TokenAvailability::Recompute;
         }
 
-        match self.token.fetch_update(
+        let fetched = self.token.fetch_update(
             std::sync::atomic::Ordering::Release,
             std::sync::atomic::Ordering::Acquire,
             |current| {
@@ -144,7 +144,9 @@ impl RateLimit<WithoutDistributedState> {
                     Some(_) => Some(0), // Not enough tokens, acquire all available
                 }
             },
-        ) {
+        );
+
+        match fetched {
             Ok(previous) => {
                 let acquired = match n {
                     None => previous,
@@ -176,7 +178,7 @@ async fn sleep_until_next_sec() {
 
 impl RateLimit<WithoutDistributedState> {
     /// Tries to acquire tokens(non-blocking)
-    async fn try_acquire_n(&self, n: Option<usize>) -> usize {
+    async fn attempt_acquire_n(&self, n: Option<usize>) -> usize {
         // let's try to acquire the tokens
         match self.get_tokens(n) {
             TokenAvailability::Available(t) => return t,
@@ -219,7 +221,7 @@ impl RateLimiter for RateLimit<WithoutDistributedState> {
     /// Timeout is only considered when token size is zero.
     async fn acquire_n(&self, n: Option<usize>, timeout: Option<Duration>) -> usize {
         // First attempt - try to get tokens immediately
-        let tokens = self.try_acquire_n(n).await;
+        let tokens = self.attempt_acquire_n(n).await;
         if tokens > 0 {
             return tokens;
         }
@@ -234,7 +236,7 @@ impl RateLimiter for RateLimit<WithoutDistributedState> {
             loop {
                 // Wait for the next epoch to try again
                 sleep_until_next_sec().await;
-                let tokens = self.try_acquire_n(n).await;
+                let tokens = self.attempt_acquire_n(n).await;
                 if tokens > 0 {
                     return tokens;
                 }
@@ -249,7 +251,7 @@ impl RateLimiter for RateLimit<WithoutDistributedState> {
 
 impl<S: Store + Send + Sync + Clone + 'static> RateLimit<WithDistributedState<S>> {
     /// Tries to acquire tokens (non-blocking)
-    async fn try_acquire_n(&self, n: Option<usize>) -> usize {
+    async fn attempt_acquire_n(&self, n: Option<usize>) -> usize {
         // Try the hot-path first: consume from the current window.
         match self.get_tokens(n) {
             TokenAvailability::Available(t) => return t,
@@ -293,7 +295,7 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithDis
     /// Timeout is only considered when token size is zero.
     async fn acquire_n(&self, n: Option<usize>, timeout: Option<Duration>) -> usize {
         // First attempt - try to get tokens immediately
-        let tokens = self.try_acquire_n(n).await;
+        let tokens = self.attempt_acquire_n(n).await;
         if tokens > 0 {
             return tokens;
         }
@@ -308,7 +310,7 @@ impl<S: Store + Send + Sync + Clone + 'static> RateLimiter for RateLimit<WithDis
             loop {
                 // Wait for the next epoch to try again
                 sleep_until_next_sec().await;
-                let tokens = self.try_acquire_n(n).await;
+                let tokens = self.attempt_acquire_n(n).await;
                 if tokens > 0 {
                     return tokens;
                 }
@@ -384,7 +386,7 @@ impl<S: Store> RateLimit<WithDistributedState<S>> {
             .load(std::sync::atomic::Ordering::Relaxed)
             .max(1);
 
-        match self.token.fetch_update(
+        let fetched = self.token.fetch_update(
             std::sync::atomic::Ordering::Release,
             std::sync::atomic::Ordering::Acquire,
             |current| {
@@ -409,7 +411,9 @@ impl<S: Store> RateLimit<WithDistributedState<S>> {
                 // by pool size to get the right number.
                 current.checked_sub(tokens_to_acquire * pool)
             },
-        ) {
+        );
+
+        match fetched {
             Ok(previous) => {
                 let available_for_pod = previous / pool;
                 let acquired = match n {
