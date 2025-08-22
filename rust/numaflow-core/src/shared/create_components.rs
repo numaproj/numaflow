@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use crate::config::components::ratelimit::RateLimitConfig;
 use crate::config::components::reduce::UnalignedWindowType;
 use crate::config::components::sink::{SinkConfig, SinkType};
 use crate::config::components::source::{SourceConfig, SourceType};
@@ -46,6 +47,8 @@ use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pb::clients::sourcetransformer::source_transform_client::SourceTransformClient;
 use numaflow_shared::server_info::{ContainerType, Protocol, sdk_server_info};
 use numaflow_sqs::sink::SqsSinkBuilder;
+use numaflow_throttling::state::OptimisticValidityUpdateSecs;
+use numaflow_throttling::{RateLimit, TokenCalcBounds, WithDistributedState};
 use tokio_util::sync::CancellationToken;
 
 /// Creates a sink writer based on the configuration
@@ -894,4 +897,39 @@ mod tests {
         sink_server_handle.await.unwrap();
         transformer_server_handle.await.unwrap();
     }
+}
+
+/// Generic helper function to create rate limiter based on store type
+pub async fn create_rate_limiter<S>(
+    rate_limit_config: &RateLimitConfig,
+    store: S,
+    cancel_token: CancellationToken,
+) -> error::Result<RateLimit<WithDistributedState<S>>>
+where
+    S: numaflow_throttling::state::Store + Send + Sync + 'static,
+{
+    let bounds = TokenCalcBounds::new(
+        rate_limit_config.max,
+        rate_limit_config.min,
+        rate_limit_config.duration,
+    );
+
+    let processor_id = &format!(
+        "{}_{}",
+        crate::config::get_vertex_name(),
+        get_vertex_replica()
+    );
+    let refresh_interval = Duration::from_millis(100);
+    let runway_update = OptimisticValidityUpdateSecs::default();
+
+    RateLimit::<WithDistributedState<S>>::new(
+        bounds,
+        store,
+        processor_id,
+        cancel_token,
+        refresh_interval,
+        runway_update,
+    )
+    .await
+    .map_err(|e| error::Error::Config(format!("Failed to create rate limiter: {}", e)))
 }
