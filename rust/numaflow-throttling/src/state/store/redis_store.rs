@@ -3,7 +3,6 @@ use crate::state::store::Store;
 use redis::sentinel::{SentinelClient, SentinelNodeConnectionInfo, SentinelServerType};
 use redis::{Client, RedisError, Script};
 use tokio_util::sync::CancellationToken;
-use tracing::info;
 
 // Embed Lua scripts at compile time
 const REGISTER_SCRIPT: &str = include_str!("lua/register.lua");
