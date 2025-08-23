@@ -1208,16 +1208,22 @@ async fn sidecar_livez(State(state): State<MetricsState>) -> impl IntoResponse {
 }
 
 #[derive(Clone)]
-pub(crate) enum LagReader {
+pub(crate) enum LagReader<S>
+where
+    S: Clone,
+{
     Source(Box<Source>),
     #[allow(clippy::upper_case_acronyms)]
-    ISB(Vec<JetStreamReader<numaflow_throttling::state::store::in_memory_store::InMemoryStore>>), // multiple partitions
+    ISB(Vec<JetStreamReader<S>>), // multiple partitions
 }
 
 /// PendingReader is responsible for periodically checking the lag of the reader
 /// and exposing the metrics.
-pub(crate) struct PendingReader {
-    lag_reader: LagReader,
+pub(crate) struct PendingReader<S>
+where
+    S: numaflow_throttling::state::Store + Sync + Clone,
+{
+    lag_reader: LagReader<S>,
     lag_checking_interval: Duration,
 }
 
@@ -1226,13 +1232,22 @@ pub(crate) struct PendingReaderTasks {
 }
 
 /// PendingReaderBuilder is used to build a [LagReader] instance.
-pub(crate) struct PendingReaderBuilder {
-    lag_reader: LagReader,
+pub(crate) struct PendingReaderBuilder<S>
+where
+    S: numaflow_throttling::state::Store + Sync + Clone,
+{
+    lag_reader: LagReader<S>,
     lag_checking_interval: Option<Duration>,
 }
 
-impl PendingReaderBuilder {
-    pub(crate) fn new(lag_reader: LagReader) -> Self {
+impl<S> PendingReaderBuilder<S>
+where
+    S: numaflow_throttling::state::Store + Sync + Clone,
+{
+    pub(crate) fn new(lag_reader: LagReader<S>) -> Self
+    where
+        S: numaflow_throttling::state::Store + Sync + Clone + 'static,
+    {
         Self {
             lag_reader,
             lag_checking_interval: None,
@@ -1243,7 +1258,7 @@ impl PendingReaderBuilder {
         self.lag_checking_interval = Some(interval);
         self
     }
-    pub(crate) fn build(self) -> PendingReader {
+    pub(crate) fn build(self) -> PendingReader<S> {
         PendingReader {
             lag_reader: self.lag_reader,
             lag_checking_interval: self
@@ -1253,7 +1268,10 @@ impl PendingReaderBuilder {
     }
 }
 
-impl PendingReader {
+impl<S> PendingReader<S>
+where
+    S: numaflow_throttling::state::Store + Sync + Clone,
+{
     /// Starts the lag reader by spawning task to expose pending metrics for daemon server.
     /// Dropping the PendingReaderTasks will abort the background tasks.
     pub async fn start(&self, is_mono_vertex: bool) -> PendingReaderTasks {
@@ -1276,11 +1294,13 @@ impl Drop for PendingReaderTasks {
 }
 
 // Periodically exposes the pending metrics by calculating the average pending messages over different intervals.
-async fn expose_pending_metrics(
-    mut lag_reader: LagReader,
+async fn expose_pending_metrics<S>(
+    mut lag_reader: LagReader<S>,
     lag_checking_interval: Duration,
     is_mono_vertex: bool,
-) {
+) where
+    S: numaflow_throttling::state::Store + Sync + Clone,
+{
     let mut ticker = time::interval(lag_checking_interval);
     // print pending messages every one minute
     let mut last_logged = std::time::Instant::now();
@@ -1360,7 +1380,10 @@ async fn fetch_source_pending(lag_reader: &Source) -> crate::error::Result<i64> 
     Ok(response)
 }
 
-async fn fetch_isb_pending(reader: &mut JetStreamReader<numaflow_throttling::state::store::in_memory_store::InMemoryStore>) -> crate::error::Result<i64> {
+async fn fetch_isb_pending<S>(reader: &mut JetStreamReader<S>) -> crate::error::Result<i64>
+where
+    S: numaflow_throttling::state::Store + Sync,
+{
     let response: i64 = reader.pending().await?.map_or(-1, |p| p as i64); // default to -1(unavailable)
     Ok(response)
 }

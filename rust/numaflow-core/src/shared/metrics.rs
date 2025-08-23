@@ -28,10 +28,13 @@ pub(crate) async fn start_metrics_server(
 }
 
 /// Creates a pending reader
-pub(crate) async fn create_pending_reader(
+pub(crate) async fn create_pending_reader<S>(
     metrics_config: &MetricsConfig,
-    lag_reader: LagReader,
-) -> PendingReader {
+    lag_reader: LagReader<S>,
+) -> PendingReader<S>
+where
+    S: numaflow_throttling::state::Store + Sync,
+{
     PendingReaderBuilder::new(lag_reader)
         .lag_checking_interval(Duration::from_secs(
             metrics_config.lag_check_interval_in_secs.into(),

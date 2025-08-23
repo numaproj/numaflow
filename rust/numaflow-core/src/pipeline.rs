@@ -14,13 +14,15 @@ use crate::config::components::reduce::{
     AlignedReducerConfig, AlignedWindowType, ReducerConfig, UnalignedReducerConfig,
     UnalignedWindowType,
 };
-use crate::config::pipeline;
+use crate::config::pipeline::isb::BufferReaderConfig;
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::{
     PipelineConfig, ReduceVtxConfig, ServingStoreType, SinkVtxConfig, SourceVtxConfig,
 };
+use crate::config::{get_pipeline_name, get_vertex_name, pipeline};
 use crate::config::{get_vertex_replica, is_mono_vertex};
+use crate::mapper::map::MapHandle;
 use crate::metrics::{
     ComponentHealthChecks, LagReader, MetricsState, PendingReaderTasks, PipelineComponents,
     WatermarkFetcherState,
@@ -46,12 +48,13 @@ use crate::reduce::wal::segment::compactor::{Compactor, WindowKind};
 use crate::shared::create_components;
 use crate::shared::create_components::create_rate_limiter;
 use crate::shared::metrics::start_metrics_server;
-use crate::sink::SinkWriter;
+
 use crate::sink::serve::ServingStore;
 use crate::sink::serve::nats::NatsServingStore;
 use crate::sink::serve::user_defined::UserDefinedStore;
 use crate::tracker::TrackerHandle;
 use crate::watermark::WatermarkHandle;
+use crate::watermark::isb::ISBWatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
 use crate::{Result, error, shared};
 use numaflow_throttling::state::store::in_memory_store::InMemoryStore;
@@ -66,7 +69,7 @@ pub(crate) async fn start_forwarder(
     cln_token: CancellationToken,
     config: PipelineConfig,
 ) -> Result<()> {
-    let js_context = create_js_context(config.js_client_config.clone()).await?;
+    let js_context = create_components::create_js_context(config.js_client_config.clone()).await?;
 
     match &config.vertex_config {
         pipeline::VertexConfig::Source(source) => {
@@ -168,7 +171,7 @@ async fn start_source_forwarder(
 
     // only check the pending and lag for source for pod_id = 0
     let _pending_reader_handle: Option<PendingReaderTasks> = if config.replica == 0 {
-        let pending_reader = shared::metrics::create_pending_reader(
+        let pending_reader = shared::metrics::create_pending_reader::<InMemoryStore>(
             &config.metrics_config,
             LagReader::Source(Box::new(source.clone())),
         )
@@ -239,10 +242,6 @@ async fn start_map_forwarder(
         .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
         .reader_config;
 
-    // Create buffer writers and buffer readers
-    let mut mapper_handle = None;
-    let mut forwarder_tasks = vec![];
-
     let buffer_writer = JetstreamWriter::new(ISBWriterConfig {
         config: config.to_vertex_config.clone(),
         js_ctx: js_context.clone(),
@@ -254,92 +253,74 @@ async fn start_map_forwarder(
         isb_config: config.isb_config.clone(),
     });
 
-    for stream in reader_config.streams.clone() {
-        info!("Creating buffer reader for stream {:?}", stream);
+    // Determine store type and create appropriate forwarder components
+    let (forwarder_tasks, mapper_handle) = if let Some(rate_limit_config) = &config.rate_limit {
+        // Check if Redis store is specifically configured
+        if let Some(redis_store) = rate_limit_config
+            .store
+            .as_ref()
+            .and_then(|store| store.redis_store.as_ref())
+        {
+            // Use Redis store
+            let redis_url = redis_store.url.clone();
+            let key_prefix = format!("{}-{}", get_pipeline_name(), get_vertex_name());
+            let store = RedisStore::new(
+                Box::leak(key_prefix.into_boxed_str()),
+                RedisMode::SingleUrl { url: redis_url },
+            )
+            .await
+            .map_err(|e| error::Error::Config(format!("Failed to create Redis store: {}", e)))?;
 
-        let mapper = create_components::create_mapper(
-            config.batch_size,
-            config.read_timeout,
-            config.graceful_shutdown_time,
-            map_vtx_config.clone(),
-            tracker_handle.clone(),
-            cln_token.clone(),
-        )
-        .await?;
+            let rate_limiter =
+                create_rate_limiter(&rate_limit_config, store.clone(), cln_token.clone()).await?;
 
-        if mapper_handle.is_none() {
-            mapper_handle = Some(mapper.clone());
-        }
-
-        let isb_reader_config = ISBReaderConfig {
-            vertex_type: config.vertex_type.to_string(),
-            stream,
-            js_ctx: js_context.clone(),
-            config: reader_config.clone(),
-            tracker_handle: tracker_handle.clone(),
-            batch_size: config.batch_size,
-            read_timeout: config.read_timeout,
-            watermark_handle: watermark_handle.clone(),
-            isb_config: config.isb_config.clone(),
-        };
-
-        // Determine store type and create appropriate forwarder
-        let task = if let Some(rate_limit_config) = &config.rate_limit {
-            // Check if Redis store is specifically configured
-            if let Some(redis_store) = rate_limit_config
-                .store
-                .as_ref()
-                .and_then(|store| store.redis_store.as_ref())
-            {
-                // Use Redis store
-                let redis_url = redis_store.url.clone();
-                let store =
-                    RedisStore::new("rate_limiter", RedisMode::SingleUrl { url: redis_url })
-                        .await
-                        .map_err(|e| {
-                            error::Error::Config(format!("Failed to create Redis store: {}", e))
-                        })?;
-                let rate_limiter =
-                    Some(create_rate_limiter(rate_limit_config, store, cln_token.clone()).await?);
-                setup_and_spawn_map_forwarder::<RedisStore>(
-                    isb_reader_config,
-                    rate_limiter,
-                    mapper,
-                    buffer_writer.clone(),
-                    cln_token.clone(),
-                )
-                .await?
-            } else {
-                // Use in-memory store for all other cases (no store config, or non-Redis store)
-                let store = InMemoryStore::new();
-                let rate_limiter =
-                    Some(create_rate_limiter(rate_limit_config, store, cln_token.clone()).await?);
-                setup_and_spawn_map_forwarder::<InMemoryStore>(
-                    isb_reader_config,
-                    rate_limiter,
-                    mapper,
-                    buffer_writer.clone(),
-                    cln_token.clone(),
-                )
-                .await?
-            }
-        } else {
-            // No rate limiting
-            setup_and_spawn_map_forwarder::<InMemoryStore>(
-                isb_reader_config,
-                None,
-                mapper,
-                buffer_writer.clone(),
+            setup_and_spawn_map_forwarders::<RedisStore>(
+                reader_config,
+                js_context.clone(),
+                &config,
+                map_vtx_config.clone(),
+                tracker_handle.clone(),
+                watermark_handle.clone(),
+                buffer_writer,
+                Some(rate_limiter),
                 cln_token.clone(),
             )
             .await?
-        };
+        } else {
+            // Use in-memory store for all other cases (no store config, or non-Redis store)
+            let store = InMemoryStore::new();
+            let rate_limiter =
+                create_rate_limiter(&rate_limit_config, store.clone(), cln_token.clone()).await?;
 
-        forwarder_tasks.push(task);
-    }
-
-    // Note: We can't easily create lag readers here since they have different types
-    // This is a limitation of the current approach - metrics for lag reading would need to be handled differently
+            setup_and_spawn_map_forwarders::<InMemoryStore>(
+                reader_config,
+                js_context.clone(),
+                &config,
+                map_vtx_config.clone(),
+                tracker_handle.clone(),
+                watermark_handle.clone(),
+                buffer_writer,
+                Some(rate_limiter),
+                cln_token.clone(),
+            )
+            .await?
+        }
+    } else {
+        let rate_limiter: Option<RateLimit<WithDistributedState<InMemoryStore>>> = None;
+        // No rate limiting - use in-memory store
+        setup_and_spawn_map_forwarders::<InMemoryStore>(
+            reader_config,
+            js_context.clone(),
+            &config,
+            map_vtx_config.clone(),
+            tracker_handle.clone(),
+            watermark_handle.clone(),
+            buffer_writer,
+            rate_limiter,
+            cln_token.clone(),
+        )
+        .await?
+    };
 
     let metrics_server_handle = start_metrics_server(
         config.metrics_config.clone(),
@@ -371,25 +352,316 @@ async fn start_map_forwarder(
     Ok(())
 }
 
-/// Generic helper function to setup and spawn map forwarder
-async fn setup_and_spawn_map_forwarder<S>(
+/// Generic helper function to setup and spawn map forwarders for all streams
+#[allow(clippy::too_many_arguments)]
+async fn setup_and_spawn_map_forwarders<S>(
+    reader_config: &BufferReaderConfig,
+    js_context: Context,
+    config: &PipelineConfig,
+    map_vtx_config: MapVtxConfig,
+    tracker_handle: TrackerHandle,
+    watermark_handle: Option<ISBWatermarkHandle>,
+    buffer_writer: JetstreamWriter,
+    rate_limiter: Option<RateLimit<WithDistributedState<S>>>,
+    cln_token: CancellationToken,
+) -> Result<(Vec<tokio::task::JoinHandle<Result<()>>>, Option<MapHandle>)>
+where
+    S: numaflow_throttling::state::Store + Sync + 'static,
+{
+    let mut forwarder_tasks = vec![];
+    let mut isb_lag_readers = vec![];
+    let mut mapper_handle = None;
+
+    for stream in reader_config.streams.clone() {
+        info!("Creating buffer reader for stream {:?}", stream);
+
+        let mapper = create_components::create_mapper(
+            config.batch_size,
+            config.read_timeout,
+            config.graceful_shutdown_time,
+            map_vtx_config.clone(),
+            tracker_handle.clone(),
+            cln_token.clone(),
+        )
+        .await?;
+
+        if mapper_handle.is_none() {
+            mapper_handle = Some(mapper.clone());
+        }
+
+        let isb_reader_config = ISBReaderConfig {
+            vertex_type: config.vertex_type.to_string(),
+            stream,
+            js_ctx: js_context.clone(),
+            config: reader_config.clone(),
+            tracker_handle: tracker_handle.clone(),
+            batch_size: config.batch_size,
+            read_timeout: config.read_timeout,
+            watermark_handle: watermark_handle.clone(),
+            isb_config: config.isb_config.clone(),
+        };
+
+        let buffer_reader = JetStreamReader::new(isb_reader_config, rate_limiter.clone()).await?;
+        isb_lag_readers.push(buffer_reader.clone());
+
+        let forwarder = forwarder::map_forwarder::MapForwarder::<S>::new(
+            buffer_reader,
+            mapper,
+            buffer_writer.clone(),
+        )
+        .await;
+
+        let task = tokio::spawn({
+            let cln_token = cln_token.clone();
+            async move { forwarder.start(cln_token).await }
+        });
+        forwarder_tasks.push(task);
+    }
+
+    // Create and start the pending reader within this function
+    let pending_reader = shared::metrics::create_pending_reader(
+        &config.metrics_config,
+        LagReader::ISB(isb_lag_readers),
+    )
+    .await;
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
+
+    Ok((forwarder_tasks, mapper_handle))
+}
+
+/// Generic helper function to setup and spawn sink forwarders for all streams
+#[allow(clippy::too_many_arguments)]
+async fn setup_and_spawn_sink_forwarders<S>(
+    reader_config: &BufferReaderConfig,
+    js_context: Context,
+    config: &PipelineConfig,
+    sink: SinkVtxConfig,
+    tracker_handle: TrackerHandle,
+    watermark_handle: Option<ISBWatermarkHandle>,
+    serving_store: Option<ServingStore>,
+    rate_limiter: Option<RateLimit<WithDistributedState<S>>>,
+    cln_token: CancellationToken,
+) -> Result<Vec<tokio::task::JoinHandle<Result<()>>>>
+where
+    S: numaflow_throttling::state::Store + Sync + Clone + 'static,
+{
+    let mut forwarder_tasks = vec![];
+    let mut buffer_readers = vec![];
+
+    for stream in reader_config.streams.clone() {
+        info!("Creating buffer reader for stream {:?}", stream);
+
+        let isb_reader_config = ISBReaderConfig {
+            vertex_type: config.vertex_type.to_string(),
+            stream,
+            js_ctx: js_context.clone(),
+            config: reader_config.clone(),
+            tracker_handle: tracker_handle.clone(),
+            batch_size: config.batch_size,
+            read_timeout: config.read_timeout,
+            watermark_handle: watermark_handle.clone(),
+            isb_config: config.isb_config.clone(),
+        };
+
+        let buffer_reader = JetStreamReader::new(isb_reader_config, rate_limiter.clone()).await?;
+        buffer_readers.push(buffer_reader.clone());
+
+        let sink_writer = shared::create_components::create_sink_writer(
+            config.batch_size,
+            config.read_timeout,
+            sink.sink_config.clone(),
+            sink.fb_sink_config.clone(),
+            tracker_handle.clone(),
+            serving_store.clone(),
+            &cln_token,
+        )
+        .await?;
+
+        let forwarder =
+            forwarder::sink_forwarder::SinkForwarder::<S>::new(buffer_reader, sink_writer).await;
+
+        let task = tokio::spawn({
+            let cln_token = cln_token.clone();
+            async move { forwarder.start(cln_token).await }
+        });
+        forwarder_tasks.push(task);
+    }
+
+    // Create and start the pending reader within this function
+    let pending_reader = shared::metrics::create_pending_reader(
+        &config.metrics_config,
+        LagReader::ISB(buffer_readers),
+    )
+    .await;
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
+
+    Ok(forwarder_tasks)
+}
+
+/// Generic helper function to setup and spawn aligned reduce forwarder
+#[allow(clippy::too_many_arguments)]
+async fn setup_and_spawn_aligned_reduce_forwarder<S>(
     isb_reader_config: ISBReaderConfig,
     rate_limiter: Option<RateLimit<WithDistributedState<S>>>,
-    mapper: crate::mapper::map::MapHandle,
+    tracker_handle: TrackerHandle,
+    window_manager: AlignedWindowManager,
     buffer_writer: JetstreamWriter,
+    wal: Option<WAL>,
+    gc_wal: Option<AppendOnlyWal>,
+    aligned_config: AlignedReducerConfig,
+    reduce_vtx_config: ReduceVtxConfig,
+    watermark_handle: Option<ISBWatermarkHandle>,
+    config: &PipelineConfig,
     cln_token: CancellationToken,
-) -> Result<tokio::task::JoinHandle<Result<()>>>
+) -> Result<()>
 where
-    S: numaflow_throttling::state::Store + Send + Sync + 'static,
+    S: numaflow_throttling::state::Store + Sync + 'static,
 {
+    // Create buffer reader
     let buffer_reader = JetStreamReader::new(isb_reader_config, rate_limiter).await?;
 
-    let forwarder =
-        forwarder::map_forwarder::MapForwarder::<S>::new(buffer_reader, mapper, buffer_writer)
-            .await;
+    // Create PBQ
+    let pbq_builder = PBQBuilder::new(buffer_reader.clone(), tracker_handle.clone());
+    let pbq = if let Some(wal) = wal {
+        pbq_builder.wal(wal).build()
+    } else {
+        pbq_builder.build()
+    };
 
-    let task = tokio::spawn(async move { forwarder.start(cln_token).await });
-    Ok(task)
+    // Create and start pending reader
+    let pending_reader = shared::metrics::create_pending_reader(
+        &config.metrics_config,
+        LagReader::ISB(vec![buffer_reader.clone()]),
+    )
+    .await;
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
+
+    // Create user-defined aligned reducer client
+    let reducer_client = shared::create_components::create_aligned_reducer(
+        aligned_config.clone(),
+        cln_token.clone(),
+    )
+    .await?;
+
+    // Start the metrics server
+    let _metrics_server_handle = start_metrics_server(
+        config.metrics_config.clone(),
+        MetricsState {
+            health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
+                UserDefinedReduce::Aligned(reducer_client.clone()),
+            ))),
+            watermark_fetcher_state: watermark_handle
+                .clone()
+                .map(|handle| WatermarkFetcherState {
+                    watermark_handle: WatermarkHandle::ISB(handle),
+                    partition_count: 1, // Reduce vertices always read from single partition (partition 0)
+                }),
+        },
+    )
+    .await;
+
+    let reducer = Reducer::Aligned(
+        AlignedReducer::new(
+            reducer_client,
+            window_manager,
+            buffer_writer,
+            gc_wal,
+            aligned_config.window_config.allowed_lateness,
+            config.graceful_shutdown_time,
+            config.read_timeout,
+            reduce_vtx_config.keyed,
+            watermark_handle,
+        )
+        .await,
+    );
+
+    let forwarder = ReduceForwarder::new(pbq, reducer);
+    forwarder.start(cln_token).await?;
+
+    Ok(())
+}
+
+/// Generic helper function to setup and spawn unaligned reduce forwarder
+#[allow(clippy::too_many_arguments)]
+async fn setup_and_spawn_unaligned_reduce_forwarder<S>(
+    isb_reader_config: ISBReaderConfig,
+    rate_limiter: Option<RateLimit<WithDistributedState<S>>>,
+    tracker_handle: TrackerHandle,
+    window_manager: UnalignedWindowManager,
+    buffer_writer: JetstreamWriter,
+    wal: Option<WAL>,
+    gc_wal: Option<AppendOnlyWal>,
+    unaligned_config: UnalignedReducerConfig,
+    reduce_vtx_config: ReduceVtxConfig,
+    watermark_handle: Option<ISBWatermarkHandle>,
+    config: &PipelineConfig,
+    cln_token: CancellationToken,
+) -> Result<()>
+where
+    S: numaflow_throttling::state::Store + Sync + Clone + 'static,
+{
+    // Create buffer reader
+    let buffer_reader = JetStreamReader::new(isb_reader_config, rate_limiter).await?;
+
+    // Create PBQ
+    let pbq_builder = PBQBuilder::new(buffer_reader.clone(), tracker_handle.clone());
+    let pbq = if let Some(wal) = wal {
+        pbq_builder.wal(wal).build()
+    } else {
+        pbq_builder.build()
+    };
+
+    // Create and start pending reader
+    let pending_reader = shared::metrics::create_pending_reader(
+        &config.metrics_config,
+        LagReader::ISB(vec![buffer_reader.clone()]),
+    )
+    .await;
+    let _pending_reader_handle = pending_reader.start(crate::config::is_mono_vertex()).await;
+
+    // Create user-defined unaligned reducer client
+    let reducer_client = shared::create_components::create_unaligned_reducer(
+        unaligned_config.clone(),
+        cln_token.clone(),
+    )
+    .await?;
+
+    // Start the metrics server
+    let _metrics_server_handle = start_metrics_server(
+        config.metrics_config.clone(),
+        MetricsState {
+            health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
+                UserDefinedReduce::Unaligned(reducer_client.clone()),
+            ))),
+            watermark_fetcher_state: watermark_handle
+                .clone()
+                .map(|handle| WatermarkFetcherState {
+                    watermark_handle: WatermarkHandle::ISB(handle),
+                    partition_count: 1, // Reduce vertices always read from single partition (partition 0)
+                }),
+        },
+    )
+    .await;
+
+    let reducer = Reducer::Unaligned(
+        UnalignedReducer::new(
+            reducer_client,
+            window_manager,
+            buffer_writer,
+            unaligned_config.window_config.allowed_lateness,
+            gc_wal,
+            config.graceful_shutdown_time,
+            config.read_timeout,
+            reduce_vtx_config.keyed,
+            watermark_handle,
+        )
+        .await,
+    );
+
+    let forwarder = ReduceForwarder::new(pbq, reducer);
+    forwarder.start(cln_token).await?;
+
+    Ok(())
 }
 
 /// Guard to manage the lifecycle of a fence file. Used when persistence is enabled for reduce.
@@ -633,46 +905,8 @@ async fn start_aligned_reduce_forwarder(
         (None, None)
     };
 
-    // Create PBQ
-    // Create user-defined aligned reducer client
-    let reducer_client =
-        create_components::create_aligned_reducer(aligned_config.clone(), cln_token.clone())
-            .await?;
-
-    // Start the metrics server with one of the clients
-    start_metrics_server(
-        config.metrics_config.clone(),
-        MetricsState {
-            health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
-                UserDefinedReduce::Aligned(reducer_client.clone()),
-            ))),
-            watermark_fetcher_state: watermark_handle
-                .clone()
-                .map(|handle| WatermarkFetcherState {
-                    watermark_handle: WatermarkHandle::ISB(handle),
-                    partition_count: 1, // Reduce vertices always read from single partition (partition 0)
-                }),
-        },
-    )
-    .await;
-
-    let reducer = Reducer::Aligned(
-        AlignedReducer::new(
-            reducer_client,
-            window_manager,
-            buffer_writer,
-            gc_wal,
-            aligned_config.window_config.allowed_lateness,
-            config.graceful_shutdown_time,
-            config.read_timeout,
-            reduce_vtx_config.keyed,
-            watermark_handle,
-        )
-        .await,
-    );
-
     // Determine store type and create appropriate forwarder
-    let task = if let Some(rate_limit_config) = &config.rate_limit {
+    if let Some(rate_limit_config) = &config.rate_limit {
         // Check if Redis store is specifically configured
         if let Some(redis_store) = rate_limit_config
             .store
@@ -681,20 +915,30 @@ async fn start_aligned_reduce_forwarder(
         {
             // Use Redis store
             let redis_url = redis_store.url.clone();
-            let store = RedisStore::new("rate_limiter", RedisMode::SingleUrl { url: redis_url })
+            let key_prefix = Box::leak(
+                format!("{}-{}", get_pipeline_name(), get_vertex_name()).into_boxed_str(),
+            );
+            let store = RedisStore::new(key_prefix, RedisMode::SingleUrl { url: redis_url })
                 .await
                 .map_err(|e| {
                     error::Error::Config(format!("Failed to create Redis store: {}", e))
                 })?;
             let rate_limiter =
                 Some(create_rate_limiter(rate_limit_config, store, cln_token.clone()).await?);
-            setup_and_spawn_reduce_forwarder::<RedisStore>(
+
+            setup_and_spawn_aligned_reduce_forwarder::<RedisStore>(
                 isb_reader_config,
                 rate_limiter,
-                tracker_handle.clone(),
-                reducer,
+                tracker_handle,
+                window_manager,
+                buffer_writer,
                 wal,
-                cln_token.clone(),
+                gc_wal,
+                aligned_config,
+                reduce_vtx_config,
+                watermark_handle,
+                &config,
+                cln_token,
             )
             .await?
         } else {
@@ -702,31 +946,41 @@ async fn start_aligned_reduce_forwarder(
             let store = InMemoryStore::new();
             let rate_limiter =
                 Some(create_rate_limiter(rate_limit_config, store, cln_token.clone()).await?);
-            setup_and_spawn_reduce_forwarder::<InMemoryStore>(
+
+            setup_and_spawn_aligned_reduce_forwarder::<InMemoryStore>(
                 isb_reader_config,
                 rate_limiter,
-                tracker_handle.clone(),
-                reducer,
+                tracker_handle,
+                window_manager,
+                buffer_writer,
                 wal,
-                cln_token.clone(),
+                gc_wal,
+                aligned_config,
+                reduce_vtx_config,
+                watermark_handle,
+                &config,
+                cln_token,
             )
             .await?
         }
     } else {
         // No rate limiting
-        setup_and_spawn_reduce_forwarder::<InMemoryStore>(
+        setup_and_spawn_aligned_reduce_forwarder::<InMemoryStore>(
             isb_reader_config,
             None,
-            tracker_handle.clone(),
-            reducer,
+            tracker_handle,
+            window_manager,
+            buffer_writer,
             wal,
-            cln_token.clone(),
+            gc_wal,
+            aligned_config,
+            reduce_vtx_config,
+            watermark_handle,
+            &config,
+            cln_token,
         )
         .await?
     };
-
-    task.await
-        .map_err(|e| error::Error::Forwarder(e.to_string()))??;
 
     info!("Aligned reduce forwarder has stopped successfully");
     Ok(())
@@ -845,44 +1099,8 @@ async fn start_unaligned_reduce_forwarder(
         (None, None)
     };
 
-    // Create user-defined unaligned reducer client
-    let reducer_client =
-        create_components::create_unaligned_reducer(unaligned_config.clone(), cln_token.clone())
-            .await?;
-
-    start_metrics_server(
-        config.metrics_config.clone(),
-        MetricsState {
-            health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
-                UserDefinedReduce::Unaligned(reducer_client.clone()),
-            ))),
-            watermark_fetcher_state: watermark_handle
-                .clone()
-                .map(|handle| WatermarkFetcherState {
-                    watermark_handle: WatermarkHandle::ISB(handle),
-                    partition_count: 1, // Reduce vertices always read from single partition (partition 0)
-                }),
-        },
-    )
-    .await;
-
-    let reducer = Reducer::Unaligned(
-        UnalignedReducer::new(
-            reducer_client,
-            window_manager,
-            buffer_writer,
-            unaligned_config.window_config.allowed_lateness,
-            gc_wal,
-            config.graceful_shutdown_time,
-            config.read_timeout,
-            reduce_vtx_config.keyed,
-            watermark_handle,
-        )
-        .await,
-    );
-
     // Determine store type and create appropriate forwarder
-    let task = if let Some(rate_limit_config) = &config.rate_limit {
+    if let Some(rate_limit_config) = &config.rate_limit {
         // Check if Redis store is specifically configured
         if let Some(redis_store) = rate_limit_config
             .store
@@ -891,80 +1109,87 @@ async fn start_unaligned_reduce_forwarder(
         {
             // Use Redis store
             let redis_url = redis_store.url.clone();
-            let store = RedisStore::new("rate_limiter", RedisMode::SingleUrl { url: redis_url })
+            let key_prefix = Box::leak(
+                format!("{}-{}", get_pipeline_name(), get_vertex_name()).into_boxed_str(),
+            );
+            let store = RedisStore::new(key_prefix, RedisMode::SingleUrl { url: redis_url })
                 .await
                 .map_err(|e| {
                     error::Error::Config(format!("Failed to create Redis store: {}", e))
                 })?;
-            let rate_limiter =
-                Some(create_rate_limiter(rate_limit_config, store, cln_token.clone()).await?);
-            setup_and_spawn_reduce_forwarder::<RedisStore>(
+            let rate_limiter = Some(
+                shared::create_components::create_rate_limiter(
+                    rate_limit_config,
+                    store,
+                    cln_token.clone(),
+                )
+                .await?,
+            );
+
+            setup_and_spawn_unaligned_reduce_forwarder::<RedisStore>(
                 isb_reader_config,
                 rate_limiter,
-                tracker_handle.clone(),
-                reducer,
+                tracker_handle,
+                window_manager,
+                buffer_writer,
                 wal,
-                cln_token.clone(),
+                gc_wal,
+                unaligned_config,
+                reduce_vtx_config,
+                watermark_handle,
+                &config,
+                cln_token,
             )
             .await?
         } else {
             // Use in-memory store for all other cases (no store config, or non-Redis store)
             let store = InMemoryStore::new();
-            let rate_limiter =
-                Some(create_rate_limiter(rate_limit_config, store, cln_token.clone()).await?);
-            setup_and_spawn_reduce_forwarder::<InMemoryStore>(
+            let rate_limiter = Some(
+                shared::create_components::create_rate_limiter(
+                    rate_limit_config,
+                    store,
+                    cln_token.clone(),
+                )
+                .await?,
+            );
+
+            setup_and_spawn_unaligned_reduce_forwarder::<InMemoryStore>(
                 isb_reader_config,
                 rate_limiter,
-                tracker_handle.clone(),
-                reducer,
+                tracker_handle,
+                window_manager,
+                buffer_writer,
                 wal,
-                cln_token.clone(),
+                gc_wal,
+                unaligned_config,
+                reduce_vtx_config,
+                watermark_handle,
+                &config,
+                cln_token,
             )
             .await?
         }
     } else {
         // No rate limiting
-        setup_and_spawn_reduce_forwarder::<InMemoryStore>(
+        setup_and_spawn_unaligned_reduce_forwarder::<InMemoryStore>(
             isb_reader_config,
             None,
-            tracker_handle.clone(),
-            reducer,
+            tracker_handle,
+            window_manager,
+            buffer_writer,
             wal,
-            cln_token.clone(),
+            gc_wal,
+            unaligned_config,
+            reduce_vtx_config,
+            watermark_handle,
+            &config,
+            cln_token,
         )
         .await?
     };
 
-    task.await
-        .map_err(|e| error::Error::Forwarder(e.to_string()))??;
-
     info!("Unaligned reduce forwarder has stopped successfully");
     Ok(())
-}
-
-/// Generic helper function to setup and spawn reduce forwarder
-async fn setup_and_spawn_reduce_forwarder<S>(
-    isb_reader_config: ISBReaderConfig,
-    rate_limiter: Option<RateLimit<WithDistributedState<S>>>,
-    tracker_handle: TrackerHandle,
-    reducer: Reducer,
-    wal: Option<WAL>,
-    cln_token: CancellationToken,
-) -> Result<tokio::task::JoinHandle<Result<()>>>
-where
-    S: numaflow_throttling::state::Store + Send + Sync + 'static,
-{
-    let buffer_reader = JetStreamReader::new(isb_reader_config, rate_limiter).await?;
-
-    let pbq_builder = PBQBuilder::<S>::new(buffer_reader.clone(), tracker_handle.clone());
-    let pbq = match wal {
-        Some(wal) => pbq_builder.wal(wal).build(),
-        None => pbq_builder.build(),
-    };
-    let forwarder = ReduceForwarder::<S>::new(pbq, reducer);
-
-    let task = tokio::spawn(async move { forwarder.start(cln_token).await });
-    Ok(task)
 }
 
 async fn start_sink_forwarder(
@@ -1022,106 +1247,100 @@ async fn start_sink_forwarder(
         None => None,
     };
 
-    // Create sink writers and buffer readers for each stream
-    let mut forwarder_tasks = Vec::new();
-    let mut first_sink_writer = None;
+    // Determine store type and create appropriate forwarder components
+    let forwarder_tasks = if let Some(rate_limit_config) = &config.rate_limit {
+        // Check if Redis store is specifically configured
+        if let Some(redis_store) = rate_limit_config
+            .store
+            .as_ref()
+            .and_then(|store| store.redis_store.as_ref())
+        {
+            // Use Redis store
+            let redis_url = redis_store.url.clone();
+            let key_prefix = Box::leak(
+                format!("{}-{}", get_pipeline_name(), get_vertex_name()).into_boxed_str(),
+            );
+            let store = RedisStore::new(key_prefix, RedisMode::SingleUrl { url: redis_url })
+                .await
+                .map_err(|e| {
+                    error::Error::Config(format!("Failed to create Redis store: {}", e))
+                })?;
 
-    for stream in reader_config.streams.clone() {
-        let sink_writer = create_components::create_sink_writer(
-            config.batch_size,
-            config.read_timeout,
-            sink.sink_config.clone(),
-            sink.fb_sink_config.clone(),
-            tracker_handle.clone(),
-            serving_store.clone(),
-            &cln_token,
-        )
-        .await?;
+            let rate_limiter =
+                create_rate_limiter(&rate_limit_config, store.clone(), cln_token.clone()).await?;
 
-        if first_sink_writer.is_none() {
-            first_sink_writer = Some(sink_writer.clone());
-        }
-
-        let isb_reader_config = ISBReaderConfig {
-            vertex_type: config.vertex_type.to_string(),
-            stream,
-            js_ctx: js_context.clone(),
-            config: reader_config.clone(),
-            tracker_handle: tracker_handle.clone(),
-            batch_size: config.batch_size,
-            read_timeout: config.read_timeout,
-            watermark_handle: watermark_handle.clone(),
-            isb_config: config.isb_config.clone(),
-        };
-
-        // Determine store type and create appropriate forwarder
-        let task = if let Some(rate_limit_config) = &config.rate_limit {
-            // Check if Redis store is specifically configured
-            if let Some(redis_store) = rate_limit_config
-                .store
-                .as_ref()
-                .and_then(|store| store.redis_store.as_ref())
-            {
-                // Use Redis store
-                let redis_url = redis_store.url.clone();
-                let store =
-                    RedisStore::new("rate_limiter", RedisMode::SingleUrl { url: redis_url })
-                        .await
-                        .map_err(|e| {
-                            error::Error::Config(format!("Failed to create Redis store: {}", e))
-                        })?;
-                let rate_limiter =
-                    Some(create_rate_limiter(rate_limit_config, store, cln_token.clone()).await?);
-                setup_and_spawn_sink_forwarder::<RedisStore>(
-                    isb_reader_config,
-                    rate_limiter,
-                    sink_writer,
-                    cln_token.clone(),
-                )
-                .await?
-            } else {
-                // Use in-memory store for all other cases (no store config, or non-Redis store)
-                let store = InMemoryStore::new();
-                let rate_limiter =
-                    Some(create_rate_limiter(rate_limit_config, store, cln_token.clone()).await?);
-                setup_and_spawn_sink_forwarder::<InMemoryStore>(
-                    isb_reader_config,
-                    rate_limiter,
-                    sink_writer,
-                    cln_token.clone(),
-                )
-                .await?
-            }
-        } else {
-            // No rate limiting
-            setup_and_spawn_sink_forwarder::<InMemoryStore>(
-                isb_reader_config,
-                None,
-                sink_writer,
+            setup_and_spawn_sink_forwarders::<RedisStore>(
+                reader_config,
+                js_context.clone(),
+                &config,
+                sink.clone(),
+                tracker_handle.clone(),
+                watermark_handle.clone(),
+                serving_store.clone(),
+                Some(rate_limiter),
                 cln_token.clone(),
             )
             .await?
-        };
+        } else {
+            // Use in-memory store for all other cases (no store config, or non-Redis store)
+            let store = InMemoryStore::new();
+            let rate_limiter =
+                create_rate_limiter(&rate_limit_config, store.clone(), cln_token.clone()).await?;
 
-        forwarder_tasks.push(task);
-    }
-
-    // Start the metrics server with one of the clients
-    if let Some(sink_handle) = &first_sink_writer {
-        start_metrics_server(
-            config.metrics_config.clone(),
-            MetricsState {
-                health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Sink(
-                    Box::new(sink_handle.clone()),
-                ))),
-                watermark_fetcher_state: watermark_handle.map(|handle| WatermarkFetcherState {
-                    watermark_handle: WatermarkHandle::ISB(handle),
-                    partition_count: reader_config.streams.len() as u16, // Number of partitions = number of streams
-                }),
-            },
+            setup_and_spawn_sink_forwarders::<InMemoryStore>(
+                reader_config,
+                js_context.clone(),
+                &config,
+                sink.clone(),
+                tracker_handle.clone(),
+                watermark_handle.clone(),
+                serving_store.clone(),
+                Some(rate_limiter),
+                cln_token.clone(),
+            )
+            .await?
+        }
+    } else {
+        // No rate limiting - use in-memory store
+        setup_and_spawn_sink_forwarders::<InMemoryStore>(
+            reader_config,
+            js_context.clone(),
+            &config,
+            sink.clone(),
+            tracker_handle.clone(),
+            watermark_handle.clone(),
+            serving_store.clone(),
+            None,
+            cln_token.clone(),
         )
-        .await;
-    }
+        .await?
+    };
+
+    // Create a sink writer for the metrics server
+    let sink_writer_for_metrics = create_components::create_sink_writer(
+        config.batch_size,
+        config.read_timeout,
+        sink.sink_config.clone(),
+        sink.fb_sink_config.clone(),
+        tracker_handle.clone(),
+        serving_store.clone(),
+        &cln_token,
+    )
+    .await?;
+
+    let metrics_server_handle = start_metrics_server(
+        config.metrics_config.clone(),
+        MetricsState {
+            health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Sink(
+                Box::new(sink_writer_for_metrics),
+            ))),
+            watermark_fetcher_state: watermark_handle.map(|handle| WatermarkFetcherState {
+                watermark_handle: WatermarkHandle::ISB(handle),
+                partition_count: reader_config.streams.len() as u16, // Number of partitions = number of streams
+            }),
+        },
+    )
+    .await;
 
     let results = try_join_all(forwarder_tasks)
         .await
@@ -1132,48 +1351,11 @@ async fn start_sink_forwarder(
         result?;
     }
 
+    // abort the metrics server
+    metrics_server_handle.abort();
+
     info!("All forwarders have stopped successfully");
     Ok(())
-}
-
-/// Generic helper function to setup and spawn sink forwarder
-async fn setup_and_spawn_sink_forwarder<S>(
-    isb_reader_config: ISBReaderConfig,
-    rate_limiter: Option<RateLimit<WithDistributedState<S>>>,
-    sink_writer: SinkWriter,
-    cln_token: CancellationToken,
-) -> Result<tokio::task::JoinHandle<Result<()>>>
-where
-    S: numaflow_throttling::state::Store + Send + Sync + 'static,
-{
-    let buffer_reader = JetStreamReader::new(isb_reader_config, rate_limiter).await?;
-
-    let forwarder =
-        forwarder::sink_forwarder::SinkForwarder::<S>::new(buffer_reader, sink_writer).await;
-
-    let task = tokio::spawn(async move { forwarder.start(cln_token).await });
-    Ok(task)
-}
-
-/// Creates a jetstream context based on the provided configuration
-pub(crate) async fn create_js_context(
-    config: pipeline::isb::jetstream::ClientConfig,
-) -> Result<Context> {
-    // TODO: make these configurable. today this is hardcoded on Golang code too.
-    let mut opts = ConnectOptions::new()
-        .max_reconnects(None) // unlimited reconnects
-        .ping_interval(Duration::from_secs(3))
-        .retry_on_initial_connect();
-
-    if let (Some(user), Some(password)) = (config.user, config.password) {
-        opts = opts.user_and_password(user, password);
-    }
-
-    let js_client = async_nats::connect_with_options(&config.url, opts)
-        .await
-        .map_err(|e| error::Error::Connection(e.to_string()))?;
-
-    Ok(jetstream::new(js_client))
 }
 
 #[cfg(test)]

@@ -336,7 +336,9 @@ where
         // Apply rate limiting if configured
         let effective_batch_size = if let Some(rate_limiter) = &self.rate_limiter {
             // Try to acquire tokens from the rate limiter
-            let tokens_acquired = rate_limiter.acquire_n(Some(batch_size), None).await;
+            let tokens_acquired = rate_limiter
+                .acquire_n(Some(batch_size), Some(Duration::from_secs(1)))
+                .await;
             if tokens_acquired == 0 {
                 // No tokens available, return empty batch
                 return Ok(vec![]);

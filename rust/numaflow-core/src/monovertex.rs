@@ -92,7 +92,9 @@ async fn start(
     // only check the pending and lag for source for pod_id = 0
     let _pending_reader_handle: Option<PendingReaderTasks> = if mvtx_config.replica == 0 {
         // start the pending reader to publish pending metrics
-        let pending_reader = shared::metrics::create_pending_reader(
+        let pending_reader = shared::metrics::create_pending_reader::<
+            numaflow_throttling::state::store::in_memory_store::InMemoryStore,
+        >(
             &mvtx_config.metrics_config,
             LagReader::Source(Box::new(source.clone())),
         )

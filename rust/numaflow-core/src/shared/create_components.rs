@@ -5,12 +5,12 @@ use crate::config::components::reduce::UnalignedWindowType;
 use crate::config::components::sink::{SinkConfig, SinkType};
 use crate::config::components::source::{SourceConfig, SourceType};
 use crate::config::components::transformer::TransformerConfig;
-use crate::config::get_vertex_replica;
 use crate::config::pipeline::map::{MapMode, MapType, MapVtxConfig};
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::{
     DEFAULT_BATCH_MAP_SOCKET, DEFAULT_STREAM_MAP_SOCKET, PipelineConfig,
 };
+use crate::config::{get_vertex_replica, pipeline};
 use crate::error::Error;
 use crate::mapper::map::MapHandle;
 use crate::reduce::reducer::WindowManager;
@@ -36,6 +36,7 @@ use crate::watermark::isb::ISBWatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
 use crate::{config, error, metrics, source};
 use async_nats::jetstream::Context;
+use async_nats::{ConnectOptions, jetstream};
 use numaflow_models::models::{NatsAuth, Tls};
 use numaflow_nats::{TlsClientAuthCerts, TlsConfig};
 use numaflow_pb::clients::accumulator::accumulator_client::AccumulatorClient;
@@ -527,7 +528,7 @@ pub(crate) async fn create_aligned_reducer(
         config::get_vertex_name().to_string(),
         server_info.language,
         server_info.version,
-        "aligned-reducer".to_string(),
+        ContainerType::Reducer.to_string(),
     );
     metrics::global_metrics()
         .sdk_info
@@ -564,7 +565,7 @@ pub(crate) async fn create_unaligned_reducer(
         config::get_vertex_name().to_string(),
         server_info.language,
         server_info.version,
-        "unaligned-reducer".to_string(),
+        ContainerType::Reducer.to_string(),
     );
     metrics::global_metrics()
         .sdk_info
@@ -673,11 +674,10 @@ pub(crate) fn parse_tls_config(tls_config: Option<Box<Tls>>) -> Result<Option<Tl
 
     let client_auth = match tls_config.cert_secret {
         Some(client_cert_secret) => {
-            let client_cert = crate::shared::create_components::get_secret_from_volume(
-                &client_cert_secret.name,
-                &client_cert_secret.key,
-            )
-            .map_err(|e| Error::Config(format!("Failed to get client cert secret: {e:?}")))?;
+            let client_cert =
+                get_secret_from_volume(&client_cert_secret.name, &client_cert_secret.key).map_err(
+                    |e| Error::Config(format!("Failed to get client cert secret: {e:?}")),
+                )?;
 
             let Some(private_key_secret) = tls_config.key_secret else {
                 return Err(Error::Config(
@@ -708,6 +708,58 @@ pub(crate) fn parse_tls_config(tls_config: Option<Box<Tls>>) -> Result<Option<Tl
         ca_cert,
         client_auth,
     }))
+}
+
+/// Generic helper function to create rate limiter based on store type
+pub async fn create_rate_limiter<S>(
+    rate_limit_config: &RateLimitConfig,
+    store: S,
+    cancel_token: CancellationToken,
+) -> error::Result<RateLimit<WithDistributedState<S>>>
+where
+    S: numaflow_throttling::state::Store + Send + Sync + 'static,
+{
+    let bounds = TokenCalcBounds::new(
+        rate_limit_config.max,
+        rate_limit_config.min,
+        rate_limit_config.duration,
+    );
+
+    let processor_id = &format!("{}_{}", config::get_vertex_name(), get_vertex_replica());
+    let refresh_interval = Duration::from_millis(100);
+    let runway_update = OptimisticValidityUpdateSecs::default();
+
+    RateLimit::<WithDistributedState<S>>::new(
+        bounds,
+        store,
+        processor_id,
+        cancel_token,
+        refresh_interval,
+        runway_update,
+    )
+    .await
+    .map_err(|e| Error::Config(format!("Failed to create rate limiter: {}", e)))
+}
+
+/// Creates a jetstream context based on the provided configuration
+pub(crate) async fn create_js_context(
+    config: pipeline::isb::jetstream::ClientConfig,
+) -> error::Result<Context> {
+    // TODO: make these configurable. today this is hardcoded on Golang code too.
+    let mut opts = ConnectOptions::new()
+        .max_reconnects(None) // unlimited reconnects
+        .ping_interval(Duration::from_secs(3))
+        .retry_on_initial_connect();
+
+    if let (Some(user), Some(password)) = (config.user, config.password) {
+        opts = opts.user_and_password(user, password);
+    }
+
+    let js_client = async_nats::connect_with_options(&config.url, opts)
+        .await
+        .map_err(|e| error::Error::Connection(e.to_string()))?;
+
+    Ok(jetstream::new(js_client))
 }
 
 #[cfg(test)]
@@ -897,39 +949,4 @@ mod tests {
         sink_server_handle.await.unwrap();
         transformer_server_handle.await.unwrap();
     }
-}
-
-/// Generic helper function to create rate limiter based on store type
-pub async fn create_rate_limiter<S>(
-    rate_limit_config: &RateLimitConfig,
-    store: S,
-    cancel_token: CancellationToken,
-) -> error::Result<RateLimit<WithDistributedState<S>>>
-where
-    S: numaflow_throttling::state::Store + Send + Sync + 'static,
-{
-    let bounds = TokenCalcBounds::new(
-        rate_limit_config.max,
-        rate_limit_config.min,
-        rate_limit_config.duration,
-    );
-
-    let processor_id = &format!(
-        "{}_{}",
-        crate::config::get_vertex_name(),
-        get_vertex_replica()
-    );
-    let refresh_interval = Duration::from_millis(100);
-    let runway_update = OptimisticValidityUpdateSecs::default();
-
-    RateLimit::<WithDistributedState<S>>::new(
-        bounds,
-        store,
-        processor_id,
-        cancel_token,
-        refresh_interval,
-        runway_update,
-    )
-    .await
-    .map_err(|e| error::Error::Config(format!("Failed to create rate limiter: {}", e)))
 }
