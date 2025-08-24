@@ -5,16 +5,17 @@ use crate::Result;
 use crate::error::Error;
 use crate::pipeline::isb::jetstream::reader::JetStreamReader;
 use crate::sink::SinkWriter;
+use crate::typ::NumaflowTypeConfig;
 
 /// Sink forwarder is a component which starts a streaming reader and a sink writer
 /// and manages the lifecycle of these components.
-pub(crate) struct SinkForwarder {
-    jetstream_reader: JetStreamReader,
+pub(crate) struct SinkForwarder<T: NumaflowTypeConfig> {
+    jetstream_reader: JetStreamReader<T>,
     sink_writer: SinkWriter,
 }
 
-impl SinkForwarder {
-    pub(crate) async fn new(jetstream_reader: JetStreamReader, sink_writer: SinkWriter) -> Self {
+impl<T: NumaflowTypeConfig> SinkForwarder<T> {
+    pub(crate) async fn new(jetstream_reader: JetStreamReader<T>, sink_writer: SinkWriter) -> Self {
         Self {
             jetstream_reader,
             sink_writer,

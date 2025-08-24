@@ -5,16 +5,17 @@ use crate::Result;
 use crate::error::Error;
 use crate::reduce::pbq::PBQ;
 use crate::reduce::reducer::Reducer;
+use crate::typ::NumaflowTypeConfig;
 
 /// ReduceForwarder is a component which starts a PBQ reader and a reducer
 /// and manages the lifecycle of these components.
-pub(crate) struct ReduceForwarder {
-    pbq: PBQ,
+pub(crate) struct ReduceForwarder<T: NumaflowTypeConfig> {
+    pbq: PBQ<T>,
     reducer: Reducer,
 }
 
-impl ReduceForwarder {
-    pub(crate) fn new(pbq: PBQ, reducer: Reducer) -> Self {
+impl<T: NumaflowTypeConfig> ReduceForwarder<T> {
+    pub(crate) fn new(pbq: PBQ<T>, reducer: Reducer) -> Self {
         Self { pbq, reducer }
     }
 

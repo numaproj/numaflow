@@ -49,6 +49,7 @@ use crate::sink::serve::ServingStore;
 use crate::sink::serve::nats::NatsServingStore;
 use crate::sink::serve::user_defined::UserDefinedStore;
 use crate::tracker::TrackerHandle;
+use crate::typ::NumaflowTypeConfig;
 use crate::watermark::WatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
 use crate::{Result, error, shared};
@@ -57,7 +58,7 @@ mod forwarder;
 pub(crate) mod isb;
 
 /// Starts the appropriate forwarder based on the pipeline configuration.
-pub(crate) async fn start_forwarder(
+pub(crate) async fn start_forwarder<T: NumaflowTypeConfig>(
     cln_token: CancellationToken,
     config: PipelineConfig,
 ) -> Result<()> {
@@ -82,7 +83,7 @@ pub(crate) async fn start_forwarder(
                 _ => None,
             };
 
-            start_source_forwarder(
+            start_source_forwarder::<T>(
                 cln_token,
                 js_context,
                 config.clone(),
@@ -97,7 +98,7 @@ pub(crate) async fn start_forwarder(
         }
         pipeline::VertexConfig::Map(map) => {
             info!("Starting map forwarder");
-            start_map_forwarder(cln_token, js_context, config.clone(), map.clone()).await?;
+            start_map_forwarder::<T>(cln_token, js_context, config.clone(), map.clone()).await?;
         }
         pipeline::VertexConfig::Reduce(reduce) => {
             info!("Starting reduce forwarder");
@@ -107,7 +108,7 @@ pub(crate) async fn start_forwarder(
     Ok(())
 }
 
-async fn start_source_forwarder(
+async fn start_source_forwarder<T: NumaflowTypeConfig>(
     cln_token: CancellationToken,
     js_context: Context,
     config: PipelineConfig,
@@ -165,7 +166,7 @@ async fn start_source_forwarder(
     let _pending_reader_handle: Option<PendingReaderTasks> = if config.replica == 0 {
         let pending_reader = shared::metrics::create_pending_reader(
             &config.metrics_config,
-            LagReader::Source(Box::new(source.clone())),
+            LagReader::<T>::Source(Box::new(source.clone())),
         )
         .await;
         Some(pending_reader.start(is_mono_vertex()).await)
@@ -193,7 +194,7 @@ async fn start_source_forwarder(
     Ok(())
 }
 
-async fn start_map_forwarder(
+async fn start_map_forwarder<T: NumaflowTypeConfig>(
     cln_token: CancellationToken,
     js_context: Context,
     config: PipelineConfig,
@@ -252,17 +253,20 @@ async fn start_map_forwarder(
 
     for stream in reader_config.streams.clone() {
         info!("Creating buffer reader for stream {:?}", stream);
-        let buffer_reader = JetStreamReader::new(ISBReaderConfig {
-            vertex_type: config.vertex_type.to_string(),
-            stream,
-            js_ctx: js_context.clone(),
-            config: reader_config.clone(),
-            tracker_handle: tracker_handle.clone(),
-            batch_size: config.batch_size,
-            read_timeout: config.read_timeout,
-            watermark_handle: watermark_handle.clone(),
-            isb_config: config.isb_config.clone(),
-        })
+        let buffer_reader = JetStreamReader::new(
+            ISBReaderConfig {
+                vertex_type: config.vertex_type.to_string(),
+                stream,
+                js_ctx: js_context.clone(),
+                config: reader_config.clone(),
+                tracker_handle: tracker_handle.clone(),
+                batch_size: config.batch_size,
+                read_timeout: config.read_timeout,
+                watermark_handle: watermark_handle.clone(),
+                isb_config: config.isb_config.clone(),
+            },
+            crate::typ::default_numaflow_config().await,
+        )
         .await?;
 
         isb_lag_readers.push(buffer_reader.clone());
@@ -505,17 +509,20 @@ async fn start_aligned_reduce_forwarder(
         .ok_or_else(|| error::Error::Config("No stream found for reduce vertex".to_string()))?;
 
     // Create buffer reader
-    let buffer_reader = JetStreamReader::new(ISBReaderConfig {
-        vertex_type: config.vertex_type.to_string(),
-        stream,
-        js_ctx: js_context.clone(),
-        config: reader_config.clone(),
-        tracker_handle: tracker_handle.clone(),
-        batch_size: config.batch_size,
-        read_timeout: config.read_timeout,
-        watermark_handle: watermark_handle.clone(),
-        isb_config: config.isb_config.clone(),
-    })
+    let buffer_reader = JetStreamReader::new(
+        ISBReaderConfig {
+            vertex_type: config.vertex_type.to_string(),
+            stream,
+            js_ctx: js_context.clone(),
+            config: reader_config.clone(),
+            tracker_handle: tracker_handle.clone(),
+            batch_size: config.batch_size,
+            read_timeout: config.read_timeout,
+            watermark_handle: watermark_handle.clone(),
+            isb_config: config.isb_config.clone(),
+        },
+        crate::typ::default_numaflow_config().await,
+    )
     .await?;
 
     // Create buffer writer
@@ -680,17 +687,20 @@ async fn start_unaligned_reduce_forwarder(
         .ok_or_else(|| error::Error::Config("No stream found for reduce vertex".to_string()))?;
 
     // Create buffer reader
-    let buffer_reader = JetStreamReader::new(ISBReaderConfig {
-        vertex_type: config.vertex_type.to_string(),
-        stream,
-        js_ctx: js_context.clone(),
-        config: reader_config.clone(),
-        tracker_handle: tracker_handle.clone(),
-        batch_size: config.batch_size,
-        read_timeout: config.read_timeout,
-        watermark_handle: watermark_handle.clone(),
-        isb_config: config.isb_config.clone(),
-    })
+    let buffer_reader = JetStreamReader::new(
+        ISBReaderConfig {
+            vertex_type: config.vertex_type.to_string(),
+            stream,
+            js_ctx: js_context.clone(),
+            config: reader_config.clone(),
+            tracker_handle: tracker_handle.clone(),
+            batch_size: config.batch_size,
+            read_timeout: config.read_timeout,
+            watermark_handle: watermark_handle.clone(),
+            isb_config: config.isb_config.clone(),
+        },
+        crate::typ::default_numaflow_config().await,
+    )
     .await?;
 
     let buffer_writer = JetstreamWriter::new(ISBWriterConfig {
@@ -866,17 +876,20 @@ async fn start_sink_forwarder(
     let mut sink_writers = vec![];
     let mut buffer_readers = vec![];
     for stream in reader_config.streams.clone() {
-        let buffer_reader = JetStreamReader::new(ISBReaderConfig {
-            vertex_type: config.vertex_type.to_string(),
-            stream,
-            js_ctx: js_context.clone(),
-            config: reader_config.clone(),
-            tracker_handle: tracker_handle.clone(),
-            batch_size: config.batch_size,
-            read_timeout: config.read_timeout,
-            watermark_handle: watermark_handle.clone(),
-            isb_config: config.isb_config.clone(),
-        })
+        let buffer_reader = JetStreamReader::new(
+            ISBReaderConfig {
+                vertex_type: config.vertex_type.to_string(),
+                stream,
+                js_ctx: js_context.clone(),
+                config: reader_config.clone(),
+                tracker_handle: tracker_handle.clone(),
+                batch_size: config.batch_size,
+                read_timeout: config.read_timeout,
+                watermark_handle: watermark_handle.clone(),
+                isb_config: config.isb_config.clone(),
+            },
+            crate::typ::default_numaflow_config().await,
+        )
         .await?;
 
         buffer_readers.push(buffer_reader);
@@ -1099,7 +1112,7 @@ mod tests {
         let forwarder_task = tokio::spawn({
             let cancellation_token = cancellation_token.clone();
             async move {
-                start_forwarder(cancellation_token, pipeline_config)
+                start_forwarder::<T>(cancellation_token, pipeline_config)
                     .await
                     .unwrap();
             }

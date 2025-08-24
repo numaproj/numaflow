@@ -27,6 +27,7 @@ numaflow-sqs.workspace = true
 numaflow-models.workspace = true
 numaflow-pb.workspace = true
 numaflow-shared.workspace = true
+numaflow-throttling.workspace = true
 serving.workspace = true
 backoff.workspace = true
 axum.workspace = true
