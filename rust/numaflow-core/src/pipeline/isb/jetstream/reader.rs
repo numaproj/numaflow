@@ -14,6 +14,7 @@ use crate::metrics::{
 };
 use crate::shared::grpc::utc_from_timestamp;
 use crate::tracker::TrackerHandle;
+use crate::typ::NumaflowTypeConfig;
 use crate::watermark::isb::ISBWatermarkHandle;
 use async_nats::jetstream::{
     AckKind, Context, Message as JetstreamMessage, consumer::PullConsumer,
@@ -63,7 +64,7 @@ const ACK_RETRY_ATTEMPTS: usize = usize::MAX;
 /// should stop reading messages. We just drop the tokio stream so that the downstream components can stop gracefully
 /// and before exiting we make sure all the work-in-progress(tasks) are completed.
 #[derive(Clone)]
-pub(crate) struct JetStreamReader<S> {
+pub(crate) struct JetStreamReader<C: NumaflowTypeConfig> {
     stream: Stream,
     config: BufferReaderConfig,
     consumer: PullConsumer,
@@ -73,7 +74,7 @@ pub(crate) struct JetStreamReader<S> {
     watermark_handle: Option<ISBWatermarkHandle>,
     vertex_type: String,
     compression_type: Option<CompressionType>,
-    rate_limiter: Option<RateLimit<WithDistributedState<S>>>,
+    rate_limiter: Option<C::RateLimiter>,
 }
 
 /// JSWrappedMessage is a wrapper around the JetStream message that includes the
@@ -181,13 +182,10 @@ impl JSWrappedMessage {
     }
 }
 
-impl<S> JetStreamReader<S>
-where
-    S: numaflow_throttling::state::Store + Sync,
-{
+impl<C: NumaflowTypeConfig> JetStreamReader<C> {
     pub(crate) async fn new(
         reader_config: ISBReaderConfig,
-        rate_limiter: Option<RateLimit<WithDistributedState<S>>>,
+        rate_limiter: Option<C::RateLimiter>,
     ) -> Result<Self> {
         let mut buffer_config = reader_config.config;
 

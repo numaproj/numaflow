@@ -51,12 +51,13 @@ use crate::sink::serve::ServingStore;
 use crate::sink::serve::nats::NatsServingStore;
 use crate::sink::serve::user_defined::UserDefinedStore;
 use crate::tracker::TrackerHandle;
+use crate::typ::{
+    NumaflowTypeConfig, WithInMemoryRateLimiter, WithRedisRateLimiter, build_rate_limiter,
+    should_use_redis_rate_limiter,
+};
 use crate::watermark::WatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
 use crate::{Result, error, shared};
-use numaflow_throttling::state::store::in_memory_store::InMemoryStore;
-use numaflow_throttling::state::store::redis_store::{RedisMode, RedisStore};
-use numaflow_throttling::{RateLimit, WithDistributedState};
 
 mod forwarder;
 pub(crate) mod isb;
@@ -283,53 +284,22 @@ async fn start_map_forwarder(
             isb_config: config.isb_config.clone(),
         };
 
-        // Determine store type and create appropriate forwarder
-        let task = if let Some(rate_limit_config) = &config.rate_limit {
-            // Check if Redis store is specifically configured
-            if let Some(redis_store) = rate_limit_config
-                .store
-                .as_ref()
-                .and_then(|store| store.redis_store.as_ref())
-            {
-                // Use Redis store
-                let redis_url = redis_store.url.clone();
-                let store =
-                    RedisStore::new("rate_limiter", RedisMode::SingleUrl { url: redis_url })
-                        .await
-                        .map_err(|e| {
-                            error::Error::Config(format!("Failed to create Redis store: {}", e))
-                        })?;
-                let rate_limiter =
-                    Some(create_rate_limiter(rate_limit_config, store, cln_token.clone()).await?);
-                setup_and_spawn_map_forwarder::<RedisStore>(
-                    isb_reader_config,
-                    rate_limiter,
-                    mapper,
-                    buffer_writer.clone(),
-                    cln_token.clone(),
-                )
-                .await?
-            } else {
-                // Use in-memory store for all other cases (no store config, or non-Redis store)
-                let store = InMemoryStore::new();
-                let rate_limiter =
-                    Some(create_rate_limiter(rate_limit_config, store, cln_token.clone()).await?);
-                setup_and_spawn_map_forwarder::<InMemoryStore>(
-                    isb_reader_config,
-                    rate_limiter,
-                    mapper,
-                    buffer_writer.clone(),
-                    cln_token.clone(),
-                )
-                .await?
-            }
-        } else {
-            // No rate limiting
-            setup_and_spawn_map_forwarder::<InMemoryStore>(
+        // Use TypeConfig pattern to simplify rate limiter setup
+        let task = if should_use_redis_rate_limiter(&config) {
+            setup_and_spawn_map_forwarder_with_config::<WithRedisRateLimiter>(
                 isb_reader_config,
-                None,
                 mapper,
                 buffer_writer.clone(),
+                &config,
+                cln_token.clone(),
+            )
+            .await?
+        } else {
+            setup_and_spawn_map_forwarder_with_config::<WithInMemoryRateLimiter>(
+                isb_reader_config,
+                mapper,
+                buffer_writer.clone(),
+                &config,
                 cln_token.clone(),
             )
             .await?
@@ -371,21 +341,21 @@ async fn start_map_forwarder(
     Ok(())
 }
 
-/// Generic helper function to setup and spawn map forwarder
-async fn setup_and_spawn_map_forwarder<S>(
+/// Generic helper function to setup and spawn map forwarder using TypeConfig pattern
+async fn setup_and_spawn_map_forwarder_with_config<C: NumaflowTypeConfig>(
     isb_reader_config: ISBReaderConfig,
-    rate_limiter: Option<RateLimit<WithDistributedState<S>>>,
     mapper: crate::mapper::map::MapHandle,
     buffer_writer: JetstreamWriter,
+    config: &PipelineConfig,
     cln_token: CancellationToken,
-) -> Result<tokio::task::JoinHandle<Result<()>>>
-where
-    S: numaflow_throttling::state::Store + Send + Sync + 'static,
-{
-    let buffer_reader = JetStreamReader::new(isb_reader_config, rate_limiter).await?;
+) -> Result<tokio::task::JoinHandle<Result<()>>> {
+    // Build the rate limiter using the TypeConfig factory method
+    let rate_limiter = build_rate_limiter::<C>(config, cln_token.clone()).await?;
+
+    let buffer_reader = JetStreamReader::new(isb_reader_config, Some(rate_limiter)).await?;
 
     let forwarder =
-        forwarder::map_forwarder::MapForwarder::<S>::new(buffer_reader, mapper, buffer_writer)
+        forwarder::map_forwarder::MapForwarder::<C>::new(buffer_reader, mapper, buffer_writer)
             .await;
 
     let task = tokio::spawn(async move { forwarder.start(cln_token).await });
@@ -671,55 +641,24 @@ async fn start_aligned_reduce_forwarder(
         .await,
     );
 
-    // Determine store type and create appropriate forwarder
-    let task = if let Some(rate_limit_config) = &config.rate_limit {
-        // Check if Redis store is specifically configured
-        if let Some(redis_store) = rate_limit_config
-            .store
-            .as_ref()
-            .and_then(|store| store.redis_store.as_ref())
-        {
-            // Use Redis store
-            let redis_url = redis_store.url.clone();
-            let store = RedisStore::new("rate_limiter", RedisMode::SingleUrl { url: redis_url })
-                .await
-                .map_err(|e| {
-                    error::Error::Config(format!("Failed to create Redis store: {}", e))
-                })?;
-            let rate_limiter =
-                Some(create_rate_limiter(rate_limit_config, store, cln_token.clone()).await?);
-            setup_and_spawn_reduce_forwarder::<RedisStore>(
-                isb_reader_config,
-                rate_limiter,
-                tracker_handle.clone(),
-                reducer,
-                wal,
-                cln_token.clone(),
-            )
-            .await?
-        } else {
-            // Use in-memory store for all other cases (no store config, or non-Redis store)
-            let store = InMemoryStore::new();
-            let rate_limiter =
-                Some(create_rate_limiter(rate_limit_config, store, cln_token.clone()).await?);
-            setup_and_spawn_reduce_forwarder::<InMemoryStore>(
-                isb_reader_config,
-                rate_limiter,
-                tracker_handle.clone(),
-                reducer,
-                wal,
-                cln_token.clone(),
-            )
-            .await?
-        }
-    } else {
-        // No rate limiting
-        setup_and_spawn_reduce_forwarder::<InMemoryStore>(
+    // Use TypeConfig pattern to simplify rate limiter setup
+    let task = if should_use_redis_rate_limiter(&config) {
+        setup_and_spawn_reduce_forwarder_with_config::<WithRedisRateLimiter>(
             isb_reader_config,
-            None,
             tracker_handle.clone(),
             reducer,
             wal,
+            &config,
+            cln_token.clone(),
+        )
+        .await?
+    } else {
+        setup_and_spawn_reduce_forwarder_with_config::<WithInMemoryRateLimiter>(
+            isb_reader_config,
+            tracker_handle.clone(),
+            reducer,
+            wal,
+            &config,
             cln_token.clone(),
         )
         .await?
@@ -881,55 +820,24 @@ async fn start_unaligned_reduce_forwarder(
         .await,
     );
 
-    // Determine store type and create appropriate forwarder
-    let task = if let Some(rate_limit_config) = &config.rate_limit {
-        // Check if Redis store is specifically configured
-        if let Some(redis_store) = rate_limit_config
-            .store
-            .as_ref()
-            .and_then(|store| store.redis_store.as_ref())
-        {
-            // Use Redis store
-            let redis_url = redis_store.url.clone();
-            let store = RedisStore::new("rate_limiter", RedisMode::SingleUrl { url: redis_url })
-                .await
-                .map_err(|e| {
-                    error::Error::Config(format!("Failed to create Redis store: {}", e))
-                })?;
-            let rate_limiter =
-                Some(create_rate_limiter(rate_limit_config, store, cln_token.clone()).await?);
-            setup_and_spawn_reduce_forwarder::<RedisStore>(
-                isb_reader_config,
-                rate_limiter,
-                tracker_handle.clone(),
-                reducer,
-                wal,
-                cln_token.clone(),
-            )
-            .await?
-        } else {
-            // Use in-memory store for all other cases (no store config, or non-Redis store)
-            let store = InMemoryStore::new();
-            let rate_limiter =
-                Some(create_rate_limiter(rate_limit_config, store, cln_token.clone()).await?);
-            setup_and_spawn_reduce_forwarder::<InMemoryStore>(
-                isb_reader_config,
-                rate_limiter,
-                tracker_handle.clone(),
-                reducer,
-                wal,
-                cln_token.clone(),
-            )
-            .await?
-        }
-    } else {
-        // No rate limiting
-        setup_and_spawn_reduce_forwarder::<InMemoryStore>(
+    // Use TypeConfig pattern to simplify rate limiter setup
+    let task = if should_use_redis_rate_limiter(&config) {
+        setup_and_spawn_reduce_forwarder_with_config::<WithRedisRateLimiter>(
             isb_reader_config,
-            None,
             tracker_handle.clone(),
             reducer,
             wal,
+            &config,
+            cln_token.clone(),
+        )
+        .await?
+    } else {
+        setup_and_spawn_reduce_forwarder_with_config::<WithInMemoryRateLimiter>(
+            isb_reader_config,
+            tracker_handle.clone(),
+            reducer,
+            wal,
+            &config,
             cln_token.clone(),
         )
         .await?
@@ -942,26 +850,26 @@ async fn start_unaligned_reduce_forwarder(
     Ok(())
 }
 
-/// Generic helper function to setup and spawn reduce forwarder
-async fn setup_and_spawn_reduce_forwarder<S>(
+/// Generic helper function to setup and spawn reduce forwarder using TypeConfig pattern
+async fn setup_and_spawn_reduce_forwarder_with_config<C: NumaflowTypeConfig>(
     isb_reader_config: ISBReaderConfig,
-    rate_limiter: Option<RateLimit<WithDistributedState<S>>>,
     tracker_handle: TrackerHandle,
     reducer: Reducer,
     wal: Option<WAL>,
+    config: &PipelineConfig,
     cln_token: CancellationToken,
-) -> Result<tokio::task::JoinHandle<Result<()>>>
-where
-    S: numaflow_throttling::state::Store + Send + Sync + 'static,
-{
+) -> Result<tokio::task::JoinHandle<Result<()>>> {
+    // Build the rate limiter using the TypeConfig factory method
+    let rate_limiter = C::build_rate_limiter(config, cln_token.clone()).await?;
+
     let buffer_reader = JetStreamReader::new(isb_reader_config, rate_limiter).await?;
 
-    let pbq_builder = PBQBuilder::<S>::new(buffer_reader.clone(), tracker_handle.clone());
+    let pbq_builder = PBQBuilder::<C>::new(buffer_reader.clone(), tracker_handle.clone());
     let pbq = match wal {
         Some(wal) => pbq_builder.wal(wal).build(),
         None => pbq_builder.build(),
     };
-    let forwarder = ReduceForwarder::<S>::new(pbq, reducer);
+    let forwarder = ReduceForwarder::<C>::new(pbq, reducer);
 
     let task = tokio::spawn(async move { forwarder.start(cln_token).await });
     Ok(task)
@@ -1054,50 +962,20 @@ async fn start_sink_forwarder(
             isb_config: config.isb_config.clone(),
         };
 
-        // Determine store type and create appropriate forwarder
-        let task = if let Some(rate_limit_config) = &config.rate_limit {
-            // Check if Redis store is specifically configured
-            if let Some(redis_store) = rate_limit_config
-                .store
-                .as_ref()
-                .and_then(|store| store.redis_store.as_ref())
-            {
-                // Use Redis store
-                let redis_url = redis_store.url.clone();
-                let store =
-                    RedisStore::new("rate_limiter", RedisMode::SingleUrl { url: redis_url })
-                        .await
-                        .map_err(|e| {
-                            error::Error::Config(format!("Failed to create Redis store: {}", e))
-                        })?;
-                let rate_limiter =
-                    Some(create_rate_limiter(rate_limit_config, store, cln_token.clone()).await?);
-                setup_and_spawn_sink_forwarder::<RedisStore>(
-                    isb_reader_config,
-                    rate_limiter,
-                    sink_writer,
-                    cln_token.clone(),
-                )
-                .await?
-            } else {
-                // Use in-memory store for all other cases (no store config, or non-Redis store)
-                let store = InMemoryStore::new();
-                let rate_limiter =
-                    Some(create_rate_limiter(rate_limit_config, store, cln_token.clone()).await?);
-                setup_and_spawn_sink_forwarder::<InMemoryStore>(
-                    isb_reader_config,
-                    rate_limiter,
-                    sink_writer,
-                    cln_token.clone(),
-                )
-                .await?
-            }
-        } else {
-            // No rate limiting
-            setup_and_spawn_sink_forwarder::<InMemoryStore>(
+        // Use TypeConfig pattern to simplify rate limiter setup
+        let task = if should_use_redis_rate_limiter(&config) {
+            setup_and_spawn_sink_forwarder_with_config::<WithRedisRateLimiter>(
                 isb_reader_config,
-                None,
                 sink_writer,
+                &config,
+                cln_token.clone(),
+            )
+            .await?
+        } else {
+            setup_and_spawn_sink_forwarder_with_config::<WithInMemoryRateLimiter>(
+                isb_reader_config,
+                sink_writer,
+                &config,
                 cln_token.clone(),
             )
             .await?
@@ -1136,20 +1014,20 @@ async fn start_sink_forwarder(
     Ok(())
 }
 
-/// Generic helper function to setup and spawn sink forwarder
-async fn setup_and_spawn_sink_forwarder<S>(
+/// Generic helper function to setup and spawn sink forwarder using TypeConfig pattern
+async fn setup_and_spawn_sink_forwarder_with_config<C: NumaflowTypeConfig>(
     isb_reader_config: ISBReaderConfig,
-    rate_limiter: Option<RateLimit<WithDistributedState<S>>>,
     sink_writer: SinkWriter,
+    config: &PipelineConfig,
     cln_token: CancellationToken,
-) -> Result<tokio::task::JoinHandle<Result<()>>>
-where
-    S: numaflow_throttling::state::Store + Send + Sync + 'static,
-{
+) -> Result<tokio::task::JoinHandle<Result<()>>> {
+    // Build the rate limiter using the TypeConfig factory method
+    let rate_limiter = C::build_rate_limiter(config, cln_token.clone()).await?;
+
     let buffer_reader = JetStreamReader::new(isb_reader_config, rate_limiter).await?;
 
     let forwarder =
-        forwarder::sink_forwarder::SinkForwarder::<S>::new(buffer_reader, sink_writer).await;
+        forwarder::sink_forwarder::SinkForwarder::<C>::new(buffer_reader, sink_writer).await;
 
     let task = tokio::spawn(async move { forwarder.start(cln_token).await });
     Ok(task)

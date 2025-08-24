@@ -9,18 +9,15 @@ use crate::pipeline::isb::jetstream::writer::JetstreamWriter;
 
 /// Map forwarder is a component which starts a streaming reader, a mapper, and a writer
 /// and manages the lifecycle of these components.
-pub(crate) struct MapForwarder<S> {
-    jetstream_reader: JetStreamReader<S>,
+pub(crate) struct MapForwarder<C: crate::typ::NumaflowTypeConfig> {
+    jetstream_reader: JetStreamReader<C>,
     mapper: MapHandle,
     jetstream_writer: JetstreamWriter,
 }
 
-impl<S> MapForwarder<S>
-where
-    S: numaflow_throttling::state::Store + Sync,
-{
+impl<C: crate::typ::NumaflowTypeConfig> MapForwarder<C> {
     pub(crate) async fn new(
-        jetstream_reader: JetStreamReader<S>,
+        jetstream_reader: JetStreamReader<C>,
         mapper: MapHandle,
         jetstream_writer: JetstreamWriter,
     ) -> Self {

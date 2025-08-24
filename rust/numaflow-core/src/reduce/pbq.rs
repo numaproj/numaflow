@@ -23,18 +23,15 @@ pub(crate) struct WAL {
 }
 
 /// PBQBuilder is a builder for PBQ.
-pub(crate) struct PBQBuilder<S> {
-    isb_reader: JetStreamReader<S>,
+pub(crate) struct PBQBuilder<C: crate::typ::NumaflowTypeConfig> {
+    isb_reader: JetStreamReader<C>,
     tracker_handle: TrackerHandle,
     wal: Option<WAL>,
 }
 
-impl<S> PBQBuilder<S>
-where
-    S: numaflow_throttling::state::Store + Sync,
-{
+impl<C: crate::typ::NumaflowTypeConfig> PBQBuilder<C> {
     /// Creates a new PBQBuilder.
-    pub(crate) fn new(isb_reader: JetStreamReader<S>, tracker_handle: TrackerHandle) -> Self {
+    pub(crate) fn new(isb_reader: JetStreamReader<C>, tracker_handle: TrackerHandle) -> Self {
         Self {
             isb_reader,
             tracker_handle,
@@ -47,7 +44,7 @@ where
         self
     }
 
-    pub(crate) fn build(self) -> PBQ<S> {
+    pub(crate) fn build(self) -> PBQ<C> {
         PBQ {
             isb_reader: self.isb_reader,
             wal: self.wal,
@@ -58,16 +55,13 @@ where
 
 /// PBQ is a persistent buffer queue.
 #[allow(clippy::upper_case_acronyms)]
-pub(crate) struct PBQ<S> {
-    isb_reader: JetStreamReader<S>,
+pub(crate) struct PBQ<C: crate::typ::NumaflowTypeConfig> {
+    isb_reader: JetStreamReader<C>,
     wal: Option<WAL>,
     tracker_handle: TrackerHandle,
 }
 
-impl<S> PBQ<S>
-where
-    S: numaflow_throttling::state::Store + Sync,
-{
+impl<C: crate::typ::NumaflowTypeConfig> PBQ<C> {
     /// Streaming read from PBQ, returns a ReceiverStream and a JoinHandle for monitoring errors.
     pub(crate) async fn streaming_read(
         self,
