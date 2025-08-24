@@ -8,6 +8,7 @@ use crate::config::components::metrics::MetricsConfig;
 use crate::metrics::{
     LagReader, MetricsState, PendingReader, PendingReaderBuilder, start_metrics_https_server,
 };
+use crate::typ::NumaflowTypeConfig;
 
 /// Starts the metrics server
 pub(crate) async fn start_metrics_server(
@@ -28,10 +29,10 @@ pub(crate) async fn start_metrics_server(
 }
 
 /// Creates a pending reader
-pub(crate) async fn create_pending_reader(
+pub(crate) async fn create_pending_reader<T: NumaflowTypeConfig>(
     metrics_config: &MetricsConfig,
-    lag_reader: LagReader,
-) -> PendingReader {
+    lag_reader: LagReader<T>,
+) -> PendingReader<T> {
     PendingReaderBuilder::new(lag_reader)
         .lag_checking_interval(Duration::from_secs(
             metrics_config.lag_check_interval_in_secs.into(),

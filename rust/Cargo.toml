@@ -16,7 +16,7 @@ members = [
     "extns/numaflow-http",
     # generated
     "numaflow-pb",
-    "numaflow-models", "numaflow-throttling", 
+    "numaflow-models", "numaflow-throttling",
 ]
 
 [workspace.lints.rust]
@@ -66,6 +66,7 @@ numaflow-models = { path = "numaflow-models" }
 numaflow-monitor = { path = "numaflow-monitor" }
 numaflow-sideinput = { path = "numaflow-sideinput" }
 numaflow-shared = { path = "numaflow-shared" }
+numaflow-throttling = { path = "numaflow-throttling" }
 backoff = { path = "backoff" }
 numaflow-pb = { path = "numaflow-pb" }
 numaflow-pulsar = { path = "extns/numaflow-pulsar" }

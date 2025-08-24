@@ -10,6 +10,8 @@ use tokio_util::sync::CancellationToken;
 use tonic::{Code, Status};
 use tracing::{error, info};
 
+pub mod typ;
+
 /// Custom Error handling.
 mod error;
 pub(crate) use crate::error::{Error, Result};

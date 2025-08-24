@@ -9,6 +9,7 @@ use crate::shared::create_components;
 use crate::sink::SinkWriter;
 use crate::source::Source;
 use crate::tracker::TrackerHandle;
+use crate::typ::NumaflowTypeConfig;
 use crate::{metrics, shared};
 
 /// [forwarder] orchestrates data movement from the Source to the Sink via the optional SourceTransformer.
@@ -81,7 +82,7 @@ pub(crate) async fn start_forwarder(
     Ok(())
 }
 
-async fn start(
+async fn start<T: NumaflowTypeConfig>(
     mvtx_config: MonovertexConfig,
     source: Source,
     sink: SinkWriter,
@@ -94,7 +95,7 @@ async fn start(
         // start the pending reader to publish pending metrics
         let pending_reader = shared::metrics::create_pending_reader(
             &mvtx_config.metrics_config,
-            LagReader::Source(Box::new(source.clone())),
+            LagReader::<T>::Source(Box::new(source.clone())),
         )
         .await;
         Some(pending_reader.start(is_mono_vertex()).await)

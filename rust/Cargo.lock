@@ -2493,6 +2493,7 @@ dependencies = [
  "numaflow-pulsar",
  "numaflow-shared",
  "numaflow-sqs",
+ "numaflow-throttling",
  "parking_lot",
  "pep440_rs",
  "pin-project",
