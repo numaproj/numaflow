@@ -24,7 +24,7 @@ use backoff::strategy::fixed;
 use bytes::Bytes;
 use chrono::Utc;
 use flate2::read::GzDecoder;
-use numaflow_throttling::{RateLimit, RateLimiter, WithDistributedState};
+use numaflow_throttling::RateLimiter;
 use prost::Message as ProtoMessage;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore, mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -635,7 +635,7 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
     }
 }
 
-impl<S> fmt::Display for JetStreamReader<S> {
+impl<C: crate::typ::NumaflowTypeConfig> fmt::Display for JetStreamReader<C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -727,9 +727,7 @@ mod tests {
             ..Default::default()
         };
         let tracker = TrackerHandle::new(None);
-        let js_reader: JetStreamReader<
-            numaflow_throttling::state::store::in_memory_store::InMemoryStore,
-        > = JetStreamReader::new(
+        let js_reader: JetStreamReader<crate::typ::WithoutRateLimiter> = JetStreamReader::new(
             ISBReaderConfig {
                 vertex_type: "Map".to_string(),
                 stream: stream.clone(),
@@ -839,9 +837,7 @@ mod tests {
             wip_ack_interval: Duration::from_millis(5),
             ..Default::default()
         };
-        let js_reader: JetStreamReader<
-            numaflow_throttling::state::store::in_memory_store::InMemoryStore,
-        > = JetStreamReader::new(
+        let js_reader: JetStreamReader<crate::typ::WithoutRateLimiter> = JetStreamReader::new(
             ISBReaderConfig {
                 vertex_type: "Map".to_string(),
                 stream: js_stream.clone(),
@@ -996,9 +992,7 @@ mod tests {
             ..Default::default()
         };
         let tracker = TrackerHandle::new(None);
-        let js_reader: JetStreamReader<
-            numaflow_throttling::state::store::in_memory_store::InMemoryStore,
-        > = JetStreamReader::new(
+        let js_reader: JetStreamReader<crate::typ::WithoutRateLimiter> = JetStreamReader::new(
             ISBReaderConfig {
                 vertex_type: "Map".to_string(),
                 stream: stream.clone(),

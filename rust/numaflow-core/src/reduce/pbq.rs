@@ -133,7 +133,7 @@ impl<C: crate::typ::NumaflowTypeConfig> PBQ<C> {
 
     /// Reads from ISB and writes to WAL.
     async fn read_isb_and_write_wal(
-        isb_reader: JetStreamReader<S>,
+        isb_reader: JetStreamReader<C>,
         append_only_wal: AppendOnlyWal,
         tracker_handle: TrackerHandle,
         tx: Sender<Message>,
@@ -238,9 +238,7 @@ mod tests {
         };
         let tracker = TrackerHandle::new(None);
         use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;
-        let js_reader: JetStreamReader<
-            numaflow_throttling::state::store::in_memory_store::InMemoryStore,
-        > = JetStreamReader::new(
+        let js_reader: JetStreamReader<crate::typ::WithoutRateLimiter> = JetStreamReader::new(
             ISBReaderConfig {
                 vertex_type: "test".to_string(),
                 stream: stream.clone(),
@@ -358,9 +356,7 @@ mod tests {
         };
         let tracker = TrackerHandle::new(None);
         use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;
-        let js_reader: JetStreamReader<
-            numaflow_throttling::state::store::in_memory_store::InMemoryStore,
-        > = JetStreamReader::new(
+        let js_reader: JetStreamReader<crate::typ::WithoutRateLimiter> = JetStreamReader::new(
             ISBReaderConfig {
                 vertex_type: "test".to_string(),
                 stream: stream.clone(),
@@ -599,9 +595,7 @@ mod tests {
         };
         let tracker = TrackerHandle::new(None);
         use crate::pipeline::isb::jetstream::reader::ISBReaderConfig;
-        let js_reader: JetStreamReader<
-            numaflow_throttling::state::store::in_memory_store::InMemoryStore,
-        > = JetStreamReader::new(
+        let js_reader: JetStreamReader<crate::typ::WithoutRateLimiter> = JetStreamReader::new(
             ISBReaderConfig {
                 vertex_type: "test".to_string(),
                 stream: stream.clone(),

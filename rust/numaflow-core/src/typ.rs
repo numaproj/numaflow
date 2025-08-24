@@ -1,27 +1,52 @@
-use tokio_util::sync::CancellationToken;
+//! Type configuration trait for Numaflow components.
+//!
+//! This module provides a simple TypeConfig trait that allows the application logic to be generic
+//! over the configuration of its components, rather than their concrete types. This approach
+//! uses concrete builder functions for clarity and maintainability.
 
 use crate::config::pipeline::PipelineConfig;
 use crate::shared::create_components::create_rate_limiter;
 use crate::{Result, error};
 use numaflow_throttling::state::store::in_memory_store::InMemoryStore;
 use numaflow_throttling::state::store::redis_store::{RedisMode, RedisStore};
-use numaflow_throttling::{RateLimit, RateLimiter, WithDistributedState};
+use numaflow_throttling::{NoOpRateLimiter, RateLimit, RateLimiter, WithDistributedState};
+use tokio_util::sync::CancellationToken;
 
-pub trait NumaflowTypeConfig: Send + Sync + 'static {
+pub trait NumaflowTypeConfig: Send + Sync + Clone + 'static {
     type RateLimiter: RateLimiter + Clone + Send + Sync + 'static;
-
-    // async fn build_rate_limiter(
-    //     config: &PipelineConfig,
-    //     cln_token: CancellationToken,
-    // ) -> Result<Option<Self::RateLimiter>>;
 }
 
-pub(crate) async fn build_rate_limiter<C: NumaflowTypeConfig>(
+#[derive(Clone)]
+pub struct WithRedisRateLimiter {
+    pub throttling_config: Option<RateLimit<WithDistributedState<RedisStore>>>,
+}
+impl NumaflowTypeConfig for WithRedisRateLimiter {
+    type RateLimiter = RateLimit<WithDistributedState<RedisStore>>;
+}
+
+#[derive(Clone)]
+pub struct WithInMemoryRateLimiter {
+    pub throttling_config: Option<RateLimit<WithDistributedState<InMemoryStore>>>,
+}
+impl NumaflowTypeConfig for WithInMemoryRateLimiter {
+    type RateLimiter = RateLimit<WithDistributedState<InMemoryStore>>;
+}
+
+#[derive(Clone)]
+pub struct WithoutRateLimiter {
+    pub throttling_config: Option<NoOpRateLimiter>,
+}
+impl NumaflowTypeConfig for WithoutRateLimiter {
+    type RateLimiter = NoOpRateLimiter;
+}
+
+/// Build a Redis-backed rate limiter
+pub async fn build_redis_rate_limiter(
     config: &PipelineConfig,
     cln_token: CancellationToken,
-) -> Result<C::RateLimiter> {
+) -> Result<RateLimit<WithDistributedState<RedisStore>>> {
     let rate_limit_config = config.rate_limit.as_ref().ok_or_else(|| {
-        error::Error::Config("Rate limit config is required for RedisRateLimiter".to_string())
+        error::Error::Config("Rate limit config is required for Redis rate limiter".to_string())
     })?;
 
     let redis_store_config = rate_limit_config
@@ -40,40 +65,54 @@ pub(crate) async fn build_rate_limiter<C: NumaflowTypeConfig>(
     Ok(limiter)
 }
 
-pub struct WithRedisRateLimiter;
-
-impl NumaflowTypeConfig for WithRedisRateLimiter {
-    type RateLimiter = RateLimit<WithDistributedState<RedisStore>>;
-
-    // async fn build_rate_limiter(
-    //     config: &PipelineConfig,
-    //     cln_token: CancellationToken,
-    // ) -> Result<Option<Self::RateLimiter>> {
-    //     todo!()
-    // }
+/// Build a Redis-backed rate limiter configuration (returns struct)
+pub async fn build_redis_rate_limiter_config(
+    config: &PipelineConfig,
+    cln_token: CancellationToken,
+) -> Result<WithRedisRateLimiter> {
+    let limiter = build_redis_rate_limiter(config, cln_token).await?;
+    Ok(WithRedisRateLimiter {
+        throttling_config: Some(limiter),
+    })
 }
 
-pub struct WithInMemoryRateLimiter;
+/// Build an in-memory rate limiter
+pub async fn build_in_memory_rate_limiter(
+    config: &PipelineConfig,
+    cln_token: CancellationToken,
+) -> Result<RateLimit<WithDistributedState<InMemoryStore>>> {
+    let rate_limit_config = config.rate_limit.as_ref().ok_or_else(|| {
+        error::Error::Config("Rate limit config is required for in-memory rate limiter".to_string())
+    })?;
 
-impl NumaflowTypeConfig for WithInMemoryRateLimiter {
-    type RateLimiter = RateLimit<WithDistributedState<InMemoryStore>>;
-
-    // async fn build_rate_limiter(
-    //     config: &PipelineConfig,
-    //     cln_token: CancellationToken,
-    // ) -> Result<Option<Self::RateLimiter>> {
-    //     if let Some(rate_limit_config) = &config.rate_limit {
-    //         // Create in-memory store
-    //         let store = InMemoryStore::new();
-    //         let limiter = create_rate_limiter(rate_limit_config, store, cln_token).await?;
-    //         Ok(Some(limiter))
-    //     } else {
-    //         // No rate limiting configured
-    //         Ok(None)
-    //     }
-    // }
+    // Create in-memory store
+    let store = InMemoryStore::new();
+    let limiter = create_rate_limiter(rate_limit_config, store, cln_token).await?;
+    Ok(limiter)
 }
 
+/// Build an in-memory rate limiter configuration (returns struct)
+pub async fn build_in_memory_rate_limiter_config(
+    config: &PipelineConfig,
+    cln_token: CancellationToken,
+) -> Result<WithInMemoryRateLimiter> {
+    let limiter = build_in_memory_rate_limiter(config, cln_token).await?;
+    Ok(WithInMemoryRateLimiter {
+        throttling_config: Some(limiter),
+    })
+}
+
+/// Build a no-op rate limiter configuration (returns struct)
+pub async fn build_noop_rate_limiter_config(
+    _config: &PipelineConfig,
+    _cln_token: CancellationToken,
+) -> Result<WithoutRateLimiter> {
+    Ok(WithoutRateLimiter {
+        throttling_config: Some(NoOpRateLimiter),
+    })
+}
+
+/// Helper function to determine which rate limiter to use based on the pipeline configuration.
 pub fn should_use_redis_rate_limiter(config: &PipelineConfig) -> bool {
     config
         .rate_limit

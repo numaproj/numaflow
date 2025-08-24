@@ -1208,16 +1208,16 @@ async fn sidecar_livez(State(state): State<MetricsState>) -> impl IntoResponse {
 }
 
 #[derive(Clone)]
-pub(crate) enum LagReader {
+pub(crate) enum LagReader<C: crate::typ::NumaflowTypeConfig> {
     Source(Box<Source>),
     #[allow(clippy::upper_case_acronyms)]
-    ISB(Vec<JetStreamReader<numaflow_throttling::state::store::in_memory_store::InMemoryStore>>), // multiple partitions
+    ISB(Vec<JetStreamReader<C>>), // multiple partitions
 }
 
 /// PendingReader is responsible for periodically checking the lag of the reader
 /// and exposing the metrics.
-pub(crate) struct PendingReader {
-    lag_reader: LagReader,
+pub(crate) struct PendingReader<C: crate::typ::NumaflowTypeConfig> {
+    lag_reader: LagReader<C>,
     lag_checking_interval: Duration,
 }
 
@@ -1226,13 +1226,13 @@ pub(crate) struct PendingReaderTasks {
 }
 
 /// PendingReaderBuilder is used to build a [LagReader] instance.
-pub(crate) struct PendingReaderBuilder {
-    lag_reader: LagReader,
+pub(crate) struct PendingReaderBuilder<C: crate::typ::NumaflowTypeConfig> {
+    lag_reader: LagReader<C>,
     lag_checking_interval: Option<Duration>,
 }
 
-impl PendingReaderBuilder {
-    pub(crate) fn new(lag_reader: LagReader) -> Self {
+impl<C: crate::typ::NumaflowTypeConfig> PendingReaderBuilder<C> {
+    pub(crate) fn new(lag_reader: LagReader<C>) -> Self {
         Self {
             lag_reader,
             lag_checking_interval: None,
@@ -1243,7 +1243,7 @@ impl PendingReaderBuilder {
         self.lag_checking_interval = Some(interval);
         self
     }
-    pub(crate) fn build(self) -> PendingReader {
+    pub(crate) fn build(self) -> PendingReader<C> {
         PendingReader {
             lag_reader: self.lag_reader,
             lag_checking_interval: self
@@ -1253,7 +1253,7 @@ impl PendingReaderBuilder {
     }
 }
 
-impl PendingReader {
+impl<C: crate::typ::NumaflowTypeConfig> PendingReader<C> {
     /// Starts the lag reader by spawning task to expose pending metrics for daemon server.
     /// Dropping the PendingReaderTasks will abort the background tasks.
     pub async fn start(&self, is_mono_vertex: bool) -> PendingReaderTasks {
@@ -1276,8 +1276,8 @@ impl Drop for PendingReaderTasks {
 }
 
 // Periodically exposes the pending metrics by calculating the average pending messages over different intervals.
-async fn expose_pending_metrics(
-    mut lag_reader: LagReader,
+async fn expose_pending_metrics<C: crate::typ::NumaflowTypeConfig>(
+    mut lag_reader: LagReader<C>,
     lag_checking_interval: Duration,
     is_mono_vertex: bool,
 ) {
@@ -1289,7 +1289,7 @@ async fn expose_pending_metrics(
         ticker.tick().await;
 
         match &mut lag_reader {
-            LagReader::Source(source) => match fetch_source_pending(source).await {
+            LagReader::Source(source) => match fetch_source_pending(&source).await {
                 Ok(pending) => {
                     if pending != -1 {
                         if last_logged.elapsed().as_secs() >= 60 {
@@ -1323,7 +1323,7 @@ async fn expose_pending_metrics(
                 }
             },
             LagReader::ISB(readers) => {
-                for reader in readers {
+                for reader in readers.iter_mut() {
                     match fetch_isb_pending(reader).await {
                         Ok(pending) => {
                             if pending != -1 {
@@ -1360,7 +1360,7 @@ async fn fetch_source_pending(lag_reader: &Source) -> crate::error::Result<i64> 
     Ok(response)
 }
 
-async fn fetch_isb_pending(reader: &mut JetStreamReader<numaflow_throttling::state::store::in_memory_store::InMemoryStore>) -> crate::error::Result<i64> {
+async fn fetch_isb_pending<C: crate::typ::NumaflowTypeConfig>(reader: &mut JetStreamReader<C>) -> crate::error::Result<i64> {
     let response: i64 = reader.pending().await?.map_or(-1, |p| p as i64); // default to -1(unavailable)
     Ok(response)
 }

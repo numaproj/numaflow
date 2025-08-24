@@ -375,6 +375,16 @@ impl TokenCalcBounds {
     }
 }
 
+#[derive(Clone)]
+pub struct NoOpRateLimiter;
+
+impl RateLimiter for NoOpRateLimiter {
+    async fn acquire_n(&self, n: Option<usize>, _timeout: Option<Duration>) -> usize {
+        // Always return the requested number of tokens (or max if not specified)
+        n.unwrap_or(usize::MAX)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

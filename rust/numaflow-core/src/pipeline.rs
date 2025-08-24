@@ -15,6 +15,7 @@ use crate::config::components::reduce::{
     UnalignedWindowType,
 };
 use crate::config::pipeline;
+use crate::config::pipeline::isb::BufferReaderConfig;
 use crate::config::pipeline::map::MapVtxConfig;
 use crate::config::pipeline::watermark::WatermarkConfig;
 use crate::config::pipeline::{
@@ -44,7 +45,7 @@ use crate::reduce::wal::segment::WalType;
 use crate::reduce::wal::segment::append::AppendOnlyWal;
 use crate::reduce::wal::segment::compactor::{Compactor, WindowKind};
 use crate::shared::create_components;
-use crate::shared::create_components::create_rate_limiter;
+
 use crate::shared::metrics::start_metrics_server;
 use crate::sink::SinkWriter;
 use crate::sink::serve::ServingStore;
@@ -52,8 +53,9 @@ use crate::sink::serve::nats::NatsServingStore;
 use crate::sink::serve::user_defined::UserDefinedStore;
 use crate::tracker::TrackerHandle;
 use crate::typ::{
-    NumaflowTypeConfig, WithInMemoryRateLimiter, WithRedisRateLimiter, build_rate_limiter,
-    should_use_redis_rate_limiter,
+    NumaflowTypeConfig, WithInMemoryRateLimiter, WithRedisRateLimiter, WithoutRateLimiter,
+    build_in_memory_rate_limiter_config, build_noop_rate_limiter_config,
+    build_redis_rate_limiter_config, should_use_redis_rate_limiter,
 };
 use crate::watermark::WatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
@@ -169,7 +171,7 @@ async fn start_source_forwarder(
 
     // only check the pending and lag for source for pod_id = 0
     let _pending_reader_handle: Option<PendingReaderTasks> = if config.replica == 0 {
-        let pending_reader = shared::metrics::create_pending_reader(
+        let pending_reader = shared::metrics::create_pending_reader::<WithoutRateLimiter>(
             &config.metrics_config,
             LagReader::Source(Box::new(source.clone())),
         )
@@ -240,10 +242,6 @@ async fn start_map_forwarder(
         .ok_or_else(|| error::Error::Config("No from vertex config found".to_string()))?
         .reader_config;
 
-    // Create buffer writers and buffer readers
-    let mut mapper_handle = None;
-    let mut forwarder_tasks = vec![];
-
     let buffer_writer = JetstreamWriter::new(ISBWriterConfig {
         config: config.to_vertex_config.clone(),
         js_ctx: js_context.clone(),
@@ -255,67 +253,66 @@ async fn start_map_forwarder(
         isb_config: config.isb_config.clone(),
     });
 
-    for stream in reader_config.streams.clone() {
-        info!("Creating buffer reader for stream {:?}", stream);
+    // The function is now just a clean dispatcher. It makes a SINGLE call
+    // to the generic worker, which handles everything else.
+    let (forwarder_tasks, mapper_handle) = if let Some(_rl_config) = &config.rate_limit {
+        if should_use_redis_rate_limiter(&config) {
+            let redis_config = build_redis_rate_limiter_config(&config, cln_token.clone()).await?;
+            let redis_limiter = redis_config.throttling_config.unwrap();
 
-        let mapper = create_components::create_mapper(
-            config.batch_size,
-            config.read_timeout,
-            config.graceful_shutdown_time,
-            map_vtx_config.clone(),
-            tracker_handle.clone(),
-            cln_token.clone(),
-        )
-        .await?;
-
-        if mapper_handle.is_none() {
-            mapper_handle = Some(mapper.clone());
-        }
-
-        let isb_reader_config = ISBReaderConfig {
-            vertex_type: config.vertex_type.to_string(),
-            stream,
-            js_ctx: js_context.clone(),
-            config: reader_config.clone(),
-            tracker_handle: tracker_handle.clone(),
-            batch_size: config.batch_size,
-            read_timeout: config.read_timeout,
-            watermark_handle: watermark_handle.clone(),
-            isb_config: config.isb_config.clone(),
-        };
-
-        // Use TypeConfig pattern to simplify rate limiter setup
-        let task = if should_use_redis_rate_limiter(&config) {
-            setup_and_spawn_map_forwarder_with_config::<WithRedisRateLimiter>(
-                isb_reader_config,
-                mapper,
-                buffer_writer.clone(),
-                &config,
+            run_all_streams_with_config::<WithRedisRateLimiter>(
                 cln_token.clone(),
+                js_context.clone(),
+                &config,
+                &map_vtx_config,
+                reader_config,
+                tracker_handle.clone(),
+                watermark_handle.clone(),
+                buffer_writer,
+                redis_limiter,
             )
             .await?
         } else {
-            setup_and_spawn_map_forwarder_with_config::<WithInMemoryRateLimiter>(
-                isb_reader_config,
-                mapper,
-                buffer_writer.clone(),
-                &config,
+            let in_mem_config =
+                build_in_memory_rate_limiter_config(&config, cln_token.clone()).await?;
+            let in_mem_limiter = in_mem_config.throttling_config.unwrap();
+
+            run_all_streams_with_config::<WithInMemoryRateLimiter>(
                 cln_token.clone(),
+                js_context.clone(),
+                &config,
+                &map_vtx_config,
+                reader_config,
+                tracker_handle.clone(),
+                watermark_handle.clone(),
+                buffer_writer,
+                in_mem_limiter,
             )
             .await?
-        };
+        }
+    } else {
+        let noop_config = build_noop_rate_limiter_config(&config, cln_token.clone()).await?;
+        let noop_limiter = noop_config.throttling_config.unwrap();
 
-        forwarder_tasks.push(task);
-    }
-
-    // Note: We can't easily create lag readers here since they have different types
-    // This is a limitation of the current approach - metrics for lag reading would need to be handled differently
+        run_all_streams_with_config::<WithoutRateLimiter>(
+            cln_token.clone(),
+            js_context.clone(),
+            &config,
+            &map_vtx_config,
+            reader_config,
+            tracker_handle.clone(),
+            watermark_handle.clone(),
+            buffer_writer,
+            noop_limiter,
+        )
+        .await?
+    };
 
     let metrics_server_handle = start_metrics_server(
         config.metrics_config.clone(),
         MetricsState {
             health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Map(
-                mapper_handle.unwrap().clone(),
+                mapper_handle,
             ))),
             watermark_fetcher_state: watermark_handle.map(|handle| WatermarkFetcherState {
                 watermark_handle: WatermarkHandle::ISB(handle),
@@ -341,25 +338,101 @@ async fn start_map_forwarder(
     Ok(())
 }
 
-/// Generic helper function to setup and spawn map forwarder using TypeConfig pattern
-async fn setup_and_spawn_map_forwarder_with_config<C: NumaflowTypeConfig>(
+/// This single generic function handles all streams for a given TypeConfig.
+async fn run_all_streams_with_config<C: NumaflowTypeConfig>(
+    cln_token: CancellationToken,
+    js_context: Context,
+    config: &PipelineConfig,
+    map_vtx_config: &MapVtxConfig,
+    reader_config: &BufferReaderConfig,
+    tracker_handle: TrackerHandle,
+    watermark_handle: Option<crate::watermark::isb::ISBWatermarkHandle>,
+    buffer_writer: JetstreamWriter,
+    rate_limiter: C::RateLimiter,
+) -> Result<(
+    Vec<tokio::task::JoinHandle<Result<()>>>,
+    crate::mapper::map::MapHandle,
+)> {
+    let mut forwarder_tasks = vec![];
+    // This vector is now homogenous because `C` is fixed for this entire function call.
+    let mut isb_lag_readers: Vec<JetStreamReader<C>> = vec![];
+    let mut mapper_handle = None;
+
+    // The loop is now inside the generic function.
+    for stream in reader_config.streams.clone() {
+        info!("Creating buffer reader for stream {:?}", stream);
+
+        let mapper = create_components::create_mapper(
+            config.batch_size,
+            config.read_timeout,
+            config.graceful_shutdown_time,
+            map_vtx_config.clone(),
+            tracker_handle.clone(),
+            cln_token.clone(),
+        )
+        .await?;
+
+        if mapper_handle.is_none() {
+            mapper_handle = Some(mapper.clone());
+        }
+
+        // This helper is now defined inside this generic context
+        let (task, reader) = run_map_forwarder_for_stream::<C>(
+            ISBReaderConfig {
+                vertex_type: config.vertex_type.to_string(),
+                stream,
+                js_ctx: js_context.clone(),
+                config: reader_config.clone(),
+                tracker_handle: tracker_handle.clone(),
+                batch_size: config.batch_size,
+                read_timeout: config.read_timeout,
+                watermark_handle: watermark_handle.clone(),
+                isb_config: config.isb_config.clone(),
+            },
+            mapper,
+            buffer_writer.clone(),
+            rate_limiter.clone(),
+            cln_token.clone(),
+        )
+        .await?;
+
+        forwarder_tasks.push(task);
+        isb_lag_readers.push(reader);
+    }
+
+    // Because `isb_lag_readers` is a homogenous Vec<JetStreamReader<C>>, this just works.
+    let pending_reader = shared::metrics::create_pending_reader(
+        &config.metrics_config,
+        LagReader::ISB(isb_lag_readers),
+    )
+    .await;
+    // We can hold the handle if we need to manage its lifecycle
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
+
+    // Return the forwarder tasks and the mapper handle for the metrics server
+    Ok((forwarder_tasks, mapper_handle.unwrap()))
+}
+
+/// Generic worker function for map forwarder. It's generic over `C` to correctly type the
+/// components it creates, like JetStreamReader<C> and MapForwarder<C>.
+async fn run_map_forwarder_for_stream<C: NumaflowTypeConfig>(
     isb_reader_config: ISBReaderConfig,
     mapper: crate::mapper::map::MapHandle,
     buffer_writer: JetstreamWriter,
-    config: &PipelineConfig,
+    rate_limiter: C::RateLimiter,
     cln_token: CancellationToken,
-) -> Result<tokio::task::JoinHandle<Result<()>>> {
-    // Build the rate limiter using the TypeConfig factory method
-    let rate_limiter = build_rate_limiter::<C>(config, cln_token.clone()).await?;
+) -> Result<(tokio::task::JoinHandle<Result<()>>, JetStreamReader<C>)> {
+    let buffer_reader = JetStreamReader::<C>::new(isb_reader_config, Some(rate_limiter)).await?;
 
-    let buffer_reader = JetStreamReader::new(isb_reader_config, Some(rate_limiter)).await?;
-
-    let forwarder =
-        forwarder::map_forwarder::MapForwarder::<C>::new(buffer_reader, mapper, buffer_writer)
-            .await;
+    let forwarder = forwarder::map_forwarder::MapForwarder::<C>::new(
+        buffer_reader.clone(),
+        mapper,
+        buffer_writer,
+    )
+    .await;
 
     let task = tokio::spawn(async move { forwarder.start(cln_token).await });
-    Ok(task)
+    Ok((task, buffer_reader))
 }
 
 /// Guard to manage the lifecycle of a fence file. Used when persistence is enabled for reduce.
@@ -593,7 +666,7 @@ async fn start_aligned_reduce_forwarder(
         .await?;
 
         (
-            Some(crate::reduce::pbq::WAL {
+            Some(WAL {
                 append_only_wal,
                 compactor,
             }),
@@ -641,31 +714,53 @@ async fn start_aligned_reduce_forwarder(
         .await,
     );
 
-    // Use TypeConfig pattern to simplify rate limiter setup
-    let task = if should_use_redis_rate_limiter(&config) {
-        setup_and_spawn_reduce_forwarder_with_config::<WithRedisRateLimiter>(
-            isb_reader_config,
-            tracker_handle.clone(),
-            reducer,
-            wal,
-            &config,
-            cln_token.clone(),
-        )
-        .await?
+    // Use concrete builder functions for clear dispatch with lag readers
+    if config.rate_limit.is_some() {
+        if should_use_redis_rate_limiter(&config) {
+            let redis_config = build_redis_rate_limiter_config(&config, cln_token.clone()).await?;
+            let redis_limiter = redis_config.throttling_config.unwrap();
+
+            run_reduce_forwarder_with_config::<WithRedisRateLimiter>(
+                isb_reader_config,
+                tracker_handle.clone(),
+                reducer,
+                wal,
+                redis_limiter,
+                &config,
+                cln_token.clone(),
+            )
+            .await?
+        } else {
+            let in_mem_config =
+                build_in_memory_rate_limiter_config(&config, cln_token.clone()).await?;
+            let in_mem_limiter = in_mem_config.throttling_config.unwrap();
+
+            run_reduce_forwarder_with_config::<WithInMemoryRateLimiter>(
+                isb_reader_config,
+                tracker_handle.clone(),
+                reducer,
+                wal,
+                in_mem_limiter,
+                &config,
+                cln_token.clone(),
+            )
+            .await?
+        }
     } else {
-        setup_and_spawn_reduce_forwarder_with_config::<WithInMemoryRateLimiter>(
+        let noop_config = build_noop_rate_limiter_config(&config, cln_token.clone()).await?;
+        let noop_limiter = noop_config.throttling_config.unwrap();
+
+        run_reduce_forwarder_with_config::<WithoutRateLimiter>(
             isb_reader_config,
             tracker_handle.clone(),
             reducer,
             wal,
+            noop_limiter,
             &config,
             cln_token.clone(),
         )
         .await?
     };
-
-    task.await
-        .map_err(|e| error::Error::Forwarder(e.to_string()))??;
 
     info!("Aligned reduce forwarder has stopped successfully");
     Ok(())
@@ -820,59 +915,84 @@ async fn start_unaligned_reduce_forwarder(
         .await,
     );
 
-    // Use TypeConfig pattern to simplify rate limiter setup
-    let task = if should_use_redis_rate_limiter(&config) {
-        setup_and_spawn_reduce_forwarder_with_config::<WithRedisRateLimiter>(
-            isb_reader_config,
-            tracker_handle.clone(),
-            reducer,
-            wal,
-            &config,
-            cln_token.clone(),
-        )
-        .await?
+    if let Some(_) = &config.rate_limit {
+        if should_use_redis_rate_limiter(&config) {
+            let redis_config = build_redis_rate_limiter_config(&config, cln_token.clone()).await?;
+            let redis_limiter = redis_config.throttling_config.unwrap();
+
+            run_reduce_forwarder_with_config::<WithRedisRateLimiter>(
+                isb_reader_config,
+                tracker_handle.clone(),
+                reducer,
+                wal,
+                redis_limiter,
+                &config,
+                cln_token.clone(),
+            )
+            .await?
+        } else {
+            let in_mem_config =
+                build_in_memory_rate_limiter_config(&config, cln_token.clone()).await?;
+            let in_mem_limiter = in_mem_config.throttling_config.unwrap();
+
+            run_reduce_forwarder_with_config::<WithInMemoryRateLimiter>(
+                isb_reader_config,
+                tracker_handle.clone(),
+                reducer,
+                wal,
+                in_mem_limiter,
+                &config,
+                cln_token.clone(),
+            )
+            .await?
+        }
     } else {
-        setup_and_spawn_reduce_forwarder_with_config::<WithInMemoryRateLimiter>(
+        let noop_config = build_noop_rate_limiter_config(&config, cln_token.clone()).await?;
+        let noop_limiter = noop_config.throttling_config.unwrap();
+
+        run_reduce_forwarder_with_config::<WithoutRateLimiter>(
             isb_reader_config,
             tracker_handle.clone(),
             reducer,
             wal,
+            noop_limiter,
             &config,
             cln_token.clone(),
         )
         .await?
     };
 
-    task.await
-        .map_err(|e| error::Error::Forwarder(e.to_string()))??;
-
     info!("Unaligned reduce forwarder has stopped successfully");
     Ok(())
 }
 
-/// Generic helper function to setup and spawn reduce forwarder using TypeConfig pattern
-async fn setup_and_spawn_reduce_forwarder_with_config<C: NumaflowTypeConfig>(
+async fn run_reduce_forwarder_with_config<C: NumaflowTypeConfig>(
     isb_reader_config: ISBReaderConfig,
     tracker_handle: TrackerHandle,
     reducer: Reducer,
     wal: Option<WAL>,
+    rate_limiter: C::RateLimiter,
     config: &PipelineConfig,
     cln_token: CancellationToken,
-) -> Result<tokio::task::JoinHandle<Result<()>>> {
-    // Build the rate limiter using the TypeConfig factory method
-    let rate_limiter = C::build_rate_limiter(config, cln_token.clone()).await?;
+) -> Result<()> {
+    let buffer_reader = JetStreamReader::<C>::new(isb_reader_config, Some(rate_limiter)).await?;
 
-    let buffer_reader = JetStreamReader::new(isb_reader_config, rate_limiter).await?;
+    // Create lag reader with the single buffer reader (reduce only reads from one stream)
+    let pending_reader = shared::metrics::create_pending_reader(
+        &config.metrics_config,
+        LagReader::ISB(vec![buffer_reader.clone()]),
+    )
+    .await;
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
-    let pbq_builder = PBQBuilder::<C>::new(buffer_reader.clone(), tracker_handle.clone());
+    let pbq_builder = PBQBuilder::<C>::new(buffer_reader, tracker_handle.clone());
     let pbq = match wal {
         Some(wal) => pbq_builder.wal(wal).build(),
         None => pbq_builder.build(),
     };
     let forwarder = ReduceForwarder::<C>::new(pbq, reducer);
 
-    let task = tokio::spawn(async move { forwarder.start(cln_token).await });
-    Ok(task)
+    forwarder.start(cln_token).await
 }
 
 async fn start_sink_forwarder(
@@ -930,11 +1050,113 @@ async fn start_sink_forwarder(
         None => None,
     };
 
-    // Create sink writers and buffer readers for each stream
-    let mut forwarder_tasks = Vec::new();
+    // The function is now just a clean dispatcher. It makes a SINGLE call
+    // to the generic worker, which handles everything else.
+    let (forwarder_tasks, first_sink_writer) = if let Some(_rl_config) = &config.rate_limit {
+        if should_use_redis_rate_limiter(&config) {
+            let redis_config = build_redis_rate_limiter_config(&config, cln_token.clone()).await?;
+            let redis_limiter = redis_config.throttling_config.unwrap();
+
+            run_all_sink_streams_with_config::<WithRedisRateLimiter>(
+                cln_token.clone(),
+                js_context.clone(),
+                &config,
+                &sink,
+                reader_config,
+                tracker_handle.clone(),
+                watermark_handle.clone(),
+                serving_store,
+                redis_limiter,
+            )
+            .await?
+        } else {
+            let in_mem_config =
+                build_in_memory_rate_limiter_config(&config, cln_token.clone()).await?;
+            let in_mem_limiter = in_mem_config.throttling_config.unwrap();
+
+            run_all_sink_streams_with_config::<WithInMemoryRateLimiter>(
+                cln_token.clone(),
+                js_context.clone(),
+                &config,
+                &sink,
+                reader_config,
+                tracker_handle.clone(),
+                watermark_handle.clone(),
+                serving_store,
+                in_mem_limiter,
+            )
+            .await?
+        }
+    } else {
+        let noop_config = build_noop_rate_limiter_config(&config, cln_token.clone()).await?;
+        let noop_limiter = noop_config.throttling_config.unwrap();
+
+        run_all_sink_streams_with_config::<WithoutRateLimiter>(
+            cln_token.clone(),
+            js_context.clone(),
+            &config,
+            &sink,
+            reader_config,
+            tracker_handle.clone(),
+            watermark_handle.clone(),
+            serving_store,
+            noop_limiter,
+        )
+        .await?
+    };
+
+    // Start the metrics server with one of the clients
+    start_metrics_server(
+        config.metrics_config.clone(),
+        MetricsState {
+            health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Sink(
+                Box::new(first_sink_writer),
+            ))),
+            watermark_fetcher_state: watermark_handle.map(|handle| WatermarkFetcherState {
+                watermark_handle: WatermarkHandle::ISB(handle),
+                partition_count: reader_config.streams.len() as u16, // Number of partitions = number of streams
+            }),
+        },
+    )
+    .await;
+
+    let results = try_join_all(forwarder_tasks)
+        .await
+        .map_err(|e| error::Error::Forwarder(e.to_string()))?;
+
+    for result in results {
+        error!(?result, "Forwarder task failed");
+        result?;
+    }
+
+    info!("All forwarders have stopped successfully");
+    Ok(())
+}
+
+/// This single generic function handles all sink streams for a given TypeConfig.
+async fn run_all_sink_streams_with_config<C: NumaflowTypeConfig>(
+    cln_token: CancellationToken,
+    js_context: Context,
+    config: &PipelineConfig,
+    sink: &SinkVtxConfig,
+    reader_config: &BufferReaderConfig,
+    tracker_handle: TrackerHandle,
+    watermark_handle: Option<crate::watermark::isb::ISBWatermarkHandle>,
+    serving_store: Option<ServingStore>,
+    rate_limiter: C::RateLimiter,
+) -> Result<(Vec<tokio::task::JoinHandle<Result<()>>>, SinkWriter)> {
+    let mut forwarder_tasks = vec![];
+    // This vector is now homogenous because `C` is fixed for this entire function call.
+    let mut isb_lag_readers: Vec<JetStreamReader<C>> = vec![];
     let mut first_sink_writer = None;
 
+    // The loop is now inside the generic function.
     for stream in reader_config.streams.clone() {
+        info!(
+            "Creating sink writer and buffer reader for stream {:?}",
+            stream
+        );
+
         let sink_writer = create_components::create_sink_writer(
             config.batch_size,
             config.read_timeout,
@@ -950,87 +1172,58 @@ async fn start_sink_forwarder(
             first_sink_writer = Some(sink_writer.clone());
         }
 
-        let isb_reader_config = ISBReaderConfig {
-            vertex_type: config.vertex_type.to_string(),
-            stream,
-            js_ctx: js_context.clone(),
-            config: reader_config.clone(),
-            tracker_handle: tracker_handle.clone(),
-            batch_size: config.batch_size,
-            read_timeout: config.read_timeout,
-            watermark_handle: watermark_handle.clone(),
-            isb_config: config.isb_config.clone(),
-        };
-
-        // Use TypeConfig pattern to simplify rate limiter setup
-        let task = if should_use_redis_rate_limiter(&config) {
-            setup_and_spawn_sink_forwarder_with_config::<WithRedisRateLimiter>(
-                isb_reader_config,
-                sink_writer,
-                &config,
-                cln_token.clone(),
-            )
-            .await?
-        } else {
-            setup_and_spawn_sink_forwarder_with_config::<WithInMemoryRateLimiter>(
-                isb_reader_config,
-                sink_writer,
-                &config,
-                cln_token.clone(),
-            )
-            .await?
-        };
+        // This helper is now defined inside this generic context
+        let (task, reader) = run_sink_forwarder_for_stream_with_reader::<C>(
+            ISBReaderConfig {
+                vertex_type: config.vertex_type.to_string(),
+                stream,
+                js_ctx: js_context.clone(),
+                config: reader_config.clone(),
+                tracker_handle: tracker_handle.clone(),
+                batch_size: config.batch_size,
+                read_timeout: config.read_timeout,
+                watermark_handle: watermark_handle.clone(),
+                isb_config: config.isb_config.clone(),
+            },
+            sink_writer,
+            rate_limiter.clone(),
+            cln_token.clone(),
+        )
+        .await?;
 
         forwarder_tasks.push(task);
+        isb_lag_readers.push(reader);
     }
 
-    // Start the metrics server with one of the clients
-    if let Some(sink_handle) = &first_sink_writer {
-        start_metrics_server(
-            config.metrics_config.clone(),
-            MetricsState {
-                health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Sink(
-                    Box::new(sink_handle.clone()),
-                ))),
-                watermark_fetcher_state: watermark_handle.map(|handle| WatermarkFetcherState {
-                    watermark_handle: WatermarkHandle::ISB(handle),
-                    partition_count: reader_config.streams.len() as u16, // Number of partitions = number of streams
-                }),
-            },
-        )
-        .await;
-    }
+    // Because `isb_lag_readers` is a homogenous Vec<JetStreamReader<C>>, this just works.
+    let pending_reader = shared::metrics::create_pending_reader(
+        &config.metrics_config,
+        LagReader::ISB(isb_lag_readers),
+    )
+    .await;
+    // We can hold the handle if we need to manage its lifecycle
+    let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
-    let results = try_join_all(forwarder_tasks)
-        .await
-        .map_err(|e| error::Error::Forwarder(e.to_string()))?;
-
-    for result in results {
-        error!(?result, "Forwarder task failed");
-        result?;
-    }
-
-    info!("All forwarders have stopped successfully");
-    Ok(())
+    // Return the forwarder tasks and the first sink writer for the metrics server
+    Ok((forwarder_tasks, first_sink_writer.unwrap()))
 }
 
-/// Generic helper function to setup and spawn sink forwarder using TypeConfig pattern
-async fn setup_and_spawn_sink_forwarder_with_config<C: NumaflowTypeConfig>(
+/// Generic worker function for sink forwarder that returns both task and reader.
+async fn run_sink_forwarder_for_stream_with_reader<C: NumaflowTypeConfig>(
     isb_reader_config: ISBReaderConfig,
     sink_writer: SinkWriter,
-    config: &PipelineConfig,
+    rate_limiter: C::RateLimiter,
     cln_token: CancellationToken,
-) -> Result<tokio::task::JoinHandle<Result<()>>> {
-    // Build the rate limiter using the TypeConfig factory method
-    let rate_limiter = C::build_rate_limiter(config, cln_token.clone()).await?;
-
-    let buffer_reader = JetStreamReader::new(isb_reader_config, rate_limiter).await?;
+) -> Result<(tokio::task::JoinHandle<Result<()>>, JetStreamReader<C>)> {
+    // The reader is constructed with the concrete rate limiter
+    let buffer_reader = JetStreamReader::<C>::new(isb_reader_config, Some(rate_limiter)).await?;
 
     let forwarder =
-        forwarder::sink_forwarder::SinkForwarder::<C>::new(buffer_reader, sink_writer).await;
+        forwarder::sink_forwarder::SinkForwarder::<C>::new(buffer_reader.clone(), sink_writer)
+            .await;
 
     let task = tokio::spawn(async move { forwarder.start(cln_token).await });
-    Ok(task)
+    Ok((task, buffer_reader))
 }
 
 /// Creates a jetstream context based on the provided configuration
