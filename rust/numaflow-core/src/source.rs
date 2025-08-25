@@ -27,12 +27,13 @@ use numaflow_nats::nats::NatsSource;
 use numaflow_pb::clients::source::source_client::SourceClient;
 use numaflow_pulsar::source::PulsarSource;
 use numaflow_sqs::source::SqsSource;
+use numaflow_throttling::RateLimiter;
 use std::sync::Arc;
 use tokio::sync::OwnedSemaphorePermit;
 use tokio::sync::Semaphore;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
-use tokio::time::Instant;
+use tokio::time::{Duration, Instant};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
@@ -192,7 +193,7 @@ where
 /// tokio stream to signal the shutdown to the downstream components and wait for all the inflight
 /// messages to be acked before shutting down the source.
 #[derive(Clone)]
-pub(crate) struct Source {
+pub(crate) struct Source<C: crate::typ::NumaflowTypeConfig> {
     read_batch_size: usize,
     sender: mpsc::Sender<ActorMessage>,
     tracker_handle: TrackerHandle,
@@ -201,9 +202,10 @@ pub(crate) struct Source {
     transformer: Option<Transformer>,
     watermark_handle: Option<SourceWatermarkHandle>,
     health_checker: Option<SourceClient<Channel>>,
+    rate_limiter: C::RateLimiter,
 }
 
-impl Source {
+impl<C: crate::typ::NumaflowTypeConfig> Source<C> {
     /// Create a new StreamingSource. It starts the read and ack actors in the background.
     pub(crate) fn new(
         batch_size: usize,
@@ -212,6 +214,7 @@ impl Source {
         read_ahead: bool,
         transformer: Option<Transformer>,
         watermark_handle: Option<SourceWatermarkHandle>,
+        rate_limiter: C::RateLimiter,
     ) -> Self {
         let (sender, receiver) = mpsc::channel(batch_size);
         let mut health_checker = None;
@@ -291,6 +294,7 @@ impl Source {
             transformer,
             watermark_handle,
             health_checker,
+            rate_limiter,
         }
     }
 
@@ -388,6 +392,16 @@ impl Source {
                     .acquire_owned()
                     .await
                     .expect("acquiring permit should not fail");
+
+                // Apply rate limiting before reading
+                let acquired = self
+                    .rate_limiter
+                    .acquire_n(Some(1), Some(Duration::from_secs(1)))
+                    .await;
+
+                if acquired == 0 {
+                    continue;
+                }
 
                 let read_start_time = Instant::now();
                 let messages = match Self::read(self.sender.clone()).await {
@@ -816,13 +830,14 @@ mod tests {
             .unwrap();
 
         let tracker = TrackerHandle::new(None);
-        let source = Source::new(
+        let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             5,
             SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
             tracker.clone(),
             true,
             None,
             None,
+            numaflow_throttling::NoOpRateLimiter,
         );
 
         let sender = source.sender.clone();
@@ -839,7 +854,9 @@ mod tests {
         }
 
         // ack all the messages
-        Source::ack(sender.clone(), offsets.clone()).await.unwrap();
+        Source::<crate::typ::WithoutRateLimiter>::ack(sender.clone(), offsets.clone())
+            .await
+            .unwrap();
 
         for offset in offsets {
             tracker.discard(offset).await.unwrap();
@@ -849,7 +866,9 @@ mod tests {
         let pending = source.pending().await.unwrap();
         assert_eq!(pending, Some(0));
 
-        let partitions = Source::partitions(sender.clone()).await.unwrap();
+        let partitions = Source::<crate::typ::WithoutRateLimiter>::partitions(sender.clone())
+            .await
+            .unwrap();
         assert_eq!(partitions, vec![1, 2]);
 
         drop(source);

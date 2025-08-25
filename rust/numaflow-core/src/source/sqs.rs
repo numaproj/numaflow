@@ -192,13 +192,14 @@ pub mod tests {
         // create SQS source with test client
         use crate::tracker::TrackerHandle;
         let tracker_handle = TrackerHandle::new(None);
-        let source = Source::new(
+        let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             1,
             SourceType::Sqs(sqs_source),
             tracker_handle.clone(),
             true,
             None,
             None,
+            numaflow_throttling::NoOpRateLimiter,
         );
 
         let cln_token = CancellationToken::new();

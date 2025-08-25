@@ -7,13 +7,13 @@ use crate::source::Source;
 
 /// Source forwarder is the orchestrator which starts streaming source, a transformer, and an isb writer
 /// and manages the lifecycle of these components.
-pub(crate) struct SourceForwarder {
-    source: Source,
+pub(crate) struct SourceForwarder<C: crate::typ::NumaflowTypeConfig> {
+    source: Source<C>,
     writer: JetstreamWriter,
 }
 
-impl SourceForwarder {
-    pub(crate) fn new(source: Source, writer: JetstreamWriter) -> Self {
+impl<C: crate::typ::NumaflowTypeConfig> SourceForwarder<C> {
+    pub(crate) fn new(source: Source<C>, writer: JetstreamWriter) -> Self {
         Self { source, writer }
     }
 
@@ -225,13 +225,14 @@ mod tests {
             .map_err(|e| panic!("failed to create source reader: {:?}", e))
             .unwrap();
 
-        let source = Source::new(
+        let source: Source<crate::typ::WithoutRateLimiter> = Source::new(
             5,
             SourceType::UserDefinedSource(Box::new(src_read), Box::new(src_ack), lag_reader),
             tracker_handle.clone(),
             true,
             Some(transformer),
             None,
+            numaflow_throttling::NoOpRateLimiter,
         );
 
         // create a js writer

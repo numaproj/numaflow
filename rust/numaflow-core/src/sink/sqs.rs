@@ -211,7 +211,11 @@ pub mod tests {
 
     async fn get_simple_source(
         tracker_handle: TrackerHandle,
-    ) -> (Source, JoinHandle<()>, oneshot::Sender<()>) {
+    ) -> (
+        Source<crate::typ::WithoutRateLimiter>,
+        JoinHandle<()>,
+        oneshot::Sender<()>,
+    ) {
         let (src_shutdown_tx, src_shutdown_rx) = oneshot::channel();
         let tmp_dir = TempDir::new().unwrap();
         let sock_file = tmp_dir.path().join("source.sock");
@@ -247,6 +251,7 @@ pub mod tests {
                 true,
                 None,
                 None,
+                numaflow_throttling::NoOpRateLimiter,
             ),
             source_handle,
             src_shutdown_tx,

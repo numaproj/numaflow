@@ -10,9 +10,9 @@ use crate::metrics::{
 };
 
 /// Starts the metrics server
-pub(crate) async fn start_metrics_server(
+pub(crate) async fn start_metrics_server<C: crate::typ::NumaflowTypeConfig>(
     metrics_config: MetricsConfig,
-    metrics_state: MetricsState,
+    metrics_state: MetricsState<C>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {
         // Start the metrics server, which server the prometheus metrics.

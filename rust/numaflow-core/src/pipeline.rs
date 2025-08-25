@@ -51,6 +51,7 @@ use crate::sink::serve::ServingStore;
 use crate::sink::serve::nats::NatsServingStore;
 use crate::sink::serve::user_defined::UserDefinedStore;
 use crate::tracker::TrackerHandle;
+use crate::transformer::Transformer;
 use crate::typ::{
     NumaflowTypeConfig, WithInMemoryRateLimiter, WithRedisRateLimiter, WithoutRateLimiter,
     build_in_memory_rate_limiter_config, build_noop_rate_limiter_config,
@@ -63,7 +64,7 @@ use crate::{Result, error, shared};
 mod forwarder;
 pub(crate) mod isb;
 
-/// PipelineContext holds common, read-only data to reduce parameter passing between functions
+/// PipelineContext contains the common context for all the forwarders.
 pub(crate) struct PipelineContext<'a> {
     cln_token: CancellationToken,
     js_context: &'a Context,
@@ -167,46 +168,49 @@ async fn start_source_forwarder(
     )
     .await?;
 
-    let source = create_components::create_source(
-        config.batch_size,
-        config.read_timeout,
-        &source_config.source_config,
-        tracker_handle,
-        transformer,
-        source_watermark_handle.clone(),
-        cln_token.clone(),
-    )
-    .await?;
+    // Apply rate limiting dispatch pattern similar to other forwarders
+    if let Some(rate_limit_config) = &config.rate_limit {
+        if should_use_redis_rate_limiter(rate_limit_config) {
+            let redis_config =
+                build_redis_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
 
-    // only check the pending and lag for source for pod_id = 0
-    let _pending_reader_handle: Option<PendingReaderTasks> = if config.replica == 0 {
-        let pending_reader = shared::metrics::create_pending_reader::<WithoutRateLimiter>(
-            &config.metrics_config,
-            LagReader::Source(Box::new(source.clone())),
-        )
-        .await;
-        Some(pending_reader.start(is_mono_vertex()).await)
+            run_source_forwarder::<WithRedisRateLimiter>(
+                &context,
+                &source_config,
+                transformer,
+                source_watermark_handle,
+                buffer_writer,
+                redis_config.throttling_config,
+            )
+            .await?
+        } else {
+            let in_mem_config =
+                build_in_memory_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
+
+            run_source_forwarder::<WithInMemoryRateLimiter>(
+                &context,
+                &source_config,
+                transformer,
+                source_watermark_handle,
+                buffer_writer,
+                in_mem_config.throttling_config,
+            )
+            .await?
+        }
     } else {
-        None
+        let noop_config = build_noop_rate_limiter_config().await?;
+
+        run_source_forwarder::<WithoutRateLimiter>(
+            &context,
+            &source_config,
+            transformer,
+            source_watermark_handle,
+            buffer_writer,
+            noop_config.throttling_config,
+        )
+        .await?
     };
 
-    start_metrics_server(
-        config.metrics_config.clone(),
-        MetricsState {
-            health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Source(
-                Box::new(source.clone()),
-            ))),
-            watermark_fetcher_state: source_watermark_handle.map(|handle| WatermarkFetcherState {
-                watermark_handle: WatermarkHandle::Source(handle),
-                partition_count: 1, // Source vertices always have partition count = 1
-            }),
-        },
-    )
-    .await;
-
-    let forwarder = source_forwarder::SourceForwarder::new(source, buffer_writer);
-
-    forwarder.start(cln_token).await?;
     Ok(())
 }
 
@@ -216,7 +220,6 @@ async fn start_map_forwarder(
     config: PipelineConfig,
     map_vtx_config: MapVtxConfig,
 ) -> Result<()> {
-    // 1. One-time setup
     let serving_callback_handler = if let Some(cb_cfg) = &config.callback_config {
         Some(
             CallbackHandler::new(
@@ -259,10 +262,11 @@ async fn start_map_forwarder(
         ISBWriterComponents::new(watermark_handle.clone().map(WatermarkHandle::ISB), &context);
 
     let buffer_writer = JetstreamWriter::new(writer_components);
-    let (forwarder_tasks, mapper_handle) = if let Some(_rl_config) = &config.rate_limit {
-        if should_use_redis_rate_limiter(&config) {
-            let redis_config = build_redis_rate_limiter_config(&config, cln_token.clone()).await?;
-            run_all_map_streams::<WithRedisRateLimiter>(
+    let (forwarder_tasks, mapper_handle) = if let Some(rate_limit_config) = &config.rate_limit {
+        if should_use_redis_rate_limiter(rate_limit_config) {
+            let redis_config =
+                build_redis_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
+            run_all_map_forwarders::<WithRedisRateLimiter>(
                 &context,
                 &map_vtx_config,
                 reader_config,
@@ -273,8 +277,8 @@ async fn start_map_forwarder(
             .await?
         } else {
             let in_mem_config =
-                build_in_memory_rate_limiter_config(&config, cln_token.clone()).await?;
-            run_all_map_streams::<WithInMemoryRateLimiter>(
+                build_in_memory_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
+            run_all_map_forwarders::<WithInMemoryRateLimiter>(
                 &context,
                 &map_vtx_config,
                 reader_config,
@@ -285,8 +289,8 @@ async fn start_map_forwarder(
             .await?
         }
     } else {
-        let noop_config = build_noop_rate_limiter_config(&config, cln_token.clone()).await?;
-        run_all_map_streams::<WithoutRateLimiter>(
+        let noop_config = build_noop_rate_limiter_config().await?;
+        run_all_map_forwarders::<WithoutRateLimiter>(
             &context,
             &map_vtx_config,
             reader_config,
@@ -297,8 +301,7 @@ async fn start_map_forwarder(
         .await?
     };
 
-    // 3. Manage results
-    let metrics_server_handle = start_metrics_server(
+    let metrics_server_handle = start_metrics_server::<WithoutRateLimiter>(
         config.metrics_config.clone(),
         MetricsState {
             health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Map(
@@ -327,8 +330,8 @@ async fn start_map_forwarder(
     Ok(())
 }
 
-/// Generic helper function that handles all map streams for a given TypeConfig.
-async fn run_all_map_streams<C: NumaflowTypeConfig>(
+/// Starts map forwarder for all the streams.
+async fn run_all_map_forwarders<C: NumaflowTypeConfig>(
     context: &PipelineContext<'_>,
     map_vtx_config: &MapVtxConfig,
     reader_config: &BufferReaderConfig,
@@ -340,11 +343,9 @@ async fn run_all_map_streams<C: NumaflowTypeConfig>(
     crate::mapper::map::MapHandle,
 )> {
     let mut forwarder_tasks = vec![];
-    // This vector is now homogenous because `C` is fixed for this entire function call.
     let mut isb_lag_readers: Vec<JetStreamReader<C>> = vec![];
     let mut mapper_handle = None;
 
-    // The loop is now inside the generic function.
     for stream in reader_config.streams.clone() {
         info!("Creating buffer reader for stream {:?}", stream);
 
@@ -362,7 +363,6 @@ async fn run_all_map_streams<C: NumaflowTypeConfig>(
             mapper_handle = Some(mapper.clone());
         }
 
-        // This helper is now defined inside this generic context
         let reader_components = ISBReaderComponents::new(
             stream,
             reader_config.clone(),
@@ -382,21 +382,18 @@ async fn run_all_map_streams<C: NumaflowTypeConfig>(
         isb_lag_readers.push(reader);
     }
 
-    // Because `isb_lag_readers` is a homogenous Vec<JetStreamReader<C>>, this just works.
     let pending_reader = shared::metrics::create_pending_reader(
         &context.config.metrics_config,
         LagReader::ISB(isb_lag_readers),
     )
     .await;
-    // We can hold the handle if we need to manage its lifecycle
     let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
-    // Return the forwarder tasks and the mapper handle for the metrics server
     Ok((forwarder_tasks, mapper_handle.unwrap()))
 }
 
-/// Generic worker function for map forwarder. It's generic over `C` to correctly type the
-/// components it creates, like JetStreamReader<C> and MapForwarder<C>.
+/// Start a map forwarder for a single stream, returns the task handle and the reader,
+/// it's returned so that we can create a pending reader for metrics.
 async fn run_map_forwarder_for_stream<C: NumaflowTypeConfig>(
     reader_components: ISBReaderComponents,
     mapper: crate::mapper::map::MapHandle,
@@ -622,7 +619,7 @@ async fn start_aligned_reduce_forwarder(
             .await?;
 
     // Start the metrics server with one of the clients
-    start_metrics_server(
+    start_metrics_server::<WithoutRateLimiter>(
         config.metrics_config.clone(),
         MetricsState {
             health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
@@ -660,10 +657,10 @@ async fn start_aligned_reduce_forwarder(
         tracker_handle,
     };
 
-    // Clean dispatch logic
-    if config.rate_limit.is_some() {
-        if should_use_redis_rate_limiter(&config) {
-            let redis_config = build_redis_rate_limiter_config(&config, cln_token.clone()).await?;
+    if let Some(rate_limit_config) = &config.rate_limit {
+        if should_use_redis_rate_limiter(rate_limit_config) {
+            let redis_config =
+                build_redis_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
 
             run_reduce_forwarder::<WithRedisRateLimiter>(
                 &context,
@@ -675,7 +672,7 @@ async fn start_aligned_reduce_forwarder(
             .await?
         } else {
             let in_mem_config =
-                build_in_memory_rate_limiter_config(&config, cln_token.clone()).await?;
+                build_in_memory_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
 
             run_reduce_forwarder::<WithInMemoryRateLimiter>(
                 &context,
@@ -687,7 +684,7 @@ async fn start_aligned_reduce_forwarder(
             .await?
         }
     } else {
-        let noop_config = build_noop_rate_limiter_config(&config, cln_token.clone()).await?;
+        let noop_config = build_noop_rate_limiter_config().await?;
 
         run_reduce_forwarder::<WithoutRateLimiter>(
             &context,
@@ -779,7 +776,7 @@ async fn start_unaligned_reduce_forwarder(
         create_components::create_unaligned_reducer(unaligned_config.clone(), cln_token.clone())
             .await?;
 
-    start_metrics_server(
+    start_metrics_server::<WithoutRateLimiter>(
         config.metrics_config.clone(),
         MetricsState {
             health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Reduce(
@@ -817,10 +814,10 @@ async fn start_unaligned_reduce_forwarder(
         tracker_handle,
     };
 
-    // Clean dispatch logic
-    if config.rate_limit.is_some() {
-        if should_use_redis_rate_limiter(&config) {
-            let redis_config = build_redis_rate_limiter_config(&config, cln_token.clone()).await?;
+    if let Some(rate_limit_config) = &config.rate_limit {
+        if should_use_redis_rate_limiter(rate_limit_config) {
+            let redis_config =
+                build_redis_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
 
             run_reduce_forwarder::<WithRedisRateLimiter>(
                 &context,
@@ -832,7 +829,7 @@ async fn start_unaligned_reduce_forwarder(
             .await?
         } else {
             let in_mem_config =
-                build_in_memory_rate_limiter_config(&config, cln_token.clone()).await?;
+                build_in_memory_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
 
             run_reduce_forwarder::<WithInMemoryRateLimiter>(
                 &context,
@@ -844,7 +841,7 @@ async fn start_unaligned_reduce_forwarder(
             .await?
         }
     } else {
-        let noop_config = build_noop_rate_limiter_config(&config, cln_token.clone()).await?;
+        let noop_config = build_noop_rate_limiter_config().await?;
 
         run_reduce_forwarder::<WithoutRateLimiter>(
             &context,
@@ -860,7 +857,7 @@ async fn start_unaligned_reduce_forwarder(
     Ok(())
 }
 
-/// Generic helper function that handles reduce forwarder for a given TypeConfig.
+/// Starts reduce forwarder.
 async fn run_reduce_forwarder<C: NumaflowTypeConfig>(
     context: &PipelineContext<'_>,
     reader_components: ISBReaderComponents,
@@ -884,6 +881,58 @@ async fn run_reduce_forwarder<C: NumaflowTypeConfig>(
         None => pbq_builder.build(),
     };
     let forwarder = ReduceForwarder::<C>::new(pbq, reducer);
+
+    forwarder.start(context.cln_token.clone()).await
+}
+
+/// Starts source forwarder.
+async fn run_source_forwarder<C: NumaflowTypeConfig>(
+    context: &PipelineContext<'_>,
+    source_config: &SourceVtxConfig,
+    transformer: Option<Transformer>,
+    source_watermark_handle: Option<SourceWatermarkHandle>,
+    buffer_writer: JetstreamWriter,
+    rate_limiter: C::RateLimiter,
+) -> Result<()> {
+    let source = create_components::create_source::<C>(
+        context.config.batch_size,
+        context.config.read_timeout,
+        &source_config.source_config,
+        context.tracker_handle.clone(),
+        transformer,
+        source_watermark_handle.clone(),
+        context.cln_token.clone(),
+        rate_limiter,
+    )
+    .await?;
+
+    // only check the pending and lag for source for pod_id = 0
+    let _pending_reader_handle: Option<PendingReaderTasks> = if context.config.replica == 0 {
+        let pending_reader = shared::metrics::create_pending_reader::<C>(
+            &context.config.metrics_config,
+            LagReader::Source(Box::new(source.clone())),
+        )
+        .await;
+        Some(pending_reader.start(is_mono_vertex()).await)
+    } else {
+        None
+    };
+
+    start_metrics_server::<C>(
+        context.config.metrics_config.clone(),
+        MetricsState {
+            health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Source(
+                Box::new(source.clone()),
+            ))),
+            watermark_fetcher_state: source_watermark_handle.map(|handle| WatermarkFetcherState {
+                watermark_handle: WatermarkHandle::Source(handle),
+                partition_count: 1, // Source vertices always have partition count = 1
+            }),
+        },
+    )
+    .await;
+
+    let forwarder = source_forwarder::SourceForwarder::<C>::new(source, buffer_writer);
 
     forwarder.start(context.cln_token.clone()).await
 }
@@ -949,11 +998,12 @@ async fn start_sink_forwarder(
     };
 
     // 2. Clean dispatch logic
-    let (forwarder_tasks, first_sink_writer) = if let Some(_rl_config) = &config.rate_limit {
-        if should_use_redis_rate_limiter(&config) {
-            let redis_config = build_redis_rate_limiter_config(&config, cln_token.clone()).await?;
+    let (forwarder_tasks, first_sink_writer) = if let Some(rate_limit_config) = &config.rate_limit {
+        if should_use_redis_rate_limiter(rate_limit_config) {
+            let redis_config =
+                build_redis_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
 
-            run_all_sink_streams::<WithRedisRateLimiter>(
+            run_all_sink_forwarders::<WithRedisRateLimiter>(
                 &context,
                 &sink,
                 reader_config,
@@ -964,9 +1014,9 @@ async fn start_sink_forwarder(
             .await?
         } else {
             let in_mem_config =
-                build_in_memory_rate_limiter_config(&config, cln_token.clone()).await?;
+                build_in_memory_rate_limiter_config(rate_limit_config, cln_token.clone()).await?;
 
-            run_all_sink_streams::<WithInMemoryRateLimiter>(
+            run_all_sink_forwarders::<WithInMemoryRateLimiter>(
                 &context,
                 &sink,
                 reader_config,
@@ -977,9 +1027,9 @@ async fn start_sink_forwarder(
             .await?
         }
     } else {
-        let noop_config = build_noop_rate_limiter_config(&config, cln_token.clone()).await?;
+        let noop_config = build_noop_rate_limiter_config().await?;
 
-        run_all_sink_streams::<WithoutRateLimiter>(
+        run_all_sink_forwarders::<WithoutRateLimiter>(
             &context,
             &sink,
             reader_config,
@@ -990,8 +1040,7 @@ async fn start_sink_forwarder(
         .await?
     };
 
-    // 3. Manage results
-    start_metrics_server(
+    start_metrics_server::<WithoutRateLimiter>(
         config.metrics_config.clone(),
         MetricsState {
             health_checks: ComponentHealthChecks::Pipeline(Box::new(PipelineComponents::Sink(
@@ -1018,8 +1067,8 @@ async fn start_sink_forwarder(
     Ok(())
 }
 
-/// Generic helper function that handles all sink streams for a given TypeConfig.
-async fn run_all_sink_streams<C: NumaflowTypeConfig>(
+/// Starts sink forwarder for all the streams.
+async fn run_all_sink_forwarders<C: NumaflowTypeConfig>(
     context: &PipelineContext<'_>,
     sink: &SinkVtxConfig,
     reader_config: &BufferReaderConfig,
@@ -1028,11 +1077,9 @@ async fn run_all_sink_streams<C: NumaflowTypeConfig>(
     rate_limiter: C::RateLimiter,
 ) -> Result<(Vec<tokio::task::JoinHandle<Result<()>>>, SinkWriter)> {
     let mut forwarder_tasks = vec![];
-    // This vector is now homogenous because `C` is fixed for this entire function call.
     let mut isb_lag_readers: Vec<JetStreamReader<C>> = vec![];
     let mut first_sink_writer = None;
 
-    // The loop is now inside the generic function.
     for stream in reader_config.streams.clone() {
         info!(
             "Creating sink writer and buffer reader for stream {:?}",
@@ -1054,7 +1101,6 @@ async fn run_all_sink_streams<C: NumaflowTypeConfig>(
             first_sink_writer = Some(sink_writer.clone());
         }
 
-        // This helper is now defined inside this generic context
         let reader_components = ISBReaderComponents::new(
             stream,
             reader_config.clone(),
@@ -1062,7 +1108,7 @@ async fn run_all_sink_streams<C: NumaflowTypeConfig>(
             context,
         );
 
-        let (task, reader) = run_sink_forwarder_for_stream_with_reader::<C>(
+        let (task, reader) = run_sink_forwarder_for_stream::<C>(
             reader_components,
             sink_writer,
             rate_limiter.clone(),
@@ -1073,26 +1119,22 @@ async fn run_all_sink_streams<C: NumaflowTypeConfig>(
         isb_lag_readers.push(reader);
     }
 
-    // Because `isb_lag_readers` is a homogenous Vec<JetStreamReader<C>>, this just works.
     let pending_reader = shared::metrics::create_pending_reader(
         &context.config.metrics_config,
         LagReader::ISB(isb_lag_readers),
     )
     .await;
-    // We can hold the handle if we need to manage its lifecycle
     let _pending_reader_handle = pending_reader.start(is_mono_vertex()).await;
 
-    // Return the forwarder tasks and the first sink writer for the metrics server
     Ok((forwarder_tasks, first_sink_writer.unwrap()))
 }
 
-/// Generic worker function for sink forwarder that returns both task and reader.
-async fn run_sink_forwarder_for_stream_with_reader<C: NumaflowTypeConfig>(
+/// Starts sink forwarder for a single stream.
+async fn run_sink_forwarder_for_stream<C: NumaflowTypeConfig>(
     reader_components: ISBReaderComponents,
     sink_writer: SinkWriter,
     rate_limiter: C::RateLimiter,
 ) -> Result<(tokio::task::JoinHandle<Result<()>>, JetStreamReader<C>)> {
-    // The reader is constructed with the concrete rate limiter
     let cln_token = reader_components.cln_token.clone();
     let buffer_reader = JetStreamReader::<C>::new(reader_components, rate_limiter).await?;
 

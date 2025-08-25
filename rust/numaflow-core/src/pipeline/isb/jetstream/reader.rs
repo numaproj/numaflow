@@ -35,7 +35,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 use tracing::{error, info};
 
-/// Components needed to create a JetStreamReader, with reduced duplication
+/// Components needed to create a JetStreamReader.
 #[derive(Clone)]
 pub(crate) struct ISBReaderComponents {
     pub vertex_type: String,
@@ -51,7 +51,6 @@ pub(crate) struct ISBReaderComponents {
 }
 
 impl ISBReaderComponents {
-    /// Create ISBReaderComponents from minimal components and pipeline context
     pub fn new(
         stream: Stream,
         reader_config: BufferReaderConfig,
@@ -215,7 +214,10 @@ impl<C: NumaflowTypeConfig> JetStreamReader<C> {
 
         let mut consumer: PullConsumer = reader_components
             .js_ctx
-            .get_consumer_from_stream(&reader_components.stream.name, &reader_components.stream.name)
+            .get_consumer_from_stream(
+                &reader_components.stream.name,
+                &reader_components.stream.name,
+            )
             .await
             .map_err(|e| Error::ISB(format!("Failed to get consumer for stream {e}")))?;
 

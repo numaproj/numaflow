@@ -23,6 +23,7 @@ use crate::reduce::wal::segment::WalType;
 use crate::reduce::wal::segment::append::AppendOnlyWal;
 use crate::reduce::wal::segment::compactor::{Compactor, WindowKind};
 use crate::shared::grpc;
+use crate::shared::grpc::{create_rpc_channel, wait_until_source_ready};
 use crate::sink::serve::ServingStore;
 use crate::sink::{SinkClientType, SinkWriter, SinkWriterBuilder};
 use crate::source::Source;
@@ -36,6 +37,7 @@ use crate::source::sqs::new_sqs_source;
 use crate::source::user_defined::new_source;
 use crate::tracker::TrackerHandle;
 use crate::transformer::Transformer;
+use crate::typ::NumaflowTypeConfig;
 use crate::watermark::isb::ISBWatermarkHandle;
 use crate::watermark::source::SourceWatermarkHandle;
 use crate::{config, error, metrics, source};
@@ -53,7 +55,9 @@ use numaflow_shared::server_info::{ContainerType, Protocol, sdk_server_info};
 use numaflow_sqs::sink::SqsSinkBuilder;
 use numaflow_throttling::state::OptimisticValidityUpdateSecs;
 use numaflow_throttling::{RateLimit, TokenCalcBounds, WithDistributedState};
+use std::path::PathBuf;
 use tokio_util::sync::CancellationToken;
+use tonic::transport::Channel;
 
 /// Creates a sink writer based on the configuration
 pub(crate) async fn create_sink_writer(
@@ -365,9 +369,9 @@ pub(crate) async fn create_mapper(
     }
 }
 
-/// Creates a source type based on the configuration
+/// Creates a source type with rate limiter based on the configuration
 #[allow(clippy::too_many_arguments)]
-pub async fn create_source(
+pub async fn create_source<C: NumaflowTypeConfig>(
     batch_size: usize,
     read_timeout: Duration,
     source_config: &SourceConfig,
@@ -375,55 +379,20 @@ pub async fn create_source(
     transformer: Option<Transformer>,
     watermark_handle: Option<SourceWatermarkHandle>,
     cln_token: CancellationToken,
-) -> error::Result<Source> {
+    rate_limiter: C::RateLimiter,
+) -> error::Result<Source<C>> {
     match &source_config.source_type {
         SourceType::Generator(generator_config) => {
-            let (generator_read, generator_ack, generator_lag) =
+            let (generator, generator_ack, generator_lag) =
                 new_generator(generator_config.clone(), batch_size)?;
             Ok(Source::new(
                 batch_size,
-                source::SourceType::Generator(generator_read, generator_ack, generator_lag),
+                source::SourceType::Generator(generator, generator_ack, generator_lag),
                 tracker_handle,
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
-            ))
-        }
-        SourceType::UserDefined(udsource_config) => {
-            let server_info = sdk_server_info(
-                udsource_config.server_info_path.clone().into(),
-                cln_token.clone(),
-            )
-            .await?;
-
-            let metric_labels = metrics::sdk_info_labels(
-                config::get_component_type().to_string(),
-                config::get_vertex_name().to_string(),
-                server_info.language,
-                server_info.version,
-                ContainerType::Sourcer.to_string(),
-            );
-            metrics::global_metrics()
-                .sdk_info
-                .get_or_create(&metric_labels)
-                .set(1);
-
-            // TODO: Add sdk info metric
-            let mut source_grpc_client = SourceClient::new(
-                grpc::create_rpc_channel(udsource_config.socket_path.clone().into()).await?,
-            )
-            .max_encoding_message_size(udsource_config.grpc_max_message_size)
-            .max_decoding_message_size(udsource_config.grpc_max_message_size);
-            grpc::wait_until_source_ready(&cln_token, &mut source_grpc_client).await?;
-            let (ud_read, ud_ack, ud_lag) =
-                new_source(source_grpc_client.clone(), batch_size, read_timeout).await?;
-            Ok(Source::new(
-                batch_size,
-                source::SourceType::UserDefinedSource(Box::new(ud_read), Box::new(ud_ack), ud_lag),
-                tracker_handle,
-                source_config.read_ahead,
-                transformer,
-                watermark_handle,
+                rate_limiter,
             ))
         }
         SourceType::Pulsar(pulsar_config) => {
@@ -434,13 +403,14 @@ pub async fn create_source(
                 *get_vertex_replica(),
             )
             .await?;
-            Ok(Source::new(
+            Ok(crate::source::Source::new(
                 batch_size,
                 source::SourceType::Pulsar(pulsar),
                 tracker_handle,
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
+                rate_limiter,
             ))
         }
         SourceType::Sqs(sqs_source_config) => {
@@ -458,6 +428,7 @@ pub async fn create_source(
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
+                rate_limiter,
             ))
         }
         SourceType::Jetstream(jetstream_config) => {
@@ -465,7 +436,7 @@ pub async fn create_source(
                 jetstream_config.clone(),
                 batch_size,
                 read_timeout,
-                cln_token.clone(),
+                cln_token,
             )
             .await?;
             Ok(Source::new(
@@ -475,6 +446,7 @@ pub async fn create_source(
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
+                rate_limiter,
             ))
         }
         SourceType::Nats(nats_config) => {
@@ -486,6 +458,7 @@ pub async fn create_source(
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
+                rate_limiter,
             ))
         }
         SourceType::Kafka(kafka_config) => {
@@ -498,6 +471,7 @@ pub async fn create_source(
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
+                rate_limiter,
             ))
         }
         SourceType::Http(http_source_config) => {
@@ -510,9 +484,56 @@ pub async fn create_source(
                 source_config.read_ahead,
                 transformer,
                 watermark_handle,
+                rate_limiter,
+            ))
+        }
+
+        SourceType::UserDefined(user_defined_config) => {
+            let source_client =
+                create_source_client(user_defined_config, cln_token.clone()).await?;
+            let (ud_read, ud_ack, ud_lag) =
+                new_source(source_client, batch_size, read_timeout).await?;
+            Ok(Source::new(
+                batch_size,
+                source::SourceType::UserDefinedSource(Box::new(ud_read), Box::new(ud_ack), ud_lag),
+                tracker_handle,
+                source_config.read_ahead,
+                transformer,
+                watermark_handle,
+                rate_limiter,
             ))
         }
     }
+}
+
+/// Creates a source client from user-defined config
+async fn create_source_client(
+    user_defined_config: &config::components::source::UserDefinedConfig,
+    cln_token: CancellationToken,
+) -> error::Result<SourceClient<Channel>> {
+    let server_info = sdk_server_info(
+        user_defined_config.server_info_path.clone().into(),
+        cln_token.clone(),
+    )
+    .await?;
+
+    let metric_labels = metrics::sdk_info_labels(
+        config::get_component_type().to_string(),
+        config::get_vertex_name().to_string(),
+        server_info.language,
+        server_info.version,
+        ContainerType::Sourcer.to_string(),
+    );
+    metrics::global_metrics()
+        .sdk_info
+        .get_or_create(&metric_labels)
+        .set(1);
+
+    let channel =
+        create_rpc_channel(PathBuf::from(user_defined_config.socket_path.clone())).await?;
+    let mut client = SourceClient::new(channel);
+    wait_until_source_ready(&cln_token, &mut client).await?;
+    Ok(client)
 }
 
 /// Creates a user-defined aligned reducer client
@@ -531,7 +552,7 @@ pub(crate) async fn create_aligned_reducer(
         config::get_vertex_name().to_string(),
         server_info.language,
         server_info.version,
-        "aligned-reducer".to_string(),
+        ContainerType::Reducer.to_string(),
     );
     metrics::global_metrics()
         .sdk_info
@@ -539,8 +560,7 @@ pub(crate) async fn create_aligned_reducer(
         .set(1);
 
     // Create gRPC channel
-    let channel =
-        grpc::create_rpc_channel(reducer_config.user_defined_config.socket_path.into()).await?;
+    let channel = create_rpc_channel(reducer_config.user_defined_config.socket_path.into()).await?;
 
     // Create client
     let client = UserDefinedAlignedReduce::new(
@@ -568,7 +588,7 @@ pub(crate) async fn create_unaligned_reducer(
         config::get_vertex_name().to_string(),
         server_info.language,
         server_info.version,
-        "unaligned-reducer".to_string(),
+        ContainerType::Reducer.to_string(),
     );
     metrics::global_metrics()
         .sdk_info
@@ -758,7 +778,7 @@ pub async fn create_edge_watermark_handle(
     }
 }
 
-/// Generic helper function to create rate limiter based on store type
+/// Creates rate limiter for a given store and rate limit configuration.
 pub async fn create_rate_limiter<S>(
     rate_limit_config: &RateLimitConfig,
     store: S,
@@ -773,24 +793,19 @@ where
         rate_limit_config.duration,
     );
 
-    let processor_id = &format!(
-        "{}_{}",
-        crate::config::get_vertex_name(),
-        get_vertex_replica()
-    );
     let refresh_interval = Duration::from_millis(100);
     let runway_update = OptimisticValidityUpdateSecs::default();
 
     RateLimit::<WithDistributedState<S>>::new(
         bounds,
         store,
-        processor_id,
+        rate_limit_config.processor_id,
         cancel_token,
         refresh_interval,
         runway_update,
     )
     .await
-    .map_err(|e| error::Error::Config(format!("Failed to create rate limiter: {}", e)))
+    .map_err(|e| Error::Config(format!("Failed to create rate limiter: {}", e)))
 }
 
 /// Create WAL components for reduce operations

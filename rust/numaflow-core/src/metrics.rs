@@ -142,24 +142,24 @@ const JETSTREAM_ISB_ACK_TIME_TOTAL: &str = "ack_time_total";
 /// A deep healthcheck for components. Each component should implement IsReady for both builtins and
 /// user-defined containers.
 #[derive(Clone)]
-pub(crate) enum ComponentHealthChecks {
-    Monovertex(Box<MonovertexComponents>),
-    Pipeline(Box<PipelineComponents>),
+pub(crate) enum ComponentHealthChecks<C: crate::typ::NumaflowTypeConfig> {
+    Monovertex(Box<MonovertexComponents<C>>),
+    Pipeline(Box<PipelineComponents<C>>),
 }
 
 /// MonovertexComponents is used to store all the components required for running mvtx. Transformer
 /// and Fallback Sink is missing because they are internally referenced by Source and Sink.
 #[derive(Clone)]
-pub(crate) struct MonovertexComponents {
-    pub(crate) source: Source,
+pub(crate) struct MonovertexComponents<C: crate::typ::NumaflowTypeConfig> {
+    pub(crate) source: Source<C>,
     pub(crate) sink: SinkWriter,
 }
 
 /// PipelineComponents is used to store the all the components required for running pipeline. Transformer
 /// and Fallback Sink is missing because they are internally referenced by Source and Sink.
 #[derive(Clone)]
-pub(crate) enum PipelineComponents {
-    Source(Box<Source>),
+pub(crate) enum PipelineComponents<C: crate::typ::NumaflowTypeConfig> {
+    Source(Box<Source<C>>),
     Sink(Box<SinkWriter>),
     Map(MapHandle),
     Reduce(UserDefinedReduce),
@@ -175,8 +175,8 @@ pub(crate) struct WatermarkFetcherState {
 /// MetricsState holds both component health checks and optional watermark fetcher state
 /// for serving metrics and watermark endpoints
 #[derive(Clone)]
-pub(crate) struct MetricsState {
-    pub(crate) health_checks: ComponentHealthChecks,
+pub(crate) struct MetricsState<C: crate::typ::NumaflowTypeConfig> {
+    pub(crate) health_checks: ComponentHealthChecks<C>,
     pub(crate) watermark_fetcher_state: Option<WatermarkFetcherState>,
 }
 
@@ -1054,7 +1054,9 @@ pub async fn metrics_handler() -> impl IntoResponse {
 
 // watermark_handler is used to fetch and return watermark information
 // for all partitions based on available watermark handles
-pub async fn watermark_handler(State(state): State<MetricsState>) -> impl IntoResponse {
+pub async fn watermark_handler<C: crate::typ::NumaflowTypeConfig>(
+    State(state): State<MetricsState<C>>,
+) -> impl IntoResponse {
     let Some(watermark_fetcher_state) = &state.watermark_fetcher_state else {
         return Response::builder()
             .status(StatusCode::NOT_FOUND)
@@ -1100,9 +1102,9 @@ pub async fn watermark_handler(State(state): State<MetricsState>) -> impl IntoRe
         .unwrap()
 }
 
-pub(crate) async fn start_metrics_https_server(
+pub(crate) async fn start_metrics_https_server<C: crate::typ::NumaflowTypeConfig>(
     addr: SocketAddr,
-    metrics_state: MetricsState,
+    metrics_state: MetricsState<C>,
 ) -> crate::Result<()> {
     // Setup the CryptoProvider (controls core cryptography used by rustls) for the process
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
@@ -1126,7 +1128,7 @@ pub(crate) async fn start_metrics_https_server(
 }
 
 /// router for metrics and k8s health endpoints
-fn metrics_router(metrics_state: MetricsState) -> Router {
+fn metrics_router<C: crate::typ::NumaflowTypeConfig>(metrics_state: MetricsState<C>) -> Router {
     Router::new()
         .route("/metrics", get(metrics_handler))
         .route("/runtime/watermark", get(watermark_handler))
@@ -1140,7 +1142,9 @@ async fn livez() -> impl IntoResponse {
     StatusCode::NO_CONTENT
 }
 
-async fn sidecar_livez(State(state): State<MetricsState>) -> impl IntoResponse {
+async fn sidecar_livez<C: crate::typ::NumaflowTypeConfig>(
+    State(state): State<MetricsState<C>>,
+) -> impl IntoResponse {
     // Check if health checks are disabled via the environment variable
     if env::var("NUMAFLOW_HEALTH_CHECK_DISABLED")
         .map(|v| v.eq_ignore_ascii_case("true"))
@@ -1209,7 +1213,7 @@ async fn sidecar_livez(State(state): State<MetricsState>) -> impl IntoResponse {
 
 #[derive(Clone)]
 pub(crate) enum LagReader<C: crate::typ::NumaflowTypeConfig> {
-    Source(Box<Source>),
+    Source(Box<Source<C>>),
     #[allow(clippy::upper_case_acronyms)]
     ISB(Vec<JetStreamReader<C>>), // multiple partitions
 }
@@ -1289,7 +1293,7 @@ async fn expose_pending_metrics<C: crate::typ::NumaflowTypeConfig>(
         ticker.tick().await;
 
         match &mut lag_reader {
-            LagReader::Source(source) => match fetch_source_pending(&source).await {
+            LagReader::Source(source) => match fetch_source_pending::<C>(source).await {
                 Ok(pending) => {
                     if pending != -1 {
                         if last_logged.elapsed().as_secs() >= 60 {
@@ -1355,12 +1359,16 @@ async fn expose_pending_metrics<C: crate::typ::NumaflowTypeConfig>(
     }
 }
 
-async fn fetch_source_pending(lag_reader: &Source) -> crate::error::Result<i64> {
+async fn fetch_source_pending<C: crate::typ::NumaflowTypeConfig>(
+    lag_reader: &Source<C>,
+) -> crate::error::Result<i64> {
     let response: i64 = lag_reader.pending().await?.map_or(-1, |p| p as i64); // default to -1(unavailable)
     Ok(response)
 }
 
-async fn fetch_isb_pending<C: crate::typ::NumaflowTypeConfig>(reader: &mut JetStreamReader<C>) -> crate::error::Result<i64> {
+async fn fetch_isb_pending<C: crate::typ::NumaflowTypeConfig>(
+    reader: &mut JetStreamReader<C>,
+) -> crate::error::Result<i64> {
     let response: i64 = reader.pending().await?.map_or(-1, |p| p as i64); // default to -1(unavailable)
     Ok(response)
 }
@@ -1504,6 +1512,7 @@ mod tests {
             true,
             None,
             None,
+            numaflow_throttling::NoOpRateLimiter,
         );
 
         let sink_writer = SinkWriterBuilder::new(
@@ -1521,7 +1530,7 @@ mod tests {
         .await
         .expect("failed to create sink writer");
 
-        let metrics_state = MetricsState {
+        let metrics_state: MetricsState<crate::typ::WithoutRateLimiter> = MetricsState {
             health_checks: ComponentHealthChecks::Monovertex(Box::new(MonovertexComponents {
                 source,
                 sink: sink_writer,
@@ -1532,13 +1541,13 @@ mod tests {
         let addr: SocketAddr = "127.0.0.1:9091".parse().unwrap();
         let metrics_state_clone = metrics_state.clone();
         let server_handle = tokio::spawn(async move {
-            start_metrics_https_server(addr, metrics_state_clone)
+            start_metrics_https_server::<crate::typ::WithoutRateLimiter>(addr, metrics_state_clone)
                 .await
                 .unwrap();
         });
 
         // invoke the sidecar-livez endpoint
-        let response = sidecar_livez(State(metrics_state)).await;
+        let response = sidecar_livez::<crate::typ::WithoutRateLimiter>(State(metrics_state)).await;
         assert_eq!(response.into_response().status(), StatusCode::NO_CONTENT);
 
         // invoke the livez endpoint
